@@ -86,7 +86,7 @@ namespace Xrpl.BinaryCodec.Enums
         public static readonly TransactionTypeField TransactionType = new TransactionTypeField(nameof(TransactionType), 2);
         public static readonly Uint16Field SignerWeight = new Uint16Field(nameof(SignerWeight), 3);
         public static readonly Uint16Field TransferFee = new Uint16Field(nameof(TransferFee), 4);
-        public static readonly Uint16Field TradingFee = new Uint16Field(nameof(TradingFee), 4); 
+        public static readonly Uint16Field TradingFee = new Uint16Field(nameof(TradingFee), 5); 
         public static readonly Uint16Field Version = new Uint16Field(nameof(Version), 16);
         public static readonly Uint16Field HookStateChangeCount = new Uint16Field(nameof(HookStateChangeCount), 17);
         public static readonly Uint16Field HookStateEmitCount = new Uint16Field(nameof(HookStateEmitCount), 18);

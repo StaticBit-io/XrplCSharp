@@ -56,23 +56,24 @@ namespace Xrpl.BinaryCodec.Types
                 [FieldType.Blob] = new BuildFrom(Blob.FromJson, Blob.FromParser),
                 [FieldType.PathSet] = new BuildFrom(PathSet.FromJson, PathSet.FromParser),
                 [FieldType.Vector256] = new BuildFrom(Vector256.FromJson, Vector256.FromParser),
+                [FieldType.Issue] = new BuildFrom(Issue.FromJson, Issue.FromParser),
             };
             foreach (var field in Field.Values.Where(
-                        field => d2.ContainsKey(field.Type)))
+                         field => d2.ContainsKey(field.Type)))
             {
                 var buildFrom = d2[field.Type];
                 field.FromJson = buildFrom.Json;
-                field.FromParser= buildFrom.Parser;
+                field.FromParser = buildFrom.Parser;
             }
 
             Field.TransactionType.FromJson = TransactionType.Values.FromJson;
-            Field.TransactionType.FromParser= TransactionType.Values.FromParser;
+            Field.TransactionType.FromParser = TransactionType.Values.FromParser;
             Field.TransactionResult.FromJson = EngineResult.Values.FromJson;
             Field.TransactionResult.FromParser = EngineResult.Values.FromParser;
             Field.LedgerEntryType.FromJson = LedgerEntryType.Values.FromJson;
             Field.LedgerEntryType.FromParser = LedgerEntryType.Values.FromParser;
-
         }
+
         /// <summary>
         /// Construct a STObject from a BinaryParser
         /// </summary>
@@ -83,11 +84,8 @@ namespace Xrpl.BinaryCodec.Types
         public static StObject FromParser(BinaryParser parser, int? hint = null)
         {
             var so = new StObject();
-
-            // hint, is how many bytes to parse
             if (hint != null)
             {
-                // end hint
                 hint = parser.Pos() + hint;
             }
             while (!parser.End(hint))
@@ -97,7 +95,7 @@ namespace Xrpl.BinaryCodec.Types
                 {
                     break;
                 }
-                var sizeHint = field.IsVlEncoded ? parser.ReadVlLength() : (int?) null;
+                var sizeHint = field.IsVlEncoded ? parser.ReadVlLength() : (int?)null;
                 var st = field.FromParser(parser, sizeHint);
                 so.Fields[field] = st ?? throw new InvalidOperationException("Parsed " + field + " as null");
             }
@@ -122,21 +120,15 @@ namespace Xrpl.BinaryCodec.Types
         public static StObject FromJson(JToken token, bool signingOnly)
         {
             if (token.Type != JTokenType.Object)
-            {
                 throw new InvalidJsonException($"{token.Type} is not an object");
-            }
 
             var so = new StObject();
-
-            var sortedKeys = new List<ISerializedType>();
-            foreach (var pair in (JObject) token)
+            foreach (var pair in (JObject)token)
             {
                 if (!Field.Values.Has(pair.Key))
                 {
                     if (signingOnly)
-                    {
                         throw new InvalidJsonException($"unknown field {pair.Key}");
-                    }
                     continue;
                 }
                 var fieldForType = Field.Values[pair.Key];
@@ -146,20 +138,13 @@ namespace Xrpl.BinaryCodec.Types
                 {
                     st = fieldForType.FromJson(jsonForField);
                 }
-                catch (Exception e) when (e is InvalidOperationException ||
-                                          e is FormatException ||
-                                          e is OverflowException ||
-                                          e is PrecisionException)
+                catch (Exception e) when (e is InvalidOperationException || e is FormatException || e is OverflowException || e is PrecisionException)
                 {
-                    throw new InvalidJsonException($"Can't decode `{fieldForType}` " + $"from `{jsonForField}`", e);
+                    throw new InvalidJsonException($"Can't decode `{fieldForType}` from `{jsonForField}`", e);
                 }
                 so.Fields[fieldForType] = st;
             }
-            if (signingOnly)
-            {
-                return so.FilterIsSigning();
-            }
-            return so;
+            return signingOnly ? so.FilterIsSigning() : so;
         }
 
         /// <inheritdoc />
@@ -191,7 +176,9 @@ namespace Xrpl.BinaryCodec.Types
         public void ToBytes(IBytesSink to, Func<Field, bool> p)
         {
             var serializer = new BinarySerializer(to);
-            foreach (var pair in Fields.Where(pair => pair.Key.IsSerialised && (p == null || p(pair.Key))))
+            foreach (var pair in Fields
+                         .OrderBy(pair => pair.Key.Ordinal)
+                         .Where(pair => pair.Key.IsSerialised && (p == null || p(pair.Key))))
             {
                 serializer.Add(pair.Key, pair.Value);
             }
@@ -432,7 +419,7 @@ namespace Xrpl.BinaryCodec.Types
             var filtered = new SortedDictionary<Field, ISerializedType>();
             foreach (var field in sto.Fields)
             {
-                if (field.Key.IsSigningField == true)
+                if (field.Key.IsSigningField)
                 {
                     filtered.Add(field.Key, field.Value);
                 }
@@ -440,6 +427,10 @@ namespace Xrpl.BinaryCodec.Types
             sto.Fields = filtered;
             return sto;
         }
-        internal static byte[] Bytes(this HashPrefix hp) => Bits.GetBytes((uint)hp);
+
+        internal static byte[] Bytes(this HashPrefix hp)
+        {
+            return Bits.GetBytes((uint)hp);
+        }
     }
 }
