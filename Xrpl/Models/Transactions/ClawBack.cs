@@ -1,15 +1,11 @@
-﻿using System;
-using System.Collections.Generic;
-using System.Linq;
-using System.Text;
+﻿using System.Collections.Generic;
 using System.Threading.Tasks;
+
 using Newtonsoft.Json;
+
 using Xrpl.Client.Exceptions;
-using static Xrpl.Models.Common.Common;
 using Xrpl.Client.Json.Converters;
-using Xrpl.Models.Common;
-using Xrpl.Models.Ledger;
-using Xrpl.BinaryCodec.Types;
+
 using Currency = Xrpl.Models.Common.Currency;
 
 namespace Xrpl.Models.Transactions

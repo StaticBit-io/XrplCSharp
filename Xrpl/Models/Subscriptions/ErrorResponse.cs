@@ -29,9 +29,9 @@ namespace Xrpl.Models.Subscriptions
         [JsonProperty("error")]
         public string Error { get; set; }
         [JsonProperty("error_code")]
-        public string ErrorCode { get; set; }
+        public string? ErrorCode { get; set; }
         [JsonProperty("error_message")]
-        public string ErrorMessage { get; set; }
+        public string? ErrorMessage { get; set; }
         /// <summary>
         /// A copy of the request that prompted this error, in JSON format.<br/>
         /// Caution: If the request contained any secrets, they are copied here!
@@ -44,7 +44,7 @@ namespace Xrpl.Models.Subscriptions
         /// </summary>
 
         [JsonProperty("api_version")]
-        public string ApiVersion { get; set; }
+        public uint? ApiVersion { get; set; }
 
     }
 }

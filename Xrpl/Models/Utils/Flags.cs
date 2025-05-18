@@ -2,8 +2,6 @@
 using System.Collections.Generic;
 using System.Linq;
 
-using Newtonsoft.Json.Linq;
-
 using Xrpl.Client.Exceptions;
 using Xrpl.Models.Transactions;
 

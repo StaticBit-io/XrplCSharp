@@ -1,13 +1,8 @@
-﻿using System;
-using System.Collections.Generic;
-using System.Linq;
-using System.Text;
+﻿using System.Collections.Generic;
 using System.Threading.Tasks;
 using Newtonsoft.Json;
 using static Xrpl.Models.Common.Common;
-using Xrpl.BinaryCodec.Types;
 using Xrpl.Client.Exceptions;
-using Xrpl.Models.Ledger;
 using Currency = Xrpl.Models.Common.Currency;
 using Xrpl.Client.Json.Converters;
 
@@ -88,6 +83,8 @@ namespace Xrpl.Models.Transactions
         /// <inheritdoc />
         [JsonConverter(typeof(CurrencyConverter))]
         public Xrpl.Models.Common.Currency? EPrice { get; set; }
+
+        public AMMDepositFlags Flags { get; set; }
     }
 
     /// <summary>
@@ -131,6 +128,8 @@ namespace Xrpl.Models.Transactions
         /// Specifies the maximum effective-price that LPTokenOut can be traded out.
         /// </summary>
         public Xrpl.Models.Common.Currency? EPrice { get; set; }
+
+        new AMMDepositFlags Flags { get; set; }
     }
 
     /// <inheritdoc cref="IAMMDeposit" />
@@ -156,6 +155,8 @@ namespace Xrpl.Models.Transactions
         /// <inheritdoc />
         [JsonConverter(typeof(CurrencyConverter))]
         public Currency EPrice { get; set; }
+
+        public AMMDepositFlags Flags { get; set; }
 
         #endregion
     }

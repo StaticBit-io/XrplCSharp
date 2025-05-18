@@ -11,6 +11,7 @@ using Newtonsoft.Json;
 using Org.BouncyCastle.Asn1.Ocsp;
 using Xrpl.Client;
 using Xrpl.Client.Exceptions;
+using Xrpl.Models;
 using Xrpl.Models.Methods;
 using Xrpl.Models.Subscriptions;
 using Xrpl.Sugar;
@@ -51,9 +52,9 @@ namespace Xrpl.Tests.ClientLib
                 var subscribe = await client.Subscribe(
                 new SubscribeRequest()
                 {
-                    Streams = new List<string>(new[]
+                    Streams = new List<StreamType>(new[]
                     {
-                        "ledger",
+                        StreamType.Ledger,
                     })
                 });
             };

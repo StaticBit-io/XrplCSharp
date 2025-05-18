@@ -27,6 +27,11 @@ namespace Xrpl.Models.Methods
         [JsonProperty("command")]
         public string Command { get; set; }
 
-        //todo not found field  api_version?: number
+        /// <summary>
+        /// The API version to use.<br/>
+        /// If omitted, use version 1.
+        /// </summary>
+        [JsonProperty("api_version")]
+        public uint? ApiVersion { get; set; } = 2;
     }
 }

@@ -1,6 +1,8 @@
 ﻿using Newtonsoft.Json;
+
 using System.Collections.Generic;
-using System.Transactions;
+
+using Xrpl.Models.Enums;
 using Xrpl.Models.Subscriptions;
 
 // https://github.com/XRPLF/xrpl.js/blob/main/packages/xrpl/src/models/methods/subscribe.ts
@@ -75,7 +77,8 @@ namespace Xrpl.Models.Methods
         /// one of these accounts.
         /// </summary>
         [JsonProperty("streams")]
-        public List<string> Streams { get; set; }
+        [JsonConverter(typeof(StreamTypeListConverter))] 
+        public List<StreamType> Streams { get; set; }
         /// <summary>
         /// (Optional) Array with the unique addresses of accounts to monitor for validated transactions.
         /// The addresses must be in the XRP Ledger's base58 format.

@@ -1,5 +1,9 @@
-﻿using System.Collections.Generic;
+﻿using System;
+
 using Newtonsoft.Json;
+using Newtonsoft.Json.Converters;
+
+using Xrpl.Models.Methods;
 using Xrpl.Models.Transactions;
 
 //https://github.com/XRPLF/xrpl.js/blob/b20c05c3680d80344006d20c44b4ae1c3b0ffcac/packages/xrpl/src/models/methods/subscribe.ts#L253
@@ -14,8 +18,15 @@ namespace Xrpl.Models.Subscriptions
     /// book (Order Book) subscriptions
     /// <see href="https://xrpl.org/subscribe.html#transaction-streams"/>
     /// </summary>
-    public class TransactionStream : BaseStream
+    public class TransactionStream : BaseStream, IAccountTransaction
     {
+        /// <summary>
+        /// The ledger close time represented in ISO 8601 time format.
+        /// </summary>
+        [JsonProperty("close_time_iso")]
+        [JsonConverter(typeof(IsoDateTimeConverter))]
+        public DateTime CloseTimeIso { get; set; }
+
         /// <summary>
         /// String Transaction result code
         /// </summary>
@@ -31,6 +42,12 @@ namespace Xrpl.Models.Subscriptions
         /// </summary>
         [JsonProperty("engine_result_message")]
         public string EngineResultMessage { get; set; }
+
+        /// <summary>
+        /// The unique hash identifier of the transaction.
+        /// </summary>
+        [JsonProperty("hash")]
+        public string Hash { get; set; }
 
         /// <summary>
         /// (Validated transactions only) The identifying hash of the ledger version that includes this transaction
@@ -55,11 +72,12 @@ namespace Xrpl.Models.Subscriptions
         /// <summary>
         /// The definition of the transaction in JSON format
         /// </summary>
-        [JsonProperty("transaction")]
+        //[JsonProperty("transaction")]
+        [JsonProperty("tx_json")]
         public dynamic TransactionJson { get; set; }
 
         [JsonIgnore]
-        public ITransactionResponseCommon Transaction => JsonConvert.DeserializeObject<TransactionResponseCommon>(TransactionJson.ToString());
+        public TransactionResponseCommon Transaction => JsonConvert.DeserializeObject<TransactionResponseCommon>(TransactionJson.ToString());
 
         /// <summary>
         /// If true, this transaction is included in a validated ledger and its outcome is final.<br/>

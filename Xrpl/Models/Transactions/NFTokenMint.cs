@@ -2,7 +2,6 @@
 using System.Collections.Generic;
 using System.Threading.Tasks;
 
-using Xrpl.BinaryCodec.Types;
 using Xrpl.Client.Exceptions;
 using Xrpl.Models.Utils;
 

@@ -1,18 +1,11 @@
 ﻿using Newtonsoft.Json.Linq;
 
-using System;
 using System.Collections.Generic;
-using System.Linq;
-using System.Text;
 
 using Xrpl.BinaryCodec;
 using Xrpl.BinaryCodec.Hashing;
-using Xrpl.BinaryCodec.ShaMapTree;
 using Xrpl.BinaryCodec.Util;
 using Xrpl.Client.Exceptions;
-using Xrpl.Models.Ledger;
-using Xrpl.Models.Transactions;
-using Xrpl.Utils.Hashes.ShaMap;
 
 using static Xrpl.AddressCodec.Utils;
 

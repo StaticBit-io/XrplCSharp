@@ -1,7 +1,7 @@
-﻿using Newtonsoft.Json;
+﻿using System.Collections.Generic;
 
-using System;
-using System.Collections.Generic;
+using Newtonsoft.Json;
+
 using Xrpl.Client.Json.Converters;
 using Xrpl.Models.Methods;
 

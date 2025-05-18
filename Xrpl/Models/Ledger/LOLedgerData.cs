@@ -1,7 +1,7 @@
-﻿using Newtonsoft.Json;
+﻿using System.Collections.Generic;
 
-using System.Collections.Generic;
-using Xrpl.Client.Json.Converters;
+using Newtonsoft.Json;
+
 using Xrpl.Models.Methods;
 
 //https://github.com/XRPLF/xrpl.js/blob/main/packages/xrpl/src/models/methods/ledgerData.ts

@@ -52,16 +52,16 @@ namespace Xrpl.Models.Subscriptions
         /// For details, see API Warnings (https://xrpl.org/response-formatting.html#api-warnings)
         /// </summary>
         [JsonProperty("warnings")]
-        public object Warnings { get; set; }
+        public List<RippleResponseWarning>? Warnings { get; set; }
         /// <summary>
         /// (May be omitted) If true, this request and response have been forwarded from a Reporting Mode
         /// server to a P2P Mode server (and back) because the request requires data that is not available in Reporting Mode.<br/>
         /// The default is false.
         /// </summary>
         [JsonProperty("forwarded")]
-        public string Forwarded { get; set; }
+        public bool? Forwarded { get; set; }
         [JsonProperty("api_version")]
-        public string ApiVersion { get; set; }
+        public uint? ApiVersion { get; set; }
     }
     /// <summary>
     /// When the response contains a warnings array, each member of the array represents a separate warning from the server.
@@ -85,25 +85,6 @@ namespace Xrpl.Models.Subscriptions
         /// The contents vary depending on the type of warning.
         /// </summary>
         [JsonProperty("details")]
-        public WarningDetails Details { get; set; }
-    }
-    /// <summary>
-    /// This warning indicates that the one or more amendments to the XRP Ledger protocol are scheduled to become enabled,
-    /// but the current server does not have an implementation for those amendments.<br/>
-    /// If those amendments become enabled, the current server will become amendment blocked, so you should upgrade to the latest rippled version as soon as possible.
-    /// </summary>
-    public class WarningDetails
-    {
-        /// <summary>
-        /// The time that the first unsupported amendment is expected to become enabled, in seconds since the Ripple Epoch.
-        /// </summary>
-        [JsonProperty("expected_date")]
-        public uint ExpectedDate { get; set; }
-        /// <summary>
-        /// The timestamp, in UTC, when the first unsupported amendment is expected to become enabled
-        /// </summary>
-        [JsonProperty("expected_date_UTC")]
-        public string ExpectedDate_UTC { get; set; }
-
+        public Dictionary<string, string>? Details { get; set; }
     }
 }

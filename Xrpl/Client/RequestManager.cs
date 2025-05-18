@@ -1,22 +1,12 @@
 ﻿using System;
 using System.Collections.Concurrent;
-using System.Net.WebSockets;
 using System.Threading.Tasks;
 using Newtonsoft.Json;
-using Org.BouncyCastle.Asn1.Tsp;
 using Xrpl.Client.Exceptions;
 using Xrpl.Models.Subscriptions;
-using Newtonsoft.Json.Linq;
 using System.Diagnostics;
 using System.Collections.Generic;
-using Xrpl.BinaryCodec;
-using System.Timers;
-using System.Threading;
 using Timer = System.Timers.Timer;
-using Org.BouncyCastle.Asn1.Ocsp;
-using System.Reflection;
-using System.Xml.Linq;
-using Org.BouncyCastle.Utilities;
 using TimeoutException = Xrpl.Client.Exceptions.TimeoutException;
 
 // https://github.com/XRPLF/xrpl.js/blob/main/packages/xrpl/src/client/RequestManager.ts

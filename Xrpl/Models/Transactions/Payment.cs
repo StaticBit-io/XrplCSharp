@@ -1,10 +1,8 @@
-﻿using System;
-using System.Collections.Generic;
-using System.Linq;
-using System.Security.Principal;
-using System.Threading.Tasks;
+﻿using Newtonsoft.Json;
 
-using Newtonsoft.Json;
+using System;
+using System.Collections.Generic;
+using System.Threading.Tasks;
 
 using Xrpl.Client.Exceptions;
 using Xrpl.Client.Json.Converters;
@@ -12,7 +10,6 @@ using Xrpl.Models.Common;
 using Xrpl.Models.Methods;
 using Xrpl.Models.Utils;
 
-using static System.Net.WebRequestMethods;
 using Index = Xrpl.Models.Utils.Index;
 
 // https://github.com/XRPLF/xrpl.js/blob/main/packages/xrpl/src/models/transactions/payment.ts

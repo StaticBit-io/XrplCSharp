@@ -1,19 +1,17 @@
 ﻿using System;
 using System.Collections.Concurrent;
 using System.Collections.Generic;
-using System.Diagnostics;
-using System.Net.WebSockets;
 using System.Threading.Tasks;
+
 using Newtonsoft.Json;
-using Newtonsoft.Json.Linq;
-using Org.BouncyCastle.Ocsp;
-using Xrpl.Client.Exceptions;
+
 using Xrpl.Models.Ledger;
 using Xrpl.Models.Methods;
 using Xrpl.Models.Subscriptions;
 using Xrpl.Models.Transactions;
 using Xrpl.Sugar;
 using Xrpl.Wallet;
+
 using static Xrpl.Client.Connection;
 using static Xrpl.Client.XrplClient;
 

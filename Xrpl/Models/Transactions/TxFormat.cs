@@ -1,6 +1,6 @@
 ﻿using System;
 using System.Collections.Generic;
-using Xrpl.BinaryCodec;
+
 using Xrpl.BinaryCodec.Enums;
 using Xrpl.BinaryCodec.Types;
 

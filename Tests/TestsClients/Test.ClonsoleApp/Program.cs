@@ -1,8 +1,11 @@
 ﻿////See https://aka.ms/new-console-template for more information
 
 using System.Diagnostics;
+
 using Newtonsoft.Json;
+
 using Xrpl.Client;
+using Xrpl.Models;
 using Xrpl.Models.Common;
 using Xrpl.Models.Methods;
 using Xrpl.Models.Transactions;
@@ -211,7 +214,7 @@ namespace MyApp
                     Issuer = "rsWKbMAytbvShMJ5tWkiVhXt8xMsJq3wrA",
                     ValueAsNumber = 2
                 },
-                Fee = new Currency() {ValueAsXrp = 0.00002m},
+                Fee = new Currency() { ValueAsXrp = 0.00002m },
             };
 
             // sign and submit the transaction
@@ -227,18 +230,27 @@ namespace MyApp
             var server = "wss://s.altnet.rippletest.net:51233";
 
             var client = new XrplClient(server);
-
             client.connection.OnConnected += async () =>
             {
                 Console.WriteLine("CONNECTED");
-                var subscribe = await client.Subscribe(
-                new SubscribeRequest()
+                try
                 {
-                    Streams = new List<string>(new[]
-                    {
-                        "ledger",
-                    })
-                });
+                    var subscribe = await client.Subscribe(
+                        new SubscribeRequest()
+                        {
+                            Streams = new List<StreamType>(new[]
+                            {
+                                StreamType.Ledger,
+                                StreamType.Transactions
+                            })
+                        });
+                    Console.WriteLine(subscribe);
+                }
+                catch (Exception e)
+                {
+                    Console.WriteLine(e);
+                    throw;
+                }
             };
 
             client.connection.OnDisconnect += (code) =>
@@ -268,14 +280,20 @@ namespace MyApp
                 isFinished = true;
                 return Task.CompletedTask;
             };
-            
+
             await client.Connect();
 
-            while (!isFinished)
-            {
-                Debug.WriteLine($"WAITING: {DateTime.Now}");
-                System.Threading.Thread.Sleep(TimeSpan.FromSeconds(1));
-            }
+            var task = Task.Run(
+                async () =>
+                {
+                    while (!isFinished)
+                    {
+                        Debug.WriteLine($"WAITING: {DateTime.Now}");
+                        await Task.Delay(1000);
+                    }
+                });
+
+            await task;
 
             await client.Disconnect();
         }
@@ -294,9 +312,9 @@ namespace MyApp
                 var subscribe = await client.Subscribe(
                 new SubscribeRequest()
                 {
-                    Streams = new List<string>(new[]
+                    Streams = new List<StreamType>(new[]
                     {
-                        "ledger",
+                        StreamType.Ledger,
                     })
                 });
             };
@@ -327,7 +345,7 @@ namespace MyApp
                 isFinished = true;
                 return Task.CompletedTask;
             };
-            
+
             await client.Connect();
 
             while (!isFinished)
@@ -397,19 +415,19 @@ namespace MyApp
 
         static async Task Main(string[] args)
         {
-            try
-            {
-                await TestAmm();
-            }
-            catch (Exception e)
-            {
-                throw;
-            }
+            //try
+            //{
+            //    await TestAmm();
+            //}
+            //catch (Exception e)
+            //{
+            //    throw;
+            //}
             //await SampleClient();
             //WalletFromSeed();
             //WalletGenerate();
             //await SubmitTestTx();
-            //await WebsocketTest();
+            await WebsocketTest();
             //await WebsocketChangeServerTest();
         }
     }

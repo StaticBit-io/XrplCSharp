@@ -3,7 +3,6 @@ using Newtonsoft.Json.Converters;
 
 using System;
 using System.Collections.Generic;
-using System.Diagnostics;
 using System.Globalization;
 using System.Linq;
 using System.Threading.Tasks;
@@ -14,8 +13,6 @@ using Xrpl.Client.Json.Converters;
 using Xrpl.Models.Common;
 using Xrpl.Models.Ledger;
 using Xrpl.Models.Utils;
-
-using Index = Xrpl.Models.Utils.Index;
 
 // https://github.com/XRPLF/xrpl.js/blob/main/packages/xrpl/src/models/transactions/common.ts
 
@@ -467,11 +464,11 @@ namespace Xrpl.Models.Transactions
         /// <summary>
         /// indicates that the transaction created a new object in the ledger.
         /// </summary>
-        public NodeInfo CreatedNode { get; set; }
+        public NodeInfo? CreatedNode { get; set; }
         /// <summary>
         /// indicates that the transaction removed an object from the ledger.
         /// </summary>
-        public NodeInfo DeletedNode { get; set; }
+        public NodeInfo? DeletedNode { get; set; }
         /// <summary>
         /// indicates that the transaction modified an existing object in the ledger.
         /// <remarks>
@@ -481,7 +478,7 @@ namespace Xrpl.Models.Transactions
         /// and their previous values are listed at the top level of the ModifiedNode object rather than in the nested PreviousFields object.
         /// </remarks>
         /// </summary>
-        public NodeInfo ModifiedNode { get; set; }
+        public NodeInfo? ModifiedNode { get; set; }
     }
 
     /// <summary>

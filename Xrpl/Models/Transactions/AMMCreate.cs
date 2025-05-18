@@ -1,12 +1,12 @@
 ﻿#nullable enable
 using System.Collections.Generic;
 using System.Threading.Tasks;
+
 using Newtonsoft.Json;
-using Xrpl.BinaryCodec.Types;
+
 using Xrpl.Client.Exceptions;
 using Xrpl.Client.Json.Converters;
-using Xrpl.Models.Ledger;
-using Xrpl.Models.Methods;
+
 using Currency = Xrpl.Models.Common.Currency;
 
 namespace Xrpl.Models.Transactions

@@ -1,6 +1,5 @@
 ﻿using System;
-using System.Runtime.Serialization;
-using System.Collections.Generic;
+
 using Newtonsoft.Json;
 using Newtonsoft.Json.Converters;
 

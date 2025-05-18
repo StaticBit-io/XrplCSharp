@@ -1,6 +1,7 @@
 ﻿using System.Collections.Generic;
-using System.Diagnostics;
+
 using Org.BouncyCastle.Math;
+
 using Xrpl.AddressCodec;
 using Xrpl.BinaryCodec;
 using Xrpl.Client.Exceptions;

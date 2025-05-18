@@ -14,8 +14,19 @@ namespace Xrpl.Models.Methods
             Transaction = hash;
         }
 
+        /// <summary>
+        /// The 256-bit hash of the transaction to look up, as hexadecimal.
+        /// </summary>
         [JsonProperty("transaction")]
-        internal string Transaction { get; set; }
+        public string? Transaction { get; set; }
+
+        /// <summary>
+        /// The compact transaction identifier of the transaction to look up.<br/>
+        /// Must use uppercase hexadecimal only.<br/>
+        /// New in: rippled 1.12.0 (Not supported in Clio v2.0 and earlier)
+        /// </summary>
+        [JsonProperty("ctid")]
+        public string? CtId { get; set; }
 
         /// <summary>
         /// If true, return transaction data and metadata as binary serialized to hexadecimal strings.<br/>
@@ -23,9 +34,23 @@ namespace Xrpl.Models.Methods
         /// The default is false.
         /// </summary>
         [JsonProperty("binary")]
-        internal bool? Binary { get; set; }
+        public bool? Binary { get; set; }
 
-        //todo not found fields - min_ledger?: number, max_ledger?: number
+        /// <summary>
+        /// Use this with max_ledger to specify a range of up to 1000 ledger indexes, starting with this ledger (inclusive).<br/>
+        /// If the server cannot find the transaction,<br/>
+        /// it confirms whether it was able to search all the ledgers in this range.
+        /// </summary>
+        [JsonProperty("min_ledger")]
+        public uint? MinLedger { get; set; }
+
+        /// <summary>
+        /// Use this with min_ledger to specify a range of up to 1000 ledger indexes, ending with this ledger (inclusive).<br/>
+        /// If the server cannot find the transaction,<br/>
+        /// it confirms whether it was able to search all the ledgers in the requested range.
+        /// </summary>
+        [JsonProperty("max_ledger")]
+        public uint? MaxLedger { get; set; }
     }
     // todo not found class TxResponse extends BaseResponse
     //https://github.com/XRPLF/xrpl.js/blob/b20c05c3680d80344006d20c44b4ae1c3b0ffcac/packages/xrpl/src/models/methods/tx.ts#L41

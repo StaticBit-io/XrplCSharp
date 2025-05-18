@@ -7,6 +7,7 @@ using System.Threading.Tasks;
 using Microsoft.VisualStudio.TestTools.UnitTesting;
 using Newtonsoft.Json;
 using Xrpl.Client;
+using Xrpl.Models;
 using Xrpl.Models.Methods;
 using Xrpl.Models.Subscriptions;
 using Xrpl.Sugar;
@@ -219,9 +220,9 @@ namespace Xrpl.Tests.ClientLib
             //});
             var request = new SubscribeRequest()
             {
-                Streams = new List<string>(new[]
+                Streams = new List<StreamType>(new[]
                     {
-                        "ledger",
+                        StreamType.Ledger,
                     })
             };
             var serializerSettings = new JsonSerializerSettings();

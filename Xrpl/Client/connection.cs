@@ -1,6 +1,5 @@
 ﻿using System;
 using System.Collections.Generic;
-using System.Diagnostics;
 using System.Net.WebSockets;
 using System.Threading.Tasks;
 using Newtonsoft.Json;
@@ -9,7 +8,6 @@ using static Xrpl.Client.RequestManager;
 using Xrpl.AddressCodec;
 using Xrpl.Models.Subscriptions;
 using Xrpl.Models.Methods;
-using System.Threading;
 using Timer = System.Timers.Timer;
 
 // https://github.com/XRPLF/xrpl.js/blob/main/packages/xrpl/src/client/connection.ts

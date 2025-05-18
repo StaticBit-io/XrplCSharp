@@ -4,7 +4,6 @@ using System;
 
 using Xrpl.AddressCodec;
 using Xrpl.BinaryCodec;
-using Xrpl.BinaryCodec.Ledger;
 using Xrpl.Keypairs;
 using Xrpl.Models.Subscriptions;
 using Xrpl.Models.Transactions;

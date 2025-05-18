@@ -2,10 +2,9 @@
 // https://github.com/XRPLF/xrpl.js/blob/main/packages/xrpl/src/models/transactions/ticketCreate.ts
 
 using System.Collections.Generic;
-using System.Text.RegularExpressions;
 using System.Threading.Tasks;
+
 using Xrpl.Client.Exceptions;
-using Xrpl.Models.Ledger;
 
 namespace Xrpl.Models.Transactions
 {

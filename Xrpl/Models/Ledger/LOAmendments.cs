@@ -1,7 +1,6 @@
-﻿using Newtonsoft.Json;
-
-using System;
+﻿using System;
 using System.Collections.Generic;
+using Newtonsoft.Json;
 using Xrpl.Client.Json.Converters;
 
 // https://github.com/XRPLF/xrpl.js/blob/main/packages/xrpl/src/models/ledger/Amendments.ts
