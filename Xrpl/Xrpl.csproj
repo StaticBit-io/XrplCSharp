@@ -1,4 +1,4 @@
-<Project Sdk="Microsoft.NET.Sdk">
+﻿<Project Sdk="Microsoft.NET.Sdk">
 
   <PropertyGroup>
     <!-- <TargetFramework>netstandard2.0</TargetFramework> -->
@@ -22,7 +22,7 @@
     <DocumentationFile>bin\Debug\net6.0\XrplCSharp.xml</DocumentationFile>
   </PropertyGroup>
   <ItemGroup>
-    <PackageReference Include="NBitcoin" Version="7.0.46" />
+    <PackageReference Include="NBitcoin" Version="8.0.13" />
     <PackageReference Include="Newtonsoft.Json" Version="13.0.3" />
     <PackageReference Include="Portable.BouncyCastle" Version="1.9.0" />
     <PackageReference Include="Chaos.NaCl.Standard" Version="1.0.0" />
