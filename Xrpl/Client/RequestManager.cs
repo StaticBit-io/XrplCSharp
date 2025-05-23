@@ -127,9 +127,10 @@ namespace Xrpl.Client
             taskInfo.Type = typeof(T);
 
             promisesAwaitingResponse.TryAdd(newId, taskInfo);
+            // Serialize the request to JSON
 
             Timer timer = new Timer(timeout);
-            timer.Elapsed += (sender, e) => this.Reject(newId, new TimeoutException());
+            timer.Elapsed += (sender, e) => this.Reject(newId, new TimeoutException($"Timeout for request: {newRequest} with id {newId}", request));
             timer.Start();
             timeoutsAwaitingResponse.TryAdd(newId, timer);
 
@@ -176,7 +177,7 @@ namespace Xrpl.Client
             promisesAwaitingResponse.TryAdd(newId, taskInfo);
 
             Timer timer = new Timer(timeout);
-            timer.Elapsed += (sender, e) => this.Reject(newId, new TimeoutException());
+            timer.Elapsed += (sender, e) => this.Reject(newId, new TimeoutException($"Timeout for request: {newRequest} with id {newId}", request));
             timer.Start();
             timeoutsAwaitingResponse.TryAdd(newId, timer);
 

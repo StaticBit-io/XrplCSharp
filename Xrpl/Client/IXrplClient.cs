@@ -288,14 +288,19 @@ namespace Xrpl.Client
         Task<object> AnyRequest(BaseRequest request);
 
         Task<Dictionary<string, dynamic>> Request(Dictionary<string, dynamic> request);
-        Task<T> GRequest<T, R>(R request);
+        Task<T> GRequest<T, R>(R request) where R : BaseRequest;
 
-        // Sugars
+
+        #region Sugars
+
         Task<Dictionary<string, dynamic>> Autofill(Dictionary<string, dynamic> tx);
         Task<uint> GetLedgerIndex();
         Task<string> GetXrpBalance(string address);
         Task ChangeServer(string server, ClientOptions? options = null);
 
+        string EnsureClassicAddress(string address);
+
+        #endregion
     }
 
     public class XrplClient : IXrplClient
@@ -306,6 +311,11 @@ namespace Xrpl.Client
             public uint? NetworkID { get; set; }
             public double? feeCushion { get; set; }
             public string? maxFeeXRP { get; set; }
+
+            /// <summary>
+            /// The API version to use when making requests.
+            /// </summary>
+            public int? ApiVersion { get; set; }
         }
 
         public Connection connection { get; set; }
@@ -313,6 +323,10 @@ namespace Xrpl.Client
         public string maxFeeXRP { get; set; }
         public uint? networkID { get; set; }
 
+        /// <summary>
+        /// The API version to use when making requests.
+        /// </summary>
+        public int ApiVersion { get; set; }
         //public event OnError OnError;
         //public event OnConnected OnConnected;
         //public event OnDisconnect OnDisconnect;
@@ -338,7 +352,7 @@ namespace Xrpl.Client
             feeCushion = options?.feeCushion ?? 1.2;
             maxFeeXRP = options?.maxFeeXRP ?? "2";
             networkID = options?.NetworkID;
-
+            ApiVersion = options?.ApiVersion ?? 2;
             connection = new Connection(server, options);
             //connection.OnError += (e, em, m, d) => OnError?.Invoke(e, em, m, d);
             //connection.OnConnected += () => OnConnected?.Invoke();
@@ -640,10 +654,12 @@ namespace Xrpl.Client
         }
 
         /// <inheritdoc />
-        public async Task<T> GRequest<T, R>(R request)
+        public async Task<T> GRequest<T, R>(R request) where R : BaseRequest
         {
             //string account = request["Account"] ? EnsureClassicAddress((string)request["account"]) : null;
-            //request["Account"] = account;
+            //request["Account"] = account
+            //
+
             var response = await this.connection.GRequest<T, R>(request);
 
             // mutates `response` to add warnings

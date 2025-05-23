@@ -72,10 +72,17 @@ namespace Xrpl.Client.Exceptions
     /// Exception thrown when rippled is not initialized.
     /// </summary>
     public class RippledNotInitializedException : XrplException { }
+
     /// <summary>
     /// Exception thrown when xrpl.js times out.
     /// </summary>
-    public class TimeoutException : XrplException { }
+    public class TimeoutException : XrplException
+    {
+        public TimeoutException(string message, dynamic data = null) : base(message)
+        {
+            
+        }
+    }
     /// <summary>
     /// Exception thrown when xrpl.js sees a response in the wrong format.
     /// </summary>
