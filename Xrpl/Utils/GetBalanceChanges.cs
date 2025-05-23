@@ -1,227 +1,210 @@
-﻿
-
-// https://github.com/XRPLF/xrpl.js/blob/main/packages/xrpl/src/utils/getBalanceChanges.ts
-
-//todo DO
-using static Xrpl.Models.Common.Common;
-using System.Collections.Generic;
-using System.Globalization;
+﻿using System.Collections.Generic;
 using System.Linq;
-using System.Numerics;
-using Xrpl.Sugar;
-using Newtonsoft.Json;
-using Newtonsoft.Json.Linq;
+
+using Xrpl.Models;
 using Xrpl.Models.Common;
+using Xrpl.Models.Ledger; // Contains Balance, IssuedCurrencyAmount
+using Xrpl.Models.Transactions;
+// https://github.com/XRPLF/xrpl.js/blob/main/packages/xrpl/test/utils/getBalanceChanges.ts
 
-namespace Xrpl.Utils
+namespace XrplTests.Xrpl.Utils;
+
+/// <summary>
+/// Utilities for computing balance changes (XRP and issued currencies)
+/// from transaction metadata's affected nodes.
+/// </summary>
+public static class BalanceChanges
 {
-
-    public class BalanceChange
+    /// <summary>
+    /// Internal representation of a single balance change for an account.
+    /// </summary>
+    private class BalanceChange
     {
-        public string Account { get; set; }
-        public Balance Balance { get; set; }
+        public string Account { get; set; } = string.Empty;
+
+        public Currency Balance { get; set; } = null!;
     }
 
-    public class Fields
+    /// <summary>
+    /// Computes XRP balance change from a modified ledger node.
+    /// </summary>
+    private static BalanceChange GetXrpQuantity(NodeInfo node)
     {
-        public string Account { get; set; }
-        public Currency Balance { get; set; }
-        public IssuedCurrencyAmount LowLimit { get; set; }
-        public IssuedCurrencyAmount HighLimit { get; set; }
-        public Dictionary<string, object> FieldDict { get; set; }
+        if (node.LedgerEntryType != LedgerEntryType.AccountRoot)
+        {
+            return null;
+        }
+
+        decimal? value = null;
+        string account = null;
+        var newField = node.New is LOAccountRoot { } newNode ? newNode : null;
+        var finalField = node.Final is LOAccountRoot { } finalNode ? finalNode : null;
+        var previousField = node.Previous is LOAccountRoot { } previousNode ? previousNode : null;
+
+        if (newField?.Balance is { } newBalance)
+        {
+            value = newBalance.ValueAsXrp;
+            account = newField.Account;
+        }
+        else if (previousField?.Balance is { } previousBalance && finalField?.Balance is { } finalBalance)
+        {
+            value = finalBalance.ValueAsXrp - previousBalance.ValueAsXrp;
+            account = finalField.Account;
+        }
+
+        if (value is not { } or 0)
+        {
+            return null;
+        }
+
+        return new BalanceChange
+        {
+            Account = account,
+            Balance = new Currency()
+            {
+                ValueAsXrp = value,
+            },
+        };
     }
 
-    public class NormalizedNode
+    /// <summary>
+    /// Computes issued-currency (trustline) balance change from a modified node.
+    /// Returns positive change for low limit issuer and negative for high limit issuer.
+    /// </summary>
+    private static List<BalanceChange> GetTrustlineQuantity(NodeInfo node)
     {
-        public string NodeType { get; set; }
-        public string LedgerEntryType { get; set; }
-        public string LedgerIndex { get; set; }
-        public Fields NewFields { get; set; }
-        public Fields FinalFields { get; set; }
-        public Fields PreviousFields { get; set; }
-        public string PreviousTxnID { get; set; }
-        public int PreviousTxnLgrSeq { get; set; }
-    }
-
-    public static class GetBalanceChanges
-    {
-
-        //todo need help with NormalizeNodes
-        //public static NormalizedNode NormalizeNode(this INode affectedNode)
-        //{
-        //    var diffType = affectedNode[0];
-        //    NormalizedNode node = affectedNode[diffType] as NormalizedNode;
-        //    return new NormalizedNode
-        //    {
-        //        NodeType = diffType,
-        //        LedgerEntryType = node.LedgerEntryType,
-        //        LedgerIndex = node.LedgerIndex,
-        //        NewFields = node.NewFields,
-        //        FinalFields = node.FinalFields,
-        //        PreviousFields = node.PreviousFields
-        //    };
-        //}
-
-        //public static List<NormalizedNode> NormalizeNodes(this TransactionMetadata metadata)
-        //{
-        //    if (metadata.AffectedNodes.Count == 0)
-        //    {
-        //        return new List<NormalizedNode>();
-        //    }
-
-        //    return metadata.AffectedNodes.Select(NormalizeNodes).ToList();
-        //}
-
-        public static List<(string account, List<Balance> balances)> GroupByAccount(this List<BalanceChange> balanceChanges)
+        if (node.LedgerEntryType != LedgerEntryType.RippleState)
         {
-            var grouped = balanceChanges.GroupBy(node => node.Account);
-            return grouped.Select(item => (item.Key, item.Select(i => i.Balance).ToList())).ToList();
+            return null;
         }
 
-        public static BigInteger GetValue(object balance) //todo need to check
-        {
-            if (balance is string val)
-            {
-                return BigInteger.Parse(val, NumberStyles.AllowLeadingSign
-                                             | (NumberStyles.AllowLeadingSign & NumberStyles.AllowDecimalPoint)
-                                             | (NumberStyles.AllowLeadingSign & NumberStyles.AllowExponent)
-                                             | (NumberStyles.AllowLeadingSign & NumberStyles.AllowExponent & NumberStyles.AllowDecimalPoint)
-                                             | (NumberStyles.AllowExponent & NumberStyles.AllowDecimalPoint)
-                                             | NumberStyles.AllowExponent
-                                             | NumberStyles.AllowDecimalPoint, CultureInfo.InvariantCulture);
-            }
+        decimal? value = null;
+        string account = null;
+        string code = null;
+        string issuer = null;
+        var newField = node.New is LORippleState { } newNode ? newNode : null;
+        var finalField = node.Final is LORippleState { } finalNode ? finalNode : null;
+        var previousField = node.Previous is LORippleState { } previousNode ? previousNode : null;
 
-            var json = JObject.Parse(JsonConvert.SerializeObject(balance));
-            return BigInteger.Parse(json["Value"].ToString(), NumberStyles.AllowLeadingSign
-                                                   | (NumberStyles.AllowLeadingSign & NumberStyles.AllowDecimalPoint)
-                                                   | (NumberStyles.AllowLeadingSign & NumberStyles.AllowExponent)
-                                                   | (NumberStyles.AllowLeadingSign & NumberStyles.AllowExponent & NumberStyles.AllowDecimalPoint)
-                                                   | (NumberStyles.AllowExponent & NumberStyles.AllowDecimalPoint)
-                                                   | NumberStyles.AllowExponent
-                                                   | NumberStyles.AllowDecimalPoint, CultureInfo.InvariantCulture);
+        if (newField?.Balance is { } newBalance)
+        {
+            value = newBalance.ValueAsNumber;
+            account = newField.LowLimit.Issuer;
+            code = newBalance.CurrencyCode;
+            issuer = newField.HighLimit.Issuer;
+        }
+        else if (previousField?.Balance is { } previousBalance && finalField?.Balance is { } finalBalance)
+        {
+            value = finalBalance.ValueAsNumber - previousBalance.ValueAsNumber;
+            account = finalField.LowLimit.Issuer;
+            code = finalBalance.CurrencyCode;
+            issuer = finalField.HighLimit.Issuer;
         }
 
-        public static BigInteger? ComputeBalanceChange(this NormalizedNode node)
+        if (value is not { } or 0)
         {
-            BigInteger? value = null;
-            if (node.NewFields?.Balance != null)
-            {
-                value = GetValue(node.NewFields.Balance);
-            }
-            else if (node.PreviousFields?.Balance != null && node.FinalFields?.Balance != null)
-            {
-                value = GetValue(node.FinalFields.Balance) - GetValue(node.PreviousFields.Balance);
-            }
-
-            if (value is null || value.Value.IsZero)
-            {
-                return null;
-            }
-
-            return value;
+            return null;
         }
 
-        public static (string account, Balance balance) GetXRPQuantity(this NormalizedNode node)
+        // Create issued currency amount for difference
+        var change = new Currency()
         {
-            var value = ComputeBalanceChange(node);
+            CurrencyCode = code,
+            Issuer = issuer,
+            ValueAsNumber = value.Value,
+        };
 
-            if (value == null)
+        return new List<BalanceChange>
+        {
+            // Low limit issuer receives positive delta
+            new BalanceChange
             {
-                return (null, null);
-            }
+                Account = account,
+                Balance = change,
+            },
 
-            return (node.FinalFields?.Account ?? node.NewFields?.Account,
-                new Balance
+            // High limit issuer receives negative delta
+            new BalanceChange
+            {
+                Account = issuer,
+                Balance = new Currency
                 {
-                    Currency = "XRP",
-                    Value = XrpConversion.DropsToXrp(value.Value.ToString())
-                });
-        }
+                    CurrencyCode = code,
+                    Issuer = account,
+                    ValueAsNumber = -value.Value,
+                },
+            },
+        };
+    }
 
-        public static BalanceChange FlipTrustlinePerspective(this BalanceChange balanceChange)
+    /// <summary>
+    /// Groups per-account balance changes and sums them.
+    /// </summary>
+    private static Dictionary<string, List<Currency>> GroupByAccount(IEnumerable<BalanceChange> changes)
+    {
+        return changes
+            .GroupBy(node => node.Account)
+            .ToDictionary(keySelector: c => c.Key, elementSelector: c => c.Select(v => v.Balance).ToList());
+    }
+
+    /// <summary>
+    /// Computes balance changes per account from transaction metadata.
+    /// </summary>
+    /// <param name="metadata">Transaction metadata including affected nodes.</param>
+    /// <returns>Dictionary mapping account addresses to balance changes (XRP string or IssuedCurrencyAmount).</returns>
+    public static Dictionary<string, List<Currency>> GetBalanceChanges(ITransactionMetadata metadata)
+    {
+        var list = new List<BalanceChange>();
+
+        foreach (var n in metadata.AffectedNodes)
         {
-            var negatedBalance = BigInteger.Parse(
-                balanceChange.Balance.Value, NumberStyles.AllowLeadingSign
-                                             | (NumberStyles.AllowLeadingSign & NumberStyles.AllowDecimalPoint)
-                                             | (NumberStyles.AllowLeadingSign & NumberStyles.AllowExponent)
-                                             | (NumberStyles.AllowLeadingSign & NumberStyles.AllowExponent & NumberStyles.AllowDecimalPoint)
-                                             | (NumberStyles.AllowExponent & NumberStyles.AllowDecimalPoint)
-                                             | NumberStyles.AllowExponent
-                                             | NumberStyles.AllowDecimalPoint, CultureInfo.InvariantCulture);//.Negate();
-            return new BalanceChange
-            {
-                Account = balanceChange.Balance.Issuer,
-                Balance = new Balance
+            var node = n.ModifiedNode != null
+                ? new NodeInfo()
                 {
-                    Issuer = balanceChange.Account,
-                    Currency = balanceChange.Balance.Currency,
-                    Value = negatedBalance.ToString()
+                    LedgerEntryType = n.ModifiedNode.LedgerEntryType,
+                    FinalFields = n.ModifiedNode.FinalFields,
+                    PreviousFields = n.ModifiedNode.PreviousFields,
+                    LedgerIndex = n.ModifiedNode.LedgerIndex,
+                    PreviousTxnID = n.ModifiedNode.PreviousTxnID,
+                    PreviousTxnLgrSeq = n.ModifiedNode.PreviousTxnLgrSeq,
                 }
-            };
-        }
-
-        public static List<BalanceChange> GetTrustlineQuantity(this NormalizedNode node)
-        {
-            var value = ComputeBalanceChange(node);
-
-            if (value == null)
+                : n.CreatedNode != null
+                    ? new NodeInfo
+                    {
+                        LedgerEntryType = n.CreatedNode.LedgerEntryType,
+                        NewFields = n.CreatedNode.NewFields,
+                        LedgerIndex = n.CreatedNode.LedgerIndex,
+                    }
+                    : n.DeletedNode != null
+                        ? new NodeInfo
+                        {
+                            LedgerEntryType = n.DeletedNode.LedgerEntryType,
+                            LedgerIndex = n.DeletedNode.LedgerIndex,
+                            FinalFields = n.DeletedNode.FinalFields,
+                            PreviousFields = n.DeletedNode.PreviousFields,
+                        }
+                        : null;
+            if (node == null)
             {
-                return null;
+                continue;
             }
-            /*
-             * A trustline can be created with a non-zero starting balance.
-             * If an offer is placed to acquire an asset with no existing trustline,
-             * the trustline can be created when the offer is taken.
-             */
-            var fields = node.NewFields ?? node.FinalFields;
-            var result = new BalanceChange
+
+            if (node.LedgerEntryType == LedgerEntryType.AccountRoot)
             {
-                Account = fields?.LowLimit?.Issuer,
-                Balance = new Balance
+                if (GetXrpQuantity(node) is { } value)
                 {
-                    Issuer = fields?.HighLimit?.Issuer,
-                    Currency = fields?.Balance.CurrencyCode,
-                    Value = value.ToString()
+                    list.Add(value);
                 }
-            };
-            return new List<BalanceChange> { result, FlipTrustlinePerspective(result) };
+            }
+            else if (node.LedgerEntryType == LedgerEntryType.RippleState)
+            {
+                if (GetTrustlineQuantity(node) is { } values)
+                {
+                    list.AddRange(values);
+                }
+            }
         }
-        ///// <summary> //todo need help with NormalizeNodes
-        ///// Computes the complete list of every balance that changed in the ledger as a result of the given transaction.
-        ///// </summary>
-        ///// <param name="metadata">Transaction metadata.</param>
-        ///// <returns>Parsed balance changes.</returns>
-        //public static List<(string account, List<Balance> balances)> GetBalanceChanges(this TransactionMetadata metadata)
-        //{
-        //    var quantities = NormalizeNodes(metadata).Select(
-        //        node =>
-        //        {
-        //            if (node.LedgerEntryType == "AccountRoot")
-        //            {
-        //                var xrpQuantity = GetXRPQuantity(node);
-        //                if (xrpQuantity.account == null)
-        //                {
-        //                    return new List<BalanceChange>();
-        //                }
 
-        //                return new List<BalanceChange>() { new BalanceChange() { Account = xrpQuantity.account, Balance = xrpQuantity.balance } };
-        //            }
-
-        //            if (node.LedgerEntryType == "RippleState")
-        //            {
-        //                var trustlineQuantity = GetTrustlineQuantity(node);
-        //                if (trustlineQuantity == null)
-        //                {
-        //                    return new List<BalanceChange>();
-        //                }
-
-        //                return trustlineQuantity;
-        //            }
-
-        //            return new List<BalanceChange>();
-        //        }).ToList();
-        //    return GroupByAccount(quantities.SelectMany(q => q).ToList());
-        //}
+        return GroupByAccount(list);
     }
 }
-
