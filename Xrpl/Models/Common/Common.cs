@@ -55,5 +55,16 @@ namespace Xrpl.Models.Common
             [JsonProperty("value")]
             public string Value { get; set; }
         }
+
+        public class MPTCurrency
+        {
+            [JsonProperty("mpt_issuance_id")]
+            public string MptIssuanceId { get; set; }
+        }
+        public class MPTAmount: MPTCurrency
+        {
+            [JsonProperty("value")]
+            public string Value { get; set; }
+        }
     }
 }

@@ -407,7 +407,7 @@ namespace Xrpl.Models.Transactions
     /// Warning: The changes described in transaction metadata are only final if the transaction is in a validated ledger version.
     /// </remarks>
     /// </summary>
-    public class Meta
+    public class Meta : ITransactionMetadata
     {
         /// <summary>
         /// List of ledger objects that were created, deleted, or modified by this transaction, and specific changes to each.
@@ -429,15 +429,23 @@ namespace Xrpl.Models.Transactions
         public string TransactionResult { get; set; }
 
         /// <summary>
-        /// OfferID for create NFT offers.
+        /// Shows the OfferIDof a new NFTokenOffer in a response from a NFTokenCreateOffer transaction.
         /// </summary>
         [JsonProperty("offer_id")]
         public string OfferID { get; set; }
         /// <summary>
-        /// NFTokenID for nft accept offer.
+        /// Shows the NFTokenID for the NFToken that changed on the ledger as a result of the transaction.
+        /// Only present if the transaction is NFTokenMint or NFTokenAcceptOffer
         /// </summary>
         [JsonProperty("nftoken_id")]
-        public string NFTokenID { get; set; }
+        public string NFTokenId { get; set; }
+
+        /// <summary>
+        /// Shows all the NFTokenIDs for the NFTokens that changed on the ledger as a result of the transaction.
+        /// Only present if the transaction is NFTokenCancelOffer.
+        /// </summary>
+        [JsonProperty("nftoken_ids")]
+        public string NFTokenIds { get; set; }
 
         /// <summary>
         /// (Omitted for non-Payment transactions) The Currency Amount actually received by the Destination account.<br/>
@@ -459,16 +467,16 @@ namespace Xrpl.Models.Transactions
     /// <summary>
     /// The AffectedNodes array contains a complete list of the objects in the ledger that this transaction modified in some way. 
     /// </summary>
-    public class AffectedNode
+    public class AffectedNode : IAffectedNode
     {
         /// <summary>
         /// indicates that the transaction created a new object in the ledger.
         /// </summary>
-        public NodeInfo? CreatedNode { get; set; }
+        public CreatedNode? CreatedNode { get; set; }
         /// <summary>
         /// indicates that the transaction removed an object from the ledger.
         /// </summary>
-        public NodeInfo? DeletedNode { get; set; }
+        public DeletedNode? DeletedNode { get; set; }
         /// <summary>
         /// indicates that the transaction modified an existing object in the ledger.
         /// <remarks>
@@ -478,13 +486,13 @@ namespace Xrpl.Models.Transactions
         /// and their previous values are listed at the top level of the ModifiedNode object rather than in the nested PreviousFields object.
         /// </remarks>
         /// </summary>
-        public NodeInfo? ModifiedNode { get; set; }
+        public ModifiedNode? ModifiedNode { get; set; }
     }
 
     /// <summary>
     /// transaction object
     /// </summary>
-    public class NodeInfo
+    public class NodeInfo : ICreatedNode, IModifiedNode, IDeletedNode
     {
         /// <summary>
         /// The type of ledger object
@@ -741,5 +749,90 @@ namespace Xrpl.Models.Transactions
         public uint? SourceTag { get; set; }
         /// <inheritdoc />
         public uint? TicketSequence { get; set; }
+    }
+
+    /// <summary>
+    /// Represents a node that was created in a transaction.
+    /// </summary>
+    public class CreatedNode : NodeBase, ICreatedNode
+    {
+        /// <summary>
+        /// Gets or sets the new fields created.
+        /// </summary>
+        [JsonProperty("NewFields")]
+        public dynamic NewFields { get; set; }
+        public BaseLedgerEntry New => LOConverter.GetBaseRippleLO(LedgerEntryType, NewFields);
+    }
+
+    /// <summary>
+    /// Represents a node that was modified in a transaction.
+    /// </summary>
+    public class ModifiedNode : NodeBase, IModifiedNode
+    {
+        /// <summary>
+        /// Gets or sets the final fields after modification.
+        /// </summary>
+        [JsonProperty("FinalFields")]
+        public dynamic FinalFields { get; set; }
+        public BaseLedgerEntry Final => LOConverter.GetBaseRippleLO(LedgerEntryType, FinalFields);
+
+        /// <summary>
+        /// Gets or sets the previous fields before modification.
+        /// </summary>
+        [JsonProperty("PreviousFields")]
+        public dynamic PreviousFields { get; set; }
+        public BaseLedgerEntry Previous => LOConverter.GetBaseRippleLO(LedgerEntryType, PreviousFields);
+
+        /// <summary>
+        /// Gets or sets the previous transaction ID.
+        /// </summary>
+        [JsonProperty("PreviousTxnID")]
+        public string PreviousTxnID { get; set; }
+
+        /// <summary>
+        /// Gets or sets the previous transaction ledger sequence.
+        /// </summary>
+        [JsonProperty("PreviousTxnLgrSeq")]
+        public uint? PreviousTxnLgrSeq { get; set; }
+    }
+
+    /// <summary>
+    /// Represents a node that was deleted in a transaction.
+    /// </summary>
+    public class DeletedNode : NodeBase, IDeletedNode
+    {
+        /// <summary>
+        /// The content fields of the ledger entry immediately before it was deleted.
+        /// Which fields are present depends on what type of ledger entry was created.
+        /// </summary>
+        [JsonProperty("FinalFields")]
+        public dynamic FinalFields { get; set; }
+        public BaseLedgerEntry Final => LOConverter.GetBaseRippleLO(LedgerEntryType, FinalFields);
+
+        /// <summary>
+        /// (May be omitted) Selected fields of the ledger entry before it was deleted.
+        /// Which fields are present depends on what type of ledger entry was created.
+        /// </summary>
+        [JsonProperty("PreviousFields")]
+        public dynamic PreviousFields { get; set; }
+        public BaseLedgerEntry Previous => LOConverter.GetBaseRippleLO(LedgerEntryType, PreviousFields);
+    }
+    /// <summary>
+    /// Base class for ledger entries
+    /// </summary>
+    public abstract class NodeBase
+    {
+        /// <summary>
+        /// Type of entry in the ledger
+        /// </summary>
+        [JsonProperty("LedgerEntryType")]
+        [JsonConverter(typeof(StringEnumConverter))]
+        public LedgerEntryType LedgerEntryType { get; set; }
+
+        /// <summary>
+        /// Identifier of this object in the ledger's state tree
+        /// </summary>
+        [JsonProperty("LedgerIndex")]
+        public string LedgerIndex { get; set; } = string.Empty;
     }
 }
