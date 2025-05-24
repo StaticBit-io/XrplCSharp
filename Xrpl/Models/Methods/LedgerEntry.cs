@@ -23,7 +23,7 @@ namespace Xrpl.Models.Methods
     }
     /// <summary>
     /// The `ledger_entry` method returns a single ledger object from the XRP Ledger  in its raw format.<br/>
-    /// Expects a response in the form of a <see cref="LOLedgerEntry"/>.
+    /// Expects a response in the form of a <see cref="LedgerEntryResponse"/>.
     /// </summary>
     /// <code>
     ///  ```ts  const ledgerEntry: LedgerEntryRequest ={

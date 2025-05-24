@@ -253,8 +253,8 @@ namespace Xrpl.Client
         /// See ledger format for information on the different types of objects you can retrieve.
         /// </summary>
         /// <param name="request">An <see cref="LedgerEntryRequest"/> response.</param>
-        /// <returns>An <see cref="LOLedgerEntry"/> response.</returns>
-        Task<LOLedgerEntry> LedgerEntry(LedgerEntryRequest request);
+        /// <returns>An <see cref="LedgerEntryResponse"/> response.</returns>
+        Task<LedgerEntryResponse> LedgerEntry(LedgerEntryRequest request);
 
 
         #endregion
@@ -531,9 +531,9 @@ namespace Xrpl.Client
         }
 
         /// <inheritdoc />
-        public Task<LOLedgerEntry> LedgerEntry(LedgerEntryRequest request)
+        public Task<LedgerEntryResponse> LedgerEntry(LedgerEntryRequest request)
         {
-            return this.GRequest<LOLedgerEntry, LedgerEntryRequest>(request);
+            return this.GRequest<LedgerEntryResponse, LedgerEntryRequest>(request);
         }
 
         /// <inheritdoc />

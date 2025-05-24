@@ -69,7 +69,7 @@ namespace Xrpl.Models.Ledger
         /// All the state information in this ledger.
         /// </summary>
         [JsonProperty("accountState")]
-        public List<LOLedgerEntry> AccountState { get; set; }
+        public List<LedgerEntryResponse> AccountState { get; set; }
         /// <summary>
         /// A bit-map of flags relating to the closing of this ledger.
         /// </summary>
@@ -143,8 +143,8 @@ namespace Xrpl.Models.Ledger
     /// Some fields of this object may be omitted because they have not yet been calculated.<br/>
     /// <a>https://xrpl.org/ledger.html#response-format</a>
     /// </summary>
-    public class QueuedTransaction 
-        //todo Rename to LedgerQueueData https://github.com/XRPLF/xrpl.js/blob/b20c05c3680d80344006d20c44b4ae1c3b0ffcac/packages/xrpl/src/models/methods/ledger.ts#L87
+    public class QueuedTransaction
+    //todo Rename to LedgerQueueData https://github.com/XRPLF/xrpl.js/blob/b20c05c3680d80344006d20c44b4ae1c3b0ffcac/packages/xrpl/src/models/methods/ledger.ts#L87
     {
         /// <summary>
         /// The Address of the sender for this queued transaction.
