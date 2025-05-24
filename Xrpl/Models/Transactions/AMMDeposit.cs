@@ -32,7 +32,12 @@ namespace Xrpl.Models.Transactions
         /// <summary>
         /// Perform a single-asset deposit with a specified effective price.
         /// </summary>
-        tfLimitLPToken = 4194304 //0x00400000
+        tfLimitLPToken = 4194304, //0x00400000
+        /// <summary>
+        /// Deposit both of this AMM's assets, in exactly the specified amounts, to an AMM with an empty asset pool.<br/>
+        /// The amount of LP Tokens you get in return is based on the total value deposited.
+        /// </summary>
+        tfTwoAssetIfEmpty = 8388608 // 0x00800000
     };
 
     //public interface AMMDepositFlagsInterface : GlobalFlags
