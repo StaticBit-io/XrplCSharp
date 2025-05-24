@@ -22,7 +22,7 @@ namespace Xrpl.Models.Methods
         /// This way, even if responses arrive out of order, you know which request prompted which response.
         /// </summary>
         [JsonProperty("id")]
-        public Guid? Id { get; set; }
+        public object? Id { get; set; }
         /** The name of the API method. */
         [JsonProperty("command")]
         public string Command { get; set; }

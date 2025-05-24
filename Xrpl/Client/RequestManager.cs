@@ -196,7 +196,11 @@ namespace Xrpl.Client
                 throw new XrplException("Valid id not found in response");
             }
 
-            if (!promisesAwaitingResponse.ContainsKey((Guid)response.Id))
+            if(!Guid.TryParse($"{response.Id}", out var id))
+            {
+                throw new XrplException("invalid id type");
+            }
+            if (!promisesAwaitingResponse.ContainsKey(id))
             {
                 Debug.WriteLine("Valid id not found in promises");
                 return;
@@ -205,23 +209,23 @@ namespace Xrpl.Client
             if (response.Status == null)
             {
                 ResponseFormatException error = new ResponseFormatException("Response has no status");
-                this.Reject((Guid)response.Id, error);
+                this.Reject(id, error);
             }
 
             if (response.Status == "error")
             {
                 XrplException error = new XrplException(response.ErrorMessage ?? response.Error);
-                this.Reject((Guid)response.Id, error);
+                this.Reject(id, error);
                 return;
             }
 
             if (response.Status != "success")
             {
                 XrplException error = new XrplException($"unrecognized response.status: ${response.Status ?? ""}");
-                this.Reject((Guid)response.Id, error);
+                this.Reject(id, error);
                 return;
             }
-            this.Resolve((Guid)response.Id, response);
+            this.Resolve(id, response);
         }
 
         /// <summary>
