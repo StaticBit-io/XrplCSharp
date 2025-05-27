@@ -43,7 +43,7 @@ namespace Xrpl.Sugar
             XrplWallet wallet = null
         )
         {
-            string signedTx = await client.GetSignedTx(transaction, autofill, false, wallet);
+            var (signedTx, _) = await client.GetSignedTx(transaction, autofill, false, wallet);
             return await SubmitRequest(client, signedTx, failHard);
         }
         /// <summary>
@@ -57,14 +57,14 @@ namespace Xrpl.Sugar
         /// <param name="failHard">If true, and the transaction fails locally, do not retry or relay the transaction to other servers.</param>
         /// <param name="wallet">A wallet to sign a transaction. It must be provided when submitting an unsigned transaction.</param>
         /// <returns>A promise that contains TxResponse, that will return when the transaction has been validated.</returns>
-        public static async Task<TransactionResponseCommon> SubmitAndWait(this IXrplClient client,
+        public static async Task<TransactionSummary> SubmitAndWait(this IXrplClient client,
             Dictionary<string, dynamic> transaction,
             bool autofill = false,
             bool failHard = false,
             XrplWallet wallet = null)
         {
-            var signedTx = await client.GetSignedTx(transaction, autofill, failHard, wallet);
-            var lastLedger = GetLastLedgerSequence(signedTx);
+            var (signedTx, tx) = await client.GetSignedTx(transaction, autofill, failHard, wallet);
+            var lastLedger = GetLastLedgerSequence(tx);
             if (lastLedger == null)
             {
                 throw new ValidationException("Transaction must contain a LastLedgerSequence value for reliable submission.");
@@ -111,7 +111,7 @@ namespace Xrpl.Sugar
         /// <param name="submissionResult"></param>
         /// <returns></returns>
         /// <exception cref="ValidationException"></exception>
-        private static async Task<TransactionResponseCommon> WaitForFinalTransactionOutcome(this IXrplClient Client, string TxHash, uint? lastLedger, string submissionResult)
+        private static async Task<TransactionSummary> WaitForFinalTransactionOutcome(this IXrplClient Client, string TxHash, uint? lastLedger, string submissionResult)
         {
             await Task.Delay(LEDGER_CLOSE_TIME);
             var latestLedger = await Client.GetLedgerIndex();
@@ -122,11 +122,10 @@ namespace Xrpl.Sugar
                     $"Preliminary result: {submissionResult}");
             }
 
-            TransactionResponseCommon txResponse = null;
+            TransactionSummary txResponse = null;
             try
             {
-                txResponse = await Client.Tx(new TxRequest(TxHash));
-
+                txResponse = await Client.TxV2(new TxRequest(TxHash){ApiVersion = 2});
             }
             catch (Exception error)
             {
@@ -155,7 +154,7 @@ namespace Xrpl.Sugar
         /// <param name="failHard">If true, and the transaction fails locally, do not retry or relay the transaction to other servers.</param>
         /// <param name="wallet">A wallet to sign a transaction. It must be provided when submitting an unsigned transaction.</param>
         /// <returns>A Wallet derived from a seed.</returns>
-        public static async Task<string> GetSignedTx(this IXrplClient client,
+        public static async Task<(string txBlob, Dictionary<string, dynamic> tx)> GetSignedTx(this IXrplClient client,
             Dictionary<string, dynamic> transaction,
             bool autofill = false,
             bool failHard = false,
@@ -180,7 +179,7 @@ namespace Xrpl.Sugar
             {
                 tx = await client.Autofill(tx);
             }
-            return wallet.Sign(tx, false).TxBlob;
+            return (wallet.Sign(tx, false).TxBlob, tx);
         }
 
         public static bool IsSigned(object transaction)

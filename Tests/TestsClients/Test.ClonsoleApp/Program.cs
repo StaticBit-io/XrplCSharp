@@ -9,6 +9,7 @@ using Xrpl.Models;
 using Xrpl.Models.Common;
 using Xrpl.Models.Methods;
 using Xrpl.Models.Transactions;
+using Xrpl.Sugar;
 using Xrpl.Wallet;
 
 using Common = Xrpl.Models.Common.Common;
@@ -90,8 +91,10 @@ namespace MyApp
 
             // sign and submit the transaction
             Dictionary<string, dynamic> txJson = JsonConvert.DeserializeObject<Dictionary<string, dynamic>>(tx.ToJson());
-            Submit response = await client.Submit(txJson, wallet);
-            Console.WriteLine(response.EngineResult);
+            var  txResult = await client.SubmitAndWait(txJson,true,false, wallet);
+            Console.WriteLine(txResult.Meta.TransactionResult);
+            //Submit response = await client.Submit(txJson, wallet);
+            //Console.WriteLine(response.EngineResult);
         }
         static async Task TestAmm()
         {
@@ -426,8 +429,8 @@ namespace MyApp
             //await SampleClient();
             //WalletFromSeed();
             //WalletGenerate();
-            //await SubmitTestTx();
-            await WebsocketTest();
+            await SubmitTestTx();
+            //await WebsocketTest();
             //await WebsocketChangeServerTest();
         }
     }

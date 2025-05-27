@@ -84,7 +84,7 @@ namespace Xrpl.Client
         /// </summary>
         /// <param name="request">An <see cref="PingRequest"/> request.</param>
         /// <returns></returns>
-        Task<object> Ping(PingRequest request);
+        Task<object> Ping();
         /// <summary> The server_info command asks the server for a human-readable version of various information about the rippled server being queried. </summary>
         /// <param name="request">An <see cref="ServerInfoRequest"/> request.</param>
         /// <returns>A <see cref="ServerInfo"/> response.</returns>
@@ -96,7 +96,7 @@ namespace Xrpl.Client
         /// <summary> The fee command reports the current state of the open-ledger requirements for the transaction cost. </summary>
         /// <param name="request">An <see cref="FeeRequest"/> request.</param>
         /// <returns>An <see cref="Models.Methods.Fee"/> response.</returns>
-        Task<Fee> Fee(FeeRequest request);
+        Task<Fee> Fee();
 
         #endregion
 
@@ -194,16 +194,29 @@ namespace Xrpl.Client
         ///// <returns>An <see cref="Models.Transaction.Submit"/> response.</returns>
         //Task<Submit> Submit(SubmitRequest request);
         /// <summary>
-        /// 
+        /// Submits a transaction to the XRP Ledger for processing.
         /// </summary>
         /// <param name="tx">
         /// Transaction in JSON format with an array of Signers.<br/>
         /// To be successful, the weights of the signatures must be equal or higher than the quorum of the SignerList.
         /// </param>
-        /// <param name="wallet"></param>//todo add description
+        /// <param name="wallet">wallet</param>
+        /// <param name="autoFill">use autofill for tx</param>
+        /// <param name="failHard">yse fail hard</param>
         /// <returns>An <see cref="Models.Transactions.Submit"/> response.</returns>
-        Task<Submit> Submit(Dictionary<string, dynamic> tx, XrplWallet wallet);
-        Task<Submit> Submit(ITransactionCommon tx, XrplWallet wallet);
+        Task<Submit> Submit(Dictionary<string, dynamic> tx, XrplWallet wallet, bool autoFill = true, bool failHard = false);
+        /// <summary>
+        /// Submits a transaction to the XRP Ledger for processing.
+        /// </summary>
+        /// <param name="tx">
+        /// Transaction.<br/>
+        /// To be successful, the weights of the signatures must be equal or higher than the quorum of the SignerList.
+        /// </param>
+        /// <param name="wallet">wallet</param>
+        /// <param name="autoFill">use autofill for tx</param>
+        /// <param name="failHard">yse fail hard</param>
+        /// <returns>An <see cref="Models.Transactions.Submit"/> response.</returns>
+        Task<Submit> Submit(ITransactionCommon tx, XrplWallet wallet, bool autoFill = true, bool failHard = false);
         /// <summary>
         /// The tx method retrieves information on a single transaction, by its identifying hash
         /// </summary>
@@ -211,6 +224,7 @@ namespace Xrpl.Client
         /// <returns>An <see cref="TransactionResponseCommon"/> response.</returns>
         Task<TransactionResponseCommon> Tx(TxRequest request);
 
+        Task<TransactionSummary> TxV2(TxRequest request);
         #endregion
 
         #region Channels
@@ -277,7 +291,7 @@ namespace Xrpl.Client
         /// </summary>
         /// <param name="request">An <see cref="RandomRequest"/> request.</param>
         /// <returns></returns>
-        Task<object> Random(RandomRequest request);
+        Task<object> Random();
 
         //Task<DepositAuthorized> DepositAuthorized(DepositAuthorizedRequest request);
         //Task<PathFind> PathFind(PathFindRequest request);
@@ -413,12 +427,12 @@ namespace Xrpl.Client
         }
 
         /// <inheritdoc />
-        public Task<Submit> Submit(Dictionary<string, dynamic> tx, XrplWallet wallet)
+        public Task<Submit> Submit(Dictionary<string, dynamic> tx, XrplWallet wallet, bool autoFill = true, bool failHard = false)
         {
-            return this.Submit(tx, true, false, wallet);
+            return this.Submit(tx, autoFill, failHard, wallet);
         }
         /// <inheritdoc />
-        public Task<Submit> Submit(ITransactionCommon tx, XrplWallet wallet)
+        public Task<Submit> Submit(ITransactionCommon tx, XrplWallet wallet, bool autoFill = true, bool failHard = false)
         {
             if (networkID is { } network)
             {
@@ -427,7 +441,7 @@ namespace Xrpl.Client
             var json = tx.ToJson();
             //var json = JsonConvert.SerializeObject(tx);
             Dictionary<string, dynamic> txJson = JsonConvert.DeserializeObject<Dictionary<string, dynamic>>(json);
-            return this.Submit(txJson, true, false, wallet);
+            return this.Submit(txJson, autoFill, failHard, wallet);
         }
 
         /// <inheritdoc />
@@ -537,8 +551,9 @@ namespace Xrpl.Client
         }
 
         /// <inheritdoc />
-        public Task<Fee> Fee(FeeRequest request)
+        public Task<Fee> Fee()
         {
+            FeeRequest request = new FeeRequest();
             return this.GRequest<Fee, FeeRequest>(request);
         }
 
@@ -572,14 +587,16 @@ namespace Xrpl.Client
         //}
 
         /// <inheritdoc />
-        public Task<object> Ping(PingRequest request)
+        public Task<object> Ping()
         {
+            PingRequest request = new PingRequest();
             return this.GRequest<object, PingRequest>(request);
         }
 
         /// <inheritdoc />
-        public Task<object> Random(RandomRequest request)
+        public Task<object> Random()
         {
+            RandomRequest request = new RandomRequest();
             return this.GRequest<object, RandomRequest>(request);
         }
 
@@ -631,7 +648,14 @@ namespace Xrpl.Client
         /// <inheritdoc />
         public Task<TransactionResponseCommon> Tx(TxRequest request)
         {
+            request.ApiVersion = 1;
             return this.GRequest<TransactionResponseCommon, TxRequest>(request);
+        }
+
+        public Task<TransactionSummary> TxV2(TxRequest request)
+        {
+            request.ApiVersion = 2;
+            return this.GRequest<TransactionSummary, TxRequest>(request);
         }
 
         /// <inheritdoc />
