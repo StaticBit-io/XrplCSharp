@@ -445,7 +445,7 @@ namespace Xrpl.Models.Transactions
         /// Only present if the transaction is NFTokenCancelOffer.
         /// </summary>
         [JsonProperty("nftoken_ids")]
-        public string NFTokenIds { get; set; }
+        public string[] NFTokenIds { get; set; }
 
         /// <summary>
         /// (Omitted for non-Payment transactions) The Currency Amount actually received by the Destination account.<br/>
