@@ -118,5 +118,5 @@ public interface ITransactionMetadata
     /// Only present if the transaction is NFTokenCancelOffer.
     /// </summary>
     [JsonProperty("nftoken_ids")]
-    public string NFTokenIds { get; set; }
+    public string[] NFTokenIds { get; set; }
 }
