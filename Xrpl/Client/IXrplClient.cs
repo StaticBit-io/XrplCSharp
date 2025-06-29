@@ -45,10 +45,10 @@ namespace Xrpl.Client
         /// <summary>
         /// Set network id for transactions, required in network where Id > 1024
         /// </summary>
-        /// <param name="networkID">network id</param>
-        public void SetNetworkId(uint? networkID)
+        /// <param name="networkId">network id</param>
+        public void SetNetworkId(uint? networkId)
         {
-            this.networkID = networkID;
+            this.networkID = networkId;
         } 
 
         //event OnError OnError;
@@ -389,6 +389,7 @@ namespace Xrpl.Client
             maxFeeXRP = options?.maxFeeXRP ?? "2";
 
             await connection.ChangeServer(server, options);
+            await SetNetworkId();
         }
 
         /// <inheritdoc />
@@ -406,6 +407,25 @@ namespace Xrpl.Client
         public async Task Connect()
         {
             await connection.Connect();
+            await SetNetworkId();
+        }
+
+        private async Task SetNetworkId()
+        {
+            var server = await ServerInfo(new ServerInfoRequest());
+            if (server?.Info?.NetworkID is { } id and > 1024)
+            {
+                SetNetworkId(id);
+            }
+            else
+            {
+                SetNetworkId(networkId: null);
+            }
+        }
+
+        public void SetNetworkId(uint? networkId)
+        {
+            this.networkID = networkID;
         }
 
         /// <inheritdoc />

@@ -228,7 +228,7 @@ namespace Xrpl.Client
 
         public async Task<Dictionary<string, dynamic>> Request(Dictionary<string, dynamic> request, int? timeout = null)
         {
-            if (!this.ShouldBeConnected() || this.ws == null)
+            if (!this.ShouldBeConnected())
             {
                 throw new NotConnectedException();
             }
@@ -246,7 +246,7 @@ namespace Xrpl.Client
 
         public async Task<dynamic> GRequest<T, R>(R request, int? timeout = null)
         {
-            if (!this.ShouldBeConnected() || this.ws == null)
+            if (!this.ShouldBeConnected())
             {
                 throw new NotConnectedException();
             }
@@ -274,7 +274,7 @@ namespace Xrpl.Client
 
         private bool ShouldBeConnected()
         {
-            return this.ws != null;
+            return this.ws is { State: WebSocketState.Open };
         }
 
         private async Task OnceOpen()
