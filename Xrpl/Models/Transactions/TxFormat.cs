@@ -328,6 +328,11 @@ namespace Xrpl.Models.Transaction
                     [Field.EPrice] = Requirement.Optional,
                     [Field.LPTokenIn] = Requirement.Optional,
                 },
+                [BinaryCodec.Types.TransactionType.Batch] = new TxFormat
+                {
+                    [Field.RawTransactions] = Requirement.Required,
+                    [Field.BatchSigners] = Requirement.Optional,
+                },
 
             };
         }

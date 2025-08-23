@@ -1,4 +1,5 @@
 ﻿using Newtonsoft.Json;
+using Newtonsoft.Json.Linq;
 
 using System;
 using System.Collections.Generic;
@@ -149,7 +150,7 @@ namespace Xrpl.Sugar
             tx.TryAdd("Sequence", data.AccountData.Sequence);
         }
 
-        public static async Task<BigInteger> FetchAccountDeleteFee(this IXrplClient client)
+        public static async Task<BigInteger> FetchReserveFee(this IXrplClient client)
         {
             ServerStateRequest request = new ServerStateRequest();
             ServerState data = await client.ServerState(request);
@@ -167,7 +168,8 @@ namespace Xrpl.Sugar
             var netFeeXRP = await client.GetFeeXrp();
             var netFeeDrops = XrpConversion.XrpToDrops(netFeeXRP);
             var baseFee = BigInteger.Parse(netFeeDrops, NumberStyles.AllowDecimalPoint | NumberStyles.AllowLeadingSign | NumberStyles.AllowExponent);
-
+            BigInteger calculatedFee = 0;
+            BigInteger signerFee = 0;
             // EscrowFinish Transaction with Fulfillment
             bool has_fulfillment = tx.TryGetValue("Fulfillment", out var Fulfillment);
             if (tx["TransactionType"] == "EscrowFinish" && has_fulfillment)
@@ -176,27 +178,79 @@ namespace Xrpl.Sugar
                 // 10 drops × (33 + (Fulfillment size in bytes / 16))
                 double resp = (33 + (fulfillmentBytesSize / 16));
                 bool product = BigInteger.TryParse(ScaleValue(netFeeDrops, 33 + (fulfillmentBytesSize / 16)), out var result);
-                baseFee = BigInteger.Parse(Math.Ceiling(((decimal)result)).ToString());
+                calculatedFee = BigInteger.Parse(Math.Ceiling(((decimal)result)).ToString());
             }
 
-            // AccountDelete Transaction
-            if (tx["TransactionType"] == "AccountDelete")
+            // AccountDelete, AMMCreate Transaction
+            else if (IsReserveFeeTxNeed(tx))
             {
-                baseFee = await FetchAccountDeleteFee(client);
+                calculatedFee = await FetchReserveFee(client);
             }
+            else if (tx["TransactionType"] == "Batch")
+            {
+                calculatedFee = baseFee * 3;
+                if (!tx.TryGetValue("RawTransactions", out var rawTransactions) || rawTransactions == null)
+                {
+                    throw new ValidationException("Batch transaction must have RawTransactions field.");
+                }
+
+                // Поддержим JArray и любые коллекции
+                IEnumerable<object> items = rawTransactions switch
+                {
+                    JArray ja => ja.ToObject<List<object>>()!,
+                    IEnumerable<object> ie => ie,
+                    _ => new List<object> { rawTransactions }
+                };
+
+                foreach (var inner in items)
+                {
+                    if (!TryGetInnerFieldsAsDict(inner, out var innerTx))
+                        throw new ArgumentNullException(nameof(inner), "RawTransaction not found or invalid.");
+
+                    if (IsReserveFeeTxNeed(innerTx))
+                        calculatedFee += await FetchReserveFee(client);
+                    else
+                        calculatedFee += baseFee;
+                }
+            }
+
 
             /*
             * Multi-signed Transaction
             * 10 drops × (1 + Number of Signatures Provided)
             */
-            if (signersCount > 0)
+            else if (signersCount > 0)
             {
-                baseFee = BigInteger.Add(baseFee, BigInteger.Parse(ScaleValue(netFeeDrops, 1 + signersCount)));
+                signerFee = BigInteger.Add(baseFee, BigInteger.Parse(ScaleValue(netFeeDrops, 1 + signersCount)));
             }
 
+            calculatedFee += signerFee;
+
             var maxFeeDrops = XrpConversion.XrpToDrops(client.maxFeeXRP);
-            var totalFee = tx["TransactionType"] == "AccountDelete" ? baseFee : BigInteger.Min(baseFee, BigInteger.Parse(maxFeeDrops));
+            var totalFee = tx["TransactionType"] == "AccountDelete" ? calculatedFee : BigInteger.Min(calculatedFee, BigInteger.Parse(maxFeeDrops));
             tx.TryAdd("Fee", Math.Ceiling(((decimal)totalFee)).ToString());
+        }
+        private static bool TryGetInnerFieldsAsDict(object item, out Dictionary<string, dynamic> dict)
+        {
+            dict = null!;
+
+            // Приводим к JObject максимально рано
+            JObject entry = item as JObject ?? JObject.FromObject(item);
+
+            // Достаём RawTransaction
+            var raw = entry["RawTransaction"] as JObject;
+            if (raw == null) return false;
+
+            // В словарь
+            var tmp = raw.ToObject<Dictionary<string, dynamic>>();
+            if (tmp == null) return false;
+
+            dict = tmp;
+            return true;
+        }
+        private static bool IsReserveFeeTxNeed(Dictionary<string, dynamic> tx)
+        {
+            return tx["TransactionType"] == "AccountDelete" || tx["TransactionType"] == "AMMCreate";
         }
 
         public static string ScaleValue(string value, double multiplier)

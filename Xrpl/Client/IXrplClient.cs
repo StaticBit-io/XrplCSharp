@@ -425,7 +425,7 @@ namespace Xrpl.Client
 
         public void SetNetworkId(uint? networkId)
         {
-            this.networkID = networkID;
+            this.networkID = networkId;
         }
 
         /// <inheritdoc />
@@ -449,15 +449,21 @@ namespace Xrpl.Client
         /// <inheritdoc />
         public Task<Submit> Submit(Dictionary<string, dynamic> tx, XrplWallet wallet, bool autoFill = true, bool failHard = false)
         {
+            if (this.networkID is { } network)
+            {
+                tx["NetworkID"] = network;
+            }
+
             return this.Submit(tx, autoFill, failHard, wallet);
         }
         /// <inheritdoc />
         public Task<Submit> Submit(ITransactionCommon tx, XrplWallet wallet, bool autoFill = true, bool failHard = false)
         {
-            if (networkID is { } network)
+            if (this.networkID is { } network)
             {
                 tx.NetworkID = network;
             }
+
             var json = tx.ToJson();
             //var json = JsonConvert.SerializeObject(tx);
             Dictionary<string, dynamic> txJson = JsonConvert.DeserializeObject<Dictionary<string, dynamic>>(json);

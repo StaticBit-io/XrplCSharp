@@ -40,6 +40,8 @@ namespace Xrpl.Utils.Hashes
 
         // ledger 'LWR'
         LEDGER = 0x4c575200,
+
+        BATCH = 0x42434800
     }
 }
 

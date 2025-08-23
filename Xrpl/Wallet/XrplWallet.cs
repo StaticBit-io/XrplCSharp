@@ -14,6 +14,7 @@ using Xrpl.BinaryCodec;
 using Xrpl.Client.Exceptions;
 using Xrpl.Keypairs;
 using Xrpl.Models.Transactions;
+using Xrpl.Models.Utils;
 using Xrpl.Utils.Hashes;
 
 // https://github.com/XRPLF/xrpl.js/blob/main/packages/xrpl/src/Wallet/index.ts
@@ -107,7 +108,7 @@ namespace Xrpl.Wallet
 
             if (encoding == "rfc1751")
             {
-                return FromRFC1751Mnemonic(mnemonic,masterAddress, algorithm);
+                return FromRFC1751Mnemonic(mnemonic, masterAddress, algorithm);
             }
 
             if (!IsValidBip39Mnemonic(mnemonic))
@@ -165,6 +166,9 @@ namespace Xrpl.Wallet
         /// <returns>A Wallet derived from the seed.</returns>
         public SignatureResult Sign(Dictionary<string, dynamic> transaction, bool multisign = false, string? signingFor = null)
         {
+            // 0) Быстрый роутинг для Batch
+            transaction = UpdateIfBatch(transaction);
+
             string multisignAddress = "";
             //if (signingFor != null && signingFor.starts(with: "X"))
             //{
@@ -192,6 +196,54 @@ namespace Xrpl.Wallet
             //this.checkTxSerialization(serialized, tx);
             return new SignatureResult(serialized, HashLedger.HashSignedTx(serialized));
         }
+
+        private Dictionary<string, dynamic> UpdateIfBatch(Dictionary<string, dynamic> transaction)
+        {
+            // 1) Стандартизируем вход в JObject
+            var outer = JObject.FromObject(transaction) ?? throw new ArgumentException("tx is null");
+
+            // 2) Базовые проверки "Batch"
+            var txType = outer.Value<string>("TransactionType");
+            if (!string.Equals(txType, "Batch", StringComparison.OrdinalIgnoreCase))
+                return transaction;
+
+            var innerTransactions = outer["RawTransactions"] as JArray
+                ?? throw new ValidationException("Batch transaction must have RawTransactions (array).");
+
+            if (innerTransactions.Count == 0 || innerTransactions.Count > 8)
+                throw new ValidationException("Batch.RawTransactions length must be between 1 and 8.");
+
+            // 3) Пройдём по внутренним транзакциям и провалидируем по XLS-56
+            foreach (var item in innerTransactions.Children<JObject>())
+            {
+                var innerTx = item["RawTransaction"] as JObject
+                              ?? throw new ValidationException("RawTransaction must be an object.");
+                // TransactionType обязателен и не Batch
+                var innerType = innerTx.Value<string>("TransactionType");
+                if (string.IsNullOrWhiteSpace(innerType))
+                    throw new ValidationException("Inner RawTransaction.TransactionType is required.");
+                if (string.Equals(innerType, "Batch", StringComparison.OrdinalIgnoreCase))
+                    throw new ValidationException("Nested Batch is not allowed.");
+
+                // Запрещённые поля
+                if (innerTx["TxnSignature"] != null || innerTx["Signers"] != null || innerTx["LastLedgerSequence"] != null)
+                    throw new ValidationException("Inner tx must NOT contain TxnSignature, Signers or LastLedgerSequence.");
+
+                // Fee (если присутствует) — ровно "0"
+                if (innerTx["Fee"] != null && innerTx.Value<string>("Fee") != "0")
+                    throw new ValidationException("Inner tx Fee must be string \"0\" when present.");
+
+                // SigningPubKey (если присутствует) — ровно ""
+                if (innerTx["SigningPubKey"] != null && innerTx.Value<string>("SigningPubKey") != "")
+                    throw new ValidationException("Inner tx SigningPubKey must be empty string when present.");
+
+                // Нормализуем под расчёт txid (Fee=\"0\", SigningPubKey=\"\", + tfInnerBatchTxn)
+                BatchBuilder.NormalizeInnerForBatch(innerTx);
+            }
+
+            return outer.ToObject<Dictionary<string, dynamic>>();
+        }
+
         /// <summary>
         /// Signs a transaction offline.
         /// </summary>
@@ -235,7 +287,7 @@ namespace Xrpl.Wallet
         public static XrplWallet FromXummNumbers(string[] numbers, string algorithm = "secp256k1")
         {
             byte[] entropy = XummExtension.EntropyFromXummNumbers(numbers);
-            return FromEntropy(entropy,null, algorithm);
+            return FromEntropy(entropy, null, algorithm);
         }
 
         /// <summary>
@@ -245,7 +297,7 @@ namespace Xrpl.Wallet
         /// <param name="algorithm">The digital signature algorithm to generate an address for.</param>
         /// <param name="salt">user salt as a password</param>
         /// <returns>generated wallet</returns>
-        public static XrplWallet FromNormalizedText(string text, string algorithm = null,  string ? salt = null)
+        public static XrplWallet FromNormalizedText(string text, string algorithm = null, string? salt = null)
         {
             var normalized = NormalizeText(text);
 
