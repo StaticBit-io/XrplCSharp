@@ -335,7 +335,7 @@ namespace Xrpl.BinaryCodec.Enums
         public static readonly StArrayField AcceptedCredentials = new StArrayField(nameof(AcceptedCredentials), 28);
         public static readonly StArrayField Permissions = new StArrayField(nameof(Permissions), 29);
         public static readonly StArrayField RawTransactions = new StArrayField(nameof(RawTransactions), 30);
-        public static readonly StArrayField BatchSigners = new StArrayField(nameof(BatchSigners), 31);
+        public static readonly StArrayField BatchSigners = new StArrayField(nameof(BatchSigners), 31, isSigningField: false);
 
         public static readonly Field Generic = new Field(nameof(Generic), 0, FieldType.Unknown, isSigningField: false);
         public static readonly Field Invalid = new Field(nameof(Invalid), -1, FieldType.Unknown, isSigningField: false);

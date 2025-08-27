@@ -3,10 +3,15 @@
 using Newtonsoft.Json;
 using Newtonsoft.Json.Linq;
 
+using Org.BouncyCastle.Asn1.Ocsp;
+using Org.BouncyCastle.Asn1.X509;
+
 using System;
 using System.Collections.Generic;
+using System.Globalization;
 using System.Linq;
 using System.Security.Cryptography;
+using System.Security.Principal;
 using System.Text;
 
 using Xrpl.AddressCodec;
@@ -16,6 +21,12 @@ using Xrpl.Keypairs;
 using Xrpl.Models.Transactions;
 using Xrpl.Models.Utils;
 using Xrpl.Utils.Hashes;
+using Xrpl.Wallet;
+
+using static NBitcoin.BIP322.BIP322Signature;
+using static NBitcoin.WalletPolicies.MiniscriptNode.ParameterRequirement;
+using static System.Reflection.Metadata.BlobBuilder;
+using static Xrpl.AddressCodec.B58;
 
 // https://github.com/XRPLF/xrpl.js/blob/main/packages/xrpl/src/Wallet/index.ts
 
@@ -166,38 +177,157 @@ namespace Xrpl.Wallet
         /// <returns>A Wallet derived from the seed.</returns>
         public SignatureResult Sign(Dictionary<string, dynamic> transaction, bool multisign = false, string? signingFor = null)
         {
-            // 0) Быстрый роутинг для Batch
-            transaction = UpdateIfBatch(transaction);
 
-            string multisignAddress = "";
-            //if (signingFor != null && signingFor.starts(with: "X"))
-            //{
-            //    multisignAddress = signingFor;
-            //}
-            //else if (multisign)
-            //{
-            //    multisignAddress = this.ClassicAddress;
-            //}
-
-            Dictionary<string, dynamic> tx = transaction;
-
-            if (tx.ContainsKey("TxnSignature") || tx.ContainsKey("Signers"))
+            if (transaction.TryGetValue("TransactionType", out var tVal) && string.Equals($"{tVal}", "Batch", StringComparison.OrdinalIgnoreCase))
             {
-                new ValidationException("txJSON must not contain `TxnSignature` or `Signers` properties");
+                // Если это Batch — используем корректный путь подписания Batch
+                return SignBatch(transaction, multisign, signingFor);
             }
 
-            JObject txToSignAndEncode = JToken.FromObject(transaction).ToObject<JObject>();
-            txToSignAndEncode["SigningPubKey"] = multisignAddress != "" ? "" : this.PublicKey;
+            string multisignAddress = "";
+            if (multisign)
+            {
+                var tx = JObject.FromObject(transaction);
 
-            string signature = ComputeSignature(txToSignAndEncode.ToObject<Dictionary<string, dynamic>>(), this.PrivateKey);
-            txToSignAndEncode.Add("TxnSignature", signature);
+                // Корень для мультиподписи: пустой ключ и без TxnSignature
+                tx["SigningPubKey"] = "";
+                tx.Remove("TxnSignature");
 
-            string serialized = XrplBinaryCodec.Encode(txToSignAndEncode);
-            //this.checkTxSerialization(serialized, tx);
-            return new SignatureResult(serialized, HashLedger.HashSignedTx(serialized));
+                // Адрес ПОДПИСАНТА (не владельца!). Если пришёл X-адрес — конвертируем.
+                string signerAccount = signingFor ?? this.ClassicAddress;
+                if (!Xrpl.AddressCodec.XrplCodec.IsValidClassicAddress(signerAccount))
+                {
+                    var x = XrplAddressCodec.XAddressToClassicAddress(signerAccount);
+                    signerAccount = x.ClassicAddress;
+                }
+
+                // ВАЖНО: preimage для MULTISIGN (а не EncodeForSigning)
+                string preimageHex = Xrpl.BinaryCodec.XrplBinaryCodec.EncodeForMultiSigning(tx, signerAccount);
+                byte[] preimage = Xrpl.AddressCodec.Utils.FromHexToBytes(preimageHex);
+
+                string sig = Xrpl.Keypairs.XrplKeypairs.Sign(preimage, this.PrivateKey);
+
+                // Добавляем подпись в Signers[]
+                var signers = (tx["Signers"] as JArray) ?? new JArray();
+                signers.Add(new JObject
+                {
+                    ["Signer"] = new JObject
+                    {
+                        ["Account"] = signerAccount,
+                        ["SigningPubKey"] = this.PublicKey,
+                        ["TxnSignature"] = sig
+                    }
+                });
+                tx["Signers"] = signers;
+
+                // Корневой ключ остаётся пустым, TxnSignature отсутствует
+                tx["SigningPubKey"] = "";
+                tx.Remove("TxnSignature");
+
+                string blob = Xrpl.BinaryCodec.XrplBinaryCodec.Encode(tx);
+                return new SignatureResult(blob, Xrpl.Utils.Hashes.HashLedger.HashSignedTx(blob));
+            }
+            else
+            {
+
+                Dictionary<string, dynamic> tx = transaction;
+
+                if (tx.ContainsKey("TxnSignature") || tx.ContainsKey("Signers"))
+                {
+                    throw new ValidationException("txJSON must not contain `TxnSignature` or `Signers` properties");
+                }
+
+                JObject txToSignAndEncode = JToken.FromObject(transaction).ToObject<JObject>();
+                txToSignAndEncode["SigningPubKey"] = multisignAddress != "" ? "" : this.PublicKey;
+
+                string signature = ComputeSignature(txToSignAndEncode.ToObject<Dictionary<string, dynamic>>(), this.PrivateKey);
+                txToSignAndEncode.Add("TxnSignature", signature);
+
+                string serialized = XrplBinaryCodec.Encode(txToSignAndEncode);
+                //this.checkTxSerialization(serialized, tx);
+                return new SignatureResult(serialized, HashLedger.HashSignedTx(serialized));
+            }
+        }
+        public static string CombineMultiSigners(params string[] txBlobs)
+        {
+            if (txBlobs == null || txBlobs.Length == 0)
+                throw new ArgumentException("No transactions to combine.");
+
+            JObject Decode(string hex)
+            {
+                var dec = Xrpl.BinaryCodec.XrplBinaryCodec.Decode(hex);
+                return dec is JObject jo ? jo
+                     : JObject.FromObject(dec!);
+            }
+
+            // X->classic
+            static string ToClassic(string addr)
+            {
+                if (Xrpl.AddressCodec.XrplCodec.IsValidClassicAddress(addr)) return addr;
+                var x = XrplAddressCodec.XAddressToClassicAddress(addr);
+                return x.ClassicAddress;
+            }
+            static byte[] AID(string acc) => Xrpl.AddressCodec.XrplCodec.DecodeAccountID(ToClassic(acc));
+
+            var objs = txBlobs.Select(Decode).ToArray();
+
+            // Запрет single-sig: у корня не должно быть ни TxnSignature, ни непустого SigningPubKey
+            foreach (var o in objs)
+            {
+                if (o["TxnSignature"] != null)
+                    throw new InvalidOperationException("Not a forMultisign tx: has TxnSignature.");
+                if ((string?)o["SigningPubKey"] is string spk && spk.Length != 0)
+                    throw new InvalidOperationException("Not a forMultisign tx: SigningPubKey must be empty.");
+            }
+
+            // Канонизация тела для сравнения
+            JObject Canon(JObject o)
+            {
+                var c = (JObject)o.DeepClone();
+                c.Remove("TxnSignature");
+                c.Remove("SigningPubKey");
+                c.Remove("Signers");
+                // Нормализуем Account (поддержка X-адресов)
+                if (c["Account"] is JValue v && v.Type == JTokenType.String)
+                    c["Account"] = ToClassic((string)v);
+                return c;
+            }
+
+            var canon0 = Canon(objs[0]);
+            if (objs.Skip(1).Any(o => !JToken.DeepEquals(canon0, Canon(o))))
+                throw new InvalidOperationException("Different tx bodies; cannot combine.");
+
+            // Собираем всех подписантов
+            var all = new List<JObject>();
+            foreach (var o in objs)
+            {
+                if (o["Signers"] is JArray arr)
+                    foreach (var it in arr.Children<JObject>())
+                        all.Add((JObject)it.DeepClone());
+            }
+            if (all.Count == 0)
+                throw new InvalidOperationException("No Signers found.");
+
+            // Сортировка по бинарному AccountID
+            var sorted = all.OrderBy(j =>
+            {
+                var acc = (string?)j["Signer"]?["Account"] ?? "";
+                return AID(acc);
+            }, Comparer<byte[]>.Create((a, b) =>
+            {
+                for (int i = 0; i < Math.Min(a.Length, b.Length); i++) { int d = a[i].CompareTo(b[i]); if (d != 0) return d; }
+                return a.Length.CompareTo(b.Length);
+            })).ToArray();
+
+            var outTx = (JObject)objs[0].DeepClone();
+            outTx["Signers"] = new JArray(sorted);
+            outTx["SigningPubKey"] = "";   // как требует мультиподпись
+            outTx.Remove("TxnSignature");
+
+            return Xrpl.BinaryCodec.XrplBinaryCodec.Encode(outTx);
         }
 
-        private Dictionary<string, dynamic> UpdateIfBatch(Dictionary<string, dynamic> transaction)
+        private SignatureResult SignBatch(Dictionary<string, dynamic> transaction, bool multisign, string? signingFor)
         {
             // 1) Стандартизируем вход в JObject
             var outer = JObject.FromObject(transaction) ?? throw new ArgumentException("tx is null");
@@ -205,7 +335,7 @@ namespace Xrpl.Wallet
             // 2) Базовые проверки "Batch"
             var txType = outer.Value<string>("TransactionType");
             if (!string.Equals(txType, "Batch", StringComparison.OrdinalIgnoreCase))
-                return transaction;
+                throw new ArgumentException("TransactionType must be 'Batch'.");
 
             var innerTransactions = outer["RawTransactions"] as JArray
                 ?? throw new ValidationException("Batch transaction must have RawTransactions (array).");
@@ -213,6 +343,7 @@ namespace Xrpl.Wallet
             if (innerTransactions.Count == 0 || innerTransactions.Count > 8)
                 throw new ValidationException("Batch.RawTransactions length must be between 1 and 8.");
 
+            var normalizedInners = new List<JObject>(innerTransactions.Count);
             // 3) Пройдём по внутренним транзакциям и провалидируем по XLS-56
             foreach (var item in innerTransactions.Children<JObject>())
             {
@@ -238,10 +369,142 @@ namespace Xrpl.Wallet
                     throw new ValidationException("Inner tx SigningPubKey must be empty string when present.");
 
                 // Нормализуем под расчёт txid (Fee=\"0\", SigningPubKey=\"\", + tfInnerBatchTxn)
-                BatchBuilder.NormalizeInnerForBatch(innerTx);
+                normalizedInners.Add(innerTx.NormalizeInnerForBatch());
             }
 
-            return outer.ToObject<Dictionary<string, dynamic>>();
+
+            // 4) Считаем txIDs нормализованных внутренних
+            var txIds = new List<string>(normalizedInners.Count);
+            foreach (var norm in normalizedInners)
+            {
+                var txid = BatchBuilder.ComputeInnerTxId(norm);
+                txIds.Add(txid);
+            }
+
+            // 5) Флаги внешнего батча
+            uint flags = 0;
+            var fTok = outer["Flags"];
+            if (fTok != null)
+            {
+                if (fTok.Type == JTokenType.Integer) flags = (uint)fTok.Value<long>();
+                else if (fTok.Type == JTokenType.String && uint.TryParse((string)fTok, out var u)) flags = u;
+                outer["Flags"] = flags;
+            }
+
+            // NetworkID (если присутствует)
+            uint? networkId = null;
+            var nTok = outer["NetworkID"];
+            if (nTok != null)
+            {
+                if (nTok.Type == JTokenType.Integer) networkId = (uint)nTok.Value<long>();
+                else if (nTok.Type == JTokenType.String && uint.TryParse((string)nTok, out var n)) networkId = n;
+            }
+
+            // 6) Подписание
+            if (!multisign)
+            {
+                // SINGLE-SIG: внешний Batch подписывается КАК обычная транзакция.
+                var outerForSigning = (JObject)outer.DeepClone();
+                outerForSigning.Remove("TxnSignature");
+                outerForSigning.Remove("BatchSigners"); // на single-sig их быть не должно
+
+                // SigningPubKey попадает в подписываемый набор — ставим его
+                outerForSigning["SigningPubKey"] = this.PublicKey;
+
+                string preimageHex = XrplBinaryCodec.EncodeForSigning(outerForSigning);
+                string signature = XrplKeypairs.Sign(AddressCodec.Utils.FromHexToBytes(preimageHex), this.PrivateKey);
+
+                outer["SigningPubKey"] = this.PublicKey;
+                outer["TxnSignature"] = signature;
+                outer.Remove("BatchSigners");
+            }
+            else
+            {
+                // MULTI-ACCOUNT: кладём подпись участника в BatchSigners над batch-preimage.
+                // batch-preimage = BCH\0 [ + NetworkID ] || Flags || Count || txID[0..N-1]
+                byte[] preimage = XrplBinaryCodec.EncodeForSigningBatch(flags, txIds, networkId);
+                string signature = XrplKeypairs.Sign(preimage, this.PrivateKey);
+
+                var accountFor = string.IsNullOrWhiteSpace(signingFor) ? this.ClassicAddress : signingFor;
+                if (!Xrpl.AddressCodec.XrplCodec.IsValidClassicAddress(accountFor))
+                {
+                    var x = XrplAddressCodec.XAddressToClassicAddress(accountFor);
+                    accountFor = x.ClassicAddress;
+                }
+
+                var batchSigners = (outer["BatchSigners"] as JArray) ?? new JArray();
+
+                var signerObj = new JObject
+                {
+                    ["Account"] = accountFor,
+                    ["SigningPubKey"] = this.PublicKey,
+                    ["TxnSignature"] = signature
+                    // Если нужен мультисиг под ЭТИМ ЖЕ аккаунтом — вместо пары выше положи "Signers": [ { Signer{Account,SigningPubKey,TxnSignature} }, ... ]
+                    // Подпись каждого Signer — над тем же preimage.
+                }
+                ;
+                batchSigners.Add(new JObject { ["BatchSigner"] = signerObj });
+
+                // Сортировка BatchSigners и вложенных Signers по account-id (как в XRPL)
+                outer["BatchSigners"] = SortBatchSigners(batchSigners);
+
+                // Для внешнего Batch при наличии BatchSigners: пустой SigningPubKey и БЕЗ TxnSignature
+                outer["SigningPubKey"] = "";
+                outer.Remove("TxnSignature");
+            }
+            // 9) Сериализация и хэш
+            string signedHex = XrplBinaryCodec.Encode(outer);
+            string txHash = HashLedger.HashSignedTx(signedHex);
+            return new SignatureResult(signedHex, txHash);
+        }
+
+        /// <summary>
+        /// Сортировка BatchSigners по Account (численно по account-id), а также сортировка внутренних Signers.
+        /// </summary>
+        private static JArray SortBatchSigners(JArray batchSigners)
+        {
+            if (batchSigners == null || batchSigners.Count == 0) return batchSigners ?? new JArray();
+
+            byte[] Aid(string acc) => Xrpl.AddressCodec.XrplCodec.DecodeAccountID(acc);
+            int Cmp(string a, string b)
+            {
+                var ab = Aid(a); var bb = Aid(b);
+                int n = Math.Min(ab.Length, bb.Length);
+                for (int i = 0; i < n; i++) { int d = ab[i].CompareTo(bb[i]); if (d != 0) return d; }
+                return ab.Length.CompareTo(bb.Length);
+            }
+
+            // helper: сортировка массива Signers внутри одного BatchSigner
+            void SortInnerSigners(JObject batchSignerObj)
+            {
+                var signersArr = batchSignerObj["Signers"] as JArray;
+                if (signersArr == null) return;
+                var sorted = signersArr
+                                    .Children<JObject>()
+                                    .OrderBy(s =>
+                                    {
+                                        var acc = (string?)s["Signer"]?["Account"] ?? "";
+                                        return acc;
+                                    }, Comparer<string>.Create(Cmp))
+                                .Select(s => new JObject { ["Signer"] = s["Signer"] })
+                                .ToArray();
+                batchSignerObj["Signers"] = new JArray(sorted);
+            }
+
+            var sortedBatchSigners = batchSigners
+                            .Children<JObject>()
+                            .Select(o => o["BatchSigner"] as JObject)
+                            .Where(o => o != null)
+                            .Select(o =>
+                            {
+                                SortInnerSigners(o!);
+                                return o!;
+                            })
+                            .OrderBy(o => (string?)o["Account"] ?? "", Comparer<string>.Create(Cmp))
+                            .Select(o => new JObject { ["BatchSigner"] = o })
+                            .ToArray();
+
+            return new JArray(sortedBatchSigners);
         }
 
         /// <summary>
@@ -326,5 +589,193 @@ namespace Xrpl.Wallet
             return normalized;
         }
 
+        /// <summary>
+        /// Объединяет несколько частично подписанных Batch-транзакций (txBlob в hex) в один финальный blob.
+        /// Условия:
+        ///  - Все входные blob'ы должны быть Batch и иметь ИДЕНТИЧНОЕ тело (кроме SigningPubKey/TxnSignature/BatchSigners).
+        ///  - Объединяются только подписи в BatchSigners (и при отсутствии BatchSigners — внешняя подпись).
+        ///  - BatchSigners сортируются по Account; вложенные Signers — по Signer.Account.
+        /// </summary>
+        public static SignatureResult CombineBatchSigners(params string[] txBlobs)
+        {
+            if (txBlobs == null || txBlobs.Length == 0)
+                throw new ArgumentException("No tx blobs provided.");
+            if (txBlobs.Length == 1)
+            {
+                // Нечего объединять — возвращаем как есть.
+                string single = txBlobs[0];
+                return new SignatureResult(single, HashLedger.HashSignedTx(single));
+            }
+
+            // 1) Декод и проверка типа
+            var decoded = txBlobs.Select(DecodeToObject).ToList();
+            foreach (var o in decoded)
+            {
+                var tt = (string?)o["TransactionType"];
+                if (!string.Equals(tt, "Batch", StringComparison.OrdinalIgnoreCase))
+                    throw new InvalidOperationException("All blobs must be Batch transactions.");
+            }
+
+            // 2) Проверяем, что "тело" батча совпадает (выкидываем поля подписи перед сравнением)
+            JObject Canonicalize(JObject x)
+            {
+                var c = (JObject)x.DeepClone();
+                c.Remove("TxnSignature");
+                c.Remove("SigningPubKey");
+                c.Remove("BatchSigners");
+                // НИЧЕГО БОЛЬШЕ НЕ УДАЛЯЕМ: Account/Sequence/Fee/Flags/NetworkID/LLS/RawTransactions должны совпасть.
+                return c;
+            }
+
+            var baseCanon = Canonicalize(decoded[0]);
+            for (int i = 1; i < decoded.Count; i++)
+            {
+                if (!JToken.DeepEquals(baseCanon, Canonicalize(decoded[i])))
+                    throw new InvalidOperationException("Incompatible Batch bodies. All inputs must have identical non-signing fields.");
+            }
+
+            // 3) Базовый "outer" для результата
+            var combined = (JObject)decoded[0].DeepClone();
+            combined.Remove("BatchSigners");
+
+            // 4) Сбор и объединение BatchSigners
+            var byAccount = new Dictionary<string, JObject>(StringComparer.Ordinal); // Account -> BatchSigner object
+            foreach (var outer in decoded)
+            {
+                var arr = outer["BatchSigners"] as JArray;
+                if (arr == null) continue;
+                foreach (var w in arr.Children<JObject>())
+                {
+                    var bs = w["BatchSigner"] as JObject;
+                    if (bs == null) continue;
+                    var accRaw = (string?)bs["Account"] ?? throw new InvalidOperationException("BatchSigner missing Account.");
+                    var acc = Xrpl.AddressCodec.XrplCodec.IsValidClassicAddress(accRaw)
+                        ? accRaw
+                        : XrplAddressCodec.XAddressToClassicAddress(accRaw).ClassicAddress;
+                    if (!byAccount.TryGetValue(acc, out var existing))
+                    {
+                        bs["Account"] = acc; // канонизируем
+                        byAccount[acc] = (JObject)bs.DeepClone();
+                        continue;
+                    }
+                    // merge incoming -> existing
+                    MergeBatchSigner(existing, bs);
+                }
+            }
+
+            // 5) Превращаем карту обратно в массив-обёртку и сортируем канонически
+            var mergedArr = new JArray(byAccount.Values.Select(v => new JObject { ["BatchSigner"] = v }));
+            combined["BatchSigners"] = SortBatchSigners(mergedArr);
+
+            // 6) Внешняя подпись: если появились BatchSigners — внешний SigningPubKey/TxnSignature удаляем (как предписано для multisign-батчей).
+            var hasBatchSigners = (combined["BatchSigners"] as JArray)?.Count > 0;
+            if (hasBatchSigners)
+            {
+                combined["SigningPubKey"] = "";
+                combined.Remove("TxnSignature");
+            }
+            else
+            {
+                // Кейс без BatchSigners: допускаем внешнюю подпись (если она везде одинакова).
+                string? outSig = null, outPub = null;
+                foreach (var o in decoded)
+                {
+                    var s = (string?)o["TxnSignature"];
+                    var p = (string?)o["SigningPubKey"];
+                    if (!string.IsNullOrEmpty(s) || !string.IsNullOrEmpty(p))
+                    {
+                        if (outSig == null && outPub == null) { outSig = s; outPub = p; }
+                        else if (!string.Equals(outSig, s, StringComparison.Ordinal)
+                                 || !string.Equals(outPub, p, StringComparison.Ordinal))
+                        {
+                            throw new InvalidOperationException("Conflicting outer signatures across inputs.");
+                        }
+                    }
+                }
+                if (!string.IsNullOrEmpty(outSig) || !string.IsNullOrEmpty(outPub))
+                {
+                    if (!string.IsNullOrEmpty(outPub)) combined["SigningPubKey"] = outPub!;
+                    if (!string.IsNullOrEmpty(outSig)) combined["TxnSignature"] = outSig!;
+                }
+            }
+
+            // 7) Сериализация и хэш
+            string signedHex = XrplBinaryCodec.Encode(combined);
+            string txHash = HashLedger.HashSignedTx(signedHex);
+            return new SignatureResult(signedHex, txHash);
+        }
+
+        /// <summary>
+        /// Сливает входящий BatchSigner в существующий:
+        /// - если у любого из них есть "Signers" (мультисиг), используем/объединяем "Signers";
+        /// - single-sig (SigningPubKey/TxnSignature) под тем же Account не дублируем;
+        /// - при конфликте single-sig vs Signers — оставляем Signers (они более общий случай).
+        /// </summary>
+        private static void MergeBatchSigner(JObject target, JObject incoming)
+        {
+            // оба мультисиг?
+            var targetSigners = target["Signers"] as JArray;
+            var incomingSigners = incoming["Signers"] as JArray;
+
+            if (incomingSigners != null)
+            {
+                // если target был single-sig — преобразуем в "Signers" модель (просто забываем single; нельзя адекватно «конвертнуть» single в мульти)
+                if (targetSigners == null)
+                {
+                    target.Remove("SigningPubKey");
+                    target.Remove("TxnSignature");
+                    targetSigners = new JArray();
+                    target["Signers"] = targetSigners;
+                }
+                // merge всех Signer'ов: уникальность по (Signer.Account, SigningPubKey, TxnSignature)
+                var seen = new HashSet<string>(StringComparer.Ordinal);
+                foreach (var s in targetSigners.Children<JObject>())
+                {
+                    var so = s["Signer"] as JObject;
+                    if (so == null) continue;
+                    var key = $"{(string?)so["Account"]}|{(string?)so["SigningPubKey"]}|{(string?)so["TxnSignature"]}";
+                    seen.Add(key);
+                }
+                foreach (var s in incomingSigners.Children<JObject>())
+                {
+                    var so = s["Signer"] as JObject;
+                    if (so == null) continue;
+                    var key = $"{(string?)so["Account"]}|{(string?)so["SigningPubKey"]}|{(string?)so["TxnSignature"]}";
+                    if (seen.Add(key))
+                        targetSigners!.Add(new JObject { ["Signer"] = (JObject)so.DeepClone() });
+                }
+                return;
+            }
+
+            // incoming single-sig
+            if (targetSigners != null)
+            {
+                // target уже мультисиг — single подпись игнорируем
+                return;
+            }
+
+            // оба single-sig: оставляем первый; если тот же pubkey/sig — всё ок, если другой — игнорируем дубликат под тем же Account
+            var tPub = (string?)target["SigningPubKey"];
+            var tSig = (string?)target["TxnSignature"];
+            var iPub = (string?)incoming["SigningPubKey"];
+            var iSig = (string?)incoming["TxnSignature"];
+
+            if (string.Equals(tPub, iPub, StringComparison.Ordinal)
+                && string.Equals(tSig, iSig, StringComparison.Ordinal))
+            {
+                return; // идентичная подпись — уже есть
+            }
+            // разные single-подписи под одним Account — спецификацией не предполагается держать несколько; оставим первую.
+        }
+
+        /// <summary>Декодирует hex blob в JObject (терпим разные возвращаемые типы Decode).</summary>
+        private static JObject DecodeToObject(string blobHex)
+        {
+            var dec = XrplBinaryCodec.Decode(blobHex);
+
+            //if (dec is string s) return JObject.Parse(s);
+            if (dec is JObject jo) return jo;
+            return JObject.FromObject(dec!);
+        }
     }
 }

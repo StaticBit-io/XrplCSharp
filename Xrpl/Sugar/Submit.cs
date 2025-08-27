@@ -1,8 +1,10 @@
-﻿using System;
-using System.Collections.Generic;
-using System.Threading.Tasks;
-
+﻿using Newtonsoft.Json;
 using Newtonsoft.Json.Linq;
+
+using System;
+using System.Collections.Generic;
+using System.Linq;
+using System.Threading.Tasks;
 
 using Xrpl.BinaryCodec;
 using Xrpl.Client;
@@ -97,6 +99,34 @@ namespace Xrpl.Sugar
             string signedTxEncoded = signedTransaction is string transaction ? transaction : XrplBinaryCodec.Encode(signedTransaction);
             SubmitRequest request = new SubmitRequest { Command = "submit", TxBlob = signedTxEncoded, FailHard = failHard };
             var response = await client.GRequest<Submit, SubmitRequest>(request);
+            return response;
+        }
+
+        /// <summary>
+        /// Encodes and submits a signed transaction.
+        /// </summary>
+        /// <param name="client">A Client.</param>
+        /// <param name="wallets">wallets for signer</param>
+        /// <param name="failHard">If true, and the transaction fails locally, do not retry or relay the transaction to other servers.</param>
+        /// <param name="tx">transaction for submit</param>
+        /// <returns></returns>
+        public static async Task<Submit> SubmitMulti(this IXrplClient client, ITransactionCommon tx,IEnumerable<XrplWallet> wallets, bool autofill = true, bool failHard = false)
+        {
+            if (wallets is null)
+            {
+                throw new ValidationException("Wallets must be provided when submitting an unsigned transaction");
+            }
+            var json = tx.ToJson();
+            //var json = JsonConvert.SerializeObject(tx);
+            Dictionary<string, dynamic> txJson = JsonConvert.DeserializeObject<Dictionary<string, dynamic>>(json);
+
+            if (autofill)
+            {
+                txJson = await client.Autofill(txJson, wallets.Count());
+            }
+            var signed = wallets.Select(c => c.Sign(txJson, true).TxBlob).ToArray();
+            var combined = XrplWallet.CombineMultiSigners(signed);
+            var response = await client.SubmitRequest(combined, false);
             return response;
         }
         /// <summary>

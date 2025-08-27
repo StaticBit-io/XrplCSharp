@@ -145,6 +145,9 @@ namespace Xrpl.Models.Transactions
                 case "AMMWithdraw":
                     await ValidateAMMWithdraw(tx);
                     break;
+                case "Batch":
+                    await ValidateBatch(tx);
+                    break;
                 default:
                     throw new ValidationException($"Invalid field TransactionType: {type}");
             }

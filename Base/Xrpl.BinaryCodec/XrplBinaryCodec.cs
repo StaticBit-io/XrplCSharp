@@ -87,7 +87,7 @@ namespace Xrpl.BinaryCodec
         /// <param name="json"></param>
         /// <param name="signingAccount"></param>
         /// <returns>string</returns>
-        public static string EncodeForMulitSigning(object json, string signingAccount)
+        public static string EncodeForMultiSigning(object json, string signingAccount)
         {
             string accountID = new AccountId(signingAccount).ToHex();
             JToken token = JToken.FromObject(json);

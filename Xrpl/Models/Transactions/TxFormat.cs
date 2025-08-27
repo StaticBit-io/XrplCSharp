@@ -171,7 +171,9 @@ namespace Xrpl.Models.Transaction
                 [BinaryCodec.Types.TransactionType.SignerListSet] = new TxFormat
                 {
                     [Field.SignerQuorum] = Requirement.Required,
-                    [Field.SignerEntries] = Requirement.Optional
+                    [Field.SignerEntries] = Requirement.Optional,
+                    [Field.WalletLocator] = Requirement.Optional,
+
                 },
                 [BinaryCodec.Types.TransactionType.PaymentChannelCreate] = new TxFormat()
                 {

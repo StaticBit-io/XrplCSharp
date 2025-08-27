@@ -1,13 +1,12 @@
-﻿using Newtonsoft.Json.Linq;
+﻿using Newtonsoft.Json;
+using Newtonsoft.Json.Linq;
 
 using System;
 using System.Collections.Generic;
 using System.Linq;
 
-using Xrpl.BinaryCodec.Enums;
 using Xrpl.Client.Exceptions;
 using Xrpl.Models.Transactions;
-using Xrpl.Models.Transactions.Batches;
 
 namespace Xrpl.Models.Utils;
 public static class BatchBuilder
@@ -33,7 +32,7 @@ public static class BatchBuilder
         batch.RawTransactions.AddRange(batchInnerTxs);
 
         // Валидация как в xrpl.js
-        Xrpl.Models.Transactions.Validation.Validate(batch);
+        Xrpl.Models.Transactions.Validation.Validate(JsonConvert.DeserializeObject<Dictionary<string, dynamic>>(batch.ToJson()));
         return batch;
     }
 
@@ -74,7 +73,7 @@ public static class BatchBuilder
     /// - принудительно выставляет Fee = "0" (строка), SigningPubKey = "".
     /// Возвращает новый JObject (исходник не меняется).
     /// </summary>
-    public static JObject NormalizeInnerForBatch(JObject source)
+    public static JObject NormalizeInnerForBatch(this JObject source)
     {
         if (source == null) throw new ArgumentNullException(nameof(source));
 
@@ -100,13 +99,13 @@ public static class BatchBuilder
         return source;
     }
 
-    public static JObject NormalizeInnerForBatch(ITransactionCommon tx)
-    {
-        var json = tx.ToJson();
-        var inner = JObject.Parse(json);
+    //public static JObject NormalizeInnerForBatch(ITransactionCommon tx)
+    //{
+    //    var json = tx.ToJson();
+    //    var inner = JObject.Parse(json);
 
-        return NormalizeInnerForBatch(inner);
-    }
+    //    return NormalizeInnerForBatch(inner);
+    //}
 
     /// <summary>
     /// Вычисляет transactionID для нормализованной внутренней транзакции.
@@ -148,24 +147,24 @@ public static class BatchBuilder
         }
         return new string(c).ToLowerInvariant();
     }
-    /// <summary>
-    /// Удобная обёртка: нормализует inner и считает txid.
-    /// </summary>
-    public static string ComputeInnerTxId(ITransactionCommon inner)
-        => ComputeInnerTxId(NormalizeInnerForBatch(inner));
+    ///// <summary>
+    ///// Удобная обёртка: нормализует inner и считает txid.
+    ///// </summary>
+    //public static string ComputeInnerTxId(ITransactionCommon inner)
+    //    => ComputeInnerTxId(NormalizeInnerForBatch(inner));
 
-    /// <summary>
-    /// Возвращает список txIDs для всех внутренних транзакций батча.
-    /// Внутренние tx предварительно нормализуются.
-    /// </summary>
-    public static IReadOnlyList<string> ComputeInnerTxIds(Models.Transactions.Batch batch)
-    {
-        if (batch == null) throw new ArgumentNullException(nameof(batch));
-        if (batch.RawTransactions == null || batch.RawTransactions.Count == 0)
-            throw new ArgumentException("Batch.RawTransactions is empty.");
+    ///// <summary>
+    ///// Возвращает список txIDs для всех внутренних транзакций батча.
+    ///// Внутренние tx предварительно нормализуются.
+    ///// </summary>
+    //public static IReadOnlyList<string> ComputeInnerTxIds(Models.Transactions.Batch batch)
+    //{
+    //    if (batch == null) throw new ArgumentNullException(nameof(batch));
+    //    if (batch.RawTransactions == null || batch.RawTransactions.Count == 0)
+    //        throw new ArgumentException("Batch.RawTransactions is empty.");
 
-        return batch.RawTransactions
-                    .Select(c => ComputeInnerTxId(c.RawTransaction))
-                    .ToArray();
-    }
+    //    return batch.RawTransactions
+    //                .Select(c => ComputeInnerTxId(c.RawTransaction))
+    //                .ToArray();
+    //}
 }

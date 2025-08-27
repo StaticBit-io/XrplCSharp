@@ -44,7 +44,7 @@ namespace Xrpl.Utils
     
         public static string EncodeForMultiSigning(this TransactionCommon transaction, string signer)
         {
-            return XrplBinaryCodec.EncodeForMulitSigning(transaction, signer);
+            return XrplBinaryCodec.EncodeForMultiSigning(transaction, signer);
         }
     
         public static JToken Decode(string hex)
