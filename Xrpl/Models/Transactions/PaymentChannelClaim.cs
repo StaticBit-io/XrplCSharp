@@ -3,6 +3,7 @@ using System.Collections.Generic;
 using System.Threading.Tasks;
 
 using Xrpl.Client.Exceptions;
+using Xrpl.Models.Enums;
 
 // https://github.com/XRPLF/xrpl.js/blob/main/packages/xrpl/src/models/transactions/paymentChannelClaim.ts
 
@@ -14,6 +15,10 @@ namespace Xrpl.Models.Transactions
     [Flags]
     public enum PaymentChannelClaimFlags : uint
     {
+        /// <summary>
+        /// batch inner transaction
+        /// </summary>
+        tfInnerBatchTxn = XrplGlobalFlags.tfInnerBatchTxn,
         /// <summary>
         /// Clear the channel's Expiration time.<br/>
         /// (Expiration is different from the channel's immutable CancelAfter time.)<br/>

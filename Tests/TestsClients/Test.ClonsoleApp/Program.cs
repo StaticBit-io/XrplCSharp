@@ -301,8 +301,10 @@ internal class Program
         };
 
         // sign and submit the transaction
-        Dictionary<string, dynamic> txJson = JsonConvert.DeserializeObject<Dictionary<string, dynamic>>(tx.ToJson());
-        var response = await client.Submit(txJson, wallet);
+        var response = await client.Submit(tx, wallet);
+
+        //Dictionary<string, dynamic> txJson = JsonConvert.DeserializeObject<Dictionary<string, dynamic>>(tx.ToJson());
+        //var response = await client.Submit(txJson, wallet);
         var txr = response.Transaction as BatchResponse;
         Console.WriteLine(response.EngineResult);
     }
@@ -317,7 +319,7 @@ internal class Program
         Console.WriteLine("NEXT");
 
         var request = new AccountInfoRequest(wallet.ClassicAddress);
-        var request2 = new AccountInfoRequest(wallet.ClassicAddress);
+        var request2 = new AccountInfoRequest(wallet2.ClassicAddress);
         var accountInfo = await client.AccountInfo(request);
         var accountInfo2 = await client.AccountInfo(request2);
 
@@ -591,9 +593,9 @@ internal class Program
             client.connection.OnConnected += async () => { Console.WriteLine("CONNECTED"); };
 
             await client.Connect();
-            await MultiSignTest();
+            //await MultiSignTest();
             //await TestBatchSingle();
-            //await TestBatchMulti();
+            await TestBatchMulti();
 
             await client.Disconnect();
         }

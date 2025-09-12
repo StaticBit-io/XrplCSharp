@@ -1,10 +1,14 @@
-﻿using System.Collections.Generic;
+﻿using Newtonsoft.Json;
+
+using System.Collections.Generic;
 using System.Threading.Tasks;
-using Newtonsoft.Json;
-using static Xrpl.Models.Common.Common;
+
 using Xrpl.Client.Exceptions;
-using Xrpl.Models.Common;
 using Xrpl.Client.Json.Converters;
+using Xrpl.Models.Common;
+using Xrpl.Models.Enums;
+
+using static Xrpl.Models.Common.Common;
 
 namespace Xrpl.Models.Transactions
 {
@@ -14,6 +18,10 @@ namespace Xrpl.Models.Transactions
     /// <category>Transaction Flags</category>
     public enum AMMWithdrawFlags : uint
     {
+        /// <summary>
+        /// batch inner transaction
+        /// </summary>
+        tfInnerBatchTxn = XrplGlobalFlags.tfInnerBatchTxn,
         /// <summary>
         /// Perform a double-asset withdrawal and receive the specified amount of LP Tokens.
         /// </summary>

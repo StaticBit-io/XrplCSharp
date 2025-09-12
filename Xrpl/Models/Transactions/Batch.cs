@@ -6,6 +6,7 @@ using System.Linq;
 using System.Threading.Tasks;
 
 using Xrpl.Client.Json.Converters;
+using Xrpl.Models.Enums;
 
 namespace Xrpl.Models.Transactions;
 
@@ -32,12 +33,6 @@ public enum BatchFlags : uint
     /// All transactions are applied, even if one or more of the inner transactions fail.
     /// </summary>
     tfIndependent = 0x00080000,
-}
-
-[Flags]
-public enum BatchGlobalFlags : uint
-{
-    tfInnerBatchTxn = 0x40000000,
 }
 
 public sealed class BatchSigner
@@ -157,7 +152,7 @@ public partial class Validation
 
             if (!innerTx.TryGetValue("Flags", out var flagsObj) ||
                 !(flagsObj is long flagsValue) ||
-                (flagsValue & (uint)BatchGlobalFlags.tfInnerBatchTxn) == 0)
+                (flagsValue & (uint)XrplGlobalFlags.tfInnerBatchTxn) == 0)
             {
                 throw new ArgumentException($"Batch: RawTransactions[{i}] must contain the `tfInnerBatchTxn` flag.");
             }

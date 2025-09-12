@@ -3,6 +3,7 @@ using System.Collections.Generic;
 using System.Threading.Tasks;
 
 using Xrpl.Client.Exceptions;
+using Xrpl.Models.Enums;
 using Xrpl.Models.Utils;
 
 // https://github.com/XRPLF/xrpl.js/blob/main/packages/xrpl/src/models/transactions/NFTokenMint.ts
@@ -14,7 +15,12 @@ namespace Xrpl.Models.Transactions
     /// </summary>
     [Flags]
     public enum NFTokenMintFlags : uint
-    {
+    {    
+        /// <summary>
+        /// batch inner transaction
+        /// </summary>
+        tfInnerBatchTxn = XrplGlobalFlags.tfInnerBatchTxn,
+
         /// <summary>
         /// If set, indicates that the minted token may be burned by the issuer even if the issuer does not currently hold the token.<br/>
         /// The current holder of the token may always burn it.

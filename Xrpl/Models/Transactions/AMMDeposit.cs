@@ -5,6 +5,7 @@ using static Xrpl.Models.Common.Common;
 using Xrpl.Client.Exceptions;
 using Currency = Xrpl.Models.Common.Currency;
 using Xrpl.Client.Json.Converters;
+using Xrpl.Models.Enums;
 
 namespace Xrpl.Models.Transactions
 {
@@ -12,7 +13,12 @@ namespace Xrpl.Models.Transactions
     /// Enum representing values for AMMDeposit Transaction Flags.
     /// </summary>
     public enum AMMDepositFlags : uint
-    {
+    {     
+        /// <summary>
+        /// batch inner transaction
+        /// </summary>
+        tfInnerBatchTxn = XrplGlobalFlags.tfInnerBatchTxn,
+
         /// <summary>
         /// Perform a double-asset deposit and receive the specified amount of LP Tokens.
         /// </summary>

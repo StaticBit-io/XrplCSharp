@@ -6,6 +6,7 @@ using System.Collections.Generic;
 using System.Linq;
 
 using Xrpl.Client.Exceptions;
+using Xrpl.Models.Enums;
 using Xrpl.Models.Transactions;
 
 namespace Xrpl.Models.Utils;
@@ -93,7 +94,7 @@ public static class BatchBuilder
         else if (source.TryGetValue("Flags", out fv) && fv.Type == JTokenType.String && uint.TryParse(fv.ToString(), out var u))
             flags = u;
 
-        flags |= (uint)BatchGlobalFlags.tfInnerBatchTxn;
+        flags |= (uint)XrplGlobalFlags.tfInnerBatchTxn;
         source["Flags"] = flags;
 
         return source;
