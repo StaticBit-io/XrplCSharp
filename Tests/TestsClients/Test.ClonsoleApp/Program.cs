@@ -334,7 +334,6 @@ internal class Program
                 ValueAsXrp = 4m,
             },
             Destination = wallet2.ClassicAddress,
-
             // Fee внутри батча всегда должна быть "0" → проставим, но потом нормализуем
             Fee = new Currency
             {
@@ -594,7 +593,7 @@ internal class Program
 
             await client.Connect();
             //await MultiSignTest();
-            //await TestBatchSingle();
+            await TestBatchSingle();
             await TestBatchMulti();
 
             await client.Disconnect();

@@ -78,7 +78,12 @@ public sealed class Batch : TransactionCommon, IBatch
 
     // Допустимо — 0 или 1 режим (бит из BatchFlags) вместе с обычными глобальными флагами.
     [JsonProperty("Flags", NullValueHandling = NullValueHandling.Ignore)]
-    public new BatchFlags? Flags { get; set; }
+    public new BatchFlags? Flags
+    {
+        get => base.Flags.HasValue ? (BatchFlags?)base.Flags.Value : null;
+        set => base.Flags = (uint?)value;
+    }
+
 
     [JsonProperty("BatchSigners", NullValueHandling = NullValueHandling.Ignore)]
     public List<BatchSigner>? BatchSigners { get; set; }
@@ -91,7 +96,11 @@ public sealed class BatchResponse : TransactionResponseCommon, IBatch
 {
     // Допустимо — 0 или 1 режим (бит из BatchFlags) вместе с обычными глобальными флагами.
     [JsonProperty("Flags", NullValueHandling = NullValueHandling.Ignore)]
-    public new BatchFlags? Flags { get; set; }
+    public new BatchFlags? Flags
+    {
+        get => base.Flags.HasValue ? (BatchFlags?)base.Flags.Value : null;
+        set => base.Flags = (uint?)value;
+    }
 
     [JsonProperty("BatchSigners", NullValueHandling = NullValueHandling.Ignore)]
     public List<BatchSigner>? BatchSigners { get; set; }

@@ -37,7 +37,7 @@ public static class BatchBuilder
         return batch;
     }
 
-    public static RawTransactionWrapper ToBatchTx( this ITransactionCommon tx)
+    public static RawTransactionWrapper ToBatchTx(this ITransactionCommon tx)
     {
         // 1) Запрещаем Batch внутри Batch
         if (tx.TransactionType == TransactionType.Batch)
@@ -51,7 +51,14 @@ public static class BatchBuilder
         // 3) Принудительные поля
         tx.Fee = new Xrpl.Models.Common.Currency() { Value = "0" };
         tx.SigningPublicKey = ""; // пустая строка
-
+        if (tx.Flags != null)
+        {
+            tx.Flags |= (uint)XrplGlobalFlags.tfInnerBatchTxn;
+        }
+        else
+        {
+            tx.Flags = (uint)XrplGlobalFlags.tfInnerBatchTxn;
+        }
         // 4) не Устанавливаем tfInnerBatchTxn, будет на подписании
         //uint flags = 0;
         //if (tx.Flags is { } fv)
@@ -94,7 +101,12 @@ public static class BatchBuilder
         else if (source.TryGetValue("Flags", out fv) && fv.Type == JTokenType.String && uint.TryParse(fv.ToString(), out var u))
             flags = u;
 
-        flags |= (uint)XrplGlobalFlags.tfInnerBatchTxn;
+        // устанавливаем tfInnerBatchTxn, если ещё не установлен
+        uint tfInnerBatchTxn = (uint)XrplGlobalFlags.tfInnerBatchTxn;
+        if ((flags & tfInnerBatchTxn) == 0)
+        {
+            flags |= tfInnerBatchTxn;
+        }
         source["Flags"] = flags;
 
         return source;

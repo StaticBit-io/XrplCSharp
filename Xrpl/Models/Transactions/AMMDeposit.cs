@@ -95,7 +95,11 @@ namespace Xrpl.Models.Transactions
         [JsonConverter(typeof(CurrencyConverter))]
         public Xrpl.Models.Common.Currency? EPrice { get; set; }
 
-        public AMMDepositFlags Flags { get; set; }
+        public new AMMDepositFlags? Flags
+        {
+            get => base.Flags.HasValue ? (AMMDepositFlags?)base.Flags.Value : null;
+            set => base.Flags = (uint?)value;
+        }
     }
 
     /// <summary>
@@ -140,7 +144,7 @@ namespace Xrpl.Models.Transactions
         /// </summary>
         public Xrpl.Models.Common.Currency? EPrice { get; set; }
 
-        new AMMDepositFlags Flags { get; set; }
+        new AMMDepositFlags? Flags { get; set; }
     }
 
     /// <inheritdoc cref="IAMMDeposit" />
@@ -167,7 +171,11 @@ namespace Xrpl.Models.Transactions
         [JsonConverter(typeof(CurrencyConverter))]
         public Currency EPrice { get; set; }
 
-        public AMMDepositFlags Flags { get; set; }
+        public new AMMDepositFlags? Flags
+        {
+            get => base.Flags.HasValue ? (AMMDepositFlags?)base.Flags.Value : null;
+            set => base.Flags = (uint?)value;
+        }
 
         #endregion
     }

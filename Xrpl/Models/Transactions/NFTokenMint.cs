@@ -53,7 +53,11 @@ namespace Xrpl.Models.Transactions
         }
 
         /// <inheritdoc />
-        public new NFTokenMintFlags? Flags { get; set; }
+        public new NFTokenMintFlags? Flags
+        {
+            get => base.Flags.HasValue ? (NFTokenMintFlags?)base.Flags.Value : null;
+            set => base.Flags = (uint?)value;
+        }
 
         /// <inheritdoc />
         public uint NFTokenTaxon { get; set; }
@@ -107,7 +111,11 @@ namespace Xrpl.Models.Transactions
     /// <inheritdoc cref="INFTokenMint" />
     public class NFTokenMintResponse : TransactionResponseCommon, INFTokenMint
     {
-        public new NFTokenMintFlags? Flags { get; set; }
+        public new NFTokenMintFlags? Flags
+        {
+            get => base.Flags.HasValue ? (NFTokenMintFlags?)base.Flags.Value : null;
+            set => base.Flags = (uint?)value;
+        }
 
         /// <inheritdoc />
         public uint NFTokenTaxon { get; set; }

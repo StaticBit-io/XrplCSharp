@@ -71,7 +71,11 @@ namespace Xrpl.Models.Transactions
         [JsonConverter(typeof(RippleDateTimeConverter))]
         public DateTime? Expiration { get; set; }
         /// <inheritdoc />
-        public new OfferCreateFlags? Flags { get; set; }
+        public new OfferCreateFlags? Flags
+        {
+            get => base.Flags.HasValue ? (OfferCreateFlags?)base.Flags.Value : null;
+            set => base.Flags = (uint?)value;
+        }
 
         /// <inheritdoc />
         public uint? OfferSequence { get; set; }
@@ -124,7 +128,11 @@ namespace Xrpl.Models.Transactions
         public DateTime? Expiration { get; set; }
 
         /// <inheritdoc />
-        public new OfferCreateFlags? Flags { get; set; }
+        public new OfferCreateFlags? Flags
+        {
+            get => base.Flags.HasValue ? (OfferCreateFlags?)base.Flags.Value : null;
+            set => base.Flags = (uint?)value;
+        }
 
         /// <inheritdoc />
         public uint? OfferSequence { get; set; }

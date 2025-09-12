@@ -67,7 +67,11 @@ namespace Xrpl.Models.Transactions
         }
 
         /// <inheritdoc />
-        public new TrustSetFlags? Flags { get; set; }
+        public new TrustSetFlags? Flags
+        {
+            get => base.Flags.HasValue ? (TrustSetFlags?)base.Flags.Value : null;
+            set => base.Flags = (uint?)value;
+        }
 
         /// <inheritdoc />
         [JsonConverter(typeof(CurrencyConverter))]
@@ -124,7 +128,11 @@ namespace Xrpl.Models.Transactions
     public class TrustSetResponse : TransactionResponseCommon, ITrustSet
     {
         /// <inheritdoc />
-        public new TrustSetFlags? Flags { get; set; }
+        public new TrustSetFlags? Flags
+        {
+            get => base.Flags.HasValue ? (TrustSetFlags?)base.Flags.Value : null;
+            set => base.Flags = (uint?)value;
+        }
 
         /// <inheritdoc />
         [JsonConverter(typeof(CurrencyConverter))]

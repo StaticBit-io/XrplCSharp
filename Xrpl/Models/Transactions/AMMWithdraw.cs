@@ -75,8 +75,12 @@ namespace Xrpl.Models.Transactions
             TransactionType = TransactionType.AMMWithdraw;
         }
         #region Implementation of IAMMWithdraw
+        public new AMMWithdrawFlags? Flags
+        {
+            get => base.Flags.HasValue ? (AMMWithdrawFlags?)base.Flags.Value : null;
+            set => base.Flags = (uint?)value;
+        }
 
-        public AMMWithdrawFlags Flags { get; set; }
         /// <inheritdoc />
         [JsonConverter(typeof(IssuedCurrencyConverter))]
         public IssuedCurrency Asset { get; set; }
@@ -143,14 +147,18 @@ namespace Xrpl.Models.Transactions
         /// the transaction.
         /// </summary>
         Currency EPrice { get; set; }
-        public AMMWithdrawFlags Flags { get; set; }
+        AMMWithdrawFlags? Flags { get; set; }
     }
 
     /// <inheritdoc cref="IAMMWithdraw" />
     public class AMMWithdrawResponse : TransactionResponseCommon, IAMMWithdraw
     {
         #region Implementation of IAMMWithdraw
-        public AMMWithdrawFlags Flags { get; set; }
+        public new AMMWithdrawFlags? Flags
+        {
+            get => base.Flags.HasValue ? (AMMWithdrawFlags?)base.Flags.Value : null;
+            set => base.Flags = (uint?)value;
+        }
 
         /// <inheritdoc />
         [JsonConverter(typeof(IssuedCurrencyConverter))]

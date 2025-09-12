@@ -54,7 +54,11 @@ namespace Xrpl.Models.Transactions
         public string Amount { get; set; }
 
         /// <inheritdoc />
-        public new PaymentChannelClaimFlags? Flags { get; set; }
+        public new PaymentChannelClaimFlags? Flags
+        {
+            get => base.Flags.HasValue ? (PaymentChannelClaimFlags?)base.Flags.Value : null;
+            set => base.Flags = (uint?)value;
+        }
 
         /// <inheritdoc />
         public string Signature { get; set; }
@@ -128,7 +132,12 @@ namespace Xrpl.Models.Transactions
         /// <inheritdoc />
         public string Channel { get; set; }
         /// <inheritdoc />
-        public new PaymentChannelClaimFlags? Flags { get; set; }
+        public new PaymentChannelClaimFlags? Flags
+        {
+            get => base.Flags.HasValue ? (PaymentChannelClaimFlags?)base.Flags.Value : null;
+            set => base.Flags = (uint?)value;
+        }
+
         /// <inheritdoc />
         public string PublicKey { get; set; }
         /// <inheritdoc />

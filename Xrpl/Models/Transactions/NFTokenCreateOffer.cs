@@ -43,7 +43,11 @@ namespace Xrpl.Models.Transactions
         public DateTime? Expiration { get; set; }
 
         /// <inheritdoc />
-        public new NFTokenCreateOfferFlags? Flags { get; set; }
+        public new NFTokenCreateOfferFlags? Flags
+        {
+            get => base.Flags.HasValue ? (NFTokenCreateOfferFlags?)base.Flags.Value : null;
+            set => base.Flags = (uint?)value;
+        }
 
         /// <inheritdoc />
         public string NFTokenID { get; set; }
@@ -106,7 +110,11 @@ namespace Xrpl.Models.Transactions
         public DateTime? Expiration { get; set; }
 
         /// <inheritdoc />
-        public new NFTokenCreateOfferFlags? Flags { get; set; }
+        public new NFTokenCreateOfferFlags? Flags
+        {
+            get => base.Flags.HasValue ? (NFTokenCreateOfferFlags?)base.Flags.Value : null;
+            set => base.Flags = (uint?)value;
+        }
 
         /// <inheritdoc />
         public string NFTokenID { get; set; }
