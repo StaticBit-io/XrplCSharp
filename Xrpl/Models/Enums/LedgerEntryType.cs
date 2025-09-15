@@ -12,47 +12,118 @@ public enum LedgerEntryType
     /// The settings, XRP balance, and other metadata for one account.
     /// </summary>
     AccountRoot,
+
     /// <summary>
     /// Singleton object with status of enabled and pending amendments.
     /// </summary>
     Amendments,
+
+    /// <summary>
+    /// Automated Market Maker pools.
+    /// </summary>
+    AMM,
+
+    /// <summary>
+    /// Cross-chain bridge object.
+    /// </summary>
+    Bridge,
+
+    /// <summary>
+    /// A Ticket tracks an account sequence number that has been set aside for future use.
+    /// </summary>
+    Check,
+
+    /// <summary>
+    /// Credential object (XLS-40).
+    /// </summary>
+    Credential,
+
+    /// <summary>
+    /// Delegate object (XLS-xx).
+    /// </summary>
+    Delegate,
+
+    /// <summary>
+    /// A record of preauthorization for sending payments to an account that requires authorization.
+    /// </summary>
+    DepositPreauth,
+
     /// <summary>
     /// Contains links to other objects.
     /// </summary>
     DirectoryNode,
+
     /// <summary>
     /// Contains XRP held for a conditional payment.
     /// </summary>
     Escrow,
+
     /// <summary>
     /// Singleton object with consensus-approved base transaction cost and reserve requirements.
     /// </summary>
     FeeSettings,
+
     /// <summary>
     /// Lists of prior ledger versions' hashes for history lookup.
     /// </summary>
     LedgerHashes,
+
+    /// <summary>
+    /// List of validators currently believed to be offline.
+    /// </summary>
+    NegativeUNL,
+
     /// <summary>
     /// An order to make a currency trade.
     /// </summary>
     Offer,
+
+    /// <summary>
+    /// Oracle object for price feeds.
+    /// </summary>
+    Oracle,
+
     /// <summary>
     /// A channel for asynchronous XRP payments.
     /// </summary>
     PayChannel,
+
+    /// <summary>
+    /// Permissioned domain configuration (XLS-81).
+    /// </summary>
+    PermissionedDomain,
+
     /// <summary>
     /// Links two accounts, tracking the balance of one currency between them.<br/>
     /// The concept of a trust line is an abstraction of this object type.
     /// </summary>
     RippleState,
+
     /// <summary>
     /// A list of addresses for multi-signing transactions.
     /// </summary>
     SignerList,
+
     /// <summary>
-    /// List of validators currently believed to be offline.
+    /// A list of addresses for multi-signing transactions.
     /// </summary>
-    NegativeUNL,
+    Ticket,
+
+    /// <summary>
+    /// Vault object (XLS-xx).
+    /// </summary>
+    Vault,
+
+    /// <summary>
+    /// Cross-chain claim identifier.
+    /// </summary>
+    XChainOwnedClaimID,
+
+    /// <summary>
+    /// Cross-chain create-account claim identifier.
+    /// </summary>
+    XChainOwnedCreateAccountClaimID,
+
     /// <summary>
     /// Create offers to buy or sell NFTs.
     /// </summary>
@@ -61,17 +132,5 @@ public enum LedgerEntryType
     /// Ledger structure for recording NFTokens.
     /// </summary>
     NFTokenPage,
-    /// <summary>
-    /// A list of addresses for multi-signing transactions.
-    /// </summary>
-    Ticket,
-    /// <summary>
-    /// A Ticket tracks an account sequence number that has been set aside for future use.
-    /// </summary>
-    Check,
-    /// <summary>
-    /// A record of preauthorization for sending payments to an account that requires authorization.
-    /// </summary>
-    DepositPreauth,
-    AMM
 }
+

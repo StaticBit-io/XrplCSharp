@@ -19,17 +19,36 @@ namespace Xrpl.Models.Methods
         [JsonProperty("account_data")]
         public LOAccountRoot AccountData { get; set; }
         /// <summary>
+        /// A map of account flags parsed out.  This will only be available for rippled nodes 1.11.0 and higher.
+        /// </summary>
+        [JsonProperty("account_flags")]
+        public AccountInfoAccountFlags? AccountFlags { get; set; }
+        /// <summary>
+        /// If requested, array of SignerList ledger objects associated with this account for Multi-Signing.
+        ///Since an account can own at most one SignerList, this array must have exactly one
+        /// member if it is present.
+        /// </summary>
+        [JsonProperty("signer_lists")]
+        public LOSignerList[]? SignerLists { get; set; }
+        /// <summary>
         /// The ledger index of the current in-progress ledger, which was used when retrieving this information.
         /// </summary>
         [JsonProperty("ledger_current_index")]
         public int LedgerCurrentIndex { get; set; }
+        /// <summary>
+        /// The ledger index of the ledger version used when retrieving this
+        ///information.The information does not contain any changes from ledger
+        /// versions newer than this one.
+        /// </summary>
+        [JsonProperty("ledger_index")]
+        public int LedgerIndex { get; set; }
         /// <summary>
         /// Information about queued transactions sent by this account.<br/>
         /// This information describes the state of the local rippled server, which may be different from other servers in the peer-to-peer XRP Ledger network.<br/>
         /// Some fields may be omitted because the values are calculated "lazily" by the queuing mechanism.
         /// </summary>
         [JsonProperty("queue_data")]
-        public QueueData QueueData { get; set; }
+        public AccountQueueData? QueueData { get; set; }
         /// <summary>
         /// True if this data is from a validated ledger version;<br/>
         /// if omitted or set to false, this data is not final.
@@ -44,7 +63,7 @@ namespace Xrpl.Models.Methods
     /// <summary>
     /// Information about each queued transaction from address.
     /// </summary>
-    public class AccountTransaction //todo rename to QueueTransaction?
+    public class AccountQueueTransaction 
     {
         /// <summary>
         /// Whether this transaction changes this address's ways of authorizing transactions.
@@ -71,16 +90,99 @@ namespace Xrpl.Models.Methods
         /// </summary>
         [JsonProperty("seq")]
         public int Sequence { get; set; }
-
-        public int? LastLedgerSequence { get; set; } //todo unknown field
     }
+    public sealed class AccountInfoAccountFlags
+    {
+        /// <summary>
+        /// Enable rippling on this address's trust lines by default. Required for issuing addresses; discouraged for others.
+        /// </summary>
+        [JsonProperty("defaultRipple")]
+        public bool DefaultRipple { get; set; }
 
+        /// <summary>
+        /// This account can only receive funds from transactions it sends, and from preauthorized accounts. (DepositAuth enabled.)
+        /// </summary>
+        [JsonProperty("depositAuth")]
+        public bool DepositAuth { get; set; }
+
+        /// <summary>
+        /// Disallows use of the master key to sign transactions for this account.
+        /// </summary>
+        [JsonProperty("disableMasterKey")]
+        public bool DisableMasterKey { get; set; }
+
+        /// <summary>
+        /// Disallow incoming Checks from other accounts. (DisallowIncoming amendment)
+        /// </summary>
+        [JsonProperty("disallowIncomingCheck", NullValueHandling = NullValueHandling.Ignore)]
+        public bool? DisallowIncomingCheck { get; set; }
+
+        /// <summary>
+        /// Disallow incoming NFTOffers from other accounts. (DisallowIncoming amendment)
+        /// </summary>
+        [JsonProperty("disallowIncomingNFTokenOffer", NullValueHandling = NullValueHandling.Ignore)]
+        public bool? DisallowIncomingNFTokenOffer { get; set; }
+
+        /// <summary>
+        /// Disallow incoming PayChannels from other accounts. (DisallowIncoming amendment)
+        /// </summary>
+        [JsonProperty("disallowIncomingPayChan", NullValueHandling = NullValueHandling.Ignore)]
+        public bool? DisallowIncomingPayChan { get; set; }
+
+        /// <summary>
+        /// Disallow incoming Trustlines from other accounts. (DisallowIncoming amendment)
+        /// </summary>
+        [JsonProperty("disallowIncomingTrustline", NullValueHandling = NullValueHandling.Ignore)]
+        public bool? DisallowIncomingTrustline { get; set; }
+
+        /// <summary>
+        /// Client applications should not send XRP to this account. Not enforced by rippled.
+        /// </summary>
+        [JsonProperty("disallowIncomingXRP")]
+        public bool DisallowIncomingXRP { get; set; }
+
+        /// <summary>
+        /// All assets issued by this address are frozen.
+        /// </summary>
+        [JsonProperty("globalFreeze")]
+        public bool GlobalFreeze { get; set; }
+
+        /// <summary>
+        /// This address cannot freeze trust lines connected to it. Once enabled, cannot be disabled.
+        /// </summary>
+        [JsonProperty("noFreeze")]
+        public bool NoFreeze { get; set; }
+
+        /// <summary>
+        /// The account has used its free SetRegularKey transaction.
+        /// </summary>
+        [JsonProperty("passwordSpent")]
+        public bool PasswordSpent { get; set; }
+
+        /// <summary>
+        /// This account must individually approve other users for those users to hold this account's issued currencies.
+        /// </summary>
+        [JsonProperty("requireAuthorization")]
+        public bool RequireAuthorization { get; set; }
+
+        /// <summary>
+        /// Requires incoming payments to specify a Destination Tag.
+        /// </summary>
+        [JsonProperty("requireDestinationTag")]
+        public bool RequireDestinationTag { get; set; }
+
+        /// <summary>
+        /// This address can claw back issued IOUs. Once enabled, cannot be disabled.
+        /// </summary>
+        [JsonProperty("allowTrustLineClawback")]
+        public bool AllowTrustLineClawback { get; set; }
+    }
     /// <summary>
     /// Information about queued transactions sent by account.<br/>
     /// This information describes the state of the local rippled server, which may be different from other servers in the peer-to-peer XRP Ledger network.<br/>
     /// Some fields may be omitted because the values are calculated "lazily" by the queuing mechanism.
     /// </summary>
-    public class QueueData
+    public class AccountQueueData
     {
         /// <summary>
         /// Whether a transaction in the queue changes this address's ways of authorizing transactions.
@@ -108,7 +210,7 @@ namespace Xrpl.Models.Methods
         /// Information about each queued transaction from this address.
         /// </summary>
         [JsonProperty("transactions")]
-        public List<AccountTransaction> Transactions { get; set; }
+        public List<AccountQueueTransaction> Transactions { get; set; }
         /// <summary>
         /// Number of queued transactions from this address.
         /// </summary>

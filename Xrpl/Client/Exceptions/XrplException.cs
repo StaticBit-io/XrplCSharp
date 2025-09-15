@@ -100,6 +100,7 @@ namespace Xrpl.Client.Exceptions
         public ValidationException(string message = null) : base(message)
         {
         }
+        public ValidationException(string message, Exception? InnerException) : base(message, InnerException) { }
     }
     /// <summary>
     /// Exception thrown when a client cannot generate a wallet from the testnet/devnet
