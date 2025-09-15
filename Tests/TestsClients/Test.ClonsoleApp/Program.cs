@@ -263,10 +263,7 @@ internal class Program
             Destination = "rsWKbMAytbvShMJ5tWkiVhXt8xMsJq3wrA",
 
             // Fee внутри батча всегда должна быть "0" → проставим, но потом нормализуем
-            Fee = new Currency
-            {
-                ValueAsXrp = 0m,
-            },
+            Fee = 0,
         }.ToBatchTx();
 
         // Внутренний Payment #2
@@ -281,10 +278,7 @@ internal class Program
             Destination = "rsWKbMAytbvShMJ5tWkiVhXt8xMsJq3wrA",
 
             // Fee внутри батча всегда должна быть "0" → проставим, но потом нормализуем
-            Fee = new Currency
-            {
-                ValueAsXrp = 0m,
-            },
+            Fee = 0,
         }.ToBatchTx();
 
         // Собираем внешний Batch
@@ -298,6 +292,7 @@ internal class Program
                 payment1,
                 payment2,
             },
+            Fee = 70,
         };
 
         // sign and submit the transaction
@@ -308,61 +303,62 @@ internal class Program
         var txr = response.Transaction as BatchResponse;
         Console.WriteLine(response.EngineResult);
     }
-    private static async Task TestBatchMulti()
+    private static async Task TestBatchSingleMultiSign()
     {
-        var seed = "spucWfdp2GUXmEkKSQkzzVfL78gaM";
-        var wallet = XrplWallet.FromSeed(seed);
-        var seed2 = "shfrkzgPQQ6kB4WMXwwu1UNSyQLeH";
-        var wallet2 = XrplWallet.FromSeed(seed2);
+        // Владелец мультисиг-аккаунта
+        var owner = XrplWallet.FromSeed("sEdTqY3295pcs14tHzHG3ZpLzR4VFND");
+        // Подписанты (могут быть любые аккаунты/ключи)
+        var signer1 = XrplWallet.FromSeed("sEdT5jzoGrDayKXtXsUHmg8X9ScGAwR");
+        var signer2 = XrplWallet.FromSeed("sEdVpoUUJrqnn2EhJBhieg6gKRP3Nax");
+
         //var client = new XrplClient("wss://batch.nerdnest.xyz");
+        var client = new XrplClient("wss://s.devnet.rippletest.net:51233");
+        //var client = new XrplClient("wss://s.altnet.rippletest.net:51233");
+
+        client.connection.OnConnected += async () => { Console.WriteLine("CONNECTED"); };
+
+        await client.Connect();
 
         Console.WriteLine("NEXT");
 
-        var request = new AccountInfoRequest(wallet.ClassicAddress);
-        var request2 = new AccountInfoRequest(wallet2.ClassicAddress);
+        var request = new AccountInfoRequest(owner.ClassicAddress);
         var accountInfo = await client.AccountInfo(request);
-        var accountInfo2 = await client.AccountInfo(request2);
 
         //var flags = BatchGlobalFlags.tfInnerBatchTxn;
         // Внутренний Payment #1
         var payment1 = new Payment
         {
             Sequence = accountInfo.AccountData.Sequence + 1,
-            Account = wallet.ClassicAddress,
+            Account = owner.ClassicAddress,
             Amount = new Currency
             {
-                ValueAsXrp = 4m,
+                ValueAsXrp = 3m,
             },
-            Destination = wallet2.ClassicAddress,
+            Destination = "rsWKbMAytbvShMJ5tWkiVhXt8xMsJq3wrA",
+
             // Fee внутри батча всегда должна быть "0" → проставим, но потом нормализуем
-            Fee = new Currency
-            {
-                ValueAsXrp = 0m,
-            },
+            Fee = 0,
         }.ToBatchTx();
 
         // Внутренний Payment #2
         var payment2 = new Payment
         {
-            Sequence = accountInfo2.AccountData.Sequence,
-            Account = wallet2.ClassicAddress,
+            Sequence = accountInfo.AccountData.Sequence + 2,
+            Account = owner.ClassicAddress,
             Amount = new Currency
             {
                 ValueAsXrp = 3m,
             },
-            Destination = wallet.ClassicAddress,
+            Destination = "rsWKbMAytbvShMJ5tWkiVhXt8xMsJq3wrA",
 
             // Fee внутри батча всегда должна быть "0" → проставим, но потом нормализуем
-            Fee = new Currency
-            {
-                ValueAsXrp = 0m,
-            },
+            Fee = 0,
         }.ToBatchTx();
 
         // Собираем внешний Batch
         var tx = new Batch
         {
-            Account = wallet.ClassicAddress,
+            Account = owner.ClassicAddress,
             Sequence = accountInfo.AccountData.Sequence,
             Flags = BatchFlags.tfAllOrNothing, // режим: или все выполняются, или ни одна
             RawTransactions = new List<RawTransactionWrapper>
@@ -370,20 +366,123 @@ internal class Program
                 payment1,
                 payment2,
             },
+            Fee = 70
         };
 
-        var sig1 = wallet.Sign(tx, true);
-        var sig2 = wallet2.Sign(tx, true);
-        var combined = XrplWallet.CombineBatchSigners(sig1.TxBlob, sig2.TxBlob);
-        var res = await client.SubmitRequest(combined.TxBlob,false);
-        Console.WriteLine(res.EngineResult);
-
         // sign and submit the transaction
-        //Dictionary<string, dynamic> txJson = JsonConvert.DeserializeObject<Dictionary<string, dynamic>>(tx.ToJson());
-        //var response = await client.Submit(txJson, wallet);
-        //Console.WriteLine(response.EngineResult);
+        var response = await client.SubmitMulti(tx, new List<XrplWallet>() { signer1, signer2 }, true);
+        var txr = response.Transaction as BatchResponse;
+        Console.WriteLine(response.EngineResult);
     }
 
+    private static async Task TestBatchMultiAccounts()
+    {
+        var seed1 = "spucWfdp2GUXmEkKSQkzzVfL78gaM";
+        var seed2 = "shfrkzgPQQ6kB4WMXwwu1UNSyQLeH";
+        var seed3 = "sEdTqY3295pcs14tHzHG3ZpLzR4VFND";
+
+        var w1 = XrplWallet.FromSeed(seed1);
+        var w2 = XrplWallet.FromSeed(seed2);
+        var w3 = XrplWallet.FromSeed(seed3);
+
+        // Внутренний #1 — от w1 (seq = next для w1)
+        var p1 = new Payment
+        {
+            Account = w1.ClassicAddress,
+            Destination = w2.ClassicAddress,
+            Amount = new Currency { ValueAsXrp = 1.1m },
+            Fee = new Currency { Value = "0" },
+        }.ToBatchTx();
+
+        // Внутренний #2 — от w2 (seq = next для w2)
+        var p2 = new Payment
+        {
+            Account = w2.ClassicAddress,
+            Destination = w1.ClassicAddress,
+            Amount = new Currency { ValueAsXrp = 1.2m },
+            Fee = new Currency { Value = "0" },
+        }.ToBatchTx();
+
+        // Внутренний #3 — от w3 (seq = next для w3)
+        var p3 = new Payment
+        {
+            Account = w3.ClassicAddress,
+            Destination = w1.ClassicAddress,
+            Amount = new Currency { ValueAsXrp = 1.3m },
+            Fee = new Currency { Value = "0" },
+        }.ToBatchTx();
+
+        // Внешний Batch — платит комиссию w1 (может быть любой плательщик)
+        var batch = new Batch
+        {
+            Account = w1.ClassicAddress,
+            Flags = BatchFlags.tfAllOrNothing,
+            RawTransactions = new List<RawTransactionWrapper> { p1, p2, p3 },
+            Fee = new Currency() { Value = "70" }
+            // Рекомендуется проставить LLS и Fee (не показано для краткости)
+        };
+
+        var submitRes = await client.SubmitMultiBatch(batch, new[] { w1, w2, w3 }, true);
+        var txr = submitRes.Transaction as BatchResponse;
+        Console.WriteLine($"{submitRes.EngineResult}: {submitRes.EngineResultMessage}");
+    }
+
+    private static async Task TestBatchMultiAccountsMultiSign()
+    {
+        // Владелец мультисиг-аккаунта
+        var owner = XrplWallet.FromSeed("sEdTqY3295pcs14tHzHG3ZpLzR4VFND");
+        // Подписанты (могут быть любые аккаунты/ключи)
+        var signer1 = XrplWallet.FromSeed("sEdT5jzoGrDayKXtXsUHmg8X9ScGAwR");
+        var signer2 = XrplWallet.FromSeed("sEdVpoUUJrqnn2EhJBhieg6gKRP3Nax");
+
+
+        var seed1 = "spucWfdp2GUXmEkKSQkzzVfL78gaM";
+        var seed2 = "shfrkzgPQQ6kB4WMXwwu1UNSyQLeH";
+
+        var w1 = XrplWallet.FromSeed(seed1);
+        var w2 = XrplWallet.FromSeed(seed2);
+
+        // Внутренний #1 — от w1 (seq = next для w1)
+        var p1 = new Payment
+        {
+            Account = w1.ClassicAddress,
+            Destination = w2.ClassicAddress,
+            Amount = new Currency { ValueAsXrp = 1.1m },
+            Fee = new Currency { Value = "0" },
+        }.ToBatchTx();
+
+        // Внутренний #2 — от w2 (seq = next для w2)
+        var p2 = new Payment
+        {
+            Account = w2.ClassicAddress,
+            Destination = w1.ClassicAddress,
+            Amount = new Currency { ValueAsXrp = 1.2m },
+            Fee = new Currency { Value = "0" },
+        }.ToBatchTx();
+
+        // Внутренний #3 — от w3 (seq = next для w3)
+        var p3 = new Payment
+        {
+            Account = owner.ClassicAddress,
+            Destination = w1.ClassicAddress,
+            Amount = new Currency { ValueAsXrp = 1.3m },
+            Fee = new Currency { Value = "0" },
+        }.ToBatchTx();
+
+        // Внешний Batch — платит комиссию w1 (может быть любой плательщик)
+        var batch = new Batch
+        {
+            Account = w1.ClassicAddress,
+            Flags = BatchFlags.tfAllOrNothing,
+            RawTransactions = new List<RawTransactionWrapper> { p1, p2, /*p3*/ },
+            Fee = new Currency() { Value = "70" }
+            // Рекомендуется проставить LLS и Fee (не показано для краткости)
+        };
+
+        var submitRes = await client.SubmitMultiBatch(batch, new[] { w1, w2, /*owner, signer1, signer2 */}, true);
+        var txr = submitRes.Transaction as BatchResponse;
+        Console.WriteLine($"{submitRes.EngineResult}: {submitRes.EngineResultMessage}");
+    }
     private static async Task WebsocketTest()
     {
         var isFinished = false;
@@ -583,8 +682,8 @@ internal class Program
         await client.Disconnect();
     }
 
-    private static IXrplClient client = new XrplClient("wss://s.altnet.rippletest.net:51233");
-    //private static IXrplClient client = new XrplClient("wss://s.devnet.rippletest.net:51233");
+    //private static IXrplClient client = new XrplClient("wss://s.altnet.rippletest.net:51233");
+    private static IXrplClient client = new XrplClient("wss://s.devnet.rippletest.net:51233");
     private static async Task Main(string[] args)
     {
         try
@@ -593,8 +692,10 @@ internal class Program
 
             await client.Connect();
             //await MultiSignTest();
-            await TestBatchSingle();
-            await TestBatchMulti();
+            //await TestBatchSingle(); //Одно-аккаунтный Batch: у всех внутренних tx один владелец
+            //await TestBatchSingleMultiSign(); //Одно-аккаунтный Batch с мультиподписью
+            //await TestBatchMultiAccounts(); //Много-аккаунтный Batch: у каждого участника single-sig (через BatchSigners
+            await TestBatchMultiAccountsMultiSign(); //Много-аккаунтный Batch: внутри Multi-Sig
 
             await client.Disconnect();
         }
@@ -632,7 +733,7 @@ internal class Program
             Amount = new Currency
             {
                 ValueAsXrp = 1
-            }, 
+            },
             //Sequence = acc.AccountData.Sequence,
             //Fee = new Currency(){Value = "100"},
             //TransactionSignature = null,
@@ -640,7 +741,7 @@ internal class Program
         };
         //var partial1 = signer1.Sign(pay, multisign: true, signingFor: owner.ClassicAddress);
         //var partial2 = signer2.Sign(pay, multisign: true, signingFor: owner.ClassicAddress);
-        var res = await client.SubmitMulti(pay, new List<XrplWallet>() { signer1,signer2 },true);
+        var res = await client.SubmitMulti(pay, new List<XrplWallet>() { signer1, signer2 }, true);
 
         //string combinedBlob = XrplWallet.CombineMultiSigners(partial1.TxBlob, partial2.TxBlob);
         //SubmitRequest request = new SubmitRequest { Command = "submit", TxBlob = combinedBlob, FailHard = false };
@@ -665,11 +766,11 @@ internal class Program
                 new SignerEntryWrapper{ SignerEntry = new SignerEntry { Account = signer1.ClassicAddress, SignerWeight = 1 }},
                 new SignerEntryWrapper{ SignerEntry = new SignerEntry { Account = signer2.ClassicAddress, SignerWeight = 1, }},
             },
-            Fee = new Currency { Value = "15"},              // нормальная комиссия
+            Fee = new Currency { Value = "15" },              // нормальная комиссия
             Sequence = acc.AccountData.Sequence,
         };
 
-        var slsSubmit = await client.Submit(sls,owner,true);
+        var slsSubmit = await client.Submit(sls, owner, true);
     }
 
     private static async Task DisableMaster(XrplWallet owner)
@@ -684,7 +785,7 @@ internal class Program
             Fee = new Currency { Value = "15" },              // нормальная комиссия
             Sequence = acc.AccountData.Sequence,
         };
-        await client.Submit(disableMaster, owner,true);
+        await client.Submit(disableMaster, owner, true);
     }
 
 }
