@@ -120,6 +120,7 @@ public static class SubmitSugar
     /// </summary>
     /// <param name="client">A Client.</param>
     /// <param name="wallets">wallets for signer</param>
+    /// <param name="autofill">autofill transaction missed fields</param>
     /// <param name="failHard">If true, and the transaction fails locally, do not retry or relay the transaction to other servers.</param>
     /// <param name="tx">transaction for submit</param>
     /// <returns></returns>
@@ -130,23 +131,44 @@ public static class SubmitSugar
         bool autofill = true,
         bool failHard = false)
     {
+        var json = tx.ToJson();
+        var txJson = JsonConvert.DeserializeObject<Dictionary<string, dynamic>>(json)
+                     ?? throw new ValidationException("Failed to deserialize tx json");
+        var response = await SubmitMulti(client, txJson, wallets, autofill, failHard);
+        return response;
+    }
+
+    /// <summary>
+    /// Encodes and submits a signed transaction.
+    /// </summary>
+    /// <param name="client">A Client.</param>
+    /// <param name="wallets">wallets for signer</param>
+    /// <param name="autofill">autofill transaction missed fields</param>
+    /// <param name="failHard">If true, and the transaction fails locally, do not retry or relay the transaction to other servers.</param>
+    /// <param name="tx">transaction for submit</param>
+    /// <returns></returns>
+    public static async Task<Submit> SubmitMulti(
+        this IXrplClient client,
+        Dictionary<string, dynamic> tx,
+        IEnumerable<XrplWallet> wallets,
+        bool autofill = true,
+        bool failHard = false)
+    {
         if (wallets is null)
         {
             throw new ValidationException("Wallets must be provided when submitting an unsigned transaction");
         }
 
-        var json = tx.ToJson();
-
-        //var json = JsonConvert.SerializeObject(tx);
-        var txJson = JsonConvert.DeserializeObject<Dictionary<string, dynamic>>(json);
-
+        var xrplWallets = wallets as XrplWallet[] ?? wallets.ToArray();
         if (autofill)
         {
-            txJson = await client.Autofill(txJson, signersCount: wallets.Count());
+            tx = await client.Autofill(tx, signersCount: xrplWallets.Length);
         }
 
-        var signed = wallets.Select(c => c.Sign(txJson, multisign: true).TxBlob).ToArray();
+        var signed = xrplWallets.Select(c => c.Sign(tx, multisign: true).TxBlob).ToArray();
         var combined = XrplWallet.CombineMultiSigners(signed);
+        var txRes = XrplBinaryCodec.Decode(combined);
+
         var response = await client.SubmitRequest(combined, failHard: false);
         return response;
     }
@@ -157,140 +179,62 @@ public static class SubmitSugar
     /// <param name="client">A Client.</param>
     /// <param name="wallets">wallets for signer</param>
     /// <param name="failHard">If true, and the transaction fails locally, do not retry or relay the transaction to other servers.</param>
-    /// <param name="tx">transaction for submit</param>
+    /// <param name="autofill">autofill transaction missed fields</param>
+    /// <param name="txJson">transaction for submit</param>
     /// <returns></returns>
     public static async Task<Submit> SubmitMultiBatch(
-    this IXrplClient client,
-    Batch tx,
-    IEnumerable<XrplWallet> wallets,
-    bool autofill = true,
-    bool failHard = false)
+        this IXrplClient client,
+        Dictionary<string, dynamic> txJson,
+        IEnumerable<XrplWallet> wallets,
+        bool autofill = true,
+        bool failHard = false)
     {
-        if (wallets is null)
-            throw new ValidationException("Wallets must be provided when submitting an unsigned transaction");
-
         var walletList = wallets as IList<XrplWallet> ?? wallets.ToList();
         if (walletList.Count == 0)
             throw new ValidationException("No wallets provided");
 
-        // Быстрый доступ по адресу
         var walletByAddr = walletList.ToDictionary(w => w.ClassicAddress, StringComparer.Ordinal);
 
-        if (!walletByAddr.TryGetValue(tx.Account, out var main))
-            throw new ValidationException($"Main account {tx.Account} not found in provided wallets");
+        if (!txJson.TryGetValue("Account", out var mainAcc))
+            throw new ValidationException("Main account not defined in tx json");
 
-        // Сырые JSON-структуры
-        var json = tx.ToJson();
-        var txJson = JsonConvert.DeserializeObject<Dictionary<string, dynamic>>(json)
-                    ?? throw new ValidationException("Failed to deserialize tx json");
+        if (!walletByAddr.TryGetValue((string)mainAcc, out var main))
+            throw new ValidationException($"Main account {mainAcc} not found in provided wallets");
 
         if (autofill)
         {
-            // signersCount можно оценивать по числу участников; оставлю как было (wallets.Count()),
-            // чтобы не менять внешний контракт.
             txJson = await client.Autofill(txJson, signersCount: walletList.Count);
         }
 
-        // Все аккаунты-участники внутренних tx, кроме основного
+        // 3) Переходим на JObject для удобного и безопасного чтения вложенных структур
+        var root = JObject.FromObject(txJson);
+
+        // Собираем участников внутренних транзакций
+        var rawArray = root["RawTransactions"] as JArray ?? new JArray();
+
         var participantAccounts = new HashSet<string>(
-            tx.RawTransactions
-                 .Select(rt => rt.RawTransaction?.Account)
-                 .Where(a => !string.IsNullOrEmpty(a))
-                 .Where(a => !string.Equals(a, tx.Account, StringComparison.Ordinal)),
+            rawArray
+                .Select(t => (string?)t?["RawTransaction"]?["Account"])
+                .Where(a => !string.IsNullOrEmpty(a))
+                .Where(a => !string.Equals(a, mainAcc, StringComparison.Ordinal))!
+                .Cast<string>(),
             StringComparer.Ordinal);
 
-        // Для каждого участника соберём подписи (параллельно)
-        var tasks = participantAccounts.Select(async acc =>
+        var signedTxs = participantAccounts.Select(acc =>
         {
-            var accountInfo = await client.AccountInfo(
-                new AccountInfoRequest(acc)
-                {
-                    SignerLists = true
-                });
-
-            if (accountInfo.AccountFlags.DisableMasterKey == false)
+            if (walletByAddr.TryGetValue(acc, out var ownerWallet))
             {
-                if (walletByAddr.TryGetValue(acc, out var ownerWallet))
-                {
-                    var blob = ownerWallet
-                        .SignAsBatchPart(txJson, multisign: false, acc)
-                        .TxBlob;
-
-                    return [blob,];
-                }
-
-                if (accountInfo.AccountData.RegularKey is not { Length: > 0 } &&
-                    accountInfo.SignerLists is not { Length: > 0 })
-                {
-                    throw new ValidationException($"Wallet for account {acc} not provided");
-                }
-            }
-            
-            if (accountInfo.AccountData.RegularKey is { Length: > 0 } regularKey &&
-                walletByAddr.TryGetValue(regularKey, out var regularWallet))
-            {
-                var blob = regularWallet
+                var blob = ownerWallet
                     .SignAsBatchPart(txJson, multisign: false, acc)
                     .TxBlob;
-                return [blob,];
+
+                return blob;
             }
 
-            var signerList = accountInfo.SignerLists
-                .FirstOrDefault();
+            throw new ValidationException($"Wallet for account {acc} not provided");
+        }).ToArray();
 
-            if (signerList is null)
-            {
-                throw new ValidationException($"Wallet for account {acc} not provided");
-            }
-
-            // Есть мультисиг — выбираем минимально-достаточный набор по сумме весов
-            var quorum = signerList.SignerQuorum;
-
-            var candidates = signerList.SignerEntries
-                .Select(se => new
-                {
-                    Addr = se.SignerEntry.Account,
-                    Weight = se.SignerEntry.SignerWeight
-                })
-                .Where(se => walletByAddr.ContainsKey(se.Addr))
-                .OrderByDescending(se => se.Weight) // жадно: самые тяжёлые сначала
-                .ToList();
-
-            if (candidates.Count == 0)
-                throw new ValidationException($"No local signer keys for multisig account {acc}");
-
-            uint sum = 0;
-            var chosen = new List<string>();
-            foreach (var cnd in candidates)
-            {
-                chosen.Add(cnd.Addr);
-                sum += cnd.Weight;
-                if (sum >= quorum) break;
-            }
-
-            if (sum < quorum)
-            {
-                var have = string.Join(", ", candidates.Select(e => $"{e.Addr}:{e.Weight}"));
-                throw new ValidationException(
-                    $"Not enough signer weight for {acc}. Quorum={quorum}, available={sum}. Signers: {have}");
-            }
-
-            // Подписываем выбранными кошельками
-            var blobs = new List<string>(chosen.Count);
-            foreach (var addr in chosen)
-            {
-                var w = walletByAddr[addr];
-                var b = w.SignAsBatchPart(txJson, multisign: true, acc).TxBlob;
-                blobs.Add(b);
-            }
-
-            return blobs.ToArray();
-        });
-
-        var signedGroups = await Task.WhenAll(tasks);
-        var signedTxs = signedGroups.SelectMany(x => x).ToArray();
-
-        // Склеиваем подписи и отправляем
+        // Склеиваем подписи
         var combined = XrplWallet.CombineBatchSigners(signedTxs);
         var txRes = XrplBinaryCodec.Decode(combined.TxBlob);
 
@@ -301,83 +245,177 @@ public static class SubmitSugar
         var signed = main.Sign(txJson);
         txRes = XrplBinaryCodec.Decode(signed.TxBlob);
 
-        var response = await client.SubmitRequest(signed.TxBlob, failHard);
+        return await client.SubmitRequest(signed.TxBlob, failHard);
+    }
 
+    /// <summary>
+    /// Encodes and submits a Batch signed transaction.
+    /// </summary>
+    /// <param name="client">A Client.</param>
+    /// <param name="wallets">wallets for signer</param>
+    /// <param name="failHard">If true, and the transaction fails locally, do not retry or relay the transaction to other servers.</param>
+    /// <param name="autofill">autofill transaction missed fields</param>
+    /// <param name="tx">transaction for submit</param>
+    /// <returns></returns>
+    public static async Task<Submit> SubmitMultiBatch(
+    this IXrplClient client,
+    Batch tx,
+    IEnumerable<XrplWallet> wallets,
+    bool autofill = true,
+    bool failHard = false)
+    {
+        var json = tx.ToJson();
+        var txJson = JsonConvert.DeserializeObject<Dictionary<string, dynamic>>(json)
+                    ?? throw new ValidationException("Failed to deserialize tx json");
+        
+        var response = await client.SubmitMultiBatch(txJson, wallets, autofill, failHard);
         return response;
     }
 
     //public static async Task<Submit> SubmitMultiBatch(
-    //    this IXrplClient client,
-    //    ITransactionCommon tx,
-    //    IEnumerable<XrplWallet> wallets,
-    //    bool autofill = true,
-    //    bool failHard = false)
+    //this IXrplClient client,
+    //Batch tx,
+    //IEnumerable<XrplWallet> wallets,
+    //bool autofill = true,
+    //bool failHard = false)
     //{
     //    if (wallets is null)
-    //    {
     //        throw new ValidationException("Wallets must be provided when submitting an unsigned transaction");
-    //    }
 
-    //    if (tx is not Batch batch)
-    //    {
-    //        throw new ValidationException("Tx must be Batch transaction");
-    //    }
+    //    var walletList = wallets as IList<XrplWallet> ?? wallets.ToList();
+    //    if (walletList.Count == 0)
+    //        throw new ValidationException("No wallets provided");
 
+    //    // Быстрый доступ по адресу
+    //    var walletByAddr = walletList.ToDictionary(w => w.ClassicAddress, StringComparer.Ordinal);
+
+    //    if (!walletByAddr.TryGetValue(tx.Account, out var main))
+    //        throw new ValidationException($"Main account {tx.Account} not found in provided wallets");
+
+    //    // Сырые JSON-структуры
     //    var json = tx.ToJson();
-
-    //    //var json = JsonConvert.SerializeObject(tx);
-    //    var txJson = JsonConvert.DeserializeObject<Dictionary<string, dynamic>>(json);
+    //    var txJson = JsonConvert.DeserializeObject<Dictionary<string, dynamic>>(json)
+    //                ?? throw new ValidationException("Failed to deserialize tx json");
 
     //    if (autofill)
     //    {
-    //        txJson = await client.Autofill(txJson, signersCount: wallets.Count());
+    //        // signersCount можно оценивать по числу участников; оставлю как было (wallets.Count()),
+    //        // чтобы не менять внешний контракт.
+    //        txJson = await client.Autofill(txJson, signersCount: walletList.Count);
     //    }
 
-    //    var main = wallets.First(c => c.ClassicAddress == tx.Account);
-    //    var walletsTxs = batch.RawTransactions.Select(c => c.RawTransaction).Select(c => c.Account).Distinct();
+    //    // Все аккаунты-участники внутренних tx, кроме основного
+    //    var participantAccounts = new HashSet<string>(
+    //        tx.RawTransactions
+    //             .Select(rt => rt.RawTransaction?.Account)
+    //             .Where(a => !string.IsNullOrEmpty(a))
+    //             .Where(a => !string.Equals(a, tx.Account, StringComparison.Ordinal)),
+    //        StringComparer.Ordinal);
 
-    //    var signedTxs = wallets.Where(c => walletsTxs.Contains(c.ClassicAddress) && c.ClassicAddress != tx.Account)
-    //        .SelectMany(c =>
-    //        {
-    //            var accSigner = await client.AccountObjects(
-    //                new AccountObjectsRequest(c.ClassicAddress)
-    //                {
-    //                    Type = LedgerEntryType.SignerList,
-    //                });
-    //            if (accSigner.AccountObjectList is { Count: > 0, } accountObjects)
+    //    // Для каждого участника соберём подписи (параллельно)
+    //    var tasks = participantAccounts.Select(async acc =>
+    //    {
+    //        var accountInfo = await client.AccountInfo(
+    //            new AccountInfoRequest(acc)
     //            {
-    //                var signers = new List<SignatureResult>();
-    //                foreach (var accObject in accountObjects)
-    //                {
-    //                    if (accObject is LOSignerList signer)
-    //                    {
-    //                        var quorum = signer.SignerQuorum;
+    //                SignerLists = true
+    //            });
 
-    //                        var signerAccounts = signer.SignerEntries.Select(a => a.SignerEntry.Account);
-    //                        var selectedWallets =
-    //                            wallets.Where(w => signerAccounts.Contains(w.ClassicAddress)).ToList();
-    //                        if (selectedWallets.Count < quorum)
-    //                        {
-    //                            throw new ValidationException(
-    //                                $"Not enough signers in wallet {c.ClassicAddress} for quorum {quorum}");
-    //                        }
+    //        if (accountInfo.AccountFlags.DisableMasterKey == false)
+    //        {
+    //            if (walletByAddr.TryGetValue(acc, out var ownerWallet))
+    //            {
+    //                var blob = ownerWallet
+    //                    .SignAsBatchPart(txJson, multisign: false, acc)
+    //                    .TxBlob;
 
-    //                        return selectedWallets.Select(w =>
-    //                            w.SignAsBatchPart(txJson, multisign: false, c.ClassicAddress).TxBlob);
-    //                    }
-    //                }
+    //                return [blob,];
     //            }
 
-    //            return [c.SignAsBatchPart(txJson, multisign: false, c.ClassicAddress).TxBlob,];
-    //        }).ToArray();
+    //            if (accountInfo.AccountData.RegularKey is not { Length: > 0 } &&
+    //                accountInfo.SignerLists is not { Length: > 0 })
+    //            {
+    //                throw new ValidationException($"Wallet for account {acc} not provided");
+    //            }
+    //        }
 
-    //    // 3) Склеиваем подписи и отправляем
+    //        if (accountInfo.AccountData.RegularKey is { Length: > 0 } regularKey &&
+    //            walletByAddr.TryGetValue(regularKey, out var regularWallet))
+    //        {
+    //            var blob = regularWallet
+    //                .SignAsBatchPart(txJson, multisign: false, acc)
+    //                .TxBlob;
+    //            return [blob,];
+    //        }
+
+    //        var signerList = accountInfo.SignerLists
+    //            .FirstOrDefault();
+
+    //        if (signerList is null)
+    //        {
+    //            throw new ValidationException($"Wallet for account {acc} not provided");
+    //        }
+
+    //        // Есть мультисиг — выбираем минимально-достаточный набор по сумме весов
+    //        var quorum = signerList.SignerQuorum;
+
+    //        var candidates = signerList.SignerEntries
+    //            .Select(se => new
+    //            {
+    //                Addr = se.SignerEntry.Account,
+    //                Weight = se.SignerEntry.SignerWeight
+    //            })
+    //            .Where(se => walletByAddr.ContainsKey(se.Addr))
+    //            .OrderByDescending(se => se.Weight) // жадно: самые тяжёлые сначала
+    //            .ToList();
+
+    //        if (candidates.Count == 0)
+    //            throw new ValidationException($"No local signer keys for multisig account {acc}");
+
+    //        uint sum = 0;
+    //        var chosen = new List<string>();
+    //        foreach (var cnd in candidates)
+    //        {
+    //            chosen.Add(cnd.Addr);
+    //            sum += cnd.Weight;
+    //            if (sum >= quorum) break;
+    //        }
+
+    //        if (sum < quorum)
+    //        {
+    //            var have = string.Join(", ", candidates.Select(e => $"{e.Addr}:{e.Weight}"));
+    //            throw new ValidationException(
+    //                $"Not enough signer weight for {acc}. Quorum={quorum}, available={sum}. Signers: {have}");
+    //        }
+
+    //        // Подписываем выбранными кошельками
+    //        var blobs = new List<string>(chosen.Count);
+    //        foreach (var addr in chosen)
+    //        {
+    //            var w = walletByAddr[addr];
+    //            var b = w.SignAsBatchPart(txJson, multisign: true, acc).TxBlob;
+    //            blobs.Add(b);
+    //        }
+
+    //        return blobs.ToArray();
+    //    });
+
+    //    var signedGroups = await Task.WhenAll(tasks);
+    //    var signedTxs = signedGroups.SelectMany(x => x).ToArray();
+
+    //    // Склеиваем подписи и отправляем
     //    var combined = XrplWallet.CombineBatchSigners(signedTxs);
     //    var txRes = XrplBinaryCodec.Decode(combined.TxBlob);
 
-    //    txJson = JsonConvert.DeserializeObject<Dictionary<string, dynamic>>(JsonConvert.SerializeObject(txRes));
+    //    txJson = JsonConvert.DeserializeObject<Dictionary<string, dynamic>>(
+    //                 JsonConvert.SerializeObject(txRes))
+    //             ?? throw new ValidationException("Failed to prepare signed tx json");
+
     //    var signed = main.Sign(txJson);
-    //    var response = await client.SubmitRequest(signed.TxBlob, failHard: false);
+    //    txRes = XrplBinaryCodec.Decode(signed.TxBlob);
+
+    //    var response = await client.SubmitRequest(signed.TxBlob, failHard);
+
     //    return response;
     //}
 
@@ -387,20 +425,20 @@ public static class SubmitSugar
     /// validated ledger, or the transaction's lastLedgerSequence has been surpassed by the
     /// latest ledger sequence (meaning it will never be included in a validated ledger).
     /// </summary>
-    /// <param name="Client"></param>
-    /// <param name="TxHash"></param>
+    /// <param name="client"></param>
+    /// <param name="txHash"></param>
     /// <param name="lastLedger"></param>
     /// <param name="submissionResult"></param>
     /// <returns></returns>
     /// <exception cref="ValidationException"></exception>
     private static async Task<TransactionSummary> WaitForFinalTransactionOutcome(
-        this IXrplClient Client,
-        string TxHash,
+        this IXrplClient client,
+        string txHash,
         uint? lastLedger,
         string submissionResult)
     {
         await Task.Delay(LEDGER_CLOSE_TIME);
-        var latestLedger = await Client.GetLedgerIndex();
+        var latestLedger = await client.GetLedgerIndex();
         if (lastLedger < latestLedger)
         {
             throw new ValidationException(
@@ -411,8 +449,8 @@ public static class SubmitSugar
         TransactionSummary txResponse = null;
         try
         {
-            txResponse = await Client.TxV2(
-                new TxRequest(TxHash)
+            txResponse = await client.TxV2(
+                new TxRequest(txHash)
                 {
                     ApiVersion = 2,
                 });
@@ -423,7 +461,7 @@ public static class SubmitSugar
             var message = error?.Data["Error"] as string;
             if (message == "txnNotFound")
             {
-                return await WaitForFinalTransactionOutcome(Client, TxHash, lastLedger, submissionResult);
+                return await WaitForFinalTransactionOutcome(client, txHash, lastLedger, submissionResult);
             }
 
             throw new ValidationException(
@@ -435,7 +473,7 @@ public static class SubmitSugar
             return txResponse;
         }
 
-        return await WaitForFinalTransactionOutcome(Client, TxHash, lastLedger, submissionResult);
+        return await WaitForFinalTransactionOutcome(client, txHash, lastLedger, submissionResult);
     }
 
     /// <summary>

@@ -319,6 +319,13 @@ namespace Xrpl.Wallet
             return Xrpl.BinaryCodec.XrplBinaryCodec.Encode(outTx);
         }
 
+        public SignatureResult SignAsBatchPart(IBatch transaction, bool multisign, string? signingFor)
+        {
+            var json = transaction.ToJson();
+            var tx = JsonConvert.DeserializeObject<Dictionary<string, dynamic>>(json)
+                         ?? throw new ValidationException("Failed to deserialize tx json");
+            return SignAsBatchPart(tx, multisign, signingFor);
+        }
         public SignatureResult SignAsBatchPart(Dictionary<string, dynamic> transaction, bool multisign, string? signingFor)
         {
             // 1) Стандартизируем вход в JObject
@@ -601,9 +608,9 @@ namespace Xrpl.Wallet
         /// <param name="algorithm">The digital signature algorithm to generate an address for.</param>
         /// <param name="salt">user salt as a password</param>
         /// <returns>generated wallet</returns>
-        public static XrplWallet FromNormalizedText(string text, string algorithm = null, string? salt = null)
+        public static XrplWallet FromNormalizedText(string text, string algorithm = null, string? salt = null, bool caseInsensitive = true)
         {
-            var normalized = NormalizeText(text);
+            var normalized = NormalizeText(text, caseInsensitive);
 
             if (!string.IsNullOrWhiteSpace(salt))
                 normalized += "::" + salt.Trim();
@@ -614,15 +621,18 @@ namespace Xrpl.Wallet
             return XrplWallet.FromEntropy(seedBytes, algorithm ?? XrplWallet.DEFAULT_ALGORITHM);
         }
 
-        private static string NormalizeText(string input)
+        private static string NormalizeText(string input, bool caseInsensitive)
         {
             // Убираем лишние пробелы, переводим в нижний регистр, нормализуем символы
             var normalized = input
                 .Trim()
-                .Replace("\r\n", "\n")  // Windows → Unix
-                .Replace("\r", "\n")    // Mac → Unix
-                .ToLowerInvariant();     // если важно быть case-insensitive
-
+                .Replace("\r\n", "\n") // Windows → Unix
+                .Replace("\r", "\n");    // Mac → Unix
+            if (caseInsensitive)
+            {
+                normalized = normalized    // Mac → Unix
+                    .ToLowerInvariant();     // если важно быть case-insensitive
+            }
             // Сжимаем множественные пробелы и переводы строк в один пробел
             normalized = string.Join(" ", normalized
                 .Split([' ', '\n', '\t',], StringSplitOptions.RemoveEmptyEntries));

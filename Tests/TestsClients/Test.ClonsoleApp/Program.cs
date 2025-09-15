@@ -8,6 +8,7 @@ using System.Diagnostics;
 using Xrpl.AddressCodec;
 using Xrpl.BinaryCodec;
 using Xrpl.Client;
+using Xrpl.Client.Exceptions;
 using Xrpl.Models;
 using Xrpl.Models.Common;
 using Xrpl.Models.Ledger;
@@ -379,7 +380,7 @@ internal class Program
     {
         var seed1 = "spucWfdp2GUXmEkKSQkzzVfL78gaM";
         var seed2 = "shfrkzgPQQ6kB4WMXwwu1UNSyQLeH";
-        var seed3 = "sEdTqY3295pcs14tHzHG3ZpLzR4VFND";
+        var seed3 = "sEdT5jzoGrDayKXtXsUHmg8X9ScGAwR";
 
         var w1 = XrplWallet.FromSeed(seed1);
         var w2 = XrplWallet.FromSeed(seed2);
@@ -427,7 +428,7 @@ internal class Program
         Console.WriteLine($"{submitRes.EngineResult}: {submitRes.EngineResultMessage}");
     }
 
-    private static async Task TestBatchMultiAccountsMultiSign()
+    private static async Task TestBatchMultiAccountsWithInnerMultiSign() //todo пока ошибка подписей от сервера
     {
         // Владелец мультисиг-аккаунта
         var owner = XrplWallet.FromSeed("sEdTqY3295pcs14tHzHG3ZpLzR4VFND");
@@ -474,12 +475,69 @@ internal class Program
         {
             Account = w1.ClassicAddress,
             Flags = BatchFlags.tfAllOrNothing,
-            RawTransactions = new List<RawTransactionWrapper> { p1, p2, /*p3*/ },
+            RawTransactions = new List<RawTransactionWrapper> { p1, p2, p3 },
             Fee = new Currency() { Value = "70" }
             // Рекомендуется проставить LLS и Fee (не показано для краткости)
         };
 
-        var submitRes = await client.SubmitMultiBatch(batch, new[] { w1, w2, /*owner, signer1, signer2 */}, true);
+        var submitRes = await client.SubmitMultiBatch(batch, new[] { w1, w2, owner, signer1, signer2 }, true);
+        var txr = submitRes.Transaction as BatchResponse;
+        Console.WriteLine($"{submitRes.EngineResult}: {submitRes.EngineResultMessage}");
+    }
+    private static async Task TestBatchMultiAccountsWithTopMultiSign() //todo пока ошибка подписей от сервера
+    {
+        // Владелец мультисиг-аккаунта
+        var owner = XrplWallet.FromSeed("sEdTqY3295pcs14tHzHG3ZpLzR4VFND");
+        // Подписанты (могут быть любые аккаунты/ключи)
+        var signer1 = XrplWallet.FromSeed("sEdT5jzoGrDayKXtXsUHmg8X9ScGAwR");
+        var signer2 = XrplWallet.FromSeed("sEdVpoUUJrqnn2EhJBhieg6gKRP3Nax");
+
+
+        var seed1 = "spucWfdp2GUXmEkKSQkzzVfL78gaM";
+        var seed2 = "shfrkzgPQQ6kB4WMXwwu1UNSyQLeH";
+
+        var w1 = XrplWallet.FromSeed(seed1);
+        var w2 = XrplWallet.FromSeed(seed2);
+
+        // Внутренний #1 — от w1 (seq = next для w1)
+        var p1 = new Payment
+        {
+            Account = w1.ClassicAddress,
+            Destination = w2.ClassicAddress,
+            Amount = new Currency { ValueAsXrp = 1.1m },
+            Fee = new Currency { Value = "0" },
+        }.ToBatchTx();
+
+        // Внутренний #2 — от w2 (seq = next для w2)
+        var p2 = new Payment
+        {
+            Account = w2.ClassicAddress,
+            Destination = w1.ClassicAddress,
+            Amount = new Currency { ValueAsXrp = 1.2m },
+            Fee = new Currency { Value = "0" },
+        }.ToBatchTx();
+
+        // Внешний Batch — платит комиссию w1 (может быть любой плательщик)
+        var batch = new Batch
+        {
+            Account = owner.ClassicAddress,
+            Flags = BatchFlags.tfAllOrNothing,
+            RawTransactions = new List<RawTransactionWrapper> { p1, p2 },
+            Fee = new Currency() { Value = "70" }
+            // Рекомендуется проставить LLS и Fee (не показано для краткости)
+        };
+        var signedTxs =new []{ w1, w2 }.Select(acc => acc
+            .SignAsBatchPart(batch, multisign: false, acc.ClassicAddress)
+            .TxBlob).ToArray();
+        var combined = XrplWallet.CombineBatchSigners(signedTxs);
+        var txRes = XrplBinaryCodec.Decode(combined.TxBlob);
+
+        var txJson = JsonConvert.DeserializeObject<Dictionary<string, dynamic>>(
+                     JsonConvert.SerializeObject(txRes))
+                 ?? throw new ValidationException("Failed to prepare signed tx json");
+
+        var submitRes = await client.SubmitMulti(txJson, new List<XrplWallet>() { signer1, signer2 }, true);
+
         var txr = submitRes.Transaction as BatchResponse;
         Console.WriteLine($"{submitRes.EngineResult}: {submitRes.EngineResultMessage}");
     }
@@ -695,7 +753,8 @@ internal class Program
             //await TestBatchSingle(); //Одно-аккаунтный Batch: у всех внутренних tx один владелец
             //await TestBatchSingleMultiSign(); //Одно-аккаунтный Batch с мультиподписью
             //await TestBatchMultiAccounts(); //Много-аккаунтный Batch: у каждого участника single-sig (через BatchSigners
-            await TestBatchMultiAccountsMultiSign(); //Много-аккаунтный Batch: внутри Multi-Sig
+            //await TestBatchMultiAccountsWithInnerMultiSign(); //Много-аккаунтный Batch: внутри Multi-Sig
+            await TestBatchMultiAccountsWithTopMultiSign(); //Много-аккаунтный Batch: внешняя подпись Multi-Sig
 
             await client.Disconnect();
         }
