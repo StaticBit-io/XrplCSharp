@@ -477,7 +477,6 @@ internal class Program
             Flags = BatchFlags.tfAllOrNothing,
             RawTransactions = new List<RawTransactionWrapper> { p1, p2, p3 },
             Fee = new Currency() { Value = "70" }
-            // Рекомендуется проставить LLS и Fee (не показано для краткости)
         };
 
         var submitRes = await client.SubmitMultiBatch(batch, new[] { w1, w2, owner, signer1, signer2 }, true);
@@ -517,26 +516,26 @@ internal class Program
             Fee = new Currency { Value = "0" },
         }.ToBatchTx();
 
-        // Внешний Batch — платит комиссию w1 (может быть любой плательщик)
+        // Внутренний #3 — от w3 (seq = next для w3)
+        var p3 = new Payment
+        {
+            Account = owner.ClassicAddress,
+            Destination = w1.ClassicAddress,
+            Amount = new Currency { ValueAsXrp = 1.3m },
+            Fee = new Currency { Value = "0" },
+        }.ToBatchTx();
+
+        // Внешний Batch — корневой аккаунт = owner (мультисиг)
         var batch = new Batch
         {
             Account = owner.ClassicAddress,
             Flags = BatchFlags.tfAllOrNothing,
-            RawTransactions = new List<RawTransactionWrapper> { p1, p2 },
+            RawTransactions = new List<RawTransactionWrapper> { p1, p2, p3 },
             Fee = new Currency() { Value = "70" }
             // Рекомендуется проставить LLS и Fee (не показано для краткости)
         };
-        var signedTxs =new []{ w1, w2 }.Select(acc => acc
-            .SignAsBatchPart(batch, multisign: false, acc.ClassicAddress)
-            .TxBlob).ToArray();
-        var combined = XrplWallet.CombineBatchSigners(signedTxs);
-        var txRes = XrplBinaryCodec.Decode(combined.TxBlob);
 
-        var txJson = JsonConvert.DeserializeObject<Dictionary<string, dynamic>>(
-                     JsonConvert.SerializeObject(txRes))
-                 ?? throw new ValidationException("Failed to prepare signed tx json");
-
-        var submitRes = await client.SubmitMulti(txJson, new List<XrplWallet>() { signer1, signer2 }, true);
+        var submitRes = await client.SubmitMultiBatch(batch, new[] { w1, w2, owner,signer1,signer2 }, true);
 
         var txr = submitRes.Transaction as BatchResponse;
         Console.WriteLine($"{submitRes.EngineResult}: {submitRes.EngineResultMessage}");
@@ -753,8 +752,8 @@ internal class Program
             //await TestBatchSingle(); //Одно-аккаунтный Batch: у всех внутренних tx один владелец
             //await TestBatchSingleMultiSign(); //Одно-аккаунтный Batch с мультиподписью
             //await TestBatchMultiAccounts(); //Много-аккаунтный Batch: у каждого участника single-sig (через BatchSigners
-            //await TestBatchMultiAccountsWithInnerMultiSign(); //Много-аккаунтный Batch: внутри Multi-Sig
-            await TestBatchMultiAccountsWithTopMultiSign(); //Много-аккаунтный Batch: внешняя подпись Multi-Sig
+            //await TestBatchMultiAccountsWithTopMultiSign(); //Много-аккаунтный Batch: внешняя подпись Multi-Sig
+            await TestBatchMultiAccountsWithInnerMultiSign(); //Много-аккаунтный Batch: внутри Multi-Sig
 
             await client.Disconnect();
         }

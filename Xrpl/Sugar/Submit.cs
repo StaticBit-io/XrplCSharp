@@ -10,7 +10,6 @@ using Xrpl.BinaryCodec;
 using Xrpl.Client;
 using Xrpl.Client.Exceptions;
 using Xrpl.Models;
-using Xrpl.Models.Ledger;
 using Xrpl.Models.Methods;
 using Xrpl.Models.Transactions;
 using Xrpl.Utils.Hashes;
@@ -191,61 +190,145 @@ public static class SubmitSugar
     {
         var walletList = wallets as IList<XrplWallet> ?? wallets.ToList();
         if (walletList.Count == 0)
+        {
             throw new ValidationException("No wallets provided");
-
+        } 
         var walletByAddr = walletList.ToDictionary(w => w.ClassicAddress, StringComparer.Ordinal);
 
-        if (!txJson.TryGetValue("Account", out var mainAcc))
+        if (!txJson.TryGetValue("Account", out var mainAccObj))
+        {
             throw new ValidationException("Main account not defined in tx json");
-
-        if (!walletByAddr.TryGetValue((string)mainAcc, out var main))
-            throw new ValidationException($"Main account {mainAcc} not found in provided wallets");
+        }    
+        var mainAcc = (string)mainAccObj;
 
         if (autofill)
         {
             txJson = await client.Autofill(txJson, signersCount: walletList.Count);
         }
 
-        // 3) Переходим на JObject для удобного и безопасного чтения вложенных структур
         var root = JObject.FromObject(txJson);
-
-        // Собираем участников внутренних транзакций
         var rawArray = root["RawTransactions"] as JArray ?? new JArray();
 
-        var participantAccounts = new HashSet<string>(
-            rawArray
-                .Select(t => (string?)t?["RawTransaction"]?["Account"])
-                .Where(a => !string.IsNullOrEmpty(a))
-                .Where(a => !string.Equals(a, mainAcc, StringComparison.Ordinal))!
-                .Cast<string>(),
-            StringComparer.Ordinal);
-
-        var signedTxs = participantAccounts.Select(acc =>
+        // 1) подписи владельцев внутренних tx
+        var partialBlobs = new List<string>();
+        foreach (var entry in rawArray.OfType<JObject>())
         {
-            if (walletByAddr.TryGetValue(acc, out var ownerWallet))
+            var acct = (string?)entry["RawTransaction"]?["Account"];
+            if (string.IsNullOrWhiteSpace(acct))
             {
-                var blob = ownerWallet
-                    .SignAsBatchPart(txJson, multisign: false, acc)
-                    .TxBlob;
-
-                return blob;
+                throw new ValidationException("Inner tx missing Account");
+            }
+            if (mainAcc == acct)
+            {
+                // не ставим подписи на внутри батча для аккаунта создателя, только верхняя подпись
+                continue;
             }
 
-            throw new ValidationException($"Wallet for account {acc} not provided");
-        }).ToArray();
+            // account_info со списком подписантов
+            var ai = await client.AccountInfo(
+                new AccountInfoRequest(acct)
+                {
+                    SignerLists = true
+                });
+            var hasSL = ai.SignerLists?.Length > 0 && ai.AccountFlags!.DisableMasterKey;
+            if (hasSL)
+            {
+                var sl = ai.SignerLists[0];
+                var need = sl.SignerQuorum;
+                var candidates = sl.SignerEntries
+                    .Select(se => (addr: se.SignerEntry.Account, w: se.SignerEntry.SignerWeight))
+                    .OrderByDescending(x => x.w)
+                    .ToList();
 
-        // Склеиваем подписи
-        var combined = XrplWallet.CombineBatchSigners(signedTxs);
-        var txRes = XrplBinaryCodec.Decode(combined.TxBlob);
+                uint sum = 0;
+                var picked = new List<XrplWallet>();
+                foreach (var (addr, w) in candidates)
+                {
+                    if (walletByAddr.TryGetValue(addr, out var wlt))
+                    {
+                        picked.Add(wlt);
+                        sum += w;
+                        if (sum >= need) break;
+                    }
+                }
 
-        txJson = JsonConvert.DeserializeObject<Dictionary<string, dynamic>>(
-                     JsonConvert.SerializeObject(txRes))
-                 ?? throw new ValidationException("Failed to prepare signed tx json");
+                if (sum < need)
+                {
+                    throw new ValidationException($"Not enough signer wallets for multisig account {acct}.");
+                }
+                foreach (var wlt in picked)
+                {
+                    partialBlobs.Add(wlt.SignAsBatchPart(txJson, multisign: true, signingFor: acct).TxBlob);
+                }
+            }
+            else
+            {
+                if (walletByAddr.TryGetValue(acct, out var owner) && !ai.AccountFlags!.DisableMasterKey)
+                    partialBlobs.Add(owner.SignAsBatchPart(txJson, multisign: false, signingFor: acct).TxBlob);
+                else if (!string.IsNullOrEmpty(ai.AccountData.RegularKey) &&
+                         walletByAddr.TryGetValue(ai.AccountData.RegularKey, out var rk))
+                    partialBlobs.Add(rk.SignAsBatchPart(txJson, multisign: false, signingFor: acct).TxBlob);
+                else
+                    throw new ValidationException($"Wallet for account {acct} (or its RegularKey) not provided");
+            }
+        }
 
-        var signed = main.Sign(txJson);
-        txRes = XrplBinaryCodec.Decode(signed.TxBlob);
+        // 2) склейка внутренних подписей
+        var combined = XrplWallet.CombineBatchSigners(partialBlobs.ToArray());
+        var combinedJson = JObject.Parse(XrplBinaryCodec.Decode(combined.TxBlob).ToString());
+        // 3) корневая подпись: single-sig ИЛИ multi-sig по наличию SignerList у корня
+        var aiRoot = await client.AccountInfo(
+            new AccountInfoRequest(mainAcc)
+            {
+                SignerLists = true
+            });
+        var rootHasSL = aiRoot.SignerLists?.Length > 0 && aiRoot.AccountFlags!.DisableMasterKey;
+        if (!rootHasSL)
+        {
+            // обычная подпись плательщика комиссии (должен быть в wallets)
+            if (!walletByAddr.TryGetValue(mainAcc, out var main))
+                throw new ValidationException($"Main account {mainAcc} not found in provided wallets");
+            var final = main.Sign(JsonConvert.DeserializeObject<Dictionary<string, dynamic>>(combinedJson.ToString()));
+            var submit = await client.SubmitRequest(final.TxBlob, failHard);
+            var txRes = XrplBinaryCodec.Decode(submit.TxBlob);
+            return submit;
+        }
+        else
+        {
+            // мультисиг корня: берём из wallets только тех, кто входит в SignerList(main)
+            var sl = aiRoot.SignerLists[0];
+            var need = sl.SignerQuorum;
+            var cands = sl.SignerEntries
+                .Select(se => (addr: se.SignerEntry.Account, w: se.SignerEntry.SignerWeight))
+                .OrderByDescending(x => x.w)
+                .ToList();
+            uint sum = 0;
+            var picked = new List<XrplWallet>();
+            foreach (var (addr, w) in cands)
+            {
+                if (walletByAddr.TryGetValue(addr, out var wlt))
+                {
+                    picked.Add(wlt);
+                    sum += w;
+                    if (sum >= need) break;
+                }
+            }
 
-        return await client.SubmitRequest(signed.TxBlob, failHard);
+            if (sum < need) throw new ValidationException($"Not enough signer wallets for root multisig {mainAcc}.");
+
+            //// корневой мультисиг: обязательно пустой SPK и без TxnSignature
+            //combinedJson.Remove("TxnSignature");
+            //combinedJson["SigningPubKey"] = "";
+
+            var msBlobs = picked.Select(w => w.Sign(
+                JsonConvert.DeserializeObject<Dictionary<string, dynamic>>(combinedJson.ToString()),
+                multisign: true).TxBlob).ToArray();
+            var msCombined = XrplWallet.CombineMultiSigners(msBlobs);
+            var txRes = XrplBinaryCodec.Decode(msCombined);
+
+            var submit = await client.SubmitRequest(msCombined, failHard);
+            return submit;
+        }
     }
 
     /// <summary>
@@ -267,7 +350,7 @@ public static class SubmitSugar
         var json = tx.ToJson();
         var txJson = JsonConvert.DeserializeObject<Dictionary<string, dynamic>>(json)
                     ?? throw new ValidationException("Failed to deserialize tx json");
-        
+
         var response = await client.SubmitMultiBatch(txJson, wallets, autofill, failHard);
         return response;
     }
