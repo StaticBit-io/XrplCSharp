@@ -25,7 +25,39 @@ using Signer = Xrpl.Models.Transactions.Signer;
 namespace MyApp;
 
 internal class Program
-{
+{   
+    //private static IXrplClient client = new XrplClient("wss://s.altnet.rippletest.net:51233");
+    private static IXrplClient client = new XrplClient("wss://s.devnet.rippletest.net:51233");
+    private static async Task Main(string[] args)
+    {
+        var wallet = XrplWallet.FromNormalizedText("random text for get new wallet", "salt", true, null);
+        try
+        {
+            client.connection.OnConnected += async () => { Console.WriteLine("CONNECTED"); };
+
+            await client.Connect();
+            //await MultiSignTest();
+            //await TestBatchSingle(); //Одно-аккаунтный Batch: у всех внутренних tx один владелец
+            //await TestBatchSingleMultiSign(); //Одно-аккаунтный Batch с мультиподписью
+            //await TestBatchMultiAccounts(); //Много-аккаунтный Batch: у каждого участника single-sig (через BatchSigners
+            //await TestBatchMultiAccountsWithTopMultiSign(); //Много-аккаунтный Batch: внешняя подпись Multi-Sig
+            await TestBatchMultiAccountsWithInnerMultiSign(); //Много-аккаунтный Batch: внутри Multi-Sig
+
+            await client.Disconnect();
+        }
+        catch (Exception e)
+        {
+            throw;
+        }
+
+        //await SampleClient();
+        //WalletFromSeed();
+        //WalletGenerate();
+        //await SubmitTestTx();
+        //await WebsocketTest();
+        //await WebsocketChangeServerTest();
+    }
+
     private static async Task SampleClient()
     {
         //using System.Diagnostics;
@@ -739,36 +771,6 @@ internal class Program
         await client.Disconnect();
     }
 
-    //private static IXrplClient client = new XrplClient("wss://s.altnet.rippletest.net:51233");
-    private static IXrplClient client = new XrplClient("wss://s.devnet.rippletest.net:51233");
-    private static async Task Main(string[] args)
-    {
-        try
-        {
-            client.connection.OnConnected += async () => { Console.WriteLine("CONNECTED"); };
-
-            await client.Connect();
-            //await MultiSignTest();
-            //await TestBatchSingle(); //Одно-аккаунтный Batch: у всех внутренних tx один владелец
-            //await TestBatchSingleMultiSign(); //Одно-аккаунтный Batch с мультиподписью
-            //await TestBatchMultiAccounts(); //Много-аккаунтный Batch: у каждого участника single-sig (через BatchSigners
-            //await TestBatchMultiAccountsWithTopMultiSign(); //Много-аккаунтный Batch: внешняя подпись Multi-Sig
-            await TestBatchMultiAccountsWithInnerMultiSign(); //Много-аккаунтный Batch: внутри Multi-Sig
-
-            await client.Disconnect();
-        }
-        catch (Exception e)
-        {
-            throw;
-        }
-
-        //await SampleClient();
-        //WalletFromSeed();
-        //WalletGenerate();
-        //await SubmitTestTx();
-        //await WebsocketTest();
-        //await WebsocketChangeServerTest();
-    }
 
     private static async Task MultiSignTest()
     {
