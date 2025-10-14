@@ -7,6 +7,7 @@ using Newtonsoft.Json;
 using Xrpl.Client.Exceptions;
 using Xrpl.Client.Json.Converters;
 using Xrpl.Models.Common;
+using Xrpl.Models.Enums;
 
 // https://github.com/XRPLF/xrpl.js/blob/main/packages/xrpl/src/models/transactions/paymentChannelClaim.ts
 
@@ -17,7 +18,12 @@ namespace Xrpl.Models.Transactions
     /// </summary>
     [Flags]
     public enum NFTokenCreateOfferFlags : uint
-    {
+    {   
+        /// <summary>
+        /// batch inner transaction
+        /// </summary>
+        tfInnerBatchTxn = XrplGlobalFlags.tfInnerBatchTxn,
+
         /// <summary>
         /// If set, indicates that the offer is a sell offer.<br/>
         /// Otherwise, it is a buy offer.
@@ -37,7 +43,11 @@ namespace Xrpl.Models.Transactions
         public DateTime? Expiration { get; set; }
 
         /// <inheritdoc />
-        public new NFTokenCreateOfferFlags? Flags { get; set; }
+        public new NFTokenCreateOfferFlags? Flags
+        {
+            get => base.Flags.HasValue ? (NFTokenCreateOfferFlags?)base.Flags.Value : null;
+            set => base.Flags = (uint?)value;
+        }
 
         /// <inheritdoc />
         public string NFTokenID { get; set; }
@@ -100,7 +110,11 @@ namespace Xrpl.Models.Transactions
         public DateTime? Expiration { get; set; }
 
         /// <inheritdoc />
-        public new NFTokenCreateOfferFlags? Flags { get; set; }
+        public new NFTokenCreateOfferFlags? Flags
+        {
+            get => base.Flags.HasValue ? (NFTokenCreateOfferFlags?)base.Flags.Value : null;
+            set => base.Flags = (uint?)value;
+        }
 
         /// <inheritdoc />
         public string NFTokenID { get; set; }

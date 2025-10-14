@@ -251,7 +251,7 @@ namespace Xrpl.BinaryCodec.Tests
         {
             var signingAccount = "rJZdUusLDtY9NEsGea7ijqhVrXv98rYBYN";
             var expected = "534D5400120000228000000024000000016140000000000003E868400000000000000A730081145B812C9D57731E27A2DA8B1830195F88EF32A3B68314B5F762798A53D543A014CAF8B297CFF8F2F937E8C0A5ABEF242802EFED4B041E8F2D4A8CC86AE3D1";
-            Assert.AreEqual(XrplBinaryCodec.EncodeForMulitSigning(MULTISIG_JSON, signingAccount), expected);
+            Assert.AreEqual(XrplBinaryCodec.EncodeForMultiSigning(MULTISIG_JSON, signingAccount), expected);
         }
     }
 }

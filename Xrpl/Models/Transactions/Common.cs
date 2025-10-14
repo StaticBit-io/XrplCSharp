@@ -447,6 +447,9 @@ namespace Xrpl.Models.Transactions
         [JsonProperty("nftoken_ids")]
         public string[] NFTokenIds { get; set; }
 
+        /// <inheritdoc />
+        public string? ParentBatchID { get; set; }
+
         /// <summary>
         /// (Omitted for non-Payment transactions) The Currency Amount actually received by the Destination account.<br/>
         /// Use this field to determine how much was delivered, regardless of whether the transaction is a partial payment.<br/>

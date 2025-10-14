@@ -108,6 +108,8 @@
         /// Unknown tx Type.
         /// </summary>
         Unknown,
+
+        Batch
     }
 }
 

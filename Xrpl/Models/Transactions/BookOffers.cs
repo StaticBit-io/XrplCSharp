@@ -1,11 +1,12 @@
-﻿using System;
-using System.Collections.Generic;
-
-using Newtonsoft.Json;
+﻿using Newtonsoft.Json;
 using Newtonsoft.Json.Converters;
+
+using System;
+using System.Collections.Generic;
 
 using Xrpl.Client.Json.Converters;
 using Xrpl.Models.Common;
+using Xrpl.Models.Enums;
 using Xrpl.Models.Methods;
 
 //https://github.com/XRPLF/xrpl.js/blob/b20c05c3680d80344006d20c44b4ae1c3b0ffcac/packages/xrpl/src/models/methods/bookOffers.ts#L51
@@ -19,18 +20,26 @@ namespace Xrpl.Models.Transactions
     /// Ledger flags have names that begin with lsf.
     /// </summary>
     [Flags]
-    public enum OfferFlags
+    public enum OfferFlags : uint
     {
+        /// <summary>
+        /// batch inner transaction
+        /// </summary>
+        tfInnerBatchTxn = XrplGlobalFlags.tfInnerBatchTxn,
         /// <summary>
         /// The object was placed as a passive offer. This has no effect on the object in the ledger.
         /// </summary>
-        lsfPassive = 65536,
+        lsfPassive = 0x00010000,
         /// <summary>
         /// The object was placed as a sell offer.<br/>
         /// This has no effect on the object in the ledger
         /// (because tfSell only matters if you get a better rate than you asked for, which cannot happen after the object enters the ledger).
         /// </summary>
-        lsfSell = 131072
+        lsfSell = 0x00020000,
+        /// <summary>
+        /// The offer was placed as a hybrid
+        /// </summary>
+        lsfHybrid = 0x00040000,
     }
     /// <summary>
     /// * Expected response from a <see cref="BookOffersRequest"/>.

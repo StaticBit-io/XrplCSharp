@@ -91,7 +91,7 @@ namespace Xrpl.Models.Methods
         /// The valid types are: Check , DepositPreauth, Escrow, Offer, PayChannel, SignerList, Ticket, and RippleState (trust line).
         /// </summary>
         [JsonProperty("type")]
-        public string? Type { get; set; } //todo add nullable enum
+        public LedgerEntryType? Type { get; set; }
         /// <summary>
         /// The maximum number of objects to include in the results.<br/>
         /// Must be within the inclusive range 10 to 400 on non-admin connections.<br/>

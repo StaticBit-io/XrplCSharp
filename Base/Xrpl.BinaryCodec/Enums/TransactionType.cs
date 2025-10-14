@@ -89,7 +89,15 @@ namespace Xrpl.BinaryCodec.Types
         public static readonly TransactionType AMMBid = Add(nameof(AMMBid), 39);
         public static readonly TransactionType AMMDelete = Add(nameof(AMMDelete), 40);
 
-        // ...
+        /// <summary>
+        /// Batch Transactions let you package multiple transactions together and execute them as a single unit.<br/>
+        /// It eliminates the risk of partial completion and unexpected outcomes,<br/>
+        /// giving you a more reliable and predictable experience for complex operations.<br/>
+        /// Up to eight transactions can be submitted in a single batch.<br/>
+        /// For details, see: https://xrpl.org/docs/concepts/transactions/batch-transactions
+        /// </summary>
+        public static readonly TransactionType Batch = Add(nameof(Batch), 71);
+
         /// <summary>
         /// This system-generated transaction type is used to update the status of the various amendments. <br/>
         /// For details, see: https://xrpl.org/amendments.html

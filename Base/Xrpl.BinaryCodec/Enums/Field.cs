@@ -288,6 +288,7 @@ namespace Xrpl.BinaryCodec.Enums
         public static readonly StObjectField NFToken = new StObjectField(nameof(NFToken), 12);
         public static readonly StObjectField EmitDetails = new StObjectField(nameof(EmitDetails), 13);
         public static readonly StObjectField Hook = new StObjectField(nameof(Hook), 14);
+        public static readonly StObjectField Permission = new StObjectField(nameof(Permission), 15);
         public static readonly StObjectField Signer = new StObjectField(nameof(Signer), 16);
         public static readonly StObjectField Majority = new StObjectField(nameof(Majority), 18);
         public static readonly StObjectField DisabledValidator = new StObjectField(nameof(DisabledValidator), 19);
@@ -297,8 +298,18 @@ namespace Xrpl.BinaryCodec.Enums
         public static readonly StObjectField HookParameter = new StObjectField(nameof(HookParameter), 23);
         public static readonly StObjectField HookGrant = new StObjectField(nameof(HookGrant), 24);
         public static readonly StObjectField VoteEntry = new StObjectField(nameof(VoteEntry), 25);
-        public static readonly StObjectField AuctionSlot = new StObjectField(nameof(AuctionSlot), 27);
-        public static readonly StObjectField AuthAccount = new StObjectField(nameof(AuthAccount), 28);
+        public static readonly StObjectField AuctionSlot = new StObjectField(nameof(AuctionSlot), 26);
+        public static readonly StObjectField AuthAccount = new StObjectField(nameof(AuthAccount), 27);
+        public static readonly StObjectField XChainClaimProofSig = new StObjectField(nameof(XChainClaimProofSig), 28);
+        public static readonly StObjectField XChainCreateAccountProofSig = new StObjectField(nameof(XChainCreateAccountProofSig), 29);
+        public static readonly StObjectField XChainClaimAttestationCollectionElement = new StObjectField(nameof(XChainClaimAttestationCollectionElement), 30);
+        public static readonly StObjectField XChainCreateAccountAttestationCollectionElement = new StObjectField(nameof(XChainCreateAccountAttestationCollectionElement), 31);
+        public static readonly StObjectField PriceData = new StObjectField(nameof(PriceData), 32);
+        public static readonly StObjectField Credential = new StObjectField(nameof(Credential), 33);
+        public static readonly StObjectField RawTransaction = new StObjectField(nameof(RawTransaction), 34);
+        public static readonly StObjectField BatchSigner = new StObjectField(nameof(BatchSigner), 35);
+        public static readonly StObjectField Book = new StObjectField(nameof(Book), 36);
+
         public static readonly StArrayField Signers = new StArrayField(nameof(Signers), 3, isSigningField:false);
         public static readonly StArrayField SignerEntries = new StArrayField(nameof(SignerEntries), 4);
         public static readonly StArrayField Template = new StArrayField(nameof(Template), 5);
@@ -308,13 +319,24 @@ namespace Xrpl.BinaryCodec.Enums
         public static readonly StArrayField Memos = new StArrayField(nameof(Memos), 9);
         public static readonly StArrayField NFTokens = new StArrayField(nameof(NFTokens), 10);
         public static readonly StArrayField Hooks = new StArrayField(nameof(Hooks), 11);
-        public static readonly StArrayField VoteSlots = new StArrayField(nameof(VoteSlots), 14);
+        public static readonly StArrayField VoteSlots = new StArrayField(nameof(VoteSlots), 12);
+        public static readonly StArrayField AdditionalBooks = new StArrayField(nameof(AdditionalBooks), 13);
         public static readonly StArrayField Majorities = new StArrayField(nameof(Majorities), 16);
         public static readonly StArrayField DisabledValidators = new StArrayField(nameof(DisabledValidators), 17);
         public static readonly StArrayField HookExecutions = new StArrayField(nameof(HookExecutions), 18);
         public static readonly StArrayField HookParameters = new StArrayField(nameof(HookParameters), 19);
         public static readonly StArrayField HookGrants = new StArrayField(nameof(HookGrants), 19);
-        public static readonly StArrayField AuthAccounts = new StArrayField(nameof(AuthAccounts), 26);
+        public static readonly StArrayField XChainClaimAttestations = new StArrayField(nameof(XChainClaimAttestations), 21);
+        public static readonly StArrayField XChainCreateAccountAttestations = new StArrayField(nameof(XChainCreateAccountAttestations), 22);
+        public static readonly StArrayField PriceDataSeries = new StArrayField(nameof(PriceDataSeries), 24);
+        public static readonly StArrayField AuthAccounts = new StArrayField(nameof(AuthAccounts), 25);
+        public static readonly StArrayField AuthorizeCredentials = new StArrayField(nameof(AuthorizeCredentials), 26);
+        public static readonly StArrayField UnauthorizeCredentials = new StArrayField(nameof(UnauthorizeCredentials), 27);
+        public static readonly StArrayField AcceptedCredentials = new StArrayField(nameof(AcceptedCredentials), 28);
+        public static readonly StArrayField Permissions = new StArrayField(nameof(Permissions), 29);
+        public static readonly StArrayField RawTransactions = new StArrayField(nameof(RawTransactions), 30);
+        public static readonly StArrayField BatchSigners = new StArrayField(nameof(BatchSigners), 31, isSigningField: false);
+
         public static readonly Field Generic = new Field(nameof(Generic), 0, FieldType.Unknown, isSigningField: false);
         public static readonly Field Invalid = new Field(nameof(Invalid), -1, FieldType.Unknown, isSigningField: false);
         

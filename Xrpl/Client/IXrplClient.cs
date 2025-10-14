@@ -161,6 +161,15 @@ namespace Xrpl.Client
         /// <returns>An <see cref="Models.Methods.AccountChannels"/> response.</returns>
         Task<AccountChannels> AccountChannels(AccountChannelsRequest request);
 
+        /// <summary>
+        /// The simulate method executes a dry run of any transaction type,
+        /// enabling you to preview the results and metadata of a transaction without committing them to the XRP Ledger.<br/>
+        /// Since this command never submits a transaction to the network, it doesn't incur any fees.<br/>
+        /// Expects a response in the form of a  <see cref="SimulateRequest"/> .
+        /// </summary>
+        /// <param name="request"></param>
+        /// <returns></returns>
+        Task<SimulateResponse> Simulate(SimulateRequest request);
         #endregion
 
         #region NFT
@@ -425,7 +434,7 @@ namespace Xrpl.Client
 
         public void SetNetworkId(uint? networkId)
         {
-            this.networkID = networkID;
+            this.networkID = networkId;
         }
 
         /// <inheritdoc />
@@ -449,15 +458,21 @@ namespace Xrpl.Client
         /// <inheritdoc />
         public Task<Submit> Submit(Dictionary<string, dynamic> tx, XrplWallet wallet, bool autoFill = true, bool failHard = false)
         {
+            if (this.networkID is { } network)
+            {
+                tx["NetworkID"] = network;
+            }
+
             return this.Submit(tx, autoFill, failHard, wallet);
         }
         /// <inheritdoc />
         public Task<Submit> Submit(ITransactionCommon tx, XrplWallet wallet, bool autoFill = true, bool failHard = false)
         {
-            if (networkID is { } network)
+            if (this.networkID is { } network)
             {
                 tx.NetworkID = network;
             }
+
             var json = tx.ToJson();
             //var json = JsonConvert.SerializeObject(tx);
             Dictionary<string, dynamic> txJson = JsonConvert.DeserializeObject<Dictionary<string, dynamic>>(json);
@@ -480,6 +495,11 @@ namespace Xrpl.Client
         public Task<AccountChannels> AccountChannels(AccountChannelsRequest request)
         {
             return this.GRequest<AccountChannels, AccountChannelsRequest>(request);
+        }
+
+        public Task<SimulateResponse> Simulate(SimulateRequest request)
+        {
+            return this.GRequest<SimulateResponse, SimulateRequest>(request);
         }
 
         /// <inheritdoc />
