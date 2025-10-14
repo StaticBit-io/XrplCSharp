@@ -1,7 +1,10 @@
 ﻿using Newtonsoft.Json.Linq;
 
+using System;
 using System.Collections.Generic;
 using System.Diagnostics;
+using System.Linq;
+
 using Xrpl.BinaryCodec.Binary;
 using Xrpl.BinaryCodec.Hashing;
 using Xrpl.BinaryCodec.Types;
@@ -84,13 +87,53 @@ namespace Xrpl.BinaryCodec
         /// <param name="json"></param>
         /// <param name="signingAccount"></param>
         /// <returns>string</returns>
-        public static string EncodeForMulitSigning(object json, string signingAccount)
+        public static string EncodeForMultiSigning(object json, string signingAccount)
         {
             string accountID = new AccountId(signingAccount).ToHex();
             JToken token = JToken.FromObject(json);
             return SerializeJson(token, HashPrefix.TransactionMultiSig.Bytes(), accountID.FromHex(), true);
         }
 
+        /// <summary>
+        /// Encode a multi transaction - Batch
+        /// </summary>
+        /// <param name="flags">Batch flags.</param>
+        /// <param name="txIDs">Collection of inner transaction IDs.</param>
+        /// <param name="networkId">Optional network ID for cross‑chain replay protection.</param>
+        /// <returns></returns>
+        /// <exception cref="ArgumentNullException"></exception>
+        /// <exception cref="ArgumentException"></exception>
+        public static byte[] EncodeForSigningBatch(uint flags, IEnumerable<string> txIDs, uint? networkId = null)
+        {
+            if (txIDs == null) throw new ArgumentNullException(nameof(txIDs));
+
+            var list = new BytesList();
+
+            // 1) Префикс "BCH\0"
+            list.Put(Bits.GetBytes((uint)HashPrefix.Batch));
+
+            // 1.5) NetworkID (если есть)
+            if (networkId.HasValue)
+            {
+                list.Put(new Uint32(networkId.Value).ToBytes());
+            }
+
+            // 2) Flags (UInt32 BE)
+            list.Put(new Uint32(flags).ToBytes());
+
+            // 3) Количество txIDs (UInt32 BE)
+            list.Put(new Uint32((uint)txIDs.Count()).ToBytes());
+
+            // 4) Каждый txid как 32 байта
+            foreach (var id in txIDs)
+            {
+                var raw = Hash256.FromHex(id).Buffer; // validate hex string
+                if (raw.Length != 32) throw new ArgumentException("txID must be 32 bytes (Hash256).");
+                list.Put(raw);
+            }
+
+            return list.ToBytes();
+        }
         /// <summary>
         /// 
         /// </summary>

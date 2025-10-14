@@ -5,6 +5,7 @@ using static Xrpl.Models.Common.Common;
 using Xrpl.Client.Exceptions;
 using Currency = Xrpl.Models.Common.Currency;
 using Xrpl.Client.Json.Converters;
+using Xrpl.Models.Enums;
 
 namespace Xrpl.Models.Transactions
 {
@@ -12,7 +13,12 @@ namespace Xrpl.Models.Transactions
     /// Enum representing values for AMMDeposit Transaction Flags.
     /// </summary>
     public enum AMMDepositFlags : uint
-    {
+    {     
+        /// <summary>
+        /// batch inner transaction
+        /// </summary>
+        tfInnerBatchTxn = XrplGlobalFlags.tfInnerBatchTxn,
+
         /// <summary>
         /// Perform a double-asset deposit and receive the specified amount of LP Tokens.
         /// </summary>
@@ -89,7 +95,11 @@ namespace Xrpl.Models.Transactions
         [JsonConverter(typeof(CurrencyConverter))]
         public Xrpl.Models.Common.Currency? EPrice { get; set; }
 
-        public AMMDepositFlags Flags { get; set; }
+        public new AMMDepositFlags? Flags
+        {
+            get => base.Flags.HasValue ? (AMMDepositFlags?)base.Flags.Value : null;
+            set => base.Flags = (uint?)value;
+        }
     }
 
     /// <summary>
@@ -134,7 +144,7 @@ namespace Xrpl.Models.Transactions
         /// </summary>
         public Xrpl.Models.Common.Currency? EPrice { get; set; }
 
-        new AMMDepositFlags Flags { get; set; }
+        new AMMDepositFlags? Flags { get; set; }
     }
 
     /// <inheritdoc cref="IAMMDeposit" />
@@ -161,7 +171,11 @@ namespace Xrpl.Models.Transactions
         [JsonConverter(typeof(CurrencyConverter))]
         public Currency EPrice { get; set; }
 
-        public AMMDepositFlags Flags { get; set; }
+        public new AMMDepositFlags? Flags
+        {
+            get => base.Flags.HasValue ? (AMMDepositFlags?)base.Flags.Value : null;
+            set => base.Flags = (uint?)value;
+        }
 
         #endregion
     }

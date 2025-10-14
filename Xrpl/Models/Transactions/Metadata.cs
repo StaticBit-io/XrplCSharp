@@ -119,4 +119,9 @@ public interface ITransactionMetadata
     /// </summary>
     [JsonProperty("nftoken_ids")]
     public string[] NFTokenIds { get; set; }
+
+    /// <summary>
+    /// Batch ID of the batch that this transaction belongs to, if any.
+    /// </summary>
+    public string? ParentBatchID { get; set; }
 }

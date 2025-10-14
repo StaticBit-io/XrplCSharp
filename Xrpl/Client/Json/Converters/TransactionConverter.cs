@@ -68,6 +68,7 @@ namespace Xrpl.Client.Json.Converters
                 "AMMVote" => new AMMVoteResponse(),
                 "AMMWithdraw" => new AMMWithdrawResponse(),
                 "Clawback" => new ClawBackResponse(),
+                "Batch" => new BatchResponse(),
                 //_ => throw new Exception("Can't create transaction type" + transactionType)
                 _ => SetUnknownType(jObject),
             };

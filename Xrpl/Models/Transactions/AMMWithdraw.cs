@@ -1,10 +1,14 @@
-﻿using System.Collections.Generic;
+﻿using Newtonsoft.Json;
+
+using System.Collections.Generic;
 using System.Threading.Tasks;
-using Newtonsoft.Json;
-using static Xrpl.Models.Common.Common;
+
 using Xrpl.Client.Exceptions;
-using Xrpl.Models.Common;
 using Xrpl.Client.Json.Converters;
+using Xrpl.Models.Common;
+using Xrpl.Models.Enums;
+
+using static Xrpl.Models.Common.Common;
 
 namespace Xrpl.Models.Transactions
 {
@@ -14,6 +18,10 @@ namespace Xrpl.Models.Transactions
     /// <category>Transaction Flags</category>
     public enum AMMWithdrawFlags : uint
     {
+        /// <summary>
+        /// batch inner transaction
+        /// </summary>
+        tfInnerBatchTxn = XrplGlobalFlags.tfInnerBatchTxn,
         /// <summary>
         /// Perform a double-asset withdrawal and receive the specified amount of LP Tokens.
         /// </summary>
@@ -67,8 +75,12 @@ namespace Xrpl.Models.Transactions
             TransactionType = TransactionType.AMMWithdraw;
         }
         #region Implementation of IAMMWithdraw
+        public new AMMWithdrawFlags? Flags
+        {
+            get => base.Flags.HasValue ? (AMMWithdrawFlags?)base.Flags.Value : null;
+            set => base.Flags = (uint?)value;
+        }
 
-        public AMMWithdrawFlags Flags { get; set; }
         /// <inheritdoc />
         [JsonConverter(typeof(IssuedCurrencyConverter))]
         public IssuedCurrency Asset { get; set; }
@@ -135,14 +147,18 @@ namespace Xrpl.Models.Transactions
         /// the transaction.
         /// </summary>
         Currency EPrice { get; set; }
-        public AMMWithdrawFlags Flags { get; set; }
+        AMMWithdrawFlags? Flags { get; set; }
     }
 
     /// <inheritdoc cref="IAMMWithdraw" />
     public class AMMWithdrawResponse : TransactionResponseCommon, IAMMWithdraw
     {
         #region Implementation of IAMMWithdraw
-        public AMMWithdrawFlags Flags { get; set; }
+        public new AMMWithdrawFlags? Flags
+        {
+            get => base.Flags.HasValue ? (AMMWithdrawFlags?)base.Flags.Value : null;
+            set => base.Flags = (uint?)value;
+        }
 
         /// <inheritdoc />
         [JsonConverter(typeof(IssuedCurrencyConverter))]

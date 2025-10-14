@@ -161,6 +161,34 @@ public class Currency
 
     public static bool operator !=(Currency c1, Currency c2) { return !c1.Equals(c2); }
 
+    /// <summary>
+    /// Implicit conversion from string → Currency
+    /// </summary>
+    /// <param name="value">value</param>
+    /// <returns>currency</returns>
+    public static implicit operator Currency(string value)
+        => new Currency { Value = value };
+    /// <summary>
+    /// Implicit conversion from string → Currency
+    /// </summary>
+    /// <param name="value">value</param>
+    /// <returns>currency</returns>
+    public static implicit operator Currency(decimal value)
+        => new Currency { Value = value.ToString(CultureInfo.InvariantCulture) };
+    /// <summary>
+    /// Implicit conversion from string → Currency
+    /// </summary>
+    /// <param name="value">value</param>
+    /// <returns>currency</returns>
+    public static implicit operator Currency(double value)
+        => new Currency { Value = value.ToString(CultureInfo.InvariantCulture) };
+    /// <summary>
+    /// Implicit conversion from string → Currency
+    /// </summary>
+    /// <param name="value">value</param>
+    /// <returns>currency</returns>
+    public static implicit operator Currency(int value)
+        => new Currency { Value = value.ToString(CultureInfo.InvariantCulture) };
     #endregion
 }
 

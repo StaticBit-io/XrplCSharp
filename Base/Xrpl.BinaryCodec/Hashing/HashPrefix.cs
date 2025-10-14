@@ -45,5 +45,9 @@ namespace Xrpl.BinaryCodec.Hashing
         /// PaymentChannelClaim
         /// </summary>
         PaymentChannelClaim = 0x434C4D00u,
+        /// <summary>
+        /// Batch
+        /// </summary>
+        Batch = 0x42434800
     }
 }

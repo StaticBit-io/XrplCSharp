@@ -1,12 +1,13 @@
-﻿using System;
+﻿using Newtonsoft.Json;
+
+using System;
 using System.Collections.Generic;
 using System.Threading.Tasks;
-
-using Newtonsoft.Json;
 
 using Xrpl.Client.Exceptions;
 using Xrpl.Client.Json.Converters;
 using Xrpl.Models.Common;
+using Xrpl.Models.Enums;
 
 // https://github.com/XRPLF/xrpl.js/blob/main/packages/xrpl/src/models/transactions/trustSet.ts 
 
@@ -19,28 +20,41 @@ namespace Xrpl.Models.Transactions
     public enum TrustSetFlags : uint
     {
         /// <summary>
+        /// batch inner transaction
+        /// </summary>
+        tfInnerBatchTxn = XrplGlobalFlags.tfInnerBatchTxn,
+        /// <summary>
         /// Authorize the other party to hold currency issued by this account.<br/>
         /// (No effect unless using the asfRequireAuth AccountSet flag.)<br/>
         /// Cannot be unset.
         /// </summary>
-        tfSetfAuth = 65536,
+        tfSetfAuth = 0x00010000,
         /// <summary>
         /// Enable the No Ripple flag, which blocks rippling between two trust lines.<br/>
         /// of the same currency if this flag is enabled on both.
         /// </summary>
-        tfSetNoRipple = 131072,
+        tfSetNoRipple = 0x00020000,
         /// <summary>
         /// Disable the No Ripple flag, allowing rippling on this trust line.
         /// </summary>
-        tfClearNoRipple = 262144,
+        tfClearNoRipple = 0x00040000,
         /// <summary>
         /// Freeze the trust line.
         /// </summary>
-        tfSetFreeze = 1048576,
+        tfSetFreeze = 0x00100000,
         /// <summary>
         /// Unfreeze the trust line.
         /// </summary>
-        tfClearFreeze = 2097152
+        tfClearFreeze = 0x00200000,
+        /// <summary>
+        /// 
+        /// </summary>
+        tfSetDeepFreeze = 0x00400000,
+        /// <summary>
+        /// 
+        /// </summary>
+        tfClearDeepFreeze = 0x00800000,
+
     }
 
     /// <inheritdoc cref="ITrustSet" />
@@ -53,7 +67,11 @@ namespace Xrpl.Models.Transactions
         }
 
         /// <inheritdoc />
-        public new TrustSetFlags? Flags { get; set; }
+        public new TrustSetFlags? Flags
+        {
+            get => base.Flags.HasValue ? (TrustSetFlags?)base.Flags.Value : null;
+            set => base.Flags = (uint?)value;
+        }
 
         /// <inheritdoc />
         [JsonConverter(typeof(CurrencyConverter))]
@@ -110,7 +128,11 @@ namespace Xrpl.Models.Transactions
     public class TrustSetResponse : TransactionResponseCommon, ITrustSet
     {
         /// <inheritdoc />
-        public new TrustSetFlags? Flags { get; set; }
+        public new TrustSetFlags? Flags
+        {
+            get => base.Flags.HasValue ? (TrustSetFlags?)base.Flags.Value : null;
+            set => base.Flags = (uint?)value;
+        }
 
         /// <inheritdoc />
         [JsonConverter(typeof(CurrencyConverter))]

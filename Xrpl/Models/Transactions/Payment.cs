@@ -7,6 +7,7 @@ using System.Threading.Tasks;
 using Xrpl.Client.Exceptions;
 using Xrpl.Client.Json.Converters;
 using Xrpl.Models.Common;
+using Xrpl.Models.Enums;
 using Xrpl.Models.Methods;
 using Xrpl.Models.Utils;
 
@@ -22,6 +23,11 @@ namespace Xrpl.Models.Transactions
     [Flags]
     public enum PaymentFlags : uint
     {
+        /// <summary>
+        /// batch inner transaction
+        /// </summary>
+        tfInnerBatchTxn = XrplGlobalFlags.tfInnerBatchTxn,
+
         /// <summary>
         /// Do not use the default path;<br/>
         /// only use paths included in the Paths field.<br/>
@@ -60,8 +66,11 @@ namespace Xrpl.Models.Transactions
         public uint? DestinationTag { get; set; }
 
         /// <inheritdoc />
-        public new PaymentFlags? Flags { get; set; }
-
+        public new PaymentFlags? Flags
+        {
+            get => base.Flags.HasValue ? (PaymentFlags?)base.Flags.Value : null;
+            set => base.Flags = (uint?)value;
+        } 
         /// <inheritdoc />
         public string InvoiceID { get; set; }
 
@@ -173,7 +182,11 @@ namespace Xrpl.Models.Transactions
         public uint? DestinationTag { get; set; }
 
         /// <inheritdoc />
-        public new PaymentFlags? Flags { get; set; }
+        public new PaymentFlags? Flags
+        {
+            get => base.Flags.HasValue ? (PaymentFlags?)base.Flags.Value : null;
+            set => base.Flags = (uint?)value;
+        }
 
         /// <inheritdoc />
         public string InvoiceID { get; set; }

@@ -4,6 +4,8 @@ using System.Diagnostics;
 using System.Threading.Tasks;
 using Microsoft.VisualStudio.TestTools.UnitTesting;
 using Newtonsoft.Json;
+
+using Xrpl.Models;
 using Xrpl.Models.Common;
 using Xrpl.Models.Ledger;
 using Xrpl.Models.Methods;
@@ -49,7 +51,7 @@ namespace XrplTests.Xrpl.ClientLib.Integration
             await Utils.TestTransaction(runner.client, setupJson, runner.wallet);
 
             // hash
-            AccountObjectsRequest request1 = new AccountObjectsRequest(runner.wallet.ClassicAddress) { Type = "escrow" };
+            AccountObjectsRequest request1 = new AccountObjectsRequest(runner.wallet.ClassicAddress) { Type = LedgerEntryType.Escrow };
             AccountObjects response1 = await runner.client.AccountObjects(request1);
             LOEscrow escrow = (LOEscrow)response1.AccountObjectList[0];
 
@@ -68,7 +70,7 @@ namespace XrplTests.Xrpl.ClientLib.Integration
             await Utils.TestTransaction(runner.client, txJson, runner.wallet);
 
             // get check ID
-            AccountObjectsRequest request3 = new AccountObjectsRequest(runner.wallet.ClassicAddress) { Type = "escrow" };
+            AccountObjectsRequest request3 = new AccountObjectsRequest(runner.wallet.ClassicAddress) { Type = LedgerEntryType.Escrow };
             AccountObjects response3 = await runner.client.AccountObjects(request3);
             Assert.AreEqual(response3.AccountObjectList.Count, 0);
         }

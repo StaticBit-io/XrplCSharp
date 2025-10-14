@@ -6,14 +6,21 @@ using System.Linq;
 using System.Threading.Tasks;
 
 using Xrpl.Client.Exceptions;
+using Xrpl.Models.Enums;
+
 // https://github.com/XRPLF/xrpl.js/blob/b20c05c3680d80344006d20c44b4ae1c3b0ffcac/packages/xrpl/src/models/transactions/accountSet.ts#L11
 namespace Xrpl.Models.Transactions
 {
     /// <summary>
     /// Enum for AccountSet Flags.
     /// </summary>
-    public enum AccountSetAsfFlags 
+    public enum AccountSetAsfFlags : uint
     {
+        /// <summary>
+        /// batch inner transaction
+        /// </summary>
+        tfInnerBatchTxn = XrplGlobalFlags.tfInnerBatchTxn,
+
         /// <summary>
         /// Require a destination tag to send transactions to this account.
         /// </summary>
@@ -56,7 +63,33 @@ namespace Xrpl.Models.Transactions
         /// <summary>
         /// Allow another account to mint and burn tokens on behalf of this account.
         /// </summary>
-        asfAuthorizedNFTokenMinter = 10
+        asfAuthorizedNFTokenMinter = 10,
+        /// <summary>
+        /// Block incoming NFTokenOffers. (Requires the DisallowIncoming amendment.)
+        /// </summary>
+        asfDisallowIncomingNFTokenOffer = 12,
+        /// <summary>
+        /// Block incoming Checks. (Requires the DisallowIncoming amendment.)
+        /// </summary>
+        asfDisallowIncomingCheck = 13,
+        /// <summary>
+        /// Block incoming Payment Channels. (Requires the DisallowIncoming amendment.)
+        /// </summary>
+        asfDisallowIncomingPayChan = 14,
+        /// <summary>
+        /// Block incoming trust lines. (Requires the DisallowIncoming amendment.)
+        /// </summary>
+        asfDisallowIncomingTrustline = 15,
+        /// <summary>
+        /// Allow account to claw back tokens it has issued.
+        /// (Requires the Clawback amendment.)
+        /// Can only be set if the account has an empty owner directory
+        /// (no trust lines, offers, escrows, payment channels, checks, or signer lists).
+        /// After you set this flag, it cannot be reverted.
+        /// The account permanently gains the ability to claw back issued assets on trust lines.
+        /// </summary>
+        asfAllowTrustLineClawback = 16,
+
     }
 
     //todo enum AccountSetTfFlags https://github.com/XRPLF/xrpl.js/blob/b20c05c3680d80344006d20c44b4ae1c3b0ffcac/packages/xrpl/src/models/transactions/accountSet.ts#L54
@@ -93,7 +126,7 @@ namespace Xrpl.Models.Transactions
         /// <inheritdoc />
         public string MessageKey { get; set; }
         /// <inheritdoc />
-        public uint? SetFlag { get; set; }
+        public AccountSetAsfFlags? SetFlag { get; set; }
         /// <inheritdoc />
         public uint? TransferRate { get; set; }
         /// <inheritdoc />
@@ -127,7 +160,7 @@ namespace Xrpl.Models.Transactions
         /// <summary>
         /// Integer flag to enable for this account.
         /// </summary>
-        uint? SetFlag { get; set; } //todo change to enum AccountSetAsfFlags
+        AccountSetAsfFlags? SetFlag { get; set; } //todo change to enum AccountSetAsfFlags
         /// <summary>
         /// The fee to charge when users transfer this account's issued currencies, represented as billionths of a unit.<br/>
         /// Cannot be more than 2000000000 or less than 1000000000, except for the special case 0 meaning no fee.
@@ -158,7 +191,7 @@ namespace Xrpl.Models.Transactions
         /// <inheritdoc />
         public string MessageKey { get; set; }
         /// <inheritdoc />
-        public uint? SetFlag { get; set; }
+        public AccountSetAsfFlags? SetFlag { get; set; }
         /// <inheritdoc />
         public uint? TransferRate { get; set; }
         /// <inheritdoc />
