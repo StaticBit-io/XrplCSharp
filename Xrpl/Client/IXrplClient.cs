@@ -161,6 +161,15 @@ namespace Xrpl.Client
         /// <returns>An <see cref="Models.Methods.AccountChannels"/> response.</returns>
         Task<AccountChannels> AccountChannels(AccountChannelsRequest request);
 
+        /// <summary>
+        /// The simulate method executes a dry run of any transaction type,
+        /// enabling you to preview the results and metadata of a transaction without committing them to the XRP Ledger.<br/>
+        /// Since this command never submits a transaction to the network, it doesn't incur any fees.<br/>
+        /// Expects a response in the form of a  <see cref="SimulateRequest"/> .
+        /// </summary>
+        /// <param name="request"></param>
+        /// <returns></returns>
+        Task<SimulateResponse> Simulate(SimulateRequest request);
         #endregion
 
         #region NFT
@@ -486,6 +495,11 @@ namespace Xrpl.Client
         public Task<AccountChannels> AccountChannels(AccountChannelsRequest request)
         {
             return this.GRequest<AccountChannels, AccountChannelsRequest>(request);
+        }
+
+        public Task<SimulateResponse> Simulate(SimulateRequest request)
+        {
+            return this.GRequest<SimulateResponse, SimulateRequest>(request);
         }
 
         /// <inheritdoc />

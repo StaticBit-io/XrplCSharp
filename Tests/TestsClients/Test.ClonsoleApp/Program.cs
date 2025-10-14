@@ -25,9 +25,9 @@ using Signer = Xrpl.Models.Transactions.Signer;
 namespace MyApp;
 
 internal class Program
-{   
-    //private static IXrplClient client = new XrplClient("wss://s.altnet.rippletest.net:51233");
-    private static IXrplClient client = new XrplClient("wss://s.devnet.rippletest.net:51233");
+{
+    private static IXrplClient client = new XrplClient("wss://s.altnet.rippletest.net:51233");
+    //private static IXrplClient client = new XrplClient("wss://s.devnet.rippletest.net:51233");
     private static async Task Main(string[] args)
     {
         var wallet = XrplWallet.FromNormalizedText("random text for get new wallet", "salt", true, null);
@@ -36,12 +36,13 @@ internal class Program
             client.connection.OnConnected += async () => { Console.WriteLine("CONNECTED"); };
 
             await client.Connect();
+            await Simulate();
             //await MultiSignTest();
             //await TestBatchSingle(); //Одно-аккаунтный Batch: у всех внутренних tx один владелец
             //await TestBatchSingleMultiSign(); //Одно-аккаунтный Batch с мультиподписью
             //await TestBatchMultiAccounts(); //Много-аккаунтный Batch: у каждого участника single-sig (через BatchSigners
             //await TestBatchMultiAccountsWithTopMultiSign(); //Много-аккаунтный Batch: внешняя подпись Multi-Sig
-            await TestBatchMultiAccountsWithInnerMultiSign(); //Много-аккаунтный Batch: внутри Multi-Sig
+            //await TestBatchMultiAccountsWithInnerMultiSign(); //Много-аккаунтный Batch: внутри Multi-Sig
 
             await client.Disconnect();
         }
@@ -56,6 +57,33 @@ internal class Program
         //await SubmitTestTx();
         //await WebsocketTest();
         //await WebsocketChangeServerTest();
+    }
+
+    private static async Task Simulate()
+    {
+        var owner = XrplWallet.FromSeed("sEdTqY3295pcs14tHzHG3ZpLzR4VFND");
+        // Подписанты (могут быть любые аккаунты/ключи)
+        var dest = XrplWallet.FromSeed("sEdT5jzoGrDayKXtXsUHmg8X9ScGAwR");
+        IPayment tx = new Payment()
+        {
+            Account = owner.ClassicAddress,
+            Destination = dest.ClassicAddress,
+            Amount = new Currency
+            {
+                ValueAsXrp = 1,
+            },
+        };
+
+        var result = await client.Simulate(
+            new SimulateRequest()
+            {
+                Transaction = tx
+            });
+        if (result.TxJson is Payment { } payment)
+        {
+
+        }
+        Console.WriteLine(result.EngineResult);
     }
 
     private static async Task SampleClient()
