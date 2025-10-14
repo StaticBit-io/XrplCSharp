@@ -14,32 +14,32 @@ public enum LedgerEntryType
     AccountRoot,
 
     /// <summary>
-    /// Singleton object with status of enabled and pending amendments.
+    /// The status of enabled and pending amendments.
     /// </summary>
     Amendments,
 
     /// <summary>
-    /// Automated Market Maker pools.
+    /// The definition and details of an Automated Market Maker (AMM) instance.
     /// </summary>
     AMM,
 
     /// <summary>
-    /// Cross-chain bridge object.
+    /// A single cross-chain bridge that connects and enables value to move efficiently between two blockchains.
     /// </summary>
     Bridge,
 
     /// <summary>
-    /// A Ticket tracks an account sequence number that has been set aside for future use.
+    /// A check that can be redeemed for money by its destination.
     /// </summary>
     Check,
 
     /// <summary>
-    /// Credential object (XLS-40).
+    /// A credential, which can be used to preauthorize payments or gain access to specific permissioned domains.
     /// </summary>
     Credential,
 
     /// <summary>
-    /// Delegate object (XLS-xx).
+    /// A record of which permissions have been granted to another account.
     /// </summary>
     Delegate,
 
@@ -49,17 +49,22 @@ public enum LedgerEntryType
     DepositPreauth,
 
     /// <summary>
-    /// Contains links to other objects.
+    /// A Decentralized Identifier (DID).
+    /// </summary>
+    DID,
+
+    /// <summary>
+    /// A set of links to other ledger entries, either objects owned by an account or trades in the decentralized exchange.
     /// </summary>
     DirectoryNode,
 
     /// <summary>
-    /// Contains XRP held for a conditional payment.
+    /// An escrow, which holds funds to be released when certain conditions are met.
     /// </summary>
     Escrow,
 
     /// <summary>
-    /// Singleton object with consensus-approved base transaction cost and reserve requirements.
+    /// The current base transaction cost and reserve requirements.
     /// </summary>
     FeeSettings,
 
@@ -69,33 +74,52 @@ public enum LedgerEntryType
     LedgerHashes,
 
     /// <summary>
+    /// Multi-Purpose Tokens (MPT) of one issuance held by a specific account.
+    /// </summary>
+    MPToken,
+
+    /// <summary>
+    /// Definition of a Multi-Purpose Token (MPT) issuance.
+    /// </summary>
+    MPTokenIssuance,
+
+    /// <summary>
     /// List of validators currently believed to be offline.
     /// </summary>
     NegativeUNL,
 
     /// <summary>
-    /// An order to make a currency trade.
+    /// An offer to buy or sell an NFT.
+    /// </summary>
+    NFTokenOffer,
+
+    /// <summary>
+    /// A group of up to 32 NFTs, stored together for efficiency.
+    /// </summary>
+    NFTokenPage,
+
+    /// <summary>
+    /// An offer (order) to trade currencies in the decentralized exchange.
     /// </summary>
     Offer,
 
     /// <summary>
-    /// Oracle object for price feeds.
+    /// A record of price information about currency pairs from an outside source.
     /// </summary>
     Oracle,
 
     /// <summary>
-    /// A channel for asynchronous XRP payments.
+    /// A payment channel, which allows for rapid, asynchronous payments.
     /// </summary>
     PayChannel,
 
     /// <summary>
-    /// Permissioned domain configuration (XLS-81).
+    /// A permissioned domain, which is used to limit access to other features.
     /// </summary>
     PermissionedDomain,
 
     /// <summary>
-    /// Links two accounts, tracking the balance of one currency between them.<br/>
-    /// The concept of a trust line is an abstraction of this object type.
+    /// A trust line, which tracks the net balance of fungible tokens between two accounts.
     /// </summary>
     RippleState,
 
@@ -105,7 +129,7 @@ public enum LedgerEntryType
     SignerList,
 
     /// <summary>
-    /// A list of addresses for multi-signing transactions.
+    /// A ticket, which sets aside a sequence number for use in a future transaction.
     /// </summary>
     Ticket,
 
@@ -115,22 +139,12 @@ public enum LedgerEntryType
     Vault,
 
     /// <summary>
-    /// Cross-chain claim identifier.
+    /// A cross-chain transfer of value.
     /// </summary>
     XChainOwnedClaimID,
 
     /// <summary>
-    /// Cross-chain create-account claim identifier.
+    /// A record of attestations for creating an account via a cross-chain transfer.
     /// </summary>
     XChainOwnedCreateAccountClaimID,
-
-    /// <summary>
-    /// Create offers to buy or sell NFTs.
-    /// </summary>
-    NFTokenOffer,
-    /// <summary>
-    /// Ledger structure for recording NFTokens.
-    /// </summary>
-    NFTokenPage,
 }
-

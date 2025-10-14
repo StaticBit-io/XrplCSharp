@@ -1,4 +1,5 @@
 ﻿using Newtonsoft.Json;
+using Newtonsoft.Json.Converters;
 
 using System.Collections.Generic;
 
@@ -91,6 +92,7 @@ namespace Xrpl.Models.Methods
         /// The valid types are: Check , DepositPreauth, Escrow, Offer, PayChannel, SignerList, Ticket, and RippleState (trust line).
         /// </summary>
         [JsonProperty("type")]
+        [JsonConverter(typeof(StringEnumConverter))]
         public LedgerEntryType? Type { get; set; }
         /// <summary>
         /// The maximum number of objects to include in the results.<br/>
