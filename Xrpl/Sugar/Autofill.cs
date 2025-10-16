@@ -328,6 +328,10 @@ namespace Xrpl.Sugar
             {
                 signerFee = BigInteger.Add(baseFee, BigInteger.Parse(ScaleValue(netFeeDrops, 1 + signersCount)));
             }
+            else
+            {
+                calculatedFee = baseFee;
+            }
 
             calculatedFee += signerFee;
 
