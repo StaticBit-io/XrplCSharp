@@ -1,0 +1,36 @@
+﻿@page "/"
+@using Xrpl.Client
+
+<h1>Hello, world!</h1>
+@if (IsConnected)
+{
+    <p>Connected to XRPL</p>
+}
+else
+{
+    <p>Not connected to XRPL</p>
+}
+@code
+{
+    bool IsConnected { get; set; }
+    [Inject]
+    IXrplClient client { get; set; }
+
+    protected override async Task OnInitializedAsync()
+    {
+        client.connection.OnConnected += () =>
+        {
+            IsConnected = true;
+            Console.WriteLine("Connected to XRPL");
+            return Task.CompletedTask;
+        };
+        client.connection.OnDisconnect += (code) =>
+        {
+            IsConnected = false;
+            Console.WriteLine($"Disconnected from XRPL with code: {code}");
+            return Task.CompletedTask;
+        };
+        await client.Connect();
+        await base.OnInitializedAsync();
+    }
+}
