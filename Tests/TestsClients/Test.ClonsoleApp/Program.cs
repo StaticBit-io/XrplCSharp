@@ -27,6 +27,7 @@ namespace MyApp;
 internal class Program
 {
     private static IXrplClient client = new XrplClient("wss://s.altnet.rippletest.net:51233");
+    //private static IXrplClient client = new XrplClient("wss://s2.ripple.com");
     //private static IXrplClient client = new XrplClient("wss://s.devnet.rippletest.net:51233");
     private static async Task Main(string[] args)
     {
@@ -36,8 +37,8 @@ internal class Program
             client.connection.OnConnected += async () => { Console.WriteLine("CONNECTED"); };
 
             await client.Connect();
-            await Simulate();
-            //await MultiSignTest();
+            //await Simulate();
+            await MultiSignTest();
             //await TestBatchSingle(); //Одно-аккаунтный Batch: у всех внутренних tx один владелец
             //await TestBatchSingleMultiSign(); //Одно-аккаунтный Batch с мультиподписью
             //await TestBatchMultiAccounts(); //Много-аккаунтный Batch: у каждого участника single-sig (через BatchSigners
