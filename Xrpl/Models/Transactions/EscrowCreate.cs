@@ -12,7 +12,7 @@ using Xrpl.Models.Common;
 namespace Xrpl.Models.Transactions
 {
     /// <inheritdoc cref="IEscrowCreate" />
-    public class EscrowCreate : TransactionCommon, IEscrowCreate
+    public class EscrowCreate : TransactionCommon, IEscrowCreate, IDestination
     {
         public EscrowCreate()
         {
@@ -45,7 +45,7 @@ namespace Xrpl.Models.Transactions
     /// <summary>
     /// Sequester XRP until the escrow process either finishes or is canceled.
     /// </summary>
-    public interface IEscrowCreate : ITransactionCommon
+    public interface IEscrowCreate : ITransactionCommon, IDestination
     {
         /// <summary>
         /// Amount of XRP, in drops, to deduct from the sender's balance and escrow.<br/>
@@ -84,7 +84,7 @@ namespace Xrpl.Models.Transactions
     }
 
     /// <inheritdoc cref="IEscrowCreate" />
-    public class EscrowCreateResponse : TransactionResponseCommon, IEscrowCreate
+    public class EscrowCreateResponse : TransactionResponseCommon, IEscrowCreate, IDestination
     {
         /// <inheritdoc />
         [JsonConverter(typeof(CurrencyConverter))]

@@ -13,7 +13,7 @@ using Xrpl.Models.Common;
 namespace Xrpl.Models.Transactions
 {
     /// <inheritdoc cref="ICheckCreate" />
-    public class CheckCreate : TransactionCommon, ICheckCreate
+    public class CheckCreate : TransactionCommon, ICheckCreate, IDestination
     {
         public CheckCreate()
         {

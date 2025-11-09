@@ -48,7 +48,7 @@ namespace Xrpl.Models.Transactions
     }
 
     /// <inheritdoc cref="IPayment" />
-    public class Payment : TransactionCommon, IPayment
+    public class Payment : TransactionCommon, IPayment, IDestination
     {
         public Payment()
         {
@@ -107,7 +107,7 @@ namespace Xrpl.Models.Transactions
     /// }
     /// ```
     /// </code>
-    public interface IPayment : ITransactionCommon
+    public interface IPayment : ITransactionCommon, IDestination
     {
         /// <summary>
         /// API v1
@@ -158,7 +158,7 @@ namespace Xrpl.Models.Transactions
     }
 
     /// <inheritdoc cref="IPayment" />
-    public class PaymentResponse : TransactionResponseCommon, IPayment
+    public class PaymentResponse : TransactionResponseCommon, IPayment, IDestination
     {
         private Currency amount;
 

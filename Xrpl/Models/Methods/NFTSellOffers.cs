@@ -4,6 +4,8 @@ using System;
 using System.Collections.Generic;
 using Xrpl.Client.Json.Converters;
 using Xrpl.Models.Common;
+using Xrpl.Models.Transactions;
+
 //https://github.com/XRPLF/xrpl.js/blob/main/packages/xrpl/src/models/methods/nftSellOffers.ts
 namespace Xrpl.Models.Methods
 {
@@ -26,7 +28,7 @@ namespace Xrpl.Models.Methods
         public string TokenID { get; set; }
     }
 
-    public class NFTOffer
+    public class NFTOffer: IDestination
     {
         [JsonProperty("amount")]
         [JsonConverter(typeof(CurrencyConverter))]
