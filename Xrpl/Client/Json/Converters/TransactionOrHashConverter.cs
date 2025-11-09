@@ -1,6 +1,9 @@
-﻿using System;
-using Newtonsoft.Json;
+﻿using Newtonsoft.Json;
+
+using System;
+
 using Xrpl.Models.Ledger;
+using Xrpl.Models.Methods;
 using Xrpl.Models.Transactions;
 
 namespace Xrpl.Client.Json.Converters
@@ -38,7 +41,7 @@ namespace Xrpl.Client.Json.Converters
             }
             else
             {
-                hashOrTransaction.Transaction = serializer.Deserialize<TransactionResponseCommon>(reader);
+                hashOrTransaction.Transaction = serializer.Deserialize<LedgerTransaction>(reader);
             }
 
             return hashOrTransaction;

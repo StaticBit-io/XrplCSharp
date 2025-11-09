@@ -28,22 +28,6 @@ namespace Xrpl.Models.Methods
         }
 
         /// <summary>
-        /// Admin required If true, return full information on the entire ledger.<br/>
-        /// Ignored if you did not specify a ledger version.<br/>
-        /// Defaults to false.
-        /// </summary>
-        [JsonProperty("full")]
-        public bool? Full { get; set; }
-
-        /// <summary>
-        /// Admin required.<br/>
-        /// If true, return information on accounts in the ledger.<br/>
-        /// Ignored if you did not specify a ledger version.<br/>
-        /// Defaults to false.
-        /// </summary>
-        [JsonProperty("accounts")]
-        public bool? Accounts { get; set; }
-        /// <summary>
         /// If true, return information on transactions in the specified ledger version.<br/>
         /// Defaults to false.<br/>
         /// Ignored if you did not specify a ledger version.
