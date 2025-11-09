@@ -1,9 +1,10 @@
-﻿using System.Collections.Generic;
+﻿using Newtonsoft.Json;
 
-using Newtonsoft.Json;
+using System.Collections.Generic;
 
 using Xrpl.Client.Json.Converters;
 using Xrpl.Models.Methods;
+using Xrpl.Models.Transactions;
 
 // https://github.com/XRPLF/xrpl.js/blob/main/packages/xrpl/src/models/ledger/Ledger.ts
 
@@ -28,7 +29,7 @@ namespace Xrpl.Models.Ledger
         /// in either JSON or binary depending  on whether the request specified binary as true.
         /// </summary>
         [JsonProperty("queue_data")]
-        public List<QueuedTransaction> QueueData { get; set; }
+        public List<QueuedTransaction>? QueueData { get; set; }
 
         /// <summary>
         /// If true, this is a validated ledger version. If omitted or set to false,
@@ -66,17 +67,11 @@ namespace Xrpl.Models.Ledger
         public string AccountHash { get; set; }
 
         /// <summary>
-        /// All the state information in this ledger.
-        /// </summary>
-        [JsonProperty("accountState")]
-        public List<LedgerEntryResponse> AccountState { get; set; }
-        /// <summary>
         /// A bit-map of flags relating to the closing of this ledger.
         /// </summary>
         [JsonProperty("close_flags")]
         public uint CloseFlags { get; set; }
-        [JsonProperty("accounts")]
-        public dynamic[] Accounts { get; set; }
+
         /// <summary>
         /// The approximate time this ledger version closed,
         /// as the number of seconds since the Ripple Epoch of 2000-01-01 00:00:00.<br/>
