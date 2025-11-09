@@ -12,7 +12,7 @@ using Xrpl.Client.Json.Converters;
 namespace Xrpl.Models.Transactions
 {
     /// <inheritdoc cref="IPaymentChannelCreate" />
-    public class PaymentChannelCreate : TransactionCommon, IPaymentChannelCreate
+    public class PaymentChannelCreate : TransactionCommon, IPaymentChannelCreate, IDestination
     {
         public PaymentChannelCreate()
         {
@@ -46,7 +46,7 @@ namespace Xrpl.Models.Transactions
     /// Create a unidirectional channel and fund it with XRP.<br/>
     /// The address sending  this transaction becomes the "source address" of the payment channel.
     /// </summary>
-    public interface IPaymentChannelCreate : ITransactionCommon
+    public interface IPaymentChannelCreate : ITransactionCommon, IDestination
     {
         /// <summary>
         /// Amount of XRP, in drops, to deduct from the sender's balance and set aside in this channel.<br/>
@@ -86,7 +86,7 @@ namespace Xrpl.Models.Transactions
     }
 
     /// <inheritdoc cref="IPaymentChannelCreate" />
-    public class PaymentChannelCreateResponse : TransactionResponseCommon, IPaymentChannelCreate
+    public class PaymentChannelCreateResponse : TransactionResponseCommon, IPaymentChannelCreate, IDestination
     {
         /// <inheritdoc />
         public string Amount { get; set; }

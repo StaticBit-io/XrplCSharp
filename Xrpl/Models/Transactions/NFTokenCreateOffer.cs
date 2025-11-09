@@ -31,7 +31,7 @@ namespace Xrpl.Models.Transactions
         tfSellNFToken = 1, 
     }
     /// <inheritdoc cref="INFTokenCreateOffer" />
-    public class NFTokenCreateOffer : TransactionCommon, INFTokenCreateOffer
+    public class NFTokenCreateOffer : TransactionCommon, INFTokenCreateOffer, IDestination
     {
         public NFTokenCreateOffer()
         {
@@ -67,7 +67,7 @@ namespace Xrpl.Models.Transactions
     /// The NFTokenCreateOffer transaction creates either an offer to buy an  NFT the submitting account does not own,
     /// or an offer to sell an NFT  the submitting account does own.
     /// </summary>
-    public interface INFTokenCreateOffer : ITransactionCommon
+    public interface INFTokenCreateOffer : ITransactionCommon, IDestination
     {
         /// <summary>
         /// Indicates the time after which the offer will no longer be valid.<br/>
@@ -103,7 +103,7 @@ namespace Xrpl.Models.Transactions
     }
 
     /// <inheritdoc cref="INFTokenCreateOffer" />
-    public class NFTokenCreateOfferResponse : TransactionResponseCommon, INFTokenCreateOffer
+    public class NFTokenCreateOfferResponse : TransactionResponseCommon, INFTokenCreateOffer, IDestination
     {
         /// <inheritdoc />
         [JsonConverter(typeof(RippleDateTimeConverter))]

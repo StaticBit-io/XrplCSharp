@@ -2,6 +2,7 @@ using Newtonsoft.Json;
 
 using Xrpl.Client.Json.Converters;
 using Xrpl.Models.Common;
+using Xrpl.Models.Transactions;
 
 // https://github.com/XRPLF/xrpl.js/blob/main/packages/xrpl/src/models/ledger/Check.ts
 
@@ -11,7 +12,7 @@ namespace Xrpl.Models.Ledger
     /// A Check object describes a check, similar to a paper personal check,
     /// which can be cashed by its destination to get money from its sender.
     /// </summary>
-    public class LOCheck : BaseLedgerEntry
+    public class LOCheck : BaseLedgerEntry, IDestination
     {
         public LOCheck()
         {

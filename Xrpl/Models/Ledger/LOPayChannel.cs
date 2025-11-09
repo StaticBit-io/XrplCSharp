@@ -3,7 +3,7 @@
 using Newtonsoft.Json;
 
 using Xrpl.Client.Json.Converters;
-
+using Xrpl.Models.Transactions;
 
 // https://github.com/XRPLF/xrpl.js/blob/main/packages/xrpl/src/models/ledger/PayChannel.ts
 
@@ -14,7 +14,7 @@ namespace Xrpl.Models.Ledger
     /// Payment channels enable small, rapid off-ledger payments of XRP that can be later reconciled with the consensus ledger.<br/>
     /// A payment channel holds a balance of XRP that can only be paid out to a specific destination address until the channel is closed.
     /// </summary>
-    public class LOPayChannel : BaseLedgerEntry
+    public class LOPayChannel : BaseLedgerEntry, IDestination
     {
         public LOPayChannel()
         {

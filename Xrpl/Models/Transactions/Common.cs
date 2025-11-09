@@ -838,4 +838,12 @@ namespace Xrpl.Models.Transactions
         [JsonProperty("LedgerIndex")]
         public string LedgerIndex { get; set; } = string.Empty;
     }
+
+    /// <summary>
+    /// object has destination field
+    /// </summary>
+    public interface IDestination
+    {
+        string Destination { get; set; }
+    }
 }

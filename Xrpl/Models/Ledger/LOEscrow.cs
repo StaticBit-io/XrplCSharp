@@ -3,7 +3,7 @@
 using Newtonsoft.Json;
 
 using Xrpl.Client.Json.Converters;
-
+using Xrpl.Models.Transactions;
 
 // https://github.com/XRPLF/xrpl.js/blob/main/packages/xrpl/src/models/ledger/Escrow.ts
 
@@ -12,7 +12,7 @@ namespace Xrpl.Models.Ledger
     /// <summary>
     /// The Escrow object type represents a held payment of XRP waiting to be executed or canceled.
     /// </summary>
-    public class LOEscrow : BaseLedgerEntry
+    public class LOEscrow : BaseLedgerEntry, IDestination
     {
         public LOEscrow()
         {

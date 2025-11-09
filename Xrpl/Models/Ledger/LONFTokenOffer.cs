@@ -5,6 +5,7 @@ using Newtonsoft.Json;
 using Xrpl.Client.Json.Converters;
 using Xrpl.Models.Common;
 using Xrpl.Models.Ledger;
+using Xrpl.Models.Transactions;
 
 namespace Xrpl.Models.Methods
 {
@@ -16,7 +17,7 @@ namespace Xrpl.Models.Methods
         /// </summary>
         lsfSellNFToken = 0x00000001
     }
-    public class LONFTokenOffer : BaseLedgerEntry
+    public class LONFTokenOffer : BaseLedgerEntry, IDestination
     {
 
         public LONFTokenOffer()

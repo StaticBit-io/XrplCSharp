@@ -12,7 +12,7 @@ namespace Xrpl.Models.Transactions
     /// An AccountDelete transaction deletes an account and any objects it owns in  the XRP Ledger,
     /// if possible, sending the account's remaining XRP to a  specified destination account.
     /// </summary>
-    public interface IAccountDelete : ITransactionCommon
+    public interface IAccountDelete : ITransactionCommon, IDestination
     {
         /// <summary>
         /// The address of an account to receive any leftover XRP after deleting the sending account.<br/>
@@ -28,7 +28,7 @@ namespace Xrpl.Models.Transactions
     }
 
     /// <inheritdoc cref="IAccountDelete" />
-    public class AccountDelete : TransactionCommon, IAccountDelete
+    public class AccountDelete : TransactionCommon, IAccountDelete, IDestination
     {
         public AccountDelete()
         {
@@ -43,7 +43,7 @@ namespace Xrpl.Models.Transactions
     }
 
     /// <inheritdoc cref="IAccountDelete" />
-    public class AccountDeleteResponse : TransactionResponseCommon, IAccountDelete
+    public class AccountDeleteResponse : TransactionResponseCommon, IAccountDelete, IDestination
     {
         /// <inheritdoc />
         public string Destination { get; set; }
