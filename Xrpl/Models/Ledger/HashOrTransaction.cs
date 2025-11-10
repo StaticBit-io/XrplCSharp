@@ -53,7 +53,7 @@ namespace Xrpl.Models.Ledger
         [JsonProperty("tx_json")]
         [JsonConverter(typeof(TransactionRequestConverter))]
 
-        public TransactionCommon Transaction { get; set; }
+        public ITransactionCommon Transaction { get; set; }
 
         /// <summary>
         /// Unique hashed String representing the transaction.

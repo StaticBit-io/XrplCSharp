@@ -26,8 +26,8 @@ namespace MyApp;
 
 internal class Program
 {
-    private static IXrplClient client = new XrplClient("wss://s.altnet.rippletest.net:51233");
-    //private static IXrplClient client = new XrplClient("wss://s2.ripple.com");
+    //private static IXrplClient client = new XrplClient("wss://s.altnet.rippletest.net:51233");
+    private static IXrplClient client = new XrplClient("wss://s2.ripple.com");
     //private static IXrplClient client = new XrplClient("wss://s.devnet.rippletest.net:51233");
     private static async Task Main(string[] args)
     {
@@ -35,7 +35,20 @@ internal class Program
         try
         {
             client.connection.OnConnected += async () => { Console.WriteLine("CONNECTED"); };
+            client.connection.OnWarning += (warning, message) =>
+            {
+                Console.WriteLine(warning);
+                return Task.CompletedTask;
+            };
+            client.connection.OnWarning2 += (warning, message) =>
+            {
+                foreach (var responseWarning in warning)
+                {
+                    Console.WriteLine(responseWarning.Message);
+                }
 
+                return Task.CompletedTask;
+            };
             await client.Connect();
             //await Simulate();
             await MultiSignTest();
