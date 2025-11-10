@@ -54,11 +54,30 @@ namespace Xrpl.Models.Transactions
         {
             TransactionType = TransactionType.Payment;
         }
+        [JsonProperty("Amount", NullValueHandling = NullValueHandling.Ignore)]
+        [JsonConverter(typeof(CurrencyConverter))]
+        private Currency _amount { get; set; }
 
         /// <inheritdoc />
+        [JsonIgnore]
         [JsonConverter(typeof(CurrencyConverter))]
-        public Currency Amount { get; set; }
-        
+        public Currency Amount
+        {
+            get => _amount;
+
+            set => _amount = value;
+        }
+
+        /// <inheritdoc />
+        [JsonIgnore]
+        [JsonConverter(typeof(CurrencyConverter))]
+        public Currency? DeliverMax
+        {
+            get => _amount;
+
+            set => _amount = value;
+        }
+
         /// <inheritdoc />
         public string Destination { get; set; }
 
@@ -120,6 +139,7 @@ namespace Xrpl.Models.Transactions
         /// other payments fail unless they deliver the exact amount.
         /// </summary>
         Currency? Amount { get; set; }
+
         /// <summary>
         /// Minimum amount of destination currency this transaction should deliver.<br/>
         /// Only valid if this is a partial payment.<br/>
@@ -160,20 +180,29 @@ namespace Xrpl.Models.Transactions
     /// <inheritdoc cref="IPayment" />
     public class PaymentResponse : TransactionResponseCommon, IPayment, IDestination
     {
-        private Currency amount;
+        [JsonIgnore] 
+        private Currency _amount { get; set; }
 
         /// <inheritdoc />
+        [JsonProperty("Amount")]
         [JsonConverter(typeof(CurrencyConverter))]
         public Currency Amount
         {
-            get => amount ?? DeliverMax;
+            get =>  _amount;
 
-            set => amount = value;
+            set => _amount = value;
         }
 
         /// <inheritdoc />
+        [JsonIgnore]
+        [JsonProperty("DeliverMax")]
         [JsonConverter(typeof(CurrencyConverter))]
-        public Currency DeliverMax { get; set; }
+        private Currency? DeliverMax
+        {
+            get => _amount;
+
+            set => _amount = value;
+        }
 
         /// <inheritdoc />
         public string Destination { get; set; }

@@ -1,16 +1,18 @@
 ﻿using System;
+
+using Xrpl.Utils;
 namespace Xrpl.Models.Common
 {
-	public class NFTokenIDData
+	public class NFTokenIdData
 	{
-        public NFTokenIDData(string nftokenId, UInt32 flags, UInt32 transferFee, string issuer, UInt32 taxon, UInt32 sequence)
+        public NFTokenIdData(UInt32 flags, UInt32 transferFee, string issuer, UInt32 taxon, UInt32 sequence)
         {
-            NFTokenID = nftokenId;
             Flags = flags;
             TransferFee = transferFee;
             Issuer = issuer;
             Taxon = taxon;
             Sequence = sequence;
+            NFTokenID = ParseNFTID.GenerateTokenId(flags, transferFee, issuer, taxon, sequence);
         }
 
         public string NFTokenID { get; set; }
@@ -24,6 +26,11 @@ namespace Xrpl.Models.Common
         public uint Taxon { get; set; }
 
         public uint Sequence { get; set; }
+
+        public static NFTokenIdData ParseNfTokenId(string nftokenID)
+        {
+            return nftokenID.ParseNFTokenID();
+        }
     }
 }
 

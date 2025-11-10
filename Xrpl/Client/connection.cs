@@ -18,6 +18,8 @@ namespace Xrpl.Client
     {
 
         public event OnError OnError;
+        public event OnWarning OnWarning;
+        public event OnWarning2 OnWarning2;
         public event OnConnected OnConnected;
         public event OnDisconnect OnDisconnect;
         public event OnLedgerClosed OnLedgerClosed;
@@ -364,6 +366,15 @@ namespace Xrpl.Client
                 if (OnError is not null)
                     await OnError?.Invoke("error", "badMessage", error.Message, message)!;
                 return;
+            }
+
+            if (data.Warning != null && OnWarning is not null)
+            {
+                await OnWarning.Invoke(data.Warning, message);
+            }
+            if (data.Warnings is { Count: > 0 } && OnWarning2 is not null)
+            {
+                await OnWarning2.Invoke(data.Warnings, message);
             }
             if (data.Type == null && data.Error != null)
             {
