@@ -54,28 +54,17 @@ namespace Xrpl.Models.Transactions
         {
             TransactionType = TransactionType.Payment;
         }
-        [JsonProperty("Amount", NullValueHandling = NullValueHandling.Ignore)]
-        [JsonConverter(typeof(CurrencyConverter))]
-        private Currency _amount { get; set; }
 
         /// <inheritdoc />
-        [JsonIgnore]
         [JsonConverter(typeof(CurrencyConverter))]
-        public Currency Amount
-        {
-            get => _amount;
-
-            set => _amount = value;
-        }
+        public Currency Amount { get; set; }
 
         /// <inheritdoc />
-        [JsonIgnore]
+        [JsonProperty("DeliverMax")]
         [JsonConverter(typeof(CurrencyConverter))]
-        public Currency? DeliverMax
+        private Currency? DeliverMax
         {
-            get => _amount;
-
-            set => _amount = value;
+            set => Amount = value;
         }
 
         /// <inheritdoc />
@@ -180,28 +169,16 @@ namespace Xrpl.Models.Transactions
     /// <inheritdoc cref="IPayment" />
     public class PaymentResponse : TransactionResponseCommon, IPayment, IDestination
     {
-        [JsonIgnore] 
-        private Currency _amount { get; set; }
-
         /// <inheritdoc />
-        [JsonProperty("Amount")]
         [JsonConverter(typeof(CurrencyConverter))]
-        public Currency Amount
-        {
-            get =>  _amount;
-
-            set => _amount = value;
-        }
+        public Currency Amount { get; set; }
 
         /// <inheritdoc />
-        [JsonIgnore]
         [JsonProperty("DeliverMax")]
         [JsonConverter(typeof(CurrencyConverter))]
         private Currency? DeliverMax
         {
-            get => _amount;
-
-            set => _amount = value;
+            set => Amount = value;
         }
 
         /// <inheritdoc />

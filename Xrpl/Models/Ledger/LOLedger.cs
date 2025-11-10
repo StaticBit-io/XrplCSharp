@@ -22,7 +22,7 @@ namespace Xrpl.Models.Ledger
         /// </summary>
         [JsonProperty("ledger")]
         [JsonConverter(typeof(LedgerBinaryConverter))]
-        public object LedgerEntity { get; set; }
+        public IBaseLedgerEntity LedgerEntity { get; set; }
         /// <summary>
         /// Array of objects describing queued transactions, in the same order as  the queue.<br/>
         /// If the request specified expand as true, members contain full  representations of the transactions,
@@ -39,10 +39,15 @@ namespace Xrpl.Models.Ledger
         public bool Validated { get; set; }
     }
 
-    public abstract class BaseLedgerEntity
+    public abstract class BaseLedgerEntity : IBaseLedgerEntity
     {
         /// <summary> Whether or not this ledger has been closed. </summary>
         [JsonProperty("closed")]
+        public bool Closed { get; set; }
+    }
+    public interface IBaseLedgerEntity
+    {
+        /// <summary> Whether or not this ledger has been closed. </summary>
         public bool Closed { get; set; }
     }
 
