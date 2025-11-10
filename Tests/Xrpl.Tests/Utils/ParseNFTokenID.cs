@@ -22,7 +22,7 @@ namespace XrplTests.Xrpl.Utils
         {
             const string nftokenId = "000813886377BBDA772433D7FCF16A9710D9D958D9F7129F376D5FC200005026";
 
-            NFTokenIDData nftokenIDData = nftokenId.ParseNFTokenID();
+            NFTokenIdData nftokenIDData = nftokenId.ParseNFTokenID();
 
             Assert.AreEqual((uint)8, nftokenIDData.Flags);
             Assert.AreEqual("rwhALEr1jdhuxKqoTno8cyGXw9yLSsqC6A", nftokenIDData.Issuer);
