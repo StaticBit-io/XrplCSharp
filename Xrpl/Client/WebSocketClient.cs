@@ -16,6 +16,73 @@ namespace Xrpl.Client
         private const int ReceiveChunkSize = 1048576;
         private const int SendChunkSize = 1048576;
 
+        private enum CloseSeverity { Info, Warn, Error }
+
+        /// <summary>
+        /// Returns a human-readable description and severity level for a given WebSocket close code.
+        /// </summary>
+        private static (CloseSeverity severity, string message) DescribeClose(WebSocketCloseStatus? code, string? reason)
+        {
+            var suffix = string.IsNullOrWhiteSpace(reason) ? "" : $" Reason: {reason}";
+
+            return code switch
+            {
+                WebSocketCloseStatus.NormalClosure =>
+                    (CloseSeverity.Info, "Connection closed normally (1000)." + suffix),
+
+                WebSocketCloseStatus.EndpointUnavailable =>
+                    (CloseSeverity.Warn, "Server unavailable or intentionally closed the connection (1001)." + suffix),
+
+                WebSocketCloseStatus.ProtocolError =>
+                    (CloseSeverity.Error, "Protocol error occurred (1002)." + suffix),
+
+                WebSocketCloseStatus.InvalidMessageType =>
+                    (CloseSeverity.Error, "Invalid message type received (1003)." + suffix),
+
+                WebSocketCloseStatus.Empty =>
+                    (CloseSeverity.Warn, "Connection was closed without a close frame (1005)." + suffix),
+
+                WebSocketCloseStatus.InvalidPayloadData =>
+                    (CloseSeverity.Error, "Invalid payload data in the WebSocket frame (1007)." + suffix),
+
+                WebSocketCloseStatus.PolicyViolation =>
+                    (CloseSeverity.Warn, "Policy violation (1008). Possibly due to rate limits or access rules." + suffix),
+
+                WebSocketCloseStatus.MessageTooBig =>
+                    (CloseSeverity.Warn, "Message too large (1009)." + suffix),
+
+                WebSocketCloseStatus.MandatoryExtension =>
+                    (CloseSeverity.Error, "Mandatory WebSocket extension is missing (1010)." + suffix),
+
+                WebSocketCloseStatus.InternalServerError =>
+                    (CloseSeverity.Error, "Internal server error (1011)." + suffix),
+
+                _ =>
+                    (CloseSeverity.Warn, $"Connection closed with code {(int?)(code ?? 0)}." + suffix)
+            };
+        }
+
+        /// <summary>
+        /// Determines whether the client should attempt to reconnect based on the WebSocket close code.
+        /// </summary>
+        private static bool ShouldReconnect(WebSocketCloseStatus? code) => code switch
+        {
+            null => true,
+            WebSocketCloseStatus.NormalClosure => false,
+            WebSocketCloseStatus.ProtocolError => false,
+            WebSocketCloseStatus.InvalidMessageType => false,
+            WebSocketCloseStatus.InvalidPayloadData => false,
+            WebSocketCloseStatus.MandatoryExtension => false,
+
+            WebSocketCloseStatus.Empty => true,
+            WebSocketCloseStatus.EndpointUnavailable => true,
+            WebSocketCloseStatus.PolicyViolation => true,
+            WebSocketCloseStatus.MessageTooBig => true,
+            WebSocketCloseStatus.InternalServerError => true,
+
+            _ => true
+        };
+
         private ClientWebSocket _ws;
         private readonly Uri _uri;
         private readonly CancellationTokenSource _cancellationTokenSource = new CancellationTokenSource();
@@ -26,7 +93,7 @@ namespace Xrpl.Client
         private Func<byte[], WebSocketClient, Task> _onMessageBinary;
         private Func<string, WebSocketClient, Task> _onMessageString;
         private Func<Exception, WebSocketClient, Task> _onError;
-        private Func<WebSocketClient, Task> _onDisconnected;
+        private Func<WebSocketCloseStatus?, string?, WebSocketClient, Task> _onDisconnected;
         private Func<WebSocketClient, Task> _onClosed;
 
         protected WebSocketClient(string uri)
@@ -132,7 +199,7 @@ namespace Xrpl.Client
         /// </summary>
         /// <param name="onDisconnect">The Action to call</param>
         /// <returns>Self</returns>
-        internal WebSocketClient OnDisconnect(Func<WebSocketClient, Task> onDisconnect)
+        internal WebSocketClient OnDisconnect(Func<WebSocketCloseStatus?, string?, WebSocketClient, Task> onDisconnect)
         {
             _onDisconnected = onDisconnect;
             return this;
@@ -265,7 +332,7 @@ namespace Xrpl.Client
         {
             if (_ws != null)
             {
-                if (_ws.State != WebSocketState.Open)
+                if (_ws.State == WebSocketState.Open)
                     try
                     {
                         await _ws.CloseOutputAsync(WebSocketCloseStatus.NormalClosure, string.Empty, CancellationToken.None);
@@ -276,7 +343,7 @@ namespace Xrpl.Client
                     }
                 Dispose();
                 _ws = null;
-                CallOnDisconnected();
+                CallOnDisconnected(WebSocketCloseStatus.NormalClosure, "Client initiated disconnect");
             }
         }
 
@@ -297,8 +364,16 @@ namespace Xrpl.Client
 
                         if (result.MessageType == WebSocketMessageType.Close)
                         {
+                            var closeStatus = result.CloseStatus;
+                            var closeDescription = result.CloseStatusDescription;
+                            
+                            var (severity, message) = DescribeClose(closeStatus, closeDescription);
+                            
                             _onClosed?.Invoke(this);
-                            Disconnect();
+                            CallOnDisconnected(closeStatus, closeDescription);
+                            Dispose();
+                            _ws = null;
+                            return;
                         }
                         else
                         {
@@ -328,9 +403,9 @@ namespace Xrpl.Client
         }
 
 
-        private void CallOnDisconnected()
+        private void CallOnDisconnected(WebSocketCloseStatus? closeStatus = null, string? closeDescription = null)
         {
-            _onDisconnected?.Invoke(this);
+            _onDisconnected?.Invoke(closeStatus, closeDescription, this);
         }
 
         private void CallOnConnected()

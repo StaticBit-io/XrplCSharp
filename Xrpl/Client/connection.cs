@@ -179,10 +179,11 @@ namespace Xrpl.Client
 
             ws.OnMessageReceived(async (m, ws) => { await IOnMessage(m); });
             //ws.OnError(async (e, ws) => { await OnConnectionFailed(e); });
-            ws.OnDisconnect(async (ws) =>
+            ws.OnDisconnect(async (closeStatus, closeDescription, ws) =>
             {
                 timer.Stop();
-                await OnceClose(1000);
+                int? code = (int?)closeStatus;
+                await OnceClose(code, closeDescription);
             });
 
             await this.ws.Connect();
@@ -307,50 +308,28 @@ namespace Xrpl.Client
             }
         }
 
-        //private void OnceClose(int? code = null, string? reason = null)
-        private async Task OnceClose(int? code)
+        private async Task OnceClose(int? code, string? description = null)
         {
-            //if (this.ws == null)
-            //{
-            //    throw new XrplException("OnceClose: ws is null");
-            //}
-            //this.clearHeartbeatInterval();
-            this.requestManager.RejectAll(new DisconnectedException($"websocket was closed, {"SOME"}"));
-            //this.ws.removeAllListeners();
+            var reasonText = string.IsNullOrWhiteSpace(description) 
+                ? "Unknown reason" 
+                : description;
+            
+            this.requestManager.RejectAll(new DisconnectedException($"websocket was closed, code: {code}, reason: {reasonText}"));
             this.ws = null;
-            //int? code = null;
-            string reason = null;
+            
             if (code == null)
             {
-                //string reasonText = reason ? reason.ToString() : null;
-                string reasonText = reason;
-                // eslint-disable-next-line no-Debug -- The error is helpful for debugging.
-                //Debug.error(
-                //  `Disconnected but the disconnect code was undefined(The given reason was ${ reasonText}).` +
-                //    `This could be caused by an exception being thrown during a 'connect' callback. ` +
-                //    `Disconnecting with code 1011 to indicate an internal error has occurred.`,
-                //)
-
-                /*
-                 * Error code 1011 represents an Internal Error according to
-                 * https://developer.mozilla.org/en-US/docs/Web/API/CloseEvent/code
-                 */
                 if (OnDisconnect is not null)
-                    await OnDisconnect?.Invoke(1011)!;
+                    await OnDisconnect?.Invoke(1011, "Internal error - disconnect code was undefined")!;
             }
             else
             {
                 if (OnDisconnect is not null)
-                    await OnDisconnect?.Invoke(code)!;
+                    await OnDisconnect?.Invoke(code, description)!;
             }
 
-            /// <summary>
-            /// If this wasn't a manual disconnect, then lets reconnect ASAP.
-            /// Code can be undefined if there's an exception while connecting.
-            /// </summary>
             if (code != INTENTIONAL_DISCONNECT_CODE && code != null)
             {
-                //this.intentionalDisconnect();
             }
         }
 
@@ -378,7 +357,20 @@ namespace Xrpl.Client
             }
             if (data.Type == null && data.Error != null)
             {
-                // e.g. slowDown
+                if (data.Error == "slowDown" || data.Error == "tooBusy")
+                {
+                    var rateLimitMessage = data.Error == "slowDown" 
+                        ? "Rate limit warning: Server requests to slow down. Reduce request frequency to avoid connection issues." 
+                        : "Rate limit warning: Server is too busy. Consider implementing exponential backoff or reducing load.";
+                    
+                    if (OnWarning is not null)
+                        await OnWarning.Invoke($"RATE_LIMIT: {data.Error}", rateLimitMessage);
+                    
+                    if (OnError is not null)
+                        await OnError?.Invoke("rate_limit", data.Error, rateLimitMessage, data)!;
+                    
+                    return;
+                }
 
                 if (OnError is not null)
                     await OnError?.Invoke("error", data.Error, "data.ErrorMessage", data)!;

@@ -24,10 +24,10 @@ else
             Console.WriteLine("Connected to XRPL");
             return Task.CompletedTask;
         };
-        client.connection.OnDisconnect += (code) =>
+        client.connection.OnDisconnect += (code, description) =>
         {
             IsConnected = false;
-            Console.WriteLine($"Disconnected from XRPL with code: {code}");
+            Console.WriteLine($"Disconnected from XRPL with code: {code}, description: {description}");
             return Task.CompletedTask;
         };
         await client.Connect();
