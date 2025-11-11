@@ -12,15 +12,24 @@ author = "agent"
 
 [[workflows.workflow.tasks]]
 task = "workflow.run"
-args = "tests"
+args = "blazor-app"
 
 [[workflows.workflow]]
-name = "tests"
+name = "blazor-app"
 author = "agent"
 
 [[workflows.workflow.tasks]]
 task = "shell.exec"
-args = "dotnet test XrplCSharp.sln"
+args = "dotnet run --project Tests/TestsClients/Blazor-WebAssembly/Blazor-WebAssembly.csproj"
+waitForPort = 5000
 
 [workflows.workflow.metadata]
-outputType = "console"
+outputType = "webview"
+
+[[ports]]
+localPort = 5000
+externalPort = 80
+
+[[ports]]
+localPort = 42881
+externalPort = 3000
