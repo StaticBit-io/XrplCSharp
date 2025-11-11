@@ -66,6 +66,9 @@
     private OnConnected _onConnectedHandler;
     private OnDisconnect _onDisconnectHandler;
     private Action<string> _onConnectionStatusHandler;
+    private OnError _onErrorHandler;
+    private OnWarning _onWarningHandler;
+    private OnWarning _onWarning2Handler;
 
     protected override async Task OnInitializedAsync()
     {
@@ -74,7 +77,7 @@
             await InvokeAsync(() =>
             {
                 IsConnected = true;
-                AddStatusMessage("Connected to XRPL");
+                AddStatusMessage("Connected to XRPL", MessageType.Success);
                 Console.WriteLine("Connected to XRPL");
                 StateHasChanged();
             });
@@ -85,7 +88,7 @@
             await InvokeAsync(() =>
             {
                 IsConnected = false;
-                AddStatusMessage($"Disconnected: code={code}, {description}");
+                AddStatusMessage($"Disconnected: code={code}, {description}", MessageType.Warning);
                 Console.WriteLine($"Disconnected from XRPL with code: {code}, description: {description}");
                 StateHasChanged();
             });
@@ -95,8 +98,38 @@
         {
             InvokeAsync(() =>
             {
-                AddStatusMessage(statusMessage);
+                AddStatusMessage(statusMessage, MessageType.Info);
                 Console.WriteLine($"Connection Status: {statusMessage}");
+                StateHasChanged();
+            });
+        };
+
+        _onErrorHandler = async (error, errorMessage, message, data) =>
+        {
+            await InvokeAsync(() =>
+            {
+                AddStatusMessage($"Error: {error} - {errorMessage}", MessageType.Error);
+                Console.WriteLine($"Error: {error}, {errorMessage}, {message}");
+                StateHasChanged();
+            });
+        };
+
+        _onWarningHandler = async (warningType, warningMessage, message) =>
+        {
+            await InvokeAsync(() =>
+            {
+                AddStatusMessage($"Warning: {warningType} - {warningMessage}", MessageType.Warning);
+                Console.WriteLine($"Warning: {warningType}, {warningMessage}, {message}");
+                StateHasChanged();
+            });
+        };
+
+        _onWarning2Handler = async (warningType, warningMessage, message) =>
+        {
+            await InvokeAsync(() =>
+            {
+                AddStatusMessage($"Warning2: {warningType} - {warningMessage}", MessageType.Warning);
+                Console.WriteLine($"Warning2: {warningType}, {warningMessage}, {message}");
                 StateHasChanged();
             });
         };
@@ -104,6 +137,9 @@
         client.connection.OnConnected += _onConnectedHandler;
         client.connection.OnDisconnect += _onDisconnectHandler;
         client.connection.OnConnectionStatus += _onConnectionStatusHandler;
+        client.OnError += _onErrorHandler;
+        client.OnWarning += _onWarningHandler;
+        client.OnWarning2 += _onWarning2Handler;
         
         await base.OnInitializedAsync();
         
@@ -133,12 +169,13 @@
         await Task.CompletedTask;
     }
     
-    private void AddStatusMessage(string message)
+    private void AddStatusMessage(string message, MessageType type = MessageType.Info)
     {
         ConnectionStatusMessages.Add(new StatusMessage 
         { 
             Timestamp = DateTime.Now, 
-            Message = message 
+            Message = message,
+            Type = type
         });
         
         if (ConnectionStatusMessages.Count > 50)
