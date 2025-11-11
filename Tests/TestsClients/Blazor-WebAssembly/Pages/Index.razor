@@ -1,36 +1,133 @@
 ﻿@page "/"
 @using Xrpl.Client
+@using System.Collections.Generic
+@implements IAsyncDisposable
 
-<h1>Hello, world!</h1>
-@if (IsConnected)
+<h1>XRP Ledger Connection Test</h1>
+
+<div style="margin: 20px 0;">
+    <h3>Connection Status</h3>
+    @if (IsConnected)
+    {
+        <p style="color: green; font-weight: bold;">✓ Connected to XRPL</p>
+    }
+    else
+    {
+        <p style="color: red; font-weight: bold;">✗ Not connected to XRPL</p>
+    }
+</div>
+
+@if (ConnectionStatusMessages.Any())
 {
-    <p>Connected to XRPL</p>
+    <div style="margin: 20px 0;">
+        <h3>Connection Events</h3>
+        <div style="background: #f5f5f5; padding: 10px; border-radius: 5px; max-height: 300px; overflow-y: auto;">
+            @foreach (var message in ConnectionStatusMessages.OrderByDescending(m => m.Timestamp))
+            {
+                <div style="margin: 5px 0; padding: 5px; border-bottom: 1px solid #ddd;">
+                    <small style="color: #666;">[@message.Timestamp.ToString("HH:mm:ss")]</small>
+                    <span>@message.Message</span>
+                </div>
+            }
+        </div>
+    </div>
 }
-else
-{
-    <p>Not connected to XRPL</p>
-}
+
 @code
 {
     bool IsConnected { get; set; }
+    List<StatusMessage> ConnectionStatusMessages { get; set; } = new List<StatusMessage>();
+    
     [Inject]
     IXrplClient client { get; set; }
 
+    public class StatusMessage
+    {
+        public DateTime Timestamp { get; set; }
+        public string Message { get; set; }
+    }
+
+    private OnConnected _onConnectedHandler;
+    private OnDisconnect _onDisconnectHandler;
+    private Action<string> _onConnectionStatusHandler;
+
     protected override async Task OnInitializedAsync()
     {
-        client.connection.OnConnected += () =>
+        _onConnectedHandler = async () =>
+        {
+            await InvokeAsync(() =>
+            {
+                IsConnected = true;
+                AddStatusMessage("Connected to XRPL");
+                Console.WriteLine("Connected to XRPL");
+                StateHasChanged();
+            });
+        };
+
+        _onDisconnectHandler = async (code, description) =>
+        {
+            await InvokeAsync(() =>
+            {
+                IsConnected = false;
+                AddStatusMessage($"Disconnected: code={code}, {description}");
+                Console.WriteLine($"Disconnected from XRPL with code: {code}, description: {description}");
+                StateHasChanged();
+            });
+        };
+
+        _onConnectionStatusHandler = (statusMessage) =>
+        {
+            InvokeAsync(() =>
+            {
+                AddStatusMessage(statusMessage);
+                Console.WriteLine($"Connection Status: {statusMessage}");
+                StateHasChanged();
+            });
+        };
+
+        client.connection.OnConnected += _onConnectedHandler;
+        client.connection.OnDisconnect += _onDisconnectHandler;
+        client.connection.OnConnectionStatus += _onConnectionStatusHandler;
+        
+        await base.OnInitializedAsync();
+        
+        await client.Connect();
+        
+        if (client.connection.IsConnected())
         {
             IsConnected = true;
-            Console.WriteLine("Connected to XRPL");
-            return Task.CompletedTask;
-        };
-        client.connection.OnDisconnect += (code, description) =>
+            StateHasChanged();
+        }
+    }
+    
+    public async ValueTask DisposeAsync()
+    {
+        if (client != null)
         {
-            IsConnected = false;
-            Console.WriteLine($"Disconnected from XRPL with code: {code}, description: {description}");
-            return Task.CompletedTask;
-        };
-        await client.Connect();
-        await base.OnInitializedAsync();
+            if (_onConnectedHandler != null)
+                client.connection.OnConnected -= _onConnectedHandler;
+            
+            if (_onDisconnectHandler != null)
+                client.connection.OnDisconnect -= _onDisconnectHandler;
+            
+            if (_onConnectionStatusHandler != null)
+                client.connection.OnConnectionStatus -= _onConnectionStatusHandler;
+        }
+        
+        await Task.CompletedTask;
+    }
+    
+    private void AddStatusMessage(string message)
+    {
+        ConnectionStatusMessages.Add(new StatusMessage 
+        { 
+            Timestamp = DateTime.Now, 
+            Message = message 
+        });
+        
+        if (ConnectionStatusMessages.Count > 50)
+        {
+            ConnectionStatusMessages.RemoveAt(0);
+        }
     }
 }

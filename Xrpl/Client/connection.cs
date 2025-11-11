@@ -114,6 +114,9 @@ namespace Xrpl.Client
         private int? heartbeatIntervalID = null;
         private int _reconnectAttempts = 0;
         private static readonly Random _random = new Random();
+        private System.Threading.CancellationTokenSource _reconnectCts;
+        private Task _reconnectLoop;
+        private System.Threading.SemaphoreSlim _connectLock = new System.Threading.SemaphoreSlim(1, 1);
 
         public ConnectionOptions config { get; private set; }
         public RequestManager requestManager = new RequestManager();
@@ -147,61 +150,73 @@ namespace Xrpl.Client
 
         public async Task Connect()
         {
-            if (this.IsConnected())
+            StopReconnectLoop();
+            await ConnectInternalAsync();
+        }
+
+        private async Task ConnectInternalAsync()
+        {
+            await _connectLock.WaitAsync();
+            try
             {
-                var p1 = new TaskCompletionSource();
-                p1.TrySetResult();
-                await p1.Task;
+                if (this.IsConnected())
+                {
+                    return;
+                }
+                if (this.State() == WebSocketState.Connecting)
+                {
+                    await this.connectionManager.AwaitConnection();
+                    return;
+                }
+                if (this.url == null)
+                {
+                    throw new ConnectionException("Cannot connect because no server was specified");
+                }
+                if (this.ws != null)
+                {
+                    throw new XrplException("Websocket connection never cleaned up.");
+                }
+                
+                timer = new Timer(this.config.connectionTimeout);
+                timer.Elapsed += async (sender, e) => await OnConnectionFailed(new ConnectionException($"Error: connect() timed out after {this.config.connectionTimeout} ms.If your internet connection is working, the rippled server may be blocked or inaccessible.You can also try setting the 'connectionTimeout' option in the Client constructor."));
+                timer.Start();
+
+                this.ws = CreateWebSocket(this.url, this.config);
+                if (this.ws == null)
+                {
+                    throw new XrplException("Connect: created null websocket");
+                }
+
+                ws.OnConnect(async (ws) => { await OnceOpen(); });
+
+                ws.OnConnectionError(async (e, ws) =>
+                {
+                    timer.Stop();
+                    await OnConnectionFailed(e);
+                });
+
+                ws.OnMessageReceived(async (m, ws) => { await IOnMessage(m); });
+                ws.OnDisconnect(async (closeStatus, closeDescription, ws) =>
+                {
+                    timer.Stop();
+                    int? code = (int?)closeStatus;
+                    await OnceClose(code, closeDescription);
+                });
+
+                await this.ws.Connect();
+
+                this.connectionManager.AwaitConnection();
             }
-            if (this.State() == WebSocketState.Connecting)
+            finally
             {
-                await this.connectionManager.AwaitConnection();
+                _connectLock.Release();
             }
-            if (this.url == null)
-            {
-                throw new ConnectionException("Cannot connect because no server was specified");
-            }
-            if (this.ws != null)
-            {
-                throw new XrplException("Websocket connection never cleaned up.");
-            }
-            //Create the connection timeout, in case the connection hangs longer than expected.
-
-            timer = new Timer(this.config.connectionTimeout);
-            timer.Elapsed += async (sender, e) => await OnConnectionFailed(new ConnectionException($"Error: connect() timed out after {this.config.connectionTimeout} ms.If your internet connection is working, the rippled server may be blocked or inaccessible.You can also try setting the 'connectionTimeout' option in the Client constructor."));
-            timer.Start();
-
-            //// Connection listeners: these stay attached only until a connection is done/open.
-            this.ws = CreateWebSocket(this.url, this.config);
-            if (this.ws == null)
-            {
-                throw new XrplException("Connect: created null websocket");
-            }
-
-            ws.OnConnect(async (ws) => { await OnceOpen(); });
-
-            ws.OnConnectionError(async (e, ws) =>
-            {
-                timer.Stop();
-                await OnConnectionFailed(e);
-            });
-
-            ws.OnMessageReceived(async (m, ws) => { await IOnMessage(m); });
-            //ws.OnError(async (e, ws) => { await OnConnectionFailed(e); });
-            ws.OnDisconnect(async (closeStatus, closeDescription, ws) =>
-            {
-                timer.Stop();
-                int? code = (int?)closeStatus;
-                await OnceClose(code, closeDescription);
-            });
-
-            await this.ws.Connect();
-
-            this.connectionManager.AwaitConnection();
         }
 
         public async Task<int> Disconnect()
         {
+            StopReconnectLoop();
+            
             if (ws == null)
             {
                 return 0;
@@ -296,16 +311,11 @@ namespace Xrpl.Client
                 throw new XrplException("onceOpen: ws is null");
             }
 
-            //this.ws.RemoveAllListeners()
-            //clearTimeout(connectionTimeoutID)
             timer.Stop();
-            // Finalize the connection and resolve all awaiting connect() requests
+            StopReconnectLoop();
 
             try
             {
-                //this.retryConnectionBackoff.reset();
-                //this.startHeartbeatInterval();
-                _reconnectAttempts = 0;
                 this.connectionManager.ResolveAllAwaiting();
                 if (OnConnected is not null)
                     await this.OnConnected?.Invoke();
@@ -313,7 +323,6 @@ namespace Xrpl.Client
             catch (Exception error)
             {
                 this.connectionManager.RejectAllAwaiting(error);
-                // Ignore this error, propagate the root cause.
                 await this.Disconnect();
             }
         }
@@ -350,35 +359,83 @@ namespace Xrpl.Client
 
             if (ShouldReconnect(code))
             {
-                _reconnectAttempts++;
-                
-                if (_reconnectAttempts > config.MaxReconnectAttempts)
-                {
-                    var warning = $"Reconnection attempt #{_reconnectAttempts} (exceeded max {config.MaxReconnectAttempts}). Will keep trying, but this may indicate a persistent issue.";
-                    OnConnectionStatus?.Invoke(warning);
-                }
-                
-                var delay = CalcBackoff(_reconnectAttempts);
-                var reconnectMessage = $"Reconnecting in {delay.TotalSeconds:F1} seconds... (attempt #{_reconnectAttempts})";
-                OnConnectionStatus?.Invoke(reconnectMessage);
-                
-                await Task.Delay(delay);
-                
-                try
-                {
-                    await Connect();
-                }
-                catch (Exception ex)
-                {
-                    var errorMessage = $"Reconnection attempt #{_reconnectAttempts} failed: {ex.Message}";
-                    OnConnectionStatus?.Invoke(errorMessage);
-                }
+                StartReconnectLoop();
             }
             else
             {
                 _reconnectAttempts = 0;
                 var noReconnectMessage = $"Connection closed permanently. {userMessage}";
                 OnConnectionStatus?.Invoke(noReconnectMessage);
+            }
+        }
+
+        private void StopReconnectLoop()
+        {
+            _reconnectCts?.Cancel();
+            _reconnectCts?.Dispose();
+            _reconnectCts = null;
+            _reconnectAttempts = 0;
+        }
+
+        private void StartReconnectLoop()
+        {
+            if (_reconnectLoop != null && !_reconnectLoop.IsCompleted)
+            {
+                return;
+            }
+
+            StopReconnectLoop();
+            _reconnectCts = new System.Threading.CancellationTokenSource();
+            _reconnectLoop = ReconnectLoopAsync(_reconnectCts.Token);
+        }
+
+        private async Task ReconnectLoopAsync(System.Threading.CancellationToken ct)
+        {
+            _reconnectAttempts = 0;
+
+            while (!ct.IsCancellationRequested)
+            {
+                _reconnectAttempts++;
+
+                if (_reconnectAttempts > config.MaxReconnectAttempts)
+                {
+                    var warning = $"Reconnection attempt #{_reconnectAttempts} (exceeded max {config.MaxReconnectAttempts}). Will keep trying, but this may indicate a persistent issue.";
+                    OnConnectionStatus?.Invoke(warning);
+                }
+
+                var delay = CalcBackoff(_reconnectAttempts);
+                var reconnectMessage = $"Reconnecting in {delay.TotalSeconds:F1} seconds... (attempt #{_reconnectAttempts})";
+                OnConnectionStatus?.Invoke(reconnectMessage);
+
+                try
+                {
+                    await Task.Delay(delay, ct);
+                }
+                catch (System.OperationCanceledException)
+                {
+                    break;
+                }
+
+                if (ct.IsCancellationRequested)
+                {
+                    break;
+                }
+
+                try
+                {
+                    await ConnectInternalAsync();
+                    
+                    if (IsConnected())
+                    {
+                        _reconnectAttempts = 0;
+                        break;
+                    }
+                }
+                catch (Exception ex)
+                {
+                    var errorMessage = $"Reconnection attempt #{_reconnectAttempts} failed: {ex.Message}";
+                    OnConnectionStatus?.Invoke(errorMessage);
+                }
             }
         }
 
