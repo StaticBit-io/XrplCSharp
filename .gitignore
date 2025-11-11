@@ -260,3 +260,12 @@ paket-files/
 __pycache__/
 *.pyc
 .DS_Store
+
+# Replit files
+.cache/
+.replit
+replit.nix
+.config/
+.upm/
+.breakpoints
+attached_assets/

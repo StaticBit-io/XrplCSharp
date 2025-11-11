@@ -1,2 +1,26 @@
+modules = ["dotnet-7.0"]
 [agent]
 expertMode = true
+
+[workflows]
+runButton = "Project"
+
+[[workflows.workflow]]
+name = "Project"
+mode = "parallel"
+author = "agent"
+
+[[workflows.workflow.tasks]]
+task = "workflow.run"
+args = "tests"
+
+[[workflows.workflow]]
+name = "tests"
+author = "agent"
+
+[[workflows.workflow.tasks]]
+task = "shell.exec"
+args = "dotnet test XrplCSharp.sln"
+
+[workflows.workflow.metadata]
+outputType = "console"
