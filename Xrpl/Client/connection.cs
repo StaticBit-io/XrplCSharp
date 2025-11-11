@@ -28,6 +28,7 @@ namespace Xrpl.Client
         public event OnPeerStatusChange OnPeerStatusChange;
         public event OnConsensusPhase OnConsensusPhase;
         public event OnPathFind OnPathFind;
+        public event Action<string> OnConnectionStatus;
 
         public static string Base64Encode(string plainText)
         {
@@ -60,7 +61,13 @@ namespace Xrpl.Client
             public int timeout { get; set; }
             public int connectionTimeout { get; set; }
             public Dictionary<string, dynamic> headers { get; set; }
+            
+            public TimeSpan ReconnectBaseDelay { get; set; } = TimeSpan.FromSeconds(1);
+            public TimeSpan ReconnectMaxDelay { get; set; } = TimeSpan.FromSeconds(30);
+            public int MaxReconnectAttempts { get; set; } = 10;
         }
+
+        private enum CloseSeverity { Info, Warn, Error }
 
         static WebSocketClient CreateWebSocket(string url, ConnectionOptions config)
         {
@@ -105,6 +112,8 @@ namespace Xrpl.Client
 
         private int? reconnectTimeoutID = null;
         private int? heartbeatIntervalID = null;
+        private int _reconnectAttempts = 0;
+        private static readonly Random _random = new Random();
 
         public ConnectionOptions config { get; private set; }
         public RequestManager requestManager = new RequestManager();
@@ -296,6 +305,7 @@ namespace Xrpl.Client
             {
                 //this.retryConnectionBackoff.reset();
                 //this.startHeartbeatInterval();
+                _reconnectAttempts = 0;
                 this.connectionManager.ResolveAllAwaiting();
                 if (OnConnected is not null)
                     await this.OnConnected?.Invoke();
@@ -314,6 +324,8 @@ namespace Xrpl.Client
                 ? "Unknown reason" 
                 : description;
             
+            var (severity, userMessage) = DescribeClose(code, reasonText);
+            
             this.requestManager.RejectAll(new DisconnectedException($"websocket was closed, code: {code}, reason: {reasonText}"));
             this.ws = null;
             
@@ -327,10 +339,97 @@ namespace Xrpl.Client
                 if (OnDisconnect is not null)
                     await OnDisconnect?.Invoke(code, description)!;
             }
+            
+            OnConnectionStatus?.Invoke(userMessage);
 
-            if (code != INTENTIONAL_DISCONNECT_CODE && code != null)
+            if (code == INTENTIONAL_DISCONNECT_CODE)
             {
+                _reconnectAttempts = 0;
+                return;
             }
+
+            if (ShouldReconnect(code))
+            {
+                _reconnectAttempts++;
+                
+                if (_reconnectAttempts > config.MaxReconnectAttempts)
+                {
+                    var warning = $"Reconnection attempt #{_reconnectAttempts} (exceeded max {config.MaxReconnectAttempts}). Will keep trying, but this may indicate a persistent issue.";
+                    OnConnectionStatus?.Invoke(warning);
+                }
+                
+                var delay = CalcBackoff(_reconnectAttempts);
+                var reconnectMessage = $"Reconnecting in {delay.TotalSeconds:F1} seconds... (attempt #{_reconnectAttempts})";
+                OnConnectionStatus?.Invoke(reconnectMessage);
+                
+                await Task.Delay(delay);
+                
+                try
+                {
+                    await Connect();
+                }
+                catch (Exception ex)
+                {
+                    var errorMessage = $"Reconnection attempt #{_reconnectAttempts} failed: {ex.Message}";
+                    OnConnectionStatus?.Invoke(errorMessage);
+                }
+            }
+            else
+            {
+                _reconnectAttempts = 0;
+                var noReconnectMessage = $"Connection closed permanently. {userMessage}";
+                OnConnectionStatus?.Invoke(noReconnectMessage);
+            }
+        }
+
+        private static (CloseSeverity severity, string message) DescribeClose(int? code, string? reason)
+        {
+            var suffix = string.IsNullOrWhiteSpace(reason) ? "" : $" Reason: {reason}";
+            
+            return code switch
+            {
+                1000 => (CloseSeverity.Info, "Connection closed normally (1000)." + suffix),
+                1001 => (CloseSeverity.Warn, "Server unavailable or intentionally closed the connection (1001)." + suffix),
+                1002 => (CloseSeverity.Error, "Protocol error occurred (1002)." + suffix),
+                1003 => (CloseSeverity.Error, "Invalid message type received (1003)." + suffix),
+                1005 => (CloseSeverity.Warn, "Connection was closed without a close frame (1005)." + suffix),
+                1007 => (CloseSeverity.Error, "Invalid payload data in the WebSocket frame (1007)." + suffix),
+                1008 => (CloseSeverity.Warn, "Policy violation (1008). Possibly due to rate limits or access rules." + suffix),
+                1009 => (CloseSeverity.Warn, "Message too large (1009)." + suffix),
+                1010 => (CloseSeverity.Error, "Mandatory WebSocket extension is missing (1010)." + suffix),
+                1011 => (CloseSeverity.Error, "Internal server error (1011)." + suffix),
+                _ => (CloseSeverity.Warn, $"Connection closed with code {code}." + suffix)
+            };
+        }
+
+        private static bool ShouldReconnect(int? code) => code switch
+        {
+            null => true,
+            1000 => false,
+            1002 => false,
+            1003 => false,
+            1007 => false,
+            1010 => false,
+            
+            1001 => true,
+            1005 => true,
+            1008 => true,
+            1009 => true,
+            1011 => true,
+            
+            _ => true
+        };
+
+        private TimeSpan CalcBackoff(int attempts)
+        {
+            var exponentialDelay = config.ReconnectBaseDelay.TotalSeconds * Math.Pow(2, attempts);
+            var cappedDelay = Math.Min(exponentialDelay, config.ReconnectMaxDelay.TotalSeconds);
+            
+            var jitterPercent = 0.25;
+            var jitter = cappedDelay * jitterPercent * (2 * _random.NextDouble() - 1);
+            
+            var finalDelay = cappedDelay + jitter;
+            return TimeSpan.FromSeconds(Math.Max(0, finalDelay));
         }
 
         private async Task IOnMessage(string message)
