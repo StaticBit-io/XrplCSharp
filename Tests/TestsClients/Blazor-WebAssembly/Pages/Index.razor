@@ -1,6 +1,8 @@
 ﻿@page "/"
 @using Xrpl.Client
+@using Xrpl.Models.Subscriptions
 @using System.Collections.Generic
+@using System.Linq
 @implements IAsyncDisposable
 
 <h1>XRP Ledger Connection Test</h1>
@@ -68,7 +70,7 @@
     private Action<string> _onConnectionStatusHandler;
     private OnError _onErrorHandler;
     private OnWarning _onWarningHandler;
-    private OnWarning _onWarning2Handler;
+    private OnWarning2 _onWarning2Handler;
 
     protected override async Task OnInitializedAsync()
     {
@@ -114,22 +116,23 @@
             });
         };
 
-        _onWarningHandler = async (warningType, warningMessage, message) =>
+        _onWarningHandler = async (warning, message) =>
         {
             await InvokeAsync(() =>
             {
-                AddStatusMessage($"Warning: {warningType} - {warningMessage}", MessageType.Warning);
-                Console.WriteLine($"Warning: {warningType}, {warningMessage}, {message}");
+                AddStatusMessage($"Warning: {warning}", MessageType.Warning);
+                Console.WriteLine($"Warning: {warning}, {message}");
                 StateHasChanged();
             });
         };
 
-        _onWarning2Handler = async (warningType, warningMessage, message) =>
+        _onWarning2Handler = async (warnings, message) =>
         {
             await InvokeAsync(() =>
             {
-                AddStatusMessage($"Warning2: {warningType} - {warningMessage}", MessageType.Warning);
-                Console.WriteLine($"Warning2: {warningType}, {warningMessage}, {message}");
+                var warningText = string.Join(", ", warnings.Select(w => $"{w.Id}: {w.Message}"));
+                AddStatusMessage($"Warnings: {warningText}", MessageType.Warning);
+                Console.WriteLine($"Warnings: {warningText}, {message}");
                 StateHasChanged();
             });
         };
@@ -137,9 +140,9 @@
         client.connection.OnConnected += _onConnectedHandler;
         client.connection.OnDisconnect += _onDisconnectHandler;
         client.connection.OnConnectionStatus += _onConnectionStatusHandler;
-        client.OnError += _onErrorHandler;
-        client.OnWarning += _onWarningHandler;
-        client.OnWarning2 += _onWarning2Handler;
+        client.connection.OnError += _onErrorHandler;
+        client.connection.OnWarning += _onWarningHandler;
+        client.connection.OnWarning2 += _onWarning2Handler;
         
         await base.OnInitializedAsync();
         
@@ -166,13 +169,13 @@
                 client.connection.OnConnectionStatus -= _onConnectionStatusHandler;
             
             if (_onErrorHandler != null)
-                client.OnError -= _onErrorHandler;
+                client.connection.OnError -= _onErrorHandler;
             
             if (_onWarningHandler != null)
-                client.OnWarning -= _onWarningHandler;
+                client.connection.OnWarning -= _onWarningHandler;
             
             if (_onWarning2Handler != null)
-                client.OnWarning2 -= _onWarning2Handler;
+                client.connection.OnWarning2 -= _onWarning2Handler;
         }
         
         await Task.CompletedTask;
