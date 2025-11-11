@@ -164,6 +164,15 @@
             
             if (_onConnectionStatusHandler != null)
                 client.connection.OnConnectionStatus -= _onConnectionStatusHandler;
+            
+            if (_onErrorHandler != null)
+                client.OnError -= _onErrorHandler;
+            
+            if (_onWarningHandler != null)
+                client.OnWarning -= _onWarningHandler;
+            
+            if (_onWarning2Handler != null)
+                client.OnWarning2 -= _onWarning2Handler;
         }
         
         await Task.CompletedTask;
