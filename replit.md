@@ -26,14 +26,25 @@ Preferred communication style: Simple, everyday language.
 
 ### WebSocket-Based Network Client
 
-**Problem**: Need real-time communication with XRP Ledger nodes for transaction submission and account monitoring.
+**Problem**: Need real-time communication with XRP Ledger nodes for transaction submission and account monitoring with robust connection stability and error handling.
 
 **Solution**: WebSocket client (`XrplClient`) for persistent connections to rippled nodes with async/await pattern for C# idiomatic usage.
 
 **Features**:
-- Connection event handling (`OnConnected`)
+- Connection event handling (`OnConnected`, `OnDisconnect`)
 - Async request/response pattern
 - Support for testnet and mainnet endpoints
+- Intelligent reconnection logic with `ShouldReconnect()` method
+- Detailed connection closure diagnostics via `DescribeClose()`
+- Rate-limit detection and handling for XRPL server responses ("slowDown", "tooBusy")
+- Real WebSocket close status and description propagation
+
+**Recent Changes (November 2025)**:
+- Updated `OnDisconnect` delegate signature to include both close code (`int?`) and description (`string?`) for better debugging
+- Modified `WebSocketClient` to extract and propagate real `CloseStatus` and `CloseStatusDescription` from WebSocket close events
+- Implemented XRPL-specific rate-limit error detection in message responses
+- Added `DescribeClose()` method to classify close reasons (normal, error, rate-limit, fatal)
+- Added `ShouldReconnect()` logic to prevent reconnection loops on fatal errors while maintaining retry behavior for transient failures
 
 ### Wallet Management
 
