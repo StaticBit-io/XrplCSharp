@@ -130,7 +130,12 @@
         {
             await InvokeAsync(() =>
             {
-                var warningText = string.Join(", ", warnings.Select(w => $"{w.Id}: {w.Message}"));
+                var toNotify = warnings.Where(w=>w.Id != 2001).ToArray();
+                if(toNotify.Length == 0)
+                {
+                    return;
+                }
+                var warningText = string.Join(", ", toNotify.Select(w => $"{w.Id}: {w.Message}"));
                 AddStatusMessage($"Warnings: {warningText}", MessageType.Warning);
                 Console.WriteLine($"Warnings: {warningText}, {message}");
                 StateHasChanged();
