@@ -13,6 +13,7 @@ using Xrpl.Models;
 using Xrpl.Models.Common;
 using Xrpl.Models.Ledger;
 using Xrpl.Models.Methods;
+using Xrpl.Models.Subscriptions;
 using Xrpl.Models.Transactions;
 using Xrpl.Models.Utils;
 using Xrpl.Sugar;
@@ -40,7 +41,7 @@ internal class Program
                 Console.WriteLine(warning);
                 return Task.CompletedTask;
             };
-            client.connection.OnWarning2 += (warning, message) =>
+            client.connection.OnServerWarning += (warning, message) =>
             {
                 foreach (var responseWarning in warning)
                 {
@@ -645,26 +646,11 @@ internal class Program
             }
         };
 
-        client.connection.OnDisconnect += (code) =>
-        {
-            Console.WriteLine($"DISCONECTED CODE: {code}");
-            Console.WriteLine("DISCONECTED");
-            return Task.CompletedTask;
-        };
+        client.connection.OnDisconnect += OnDisconnect;
 
-        client.connection.OnError += (errorCode, errorMessage, error, data) =>
-        {
-            Console.WriteLine(errorCode);
-            Console.WriteLine(errorMessage);
-            Console.WriteLine(data);
-            return Task.CompletedTask;
-        };
+        client.connection.OnError += OnError;
 
-        client.connection.OnTransaction += Response =>
-        {
-            Console.WriteLine(Response.Transaction.TransactionType.ToString());
-            return Task.CompletedTask;
-        };
+        client.connection.OnTransaction += OnTransaction;
 
         client.connection.OnLedgerClosed += r =>
         {
@@ -690,6 +676,26 @@ internal class Program
         await client.Disconnect();
     }
 
+    private static Task OnTransaction(TransactionStream response)
+    {
+        Console.WriteLine(response.Transaction.TransactionType.ToString());
+        return Task.CompletedTask;
+    }
+
+    private static Task OnError(string errorCode, string errorMessage, string error, dynamic data)
+    {
+        Console.WriteLine(errorCode);
+        Console.WriteLine(errorMessage);
+        Console.WriteLine(data);
+        return Task.CompletedTask;
+    }
+
+    private static Task OnDisconnect(int? code, string? description)
+    {
+        Console.WriteLine($"Disconnected from XRPL with code: {code}, description: {description}");
+        return Task.CompletedTask;
+    }
+
     private static async Task WebsocketChangeServerTest()
     {
         var isFinished = false;
@@ -713,25 +719,11 @@ internal class Program
                 });
         };
 
-        client.connection.OnDisconnect += (code) =>
-        {
-            Console.WriteLine($"DISCONECTED CODE: {code}");
-            return Task.CompletedTask;
-        };
+        client.connection.OnDisconnect += OnDisconnect;
 
-        client.connection.OnError += (errorCode, errorMessage, error, data) =>
-        {
-            Console.WriteLine(errorCode);
-            Console.WriteLine(errorMessage);
-            Console.WriteLine(data);
-            return Task.CompletedTask;
-        };
+        client.connection.OnError += OnError;
 
-        client.connection.OnTransaction += Response =>
-        {
-            Console.WriteLine(Response.Transaction.TransactionType.ToString());
-            return Task.CompletedTask;
-        };
+        client.connection.OnTransaction += OnTransaction;
 
         client.connection.OnLedgerClosed += r =>
         {

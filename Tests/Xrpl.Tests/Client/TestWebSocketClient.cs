@@ -69,9 +69,9 @@ namespace Xrpl.Tests.ClientLib
                 return Task.CompletedTask;
             };
 
-            client.connection.OnDisconnect += (code) =>
+            client.connection.OnDisconnect += (code, description) =>
             {
-                Console.WriteLine($"DISCONNECTED: {code}");
+                Console.WriteLine($"Disconnected from XRPL with code: {code}, description: {description}");
                 isFinished = true;
                 return Task.CompletedTask;
             };
