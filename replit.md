@@ -132,6 +132,10 @@ Preferred communication style: Simple, everyday language.
     - CurrentServerUrl synchronized with live connection via `client.connection.GetUrl()`
     - Validation to prevent switching to already connected server
     - Loading states and error handling for server changes
+  - **UI Message Improvements** (November 12, 2025):
+    - Disconnect messages now show "code=unknown" instead of empty string when code is null
+    - "Server changed successfully" message only appears after actual connection (not premature)
+    - IsChangingServer flag ensures correct message display during server transitions
 
 ### Build and Distribution
 
