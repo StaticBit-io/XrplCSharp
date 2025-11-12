@@ -461,12 +461,17 @@ namespace Xrpl.Client
         
         private void StartPingTimer()
         {
+            if (!config.UseCustomPing)
+            {
+                return;
+            }
+            
             StopPingTimer();
             
             lastActivityTime = DateTime.UtcNow;
             
             pingTimer = new Timer(20000);
-            pingTimer.Elapsed += (sender, e) =>
+            pingTimer.Elapsed += async (sender, e) =>
             {
                 if (_pingTimerRunning)
                     return;
@@ -493,7 +498,18 @@ namespace Xrpl.Client
                     
                     if (this.ShouldBeConnected())
                     {
-                        _ = Request(new Dictionary<string, dynamic> { { "command", "ping" } });
+                        try
+                        {
+                            var response = await Request(new Dictionary<string, dynamic> { { "command", "ping" } });
+                            if (OnPing != null)
+                            {
+                                await OnPing.Invoke(response);
+                            }
+                        }
+                        catch (Exception pingEx)
+                        {
+                            Console.WriteLine($"Ping request error: {pingEx.Message}");
+                        }
                     }
                 }
                 catch (Exception ex)
