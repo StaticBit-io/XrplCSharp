@@ -233,6 +233,10 @@ namespace Xrpl.Client
 
         private async Task OnConnectionFailed(Exception error)
         {
+            timer?.Stop();
+            timer?.Dispose();
+            timer = null;
+            
             if (this.ws != null)
             {
                 //this.ws.RemoveAllListeners();
@@ -246,6 +250,14 @@ namespace Xrpl.Client
                 this.ws = null;
             }
             this.connectionManager.RejectAllAwaiting(new NotConnectedException(error.Message));
+            
+            var errorMessage = $"Initial connection failed: {error.Message}";
+            OnConnectionStatus?.Invoke(errorMessage);
+            
+            if (OnDisconnect is not null)
+                await OnDisconnect?.Invoke(null, error.Message)!;
+            
+            StartReconnectLoop();
         }
 
         public void WebsocketSendAsync(WebSocketClient ws, string message)
