@@ -167,7 +167,7 @@
     private OnConnected _onConnectedHandler;
     private OnDisconnect _onDisconnectHandler;
     private OnPing _onPingHandler;
-    private Action<string> _onConnectionStatusHandler;
+    private Action<ConnectionCloseSeverity, string> _onConnectionStatusHandler;
     private OnError _onErrorHandler;
     private OnWarning _onWarningHandler;
     private OnWarning2 _onWarning2Handler;
@@ -209,11 +209,18 @@
             });
         };
 
-        _onConnectionStatusHandler = (statusMessage) =>
+        _onConnectionStatusHandler = (status, statusMessage) =>
         {
             InvokeAsync(() =>
             {
-                AddStatusMessage(statusMessage, MessageType.Info);
+                var type = status switch
+                {
+                    ConnectionCloseSeverity.Error => MessageType.Error,
+                    ConnectionCloseSeverity.Warn => MessageType.Warning,
+                    ConnectionCloseSeverity.Info => MessageType.Info,
+                    _ => MessageType.Info
+                };
+                AddStatusMessage(statusMessage, type);
                 Console.WriteLine($"Connection Status: {statusMessage}");
                 StateHasChanged();
             });

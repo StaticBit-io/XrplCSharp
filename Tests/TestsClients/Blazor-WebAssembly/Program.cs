@@ -19,9 +19,9 @@ internal class Program
         {
             ApiVersion = 2,
             UseCustomPing = true,
-            });
-            builder.Services.AddSingleton<IXrplClient>(client);
-            
-            await builder.Build().RunAsync();
+        });
+        builder.Services.AddSingleton<IXrplClient>(client);
+
+        await builder.Build().RunAsync();
     }
 }

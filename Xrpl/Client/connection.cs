@@ -14,6 +14,8 @@ using Timer = System.Timers.Timer;
 
 namespace Xrpl.Client
 {
+    public enum ConnectionCloseSeverity { Info, Warn, Error }
+
     public class Connection
     {
 
@@ -29,7 +31,7 @@ namespace Xrpl.Client
         public event OnPeerStatusChange OnPeerStatusChange;
         public event OnConsensusPhase OnConsensusPhase;
         public event OnPathFind OnPathFind;
-        public event Action<string> OnConnectionStatus;
+        public event Action<ConnectionCloseSeverity, string> OnConnectionStatus;
 
         public static string Base64Encode(string plainText)
         {
@@ -66,10 +68,8 @@ namespace Xrpl.Client
             public TimeSpan ReconnectBaseDelay { get; set; } = TimeSpan.FromSeconds(1);
             public TimeSpan ReconnectMaxDelay { get; set; } = TimeSpan.FromSeconds(30);
             public int MaxReconnectAttempts { get; set; } = 10;
-            public bool UseCustomPing { get; set; } = false;
+            public bool UseCustomPing { get; set; } = true;
         }
-
-        private enum CloseSeverity { Info, Warn, Error }
 
         static WebSocketClient CreateWebSocket(string url, ConnectionOptions config)
         {
@@ -140,7 +140,7 @@ namespace Xrpl.Client
         {
             await Disconnect();
             url = server;
-            config = options ?? new ConnectionOptions();
+            config = options ?? new ConnectionOptions(){UseCustomPing = true};
             config.timeout = TIMEOUT * 1000;
             config.connectionTimeout = CONNECTION_TIMEOUT * 1000;
             await Task.Delay(3000);
@@ -258,7 +258,7 @@ namespace Xrpl.Client
             this.connectionManager.RejectAllAwaiting(new NotConnectedException(error.Message));
 
             var errorMessage = $"Initial connection failed: {error.Message}";
-            OnConnectionStatus?.Invoke(errorMessage);
+            OnConnectionStatus?.Invoke(ConnectionCloseSeverity.Error, errorMessage);
 
             if (OnDisconnect is not null)
                 await OnDisconnect?.Invoke(null, error.Message)!;
@@ -346,12 +346,9 @@ namespace Xrpl.Client
         private async Task OnceClose(int? code, string? description = null)
         {
             StopPingTimer();
-
-            var reasonText = string.IsNullOrWhiteSpace(description)
-                ? "Unknown reason"
-                : description;
-
-            var (severity, userMessage) = DescribeClose(code, reasonText);
+            
+            var (severity, userMessage) = DescribeClose(code, description);
+            var reasonText = description ?? userMessage;
 
             this.requestManager.RejectAll(new DisconnectedException($"websocket was closed, code: {code}, reason: {reasonText}"));
             this.ws = null;
@@ -367,7 +364,7 @@ namespace Xrpl.Client
                     await OnDisconnect?.Invoke(code, reasonText)!;
             }
 
-            OnConnectionStatus?.Invoke(userMessage);
+            OnConnectionStatus?.Invoke(severity, userMessage);
 
             if (code == INTENTIONAL_DISCONNECT_CODE)
             {
@@ -383,7 +380,7 @@ namespace Xrpl.Client
             {
                 _reconnectAttempts = 0;
                 var noReconnectMessage = $"Connection closed permanently. {userMessage}";
-                OnConnectionStatus?.Invoke(noReconnectMessage);
+                OnConnectionStatus?.Invoke(ConnectionCloseSeverity.Warn, noReconnectMessage);
             }
         }
 
@@ -418,12 +415,12 @@ namespace Xrpl.Client
                 if (_reconnectAttempts > config.MaxReconnectAttempts)
                 {
                     var warning = $"Reconnection attempt #{_reconnectAttempts} (exceeded max {config.MaxReconnectAttempts}). Will keep trying, but this may indicate a persistent issue.";
-                    OnConnectionStatus?.Invoke(warning);
+                    OnConnectionStatus?.Invoke(ConnectionCloseSeverity.Warn, warning);
                 }
 
                 var delay = CalcBackoff(_reconnectAttempts);
                 var reconnectMessage = $"Reconnecting in {delay.TotalSeconds:F1} seconds... (attempt #{_reconnectAttempts})";
-                OnConnectionStatus?.Invoke(reconnectMessage);
+                OnConnectionStatus?.Invoke(ConnectionCloseSeverity.Info, reconnectMessage);
 
                 try
                 {
@@ -452,7 +449,7 @@ namespace Xrpl.Client
                 catch (Exception ex)
                 {
                     var errorMessage = $"Reconnection attempt #{_reconnectAttempts} failed: {ex.Message}";
-                    OnConnectionStatus?.Invoke(errorMessage);
+                    OnConnectionStatus?.Invoke(ConnectionCloseSeverity.Error, errorMessage);
                 }
             }
         }
@@ -488,7 +485,7 @@ namespace Xrpl.Client
                     if (timeSinceLastActivity > 60)
                     {
                         StopPingTimer();
-                        OnConnectionStatus?.Invoke("Connection timeout detected (no activity for 60+ seconds). Reconnecting...");
+                        OnConnectionStatus?.Invoke(ConnectionCloseSeverity.Error, "Connection timeout detected (no activity for 60+ seconds). Reconnecting...");
 
                         this.ws?.Disconnect();
                         this.ws = null;
@@ -539,24 +536,24 @@ namespace Xrpl.Client
             }
         }
 
-        private static (CloseSeverity severity, string message) DescribeClose(int? code, string? reason)
+        private static (ConnectionCloseSeverity severity, string message) DescribeClose(int? code, string? reason)
         {
-            var suffix = string.IsNullOrWhiteSpace(reason) ? "" : $" Reason: {reason}";
+            var suffix = string.IsNullOrWhiteSpace(reason) ? string.Empty : $" Reason: {reason}";
 
             return code switch
             {
-                1000 => (CloseSeverity.Info, "Connection closed normally (1000)." + suffix),
-                1001 => (CloseSeverity.Warn, "Server unavailable or intentionally closed the connection (1001)." + suffix),
-                1002 => (CloseSeverity.Error, "Protocol error occurred (1002)." + suffix),
-                1003 => (CloseSeverity.Error, "Invalid message type received (1003)." + suffix),
-                1005 => (CloseSeverity.Warn, "Connection was closed without a close frame (1005)." + suffix),
-                1006 => (CloseSeverity.Warn, "Connection interrupted abnormally (1006). Network issue, server restart, or timeout." + suffix),
-                1007 => (CloseSeverity.Error, "Invalid payload data in the WebSocket frame (1007)." + suffix),
-                1008 => (CloseSeverity.Warn, "Policy violation (1008). Possibly due to rate limits or access rules." + suffix),
-                1009 => (CloseSeverity.Warn, "Message too large (1009)." + suffix),
-                1010 => (CloseSeverity.Error, "Mandatory WebSocket extension is missing (1010)." + suffix),
-                1011 => (CloseSeverity.Error, "Internal server error (1011)." + suffix),
-                _ => (CloseSeverity.Warn, $"Connection closed with code {code}." + suffix)
+                1000 => (ConnectionCloseSeverity.Info, "Connection closed normally (1000)." + suffix),
+                1001 => (ConnectionCloseSeverity.Warn, "Server unavailable or intentionally closed the connection (1001)." + suffix),
+                1002 => (ConnectionCloseSeverity.Error, "Protocol error occurred (1002)." + suffix),
+                1003 => (ConnectionCloseSeverity.Error, "Invalid message type received (1003)." + suffix),
+                1005 => (ConnectionCloseSeverity.Warn, "Connection was closed without a close frame (1005)." + suffix),
+                1006 => (ConnectionCloseSeverity.Warn, "Connection interrupted abnormally (1006). Network issue, server restart, or timeout." + suffix),
+                1007 => (ConnectionCloseSeverity.Error, "Invalid payload data in the WebSocket frame (1007)." + suffix),
+                1008 => (ConnectionCloseSeverity.Warn, "Policy violation (1008). Possibly due to rate limits or access rules." + suffix),
+                1009 => (ConnectionCloseSeverity.Warn, "Message too large (1009)." + suffix),
+                1010 => (ConnectionCloseSeverity.Error, "Mandatory WebSocket extension is missing (1010)." + suffix),
+                1011 => (ConnectionCloseSeverity.Error, "Internal server error (1011)." + suffix),
+                _ => (ConnectionCloseSeverity.Warn, $"Connection closed with code {code}." + suffix)
             };
         }
 
