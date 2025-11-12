@@ -446,23 +446,18 @@ namespace Xrpl.Client
             {
                 _reconnectAttempts++;
 
-                if (_reconnectAttempts > config.MaxReconnectAttempts)
-                {
-                    var warning = $"Reconnection attempt #{_reconnectAttempts} (exceeded max {config.MaxReconnectAttempts}). Will keep trying, but this may indicate a persistent issue.";
-                    OnConnectionStatus?.Invoke(new ConnectionStatusInfo
-                    {
-                        Message = warning,
-                        Severity = ConnectionCloseSeverity.Warn,
-                        Reconnect = null
-                    });
-                }
-
                 var delay = CalcBackoff(_reconnectAttempts);
                 var reconnectMessage = $"Reconnecting in {delay.TotalSeconds:F1} seconds... (attempt #{_reconnectAttempts})";
+                var type = ConnectionCloseSeverity.Info;
+                if (_reconnectAttempts > config.MaxReconnectAttempts)
+                {
+                    reconnectMessage = $"Reconnection attempt #{_reconnectAttempts} (exceeded max {config.MaxReconnectAttempts}). Will keep trying, but this may indicate a persistent issue.";
+                    type = ConnectionCloseSeverity.Warn;
+                }
                 OnConnectionStatus?.Invoke(new ConnectionStatusInfo
                 {
                     Message = reconnectMessage,
-                    Severity = ConnectionCloseSeverity.Info,
+                    Severity = type,
                     Reconnect = new ReconnectInfo
                     {
                         CurrentAttempt = _reconnectAttempts,
