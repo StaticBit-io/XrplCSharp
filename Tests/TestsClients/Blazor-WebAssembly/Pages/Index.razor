@@ -178,8 +178,19 @@
             {
                 IsConnected = true;
                 CurrentServerUrl = client.connection.GetUrl();
-                AddStatusMessage("Connected to XRPL", MessageType.Success);
-                Console.WriteLine("Connected to XRPL");
+                
+                if (IsChangingServer)
+                {
+                    AddStatusMessage($"Server changed successfully to: {CurrentServerUrl}", MessageType.Success);
+                    Console.WriteLine($"Server changed successfully to: {CurrentServerUrl}");
+                    IsChangingServer = false;
+                }
+                else
+                {
+                    AddStatusMessage("Connected to XRPL", MessageType.Success);
+                    Console.WriteLine("Connected to XRPL");
+                }
+                
                 StateHasChanged();
             });
         };
@@ -189,8 +200,9 @@
             await InvokeAsync(() =>
             {
                 IsConnected = false;
-                AddStatusMessage($"Disconnected: code={code}, {description}", MessageType.Warning);
-                Console.WriteLine($"Disconnected from XRPL with code: {code}, description: {description}");
+                var codeStr = code?.ToString() ?? "unknown";
+                AddStatusMessage($"Disconnected: code={codeStr}, {description}", MessageType.Warning);
+                Console.WriteLine($"Disconnected from XRPL with code: {codeStr}, description: {description}");
                 StateHasChanged();
             });
         };
@@ -337,15 +349,11 @@
             await client.connection.ChangeServer(newServerUrl);
             
             CurrentServerUrl = client.connection.GetUrl();
-            AddStatusMessage($"Server changed successfully to: {CurrentServerUrl}", MessageType.Success);
         }
         catch (Exception ex)
         {
             AddStatusMessage($"Failed to change server: {ex.Message}", MessageType.Error);
             Console.WriteLine($"Error changing server: {ex}");
-        }
-        finally
-        {
             IsChangingServer = false;
             StateHasChanged();
         }
