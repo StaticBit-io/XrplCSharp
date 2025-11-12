@@ -451,7 +451,7 @@ namespace Xrpl.Client
                 var type = ConnectionCloseSeverity.Info;
                 if (_reconnectAttempts > config.MaxReconnectAttempts)
                 {
-                    reconnectMessage = $"Reconnection attempt #{_reconnectAttempts} (exceeded max {config.MaxReconnectAttempts}). Will keep trying, but this may indicate a persistent issue.";
+                    reconnectMessage = $"Reconnection in {delay.TotalSeconds:F1} seconds... attempt #{_reconnectAttempts} (exceeded max {config.MaxReconnectAttempts}). Will keep trying, but this may indicate a persistent issue.";
                     type = ConnectionCloseSeverity.Warn;
                 }
                 OnConnectionStatus?.Invoke(new ConnectionStatusInfo
