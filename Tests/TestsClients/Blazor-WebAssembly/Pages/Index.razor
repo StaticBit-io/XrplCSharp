@@ -17,6 +17,50 @@
     {
         <p style="color: red; font-weight: bold;">✗ Not connected to XRPL</p>
     }
+    <p style="color: #666; font-size: 14px; margin-top: 5px;">
+        <strong>Current Server:</strong> @CurrentServerUrl
+    </p>
+</div>
+
+<div style="margin: 20px 0;">
+    <h3>Server Selection</h3>
+    <div style="background: #f5f5f5; padding: 15px; border-radius: 5px;">
+        <div style="margin-bottom: 10px;">
+            <label style="display: block; margin-bottom: 5px; font-weight: bold;">Network:</label>
+            <select @bind="SelectedServerType" 
+                    style="width: 100%; padding: 8px; border: 1px solid #ccc; border-radius: 4px;"
+                    disabled="@IsChangingServer">
+                <option value="@ServerType.Mainnet">Mainnet (s2.ripple.com)</option>
+                <option value="@ServerType.Testnet">Testnet / Altnet (s.altnet.rippletest.net)</option>
+                <option value="@ServerType.Devnet">Devnet (s.devnet.rippletest.net)</option>
+                <option value="@ServerType.Custom">Custom URL</option>
+            </select>
+        </div>
+        
+        @if (SelectedServerType == ServerType.Custom)
+        {
+            <div style="margin-bottom: 10px;">
+                <label style="display: block; margin-bottom: 5px; font-weight: bold;">Custom Server URL:</label>
+                <input @bind="CustomServerUrl" 
+                       placeholder="wss://your-server.com:51233" 
+                       style="width: 100%; padding: 8px; border: 1px solid #ccc; border-radius: 4px;"
+                       disabled="@IsChangingServer" />
+            </div>
+        }
+        
+        <button @onclick="ChangeServerAsync" 
+                disabled="@IsChangingServer"
+                style="background: #ff6600; color: white; padding: 10px 20px; border: none; border-radius: 4px; cursor: pointer; font-weight: bold;">
+            @if (IsChangingServer)
+            {
+                <span>Changing Server...</span>
+            }
+            else
+            {
+                <span>Change Server</span>
+            }
+        </button>
+    </div>
 </div>
 
 <div style="margin: 20px 0;">
@@ -81,8 +125,28 @@
     bool IsLoading { get; set; }
     int TransactionCount { get; set; }
     
+    ServerType SelectedServerType { get; set; } = ServerType.Mainnet;
+    string CustomServerUrl { get; set; } = "";
+    bool IsChangingServer { get; set; }
+    string CurrentServerUrl { get; set; } = "wss://s2.ripple.com";
+    
     [Inject]
     IXrplClient client { get; set; }
+
+    public enum ServerType
+    {
+        Mainnet,
+        Testnet,
+        Devnet,
+        Custom
+    }
+    
+    private static readonly Dictionary<ServerType, string> ServerUrls = new()
+    {
+        { ServerType.Mainnet, "wss://s2.ripple.com" },
+        { ServerType.Testnet, "wss://s.altnet.rippletest.net:51233" },
+        { ServerType.Devnet, "wss://s.devnet.rippletest.net:51233" }
+    };
 
     public enum MessageType
     {
@@ -113,6 +177,7 @@
             await InvokeAsync(() =>
             {
                 IsConnected = true;
+                CurrentServerUrl = client.connection.GetUrl();
                 AddStatusMessage("Connected to XRPL", MessageType.Success);
                 Console.WriteLine("Connected to XRPL");
                 StateHasChanged();
@@ -183,6 +248,8 @@
         client.connection.OnWarning += _onWarningHandler;
         client.connection.OnWarning2 += _onWarning2Handler;
         
+        CurrentServerUrl = client.connection.GetUrl();
+        
         await base.OnInitializedAsync();
         
         await client.Connect();
@@ -190,6 +257,7 @@
         if (client.connection.IsConnected())
         {
             IsConnected = true;
+            CurrentServerUrl = client.connection.GetUrl();
             StateHasChanged();
         }
     }
@@ -232,6 +300,54 @@
         if (ConnectionStatusMessages.Count > 50)
         {
             ConnectionStatusMessages.RemoveAt(0);
+        }
+    }
+
+    private async Task ChangeServerAsync()
+    {
+        string newServerUrl;
+        
+        if (SelectedServerType == ServerType.Custom)
+        {
+            if (string.IsNullOrWhiteSpace(CustomServerUrl))
+            {
+                AddStatusMessage("Please enter a custom server URL", MessageType.Warning);
+                return;
+            }
+            newServerUrl = CustomServerUrl.Trim();
+        }
+        else
+        {
+            newServerUrl = ServerUrls[SelectedServerType];
+        }
+        
+        if (newServerUrl == CurrentServerUrl)
+        {
+            AddStatusMessage("Already connected to this server", MessageType.Info);
+            return;
+        }
+        
+        IsChangingServer = true;
+        StateHasChanged();
+        
+        try
+        {
+            AddStatusMessage($"Changing server to: {newServerUrl}...", MessageType.Info);
+            
+            await client.connection.ChangeServer(newServerUrl);
+            
+            CurrentServerUrl = client.connection.GetUrl();
+            AddStatusMessage($"Server changed successfully to: {CurrentServerUrl}", MessageType.Success);
+        }
+        catch (Exception ex)
+        {
+            AddStatusMessage($"Failed to change server: {ex.Message}", MessageType.Error);
+            Console.WriteLine($"Error changing server: {ex}");
+        }
+        finally
+        {
+            IsChangingServer = false;
+            StateHasChanged();
         }
     }
 
