@@ -15,7 +15,14 @@ internal class Program
 
         builder.Services.AddScoped(sp => new HttpClient { BaseAddress = new Uri(builder.HostEnvironment.BaseAddress) });
         
-        var client = new XrplClient("wss://s2.ripple.com", new XrplClient.ClientOptions() { ApiVersion = 2 });
+        var client = new XrplClient("wss://s2.ripple.com", new XrplClient.ClientOptions() 
+        { 
+            ApiVersion = 2,
+            ConnectionOptions = new Connection.ConnectionOptions 
+            { 
+                UseCustomPing = true 
+            }
+        });
         builder.Services.AddSingleton<IXrplClient>(client);
         
         await builder.Build().RunAsync();

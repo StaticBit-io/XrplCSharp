@@ -166,6 +166,7 @@
 
     private OnConnected _onConnectedHandler;
     private OnDisconnect _onDisconnectHandler;
+    private OnPing _onPingHandler;
     private Action<string> _onConnectionStatusHandler;
     private OnError _onErrorHandler;
     private OnWarning _onWarningHandler;
@@ -254,8 +255,20 @@
             });
         };
 
+        _onPingHandler = async (response) =>
+        {
+            await InvokeAsync(() =>
+            {
+                var result = response.TryGetValue("result", out var resultValue) ? resultValue.ToString() : "unknown";
+                AddStatusMessage($"Ping: {result}", MessageType.Info);
+                Console.WriteLine($"Ping response: {System.Text.Json.JsonSerializer.Serialize(response)}");
+                StateHasChanged();
+            });
+        };
+
         client.connection.OnConnected += _onConnectedHandler;
         client.connection.OnDisconnect += _onDisconnectHandler;
+        client.connection.OnPing += _onPingHandler;
         client.connection.OnConnectionStatus += _onConnectionStatusHandler;
         client.connection.OnError += _onErrorHandler;
         client.connection.OnWarning += _onWarningHandler;
@@ -296,6 +309,9 @@
             
             if (_onWarning2Handler != null)
                 client.connection.OnWarning2 -= _onWarning2Handler;
+            
+            if (_onPingHandler != null)
+                client.connection.OnPing -= _onPingHandler;
         }
         
         await Task.CompletedTask;
