@@ -45,6 +45,9 @@ Preferred communication style: Simple, everyday language.
 - Implemented XRPL-specific rate-limit error detection in message responses
 - Added `DescribeClose()` method to classify close reasons (normal, error, rate-limit, fatal)
 - Added `ShouldReconnect()` logic to prevent reconnection loops on fatal errors while maintaining retry behavior for transient failures
+- **Fixed `State()` method** (November 12, 2025): Changed from incorrectly returning `Open` when WebSocket object exists to correctly returning actual WebSocket state (`ws?.State ?? Closed`). This fixes `IsConnected()` accuracy and enables proper `Connecting` state detection in reconnection logic.
+- **Fixed initial connection failure handling** (November 12, 2025): Added automatic reconnection when first connection attempt fails (timeout, network unavailable, server not responding). Previously only established connections would auto-reconnect on failure.
+- **Fixed connection timeout timer cleanup** (November 12, 2025): Timer now properly stops and disposes in `OnConnectionFailed()` to prevent perpetual connect/disconnect cycles after successful reconnection.
 
 ### Wallet Management
 
