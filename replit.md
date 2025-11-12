@@ -48,6 +48,7 @@ Preferred communication style: Simple, everyday language.
 - **Fixed `State()` method** (November 12, 2025): Changed from incorrectly returning `Open` when WebSocket object exists to correctly returning actual WebSocket state (`ws?.State ?? Closed`). This fixes `IsConnected()` accuracy and enables proper `Connecting` state detection in reconnection logic.
 - **Fixed initial connection failure handling** (November 12, 2025): Added automatic reconnection when first connection attempt fails (timeout, network unavailable, server not responding). Previously only established connections would auto-reconnect on failure.
 - **Fixed connection timeout timer cleanup** (November 12, 2025): Timer now properly stops and disposes in `OnConnectionFailed()` to prevent perpetual connect/disconnect cycles after successful reconnection.
+- **Fixed duplicate disconnect notifications** (November 12, 2025): Removed premature `CallOnDisconnected()` from `DisconnectAsync()` in `WebSocketClient`, ensuring disconnect event fires only once when WebSocket actually closes. Changed `OnceClose()` to pass `reasonText` (guaranteed non-empty) instead of raw `description` to prevent empty disconnect reasons.
 
 ### Wallet Management
 

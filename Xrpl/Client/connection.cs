@@ -355,7 +355,7 @@ namespace Xrpl.Client
             else
             {
                 if (OnDisconnect is not null)
-                    await OnDisconnect?.Invoke(code, description)!;
+                    await OnDisconnect?.Invoke(code, reasonText)!;
             }
             
             OnConnectionStatus?.Invoke(userMessage);

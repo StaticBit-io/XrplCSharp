@@ -276,7 +276,6 @@ namespace Xrpl.Client
                     }
                 Dispose();
                 _ws = null;
-                CallOnDisconnected(WebSocketCloseStatus.NormalClosure, "Client initiated disconnect");
             }
         }
 
