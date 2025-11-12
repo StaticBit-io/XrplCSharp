@@ -119,6 +119,18 @@ Preferred communication style: Simple, everyday language.
 
 - **Unit Tests** - Filter: `TestU`
 - **Integration Tests** - Filter: `TestI`, requires local or Docker-based rippled node
+- **Blazor WebAssembly Test Application** (`Tests/TestsClients/Blazor-WebAssembly/`)
+  - Interactive UI for testing XRP Ledger connectivity and features
+  - Server selection dropdown (Mainnet/Testnet/Devnet/Custom)
+  - Real-time connection status display showing current connected server
+  - Account transaction loading functionality
+  - **Server Selection Feature** (November 12, 2025):
+    - Dropdown menu for quick switching between predefined networks
+    - Custom URL input for connecting to private/local rippled nodes
+    - "Change Server" functionality that triggers disconnect → reconnect sequence
+    - CurrentServerUrl synchronized with live connection via `client.connection.GetUrl()`
+    - Validation to prevent switching to already connected server
+    - Loading states and error handling for server changes
 
 ### Build and Distribution
 
