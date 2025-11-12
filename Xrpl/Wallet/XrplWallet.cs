@@ -211,7 +211,7 @@ namespace Xrpl.Wallet
             }
             // Сжимаем множественные пробелы и переводы строк в один пробел
             normalized = string.Join(" ", normalized
-                .Split([' ', '\n', '\t',], StringSplitOptions.RemoveEmptyEntries));
+                .Split(new char[] { ' ', '\n', '\t' }, StringSplitOptions.RemoveEmptyEntries));
 
             return normalized;
         }

@@ -1,36 +1,486 @@
 ﻿@page "/"
 @using Xrpl.Client
+@using Xrpl.Models.Subscriptions
+@using System.Collections.Generic
+@using System.Linq
+@implements IAsyncDisposable
 
-<h1>Hello, world!</h1>
-@if (IsConnected)
+<h1>XRP Ledger Connection Test</h1>
+
+<div style="margin: 20px 0;">
+    <h3>Connection Status</h3>
+    @if (IsConnected)
+    {
+        <p style="color: green; font-weight: bold;">✓ Connected to XRPL</p>
+    }
+    else
+    {
+        <p style="color: red; font-weight: bold;">✗ Not connected to XRPL</p>
+    }
+    <p style="color: #666; font-size: 14px; margin-top: 5px;">
+        <strong>Current Server:</strong> @CurrentServerUrl
+    </p>
+    
+    @if (CurrentReconnectInfo != null)
+    {
+        <div style="margin-top: 15px; padding: 10px; background: #fff3cd; border: 1px solid #ffc107; border-radius: 5px;">
+            <div style="margin-bottom: 5px;">
+                <strong>Reconnecting...</strong> 
+                <span style="color: #666;">Attempt @CurrentReconnectInfo.CurrentAttempt of @CurrentReconnectInfo.MaxAttempts</span>
+            </div>
+            <div style="width: 100%; background: #e0e0e0; border-radius: 3px; height: 20px; overflow: hidden;">
+                <div style="width: @(((double)CurrentReconnectInfo.CurrentAttempt / CurrentReconnectInfo.MaxAttempts) * 100)%; background: #ff9800; height: 100%; transition: width 0.3s;"></div>
+            </div>
+            <div style="margin-top: 5px; font-size: 12px; color: #666;">
+                Next attempt in @CurrentReconnectInfo.RemainingDelay.TotalSeconds.ToString("F1") seconds
+            </div>
+        </div>
+    }
+</div>
+
+<div style="margin: 20px 0;">
+    <h3>Server Selection</h3>
+    <div style="background: #f5f5f5; padding: 15px; border-radius: 5px;">
+        <div style="margin-bottom: 10px;">
+            <label style="display: block; margin-bottom: 5px; font-weight: bold;">Network:</label>
+            <select @bind="SelectedServerType" 
+                    style="width: 100%; padding: 8px; border: 1px solid #ccc; border-radius: 4px;"
+                    disabled="@IsChangingServer">
+                <option value="@ServerType.Mainnet">Mainnet (s2.ripple.com)</option>
+                <option value="@ServerType.Testnet">Testnet / Altnet (s.altnet.rippletest.net)</option>
+                <option value="@ServerType.Devnet">Devnet (s.devnet.rippletest.net)</option>
+                <option value="@ServerType.Custom">Custom URL</option>
+            </select>
+        </div>
+        
+        @if (SelectedServerType == ServerType.Custom)
+        {
+            <div style="margin-bottom: 10px;">
+                <label style="display: block; margin-bottom: 5px; font-weight: bold;">Custom Server URL:</label>
+                <input @bind="CustomServerUrl" 
+                       placeholder="wss://your-server.com:51233" 
+                       style="width: 100%; padding: 8px; border: 1px solid #ccc; border-radius: 4px;"
+                       disabled="@IsChangingServer" />
+            </div>
+        }
+        
+        <button @onclick="ChangeServerAsync" 
+                disabled="@IsChangingServer"
+                style="background: #ff6600; color: white; padding: 10px 20px; border: none; border-radius: 4px; cursor: pointer; font-weight: bold;">
+            @if (IsChangingServer)
+            {
+                <span>Changing Server...</span>
+            }
+            else
+            {
+                <span>Change Server</span>
+            }
+        </button>
+    </div>
+</div>
+
+<div style="margin: 20px 0;">
+    <h3>Load Test</h3>
+    <div style="background: #f5f5f5; padding: 15px; border-radius: 5px;">
+        <div style="margin-bottom: 10px;">
+            <label style="display: block; margin-bottom: 5px; font-weight: bold;">Account Address:</label>
+            <input @bind="AccountAddress" 
+                   placeholder="e.g., rN7n7otQDd6FczFgLdlqtyMVrn3VqhBqy2" 
+                   style="width: 100%; padding: 8px; border: 1px solid #ccc; border-radius: 4px;"
+                   disabled="@IsLoading" />
+        </div>
+        <button @onclick="LoadAccountTransactions" 
+                disabled="@IsLoading"
+                style="background: #0066cc; color: white; padding: 10px 20px; border: none; border-radius: 4px; cursor: pointer; font-weight: bold;">
+            @if (IsLoading)
+            {
+                <span>Loading...</span>
+            }
+            else
+            {
+                <span>Load Transactions</span>
+            }
+        </button>
+        @if (TransactionCount > 0)
+        {
+            <div style="margin-top: 10px; padding: 10px; background: #e3f2fd; border-radius: 4px;">
+                <strong>Loaded: @TransactionCount transactions</strong>
+            </div>
+        }
+    </div>
+</div>
+
+@if (ConnectionStatusMessages.Any())
 {
-    <p>Connected to XRPL</p>
+    <div style="margin: 20px 0;">
+        <h3>Connection Events</h3>
+        <div style="background: #f5f5f5; padding: 10px; border-radius: 5px; max-height: 300px; overflow-y: auto;">
+            @foreach (var message in ConnectionStatusMessages.OrderByDescending(m => m.Timestamp))
+            {
+                var color = message.Type switch
+                {
+                    MessageType.Success => "green",
+                    MessageType.Warning => "#ff9800",
+                    MessageType.Error => "red",
+                    _ => "#666"
+                };
+                <div style="margin: 5px 0; padding: 5px; border-bottom: 1px solid #ddd;">
+                    <small style="color: #666;">[@message.Timestamp.ToString("HH:mm:ss.fff")]</small>
+                    <span style="color: @color">@message.Message</span>
+                </div>
+            }
+        </div>
+    </div>
 }
-else
-{
-    <p>Not connected to XRPL</p>
-}
+
 @code
 {
     bool IsConnected { get; set; }
+    List<StatusMessage> ConnectionStatusMessages { get; set; } = new List<StatusMessage>();
+    string AccountAddress { get; set; } = "rN7n7otQDd6FczFgLdlqtyMVrn3VqhBqy2";
+    bool IsLoading { get; set; }
+    int TransactionCount { get; set; }
+    
+    ServerType SelectedServerType { get; set; } = ServerType.Mainnet;
+    string CustomServerUrl { get; set; } = "";
+    bool IsChangingServer { get; set; }
+    string CurrentServerUrl { get; set; } = "wss://s2.ripple.com";
+    string? PreviousServerUrl { get; set; }
+    ReconnectInfo? CurrentReconnectInfo { get; set; }
+    
     [Inject]
     IXrplClient client { get; set; }
 
+    public enum ServerType
+    {
+        Mainnet,
+        Testnet,
+        Devnet,
+        Custom
+    }
+    
+    private static readonly Dictionary<ServerType, string> ServerUrls = new()
+    {
+        { ServerType.Mainnet, "wss://s2.ripple.com" },
+        { ServerType.Testnet, "wss://s.altnet.rippletest.net:51233" },
+        { ServerType.Devnet, "wss://s.devnet.rippletest.net:51233" }
+    };
+
+    public enum MessageType
+    {
+        Info,
+        Success,
+        Warning,
+        Error
+    }
+
+    public class StatusMessage
+    {
+        public DateTime Timestamp { get; set; }
+        public string Message { get; set; }
+        public MessageType Type { get; set; } = MessageType.Info;
+    }
+
+    private OnConnected _onConnectedHandler;
+    private OnDisconnect _onDisconnectHandler;
+    private OnPing _onPingHandler;
+    private Action<ConnectionStatusInfo> _onConnectionStatusHandler;
+    private OnError _onErrorHandler;
+    private OnWarning _onWarningHandler;
+    private OnServerWarning _onWarning2Handler;
+
     protected override async Task OnInitializedAsync()
     {
-        client.connection.OnConnected += () =>
+        _onConnectedHandler = async () =>
+        {
+            await InvokeAsync(() =>
+            {
+                IsConnected = true;
+                CurrentServerUrl = client.connection.GetUrl();
+                CurrentReconnectInfo = null;
+                
+                if (PreviousServerUrl != null && PreviousServerUrl != CurrentServerUrl)
+                {
+                    AddStatusMessage($"Server changed successfully to: {CurrentServerUrl}", MessageType.Success);
+                    Console.WriteLine($"Server changed successfully to: {CurrentServerUrl}");
+                    PreviousServerUrl = null;
+                }
+                else
+                {
+                    AddStatusMessage("Connected to XRPL", MessageType.Success);
+                    Console.WriteLine("Connected to XRPL");
+                }
+                
+                StateHasChanged();
+            });
+        };
+
+        _onDisconnectHandler = async (code, description) =>
+        {
+            await InvokeAsync(() =>
+            {
+                IsConnected = false;
+                var codeStr = code?.ToString() ?? "unknown";
+                AddStatusMessage($"Disconnected: code={codeStr}, {description}", MessageType.Warning);
+                Console.WriteLine($"Disconnected from XRPL with code: {codeStr}, description: {description}");
+                StateHasChanged();
+            });
+        };
+
+        _onConnectionStatusHandler = (statusInfo) =>
+        {
+            InvokeAsync(() =>
+            {
+                var type = statusInfo.Severity switch
+                {
+                    ConnectionCloseSeverity.Error => MessageType.Error,
+                    ConnectionCloseSeverity.Warn => MessageType.Warning,
+                    ConnectionCloseSeverity.Info => MessageType.Info,
+                    _ => MessageType.Info
+                };
+                
+                CurrentReconnectInfo = statusInfo.Reconnect;
+                
+                AddStatusMessage(statusInfo.Message, type);
+                Console.WriteLine($"Connection Status: {statusInfo.Message}");
+                StateHasChanged();
+            });
+        };
+
+        _onErrorHandler = async (error, errorMessage, message, data) =>
+        {
+            await InvokeAsync(() =>
+            {
+                AddStatusMessage($"Error: {error} - {errorMessage}", MessageType.Error);
+                Console.WriteLine($"Error: {error}, {errorMessage}, {message}");
+                StateHasChanged();
+            });
+        };
+
+        _onWarningHandler = async (warning, message) =>
+        {
+            await InvokeAsync(() =>
+            {
+                AddStatusMessage($"Warning: {warning}", MessageType.Warning);
+                Console.WriteLine($"Warning: {warning}, {message}");
+                StateHasChanged();
+            });
+        };
+
+        _onWarning2Handler = async (warnings, message) =>
+        {
+            await InvokeAsync(() =>
+            {
+                var toNotify = warnings.Where(w=>w.Id != 2001).ToArray();
+                if(toNotify.Length == 0)
+                {
+                    return;
+                }
+                var warningText = string.Join(", ", toNotify.Select(w => $"{w.Id}: {w.Message}"));
+                AddStatusMessage($"Warnings: {warningText}", MessageType.Warning);
+                Console.WriteLine($"Warnings: {warningText}, {message}");
+                StateHasChanged();
+            });
+        };
+
+        _onPingHandler = async (ping) =>
+        {
+            await InvokeAsync(() =>
+            {
+                AddStatusMessage(ping, MessageType.Info);
+                Console.WriteLine(ping);
+                StateHasChanged();
+            });
+        };
+
+        client.connection.OnConnected += _onConnectedHandler;
+        client.connection.OnDisconnect += _onDisconnectHandler;
+        client.connection.OnPing += _onPingHandler;
+        client.connection.OnConnectionStatus += _onConnectionStatusHandler;
+        client.connection.OnError += _onErrorHandler;
+        client.connection.OnWarning += _onWarningHandler;
+        client.connection.OnServerWarning += _onWarning2Handler;
+        
+        CurrentServerUrl = client.connection.GetUrl();
+        
+        await base.OnInitializedAsync();
+        
+        await client.Connect();
+        
+        if (client.connection.IsConnected())
         {
             IsConnected = true;
-            Console.WriteLine("Connected to XRPL");
-            return Task.CompletedTask;
-        };
-        client.connection.OnDisconnect += (code) =>
+            CurrentServerUrl = client.connection.GetUrl();
+            StateHasChanged();
+        }
+    }
+    
+    public async ValueTask DisposeAsync()
+    {
+        if (client != null)
         {
-            IsConnected = false;
-            Console.WriteLine($"Disconnected from XRPL with code: {code}");
-            return Task.CompletedTask;
-        };
-        await client.Connect();
-        await base.OnInitializedAsync();
+            if (_onConnectedHandler != null)
+                client.connection.OnConnected -= _onConnectedHandler;
+            
+            if (_onDisconnectHandler != null)
+                client.connection.OnDisconnect -= _onDisconnectHandler;
+            
+            if (_onConnectionStatusHandler != null)
+                client.connection.OnConnectionStatus -= _onConnectionStatusHandler;
+            
+            if (_onErrorHandler != null)
+                client.connection.OnError -= _onErrorHandler;
+            
+            if (_onWarningHandler != null)
+                client.connection.OnWarning -= _onWarningHandler;
+            
+            if (_onWarning2Handler != null)
+                client.connection.OnServerWarning -= _onWarning2Handler;
+            
+            if (_onPingHandler != null)
+                client.connection.OnPing -= _onPingHandler;
+        }
+        
+        await Task.CompletedTask;
+    }
+    
+    private void AddStatusMessage(string message, MessageType type = MessageType.Info)
+    {
+        ConnectionStatusMessages.Add(new StatusMessage 
+        { 
+            Timestamp = DateTime.Now, 
+            Message = message,
+            Type = type
+        });
+        
+        if (ConnectionStatusMessages.Count > 50)
+        {
+            ConnectionStatusMessages.RemoveAt(0);
+        }
+    }
+
+    private async Task ChangeServerAsync()
+    {
+        string newServerUrl;
+        
+        if (SelectedServerType == ServerType.Custom)
+        {
+            if (string.IsNullOrWhiteSpace(CustomServerUrl))
+            {
+                AddStatusMessage("Please enter a custom server URL", MessageType.Warning);
+                return;
+            }
+            newServerUrl = CustomServerUrl.Trim();
+        }
+        else
+        {
+            newServerUrl = ServerUrls[SelectedServerType];
+        }
+        
+        if (newServerUrl == CurrentServerUrl)
+        {
+            AddStatusMessage("Already connected to this server", MessageType.Info);
+            return;
+        }
+        
+        IsChangingServer = true;
+        PreviousServerUrl = CurrentServerUrl;
+        StateHasChanged();
+        
+        try
+        {
+            AddStatusMessage($"Changing server to: {newServerUrl}...", MessageType.Info);
+            
+            await client.connection.ChangeServer(newServerUrl);
+            
+            CurrentServerUrl = client.connection.GetUrl();
+        }
+        catch (Exception ex)
+        {
+            AddStatusMessage($"Failed to change server: {ex.Message}", MessageType.Error);
+            Console.WriteLine($"Error changing server: {ex}");
+            PreviousServerUrl = null;
+        }
+        finally
+        {
+            IsChangingServer = false;
+            StateHasChanged();
+        }
+    }
+
+    private async Task LoadAccountTransactions()
+    {
+        if (string.IsNullOrWhiteSpace(AccountAddress))
+        {
+            AddStatusMessage("Please enter an account address", MessageType.Warning);
+            return;
+        }
+
+        if (!client.connection.IsConnected())
+        {
+            AddStatusMessage("Not connected to XRPL. Please wait for connection.", MessageType.Warning);
+            return;
+        }
+
+        IsLoading = true;
+        TransactionCount = 0;
+        StateHasChanged();
+
+        try
+        {
+            AddStatusMessage($"Loading transactions for {AccountAddress}...", MessageType.Info);
+            
+            object marker = null;
+            int batchCount = 0;
+            
+            while (true)
+            {
+                var response = await client.AccountTransactions(
+                    new Xrpl.Models.Methods.AccountTransactionsRequest(AccountAddress)
+                    {
+                        Limit = 50,
+                        Marker = marker,
+                    });
+                
+                if (response == null)
+                    break;
+                
+                batchCount++;
+                TransactionCount += response.Transactions.Count;
+                
+                await InvokeAsync(() =>
+                {
+                    AddStatusMessage($"Batch {batchCount}: Loaded {response.Transactions.Count} transactions (Total: {TransactionCount})", MessageType.Info);
+                    StateHasChanged();
+                });
+                
+                Console.WriteLine($"Batch {batchCount}: {response.Transactions.Count} transactions");
+                
+                if (response.Marker == null)
+                    break;
+                
+                marker = response.Marker;
+            }
+            
+            await InvokeAsync(() =>
+            {
+                AddStatusMessage($"Completed! Total transactions loaded: {TransactionCount}", MessageType.Success);
+                StateHasChanged();
+            });
+        }
+        catch (Exception ex)
+        {
+            await InvokeAsync(() =>
+            {
+                AddStatusMessage($"Error loading transactions: {ex.Message}", MessageType.Error);
+                StateHasChanged();
+            });
+            Console.WriteLine($"Error: {ex}");
+        }
+        finally
+        {
+            IsLoading = false;
+            StateHasChanged();
+        }
     }
 }

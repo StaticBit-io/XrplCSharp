@@ -34,9 +34,9 @@ namespace Xrpl.Tests
                 Debug.WriteLine("SETUP CLIENT: CONECTED");
                 return Task.CompletedTask;
             };
-            client.connection.OnDisconnect += (code) =>
+            client.connection.OnDisconnect += (code, description) =>
             {
-                Debug.WriteLine("SETUP CLIENT: DISCONECTED");
+                Console.WriteLine($"SSETUP CLIENT: DISCONECTED: {code}, description: {description}");
                 return Task.CompletedTask;
             };
             client.connection.OnError += (e, em, m, d) =>

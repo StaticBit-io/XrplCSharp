@@ -26,7 +26,7 @@ namespace Xrpl.Client
         private Func<byte[], WebSocketClient, Task> _onMessageBinary;
         private Func<string, WebSocketClient, Task> _onMessageString;
         private Func<Exception, WebSocketClient, Task> _onError;
-        private Func<WebSocketClient, Task> _onDisconnected;
+        private Func<WebSocketCloseStatus?, string?, WebSocketClient, Task> _onDisconnected;
         private Func<WebSocketClient, Task> _onClosed;
 
         protected WebSocketClient(string uri)
@@ -132,7 +132,7 @@ namespace Xrpl.Client
         /// </summary>
         /// <param name="onDisconnect">The Action to call</param>
         /// <returns>Self</returns>
-        internal WebSocketClient OnDisconnect(Func<WebSocketClient, Task> onDisconnect)
+        internal WebSocketClient OnDisconnect(Func<WebSocketCloseStatus?, string?, WebSocketClient, Task> onDisconnect)
         {
             _onDisconnected = onDisconnect;
             return this;
@@ -265,7 +265,7 @@ namespace Xrpl.Client
         {
             if (_ws != null)
             {
-                if (_ws.State != WebSocketState.Open)
+                if (_ws.State == WebSocketState.Open)
                     try
                     {
                         await _ws.CloseOutputAsync(WebSocketCloseStatus.NormalClosure, string.Empty, CancellationToken.None);
@@ -276,7 +276,6 @@ namespace Xrpl.Client
                     }
                 Dispose();
                 _ws = null;
-                CallOnDisconnected();
             }
         }
 
@@ -297,8 +296,14 @@ namespace Xrpl.Client
 
                         if (result.MessageType == WebSocketMessageType.Close)
                         {
+                            var closeStatus = result.CloseStatus;
+                            var closeDescription = result.CloseStatusDescription;
+                            
                             _onClosed?.Invoke(this);
-                            Disconnect();
+                            CallOnDisconnected(closeStatus, closeDescription);
+                            Dispose();
+                            _ws = null;
+                            return;
                         }
                         else
                         {
@@ -328,9 +333,9 @@ namespace Xrpl.Client
         }
 
 
-        private void CallOnDisconnected()
+        private void CallOnDisconnected(WebSocketCloseStatus? closeStatus = null, string? closeDescription = null)
         {
-            _onDisconnected?.Invoke(this);
+            _onDisconnected?.Invoke(closeStatus, closeDescription, this);
         }
 
         private void CallOnConnected()

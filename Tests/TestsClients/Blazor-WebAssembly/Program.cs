@@ -14,7 +14,14 @@ internal class Program
         builder.RootComponents.Add<HeadOutlet>("head::after");
 
         builder.Services.AddScoped(sp => new HttpClient { BaseAddress = new Uri(builder.HostEnvironment.BaseAddress) });
-        builder.Services.AddSingleton<IXrplClient, XrplClient>(c=>new XrplClient("wss://s2.ripple.com",new XrplClient.ClientOptions(){ApiVersion = 2}));
+
+        var client = new XrplClient("wss://s2.ripple.com", new XrplClient.ClientOptions()
+        {
+            ApiVersion = 2,
+            UseCustomPing = true,
+        });
+        builder.Services.AddSingleton<IXrplClient>(client);
+
         await builder.Build().RunAsync();
     }
 }

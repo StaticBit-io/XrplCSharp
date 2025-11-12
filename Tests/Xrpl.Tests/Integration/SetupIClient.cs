@@ -23,9 +23,9 @@ namespace XrplTests.Xrpl.ClientLib.Integration
                 Console.WriteLine($"SetupIntegration CONNECTED");
                 return Task.CompletedTask;
             };
-            client.connection.OnDisconnect += (code) =>
+            client.connection.OnDisconnect += (code, description) =>
             {
-                Console.WriteLine($"SetupIntegration DISCONNECTED: {code}");
+                Console.WriteLine($"SetupIntegration DISCONNECTED: {code}, description: {description}");
                 return Task.CompletedTask;
             };
             client.connection.OnError += (error, errorMessage, message, data) =>
