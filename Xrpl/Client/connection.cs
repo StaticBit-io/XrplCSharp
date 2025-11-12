@@ -117,6 +117,9 @@ namespace Xrpl.Client
         private System.Threading.CancellationTokenSource _reconnectCts;
         private Task _reconnectLoop;
         private System.Threading.SemaphoreSlim _connectLock = new System.Threading.SemaphoreSlim(1, 1);
+        
+        private DateTime? lastActivityTime = null;
+        private Timer? pingTimer = null;
 
         public ConnectionOptions config { get; private set; }
         public RequestManager requestManager = new RequestManager();
@@ -216,6 +219,7 @@ namespace Xrpl.Client
         public async Task<int> Disconnect()
         {
             StopReconnectLoop();
+            StopPingTimer();
             
             if (ws == null)
             {
@@ -322,6 +326,7 @@ namespace Xrpl.Client
 
             timer.Stop();
             StopReconnectLoop();
+            StartPingTimer();
 
             try
             {
@@ -338,6 +343,8 @@ namespace Xrpl.Client
 
         private async Task OnceClose(int? code, string? description = null)
         {
+            StopPingTimer();
+            
             var reasonText = string.IsNullOrWhiteSpace(description) 
                 ? "Unknown reason" 
                 : description;
@@ -448,6 +455,69 @@ namespace Xrpl.Client
             }
         }
 
+        private bool _pingTimerRunning = false;
+        
+        private void StartPingTimer()
+        {
+            StopPingTimer();
+            
+            lastActivityTime = DateTime.UtcNow;
+            
+            pingTimer = new Timer(20000);
+            pingTimer.Elapsed += (sender, e) =>
+            {
+                if (_pingTimerRunning)
+                    return;
+                
+                try
+                {
+                    _pingTimerRunning = true;
+                    
+                    var now = DateTime.UtcNow;
+                    var timeSinceLastActivity = lastActivityTime.HasValue 
+                        ? (now - lastActivityTime.Value).TotalSeconds 
+                        : double.MaxValue;
+                    
+                    if (timeSinceLastActivity > 60)
+                    {
+                        StopPingTimer();
+                        OnConnectionStatus?.Invoke("Connection timeout detected (no activity for 60+ seconds). Reconnecting...");
+                        
+                        this.ws?.Disconnect();
+                        this.ws = null;
+                        StartReconnectLoop();
+                        return;
+                    }
+                    
+                    if (this.ShouldBeConnected())
+                    {
+                        var pingMessage = JsonConvert.SerializeObject(new { command = "ping" });
+                        WebsocketSendAsync(this.ws, pingMessage);
+                    }
+                }
+                catch (Exception ex)
+                {
+                    Console.WriteLine($"Ping timer error: {ex.Message}");
+                }
+                finally
+                {
+                    _pingTimerRunning = false;
+                }
+            };
+            pingTimer.AutoReset = true;
+            pingTimer.Start();
+        }
+
+        private void StopPingTimer()
+        {
+            if (pingTimer != null)
+            {
+                pingTimer.Stop();
+                pingTimer.Dispose();
+                pingTimer = null;
+            }
+        }
+
         private static (CloseSeverity severity, string message) DescribeClose(int? code, string? reason)
         {
             var suffix = string.IsNullOrWhiteSpace(reason) ? "" : $" Reason: {reason}";
@@ -459,6 +529,7 @@ namespace Xrpl.Client
                 1002 => (CloseSeverity.Error, "Protocol error occurred (1002)." + suffix),
                 1003 => (CloseSeverity.Error, "Invalid message type received (1003)." + suffix),
                 1005 => (CloseSeverity.Warn, "Connection was closed without a close frame (1005)." + suffix),
+                1006 => (CloseSeverity.Warn, "Connection interrupted abnormally (1006). Network issue, server restart, or timeout." + suffix),
                 1007 => (CloseSeverity.Error, "Invalid payload data in the WebSocket frame (1007)." + suffix),
                 1008 => (CloseSeverity.Warn, "Policy violation (1008). Possibly due to rate limits or access rules." + suffix),
                 1009 => (CloseSeverity.Warn, "Message too large (1009)." + suffix),
@@ -500,6 +571,8 @@ namespace Xrpl.Client
 
         private async Task IOnMessage(string message)
         {
+            lastActivityTime = DateTime.UtcNow;
+            
             BaseResponse data;
             try
             {
