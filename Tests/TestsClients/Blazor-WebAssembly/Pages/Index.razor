@@ -19,6 +19,37 @@
     }
 </div>
 
+<div style="margin: 20px 0;">
+    <h3>Load Test</h3>
+    <div style="background: #f5f5f5; padding: 15px; border-radius: 5px;">
+        <div style="margin-bottom: 10px;">
+            <label style="display: block; margin-bottom: 5px; font-weight: bold;">Account Address:</label>
+            <input @bind="AccountAddress" 
+                   placeholder="e.g., rN7n7otQDd6FczFgLdlqtyMVrn3VqhBqy2" 
+                   style="width: 100%; padding: 8px; border: 1px solid #ccc; border-radius: 4px;"
+                   disabled="@IsLoading" />
+        </div>
+        <button @onclick="LoadAccountTransactions" 
+                disabled="@IsLoading"
+                style="background: #0066cc; color: white; padding: 10px 20px; border: none; border-radius: 4px; cursor: pointer; font-weight: bold;">
+            @if (IsLoading)
+            {
+                <span>Loading...</span>
+            }
+            else
+            {
+                <span>Load Transactions</span>
+            }
+        </button>
+        @if (TransactionCount > 0)
+        {
+            <div style="margin-top: 10px; padding: 10px; background: #e3f2fd; border-radius: 4px;">
+                <strong>Loaded: @TransactionCount transactions</strong>
+            </div>
+        }
+    </div>
+</div>
+
 @if (ConnectionStatusMessages.Any())
 {
     <div style="margin: 20px 0;">
