@@ -35,7 +35,7 @@ namespace Xrpl.Client
 
         public event OnError OnError;
         public event OnWarning OnWarning;
-        public event OnWarning2 OnWarning2;
+        public event OnServerWarning OnServerWarning;
         public event OnConnected OnConnected;
         public event OnDisconnect OnDisconnect;
         public event OnPing OnPing;
@@ -661,9 +661,9 @@ namespace Xrpl.Client
             {
                 await OnWarning.Invoke(data.Warning, message);
             }
-            if (data.Warnings is { Count: > 0 } && OnWarning2 is not null)
+            if (data.Warnings is { Count: > 0 } && OnServerWarning is not null)
             {
-                await OnWarning2.Invoke(data.Warnings, message);
+                await OnServerWarning.Invoke(data.Warnings, message);
             }
             if (data.Type == null && data.Error != null)
             {
@@ -672,9 +672,6 @@ namespace Xrpl.Client
                     var rateLimitMessage = data.Error == "slowDown"
                         ? "Rate limit warning: Server requests to slow down. Reduce request frequency to avoid connection issues."
                         : "Rate limit warning: Server is too busy. Consider implementing exponential backoff or reducing load.";
-
-                    if (OnWarning is not null)
-                        await OnWarning.Invoke($"RATE_LIMIT: {data.Error}", rateLimitMessage);
 
                     if (OnError is not null)
                         await OnError?.Invoke("rate_limit", data.Error, rateLimitMessage, data)!;

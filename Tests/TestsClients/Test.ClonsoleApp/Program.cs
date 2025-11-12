@@ -41,7 +41,7 @@ internal class Program
                 Console.WriteLine(warning);
                 return Task.CompletedTask;
             };
-            client.connection.OnWarning2 += (warning, message) =>
+            client.connection.OnServerWarning += (warning, message) =>
             {
                 foreach (var responseWarning in warning)
                 {
