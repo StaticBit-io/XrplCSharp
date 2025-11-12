@@ -129,6 +129,7 @@
     string CustomServerUrl { get; set; } = "";
     bool IsChangingServer { get; set; }
     string CurrentServerUrl { get; set; } = "wss://s2.ripple.com";
+    string? PreviousServerUrl { get; set; }
     
     [Inject]
     IXrplClient client { get; set; }
@@ -179,11 +180,11 @@
                 IsConnected = true;
                 CurrentServerUrl = client.connection.GetUrl();
                 
-                if (IsChangingServer)
+                if (PreviousServerUrl != null && PreviousServerUrl != CurrentServerUrl)
                 {
                     AddStatusMessage($"Server changed successfully to: {CurrentServerUrl}", MessageType.Success);
                     Console.WriteLine($"Server changed successfully to: {CurrentServerUrl}");
-                    IsChangingServer = false;
+                    PreviousServerUrl = null;
                 }
                 else
                 {
@@ -340,6 +341,7 @@
         }
         
         IsChangingServer = true;
+        PreviousServerUrl = CurrentServerUrl;
         StateHasChanged();
         
         try
@@ -354,6 +356,10 @@
         {
             AddStatusMessage($"Failed to change server: {ex.Message}", MessageType.Error);
             Console.WriteLine($"Error changing server: {ex}");
+            PreviousServerUrl = null;
+        }
+        finally
+        {
             IsChangingServer = false;
             StateHasChanged();
         }
