@@ -45,7 +45,7 @@ namespace Xrpl.Client
         public event OnPeerStatusChange OnPeerStatusChange;
         public event OnConsensusPhase OnConsensusPhase;
         public event OnPathFind OnPathFind;
-        public event Action<ConnectionCloseSeverity, string> OnConnectionStatus;
+        public event Action<ConnectionStatusInfo> OnConnectionStatus;
 
         public static string Base64Encode(string plainText)
         {
