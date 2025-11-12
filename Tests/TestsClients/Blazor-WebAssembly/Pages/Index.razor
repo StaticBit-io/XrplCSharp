@@ -109,7 +109,7 @@
                     _ => "#666"
                 };
                 <div style="margin: 5px 0; padding: 5px; border-bottom: 1px solid #ddd;">
-                    <small style="color: #666;">[@message.Timestamp.ToString("HH:mm:ss")]</small>
+                    <small style="color: #666;">[@message.Timestamp.ToString("HH:mm:ss.fff")]</small>
                     <span style="color: @color">@message.Message</span>
                 </div>
             }
@@ -255,13 +255,12 @@
             });
         };
 
-        _onPingHandler = async (response) =>
+        _onPingHandler = async (ping) =>
         {
             await InvokeAsync(() =>
             {
-                var result = response.TryGetValue("result", out var resultValue) ? resultValue.ToString() : "unknown";
-                AddStatusMessage($"Ping: {result}", MessageType.Info);
-                Console.WriteLine($"Ping response: {System.Text.Json.JsonSerializer.Serialize(response)}");
+                AddStatusMessage(ping, MessageType.Info);
+                Console.WriteLine(ping);
                 StateHasChanged();
             });
         };

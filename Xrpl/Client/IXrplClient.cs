@@ -29,7 +29,7 @@ namespace Xrpl.Client
     public delegate Task OnWarning2(List<RippleResponseWarning> warning, string message);
     public delegate Task OnConnected();
     public delegate Task OnDisconnect(int? code, string? description);
-    public delegate Task OnPing(Dictionary<string, dynamic> response);
+    public delegate Task OnPing(string ping);
     public delegate Task OnLedgerClosed(LedgerStream response);
     public delegate Task OnTransaction(TransactionStream response);
     public delegate Task OnManifestReceived(ValidationStream response);
@@ -52,7 +52,7 @@ namespace Xrpl.Client
         public void SetNetworkId(uint? networkId)
         {
             this.networkID = networkId;
-        } 
+        }
 
         //event OnError OnError;
         //event OnConnected OnConnected;

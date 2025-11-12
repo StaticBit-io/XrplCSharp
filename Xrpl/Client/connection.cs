@@ -62,7 +62,7 @@ namespace Xrpl.Client
             public int timeout { get; set; }
             public int connectionTimeout { get; set; }
             public Dictionary<string, dynamic> headers { get; set; }
-            
+
             public TimeSpan ReconnectBaseDelay { get; set; } = TimeSpan.FromSeconds(1);
             public TimeSpan ReconnectMaxDelay { get; set; } = TimeSpan.FromSeconds(30);
             public int MaxReconnectAttempts { get; set; } = 10;
@@ -119,7 +119,7 @@ namespace Xrpl.Client
         private System.Threading.CancellationTokenSource _reconnectCts;
         private Task _reconnectLoop;
         private System.Threading.SemaphoreSlim _connectLock = new System.Threading.SemaphoreSlim(1, 1);
-        
+
         private DateTime? lastActivityTime = null;
         private Timer? pingTimer = null;
 
@@ -181,7 +181,7 @@ namespace Xrpl.Client
                 {
                     throw new XrplException("Websocket connection never cleaned up.");
                 }
-                
+
                 timer = new Timer(this.config.connectionTimeout);
                 timer.Elapsed += async (sender, e) => await OnConnectionFailed(new ConnectionException($"Error: connect() timed out after {this.config.connectionTimeout} ms.If your internet connection is working, the rippled server may be blocked or inaccessible.You can also try setting the 'connectionTimeout' option in the Client constructor."));
                 timer.Start();
@@ -222,7 +222,7 @@ namespace Xrpl.Client
         {
             StopReconnectLoop();
             StopPingTimer();
-            
+
             if (ws == null)
             {
                 return 0;
@@ -242,7 +242,7 @@ namespace Xrpl.Client
             timer?.Stop();
             timer?.Dispose();
             timer = null;
-            
+
             if (this.ws != null)
             {
                 //this.ws.RemoveAllListeners();
@@ -256,13 +256,13 @@ namespace Xrpl.Client
                 this.ws = null;
             }
             this.connectionManager.RejectAllAwaiting(new NotConnectedException(error.Message));
-            
+
             var errorMessage = $"Initial connection failed: {error.Message}";
             OnConnectionStatus?.Invoke(errorMessage);
-            
+
             if (OnDisconnect is not null)
                 await OnDisconnect?.Invoke(null, error.Message)!;
-            
+
             StartReconnectLoop();
         }
 
@@ -346,16 +346,16 @@ namespace Xrpl.Client
         private async Task OnceClose(int? code, string? description = null)
         {
             StopPingTimer();
-            
-            var reasonText = string.IsNullOrWhiteSpace(description) 
-                ? "Unknown reason" 
+
+            var reasonText = string.IsNullOrWhiteSpace(description)
+                ? "Unknown reason"
                 : description;
-            
+
             var (severity, userMessage) = DescribeClose(code, reasonText);
-            
+
             this.requestManager.RejectAll(new DisconnectedException($"websocket was closed, code: {code}, reason: {reasonText}"));
             this.ws = null;
-            
+
             if (code == null)
             {
                 if (OnDisconnect is not null)
@@ -366,7 +366,7 @@ namespace Xrpl.Client
                 if (OnDisconnect is not null)
                     await OnDisconnect?.Invoke(code, reasonText)!;
             }
-            
+
             OnConnectionStatus?.Invoke(userMessage);
 
             if (code == INTENTIONAL_DISCONNECT_CODE)
@@ -442,7 +442,7 @@ namespace Xrpl.Client
                 try
                 {
                     await ConnectInternalAsync();
-                    
+
                     if (IsConnected())
                     {
                         _reconnectAttempts = 0;
@@ -458,52 +458,56 @@ namespace Xrpl.Client
         }
 
         private bool _pingTimerRunning = false;
-        
+
         private void StartPingTimer()
         {
             if (!config.UseCustomPing)
             {
                 return;
             }
-            
+
             StopPingTimer();
-            
+
             lastActivityTime = DateTime.UtcNow;
-            
+
             pingTimer = new Timer(20000);
             pingTimer.Elapsed += async (sender, e) =>
             {
                 if (_pingTimerRunning)
                     return;
-                
+
                 try
                 {
                     _pingTimerRunning = true;
-                    
+
                     var now = DateTime.UtcNow;
-                    var timeSinceLastActivity = lastActivityTime.HasValue 
-                        ? (now - lastActivityTime.Value).TotalSeconds 
+                    var timeSinceLastActivity = lastActivityTime.HasValue
+                        ? (now - lastActivityTime.Value).TotalSeconds
                         : double.MaxValue;
-                    
+
                     if (timeSinceLastActivity > 60)
                     {
                         StopPingTimer();
                         OnConnectionStatus?.Invoke("Connection timeout detected (no activity for 60+ seconds). Reconnecting...");
-                        
+
                         this.ws?.Disconnect();
                         this.ws = null;
                         StartReconnectLoop();
                         return;
                     }
-                    
+
                     if (this.ShouldBeConnected())
                     {
                         try
                         {
-                            var response = await Request(new Dictionary<string, dynamic> { { "command", "ping" } });
                             if (OnPing != null)
                             {
-                                await OnPing.Invoke(response);
+                                await OnPing.Invoke("Ping");
+                            }
+                            await Request(new Dictionary<string, dynamic> { { "command", "ping" } });
+                            if (OnPing != null)
+                            {
+                                await OnPing.Invoke("Pong");
                             }
                         }
                         catch (Exception pingEx)
@@ -538,7 +542,7 @@ namespace Xrpl.Client
         private static (CloseSeverity severity, string message) DescribeClose(int? code, string? reason)
         {
             var suffix = string.IsNullOrWhiteSpace(reason) ? "" : $" Reason: {reason}";
-            
+
             return code switch
             {
                 1000 => (CloseSeverity.Info, "Connection closed normally (1000)." + suffix),
@@ -564,13 +568,13 @@ namespace Xrpl.Client
             1003 => false,
             1007 => false,
             1010 => false,
-            
+
             1001 => true,
             1005 => true,
             1008 => true,
             1009 => true,
             1011 => true,
-            
+
             _ => true
         };
 
@@ -578,10 +582,10 @@ namespace Xrpl.Client
         {
             var exponentialDelay = config.ReconnectBaseDelay.TotalSeconds * Math.Pow(2, attempts);
             var cappedDelay = Math.Min(exponentialDelay, config.ReconnectMaxDelay.TotalSeconds);
-            
+
             var jitterPercent = 0.25;
             var jitter = cappedDelay * jitterPercent * (2 * _random.NextDouble() - 1);
-            
+
             var finalDelay = cappedDelay + jitter;
             return TimeSpan.FromSeconds(Math.Max(0, finalDelay));
         }
@@ -589,7 +593,7 @@ namespace Xrpl.Client
         private async Task IOnMessage(string message)
         {
             lastActivityTime = DateTime.UtcNow;
-            
+
             BaseResponse data;
             try
             {
@@ -614,16 +618,16 @@ namespace Xrpl.Client
             {
                 if (data.Error == "slowDown" || data.Error == "tooBusy")
                 {
-                    var rateLimitMessage = data.Error == "slowDown" 
-                        ? "Rate limit warning: Server requests to slow down. Reduce request frequency to avoid connection issues." 
+                    var rateLimitMessage = data.Error == "slowDown"
+                        ? "Rate limit warning: Server requests to slow down. Reduce request frequency to avoid connection issues."
                         : "Rate limit warning: Server is too busy. Consider implementing exponential backoff or reducing load.";
-                    
+
                     if (OnWarning is not null)
                         await OnWarning.Invoke($"RATE_LIMIT: {data.Error}", rateLimitMessage);
-                    
+
                     if (OnError is not null)
                         await OnError?.Invoke("rate_limit", data.Error, rateLimitMessage, data)!;
-                    
+
                     return;
                 }
 
