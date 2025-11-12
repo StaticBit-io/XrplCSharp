@@ -491,8 +491,7 @@ namespace Xrpl.Client
                     
                     if (this.ShouldBeConnected())
                     {
-                        var pingMessage = JsonConvert.SerializeObject(new { command = "ping" });
-                        WebsocketSendAsync(this.ws, pingMessage);
+                        _ = Request(new Dictionary<string, dynamic> { { "command", "ping" } });
                     }
                 }
                 catch (Exception ex)
