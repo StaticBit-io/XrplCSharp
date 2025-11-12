@@ -65,6 +65,7 @@ namespace Xrpl.Client
             public TimeSpan ReconnectBaseDelay { get; set; } = TimeSpan.FromSeconds(1);
             public TimeSpan ReconnectMaxDelay { get; set; } = TimeSpan.FromSeconds(30);
             public int MaxReconnectAttempts { get; set; } = 10;
+            public bool UseCustomPing { get; set; } = false;
         }
 
         private enum CloseSeverity { Info, Warn, Error }
