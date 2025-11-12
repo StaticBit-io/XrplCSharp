@@ -20,6 +20,22 @@
     <p style="color: #666; font-size: 14px; margin-top: 5px;">
         <strong>Current Server:</strong> @CurrentServerUrl
     </p>
+    
+    @if (CurrentReconnectInfo != null)
+    {
+        <div style="margin-top: 15px; padding: 10px; background: #fff3cd; border: 1px solid #ffc107; border-radius: 5px;">
+            <div style="margin-bottom: 5px;">
+                <strong>Reconnecting...</strong> 
+                <span style="color: #666;">Attempt @CurrentReconnectInfo.CurrentAttempt of @CurrentReconnectInfo.MaxAttempts</span>
+            </div>
+            <div style="width: 100%; background: #e0e0e0; border-radius: 3px; height: 20px; overflow: hidden;">
+                <div style="width: @(((double)CurrentReconnectInfo.CurrentAttempt / CurrentReconnectInfo.MaxAttempts) * 100)%; background: #ff9800; height: 100%; transition: width 0.3s;"></div>
+            </div>
+            <div style="margin-top: 5px; font-size: 12px; color: #666;">
+                Next attempt in @CurrentReconnectInfo.RemainingDelay.TotalSeconds.ToString("F1") seconds
+            </div>
+        </div>
+    }
 </div>
 
 <div style="margin: 20px 0;">
@@ -130,6 +146,7 @@
     bool IsChangingServer { get; set; }
     string CurrentServerUrl { get; set; } = "wss://s2.ripple.com";
     string? PreviousServerUrl { get; set; }
+    ReconnectInfo? CurrentReconnectInfo { get; set; }
     
     [Inject]
     IXrplClient client { get; set; }
@@ -167,7 +184,7 @@
     private OnConnected _onConnectedHandler;
     private OnDisconnect _onDisconnectHandler;
     private OnPing _onPingHandler;
-    private Action<ConnectionCloseSeverity, string> _onConnectionStatusHandler;
+    private Action<ConnectionStatusInfo> _onConnectionStatusHandler;
     private OnError _onErrorHandler;
     private OnWarning _onWarningHandler;
     private OnWarning2 _onWarning2Handler;
@@ -180,6 +197,7 @@
             {
                 IsConnected = true;
                 CurrentServerUrl = client.connection.GetUrl();
+                CurrentReconnectInfo = null;
                 
                 if (PreviousServerUrl != null && PreviousServerUrl != CurrentServerUrl)
                 {
@@ -209,19 +227,22 @@
             });
         };
 
-        _onConnectionStatusHandler = (status, statusMessage) =>
+        _onConnectionStatusHandler = (statusInfo) =>
         {
             InvokeAsync(() =>
             {
-                var type = status switch
+                var type = statusInfo.Severity switch
                 {
                     ConnectionCloseSeverity.Error => MessageType.Error,
                     ConnectionCloseSeverity.Warn => MessageType.Warning,
                     ConnectionCloseSeverity.Info => MessageType.Info,
                     _ => MessageType.Info
                 };
-                AddStatusMessage(statusMessage, type);
-                Console.WriteLine($"Connection Status: {statusMessage}");
+                
+                CurrentReconnectInfo = statusInfo.Reconnect;
+                
+                AddStatusMessage(statusInfo.Message, type);
+                Console.WriteLine($"Connection Status: {statusInfo.Message}");
                 StateHasChanged();
             });
         };

@@ -50,6 +50,7 @@ Preferred communication style: Simple, everyday language.
 - **Fixed connection timeout timer cleanup** (November 12, 2025): Timer now properly stops and disposes in `OnConnectionFailed()` to prevent perpetual connect/disconnect cycles after successful reconnection.
 - **Fixed duplicate disconnect notifications** (November 12, 2025): Removed premature `CallOnDisconnected()` from `DisconnectAsync()` in `WebSocketClient`, ensuring disconnect event fires only once when WebSocket actually closes. Changed `OnceClose()` to pass `reasonText` (guaranteed non-empty) instead of raw `description` to prevent empty disconnect reasons.
 - **Implemented ping/pong heartbeat mechanism** (November 12, 2025): Added application-level heartbeat to prevent server-side timeouts and detect dead connections. Timer sends `{"command":"ping"}` every 20 seconds and tracks last received message activity. If no messages received for >60 seconds (indicating connection dead or hung), automatically triggers reconnection. Prevents common XRPL Clio server disconnections (code 1006) due to inactivity. Timer properly integrates with connection lifecycle (starts on OnceOpen, stops on OnceClose/Disconnect). Added enhanced description for WebSocket close code 1006 to indicate network interruption, server restart, or timeout. Fixed ping implementation to use `Request()` method instead of `WebsocketSendAsync()`, ensuring proper request registration and eliminating "badMessage" errors when server responds.
+- **Implemented reconnection progress tracking** (November 12, 2025): Added `ConnectionStatusInfo` and `ReconnectInfo` data structures to provide rich connection status information. Changed `OnConnectionStatus` event from `Action<ConnectionCloseSeverity, string>` to `Action<ConnectionStatusInfo>` to deliver structured status updates with message, severity level, and optional reconnection progress. `ReconnectInfo` includes `CurrentAttempt`, `MaxAttempts`, and `RemainingDelay` fields to enable UI progress bars and detailed reconnection state display. This allows applications to show users exactly where they are in the reconnection process without calculating percentages - UI decides display format based on attempt counts.
 
 ### Wallet Management
 
@@ -137,6 +138,12 @@ Preferred communication style: Simple, everyday language.
     - Disconnect messages now show "code=unknown" instead of empty string when code is null
     - "Server changed successfully" message only appears after actual connection (not premature)
     - IsChangingServer flag ensures correct message display during server transitions
+  - **Reconnection Progress Display** (November 12, 2025):
+    - Visual progress bar showing reconnection attempts in real-time
+    - Displays current attempt number out of maximum attempts (e.g., "Attempt 3 of 10")
+    - Shows countdown timer for next reconnection attempt with remaining delay in seconds
+    - Progress bar automatically appears during reconnection and disappears when connected
+    - Uses `ConnectionStatusInfo` and `ReconnectInfo` structures for rich status updates
 
 ### Build and Distribution
 
