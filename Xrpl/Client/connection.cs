@@ -22,6 +22,7 @@ namespace Xrpl.Client
         public event OnWarning2 OnWarning2;
         public event OnConnected OnConnected;
         public event OnDisconnect OnDisconnect;
+        public event OnPing OnPing;
         public event OnLedgerClosed OnLedgerClosed;
         public event OnTransaction OnTransaction;
         public event OnManifestReceived OnManifestReceived;
