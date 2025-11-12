@@ -16,6 +16,20 @@ namespace Xrpl.Client
 {
     public enum ConnectionCloseSeverity { Info, Warn, Error }
 
+    public class ReconnectInfo
+    {
+        public int CurrentAttempt { get; set; }
+        public int MaxAttempts { get; set; }
+        public TimeSpan RemainingDelay { get; set; }
+    }
+
+    public class ConnectionStatusInfo
+    {
+        public string Message { get; set; }
+        public ConnectionCloseSeverity Severity { get; set; }
+        public ReconnectInfo? Reconnect { get; set; }
+    }
+
     public class Connection
     {
 
