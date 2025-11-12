@@ -140,7 +140,7 @@ namespace Xrpl.Client
         {
             await Disconnect();
             url = server;
-            config = options ?? new ConnectionOptions(){UseCustomPing = true};
+            config = options ?? new ConnectionOptions() { UseCustomPing = true };
             config.timeout = TIMEOUT * 1000;
             config.connectionTimeout = CONNECTION_TIMEOUT * 1000;
             await Task.Delay(3000);
@@ -346,7 +346,7 @@ namespace Xrpl.Client
         private async Task OnceClose(int? code, string? description = null)
         {
             StopPingTimer();
-            
+
             var (severity, userMessage) = DescribeClose(code, description);
             var reasonText = description ?? userMessage;
 
@@ -364,16 +364,16 @@ namespace Xrpl.Client
                     await OnDisconnect?.Invoke(code, reasonText)!;
             }
 
-            OnConnectionStatus?.Invoke(severity, userMessage);
-
             if (code == INTENTIONAL_DISCONNECT_CODE)
             {
+                OnConnectionStatus?.Invoke(severity, userMessage);
                 _reconnectAttempts = 0;
                 return;
             }
 
             if (ShouldReconnect(code))
             {
+                OnConnectionStatus?.Invoke(severity, userMessage);
                 StartReconnectLoop();
             }
             else
