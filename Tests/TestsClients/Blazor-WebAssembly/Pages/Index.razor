@@ -77,6 +77,9 @@
 {
     bool IsConnected { get; set; }
     List<StatusMessage> ConnectionStatusMessages { get; set; } = new List<StatusMessage>();
+    string AccountAddress { get; set; } = "rN7n7otQDd6FczFgLdlqtyMVrn3VqhBqy2";
+    bool IsLoading { get; set; }
+    int TransactionCount { get; set; }
     
     [Inject]
     IXrplClient client { get; set; }
@@ -229,6 +232,82 @@
         if (ConnectionStatusMessages.Count > 50)
         {
             ConnectionStatusMessages.RemoveAt(0);
+        }
+    }
+
+    private async Task LoadAccountTransactions()
+    {
+        if (string.IsNullOrWhiteSpace(AccountAddress))
+        {
+            AddStatusMessage("Please enter an account address", MessageType.Warning);
+            return;
+        }
+
+        if (!client.connection.IsConnected())
+        {
+            AddStatusMessage("Not connected to XRPL. Please wait for connection.", MessageType.Warning);
+            return;
+        }
+
+        IsLoading = true;
+        TransactionCount = 0;
+        StateHasChanged();
+
+        try
+        {
+            AddStatusMessage($"Loading transactions for {AccountAddress}...", MessageType.Info);
+            
+            object marker = null;
+            int batchCount = 0;
+            
+            while (true)
+            {
+                var response = await client.AccountTransactions(
+                    new Xrpl.Models.Methods.AccountTransactionsRequest(AccountAddress)
+                    {
+                        Limit = 50,
+                        Marker = marker,
+                    });
+                
+                if (response == null)
+                    break;
+                
+                batchCount++;
+                TransactionCount += response.Transactions.Count;
+                
+                await InvokeAsync(() =>
+                {
+                    AddStatusMessage($"Batch {batchCount}: Loaded {response.Transactions.Count} transactions (Total: {TransactionCount})", MessageType.Info);
+                    StateHasChanged();
+                });
+                
+                Console.WriteLine($"Batch {batchCount}: {response.Transactions.Count} transactions");
+                
+                if (response.Marker == null)
+                    break;
+                
+                marker = response.Marker;
+            }
+            
+            await InvokeAsync(() =>
+            {
+                AddStatusMessage($"Completed! Total transactions loaded: {TransactionCount}", MessageType.Success);
+                StateHasChanged();
+            });
+        }
+        catch (Exception ex)
+        {
+            await InvokeAsync(() =>
+            {
+                AddStatusMessage($"Error loading transactions: {ex.Message}", MessageType.Error);
+                StateHasChanged();
+            });
+            Console.WriteLine($"Error: {ex}");
+        }
+        finally
+        {
+            IsLoading = false;
+            StateHasChanged();
         }
     }
 }
