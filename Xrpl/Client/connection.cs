@@ -294,10 +294,7 @@ namespace Xrpl.Client
             return this.url;
         }
 
-        public WebSocketState State()
-        {
-            return this.ws != null ? WebSocketState.Open : WebSocketState.Closed;
-        }
+        public WebSocketState State() => ws?.State ?? WebSocketState.Closed;
 
         private bool ShouldBeConnected()
         {
