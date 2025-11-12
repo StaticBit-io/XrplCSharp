@@ -272,7 +272,12 @@ namespace Xrpl.Client
             this.connectionManager.RejectAllAwaiting(new NotConnectedException(error.Message));
 
             var errorMessage = $"Initial connection failed: {error.Message}";
-            OnConnectionStatus?.Invoke(ConnectionCloseSeverity.Error, errorMessage);
+            OnConnectionStatus?.Invoke(new ConnectionStatusInfo
+            {
+                Message = errorMessage,
+                Severity = ConnectionCloseSeverity.Error,
+                Reconnect = null
+            });
 
             if (OnDisconnect is not null)
                 await OnDisconnect?.Invoke(null, error.Message)!;
@@ -380,21 +385,36 @@ namespace Xrpl.Client
 
             if (code == INTENTIONAL_DISCONNECT_CODE)
             {
-                OnConnectionStatus?.Invoke(severity, userMessage);
+                OnConnectionStatus?.Invoke(new ConnectionStatusInfo
+                {
+                    Message = userMessage,
+                    Severity = severity,
+                    Reconnect = null
+                });
                 _reconnectAttempts = 0;
                 return;
             }
 
             if (ShouldReconnect(code))
             {
-                OnConnectionStatus?.Invoke(severity, userMessage);
+                OnConnectionStatus?.Invoke(new ConnectionStatusInfo
+                {
+                    Message = userMessage,
+                    Severity = severity,
+                    Reconnect = null
+                });
                 StartReconnectLoop();
             }
             else
             {
                 _reconnectAttempts = 0;
                 var noReconnectMessage = $"Connection closed permanently. {userMessage}";
-                OnConnectionStatus?.Invoke(ConnectionCloseSeverity.Warn, noReconnectMessage);
+                OnConnectionStatus?.Invoke(new ConnectionStatusInfo
+                {
+                    Message = noReconnectMessage,
+                    Severity = ConnectionCloseSeverity.Warn,
+                    Reconnect = null
+                });
             }
         }
 
@@ -429,12 +449,27 @@ namespace Xrpl.Client
                 if (_reconnectAttempts > config.MaxReconnectAttempts)
                 {
                     var warning = $"Reconnection attempt #{_reconnectAttempts} (exceeded max {config.MaxReconnectAttempts}). Will keep trying, but this may indicate a persistent issue.";
-                    OnConnectionStatus?.Invoke(ConnectionCloseSeverity.Warn, warning);
+                    OnConnectionStatus?.Invoke(new ConnectionStatusInfo
+                    {
+                        Message = warning,
+                        Severity = ConnectionCloseSeverity.Warn,
+                        Reconnect = null
+                    });
                 }
 
                 var delay = CalcBackoff(_reconnectAttempts);
                 var reconnectMessage = $"Reconnecting in {delay.TotalSeconds:F1} seconds... (attempt #{_reconnectAttempts})";
-                OnConnectionStatus?.Invoke(ConnectionCloseSeverity.Info, reconnectMessage);
+                OnConnectionStatus?.Invoke(new ConnectionStatusInfo
+                {
+                    Message = reconnectMessage,
+                    Severity = ConnectionCloseSeverity.Info,
+                    Reconnect = new ReconnectInfo
+                    {
+                        CurrentAttempt = _reconnectAttempts,
+                        MaxAttempts = config.MaxReconnectAttempts,
+                        RemainingDelay = delay
+                    }
+                });
 
                 try
                 {
@@ -463,7 +498,12 @@ namespace Xrpl.Client
                 catch (Exception ex)
                 {
                     var errorMessage = $"Reconnection attempt #{_reconnectAttempts} failed: {ex.Message}";
-                    OnConnectionStatus?.Invoke(ConnectionCloseSeverity.Error, errorMessage);
+                    OnConnectionStatus?.Invoke(new ConnectionStatusInfo
+                    {
+                        Message = errorMessage,
+                        Severity = ConnectionCloseSeverity.Error,
+                        Reconnect = null
+                    });
                 }
             }
         }
@@ -499,7 +539,12 @@ namespace Xrpl.Client
                     if (timeSinceLastActivity > 60)
                     {
                         StopPingTimer();
-                        OnConnectionStatus?.Invoke(ConnectionCloseSeverity.Error, "Connection timeout detected (no activity for 60+ seconds). Reconnecting...");
+                        OnConnectionStatus?.Invoke(new ConnectionStatusInfo
+                        {
+                            Message = "Connection timeout detected (no activity for 60+ seconds). Reconnecting...",
+                            Severity = ConnectionCloseSeverity.Error,
+                            Reconnect = null
+                        });
 
                         this.ws?.Disconnect();
                         this.ws = null;
