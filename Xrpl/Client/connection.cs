@@ -16,6 +16,12 @@ namespace Xrpl.Client
 {
     public enum ConnectionCloseSeverity { Info, Warn, Error }
 
+    public enum RequestFailurePolicy
+    {
+        ImmediateFail,
+        WaitForConnection
+    }
+
     public class ReconnectInfo
     {
         public int CurrentAttempt { get; set; }
@@ -84,6 +90,9 @@ namespace Xrpl.Client
             public int MaxReconnectAttempts { get; set; } = 10;
             public bool StopAfterMaxAttempts { get; set; } = false;
             public bool UseCustomPing { get; set; } = true;
+
+            public RequestFailurePolicy RequestPolicy { get; set; } = RequestFailurePolicy.ImmediateFail;
+            public TimeSpan MaxRequestWaitTime { get; set; } = TimeSpan.FromSeconds(30);
         }
 
         static WebSocketClient CreateWebSocket(string url, ConnectionOptions config)
@@ -164,6 +173,55 @@ namespace Xrpl.Client
         public bool IsConnected()
         {
             return this.State() == WebSocketState.Open;
+        }
+
+        public async Task WaitForConnectionAsync(TimeSpan? timeout = null, System.Threading.CancellationToken cancellationToken = default)
+        {
+            if (IsConnected())
+                return;
+
+            var waitTimeout = timeout ?? config.MaxRequestWaitTime;
+            var startTime = DateTime.UtcNow;
+            var checkInterval = TimeSpan.FromMilliseconds(100);
+
+            while (!IsConnected())
+            {
+                if (DateTime.UtcNow - startTime > waitTimeout)
+                {
+                    throw new System.TimeoutException($"Connection was not established within {waitTimeout.TotalSeconds:F1} seconds");
+                }
+
+                if (cancellationToken.IsCancellationRequested)
+                {
+                    throw new OperationCanceledException("Connection wait was cancelled", cancellationToken);
+                }
+
+                try
+                {
+                    await Task.Delay(checkInterval, cancellationToken);
+                }
+                catch (OperationCanceledException)
+                {
+                    throw new OperationCanceledException("Connection wait was cancelled", cancellationToken);
+                }
+            }
+        }
+
+        public async Task<bool> HasConnectionAsync(TimeSpan? timeout = null)
+        {
+            try
+            {
+                await WaitForConnectionAsync(timeout, System.Threading.CancellationToken.None);
+                return true;
+            }
+            catch (System.TimeoutException)
+            {
+                return false;
+            }
+            catch (OperationCanceledException)
+            {
+                return false;
+            }
         }
 
         public Timer timer;
@@ -291,12 +349,31 @@ namespace Xrpl.Client
             ws.SendMessage(message);
         }
 
+        private async Task EnsureConnectionForRequest()
+        {
+            if (this.ShouldBeConnected())
+                return;
+
+            switch (config.RequestPolicy)
+            {
+                case RequestFailurePolicy.ImmediateFail:
+                    throw new NotConnectedException();
+
+                case RequestFailurePolicy.WaitForConnection:
+                    await WaitForConnectionAsync();
+                    if (!this.ShouldBeConnected())
+                        throw new NotConnectedException("Failed to establish connection within timeout period");
+                    break;
+
+                default:
+                    throw new NotConnectedException();
+            }
+        }
+
         public async Task<Dictionary<string, dynamic>> Request(Dictionary<string, dynamic> request, int? timeout = null)
         {
-            if (!this.ShouldBeConnected())
-            {
-                throw new NotConnectedException();
-            }
+            await EnsureConnectionForRequest();
+
             XrplRequest _request = this.requestManager.CreateRequest(request, timeout ?? this.config.timeout);
             try
             {
@@ -311,10 +388,8 @@ namespace Xrpl.Client
 
         public async Task<dynamic> GRequest<T, R>(R request, int? timeout = null)
         {
-            if (!this.ShouldBeConnected())
-            {
-                throw new NotConnectedException();
-            }
+            await EnsureConnectionForRequest();
+
             XrplGRequest _request = this.requestManager.CreateGRequest<T, R>(request, timeout ?? this.config.timeout);
             try
             {
@@ -368,9 +443,8 @@ namespace Xrpl.Client
             StopPingTimer();
 
             var (severity, userMessage) = DescribeClose(code, description);
-            var reasonText = description ?? userMessage;
 
-            this.requestManager.RejectAll(new DisconnectedException($"websocket was closed, code: {code}, reason: {reasonText}"));
+            this.requestManager.RejectAll(new DisconnectedException($"websocket was closed, code: {code}, reason: {userMessage}"));
             this.ws = null;
 
             if (code == null)
@@ -381,7 +455,7 @@ namespace Xrpl.Client
             else
             {
                 if (OnDisconnect is not null)
-                    await OnDisconnect?.Invoke(code, reasonText)!;
+                    await OnDisconnect?.Invoke(code, userMessage)!;
             }
 
             if (code == INTENTIONAL_DISCONNECT_CODE)
