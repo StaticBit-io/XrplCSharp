@@ -82,6 +82,7 @@ namespace Xrpl.Client
             public TimeSpan ReconnectBaseDelay { get; set; } = TimeSpan.FromSeconds(1);
             public TimeSpan ReconnectMaxDelay { get; set; } = TimeSpan.FromSeconds(30);
             public int MaxReconnectAttempts { get; set; } = 10;
+            public bool StopAfterMaxAttempts { get; set; } = false;
             public bool UseCustomPing { get; set; } = true;
         }
 
@@ -451,6 +452,17 @@ namespace Xrpl.Client
                 var type = ConnectionCloseSeverity.Info;
                 if (_reconnectAttempts > config.MaxReconnectAttempts)
                 {
+                    if (config.StopAfterMaxAttempts)
+                    {
+                        OnConnectionStatus?.Invoke(new ConnectionStatusInfo
+                        {
+                            Message = $"Reconnection stopped after {config.MaxReconnectAttempts} attempts.",
+                            Severity = ConnectionCloseSeverity.Error,
+                            Reconnect = null
+                        });
+                        break;
+                    }
+
                     reconnectMessage = $"Reconnection in {delay.TotalSeconds:F1} seconds... attempt #{_reconnectAttempts} (exceeded max {config.MaxReconnectAttempts}). Will keep trying, but this may indicate a persistent issue.";
                     type = ConnectionCloseSeverity.Warn;
                 }
