@@ -68,7 +68,7 @@ namespace Xrpl.Client
         /// <summary> the url </summary>
         string Url();
         /// <summary> connect to the server </summary>
-        Task Connect();
+        Task Connect(TimeSpan? timeout = null, System.Threading.CancellationToken cancellationToken = default);
         /// <summary> Disconnect from server </summary>
         Task Disconnect();
         /// <summary> if the websocket is connected </summary>
@@ -416,9 +416,10 @@ namespace Xrpl.Client
         }
 
         /// <inheritdoc />
-        public async Task Connect()
+        public async Task Connect(TimeSpan? timeout = null, System.Threading.CancellationToken cancellationToken = default)
         {
             await connection.Connect();
+            await connection.WaitForConnectionAsync(timeout, cancellationToken);
             await SetNetworkId();
         }
 
