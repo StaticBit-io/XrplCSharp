@@ -10,6 +10,26 @@ The library is built on .NET 6.0 and follows a modular architecture with separat
 
 Preferred communication style: Simple, everyday language.
 
+## Recent Major Changes
+
+**Timeout Parameter Refactoring** (November 15, 2025):
+- Renamed timeout parameters in `ConnectionOptions` for clarity:
+  - `timeout` → `RequestTimeout` (TimeSpan): Timeout for individual API requests after connection established (default: 20 seconds)
+  - `connectionTimeout` → `ConnectionAttemptTimeout` (TimeSpan): Timeout for single WebSocket connection attempt (default: 5 seconds, **must be finite**)
+  - `MaxRequestWaitTime` → `ConnectionAcquisitionTimeout` (TimeSpan): Maximum wait time for connection with WaitForConnection policy (default: 30 seconds)
+- Converted all timeout parameters from `int` (milliseconds) to `TimeSpan` for consistency
+- Added XML documentation to each timeout parameter explaining purpose and relationship
+- Added validation in Connection constructor: `ConnectionAcquisitionTimeout >= ConnectionAttemptTimeout`
+- Updated `Request()` and `GRequest()` method signatures to use `TimeSpan?` instead of `int?`
+- Updated `RequestManager.CreateRequest()` and `CreateGRequest()` to accept TimeSpan
+- **Timeout.InfiniteTimeSpan support** (November 15, 2025):
+  - `RequestTimeout` and `ConnectionAcquisitionTimeout` can be set to `Timeout.InfiniteTimeSpan` for no timeout
+  - `RequestManager` skips timer creation for infinite timeouts, allowing requests to wait indefinitely
+  - `WaitForConnectionAsync` bypasses elapsed time checks for infinite timeouts
+  - Validation rejects non-positive finite TimeSpan values with `ArgumentOutOfRangeException`
+  - Note: `ConnectionAttemptTimeout` must remain finite (positive value) as WebSocket connection requires bounded wait
+- **Breaking change**: Old parameter names and types no longer supported
+
 ## System Architecture
 
 ### Modular Package Design
@@ -61,6 +81,8 @@ Preferred communication style: Simple, everyday language.
   - Policy is respected by all `Request()` and `GRequest()` calls through internal `EnsureConnectionForRequest()` validation
   - Blazor test application updated to use `WaitForConnection` policy for better user experience during server switching
 - **Code cleanup** (November 13, 2025): Removed unused `AsyncManualResetEvent` scaffolding class and related code (`_connectionReadyEvent` field). This code was part of an earlier implementation approach that was replaced with a simpler polling-based solution.
+- **Fixed duplicate OnDisconnect events during initial connection failures** (November 15, 2025): Modified `OnConnectionFailed()` to capture WebSocket state before calling `Disconnect()`. Only manually triggers `OnDisconnect`/`StartReconnectLoop` when socket was not Open, preventing duplicate events since open sockets trigger these through `OnceClose()` callback automatically.
+- **Fixed timeout issue when reconnections are stopped** (November 15, 2025): Enhanced `WaitForConnectionAsync()` to detect when reconnections have been permanently stopped (`StopAfterMaxAttempts=true` and attempts exhausted). Now immediately throws `NotConnectedException` with clear message instead of waiting for 10-second timeout. Implementation: `ReconnectLoopAsync()` now disposes and nulls `_reconnectCts` when max attempts are reached, allowing `WaitForConnectionAsync()` to detect the stopped state via null check.
 
 ### Wallet Management
 

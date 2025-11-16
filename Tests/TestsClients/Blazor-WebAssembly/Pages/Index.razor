@@ -305,7 +305,7 @@
         
         await base.OnInitializedAsync();
         
-        await client.Connect();
+        await client.Connect(default);
         
         if (client.connection.IsConnected())
         {
@@ -391,9 +391,9 @@
         {
             AddStatusMessage($"Changing server to: {newServerUrl}...", MessageType.Info);
             
-            await client.connection.ChangeServer(newServerUrl);
+            await client.ChangeServer(newServerUrl);
             
-            CurrentServerUrl = client.connection.GetUrl();
+            CurrentServerUrl = client.Url();
         }
         catch (Exception ex)
         {

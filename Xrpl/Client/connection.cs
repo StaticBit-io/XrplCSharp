@@ -1,6 +1,7 @@
 ﻿using System;
 using System.Collections.Generic;
 using System.Net.WebSockets;
+using System.Threading;
 using System.Threading.Tasks;
 using Newtonsoft.Json;
 using Xrpl.Client.Exceptions;
@@ -81,18 +82,83 @@ namespace Xrpl.Client
             public string key { get; set; }
             public string passphrase { get; set; }
             public string certificate { get; set; }
-            public int timeout { get; set; }
-            public int connectionTimeout { get; set; }
             public Dictionary<string, dynamic> headers { get; set; }
 
-            public TimeSpan ReconnectBaseDelay { get; set; } = TimeSpan.FromSeconds(1);
-            public TimeSpan ReconnectMaxDelay { get; set; } = TimeSpan.FromSeconds(30);
+            /// <summary>
+            /// Timeout for individual API requests after connection is established.
+            /// This controls how long to wait for a response to a single request (e.g., account_info, submit).
+            /// Default: 20 seconds.
+            /// </summary>
+            public TimeSpan RequestTimeout { get; set; } = TimeSpan.FromSeconds(20);
+
+            /// <summary>
+            /// Timeout for a single WebSocket connection attempt.
+            /// If the connection cannot be established within this time, it will fail and trigger reconnection logic.
+            /// Should be shorter than ConnectionAcquisitionTimeout to allow multiple retry attempts.
+            /// Default: 5 seconds.
+            /// </summary>
+            public TimeSpan ConnectionAttemptTimeout { get; set; } = TimeSpan.FromSeconds(5);
+
+            /// <summary>
+            /// Gets or sets the base delay interval used between automatic reconnection attempts.
+            /// </summary>
+            public TimeSpan ReconnectBaseDelay { get; set; } = TimeSpan.FromSeconds(2);
+
+            /// <summary>
+            /// Gets or sets the maximum delay between automatic reconnection attempts after a disconnection.
+            /// </summary>
+            /// <remarks>This value determines the upper bound for the time interval between
+            /// reconnection attempts. If the connection is lost, the delay between retries will not exceed this value,
+            /// even if a backoff strategy is used.</remarks>
+            public TimeSpan ReconnectMaxDelay { get; set; } = TimeSpan.FromSeconds(20);
+
+            /// <summary>
+            /// Gets or sets the maximum number of times the system will attempt to reconnect after a disconnection.
+            /// </summary>
+            /// <remarks>Set this property to limit how many reconnection attempts are made before
+            /// giving up. A value of 0 disables automatic reconnection.</remarks>
             public int MaxReconnectAttempts { get; set; } = 10;
+
+            /// <summary>
+            /// Gets or sets a value indicating whether the operation should stop after reaching the maximum number of
+            /// attempts.
+            /// </summary>
+            /// <remarks>Set this property to <see langword="true"/> to prevent further retries once
+            /// the maximum attempt count is reached. If set to <see langword="false"/>, the operation may continue
+            /// beyond the maximum attempts, depending on the retry policy.</remarks>
             public bool StopAfterMaxAttempts { get; set; } = false;
+
+            /// <summary>
+            /// Gets or sets a value indicating whether to use a custom ping<br/>
+            /// implementation instead of the default behavior.
+            /// </summary>
             public bool UseCustomPing { get; set; } = true;
 
-            public RequestFailurePolicy RequestPolicy { get; set; } = RequestFailurePolicy.ImmediateFail;
-            public TimeSpan MaxRequestWaitTime { get; set; } = TimeSpan.FromSeconds(30);
+            /// <summary>
+            /// Gets or sets the policy that determines how failed requests are handled.
+            /// </summary>
+            /// <remarks>
+            /// Use this property to specify the strategy for handling request failures,<br/>
+            /// such as whether to retry, delay, or fail immediately.<br/>
+            /// The selected policy affects how the system responds to transient errors or network issues.</remarks>
+            public RequestFailurePolicy RequestPolicy { get; set; } = RequestFailurePolicy.WaitForConnection;
+
+            /// <summary>
+            /// Maximum time to wait for connection when using WaitForConnection request policy.
+            /// This is the total time allowed for multiple connection attempts, including retry delays.
+            /// Must be >= ConnectionAttemptTimeout to allow at least one full connection attempt.
+            /// Default: 30 seconds.
+            /// </summary>
+            public TimeSpan ConnectionAcquisitionTimeout { get; set; } = TimeSpan.FromMinutes(5);
+        }
+
+        private void ValidateConfig()
+        {
+            if (config.ConnectionAcquisitionTimeout < config.ConnectionAttemptTimeout)
+            {
+                throw new ArgumentException(
+                    $"ConnectionAcquisitionTimeout ({config.ConnectionAcquisitionTimeout.TotalSeconds}s) must be >= ConnectionAttemptTimeout ({config.ConnectionAttemptTimeout.TotalSeconds}s) to allow at least one full connection attempt.");
+            }
         }
 
         static WebSocketClient CreateWebSocket(string url, ConnectionOptions config)
@@ -129,8 +195,6 @@ namespace Xrpl.Client
             return WebSocketClient.Create(url); // todo add options
         }
 
-        int TIMEOUT = 20;
-        int CONNECTION_TIMEOUT = 5;
         int INTENTIONAL_DISCONNECT_CODE = 4000;
 
         public string url { get; private set; }
@@ -155,20 +219,23 @@ namespace Xrpl.Client
         {
             url = server;
             config = options ?? new ConnectionOptions();
-            config.timeout = TIMEOUT * 1000;
-            config.connectionTimeout = CONNECTION_TIMEOUT * 1000;
 
+            ValidateConfig();
         }
 
-        public async Task ChangeServer(string server, ConnectionOptions? options = null)
+        public async Task ChangeServer(string server, ConnectionOptions? options = null, CancellationToken cancellationToken = default)
         {
             await Disconnect();
             url = server;
-            config = options ?? new ConnectionOptions() { UseCustomPing = true };
-            config.timeout = TIMEOUT * 1000;
-            config.connectionTimeout = CONNECTION_TIMEOUT * 1000;
-            await Task.Delay(3000);
-            await Connect();
+            if (options != null)
+            {
+                config = options;
+            }
+
+            ValidateConfig();
+
+            await Task.Delay(3000, cancellationToken);
+            await Connect(cancellationToken);
         }
         public bool IsConnected()
         {
@@ -180,13 +247,30 @@ namespace Xrpl.Client
             if (IsConnected())
                 return;
 
-            var waitTimeout = timeout ?? config.MaxRequestWaitTime;
+            var waitTimeout = timeout ?? config.ConnectionAcquisitionTimeout;
+
+            if (waitTimeout != System.Threading.Timeout.InfiniteTimeSpan && waitTimeout <= TimeSpan.Zero)
+            {
+                throw new ArgumentOutOfRangeException(nameof(timeout), 
+                    $"Timeout must be positive or Timeout.InfiniteTimeSpan, but was {waitTimeout.TotalSeconds:F1}s");
+            }
+
             var startTime = DateTime.UtcNow;
             var checkInterval = TimeSpan.FromMilliseconds(100);
+            var hasTimeout = waitTimeout != System.Threading.Timeout.InfiniteTimeSpan;
 
             while (!IsConnected())
             {
-                if (DateTime.UtcNow - startTime > waitTimeout)
+                if (config.StopAfterMaxAttempts && 
+                    _reconnectAttempts >= config.MaxReconnectAttempts && 
+                    _reconnectCts == null)
+                {
+                    throw new NotConnectedException(
+                        $"Connection failed permanently after {config.MaxReconnectAttempts} attempts. " +
+                        "Reconnection has been stopped.");
+                }
+
+                if (hasTimeout && DateTime.UtcNow - startTime > waitTimeout)
                 {
                     throw new System.TimeoutException($"Connection was not established within {waitTimeout.TotalSeconds:F1} seconds");
                 }
@@ -226,10 +310,11 @@ namespace Xrpl.Client
 
         public Timer timer;
 
-        public async Task Connect()
+        public async Task Connect(CancellationToken cancellationToken)
         {
             StopReconnectLoop();
             await ConnectInternalAsync();
+            await WaitForConnectionAsync(config.ConnectionAcquisitionTimeout, cancellationToken);
         }
 
         private async Task ConnectInternalAsync()
@@ -255,8 +340,8 @@ namespace Xrpl.Client
                     throw new XrplException("Websocket connection never cleaned up.");
                 }
 
-                timer = new Timer(this.config.connectionTimeout);
-                timer.Elapsed += async (sender, e) => await OnConnectionFailed(new ConnectionException($"Error: connect() timed out after {this.config.connectionTimeout} ms.If your internet connection is working, the rippled server may be blocked or inaccessible.You can also try setting the 'connectionTimeout' option in the Client constructor."));
+                timer = new Timer(this.config.ConnectionAttemptTimeout.TotalMilliseconds);
+                timer.Elapsed += async (sender, e) => await OnConnectionFailed(new ConnectionException($"Error: connect() timed out after {this.config.ConnectionAttemptTimeout.TotalSeconds:F1} seconds. If your internet connection is working, the rippled server may be blocked or inaccessible. You can also try setting the 'ConnectionAttemptTimeout' option in the Client constructor."));
                 timer.Start();
 
                 this.ws = CreateWebSocket(this.url, this.config);
@@ -316,6 +401,8 @@ namespace Xrpl.Client
             timer?.Dispose();
             timer = null;
 
+            var wasOpen = this.ws?.State == WebSocketState.Open;
+
             if (this.ws != null)
             {
                 //this.ws.RemoveAllListeners();
@@ -338,10 +425,13 @@ namespace Xrpl.Client
                 Reconnect = null
             });
 
-            if (OnDisconnect is not null)
-                await OnDisconnect?.Invoke(null, error.Message)!;
+            if (!wasOpen)
+            {
+                if (OnDisconnect is not null)
+                    await OnDisconnect?.Invoke(null, error.Message)!;
 
-            StartReconnectLoop();
+                StartReconnectLoop();
+            }
         }
 
         public void WebsocketSendAsync(WebSocketClient ws, string message)
@@ -370,11 +460,11 @@ namespace Xrpl.Client
             }
         }
 
-        public async Task<Dictionary<string, dynamic>> Request(Dictionary<string, dynamic> request, int? timeout = null)
+        public async Task<Dictionary<string, dynamic>> Request(Dictionary<string, dynamic> request, TimeSpan? timeout = null)
         {
             await EnsureConnectionForRequest();
 
-            XrplRequest _request = this.requestManager.CreateRequest(request, timeout ?? this.config.timeout);
+            XrplRequest _request = this.requestManager.CreateRequest(request, timeout ?? this.config.RequestTimeout);
             try
             {
                 WebsocketSendAsync(this.ws, _request.Message);
@@ -386,11 +476,11 @@ namespace Xrpl.Client
             return await _request.Promise;
         }
 
-        public async Task<dynamic> GRequest<T, R>(R request, int? timeout = null)
+        public async Task<dynamic> GRequest<T, R>(R request, TimeSpan? timeout = null)
         {
             await EnsureConnectionForRequest();
 
-            XrplGRequest _request = this.requestManager.CreateGRequest<T, R>(request, timeout ?? this.config.timeout);
+            XrplGRequest _request = this.requestManager.CreateGRequest<T, R>(request, timeout ?? this.config.RequestTimeout);
             try
             {
                 WebsocketSendAsync(this.ws, _request.Message);
@@ -586,6 +676,12 @@ namespace Xrpl.Client
                         Reconnect = null
                     });
                 }
+            }
+
+            if (config.StopAfterMaxAttempts && _reconnectAttempts >= config.MaxReconnectAttempts)
+            {
+                _reconnectCts?.Dispose();
+                _reconnectCts = null;
             }
         }
 
