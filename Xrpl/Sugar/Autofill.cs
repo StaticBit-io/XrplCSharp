@@ -68,6 +68,10 @@ namespace Xrpl.Sugar
             {
                 promises.Add(client.SetLatestValidatedLedgerSequence(tx));
             }
+            else if(tx.TryGetValue("LastLedgerSequence", out var lastLedgerValue) && lastLedgerValue is 0u or 0UL or 0L or 0)
+            {
+                tx.Remove("LastLedgerSequence");
+            }
             if (tt == "AccountDelete")
             {
                 //todo error here
