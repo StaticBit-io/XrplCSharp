@@ -35,7 +35,7 @@ namespace Xrpl.Tests.ClientLib
             Dictionary<string, dynamic> jsonData = JsonConvert.DeserializeObject<Dictionary<string, dynamic>>(jsonString);
             runner.mockedRippled.AddResponse("ledger", jsonData);
             uint ledgerIndex = await runner.client.GetLedgerIndex();
-            Assert.AreEqual(9038214, ledgerIndex);
+            Assert.AreEqual(9038214u, ledgerIndex);
         }
     }
 }

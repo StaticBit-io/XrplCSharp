@@ -15,7 +15,7 @@ using Timer = System.Timers.Timer;
 
 namespace Xrpl.Client
 {
-    public enum ConnectionCloseSeverity { Info, Warn, Error }
+    public enum ConnectionCloseSeverity { Info, Warning, Error }
 
     public enum RequestFailurePolicy
     {
@@ -95,9 +95,9 @@ namespace Xrpl.Client
             /// Timeout for a single WebSocket connection attempt.
             /// If the connection cannot be established within this time, it will fail and trigger reconnection logic.
             /// Should be shorter than ConnectionAcquisitionTimeout to allow multiple retry attempts.
-            /// Default: 5 seconds.
+            /// Default: 30 seconds.
             /// </summary>
-            public TimeSpan ConnectionAttemptTimeout { get; set; } = TimeSpan.FromSeconds(5);
+            public TimeSpan ConnectionAttemptTimeout { get; set; } = TimeSpan.FromSeconds(20);
 
             /// <summary>
             /// Gets or sets the base delay interval used between automatic reconnection attempts.
@@ -110,7 +110,7 @@ namespace Xrpl.Client
             /// <remarks>This value determines the upper bound for the time interval between
             /// reconnection attempts. If the connection is lost, the delay between retries will not exceed this value,
             /// even if a backoff strategy is used.</remarks>
-            public TimeSpan ReconnectMaxDelay { get; set; } = TimeSpan.FromSeconds(20);
+            public TimeSpan ReconnectMaxDelay { get; set; } = TimeSpan.FromSeconds(30);
 
             /// <summary>
             /// Gets or sets the maximum number of times the system will attempt to reconnect after a disconnection.
@@ -577,7 +577,7 @@ namespace Xrpl.Client
                 OnConnectionStatus?.Invoke(new ConnectionStatusInfo
                 {
                     Message = noReconnectMessage,
-                    Severity = ConnectionCloseSeverity.Warn,
+                    Severity = ConnectionCloseSeverity.Warning,
                     Reconnect = null
                 });
             }
@@ -628,7 +628,7 @@ namespace Xrpl.Client
                     }
 
                     reconnectMessage = $"Reconnection in {delay.TotalSeconds:F1} seconds... attempt #{_reconnectAttempts} (exceeded max {config.MaxReconnectAttempts}). Will keep trying, but this may indicate a persistent issue.";
-                    type = ConnectionCloseSeverity.Warn;
+                    type = ConnectionCloseSeverity.Warning;
                 }
                 OnConnectionStatus?.Invoke(new ConnectionStatusInfo
                 {
@@ -779,17 +779,17 @@ namespace Xrpl.Client
             return code switch
             {
                 1000 => (ConnectionCloseSeverity.Info, "Connection closed normally (1000)." + suffix),
-                1001 => (ConnectionCloseSeverity.Warn, "Server unavailable or intentionally closed the connection (1001)." + suffix),
+                1001 => (ConnectionCloseSeverity.Warning, "Server unavailable or intentionally closed the connection (1001)." + suffix),
                 1002 => (ConnectionCloseSeverity.Error, "Protocol error occurred (1002)." + suffix),
                 1003 => (ConnectionCloseSeverity.Error, "Invalid message type received (1003)." + suffix),
-                1005 => (ConnectionCloseSeverity.Warn, "Connection was closed without a close frame (1005)." + suffix),
-                1006 => (ConnectionCloseSeverity.Warn, "Connection interrupted abnormally (1006). Network issue, server restart, or timeout." + suffix),
+                1005 => (ConnectionCloseSeverity.Warning, "Connection was closed without a close frame (1005)." + suffix),
+                1006 => (ConnectionCloseSeverity.Warning, "Connection interrupted abnormally (1006). Network issue, server restart, or timeout." + suffix),
                 1007 => (ConnectionCloseSeverity.Error, "Invalid payload data in the WebSocket frame (1007)." + suffix),
-                1008 => (ConnectionCloseSeverity.Warn, "Policy violation (1008). Possibly due to rate limits or access rules." + suffix),
-                1009 => (ConnectionCloseSeverity.Warn, "Message too large (1009)." + suffix),
+                1008 => (ConnectionCloseSeverity.Warning, "Policy violation (1008). Possibly due to rate limits or access rules." + suffix),
+                1009 => (ConnectionCloseSeverity.Warning, "Message too large (1009)." + suffix),
                 1010 => (ConnectionCloseSeverity.Error, "Mandatory WebSocket extension is missing (1010)." + suffix),
                 1011 => (ConnectionCloseSeverity.Error, "Internal server error (1011)." + suffix),
-                _ => (ConnectionCloseSeverity.Warn, $"Connection closed with code {code}." + suffix)
+                _ => (ConnectionCloseSeverity.Warning, $"Connection closed with code {code}." + suffix)
             };
         }
 

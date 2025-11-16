@@ -234,7 +234,7 @@
                 var type = statusInfo.Severity switch
                 {
                     ConnectionCloseSeverity.Error => MessageType.Error,
-                    ConnectionCloseSeverity.Warn => MessageType.Warning,
+                    ConnectionCloseSeverity.Warning => MessageType.Warning,
                     ConnectionCloseSeverity.Info => MessageType.Info,
                     _ => MessageType.Info
                 };
