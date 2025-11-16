@@ -1,15 +1,20 @@
-﻿using System;
-using System.Collections.Generic;
-using System.Diagnostics;
-using Microsoft.VisualStudio.TestTools.UnitTesting;
+﻿using Microsoft.VisualStudio.TestTools.UnitTesting;
+
 using Newtonsoft.Json;
 using Newtonsoft.Json.Linq;
+
+using System;
+using System.Collections.Generic;
+using System.Diagnostics;
+
 using Xrpl.BinaryCodec;
 using Xrpl.BinaryCodec.Types;
 using Xrpl.Client.Exceptions;
 using Xrpl.Keypairs;
 using Xrpl.Models.Transactions;
 using Xrpl.Wallet;
+
+using XrplTests;
 
 // https://github.com/XRPLF/xrpl.js/blob/main/packages/xrpl/test/wallet/index.ts
 
@@ -57,9 +62,9 @@ namespace Xrpl.Tests.Wallet.Tests.Generate
             //Assert.IsInstanceOfType(wallet.PrivateKey, string);
             //Assert.IsInstanceOfType(wallet.ClassicAddress, string);
             //Assert.IsInstanceOfType(wallet.Seed, string);
-            Assert.IsTrue(wallet.PublicKey.StartsWith(ed25519KeyPrefix));
-            Assert.IsTrue(wallet.PrivateKey.StartsWith(ed25519KeyPrefix));
-            Assert.IsTrue(wallet.ClassicAddress.StartsWith(classicAddressPrefix));
+            Assert.StartsWith(ed25519KeyPrefix, wallet.PublicKey);
+            Assert.StartsWith(ed25519KeyPrefix, wallet.PrivateKey);
+            Assert.StartsWith(classicAddressPrefix, wallet.ClassicAddress);
         }
 
         [TestMethod]
@@ -71,8 +76,8 @@ namespace Xrpl.Tests.Wallet.Tests.Generate
             //Assert.IsInstanceOfType(wallet.PrivateKey, string);
             //Assert.IsInstanceOfType(wallet.ClassicAddress, string);
             //Assert.IsInstanceOfType(wallet.Seed, string);
-            Assert.IsTrue(wallet.PrivateKey.StartsWith(secp256k1PrivateKeyPrefix));
-            Assert.IsTrue(wallet.ClassicAddress.StartsWith(classicAddressPrefix));
+            Assert.StartsWith(secp256k1PrivateKeyPrefix, wallet.PrivateKey);
+            Assert.StartsWith(classicAddressPrefix, wallet.ClassicAddress);
         }
 
         [TestMethod]
@@ -84,9 +89,9 @@ namespace Xrpl.Tests.Wallet.Tests.Generate
             //Assert.IsInstanceOfType(wallet.PrivateKey, string);
             //Assert.IsInstanceOfType(wallet.ClassicAddress, string);
             //Assert.IsInstanceOfType(wallet.Seed, string);
-            Assert.IsTrue(wallet.PublicKey.StartsWith(ed25519KeyPrefix));
-            Assert.IsTrue(wallet.PrivateKey.StartsWith(ed25519KeyPrefix));
-            Assert.IsTrue(wallet.ClassicAddress.StartsWith(classicAddressPrefix));
+            Assert.StartsWith(ed25519KeyPrefix, wallet.PublicKey);
+            Assert.StartsWith(ed25519KeyPrefix, wallet.PrivateKey);
+            Assert.StartsWith(classicAddressPrefix, wallet.ClassicAddress);
         }
     }
 }
@@ -134,7 +139,7 @@ namespace Xrpl.Tests.Wallet.Tests.Seed
 
             XrplWallet wallet = XrplWallet.FromMnemonic(mnemonic, null, null, "rfc1751", "secp256k1");
 
-            Assert.AreEqual(wallet.Seed, expectedSeed);
+            Assert.AreEqual(expectedSeed, wallet.Seed);
         }
 
         [TestMethod]
@@ -145,7 +150,7 @@ namespace Xrpl.Tests.Wallet.Tests.Seed
 
             XrplWallet wallet = XrplWallet.FromMnemonic(mnemonic, null, null, "rfc1751", "ed25519");
 
-            Assert.AreEqual(wallet.Seed, expectedSeed);
+            Assert.AreEqual(expectedSeed, wallet.Seed);
         }
 
         // This needs to throw an error
@@ -153,11 +158,7 @@ namespace Xrpl.Tests.Wallet.Tests.Seed
         public void TestThrowsRFC1751B39Seed()
         {
             string mnemonic = "CAB BETH HANK BIRD MEND SIGN GILD ANY KERN HYDE CHAT STUB";
-            string expectedSeed = "sEdVaw4m9W3H3ou3VnyvDwvPAP5BEz1";
-
-            XrplWallet wallet = XrplWallet.FromMnemonic(mnemonic, null, null, "bip39", "ed25519");
-
-            Assert.AreEqual(wallet.Seed, expectedSeed);
+            Helper.ThrowsException<ValidationException>(() => XrplWallet.FromMnemonic(mnemonic, null, null, "bip39", "ed25519"), "Unable to parse the given mnemonic using bip39 encoding");
         }
 
         // This needs to throw an error
@@ -165,22 +166,19 @@ namespace Xrpl.Tests.Wallet.Tests.Seed
         public void TestThrowsB39Seed()
         {
             string mnemonic = "draw attack antique swing base employ blur above palace lucky glide clap pen use illegal";
-            string expectedSeed = "sEdVaw4m9W3H3ou3VnyvDwvPAP5BEz1";
 
-            XrplWallet wallet = XrplWallet.FromMnemonic(mnemonic, null, null, "rfc1751", "ed25519");
-
-            Assert.AreEqual(wallet.Seed, expectedSeed);
+            Helper.ThrowsException<ArgumentException>(() => XrplWallet.FromMnemonic(mnemonic, null, null, "rfc1751", "ed25519"),"Expected an RFC1751 word, but received 'attack'.");
         }
 
         [TestMethod]
         public void TestEDPRFC1751SeedLower()
         {
             string mnemonic = "cab beth hank bird mend sign gild any kern hyde chat stub";
-            string expectedSeed = "sEdVaw4m9W3H3ou3VnyvDwvPAP5BEz1";
+            string expectedSeed = "snVB4iTWYqsWZaj1hkvAy1QzqNbAg";
 
             XrplWallet wallet = XrplWallet.FromMnemonic(mnemonic, null, null, "rfc1751", "secp256k1");
 
-            Assert.AreEqual(wallet.Seed, expectedSeed);
+            Assert.AreEqual(expectedSeed, wallet.Seed);
         }
 
         [TestMethod]
@@ -328,7 +326,7 @@ namespace Xrpl.Tests.Wallet.Tests.Sign
             JObject some = requestJson["sign"]["normal"];
             SignatureResult result = wallet.Sign(some.ToObject<Dictionary<string, dynamic>>());
             Assert.AreEqual(result.TxBlob, (string)responseJson["sign"]["normal"]["signedTransaction"]);
-            Assert.AreEqual(result.Hash, "93F6C6CE73C092AA005103223F3A1F557F4C097A2943D96760F6490F04379917");
+            Assert.AreEqual("93F6C6CE73C092AA005103223F3A1F557F4C097A2943D96760F6490F04379917", result.Hash);
         }
 
         //[TestMethod]
@@ -348,7 +346,7 @@ namespace Xrpl.Tests.Wallet.Tests.Sign
             JObject some = requestJson["sign"]["escrow"];
             SignatureResult result = wallet.Sign(some.ToObject<Dictionary<string, dynamic>>());
             Assert.AreEqual(result.TxBlob, (string)responseJson["sign"]["escrow"]["signedTransaction"]);
-            Assert.AreEqual(result.Hash, "645B7676DF057E4F5E83F970A18B3751B6813807F1030A8D2F482D02DC885106");
+            Assert.AreEqual("645B7676DF057E4F5E83F970A18B3751B6813807F1030A8D2F482D02DC885106", result.Hash);
         }
 
         //[TestMethod]
@@ -396,11 +394,11 @@ namespace Xrpl.Tests.Wallet.Tests.Sign
                 { "Fee", "12" },
             };
             SignatureResult result = wallet.Sign(tx);
-            Assert.AreEqual(result.TxBlob, "1200002400000001614000000001312D0068400000000000000C732102A8A44DB3D4C73EEEE11DFE54D2029103B776AA8A8D293A91D645977C9DF5F5447446304402201C0A74EE8ECF5ED83734D7171FB65C01D90D67040DEDCC66414BD546CE302B5802205356843841BFFF60D15F5F5F9FB0AB9D66591778140AB2D137FF576D9DEC44BC8114EE3046A5DDF8422C40DDB93F1D522BB4FE6419158314FDB08D07AAA0EB711793A3027304D688E10C3648");
-            Assert.AreEqual(result.Hash, "E22186AE9FE477821BF361358174C2B0AC2D3289AA6F7E8C1102B3D270C41204");
+            Assert.AreEqual("1200002400000001614000000001312D0068400000000000000C732102A8A44DB3D4C73EEEE11DFE54D2029103B776AA8A8D293A91D645977C9DF5F5447446304402201C0A74EE8ECF5ED83734D7171FB65C01D90D67040DEDCC66414BD546CE302B5802205356843841BFFF60D15F5F5F9FB0AB9D66591778140AB2D137FF576D9DEC44BC8114EE3046A5DDF8422C40DDB93F1D522BB4FE6419158314FDB08D07AAA0EB711793A3027304D688E10C3648", result.TxBlob);
+            Assert.AreEqual("E22186AE9FE477821BF361358174C2B0AC2D3289AA6F7E8C1102B3D270C41204", result.Hash);
 
             JToken decoded = XrplBinaryCodec.Decode(result.TxBlob);
-            Assert.AreEqual(decoded["Flags"], null);
+            Assert.IsNull(decoded["Flags"]);
         }
 
         [TestMethod]
@@ -436,8 +434,8 @@ namespace Xrpl.Tests.Wallet.Tests.Sign
             SignatureResult result = wallet.Sign(tx);
             JToken decoded = XrplBinaryCodec.Decode(result.TxBlob);
             Assert.AreEqual(2147614720, decoded["Flags"]);
-            Assert.AreEqual(result.TxBlob, "12000022800200002400000017201B0086955361EC6386F26FC0FFFF0000000000000000000000005553440000000000DC596C88BCDE4E818D416FCDEEBF2C8656BADC9A68400000000000000C69D4438D7EA4C6800000000000000000000000000047425000000000000C155FFE99C8C91F67083CEFFDB69EBFE76348CA6AD4446F8C5D8A5E0B0000000000000000000000005553440000000000DC596C88BCDE4E818D416FCDEEBF2C8656BADC9A732102A8A44DB3D4C73EEEE11DFE54D2029103B776AA8A8D293A91D645977C9DF5F544744630440220297E0C7670C7DA491E0D649E62C123D988BA93FD7EA1B9141F1D376CDDF902F502205AF1936B22B18BBA7793A88ABEEABADB4CE0E4C3BE583066480F2F476B5ED08E81145E7B112523F68D2F5E879DB4EAC51C6698A6930483149F500E50C2F016CA01945E5A1E5846B61EF2D376");
-            Assert.AreEqual(result.Hash, "FB2813E9E673EF56609070A4BA9640FAD0508DA567320AE9D92FB5A356A03D84");
+            Assert.AreEqual("12000022800200002400000017201B0086955361EC6386F26FC0FFFF0000000000000000000000005553440000000000DC596C88BCDE4E818D416FCDEEBF2C8656BADC9A68400000000000000C69D4438D7EA4C6800000000000000000000000000047425000000000000C155FFE99C8C91F67083CEFFDB69EBFE76348CA6AD4446F8C5D8A5E0B0000000000000000000000005553440000000000DC596C88BCDE4E818D416FCDEEBF2C8656BADC9A732102A8A44DB3D4C73EEEE11DFE54D2029103B776AA8A8D293A91D645977C9DF5F544744630440220297E0C7670C7DA491E0D649E62C123D988BA93FD7EA1B9141F1D376CDDF902F502205AF1936B22B18BBA7793A88ABEEABADB4CE0E4C3BE583066480F2F476B5ED08E81145E7B112523F68D2F5E879DB4EAC51C6698A6930483149F500E50C2F016CA01945E5A1E5846B61EF2D376", result.TxBlob);
+            Assert.AreEqual("FB2813E9E673EF56609070A4BA9640FAD0508DA567320AE9D92FB5A356A03D84", result.Hash);
         }
 
         //[TestMethod]
@@ -456,7 +454,7 @@ namespace Xrpl.Tests.Wallet.Tests.Sign
         //        { "Sequence", 23 },
         //        { "SigningPubKey", "02F89EAEC7667B30F33D0687BBA86C3FE2A08CCA40A9186C5BDE2DAA6FA97A37D8" },
         //    };
-        //    Assert.ThrowsException<InvalidJsonException>(() => wallet.Sign(tx));
+        //    Helper.ThrowsException<InvalidJsonException>(() => wallet.Sign(tx));
         //}
 
         //[TestMethod]
@@ -475,7 +473,7 @@ namespace Xrpl.Tests.Wallet.Tests.Sign
         //        { "Sequence", 23 },
         //        { "SigningPubKey", "02F89EAEC7667B30F33D0687BBA86C3FE2A08CCA40A9186C5BDE2DAA6FA97A37D8" },
         //    };
-        //    Assert.ThrowsException<InvalidJsonException>(() => wallet.Sign(tx));
+        //    Helper.ThrowsException<InvalidJsonException>(() => wallet.Sign(tx));
         //}
 
         [TestMethod]
@@ -485,7 +483,7 @@ namespace Xrpl.Tests.Wallet.Tests.Sign
             JObject some = requestJson["sign"]["ticket"];
             SignatureResult result = wallet.Sign(some.ToObject<Dictionary<string, dynamic>>());
             Assert.AreEqual(result.TxBlob, (string)responseJson["sign"]["ticket"]["signedTransaction"]);
-            Assert.AreEqual(result.Hash, "0AC60B1E1F063904D9D9D0E9D03F2E9C8D41BC6FC872D5B8BF87E15BBF9669BB");
+            Assert.AreEqual("0AC60B1E1F063904D9D9D0E9D03F2E9C8D41BC6FC872D5B8BF87E15BBF9669BB", result.Hash);
         }
 
         //[TestMethod]
@@ -542,8 +540,8 @@ namespace Xrpl.Tests.Wallet.Tests.Sign
                 { "Fee", "12" },
             };
             SignatureResult result = wallet.Sign(tx);
-            Assert.AreEqual(result.TxBlob, "12000022800000002400000017201B008694F261400000000000000168400000000000000C732102A8A44DB3D4C73EEEE11DFE54D2029103B776AA8A8D293A91D645977C9DF5F54474473045022100E8929B68B137AB2AAB1AD3A4BB253883B0C8C318DC8BB39579375751B8E54AC502206893B2D61244AFE777DAC9FA3D9DDAC7780A9810AF4B322D629784FD626B8CE481145E7B112523F68D2F5E879DB4EAC51C6698A693048314FDB08D07AAA0EB711793A3027304D688E10C3648");
-            Assert.AreEqual(result.Hash, "AA1D2BDC59E504AA6C2416E864C615FB18042C1AB4457BEB883F7194D8C452B5");
+            Assert.AreEqual("12000022800000002400000017201B008694F261400000000000000168400000000000000C732102A8A44DB3D4C73EEEE11DFE54D2029103B776AA8A8D293A91D645977C9DF5F54474473045022100E8929B68B137AB2AAB1AD3A4BB253883B0C8C318DC8BB39579375751B8E54AC502206893B2D61244AFE777DAC9FA3D9DDAC7780A9810AF4B322D629784FD626B8CE481145E7B112523F68D2F5E879DB4EAC51C6698A693048314FDB08D07AAA0EB711793A3027304D688E10C3648", result.TxBlob);
+            Assert.AreEqual("AA1D2BDC59E504AA6C2416E864C615FB18042C1AB4457BEB883F7194D8C452B5", result.Hash);
         }
 
         //[TestMethod]
@@ -561,7 +559,7 @@ namespace Xrpl.Tests.Wallet.Tests.Sign
         //        { "LastLedgerSequence", 8819954 },
         //        { "Fee", "12" },
         //    };
-        //    Assert.ThrowsException<InvalidJsonException>(() => wallet.Sign(tx));
+        //    Helper.ThrowsException<InvalidJsonException>(() => wallet.Sign(tx));
         //}
 
         private Dictionary<string, dynamic> icPayment = new Dictionary<string, dynamic>
@@ -592,8 +590,8 @@ namespace Xrpl.Tests.Wallet.Tests.Sign
                 { "value", "123.40" }
             };
             SignatureResult result = wallet.Sign(payment);
-            Assert.AreEqual(result.TxBlob, "12000022800000002400000017201B008694F261D504625103A72000000000000000000000000000666F6F00000000002E099DD75FDD96EB4A603037844F964832FED86B68400000000000000C732102A8A44DB3D4C73EEEE11DFE54D2029103B776AA8A8D293A91D645977C9DF5F54474473045022100D32EBD44F86FB6D0BE239A410B62A73A8B0C26CE3767321913D6FB7BE6FAC2410220430C011C25091DA9CD75E7C99BE406572FBB57B92132E39B4BF873863E744E2E81145E7B112523F68D2F5E879DB4EAC51C6698A693048314FDB08D07AAA0EB711793A3027304D688E10C3648");
-            Assert.AreEqual(result.Hash, "F822EA1D7B2A3026E4654A9152896652C3843B5690F8A56C4217CB4690C5C95A");
+            Assert.AreEqual("12000022800000002400000017201B008694F261D504625103A72000000000000000000000000000666F6F00000000002E099DD75FDD96EB4A603037844F964832FED86B68400000000000000C732102A8A44DB3D4C73EEEE11DFE54D2029103B776AA8A8D293A91D645977C9DF5F54474473045022100D32EBD44F86FB6D0BE239A410B62A73A8B0C26CE3767321913D6FB7BE6FAC2410220430C011C25091DA9CD75E7C99BE406572FBB57B92132E39B4BF873863E744E2E81145E7B112523F68D2F5E879DB4EAC51C6698A693048314FDB08D07AAA0EB711793A3027304D688E10C3648", result.TxBlob);
+            Assert.AreEqual("F822EA1D7B2A3026E4654A9152896652C3843B5690F8A56C4217CB4690C5C95A", result.Hash);
         }
 
         [TestMethod]
@@ -633,7 +631,7 @@ namespace Xrpl.Tests.Wallet.Tests.Sign
         //        { "value", "123.40" }
         //    };
         //    // TODO: InvalidJsonException should be different
-        //    Assert.ThrowsException<InvalidJsonException>(() => wallet.Sign(payment));
+        //    Helper.ThrowsException<InvalidJsonException>(() => wallet.Sign(payment));
         //}
 
         [TestMethod]
@@ -648,8 +646,8 @@ namespace Xrpl.Tests.Wallet.Tests.Sign
                 { "value", "123.40" }
             };
             SignatureResult result = wallet.Sign(payment);
-            Assert.AreEqual(result.TxBlob, "12000022800000002400000017201B008694F261D504625103A7200000000000000000000000000078727000000000002E099DD75FDD96EB4A603037844F964832FED86B68400000000000000C732102A8A44DB3D4C73EEEE11DFE54D2029103B776AA8A8D293A91D645977C9DF5F5447446304402202CD2BE27480860765B1B8DB6C499D299734C533F4FFA66317E46D1ADE5181EB7022066D2C65B975A6A9FEE56AB55211D5F2F65D6F988C8280019211874D11771A05D81145E7B112523F68D2F5E879DB4EAC51C6698A693048314FDB08D07AAA0EB711793A3027304D688E10C3648");
-            Assert.AreEqual(result.Hash, "1FEAA7894E507E36D73F60DED89852CE28994366879BC7D3D806E4C50D10B1EE");
+            Assert.AreEqual("12000022800000002400000017201B008694F261D504625103A7200000000000000000000000000078727000000000002E099DD75FDD96EB4A603037844F964832FED86B68400000000000000C732102A8A44DB3D4C73EEEE11DFE54D2029103B776AA8A8D293A91D645977C9DF5F5447446304402202CD2BE27480860765B1B8DB6C499D299734C533F4FFA66317E46D1ADE5181EB7022066D2C65B975A6A9FEE56AB55211D5F2F65D6F988C8280019211874D11771A05D81145E7B112523F68D2F5E879DB4EAC51C6698A693048314FDB08D07AAA0EB711793A3027304D688E10C3648", result.TxBlob);
+            Assert.AreEqual("1FEAA7894E507E36D73F60DED89852CE28994366879BC7D3D806E4C50D10B1EE", result.Hash);
         }
 
         [TestMethod]
@@ -664,8 +662,8 @@ namespace Xrpl.Tests.Wallet.Tests.Sign
                 { "value", "123.40" }
             };
             SignatureResult result = wallet.Sign(payment);
-            Assert.AreEqual(result.TxBlob, "12000022800000002400000017201B008694F261D504625103A720000000000000000000000000002A2A2A00000000002E099DD75FDD96EB4A603037844F964832FED86B68400000000000000C732102A8A44DB3D4C73EEEE11DFE54D2029103B776AA8A8D293A91D645977C9DF5F54474463044022073E71588750C3D47D7D9A541F00FB897823DA67ED198D0A74404B6FE6D5E4AB5022021BE798D4159F375EBE13D0545F50EE864DF834D5A9F9A31504212156A57934C81145E7B112523F68D2F5E879DB4EAC51C6698A693048314FDB08D07AAA0EB711793A3027304D688E10C3648");
-            Assert.AreEqual(result.Hash, "95BF9931C1EA164960FE13A504D5FBAEB1E072C1D291D75B85BA3F22A50346DF");
+            Assert.AreEqual("12000022800000002400000017201B008694F261D504625103A720000000000000000000000000002A2A2A00000000002E099DD75FDD96EB4A603037844F964832FED86B68400000000000000C732102A8A44DB3D4C73EEEE11DFE54D2029103B776AA8A8D293A91D645977C9DF5F54474463044022073E71588750C3D47D7D9A541F00FB897823DA67ED198D0A74404B6FE6D5E4AB5022021BE798D4159F375EBE13D0545F50EE864DF834D5A9F9A31504212156A57934C81145E7B112523F68D2F5E879DB4EAC51C6698A693048314FDB08D07AAA0EB711793A3027304D688E10C3648", result.TxBlob);
+            Assert.AreEqual("95BF9931C1EA164960FE13A504D5FBAEB1E072C1D291D75B85BA3F22A50346DF", result.Hash);
         }
 
         [TestMethod]
@@ -680,8 +678,8 @@ namespace Xrpl.Tests.Wallet.Tests.Sign
                 { "value", "123.40" }
             };
             SignatureResult result = wallet.Sign(payment);
-            Assert.AreEqual(result.TxBlob, "12000022800000002400000017201B008694F261D504625103A720000000000000000000000000003A3A3A00000000002E099DD75FDD96EB4A603037844F964832FED86B68400000000000000C732102A8A44DB3D4C73EEEE11DFE54D2029103B776AA8A8D293A91D645977C9DF5F5447446304402205952993DB235D3A6398E2CB5F91D7F0AD9067F02CB8E62FD335C516B64130F4702206777746CC516F95F39ADDD62CD395AF2F6BAFCCA355B5D23B9B4D9358474A11281145E7B112523F68D2F5E879DB4EAC51C6698A693048314FDB08D07AAA0EB711793A3027304D688E10C3648");
-            Assert.AreEqual(result.Hash, "CE80072E6D70932BC7AA698B931BCF97B6CC3DD3984E08DF284B74E8CB4E543A");
+            Assert.AreEqual("12000022800000002400000017201B008694F261D504625103A720000000000000000000000000003A3A3A00000000002E099DD75FDD96EB4A603037844F964832FED86B68400000000000000C732102A8A44DB3D4C73EEEE11DFE54D2029103B776AA8A8D293A91D645977C9DF5F5447446304402205952993DB235D3A6398E2CB5F91D7F0AD9067F02CB8E62FD335C516B64130F4702206777746CC516F95F39ADDD62CD395AF2F6BAFCCA355B5D23B9B4D9358474A11281145E7B112523F68D2F5E879DB4EAC51C6698A693048314FDB08D07AAA0EB711793A3027304D688E10C3648", result.TxBlob);
+            Assert.AreEqual("CE80072E6D70932BC7AA698B931BCF97B6CC3DD3984E08DF284B74E8CB4E543A", result.Hash);
         }
 
         [TestMethod]
@@ -705,8 +703,8 @@ namespace Xrpl.Tests.Wallet.Tests.Sign
                 { "Fee", "12" },
             };
             SignatureResult result = wallet.Sign(payment);
-            Assert.AreEqual(result.TxBlob, "12000022800000002400000017201B008694F261D504625103A72000000000000000000000000000464F4F00000000002E099DD75FDD96EB4A603037844F964832FED86B68400000000000000C732102A8A44DB3D4C73EEEE11DFE54D2029103B776AA8A8D293A91D645977C9DF5F5447446304402206EBFC9B8061C3F82D521506CE62B6BBA99995B2175BFE0E1BC516775932AECEB0220172B9CE9C0EFB3F4870E19B79B4E817DD376E5785F034AB792708F92282C65F781145E7B112523F68D2F5E879DB4EAC51C6698A693048314FDB08D07AAA0EB711793A3027304D688E10C3648");
-            Assert.AreEqual(result.Hash, "6235E5A3CC14DB97F75CAE2A4B5AA9B4134B7AD48D7DD8C15473D81631435FE4");
+            Assert.AreEqual("12000022800000002400000017201B008694F261D504625103A72000000000000000000000000000464F4F00000000002E099DD75FDD96EB4A603037844F964832FED86B68400000000000000C732102A8A44DB3D4C73EEEE11DFE54D2029103B776AA8A8D293A91D645977C9DF5F5447446304402206EBFC9B8061C3F82D521506CE62B6BBA99995B2175BFE0E1BC516775932AECEB0220172B9CE9C0EFB3F4870E19B79B4E817DD376E5785F034AB792708F92282C65F781145E7B112523F68D2F5E879DB4EAC51C6698A693048314FDB08D07AAA0EB711793A3027304D688E10C3648", result.TxBlob);
+            Assert.AreEqual("6235E5A3CC14DB97F75CAE2A4B5AA9B4134B7AD48D7DD8C15473D81631435FE4", result.Hash);
         }
 
         [TestMethod]
@@ -730,8 +728,8 @@ namespace Xrpl.Tests.Wallet.Tests.Sign
                 { "Fee", "12" },
             };
             SignatureResult result = wallet.Sign(payment);
-            Assert.AreEqual(result.TxBlob, "12000022800000002400000017201B008694F261D5045EADB112E000000000000000000000000000464F4F00000000002E099DD75FDD96EB4A603037844F964832FED86B68400000000000000C732102A8A44DB3D4C73EEEE11DFE54D2029103B776AA8A8D293A91D645977C9DF5F54474473045022100C0C77D7D6D6453F0C5EDFF61DE60B5D3D6952C8F30D51543560936D72FA103B00220258CBFCEAC4D2DB5CC2B9417EB46225943E9F4B92944B303ADB810002530BFFB81145E7B112523F68D2F5E879DB4EAC51C6698A693048314FDB08D07AAA0EB711793A3027304D688E10C3648");
-            Assert.AreEqual(result.Hash, "FADCD5EE33C01103AA129FCF0923637D543DB56250CD57A1A308EC386A211CBB");
+            Assert.AreEqual("12000022800000002400000017201B008694F261D5045EADB112E000000000000000000000000000464F4F00000000002E099DD75FDD96EB4A603037844F964832FED86B68400000000000000C732102A8A44DB3D4C73EEEE11DFE54D2029103B776AA8A8D293A91D645977C9DF5F54474473045022100C0C77D7D6D6453F0C5EDFF61DE60B5D3D6952C8F30D51543560936D72FA103B00220258CBFCEAC4D2DB5CC2B9417EB46225943E9F4B92944B303ADB810002530BFFB81145E7B112523F68D2F5E879DB4EAC51C6698A693048314FDB08D07AAA0EB711793A3027304D688E10C3648", result.TxBlob);
+            Assert.AreEqual("FADCD5EE33C01103AA129FCF0923637D543DB56250CD57A1A308EC386A211CBB", result.Hash);
         }
 
         //[TestMethod]
@@ -766,7 +764,6 @@ namespace Xrpl.Tests.Wallet.Tests.Sign
         //}
 
         [TestMethod]
-        [ExpectedException(typeof(InvalidJsonException))]
         public void TestSignNFTMintInvalidURI()
         {
             var wallet = XrplWallet.FromSeed("ss1x3KLrSvfg7irFc1D929WXZ7z9H");
@@ -787,7 +784,7 @@ namespace Xrpl.Tests.Wallet.Tests.Sign
                     } },
                 } },
             };
-            SignatureResult result = wallet.Sign(tx);
+            Helper.ThrowsException<InvalidJsonException>(() => wallet.Sign(tx));
         }
     }
 }
@@ -811,7 +808,7 @@ namespace Xrpl.Tests.Wallet.Tests.Verify
 
             var wallet = new XrplWallet(publicKey, privateKey);
             bool isVerified = wallet.VerifyTransaction(prepared["signedTransaction"]);
-            Assert.AreEqual(true, isVerified);
+            Assert.IsTrue(isVerified);
         }
 
         [TestMethod]
@@ -889,7 +886,7 @@ namespace Xrpl.Tests.Wallet.Tests.XummNumbers
             var numbers = new string[8];
             Array.Copy(xummNumbers, numbers, 8);
             numbers[0] = "556862";
-            Assert.ThrowsException<ArgumentException>(() => XrplWallet.FromXummNumbers(numbers), "Wrong numbers");
+            Helper.ThrowsException<ArgumentException>(() => XrplWallet.FromXummNumbers(numbers), "Wrong numbers");
         }
 
         [TestMethod]
@@ -898,22 +895,22 @@ namespace Xrpl.Tests.Wallet.Tests.XummNumbers
             var number = xummNumbers[0];
             var position = 0;
             var valid_sum = XummExtension.CheckXummSum(position, number);
-            Assert.AreEqual(true, valid_sum);
+            Assert.IsTrue(valid_sum);
 
             number = xummNumbers[2];
             position = 2;
             valid_sum = XummExtension.CheckXummSum(position, number);
-            Assert.AreEqual(true, valid_sum);
+            Assert.IsTrue(valid_sum);
 
             number = xummNumbers[6];
             position = 6;
             valid_sum = XummExtension.CheckXummSum(position, number);
-            Assert.AreEqual(true, valid_sum);
+            Assert.IsTrue(valid_sum);
 
             number = xummNumbers[7];
             position = 7;
             valid_sum = XummExtension.CheckXummSum(position, number);
-            Assert.AreEqual(true, valid_sum);
+            Assert.IsTrue(valid_sum);
         }
         [TestMethod]
         public void TestVerify_InValid_CheckXummSum()

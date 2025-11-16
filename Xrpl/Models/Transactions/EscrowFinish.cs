@@ -99,7 +99,7 @@ namespace Xrpl.Models.Transactions
             if (!tx.TryGetValue("OfferSequence", out var OfferSequence) || OfferSequence is null)
                 throw new ValidationException("EscrowFinish: missing field OfferSequence");
             if (OfferSequence is not uint)
-                throw new ValidationException("EscrowFinish: Destination must be a number");
+                throw new ValidationException("EscrowFinish: OfferSequence must be a number");
 
             if (tx.TryGetValue("Condition", out var Condition) && Condition is not string)
                 throw new ValidationException("EscrowFinish: Condition must be a string");

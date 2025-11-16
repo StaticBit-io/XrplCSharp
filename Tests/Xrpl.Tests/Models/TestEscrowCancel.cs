@@ -38,26 +38,26 @@ namespace XrplTests.Xrpl.Models
 
             // valid EscrowCancel missing owner
             depositPreauth.Remove("Owner");
-            await Assert.ThrowsExceptionAsync<ValidationException>(() => Validation.ValidateEscrowCancel(depositPreauth), "EscrowCancel: missing Owner");
-            await Assert.ThrowsExceptionAsync<ValidationException>(() => Validation.Validate(depositPreauth), "EscrowCancel: missing Owner");
+            await Helper.ThrowsExceptionAsync<ValidationException>(() => Validation.ValidateEscrowCancel(depositPreauth), "EscrowCancel: missing Owner");
+            await Helper.ThrowsExceptionAsync<ValidationException>(() => Validation.Validate(depositPreauth), "EscrowCancel: missing Owner");
             depositPreauth["Owner"] = "rf1BiGeXwwQoi8Z2ueFYTEXSwuJYfV2Jpn";
 
             // valid EscrowCancel missing OfferSequence
             depositPreauth.Remove("OfferSequence");
-            await Assert.ThrowsExceptionAsync<ValidationException>(() => Validation.ValidateEscrowCancel(depositPreauth), "EscrowCancel: missing OfferSequence");
-            await Assert.ThrowsExceptionAsync<ValidationException>(() => Validation.Validate(depositPreauth), "EscrowCancel: missing OfferSequence");
+            await Helper.ThrowsExceptionAsync<ValidationException>(() => Validation.ValidateEscrowCancel(depositPreauth), "EscrowCancel: missing OfferSequence");
+            await Helper.ThrowsExceptionAsync<ValidationException>(() => Validation.Validate(depositPreauth), "EscrowCancel: missing OfferSequence");
             depositPreauth["OfferSequence"] = 7u;
 
             // Invalid owner
             depositPreauth["Owner"] = 10;
-            await Assert.ThrowsExceptionAsync<ValidationException>(() => Validation.ValidateEscrowCancel(depositPreauth), "EscrowCancel: Owner must be a string");
-            await Assert.ThrowsExceptionAsync<ValidationException>(() => Validation.Validate(depositPreauth), "EscrowCancel: Owner must be a string");
+            await Helper.ThrowsExceptionAsync<ValidationException>(() => Validation.ValidateEscrowCancel(depositPreauth), "EscrowCancel: Owner must be a string");
+            await Helper.ThrowsExceptionAsync<ValidationException>(() => Validation.Validate(depositPreauth), "EscrowCancel: Owner must be a string");
             depositPreauth["Owner"] = "rf1BiGeXwwQoi8Z2ueFYTEXSwuJYfV2Jpn";
 
             // Invalid OfferSequence
             depositPreauth["OfferSequence"] = "10";
-            await Assert.ThrowsExceptionAsync<ValidationException>(() => Validation.ValidateEscrowCancel(depositPreauth), "EscrowCancel: OfferSequence must be a number");
-            await Assert.ThrowsExceptionAsync<ValidationException>(() => Validation.Validate(depositPreauth), "EscrowCancel: OfferSequence must be a number");
+            await Helper.ThrowsExceptionAsync<ValidationException>(() => Validation.ValidateEscrowCancel(depositPreauth), "EscrowCancel: OfferSequence must be a number");
+            await Helper.ThrowsExceptionAsync<ValidationException>(() => Validation.Validate(depositPreauth), "EscrowCancel: OfferSequence must be a number");
             depositPreauth["OfferSequence"] = 7u;
         }
     }

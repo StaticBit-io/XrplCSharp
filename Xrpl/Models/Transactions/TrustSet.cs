@@ -162,10 +162,10 @@ namespace Xrpl.Models.Transactions
                 throw new ValidationException("TrustSet: invalid LimitAmount");
 
             if (tx.TryGetValue("QualityIn", out var QualityIn) && QualityIn is not uint { })
-                throw new ValidationException("TrustSet: invalid QualityIn");
+                throw new ValidationException("TrustSet: QualityIn must be a number");
 
             if (tx.TryGetValue("QualityOut", out var QualityOut) && QualityOut is not uint { })
-                throw new ValidationException("TrustSet: invalid QualityOut");
+                throw new ValidationException("TrustSet: QualityOut must be a number");
         }
     }
 }

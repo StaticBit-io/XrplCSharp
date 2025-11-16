@@ -143,7 +143,7 @@ namespace Xrpl.Models.Transactions
         public static Task ValidateNFTokenBuyOfferCases(Dictionary<string, dynamic> tx)
         {
             if (!tx.TryGetValue("Owner", out var Owner) || Owner is null)
-                throw new ValidationException("NFTokenCreateOffer: Owner must not be present for sell offers");
+                throw new ValidationException("NFTokenCreateOffer: Owner must be present for buy offers");
 
             if (!tx.TryGetValue("Amount", out var Amount) || Common.ParseAmountValue(Amount) <= 0)
                 throw new ValidationException("NFTokenCreateOffer: Amount must be greater than 0 for buy offers");

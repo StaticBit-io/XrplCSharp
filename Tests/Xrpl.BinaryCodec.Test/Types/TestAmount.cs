@@ -44,9 +44,9 @@
 //            string validSmall = "1e-7";
 //            string valueDecimal = "1.234";
 
-//            Assert.ThrowsException<TypeInitializationException>(() => Amount.VerifyXrpValue(validLarge));
-//            Assert.ThrowsException<TypeInitializationException>(() => Amount.VerifyXrpValue(validSmall));
-//            Assert.ThrowsException<BinaryCodecException>(() => Amount.VerifyXrpValue(valueDecimal));
+//            Helper.ThrowsException<TypeInitializationException>(() => Amount.VerifyXrpValue(validLarge));
+//            Helper.ThrowsException<TypeInitializationException>(() => Amount.VerifyXrpValue(validSmall));
+//            Helper.ThrowsException<BinaryCodecException>(() => Amount.VerifyXrpValue(valueDecimal));
 //        }
 
 //        [TestMethod]

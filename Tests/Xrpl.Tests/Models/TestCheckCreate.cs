@@ -45,8 +45,8 @@ namespace XrplTests.Xrpl.Models
                 {"DestinationTag", 1u},
                 {"Fee", "12"},
             };
-            await Assert.ThrowsExceptionAsync<ValidationException>(() => Validation.ValidateCheckCreate(tx), "CheckCreate: invalid Destination");
-            await Assert.ThrowsExceptionAsync<ValidationException>(() => Validation.Validate(tx), "CheckCreate: invalid Destination");
+            await Helper.ThrowsExceptionAsync<ValidationException>(() => Validation.ValidateCheckCreate(tx), "CheckCreate: invalid Destination");
+            await Helper.ThrowsExceptionAsync<ValidationException>(() => Validation.Validate(tx), "CheckCreate: invalid Destination");
         }
         [TestMethod]
         public async Task TestVerify_InValid_SendMax()
@@ -62,8 +62,8 @@ namespace XrplTests.Xrpl.Models
                 {"DestinationTag", 1u},
                 {"Fee", "12"},
             };
-            await Assert.ThrowsExceptionAsync<ValidationException>(() => Validation.ValidateCheckCreate(tx), "CheckCreate: invalid SendMax");
-            await Assert.ThrowsExceptionAsync<ValidationException>(() => Validation.Validate(tx), "CheckCreate: invalid SendMax");
+            await Helper.ThrowsExceptionAsync<ValidationException>(() => Validation.ValidateCheckCreate(tx), "CheckCreate: invalid SendMax");
+            await Helper.ThrowsExceptionAsync<ValidationException>(() => Validation.Validate(tx), "CheckCreate: invalid SendMax");
         }
         [TestMethod]
         public async Task TestVerify_InValid_DestinationTag()
@@ -72,15 +72,15 @@ namespace XrplTests.Xrpl.Models
             {
                 { "TransactionType", "CheckCreate" },
                 {"Account", "rUn84CUYbNjRoTQ6mSW7BVJPSVJNLb1QLo"},
-                {"Destination", 7896214789632154},
+                {"Destination", "rfkE1aSy9G8Upk4JssnwBxhEv5p4mn2KTy"},
                 {"SendMax", "100000000"}, //todo in tests must be Issued Currency
                 {"Expiration", 570113521u},
                 {"InvoiceID", "6F1DFD1D0FE8A32E40E1F2C05CF1C15545BAB56B617F9C6C2D63A6B704BEF59B"},
                 {"DestinationTag", "1"},
                 {"Fee", "12"},
             };
-            await Assert.ThrowsExceptionAsync<ValidationException>(() => Validation.ValidateCheckCreate(tx), "CheckCreate: invalid DestinationTag");
-            await Assert.ThrowsExceptionAsync<ValidationException>(() => Validation.Validate(tx), "CheckCreate: invalid DestinationTag");
+            await Helper.ThrowsExceptionAsync<ValidationException>(() => Validation.ValidateCheckCreate(tx), "CheckCreate: invalid DestinationTag");
+            await Helper.ThrowsExceptionAsync<ValidationException>(() => Validation.Validate(tx), "CheckCreate: invalid DestinationTag");
         }
         [TestMethod]
         public async Task TestVerify_InValid_Expiration()
@@ -96,8 +96,8 @@ namespace XrplTests.Xrpl.Models
                 {"DestinationTag", 1u},
                 {"Fee", "12"},
             };
-            await Assert.ThrowsExceptionAsync<ValidationException>(() => Validation.ValidateCheckCreate(tx), "CheckCreate: invalid Expiration");
-            await Assert.ThrowsExceptionAsync<ValidationException>(() => Validation.Validate(tx), "CheckCreate: invalid Expiration");
+            await Helper.ThrowsExceptionAsync<ValidationException>(() => Validation.ValidateCheckCreate(tx), "CheckCreate: invalid Expiration");
+            await Helper.ThrowsExceptionAsync<ValidationException>(() => Validation.Validate(tx), "CheckCreate: invalid Expiration");
         }
         [TestMethod]
         public async Task TestVerify_InValid_InvoiceID()
@@ -113,8 +113,8 @@ namespace XrplTests.Xrpl.Models
                 {"DestinationTag", 1u},
                 {"Fee", "12"},
             };
-            await Assert.ThrowsExceptionAsync<ValidationException>(() => Validation.ValidateCheckCreate(tx), "CheckCreate: invalid InvoiceID");
-            await Assert.ThrowsExceptionAsync<ValidationException>(() => Validation.Validate(tx), "CheckCreate: invalid InvoiceID");
+            await Helper.ThrowsExceptionAsync<ValidationException>(() => Validation.ValidateCheckCreate(tx), "CheckCreate: invalid InvoiceID");
+            await Helper.ThrowsExceptionAsync<ValidationException>(() => Validation.Validate(tx), "CheckCreate: invalid InvoiceID");
         }
     }
 

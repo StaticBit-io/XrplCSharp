@@ -65,7 +65,7 @@ namespace XrplTests.Xrpl.Models
                 {"Sequence", 2470665u},
                 {"Flags", 2147483648u},
             };
-            await Assert.ThrowsExceptionAsync<ValidationException>(() => Validation.Validate(offer), "NFTokenAcceptOffer: must set either NFTokenSellOffer or NFTokenBuyOffer - no ERROR");
+            await Helper.ThrowsExceptionAsync<ValidationException>(() => Validation.Validate(offer), "NFTokenAcceptOffer: must set either NFTokenSellOffer or NFTokenBuyOffer");
         }
         [TestMethod]
         public async Task TestVerify_Invalid_missing_NFTokenSellOffer_and_present_NFTokenBrokerFee()
@@ -80,7 +80,7 @@ namespace XrplTests.Xrpl.Models
                 {"Sequence", 2470665u},
                 {"Flags", 2147483648u},
             };
-            await Assert.ThrowsExceptionAsync<ValidationException>(() => Validation.Validate(offer), "NFTokenAcceptOffer: both NFTokenSellOffer and NFTokenBuyOffer must be set if using brokered mode - no ERROR");
+            await Helper.ThrowsExceptionAsync<ValidationException>(() => Validation.Validate(offer), "NFTokenAcceptOffer: both NFTokenSellOffer and NFTokenBuyOffer must be set if using brokered mode");
         }
         [TestMethod]
         public async Task TestVerify_Invalid_missing_NFTokenBuyOffer_and_present_NFTokenBrokerFee()
@@ -95,7 +95,7 @@ namespace XrplTests.Xrpl.Models
                 {"Sequence", 2470665u},
                 {"Flags", 2147483648u},
             };
-            await Assert.ThrowsExceptionAsync<ValidationException>(() => Validation.Validate(offer), "NFTokenAcceptOffer: both NFTokenSellOffer and NFTokenBuyOffer must be set if using brokered mode - no ERROR");
+            await Helper.ThrowsExceptionAsync<ValidationException>(() => Validation.Validate(offer), "NFTokenAcceptOffer: both NFTokenSellOffer and NFTokenBuyOffer must be set if using brokered mode");
         }
 
         [TestMethod]
@@ -144,7 +144,7 @@ namespace XrplTests.Xrpl.Models
                 {"Sequence", 2470665u},
                 {"Flags", 2147483648u},
             };
-            await Assert.ThrowsExceptionAsync<ValidationException>(() => Validation.Validate(offer), "NFTokenAcceptOffer: NFTokenBrokerFee must be greater than 0; omit if there is no fee - no ERROR");
+            await Helper.ThrowsExceptionAsync<ValidationException>(() => Validation.Validate(offer), "NFTokenAcceptOffer: NFTokenBrokerFee must be greater than 0; omit if there is no fee");
         }
         [TestMethod]
         public async Task TestVerify_Invalid_NFTokenBrokerFee_less_0()
@@ -160,7 +160,7 @@ namespace XrplTests.Xrpl.Models
                 {"Sequence", 2470665u},
                 {"Flags", 2147483648u},
             };
-            await Assert.ThrowsExceptionAsync<ValidationException>(() => Validation.Validate(offer), "NFTokenAcceptOffer: NFTokenBrokerFee must be greater than 0; omit if there is no fee - no ERROR");
+            await Helper.ThrowsExceptionAsync<ValidationException>(() => Validation.Validate(offer), "NFTokenAcceptOffer: NFTokenBrokerFee must be greater than 0; omit if there is no fee");
         }
 
         [TestMethod]
@@ -177,7 +177,7 @@ namespace XrplTests.Xrpl.Models
                 {"Sequence", 2470665u},
                 {"Flags", 2147483648u},
             };
-            await Assert.ThrowsExceptionAsync<ValidationException>(() => Validation.Validate(offer), "NFTokenAcceptOffer: invalid NFTokenBrokerFee - no ERROR");
+            await Helper.ThrowsExceptionAsync<ValidationException>(() => Validation.Validate(offer), "NFTokenAcceptOffer: invalid NFTokenBrokerFee");
         }
 
 

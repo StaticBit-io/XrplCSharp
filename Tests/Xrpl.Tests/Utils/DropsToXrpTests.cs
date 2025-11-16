@@ -13,7 +13,7 @@ namespace XrplTests.Xrpl.Utils
         public void TestDropsToXrp()
         {
             string xrp = XrpConversion.DropsToXrp("2000000");
-            Assert.AreEqual(xrp, "2");
+            Assert.AreEqual("2", xrp);
         }
 
         [TestMethod]
@@ -90,24 +90,24 @@ namespace XrplTests.Xrpl.Utils
         [TestMethod]
         public void TestInvalidDropsToXrpDecimalError()
         {
-            Assert.ThrowsException<FormatException>(() => XrpConversion.DropsToXrp("1.2"));
-            Assert.ThrowsException<FormatException>(() => XrpConversion.DropsToXrp("0.10"));
+            Helper.ThrowsException<FormatException>(() => XrpConversion.DropsToXrp("1.2"));
+            Helper.ThrowsException<FormatException>(() => XrpConversion.DropsToXrp("0.10"));
         }
 
         [TestMethod]
         public void TestInvalidDropsToXrpValueError()
         {
-            Assert.ThrowsException<FormatException>(() => XrpConversion.DropsToXrp("FOO"));
-            Assert.ThrowsException<FormatException>(() => XrpConversion.DropsToXrp("1e-7"));
-            Assert.ThrowsException<FormatException>(() => XrpConversion.DropsToXrp("2,0"));
-            Assert.ThrowsException<FormatException>(() => XrpConversion.DropsToXrp("."));
+            Helper.ThrowsException<FormatException>(() => XrpConversion.DropsToXrp("FOO"));
+            Helper.ThrowsException<FormatException>(() => XrpConversion.DropsToXrp("1e-7"));
+            Helper.ThrowsException<FormatException>(() => XrpConversion.DropsToXrp("2,0"));
+            Helper.ThrowsException<FormatException>(() => XrpConversion.DropsToXrp("."));
         }
 
         [TestMethod]
         public void TestInvalidDropsToXrpMultipleDecimalPointError()
         {
-            Assert.ThrowsException<FormatException>(() => XrpConversion.DropsToXrp("1.0.0"));
-            Assert.ThrowsException<FormatException>(() => XrpConversion.DropsToXrp("..."));
+            Helper.ThrowsException<FormatException>(() => XrpConversion.DropsToXrp("1.0.0"));
+            Helper.ThrowsException<FormatException>(() => XrpConversion.DropsToXrp("..."));
         }
     }
 }

@@ -165,7 +165,7 @@ namespace Xrpl.Models.Transactions
             if (TakerGets is not string && !Common.IsAmount(TakerGets))
                 throw new ValidationException("OfferCreate: invalid TakerGets");
             if (TakerPays is not string && !Common.IsAmount(TakerPays))
-                throw new ValidationException("OfferCreate: invalid TakerGets");
+                throw new ValidationException("OfferCreate: invalid TakerPays");
 
             if (tx.TryGetValue("Expiration", out var Expiration) && Expiration is not uint { })
                 throw new ValidationException("OfferCreate: invalid Expiration");

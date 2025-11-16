@@ -61,7 +61,7 @@ namespace XrplTests.Xrpl.ClientLib.Integration
             // get check ID
             AccountObjectsRequest request2 = new AccountObjectsRequest(runner.wallet.ClassicAddress) { Type = LedgerEntryType.Check };
             AccountObjects response2 = await runner.client.AccountObjects(request1);
-            Assert.AreEqual(response2.AccountObjectList.Count, 0);
+            Assert.IsEmpty(response2.AccountObjectList);
         }
     }
 }

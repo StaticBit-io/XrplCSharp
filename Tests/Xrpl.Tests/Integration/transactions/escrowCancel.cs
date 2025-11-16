@@ -1,9 +1,9 @@
-using System;
-using System.Collections.Generic;
-using System.Diagnostics;
-using System.Threading.Tasks;
 using Microsoft.VisualStudio.TestTools.UnitTesting;
+
 using Newtonsoft.Json;
+
+using System.Collections.Generic;
+using System.Threading.Tasks;
 
 using Xrpl.Models;
 using Xrpl.Models.Common;
@@ -73,7 +73,7 @@ namespace XrplTests.Xrpl.ClientLib.Integration
             // get check ID
             AccountObjectsRequest request3 = new AccountObjectsRequest(runner.wallet.ClassicAddress) { Type = LedgerEntryType.Escrow };
             AccountObjects response3 = await runner.client.AccountObjects(request3);
-            Assert.AreEqual(response3.AccountObjectList.Count, 0);
+            Assert.IsEmpty(response3.AccountObjectList);
         }
     }
 }

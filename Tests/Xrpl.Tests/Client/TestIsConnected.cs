@@ -28,9 +28,9 @@ namespace Xrpl.Tests.ClientLib
         [TestMethod]
         public async Task TestConnectedDisconnect()
         {
-            Assert.AreEqual(true, runner.client.IsConnected());
+            Assert.IsTrue(runner.client.IsConnected());
             await runner.client.Disconnect();
-            Assert.AreEqual(false, runner.client.IsConnected());
+            Assert.IsFalse(runner.client.IsConnected());
         }
     }
 }

@@ -1,5 +1,7 @@
 ﻿using Microsoft.VisualStudio.TestTools.UnitTesting;
 
+using XrplTests;
+
 using static Xrpl.AddressCodec.XrplCodec;
 
 // https://github.com/XRPLF/xrpl.js/blob/main/packages/ripple-address-codec/src/xrp-codec.test.js
@@ -12,7 +14,7 @@ namespace Xrpl.AddressCodec.Tests
         public void EncodeDecodeAccountIDTest(string base58, string hex)
         {
             string actual = XrplCodec.EncodeAccountID(hex.FromHex());
-            Assert.AreEqual(actual, base58);
+            Assert.AreEqual(base58, actual);
             byte[] buffer = XrplCodec.DecodeAccountID(base58);
             Assert.AreEqual(buffer.ToHex(), hex);
         }
@@ -29,7 +31,7 @@ namespace Xrpl.AddressCodec.Tests
         public void EncodeDecodeNodePublicTest(string base58, string hex)
         {
             string actual = XrplCodec.EncodeNodePublic(hex.FromHex());
-            Assert.AreEqual(actual, base58);
+            Assert.AreEqual(base58, actual);
             byte[] buffer = XrplCodec.DecodeNodePublic(base58);
             Assert.AreEqual(buffer.ToHex(), hex);
         }
@@ -46,7 +48,7 @@ namespace Xrpl.AddressCodec.Tests
         public void EncodeDecodeAccountPublicTest(string base58, string hex)
         {
             string actual = XrplCodec.EncodeAccountPublic(hex.FromHex());
-            Assert.AreEqual(actual, base58);
+            Assert.AreEqual(base58, actual);
             byte[] buffer = XrplCodec.DecodeAccountPublic(base58);
             Assert.AreEqual(buffer.ToHex(), hex);
         }
@@ -64,12 +66,12 @@ namespace Xrpl.AddressCodec.Tests
         public void TestDecodeArbitrarySeed()
         {
             XrplCodec.DecodedSeed decoded = XrplCodec.DecodeSeed("sEdTM1uX8pu2do5XvTnutH6HsouMaM2");
-            Assert.AreEqual(decoded.Bytes.ToHex(), "4C3A1D213FBDFB14C7C28D609469B341");
-            Assert.AreEqual(decoded.Type, "ed25519");
+            Assert.AreEqual("4C3A1D213FBDFB14C7C28D609469B341", decoded.Bytes.ToHex());
+            Assert.AreEqual("ed25519", decoded.Type);
 
             XrplCodec.DecodedSeed decoded1 = XrplCodec.DecodeSeed("sn259rEFXrQrWyx3Q7XneWcwV6dfL");
-            Assert.AreEqual(decoded1.Bytes.ToHex(), "CF2DE378FBDD7E2EE87D486DFB5A7BFF");
-            Assert.AreEqual(decoded1.Type, "secp256k1");
+            Assert.AreEqual("CF2DE378FBDD7E2EE87D486DFB5A7BFF", decoded1.Bytes.ToHex());
+            Assert.AreEqual("secp256k1", decoded1.Type);
         }
 
         [TestMethod]
@@ -78,7 +80,7 @@ namespace Xrpl.AddressCodec.Tests
             string edSeed = "sEdTM1uX8pu2do5XvTnutH6HsouMaM2";
             XrplCodec.DecodedSeed decoded = XrplCodec.DecodeSeed(edSeed);
             string type = "ed25519";
-            Assert.AreEqual(decoded.Bytes.ToHex(), "4C3A1D213FBDFB14C7C28D609469B341");
+            Assert.AreEqual("4C3A1D213FBDFB14C7C28D609469B341", decoded.Bytes.ToHex());
             Assert.AreEqual(decoded.Type, type);
             Assert.AreEqual(XrplCodec.EncodeSeed(decoded.Bytes, type), edSeed);
         }
@@ -115,54 +117,58 @@ namespace Xrpl.AddressCodec.Tests
         public void TestEncodeSECP()
         {
             string result = XrplCodec.EncodeSeed("CF2DE378FBDD7E2EE87D486DFB5A7BFF".FromHex(), "secp256k1");
-            Assert.AreEqual(result, "sn259rEFXrQrWyx3Q7XneWcwV6dfL");
+            Assert.AreEqual("sn259rEFXrQrWyx3Q7XneWcwV6dfL", result);
         }
 
         [TestMethod]
         public void TestEncodeLowSECP()
         {
             string result = XrplCodec.EncodeSeed("00000000000000000000000000000000".FromHex(), "secp256k1");
-            Assert.AreEqual(result, "sp6JS7f14BuwFY8Mw6bTtLKWauoUs");
+            Assert.AreEqual("sp6JS7f14BuwFY8Mw6bTtLKWauoUs", result);
         }
 
         [TestMethod]
         public void TestEncodeHighSECP()
         {
             string result = XrplCodec.EncodeSeed("FFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFF".FromHex(), "secp256k1");
-            Assert.AreEqual(result, "saGwBRReqUNKuWNLpUAq8i8NkXEPN");
+            Assert.AreEqual("saGwBRReqUNKuWNLpUAq8i8NkXEPN", result);
         }
 
         [TestMethod]
         public void TestEncodeED()
         {
             string result = XrplCodec.EncodeSeed("4C3A1D213FBDFB14C7C28D609469B341".FromHex(), "ed25519");
-            Assert.AreEqual(result, "sEdTM1uX8pu2do5XvTnutH6HsouMaM2");
+            Assert.AreEqual("sEdTM1uX8pu2do5XvTnutH6HsouMaM2", result);
         }
 
         [TestMethod]
         public void TestEncodeLowED()
         {
             string result = XrplCodec.EncodeSeed("00000000000000000000000000000000".FromHex(), "ed25519");
-            Assert.AreEqual(result, "sEdSJHS4oiAdz7w2X2ni1gFiqtbJHqE");
+            Assert.AreEqual("sEdSJHS4oiAdz7w2X2ni1gFiqtbJHqE", result);
         }
 
         [TestMethod]
         public void TestEncodeHighED()
         {
             string result = XrplCodec.EncodeSeed("FFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFF".FromHex(), "ed25519");
-            Assert.AreEqual(result, "sEdV19BLfeQeKdEXyYA4NhjPJe6XBfG");
+            Assert.AreEqual("sEdV19BLfeQeKdEXyYA4NhjPJe6XBfG", result);
         }
 
         [TestMethod]
         public void TestSeedLess16Bytes()
         {
-            Assert.ThrowsException<EncodingFormatException>(() => XrplCodec.EncodeSeed("CF2DE378FBDD7E2EE87D486DFB5A7B".FromHex(), "secp256k1"));
+            var ex = Helper.Throws<EncodingFormatException>(() =>
+                XrplCodec.EncodeSeed("CF2DE378FBDD7E2EE87D486DFB5A7B".FromHex(), "secp256k1")
+            );
         }
 
         [TestMethod]
         public void TestSeedGreater16Bytes()
         {
-            Assert.ThrowsException<EncodingFormatException>(() => XrplCodec.EncodeSeed("CF2DE378FBDD7E2EE87D486DFB5A7BFFFF".FromHex(), "secp256k1"));
+            var ex = Helper.Throws<EncodingFormatException>(() =>
+                XrplCodec.EncodeSeed("CF2DE378FBDD7E2EE87D486DFB5A7BFFFF".FromHex(), "secp256k1")
+            );
         }
     }
 
@@ -173,16 +179,16 @@ namespace Xrpl.AddressCodec.Tests
         public void TestEncodeED()
         {
             XrplCodec.DecodedSeed decoded = XrplCodec.DecodeSeed("sEdTM1uX8pu2do5XvTnutH6HsouMaM2");
-            Assert.AreEqual(decoded.Bytes.ToHex(), "4C3A1D213FBDFB14C7C28D609469B341");
-            Assert.AreEqual(decoded.Type, "ed25519");
+            Assert.AreEqual("4C3A1D213FBDFB14C7C28D609469B341", decoded.Bytes.ToHex());
+            Assert.AreEqual("ed25519", decoded.Type);
         }
 
         [TestMethod]
         public void TestEncodeSECP()
         {
             XrplCodec.DecodedSeed decoded = XrplCodec.DecodeSeed("sn259rEFXrQrWyx3Q7XneWcwV6dfL");
-            Assert.AreEqual(decoded.Bytes.ToHex(), "CF2DE378FBDD7E2EE87D486DFB5A7BFF");
-            Assert.AreEqual(decoded.Type, "secp256k1");
+            Assert.AreEqual("CF2DE378FBDD7E2EE87D486DFB5A7BFF", decoded.Bytes.ToHex());
+            Assert.AreEqual("secp256k1", decoded.Type);
         }
     }
 
@@ -193,13 +199,15 @@ namespace Xrpl.AddressCodec.Tests
         public void TestEncodeAccountID()
         {
             string encoded = XrplCodec.EncodeAccountID("BA8E78626EE42C41B46D46C3048DF3A1C3C87072".FromHex());
-            Assert.AreEqual(encoded, "rJrRMgiRgrU6hDF4pgu5DXQdWyPbY35ErN");
+            Assert.AreEqual("rJrRMgiRgrU6hDF4pgu5DXQdWyPbY35ErN", encoded);
         }
 
         [TestMethod]
         public void TestInvalidAccountID()
         {
-            Assert.ThrowsException<EncodingFormatException>(() => XrplCodec.EncodeAccountID("ABCDEF".FromHex()));
+            var ex = Helper.Throws<EncodingFormatException>(() =>
+                XrplCodec.EncodeAccountID("ABCDEF".FromHex())
+            );
         }
     }
 
@@ -210,7 +218,7 @@ namespace Xrpl.AddressCodec.Tests
         public void TestDecodeNodePublic()
         {
             byte[] decoded = XrplCodec.DecodeNodePublic("n9MXXueo837zYH36DvMc13BwHcqtfAWNJY5czWVbp7uYTj7x17TH");
-            Assert.AreEqual(decoded.ToHex(), "0388E5BA87A000CB807240DF8C848EB0B5FFA5C8E5A521BC8E105C0F0A44217828");
+            Assert.AreEqual("0388E5BA87A000CB807240DF8C848EB0B5FFA5C8E5A521BC8E105C0F0A44217828", decoded.ToHex());
         }
     }
 

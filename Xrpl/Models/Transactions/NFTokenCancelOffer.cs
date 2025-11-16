@@ -55,7 +55,7 @@ namespace Xrpl.Models.Transactions
         {
             await Common.ValidateBaseTransaction(tx);
             if (!tx.TryGetValue("NFTokenOffers", out var NFTokenOffers) || NFTokenOffers is not List<dynamic> { } offers)
-                throw new ValidationException("NFTokenCancelOffer : missing field NFTokenOffers ");
+                throw new ValidationException("NFTokenCancelOffer: missing field NFTokenOffers");
 
             if (offers.Count == 0)
                 throw new ValidationException("NFTokenCancelOffer: empty field NFTokenOffers");
