@@ -20,7 +20,7 @@ internal class Program
             ApiVersion = 2,
             UseCustomPing = true,
             RequestPolicy = Xrpl.Client.RequestFailurePolicy.WaitForConnection,
-            ConnectionAcquisitionTimeout = System.TimeSpan.FromSeconds(10),
+            ConnectionAcquisitionTimeout = System.TimeSpan.FromSeconds(30),
             MaxReconnectAttempts = 4,
             StopAfterMaxAttempts = true,
         });
