@@ -64,18 +64,37 @@
             </div>
         }
         
-        <button @onclick="ChangeServerAsync" 
-                disabled="@IsChangingServer"
-                style="background: #ff6600; color: white; padding: 10px 20px; border: none; border-radius: 4px; cursor: pointer; font-weight: bold;">
-            @if (IsChangingServer)
-            {
-                <span>Changing Server...</span>
-            }
-            else
-            {
-                <span>Change Server</span>
-            }
-        </button>
+        <div style="display: flex; gap: 10px; align-items: center;">
+            <button @onclick="ChangeServerAsync" 
+                    disabled="@IsChangingServer"
+                    style="background: #ff6600; color: white; padding: 10px 20px; border: none; border-radius: 4px; cursor: pointer; font-weight: bold; flex: 1; max-width: 200px;">
+                @if (IsChangingServer)
+                {
+                    <span>Changing Server...</span>
+                }
+                else
+                {
+                    <span>Change Server</span>
+                }
+            </button>
+            
+            <button @onclick="ToggleConnectionAsync" 
+                    disabled="@(IsChangingServer || IsTogglingConnection)"
+                    style="background: @(IsConnected ? "#dc3545" : "#28a745"); color: white; padding: 10px 20px; border: none; border-radius: 4px; cursor: pointer; font-weight: bold; flex: 1; max-width: 200px;">
+                @if (IsTogglingConnection)
+                {
+                    <span>@(IsConnected ? "Disconnecting..." : "Connecting...")</span>
+                }
+                else if (IsConnected)
+                {
+                    <span>Disconnect</span>
+                }
+                else
+                {
+                    <span>Connect</span>
+                }
+            </button>
+        </div>
     </div>
 </div>
 
@@ -144,6 +163,7 @@
     ServerType SelectedServerType { get; set; } = ServerType.Mainnet;
     string CustomServerUrl { get; set; } = "";
     bool IsChangingServer { get; set; }
+    bool IsTogglingConnection { get; set; }
     string CurrentServerUrl { get; set; } = "wss://s2.ripple.com";
     string? PreviousServerUrl { get; set; }
     ReconnectInfo? CurrentReconnectInfo { get; set; }
@@ -404,6 +424,50 @@
         finally
         {
             IsChangingServer = false;
+            StateHasChanged();
+        }
+    }
+    
+    private async Task ToggleConnectionAsync()
+    {
+        if (IsTogglingConnection)
+            return;
+            
+        IsTogglingConnection = true;
+        StateHasChanged();
+        
+        try
+        {
+            if (IsConnected)
+            {
+                AddStatusMessage("Disconnecting from XRPL...", MessageType.Info);
+                Console.WriteLine("User-initiated disconnect");
+                
+                await client.Disconnect();
+                
+                AddStatusMessage("Disconnected successfully", MessageType.Success);
+                Console.WriteLine("Successfully disconnected");
+            }
+            else
+            {
+                AddStatusMessage("Connecting to XRPL...", MessageType.Info);
+                Console.WriteLine($"User-initiated connect to {CurrentServerUrl}");
+                
+                await client.Connect();
+                
+                AddStatusMessage("Connected successfully", MessageType.Success);
+                Console.WriteLine("Successfully connected");
+            }
+        }
+        catch (Exception ex)
+        {
+            var action = IsConnected ? "disconnect" : "connect";
+            AddStatusMessage($"Failed to {action}: {ex.Message}", MessageType.Error);
+            Console.WriteLine($"Error during {action}: {ex}");
+        }
+        finally
+        {
+            IsTogglingConnection = false;
             StateHasChanged();
         }
     }

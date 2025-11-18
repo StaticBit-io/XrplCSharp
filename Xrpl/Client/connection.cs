@@ -195,8 +195,6 @@ namespace Xrpl.Client
             return WebSocketClient.Create(url); // todo add options
         }
 
-        int INTENTIONAL_DISCONNECT_CODE = 4000;
-
         public string url { get; private set; }
         public WebSocketClient ws;
 
@@ -210,6 +208,7 @@ namespace Xrpl.Client
 
         private DateTime? lastActivityTime = null;
         private Timer? pingTimer = null;
+        private WebSocketClient? _userInitiatedSocket = null;
 
         public ConnectionOptions config { get; private set; }
         public RequestManager requestManager = new RequestManager();
@@ -359,11 +358,11 @@ namespace Xrpl.Client
                 });
 
                 ws.OnMessageReceived(async (m, ws) => { await IOnMessage(m); });
-                ws.OnDisconnect(async (closeStatus, closeDescription, ws) =>
+                ws.OnDisconnect(async (closeStatus, closeDescription, closingSocket) =>
                 {
                     timer.Stop();
                     int? code = (int?)closeStatus;
-                    await OnceClose(code, closeDescription);
+                    await OnceClose(code, closeDescription, closingSocket);
                 });
 
                 await this.ws.Connect();
@@ -385,14 +384,11 @@ namespace Xrpl.Client
             {
                 return 0;
             }
-            var result = 0;
-            if (ws != null)
-            {
-                ws.Disconnect();
-                //ws.OnDisconnect += (code) => { result = code; };
-            }
 
-            return result;
+            Interlocked.Exchange(ref _userInitiatedSocket, ws);
+            ws.Disconnect();
+
+            return 0;
         }
 
         private async Task OnConnectionFailed(Exception error)
@@ -439,12 +435,14 @@ namespace Xrpl.Client
             ws.SendMessage(message);
         }
 
-        private async Task EnsureConnectionForRequest()
+        private async Task EnsureConnectionForRequest(RequestFailurePolicy? policyOverride = null)
         {
             if (this.ShouldBeConnected())
                 return;
 
-            switch (config.RequestPolicy)
+            var policy = policyOverride ?? config.RequestPolicy;
+
+            switch (policy)
             {
                 case RequestFailurePolicy.ImmediateFail:
                     throw new NotConnectedException();
@@ -460,9 +458,9 @@ namespace Xrpl.Client
             }
         }
 
-        public async Task<Dictionary<string, dynamic>> Request(Dictionary<string, dynamic> request, TimeSpan? timeout = null)
+        public async Task<Dictionary<string, dynamic>> Request(Dictionary<string, dynamic> request, TimeSpan? timeout = null, RequestFailurePolicy? policyOverride = null)
         {
-            await EnsureConnectionForRequest();
+            await EnsureConnectionForRequest(policyOverride);
 
             XrplRequest _request = this.requestManager.CreateRequest(request, timeout ?? this.config.RequestTimeout);
             try
@@ -476,9 +474,9 @@ namespace Xrpl.Client
             return await _request.Promise;
         }
 
-        public async Task<dynamic> GRequest<T, R>(R request, TimeSpan? timeout = null)
+        public async Task<dynamic> GRequest<T, R>(R request, TimeSpan? timeout = null, RequestFailurePolicy? policyOverride = null)
         {
-            await EnsureConnectionForRequest();
+            await EnsureConnectionForRequest(policyOverride);
 
             XrplGRequest _request = this.requestManager.CreateGRequest<T, R>(request, timeout ?? this.config.RequestTimeout);
             try
@@ -528,7 +526,7 @@ namespace Xrpl.Client
             }
         }
 
-        private async Task OnceClose(int? code, string? description = null)
+        private async Task OnceClose(int? code, string? description, WebSocketClient closingSocket)
         {
             StopPingTimer();
 
@@ -548,19 +546,26 @@ namespace Xrpl.Client
                     await OnDisconnect?.Invoke(code, userMessage)!;
             }
 
-            if (code == INTENTIONAL_DISCONNECT_CODE)
+            var isUserInitiated = Interlocked.CompareExchange(
+                ref _userInitiatedSocket,
+                null,
+                closingSocket
+            ) == closingSocket;
+
+            if (isUserInitiated)
             {
+                _reconnectAttempts = 0;
+                var noReconnectMessage = $"Connection closed permanently. {userMessage}";
                 OnConnectionStatus?.Invoke(new ConnectionStatusInfo
                 {
-                    Message = userMessage,
-                    Severity = severity,
+                    Message = noReconnectMessage,
+                    Severity = ConnectionCloseSeverity.Warning,
                     Reconnect = null
                 });
-                _reconnectAttempts = 0;
                 return;
             }
 
-            if (ShouldReconnect(code))
+            if (ShouldReconnect(code) || code == 1000)
             {
                 OnConnectionStatus?.Invoke(new ConnectionStatusInfo
                 {
@@ -729,24 +734,29 @@ namespace Xrpl.Client
                         return;
                     }
 
-                    if (this.ShouldBeConnected())
+                    if (!IsConnected())
                     {
-                        try
+                        return;
+                    }
+
+                    try
+                    {
+                        if (OnPing != null)
                         {
-                            if (OnPing != null)
-                            {
-                                await OnPing.Invoke("Ping");
-                            }
-                            await Request(new Dictionary<string, dynamic> { { "command", "ping" } });
-                            if (OnPing != null)
-                            {
-                                await OnPing.Invoke("Pong");
-                            }
+                            await OnPing.Invoke("Ping");
                         }
-                        catch (Exception pingEx)
+                        await Request(new Dictionary<string, dynamic> { { "command", "ping" } }, null, RequestFailurePolicy.ImmediateFail);
+                        if (OnPing != null)
                         {
-                            Console.WriteLine($"Ping request error: {pingEx.Message}");
+                            await OnPing.Invoke("Pong");
                         }
+                    }
+                    catch (NotConnectedException)
+                    {
+                    }
+                    catch (Exception pingEx)
+                    {
+                        Console.WriteLine($"Ping request error: {pingEx.Message}");
                     }
                 }
                 catch (Exception ex)
