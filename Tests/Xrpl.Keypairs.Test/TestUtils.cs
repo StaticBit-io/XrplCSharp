@@ -31,25 +31,25 @@ namespace Xrpl.Keypairs.Tests
         [TestMethod]
         public void HexToBytesEmptyTest()
         {
-            Assert.AreEqual(Equality("".FromHex(), new byte[0]), true);
+            Assert.IsTrue(Equality("".FromHex(), new byte[0]));
         }
 
         [TestMethod]
         public void HexToBytesZeroTest()
         {
-            Assert.AreEqual(Equality("000000".FromHex(), new byte[] { 0x0, 0x0, 0x0 }), true);
+            Assert.IsTrue(Equality("000000".FromHex(), new byte[] { 0x0, 0x0, 0x0 }));
         }
 
         [TestMethod]
         public void HexToBytesDEEDBEEFTest()
         {
-            Assert.AreEqual(Equality("DEADBEEF".FromHex(), new byte[] { 222, 173, 190, 239 }), true);
+            Assert.IsTrue(Equality("DEADBEEF".FromHex(), new byte[] { 222, 173, 190, 239 }));
         }
 
         [TestMethod]
         public void BytesToHexDEEDBEEFTest()
         {
-            Assert.AreEqual(new byte[] { 222, 173, 190, 239 }.ToHex(), "DEADBEEF");
+            Assert.AreEqual("DEADBEEF", new byte[] { 222, 173, 190, 239 }.ToHex());
         }
     }
 }

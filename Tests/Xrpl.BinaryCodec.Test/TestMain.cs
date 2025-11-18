@@ -131,7 +131,7 @@ namespace Xrpl.BinaryCodec.Tests
         public void CheckXaddressJsons(TestXData test)
         {
             Assert.AreEqual(XrplBinaryCodec.Encode(test.xjson), XrplBinaryCodec.Encode(test.rjson));
-            Assert.IsTrue(XrplBinaryCodec.Decode(XrplBinaryCodec.Encode(test.xjson)) == test.rjson);
+            Assert.AreEqual(test.rjson, XrplBinaryCodec.Decode(XrplBinaryCodec.Encode(test.xjson)));
         }
 
         public void MakeSuite(string name, TestData[] entries)
@@ -229,7 +229,7 @@ namespace Xrpl.BinaryCodec.Tests
         public void TestSingleSigning()
         {
             var expected = "53545800120000228000000024000000016140000000000003E868400000000000000A7321ED5F5AC8B98974A3CA843326D9B88CEBD0560177B973EE0B149F782CFAA06DC66A81145B812C9D57731E27A2DA8B1830195F88EF32A3B68314B5F762798A53D543A014CAF8B297CFF8F2F937E8";
-            Assert.AreEqual(XrplBinaryCodec.EncodeForSigning(TX_JSON), expected);
+            Assert.AreEqual(expected, XrplBinaryCodec.EncodeForSigning(TX_JSON));
         }
 
         [TestMethod]
@@ -243,7 +243,7 @@ namespace Xrpl.BinaryCodec.Tests
                 { "channel", channel },
             };
             var expected = "434C4D0043904CBFCDCEC530B4037871F86EE90BF799DF8D2E0EA564BC8A3F332E4F5FB100000000000003E8";
-            Assert.AreEqual(XrplBinaryCodec.EncodeForSigningClaim(TX_JSON), expected);
+            Assert.AreEqual(expected, XrplBinaryCodec.EncodeForSigningClaim(TX_JSON));
         }
 
         [TestMethod]
@@ -251,7 +251,7 @@ namespace Xrpl.BinaryCodec.Tests
         {
             var signingAccount = "rJZdUusLDtY9NEsGea7ijqhVrXv98rYBYN";
             var expected = "534D5400120000228000000024000000016140000000000003E868400000000000000A730081145B812C9D57731E27A2DA8B1830195F88EF32A3B68314B5F762798A53D543A014CAF8B297CFF8F2F937E8C0A5ABEF242802EFED4B041E8F2D4A8CC86AE3D1";
-            Assert.AreEqual(XrplBinaryCodec.EncodeForMultiSigning(MULTISIG_JSON, signingAccount), expected);
+            Assert.AreEqual(expected, XrplBinaryCodec.EncodeForMultiSigning(MULTISIG_JSON, signingAccount));
         }
     }
 }

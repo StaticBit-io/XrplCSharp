@@ -26,10 +26,10 @@ namespace Xrpl.Keypairs.Tests
         public void TestGenerateSeedSECPRandom()
         {
             string seed = XrplKeypairs.GenerateSeed();
-            Assert.AreEqual(seed[0].ToString(), "s");
+            Assert.AreEqual("s", seed[0].ToString());
             DecodedSeed decodedSeed = XrplCodec.DecodeSeed(seed);
-            Assert.IsTrue(decodedSeed.Type == "secp256k1");
-            Assert.IsTrue(decodedSeed.Bytes.Length == 16);
+            Assert.AreEqual("secp256k1", decodedSeed.Type);
+            Assert.HasCount(16, decodedSeed.Bytes);
         }
 
         [TestMethod]
@@ -42,10 +42,10 @@ namespace Xrpl.Keypairs.Tests
         public void TestGenerateSeedEDRandom()
         {
             string seed = XrplKeypairs.GenerateSeed(null, "ed25519");
-            Assert.AreEqual(seed[0..3].ToString(), "sEd");
+            Assert.AreEqual("sEd", seed[0..3].ToString());
             DecodedSeed decodedSeed = XrplCodec.DecodeSeed(seed);
-            Assert.IsTrue(decodedSeed.Type == "ed25519");
-            Assert.IsTrue(decodedSeed.Bytes.Length == 16);
+            Assert.AreEqual("ed25519", decodedSeed.Type);
+            Assert.HasCount(16, decodedSeed.Bytes);
         }
 
         [TestMethod]
@@ -122,7 +122,7 @@ namespace Xrpl.Keypairs.Tests
             string message = "CF83E1357EEFB8BDF1542850D66D8007D620E4050B5715DC83F4A921D36CE9CE";
             byte[] messageBytes = message.FromHex();
             string signature = XrplKeypairs.Sign(messageBytes, privateKey);
-            Assert.AreEqual(signature, "30440220600D60F6FF362A63C9B8484C5911F0B436047AB0FFE37D784BB115FFEF31894402200C87284F7FA540A454D20BD5D3EA1903B8D7AE4E991D7B44290DB30EF707B47D");
+            Assert.AreEqual("30440220600D60F6FF362A63C9B8484C5911F0B436047AB0FFE37D784BB115FFEF31894402200C87284F7FA540A454D20BD5D3EA1903B8D7AE4E991D7B44290DB30EF707B47D", signature);
         }
 
         [TestMethod]

@@ -83,7 +83,7 @@ namespace XrplTests.Xrpl.Models
                 {"TransactionType", "Payment"},
                 {"Fee", 1000},
             };
-            await Assert.ThrowsExceptionAsync<ValidationException>(() => Common.ValidateBaseTransaction(tx), "BaseTransaction: invalid Fee - no ERROR");
+            await Helper.ThrowsExceptionAsync<ValidationException>(() => Common.ValidateBaseTransaction(tx), "BaseTransaction: invalid Fee");
         }
         [TestMethod]
         public async Task TestVerify_Invalid_Sequence()
@@ -94,7 +94,7 @@ namespace XrplTests.Xrpl.Models
                 {"TransactionType", "Payment"},
                 {"Sequence", "145"},
             };
-            await Assert.ThrowsExceptionAsync<ValidationException>(() => Common.ValidateBaseTransaction(tx), "BaseTransaction: invalid Sequence - no ERROR");
+            await Helper.ThrowsExceptionAsync<ValidationException>(() => Common.ValidateBaseTransaction(tx), "BaseTransaction: invalid Sequence");
         }
         [TestMethod]
         public async Task TestVerify_Invalid_AccountTxnID()
@@ -105,7 +105,7 @@ namespace XrplTests.Xrpl.Models
                 {"TransactionType", "Payment"},
                 {"AccountTxnID",new List<dynamic>(){"WRONG"}},
             };
-            await Assert.ThrowsExceptionAsync<ValidationException>(() => Common.ValidateBaseTransaction(tx), "BaseTransaction: invalid AccountTxnID - no ERROR");
+            await Helper.ThrowsExceptionAsync<ValidationException>(() => Common.ValidateBaseTransaction(tx), "BaseTransaction: invalid AccountTxnID");
         }
         [TestMethod]
         public async Task TestVerify_Invalid_LastLedgerSequence()
@@ -116,7 +116,7 @@ namespace XrplTests.Xrpl.Models
                 {"TransactionType", "Payment"},
                 {"LastLedgerSequence","1000"},
             };
-            await Assert.ThrowsExceptionAsync<ValidationException>(() => Common.ValidateBaseTransaction(tx), "BaseTransaction: invalid LastLedgerSequence - no ERROR");
+            await Helper.ThrowsExceptionAsync<ValidationException>(() => Common.ValidateBaseTransaction(tx), "BaseTransaction: invalid LastLedgerSequence");
         }
         [TestMethod]
         public async Task TestVerify_Invalid_SourceTag()
@@ -127,7 +127,7 @@ namespace XrplTests.Xrpl.Models
                 {"TransactionType", "Payment"},
                 {"SourceTag",new List<dynamic>(){"ARRAY"}},
             };
-            await Assert.ThrowsExceptionAsync<ValidationException>(() => Common.ValidateBaseTransaction(tx), "BaseTransaction: invalid SourceTag - no ERROR");
+            await Helper.ThrowsExceptionAsync<ValidationException>(() => Common.ValidateBaseTransaction(tx), "BaseTransaction: invalid SourceTag");
         }
         [TestMethod]
         public async Task TestVerify_Invalid_SigningPubKey()
@@ -138,7 +138,7 @@ namespace XrplTests.Xrpl.Models
                 {"TransactionType", "Payment"},
                 {"SigningPubKey",1000},
             };
-            await Assert.ThrowsExceptionAsync<ValidationException>(() => Common.ValidateBaseTransaction(tx), "BaseTransaction: invalid SigningPubKey - no ERROR");
+            await Helper.ThrowsExceptionAsync<ValidationException>(() => Common.ValidateBaseTransaction(tx), "BaseTransaction: invalid SigningPubKey");
         }
         [TestMethod]
         public async Task TestVerify_Invalid_TicketSequence()
@@ -149,7 +149,7 @@ namespace XrplTests.Xrpl.Models
                 {"TransactionType", "Payment"},
                 {"TicketSequence","1000"},
             };
-            await Assert.ThrowsExceptionAsync<ValidationException>(() => Common.ValidateBaseTransaction(tx), "BaseTransaction: invalid TicketSequence - no ERROR");
+            await Helper.ThrowsExceptionAsync<ValidationException>(() => Common.ValidateBaseTransaction(tx), "BaseTransaction: invalid TicketSequence");
         }
         [TestMethod]
         public async Task TestVerify_Invalid_TxnSignature()
@@ -160,7 +160,7 @@ namespace XrplTests.Xrpl.Models
                 {"TransactionType", "Payment"},
                 {"TxnSignature",1000},
             };
-            await Assert.ThrowsExceptionAsync<ValidationException>(() => Common.ValidateBaseTransaction(tx), "BaseTransaction: invalid TxnSignature - no ERROR");
+            await Helper.ThrowsExceptionAsync<ValidationException>(() => Common.ValidateBaseTransaction(tx), "BaseTransaction: invalid TxnSignature");
         }
         [TestMethod]
         public async Task TestVerify_Invalid_Signers_1()
@@ -171,7 +171,7 @@ namespace XrplTests.Xrpl.Models
                 {"TransactionType", "Payment"},
                 {"Signers",new List<dynamic>() { }},
             };
-            await Assert.ThrowsExceptionAsync<ValidationException>(() => Common.ValidateBaseTransaction(tx), "BaseTransaction: invalid Signers - no ERROR");
+            await Helper.ThrowsExceptionAsync<ValidationException>(() => Common.ValidateBaseTransaction(tx), "BaseTransaction: invalid Signers");
         }
         [TestMethod]
         public async Task TestVerify_Invalid_Signers_2()
@@ -189,7 +189,7 @@ namespace XrplTests.Xrpl.Models
                     }
                 }},
             };
-            await Assert.ThrowsExceptionAsync<ValidationException>(() => Common.ValidateBaseTransaction(tx), "BaseTransaction: invalid Signers - no ERROR");
+            await Helper.ThrowsExceptionAsync<ValidationException>(() => Common.ValidateBaseTransaction(tx), "BaseTransaction: invalid Signers");
         }
         [TestMethod]
         public async Task TestVerify_Invalid_Memo()
@@ -207,7 +207,7 @@ namespace XrplTests.Xrpl.Models
                     },
                 }},
             };
-            await Assert.ThrowsExceptionAsync<ValidationException>(() => Common.ValidateBaseTransaction(tx), "BaseTransaction: invalid Memos");
+            await Helper.ThrowsExceptionAsync<ValidationException>(() => Common.ValidateBaseTransaction(tx), "BaseTransaction: invalid Memos");
         }
     }
 

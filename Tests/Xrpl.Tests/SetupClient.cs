@@ -1,4 +1,5 @@
 ﻿using System;
+using System.Collections.Generic;
 using System.Diagnostics;
 using System.Threading;
 using System.Threading.Tasks;
@@ -19,13 +20,30 @@ namespace Xrpl.Tests
         public async Task<SetupUnitClient> SetupClient()
         {
             int port = TestUtils.GetFreePort();
+            mockedRippled = new CreateMockRippled(port);
+            mockedRippled.AddResponse("server_info", new Dictionary<string, dynamic>
+            {
+                { "type", "response" },
+                { "status", "success" },
+                { "result", new Dictionary<string, dynamic>
+                    {
+                        { "info", new Dictionary<string, dynamic>
+                            {
+                                { "build_version", "test-mock" },
+                                { "complete_ledgers", "1-1" },
+                                { "server_state", "full" }
+                            }
+                        }
+                    }
+                }
+            });
             var tcpListenerThread = new Thread(() =>
             {
-                mockedRippled = new CreateMockRippled(port);
                 mockedRippled.Start();
                 _mockedServerPort = port;
             });
             tcpListenerThread.Start();
+
             Timer timer = new Timer(25000);
             timer.Elapsed += (sender, e) => tcpListenerThread.Abort();
             client = new XrplClient($"ws://127.0.0.1:{port}");

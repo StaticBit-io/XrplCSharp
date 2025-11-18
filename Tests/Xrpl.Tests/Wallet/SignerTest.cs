@@ -146,10 +146,8 @@ namespace Xrpl.Tests.Wallet.Tests
             XrplWallet secpWallet = XrplWallet.FromSeed("snGHNrPbHrdUcszeuDEigMdC1Lyyd");
             string channelId = "5DB01B7FFED6B67E6B0414DED11E051D2EE2B7619CE0EAA6286D67A3A4D5BDB3";
             string amount = "1000000";
-            Assert.AreEqual(
-                Signer.AuthorizeChannel(secpWallet, channelId, amount),
-                "304402204E7052F33DDAFAAA55C9F5B132A5E50EE95B2CF68C0902F61DFE77299BC893740220353640B951DCD24371C16868B3F91B78D38B6F3FD1E826413CDF891FA8250AAC"
-            );
+            Assert.AreEqual("304402204E7052F33DDAFAAA55C9F5B132A5E50EE95B2CF68C0902F61DFE77299BC893740220353640B951DCD24371C16868B3F91B78D38B6F3FD1E826413CDF891FA8250AAC"
+, Signer.AuthorizeChannel(secpWallet, channelId, amount));
         }
 
         [TestMethod]
@@ -158,10 +156,8 @@ namespace Xrpl.Tests.Wallet.Tests
             XrplWallet edWallet = XrplWallet.FromSeed("sEdSuqBPSQaood2DmNYVkwWTn1oQTj2");
             string channelId = "5DB01B7FFED6B67E6B0414DED11E051D2EE2B7619CE0EAA6286D67A3A4D5BDB3";
             string amount = "1000000";
-            Assert.AreEqual(
-                Signer.AuthorizeChannel(edWallet, channelId, amount),
-                "7E1C217A3E4B3C107B7A356E665088B4FBA6464C48C58267BEF64975E3375EA338AE22E6714E3F5E734AE33E6B97AAD59058E1E196C1F92346FC1498D0674404"
-            );
+            Assert.AreEqual("7E1C217A3E4B3C107B7A356E665088B4FBA6464C48C58267BEF64975E3375EA338AE22E6714E3F5E734AE33E6B97AAD59058E1E196C1F92346FC1498D0674404"
+, Signer.AuthorizeChannel(edWallet, channelId, amount));
         }
 
         [TestMethod]

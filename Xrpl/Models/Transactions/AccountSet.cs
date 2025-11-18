@@ -250,7 +250,7 @@ namespace Xrpl.Models.Transactions
                     throw new ValidationException("AccountSet: invalid TickSize");
 
                 if (size is < MIN_TICK_SIZE or > MAX_TICK_SIZE)
-                    throw new ValidationException("AccountSet: invalid TickSize");
+                    throw new ValidationException("AccountSet: out of TickSize");
             }
 
         }

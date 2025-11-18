@@ -15,8 +15,8 @@ namespace XrplTests.BinaryCodecLib.Types
             Uint8 value1 = Uint8.FromValue(124);
             Uint8 value2 = Uint8.FromValue(123);
             Uint8 value3 = Uint8.FromValue(124);
-            Assert.AreEqual((int)value1.ToJson() > (int)value2.ToJson(), true);
-            Assert.AreEqual((int)value2.ToJson() < (int)value1.ToJson(), true);
+            Assert.IsGreaterThan((int)value2.ToJson(), (int)value1.ToJson());
+            Assert.IsLessThan((int)value1.ToJson(), (int)value2.ToJson());
             Assert.AreNotEqual((int)value1.ToJson(), (int)value2.ToJson());
             Assert.AreEqual(value1.ToJson(), value3.ToJson());
         }
@@ -25,16 +25,16 @@ namespace XrplTests.BinaryCodecLib.Types
         public void TestFromValue64()
         {
             Uint64 value1 = Uint64.FromValue("10000000");
-            Assert.AreEqual(value1.ToJson(), "1000000000000000");
+            Assert.AreEqual("1000000000000000", value1.ToJson());
         }
 
         [TestMethod]
         public void TestCompare()
         {
             Uint8 value1 = Uint8.FromValue(124);
-            Assert.AreEqual((int)value1.ToJson() == 124, true);
-            Assert.AreEqual((int)value1.ToJson() < 125, true);
-            Assert.AreEqual((int)value1.ToJson() > 123, true);
+            Assert.AreEqual(124, (int)value1.ToJson());
+            Assert.IsLessThan(125, (int)value1.ToJson());
+            Assert.IsGreaterThan(123, (int)value1.ToJson());
         }
 
         [TestMethod]

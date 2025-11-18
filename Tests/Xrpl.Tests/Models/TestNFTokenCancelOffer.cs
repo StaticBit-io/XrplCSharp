@@ -46,7 +46,7 @@ namespace XrplTests.Xrpl.Models
                 {"Sequence", 2470665u},
                 {"Flags", 2147483648u},
             };
-            await Assert.ThrowsExceptionAsync<ValidationException>(() => Validation.Validate(offer), "NFTokenCancelOffer: missing field NFTokenOffers - no ERROR");
+            await Helper.ThrowsExceptionAsync<ValidationException>(() => Validation.Validate(offer), "NFTokenCancelOffer: missing field NFTokenOffers");
         }
         [TestMethod]
         public async Task TestVerify_Invalid_empty_NFTokenOffers()
@@ -60,7 +60,7 @@ namespace XrplTests.Xrpl.Models
                 {"Sequence", 2470665u},
                 {"Flags", 2147483648u},
             };
-            await Assert.ThrowsExceptionAsync<ValidationException>(() => Validation.Validate(offer), "NFTokenCancelOffer: empty field NFTokenOffers - no ERROR");
+            await Helper.ThrowsExceptionAsync<ValidationException>(() => Validation.Validate(offer), "NFTokenCancelOffer: empty field NFTokenOffers");
         }
     }
 

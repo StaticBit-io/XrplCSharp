@@ -37,8 +37,8 @@ namespace XrplTests.Xrpl.Models
                 {"Account", "rWYkbWkCeg8dP6rXALnjgZSjjLyih5NXm" },
                 {"CheckID", 4964734566545678 }, //todo no check for CheckID size
             };
-            await Assert.ThrowsExceptionAsync<ValidationException>(() => Validation.ValidateCheckCancel(tx));
-            await Assert.ThrowsExceptionAsync<ValidationException>(() => Validation.Validate(tx));
+            await Helper.ThrowsExceptionAsync<ValidationException>(() => Validation.ValidateCheckCancel(tx));
+            await Helper.ThrowsExceptionAsync<ValidationException>(() => Validation.Validate(tx));
         }
     }
 

@@ -52,7 +52,7 @@ namespace XrplTests.Xrpl.ClientLib.Integration
 
             AccountObjectsRequest request2 = new AccountObjectsRequest(runner.wallet.ClassicAddress) { Type = LedgerEntryType.Escrow };
             AccountObjects response2 = await runner.client.AccountObjects(request2);
-            Assert.AreEqual(response2.AccountObjectList.Count, 1);
+            Assert.HasCount(1, response2.AccountObjectList);
         }
     }
 }

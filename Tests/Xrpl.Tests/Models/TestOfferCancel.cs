@@ -48,14 +48,14 @@ namespace XrplTests.Xrpl.Models
 
             // throws w/ OfferSequence must be a number
             offer["OfferSequence"] = "99";
-            await Assert.ThrowsExceptionAsync<ValidationException>(() => Validation.ValidateOfferCancel(offer), "OfferCancel: OfferSequence must be a number");
-            await Assert.ThrowsExceptionAsync<ValidationException>(() => Validation.Validate(offer), "OfferCancel: OfferSequence must be a number");
+            await Helper.ThrowsExceptionAsync<ValidationException>(() => Validation.ValidateOfferCancel(offer), "OfferCancel: OfferSequence must be a number");
+            await Helper.ThrowsExceptionAsync<ValidationException>(() => Validation.Validate(offer), "OfferCancel: OfferSequence must be a number");
             offer["OfferSequence"] = 60797528u;
 
             // throws w/ missing OfferSequence
             offer.Remove("OfferSequence");
-            await Assert.ThrowsExceptionAsync<ValidationException>(() => Validation.ValidateOfferCancel(offer), "OfferCancel:  missing field OfferSequence");
-            await Assert.ThrowsExceptionAsync<ValidationException>(() => Validation.Validate(offer), "OfferCancel:  missing field OfferSequence");
+            await Helper.ThrowsExceptionAsync<ValidationException>(() => Validation.ValidateOfferCancel(offer), "OfferCancel: missing field OfferSequence");
+            await Helper.ThrowsExceptionAsync<ValidationException>(() => Validation.Validate(offer), "OfferCancel: missing field OfferSequence");
             offer["OfferSequence"] = 60797528u;
 
         }

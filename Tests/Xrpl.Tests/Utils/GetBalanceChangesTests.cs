@@ -44,17 +44,17 @@ public class GetBalanceChangesTests
         var issuerTokenSellerChanges = issuerChanges.FirstOrDefault(c => c.Issuer == seller);
 
         // Assert
-        Assert.AreEqual(3, changes.Count);
+        Assert.HasCount(3, changes);
 
         // Check XRP balance changes
-        Assert.AreEqual(2, sellerChanges.Count);
+        Assert.HasCount(2, sellerChanges);
         Assert.AreEqual("XRP", sellerXrpChanges.CurrencyCode);
         Assert.AreEqual("8755899", sellerXrpChanges.Value);
         Assert.AreEqual(currencyCode, sellerTokenChanges.CurrencyCode);
         Assert.AreEqual(issuer, sellerTokenChanges.Issuer);
         Assert.AreEqual("-639.11146415997", sellerTokenChanges.Value);
 
-        Assert.AreEqual(2, buyerChanges.Count);
+        Assert.HasCount(2, buyerChanges);
         Assert.AreEqual("XRP", buyerXrpChanges.CurrencyCode);
         Assert.AreEqual("-8755911", buyerXrpChanges.Value);
 
@@ -63,7 +63,7 @@ public class GetBalanceChangesTests
         Assert.AreEqual(issuer, buyerTokenChanges.Issuer);
         Assert.AreEqual(currencyCode, buyerTokenChanges.CurrencyCode);
 
-        Assert.AreEqual(2, issuerChanges.Count);
+        Assert.HasCount(2, issuerChanges);
         Assert.IsNull(issuerXrpChanges);
         Assert.AreEqual("639.11146415997", issuerTokenSellerChanges.Value);
         Assert.AreEqual(seller, issuerTokenSellerChanges.Issuer);
