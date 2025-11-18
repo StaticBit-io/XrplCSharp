@@ -67,7 +67,7 @@ namespace Xrpl.Models.Transactions
         {
             await Common.ValidateBaseTransaction(tx);
             if (!tx.TryGetValue("NFTokenID", out var NFTokenID) || NFTokenID is null)
-                throw new ValidationException("NFTokenID: missing field NFTokenID ");
+                throw new ValidationException("NFTokenBurn: missing field NFTokenID");
         }
 
     }

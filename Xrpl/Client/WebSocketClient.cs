@@ -229,6 +229,7 @@ namespace Xrpl.Client
                 }
                 catch (Exception e)
                 {
+                    //_onError?.Invoke(e, this);
                     return;
                 }
             }

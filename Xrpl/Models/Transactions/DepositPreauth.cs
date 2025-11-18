@@ -64,23 +64,23 @@ namespace Xrpl.Models.Transactions
             tx.TryGetValue("Unauthorize", out var Unauthorize);
 
             if (Authorize is null && Unauthorize is null)
-                throw new ValidationException("DepositPreauth: must provide either Authorize or Unauthorize field ");
+                throw new ValidationException("DepositPreauth: must provide either Authorize or Unauthorize field");
 
             if (Authorize is not null && Unauthorize is not null)
                 throw new ValidationException("DepositPreauth: can't provide both Authorize and Unauthorize fields");
             if (Authorize is { } aut)
             {
                 if (aut is not string { })
-                    throw new ValidationException("DepositPreauth:  Authorize must be a string");
+                    throw new ValidationException("DepositPreauth: Authorize must be a string");
                 if (tx["Account"] == aut)
-                    throw new ValidationException("DepositPreauth:  Account can't preauthorize its own address");
+                    throw new ValidationException("DepositPreauth: Account can't preauthorize its own address");
             }
             if (Unauthorize is { } un_aut)
             {
                 if (un_aut is not string { })
-                    throw new ValidationException("DepositPreauth:  Unauthorize must be a string");
+                    throw new ValidationException("DepositPreauth: Unauthorize must be a string");
                 if (tx["Account"] == un_aut)
-                    throw new ValidationException("DepositPreauth:  Account can't unauthorize its own address");
+                    throw new ValidationException("DepositPreauth: Account can't unauthorize its own address");
             }
 
 

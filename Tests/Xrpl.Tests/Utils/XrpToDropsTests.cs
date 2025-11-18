@@ -88,24 +88,24 @@ namespace XrplTests.Xrpl.Utils
         [TestMethod]
         public void TestInvalidXrpToDropsDecimalError()
         {
-            Assert.ThrowsException<ValidationException>(() => XrpConversion.XrpToDrops("1.1234567"));
-            Assert.ThrowsException<ValidationException>(() => XrpConversion.XrpToDrops("0.0000001"));
+            Helper.ThrowsException<ValidationException>(() => XrpConversion.XrpToDrops("1.12345678"));
+            Helper.ThrowsException<ValidationException>(() => XrpConversion.XrpToDrops("0.00000001"));
         }
 
         [TestMethod]
         public void TestInvalidXrpToDropsValueError()
         {
-            Assert.ThrowsException<FormatException>(() => XrpConversion.XrpToDrops("FOO"));
-            Assert.ThrowsException<ValidationException>(() => XrpConversion.XrpToDrops("1e-7"));
-            Assert.ThrowsException<FormatException>(() => XrpConversion.XrpToDrops("2,0"));
-            Assert.ThrowsException<FormatException>(() => XrpConversion.XrpToDrops("."));
+            Helper.ThrowsException<FormatException>(() => XrpConversion.XrpToDrops("FOO"));
+            Helper.ThrowsException<ValidationException>(() => XrpConversion.XrpToDrops("1e-8"));
+            Helper.ThrowsException<FormatException>(() => XrpConversion.XrpToDrops("2,0"));
+            Helper.ThrowsException<FormatException>(() => XrpConversion.XrpToDrops("."));
         }
 
         [TestMethod]
         public void TestInvalidXrpToDropsMultipleDecimalPointError()
         {
-            Assert.ThrowsException<FormatException>(() => XrpConversion.XrpToDrops("1.0.0"));
-            Assert.ThrowsException<FormatException>(() => XrpConversion.XrpToDrops("..."));
+            Helper.ThrowsException<FormatException>(() => XrpConversion.XrpToDrops("1.0.0"));
+            Helper.ThrowsException<FormatException>(() => XrpConversion.XrpToDrops("..."));
         }
     }
 }

@@ -1,12 +1,18 @@
-﻿using System;
+﻿using Microsoft.VisualStudio.TestTools.UnitTesting;
+
+using Newtonsoft.Json;
+
+using System;
 using System.Collections.Generic;
 using System.Security.Cryptography.X509Certificates;
 using System.Threading.Tasks;
-using Microsoft.VisualStudio.TestTools.UnitTesting;
-using Newtonsoft.Json;
+
 using Xrpl.BinaryCodec.Types;
 using Xrpl.Client;
 using Xrpl.Client.Exceptions;
+
+using XrplTests;
+
 using static Xrpl.Client.Connection;
 
 // https://github.com/XRPLF/xrpl.js/blob/main/packages/xrpl/test/connection.ts
@@ -29,7 +35,10 @@ namespace Xrpl.Tests
         [TestCleanup]
         public async Task MyTestCleanupAsync()
         {
-            await runner.client.Disconnect();
+            if (runner?.client != null)
+            {
+                await runner.client.Disconnect();
+            }
         }
 
         [TestMethod]
@@ -37,9 +46,9 @@ namespace Xrpl.Tests
         {
             ConnectionOptions options = new ConnectionOptions();
             Connection connection = new Connection("url", options);
-            Assert.AreEqual(connection.GetUrl(), "url");
-            Assert.IsTrue(connection.config.proxy == null);
-            Assert.IsTrue(connection.config.authorization == null);
+            Assert.AreEqual("url", connection.GetUrl());
+            Assert.IsNull(connection.config.proxy);
+            Assert.IsNull(connection.config.authorization);
         }
 
         //[TestMethod]
@@ -56,7 +65,6 @@ namespace Xrpl.Tests
         //}
 
         [TestMethod]
-        [ExpectedException(typeof(NotConnectedException))]
         public async Task TestNotConnectedException()
         {
             ConnectionOptions options = new ConnectionOptions();
@@ -67,11 +75,10 @@ namespace Xrpl.Tests
                 { "command", "ledger" },
                 { "ledger_index", "validated" },
             };
-            await connection.Request(tx, null);
+            await Helper.ThrowsExceptionAsync<NotConnectedException>(() => connection.Request(tx, null));
         }
 
         [TestMethod]
-        [ExpectedException(typeof(DisconnectedException))]
         public async Task TestDisconnectedError()
         {
             Dictionary<string, dynamic> tx = new Dictionary<string, dynamic>
@@ -81,7 +88,7 @@ namespace Xrpl.Tests
                    { "closeServer", true },
                 } },
             };
-            await runner.client.Request(tx);
+            await Helper.ThrowsExceptionAsync<DisconnectedException>(() => runner.client.Request(tx));
         }
 
         //[TestMethod]
@@ -121,7 +128,6 @@ namespace Xrpl.Tests
         //}
 
         [TestMethod]
-        [ExpectedException(typeof(XrplException))]
         public async Task TestNoCrashError()
         {
             runner.mockedRippled.suppressOutput = true;
@@ -129,7 +135,7 @@ namespace Xrpl.Tests
             {
                 { "command", "test_garbage" },
             };
-            await runner.client.connection.Request(tx);
+            await Helper.ThrowsExceptionAsync<XrplException>(() => runner.client.connection.Request(tx));
         }
     }
 }

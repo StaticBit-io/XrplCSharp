@@ -19,6 +19,10 @@ internal class Program
         {
             ApiVersion = 2,
             UseCustomPing = true,
+            RequestPolicy = Xrpl.Client.RequestFailurePolicy.WaitForConnection,
+            ConnectionAcquisitionTimeout = System.TimeSpan.FromSeconds(30),
+            MaxReconnectAttempts = 4,
+            StopAfterMaxAttempts = false,
         });
         builder.Services.AddSingleton<IXrplClient>(client);
 

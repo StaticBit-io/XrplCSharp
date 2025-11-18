@@ -44,7 +44,7 @@ namespace XrplTests.Xrpl.ClientLib.Integration
 
             AccountOffersRequest request2 = new AccountOffersRequest(runner.wallet.ClassicAddress);
             AccountOffers response2 = await runner.client.AccountOffers(request2);
-            Assert.AreEqual(1, response2.Offers.Count);
+            Assert.HasCount(1, response2.Offers);
         }
     }
 }

@@ -72,7 +72,7 @@ namespace XrplTests.Xrpl.ClientLib.Integration
             // get check ID
             AccountObjectsRequest request3 = new AccountObjectsRequest(runner.wallet.ClassicAddress) { Type = LedgerEntryType.Escrow };
             AccountObjects response3 = await runner.client.AccountObjects(request3);
-            Assert.AreEqual(response3.AccountObjectList.Count, 0);
+            Assert.IsEmpty(response3.AccountObjectList);
         }
     }
 }

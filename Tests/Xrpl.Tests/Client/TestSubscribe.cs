@@ -3,6 +3,7 @@ using System.Collections.Generic;
 using System.Diagnostics;
 using System.Net.WebSockets;
 using System.Text;
+using System.Threading;
 using System.Threading.Tasks;
 using Microsoft.VisualStudio.TestTools.UnitTesting;
 using Newtonsoft.Json;
@@ -70,7 +71,7 @@ namespace Xrpl.Tests.ClientLib
             bool isDone = false;
             runner.client.connection.OnTransaction += r =>
             {
-                Assert.IsTrue(r.Type == ResponseStreamType.transaction);
+                Assert.AreEqual(ResponseStreamType.transaction, r.Type);
                 isDone = true;
                 return Task.CompletedTask;
             };
@@ -102,7 +103,7 @@ namespace Xrpl.Tests.ClientLib
         {
             runner.client.connection.OnPeerStatusChange += r =>
             {
-                Assert.IsTrue(r.Type == ResponseStreamType.consensusPhase);
+                Assert.AreEqual(ResponseStreamType.consensusPhase, r.Type);
                 return Task.CompletedTask;
             };
 
@@ -115,7 +116,7 @@ namespace Xrpl.Tests.ClientLib
         {
             runner.client.connection.OnPathFind += r =>
             {
-                Assert.IsTrue(r.Type == ResponseStreamType.path_find);
+                Assert.AreEqual(ResponseStreamType.path_find, r.Type);
                 return Task.CompletedTask;
             };
 
@@ -128,7 +129,7 @@ namespace Xrpl.Tests.ClientLib
         {
             runner.client.connection.OnManifestReceived += r =>
             {
-                Assert.IsTrue(r.Type == ResponseStreamType.validationReceived);
+                Assert.AreEqual(ResponseStreamType.validationReceived, r.Type);
                 return Task.CompletedTask;
             };
 
@@ -208,7 +209,7 @@ namespace Xrpl.Tests.ClientLib
             //    System.Threading.Thread.Sleep(TimeSpan.FromSeconds(1));
             //}
 
-            await client.connection.Connect();
+            await client.connection.Connect(CancellationToken.None);
 
             //var subscribe = await client.Subscribe(
             //new SubscribeRequest()

@@ -3,21 +3,21 @@ using Microsoft.VisualStudio.TestTools.UnitTesting;
 using Newtonsoft.Json;
 
 using System.Collections.Generic;
-using System.Diagnostics;
+
+using XrplTests;
 
 // https://github.com/XRPLF/xrpl.js/blob/main/packages/ripple-address-codec/src/index.test.js
 
+
 namespace Xrpl.AddressCodec.Tests
 {
+
+
     using static Xrpl.AddressCodec.XrplAddressCodec;
-    using static XrplAddressCodec;
 
     [TestClass]
     public class TestUAddressCodec
     {
-
-        private static uint MAX_32_BIT_UNSIGNED_INT = 4294967295;
-
         [TestMethod]
         public void InvalidXAddressF()
         {
@@ -35,7 +35,7 @@ namespace Xrpl.AddressCodec.Tests
                 CodecAddress myClassicAddress = XAddressToClassicAddress(xAddress);
                 Assert.AreEqual(myClassicAddress.ClassicAddress, classicAddress);
                 Assert.AreEqual(myClassicAddress.Tag, tag);
-                Assert.AreEqual(myClassicAddress.Test, false);
+                Assert.IsFalse(myClassicAddress.Test);
                 Assert.IsTrue(IsValidXAddress(xAddress));
 
             }
@@ -51,23 +51,23 @@ namespace Xrpl.AddressCodec.Tests
                 CodecAddress myClassicAddress = XAddressToClassicAddress(xAddress);
                 Assert.AreEqual(myClassicAddress.ClassicAddress, classicAddress);
                 Assert.AreEqual(myClassicAddress.Tag, tag);
-                Assert.AreEqual(myClassicAddress.Test, true);
+                Assert.IsTrue(myClassicAddress.Test);
                 Assert.IsTrue(IsValidXAddress(xAddress));
             }
         }
 
         [TestMethod]
-        [ExpectedException(typeof(AddressCodecException), "Unsupported X-address")]
         public void InvalidXAddress()
         {
-            XAddressToClassicAddress("XVLhHMPHU98es4dbozjVtdWzVrDjtV18pX8zeUygYrCgrPh");
+            Helper.Throws<AddressCodecException>(() =>
+                XAddressToClassicAddress("XVLhHMPHU98es4dbozjVtdWzVrDjtV18pX8zeUygYrCgrPh"), "Unsupported X-address");
         }
 
         [TestMethod]
-        [ExpectedException(typeof(AddressCodecException), "Account ID must be 20 bytes")]
         public void InvalidAccountID()
         {
-            EncodeXAddress(new byte[] { 0x0, 0x0, 0x0 }, 0, false);
+            Helper.Throws<AddressCodecException>(() =>
+                EncodeXAddress(new byte[] { 0x0, 0x0, 0x0 }, 0, false), "Account ID must be 20 bytes");
         }
 
         [TestMethod]

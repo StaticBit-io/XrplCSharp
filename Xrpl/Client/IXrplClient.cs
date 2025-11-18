@@ -1,6 +1,7 @@
 ﻿using System;
 using System.Collections.Concurrent;
 using System.Collections.Generic;
+using System.Threading;
 using System.Threading.Tasks;
 
 using Newtonsoft.Json;
@@ -54,21 +55,11 @@ namespace Xrpl.Client
             this.networkID = networkId;
         }
 
-        //event OnError OnError;
-        //event OnConnected OnConnected;
-        //event OnDisconnect OnDisconnect;
-        //event OnLedgerClosed OnLedgerClosed;
-        //event OnTransaction OnTransaction;
-        //event OnManifestReceived OnManifestReceived;
-        //event OnPeerStatusChange OnPeerStatusChange;
-        //event OnConsensusPhase OnConsensusPhase;
-        //event OnPathFind OnPathFind;
-
         #region Server
         /// <summary> the url </summary>
         string Url();
         /// <summary> connect to the server </summary>
-        Task Connect();
+        Task Connect(System.Threading.CancellationToken cancellationToken = default);
         /// <summary> Disconnect from server </summary>
         Task Disconnect();
         /// <summary> if the websocket is connected </summary>
@@ -322,7 +313,7 @@ namespace Xrpl.Client
         Task<Dictionary<string, dynamic>> Autofill(Dictionary<string, dynamic> tx);
         Task<uint> GetLedgerIndex();
         Task<string> GetXrpBalance(string address);
-        Task ChangeServer(string server, ClientOptions? options = null);
+        Task ChangeServer(string server, ClientOptions? options = null, CancellationToken cancellationToken = default);
 
         string EnsureClassicAddress(string address);
 
@@ -375,32 +366,27 @@ namespace Xrpl.Client
             {
                 throw new Exception("Invalid WSS Server Url");
             }
+            SetSettings(options);
+            connection = new Connection(server, options);
+        }
+
+        private void SetSettings(ClientOptions options)
+        {
             feeCushion = options?.feeCushion ?? 1.2;
             maxFeeXRP = options?.maxFeeXRP ?? "2";
             networkID = options?.NetworkID;
             ApiVersion = options?.ApiVersion ?? 2;
-            connection = new Connection(server, options);
-            //connection.OnError += (e, em, m, d) => OnError?.Invoke(e, em, m, d);
-            //connection.OnConnected += () => OnConnected?.Invoke();
-            //connection.OnDisconnect += (c) => OnDisconnect?.Invoke(c);
-            //connection.OnLedgerClosed += (s) => OnLedgerClosed?.Invoke(s);
-            //connection.OnTransaction += (s) => OnTransaction?.Invoke(s);
-            //connection.OnManifestReceived += (s) => OnManifestReceived?.Invoke(s);
-            //connection.OnPeerStatusChange += (s) => OnPeerStatusChange?.Invoke(s);
-            //connection.OnConsensusPhase += (s) => OnConsensusPhase?.Invoke(s);
-            //connection.OnPathFind += (s) => OnPathFind?.Invoke(s);
         }
 
-        public async Task ChangeServer(string server, ClientOptions? options = null)
+        public async Task ChangeServer(string server, ClientOptions? options = null, CancellationToken cancellationToken = default)
         {
             if (!IsValidWss(server))
             {
                 throw new Exception("Invalid WSS Server Url");
             }
-            feeCushion = options?.feeCushion ?? 1.2;
-            maxFeeXRP = options?.maxFeeXRP ?? "2";
+            SetSettings(options);
 
-            await connection.ChangeServer(server, options);
+            await connection.ChangeServer(server, options, cancellationToken);
             await SetNetworkId();
         }
 
@@ -415,10 +401,14 @@ namespace Xrpl.Client
             return true;
         }
 
-        /// <inheritdoc />
-        public async Task Connect()
+        /// <summary>
+        /// Connect to the server
+        /// </summary>
+        /// <param name="cancellationToken">cancellation token</param>
+        /// <returns></returns>
+        public async Task Connect(System.Threading.CancellationToken cancellationToken = default)
         {
-            await connection.Connect();
+            await connection.Connect(cancellationToken);
             await SetNetworkId();
         }
 

@@ -1,6 +1,7 @@
 ﻿using System;
 using System.Collections.Generic;
 using System.Net.WebSockets;
+using System.Threading;
 using System.Threading.Tasks;
 using Newtonsoft.Json;
 using Xrpl.Client.Exceptions;
@@ -14,7 +15,13 @@ using Timer = System.Timers.Timer;
 
 namespace Xrpl.Client
 {
-    public enum ConnectionCloseSeverity { Info, Warn, Error }
+    public enum ConnectionCloseSeverity { Info, Warning, Error }
+
+    public enum RequestFailurePolicy
+    {
+        ImmediateFail,
+        WaitForConnection
+    }
 
     public class ReconnectInfo
     {
@@ -75,14 +82,83 @@ namespace Xrpl.Client
             public string key { get; set; }
             public string passphrase { get; set; }
             public string certificate { get; set; }
-            public int timeout { get; set; }
-            public int connectionTimeout { get; set; }
             public Dictionary<string, dynamic> headers { get; set; }
 
-            public TimeSpan ReconnectBaseDelay { get; set; } = TimeSpan.FromSeconds(1);
+            /// <summary>
+            /// Timeout for individual API requests after connection is established.
+            /// This controls how long to wait for a response to a single request (e.g., account_info, submit).
+            /// Default: 20 seconds.
+            /// </summary>
+            public TimeSpan RequestTimeout { get; set; } = TimeSpan.FromSeconds(20);
+
+            /// <summary>
+            /// Timeout for a single WebSocket connection attempt.
+            /// If the connection cannot be established within this time, it will fail and trigger reconnection logic.
+            /// Should be shorter than ConnectionAcquisitionTimeout to allow multiple retry attempts.
+            /// Default: 30 seconds.
+            /// </summary>
+            public TimeSpan ConnectionAttemptTimeout { get; set; } = TimeSpan.FromSeconds(20);
+
+            /// <summary>
+            /// Gets or sets the base delay interval used between automatic reconnection attempts.
+            /// </summary>
+            public TimeSpan ReconnectBaseDelay { get; set; } = TimeSpan.FromSeconds(2);
+
+            /// <summary>
+            /// Gets or sets the maximum delay between automatic reconnection attempts after a disconnection.
+            /// </summary>
+            /// <remarks>This value determines the upper bound for the time interval between
+            /// reconnection attempts. If the connection is lost, the delay between retries will not exceed this value,
+            /// even if a backoff strategy is used.</remarks>
             public TimeSpan ReconnectMaxDelay { get; set; } = TimeSpan.FromSeconds(30);
+
+            /// <summary>
+            /// Gets or sets the maximum number of times the system will attempt to reconnect after a disconnection.
+            /// </summary>
+            /// <remarks>Set this property to limit how many reconnection attempts are made before
+            /// giving up. A value of 0 disables automatic reconnection.</remarks>
             public int MaxReconnectAttempts { get; set; } = 10;
+
+            /// <summary>
+            /// Gets or sets a value indicating whether the operation should stop after reaching the maximum number of
+            /// attempts.
+            /// </summary>
+            /// <remarks>Set this property to <see langword="true"/> to prevent further retries once
+            /// the maximum attempt count is reached. If set to <see langword="false"/>, the operation may continue
+            /// beyond the maximum attempts, depending on the retry policy.</remarks>
+            public bool StopAfterMaxAttempts { get; set; } = false;
+
+            /// <summary>
+            /// Gets or sets a value indicating whether to use a custom ping<br/>
+            /// implementation instead of the default behavior.
+            /// </summary>
             public bool UseCustomPing { get; set; } = true;
+
+            /// <summary>
+            /// Gets or sets the policy that determines how failed requests are handled.
+            /// </summary>
+            /// <remarks>
+            /// Use this property to specify the strategy for handling request failures,<br/>
+            /// such as whether to retry, delay, or fail immediately.<br/>
+            /// The selected policy affects how the system responds to transient errors or network issues.</remarks>
+            public RequestFailurePolicy RequestPolicy { get; set; } = RequestFailurePolicy.WaitForConnection;
+
+            /// <summary>
+            /// Maximum time to wait for connection when using WaitForConnection request policy.
+            /// This is the total time allowed for multiple connection attempts, including retry delays.
+            /// Must be >= ConnectionAttemptTimeout to allow at least one full connection attempt.
+            /// Default: 30 seconds.
+            /// </summary>
+            public TimeSpan ConnectionAcquisitionTimeout { get; set; } = TimeSpan.FromMinutes(5);
+        }
+
+        private void ValidateConfig()
+        {
+            if (config.ConnectionAcquisitionTimeout < config.ConnectionAttemptTimeout)
+            {
+                throw new ArgumentException(
+                    $"ConnectionAcquisitionTimeout ({config.ConnectionAcquisitionTimeout.TotalSeconds}s) must be >= ConnectionAttemptTimeout ({config.ConnectionAttemptTimeout.TotalSeconds}s) to allow at least one full connection attempt.");
+            }
         }
 
         static WebSocketClient CreateWebSocket(string url, ConnectionOptions config)
@@ -119,10 +195,6 @@ namespace Xrpl.Client
             return WebSocketClient.Create(url); // todo add options
         }
 
-        int TIMEOUT = 20;
-        int CONNECTION_TIMEOUT = 5;
-        int INTENTIONAL_DISCONNECT_CODE = 4000;
-
         public string url { get; private set; }
         public WebSocketClient ws;
 
@@ -136,6 +208,7 @@ namespace Xrpl.Client
 
         private DateTime? lastActivityTime = null;
         private Timer? pingTimer = null;
+        private WebSocketClient? _userInitiatedSocket = null;
 
         public ConnectionOptions config { get; private set; }
         public RequestManager requestManager = new RequestManager();
@@ -145,32 +218,102 @@ namespace Xrpl.Client
         {
             url = server;
             config = options ?? new ConnectionOptions();
-            config.timeout = TIMEOUT * 1000;
-            config.connectionTimeout = CONNECTION_TIMEOUT * 1000;
 
+            ValidateConfig();
         }
 
-        public async Task ChangeServer(string server, ConnectionOptions? options = null)
+        public async Task ChangeServer(string server, ConnectionOptions? options = null, CancellationToken cancellationToken = default)
         {
             await Disconnect();
             url = server;
-            config = options ?? new ConnectionOptions() { UseCustomPing = true };
-            config.timeout = TIMEOUT * 1000;
-            config.connectionTimeout = CONNECTION_TIMEOUT * 1000;
-            await Task.Delay(3000);
-            await Connect();
+            if (options != null)
+            {
+                config = options;
+            }
+
+            ValidateConfig();
+
+            await Task.Delay(3000, cancellationToken);
+            await Connect(cancellationToken);
         }
         public bool IsConnected()
         {
             return this.State() == WebSocketState.Open;
         }
 
+        public async Task WaitForConnectionAsync(TimeSpan? timeout = null, System.Threading.CancellationToken cancellationToken = default)
+        {
+            if (IsConnected())
+                return;
+
+            var waitTimeout = timeout ?? config.ConnectionAcquisitionTimeout;
+
+            if (waitTimeout != System.Threading.Timeout.InfiniteTimeSpan && waitTimeout <= TimeSpan.Zero)
+            {
+                throw new ArgumentOutOfRangeException(nameof(timeout), 
+                    $"Timeout must be positive or Timeout.InfiniteTimeSpan, but was {waitTimeout.TotalSeconds:F1}s");
+            }
+
+            var startTime = DateTime.UtcNow;
+            var checkInterval = TimeSpan.FromMilliseconds(100);
+            var hasTimeout = waitTimeout != System.Threading.Timeout.InfiniteTimeSpan;
+
+            while (!IsConnected())
+            {
+                if (config.StopAfterMaxAttempts && 
+                    _reconnectAttempts >= config.MaxReconnectAttempts && 
+                    _reconnectCts == null)
+                {
+                    throw new NotConnectedException(
+                        $"Connection failed permanently after {config.MaxReconnectAttempts} attempts. " +
+                        "Reconnection has been stopped.");
+                }
+
+                if (hasTimeout && DateTime.UtcNow - startTime > waitTimeout)
+                {
+                    throw new System.TimeoutException($"Connection was not established within {waitTimeout.TotalSeconds:F1} seconds");
+                }
+
+                if (cancellationToken.IsCancellationRequested)
+                {
+                    throw new OperationCanceledException("Connection wait was cancelled", cancellationToken);
+                }
+
+                try
+                {
+                    await Task.Delay(checkInterval, cancellationToken);
+                }
+                catch (OperationCanceledException)
+                {
+                    throw new OperationCanceledException("Connection wait was cancelled", cancellationToken);
+                }
+            }
+        }
+
+        public async Task<bool> HasConnectionAsync(TimeSpan? timeout = null)
+        {
+            try
+            {
+                await WaitForConnectionAsync(timeout, System.Threading.CancellationToken.None);
+                return true;
+            }
+            catch (System.TimeoutException)
+            {
+                return false;
+            }
+            catch (OperationCanceledException)
+            {
+                return false;
+            }
+        }
+
         public Timer timer;
 
-        public async Task Connect()
+        public async Task Connect(CancellationToken cancellationToken)
         {
             StopReconnectLoop();
             await ConnectInternalAsync();
+            await WaitForConnectionAsync(config.ConnectionAcquisitionTimeout, cancellationToken);
         }
 
         private async Task ConnectInternalAsync()
@@ -196,8 +339,8 @@ namespace Xrpl.Client
                     throw new XrplException("Websocket connection never cleaned up.");
                 }
 
-                timer = new Timer(this.config.connectionTimeout);
-                timer.Elapsed += async (sender, e) => await OnConnectionFailed(new ConnectionException($"Error: connect() timed out after {this.config.connectionTimeout} ms.If your internet connection is working, the rippled server may be blocked or inaccessible.You can also try setting the 'connectionTimeout' option in the Client constructor."));
+                timer = new Timer(this.config.ConnectionAttemptTimeout.TotalMilliseconds);
+                timer.Elapsed += async (sender, e) => await OnConnectionFailed(new ConnectionException($"Error: connect() timed out after {this.config.ConnectionAttemptTimeout.TotalSeconds:F1} seconds. If your internet connection is working, the rippled server may be blocked or inaccessible. You can also try setting the 'ConnectionAttemptTimeout' option in the Client constructor."));
                 timer.Start();
 
                 this.ws = CreateWebSocket(this.url, this.config);
@@ -215,11 +358,11 @@ namespace Xrpl.Client
                 });
 
                 ws.OnMessageReceived(async (m, ws) => { await IOnMessage(m); });
-                ws.OnDisconnect(async (closeStatus, closeDescription, ws) =>
+                ws.OnDisconnect(async (closeStatus, closeDescription, closingSocket) =>
                 {
                     timer.Stop();
                     int? code = (int?)closeStatus;
-                    await OnceClose(code, closeDescription);
+                    await OnceClose(code, closeDescription, closingSocket);
                 });
 
                 await this.ws.Connect();
@@ -241,14 +384,11 @@ namespace Xrpl.Client
             {
                 return 0;
             }
-            var result = 0;
-            if (ws != null)
-            {
-                ws.Disconnect();
-                //ws.OnDisconnect += (code) => { result = code; };
-            }
 
-            return result;
+            Interlocked.Exchange(ref _userInitiatedSocket, ws);
+            ws.Disconnect();
+
+            return 0;
         }
 
         private async Task OnConnectionFailed(Exception error)
@@ -256,6 +396,8 @@ namespace Xrpl.Client
             timer?.Stop();
             timer?.Dispose();
             timer = null;
+
+            var wasOpen = this.ws?.State == WebSocketState.Open;
 
             if (this.ws != null)
             {
@@ -279,10 +421,13 @@ namespace Xrpl.Client
                 Reconnect = null
             });
 
-            if (OnDisconnect is not null)
-                await OnDisconnect?.Invoke(null, error.Message)!;
+            if (!wasOpen)
+            {
+                if (OnDisconnect is not null)
+                    await OnDisconnect?.Invoke(null, error.Message)!;
 
-            StartReconnectLoop();
+                StartReconnectLoop();
+            }
         }
 
         public void WebsocketSendAsync(WebSocketClient ws, string message)
@@ -290,13 +435,34 @@ namespace Xrpl.Client
             ws.SendMessage(message);
         }
 
-        public async Task<Dictionary<string, dynamic>> Request(Dictionary<string, dynamic> request, int? timeout = null)
+        private async Task EnsureConnectionForRequest(RequestFailurePolicy? policyOverride = null)
         {
-            if (!this.ShouldBeConnected())
+            if (this.ShouldBeConnected())
+                return;
+
+            var policy = policyOverride ?? config.RequestPolicy;
+
+            switch (policy)
             {
-                throw new NotConnectedException();
+                case RequestFailurePolicy.ImmediateFail:
+                    throw new NotConnectedException();
+
+                case RequestFailurePolicy.WaitForConnection:
+                    await WaitForConnectionAsync();
+                    if (!this.ShouldBeConnected())
+                        throw new NotConnectedException("Failed to establish connection within timeout period");
+                    break;
+
+                default:
+                    throw new NotConnectedException();
             }
-            XrplRequest _request = this.requestManager.CreateRequest(request, timeout ?? this.config.timeout);
+        }
+
+        public async Task<Dictionary<string, dynamic>> Request(Dictionary<string, dynamic> request, TimeSpan? timeout = null, RequestFailurePolicy? policyOverride = null)
+        {
+            await EnsureConnectionForRequest(policyOverride);
+
+            XrplRequest _request = this.requestManager.CreateRequest(request, timeout ?? this.config.RequestTimeout);
             try
             {
                 WebsocketSendAsync(this.ws, _request.Message);
@@ -308,13 +474,11 @@ namespace Xrpl.Client
             return await _request.Promise;
         }
 
-        public async Task<dynamic> GRequest<T, R>(R request, int? timeout = null)
+        public async Task<dynamic> GRequest<T, R>(R request, TimeSpan? timeout = null, RequestFailurePolicy? policyOverride = null)
         {
-            if (!this.ShouldBeConnected())
-            {
-                throw new NotConnectedException();
-            }
-            XrplGRequest _request = this.requestManager.CreateGRequest<T, R>(request, timeout ?? this.config.timeout);
+            await EnsureConnectionForRequest(policyOverride);
+
+            XrplGRequest _request = this.requestManager.CreateGRequest<T, R>(request, timeout ?? this.config.RequestTimeout);
             try
             {
                 WebsocketSendAsync(this.ws, _request.Message);
@@ -362,14 +526,13 @@ namespace Xrpl.Client
             }
         }
 
-        private async Task OnceClose(int? code, string? description = null)
+        private async Task OnceClose(int? code, string? description, WebSocketClient closingSocket)
         {
             StopPingTimer();
 
             var (severity, userMessage) = DescribeClose(code, description);
-            var reasonText = description ?? userMessage;
 
-            this.requestManager.RejectAll(new DisconnectedException($"websocket was closed, code: {code}, reason: {reasonText}"));
+            this.requestManager.RejectAll(new DisconnectedException($"websocket was closed, code: {code}, reason: {userMessage}"));
             this.ws = null;
 
             if (code == null)
@@ -380,22 +543,29 @@ namespace Xrpl.Client
             else
             {
                 if (OnDisconnect is not null)
-                    await OnDisconnect?.Invoke(code, reasonText)!;
+                    await OnDisconnect?.Invoke(code, userMessage)!;
             }
 
-            if (code == INTENTIONAL_DISCONNECT_CODE)
+            var isUserInitiated = Interlocked.CompareExchange(
+                ref _userInitiatedSocket,
+                null,
+                closingSocket
+            ) == closingSocket;
+
+            if (isUserInitiated)
             {
+                _reconnectAttempts = 0;
+                var noReconnectMessage = $"Connection closed permanently. {userMessage}";
                 OnConnectionStatus?.Invoke(new ConnectionStatusInfo
                 {
-                    Message = userMessage,
-                    Severity = severity,
+                    Message = noReconnectMessage,
+                    Severity = ConnectionCloseSeverity.Warning,
                     Reconnect = null
                 });
-                _reconnectAttempts = 0;
                 return;
             }
 
-            if (ShouldReconnect(code))
+            if (ShouldReconnect(code) || code == 1000)
             {
                 OnConnectionStatus?.Invoke(new ConnectionStatusInfo
                 {
@@ -412,7 +582,7 @@ namespace Xrpl.Client
                 OnConnectionStatus?.Invoke(new ConnectionStatusInfo
                 {
                     Message = noReconnectMessage,
-                    Severity = ConnectionCloseSeverity.Warn,
+                    Severity = ConnectionCloseSeverity.Warning,
                     Reconnect = null
                 });
             }
@@ -451,8 +621,19 @@ namespace Xrpl.Client
                 var type = ConnectionCloseSeverity.Info;
                 if (_reconnectAttempts > config.MaxReconnectAttempts)
                 {
+                    if (config.StopAfterMaxAttempts)
+                    {
+                        OnConnectionStatus?.Invoke(new ConnectionStatusInfo
+                        {
+                            Message = $"Reconnection stopped after {config.MaxReconnectAttempts} attempts.",
+                            Severity = ConnectionCloseSeverity.Error,
+                            Reconnect = null
+                        });
+                        break;
+                    }
+
                     reconnectMessage = $"Reconnection in {delay.TotalSeconds:F1} seconds... attempt #{_reconnectAttempts} (exceeded max {config.MaxReconnectAttempts}). Will keep trying, but this may indicate a persistent issue.";
-                    type = ConnectionCloseSeverity.Warn;
+                    type = ConnectionCloseSeverity.Warning;
                 }
                 OnConnectionStatus?.Invoke(new ConnectionStatusInfo
                 {
@@ -501,6 +682,12 @@ namespace Xrpl.Client
                     });
                 }
             }
+
+            if (config.StopAfterMaxAttempts && _reconnectAttempts >= config.MaxReconnectAttempts)
+            {
+                _reconnectCts?.Dispose();
+                _reconnectCts = null;
+            }
         }
 
         private bool _pingTimerRunning = false;
@@ -547,24 +734,29 @@ namespace Xrpl.Client
                         return;
                     }
 
-                    if (this.ShouldBeConnected())
+                    if (!IsConnected())
                     {
-                        try
+                        return;
+                    }
+
+                    try
+                    {
+                        if (OnPing != null)
                         {
-                            if (OnPing != null)
-                            {
-                                await OnPing.Invoke("Ping");
-                            }
-                            await Request(new Dictionary<string, dynamic> { { "command", "ping" } });
-                            if (OnPing != null)
-                            {
-                                await OnPing.Invoke("Pong");
-                            }
+                            await OnPing.Invoke("Ping");
                         }
-                        catch (Exception pingEx)
+                        await Request(new Dictionary<string, dynamic> { { "command", "ping" } }, null, RequestFailurePolicy.ImmediateFail);
+                        if (OnPing != null)
                         {
-                            Console.WriteLine($"Ping request error: {pingEx.Message}");
+                            await OnPing.Invoke("Pong");
                         }
+                    }
+                    catch (NotConnectedException)
+                    {
+                    }
+                    catch (Exception pingEx)
+                    {
+                        Console.WriteLine($"Ping request error: {pingEx.Message}");
                     }
                 }
                 catch (Exception ex)
@@ -597,17 +789,17 @@ namespace Xrpl.Client
             return code switch
             {
                 1000 => (ConnectionCloseSeverity.Info, "Connection closed normally (1000)." + suffix),
-                1001 => (ConnectionCloseSeverity.Warn, "Server unavailable or intentionally closed the connection (1001)." + suffix),
+                1001 => (ConnectionCloseSeverity.Warning, "Server unavailable or intentionally closed the connection (1001)." + suffix),
                 1002 => (ConnectionCloseSeverity.Error, "Protocol error occurred (1002)." + suffix),
                 1003 => (ConnectionCloseSeverity.Error, "Invalid message type received (1003)." + suffix),
-                1005 => (ConnectionCloseSeverity.Warn, "Connection was closed without a close frame (1005)." + suffix),
-                1006 => (ConnectionCloseSeverity.Warn, "Connection interrupted abnormally (1006). Network issue, server restart, or timeout." + suffix),
+                1005 => (ConnectionCloseSeverity.Warning, "Connection was closed without a close frame (1005)." + suffix),
+                1006 => (ConnectionCloseSeverity.Warning, "Connection interrupted abnormally (1006). Network issue, server restart, or timeout." + suffix),
                 1007 => (ConnectionCloseSeverity.Error, "Invalid payload data in the WebSocket frame (1007)." + suffix),
-                1008 => (ConnectionCloseSeverity.Warn, "Policy violation (1008). Possibly due to rate limits or access rules." + suffix),
-                1009 => (ConnectionCloseSeverity.Warn, "Message too large (1009)." + suffix),
+                1008 => (ConnectionCloseSeverity.Warning, "Policy violation (1008). Possibly due to rate limits or access rules." + suffix),
+                1009 => (ConnectionCloseSeverity.Warning, "Message too large (1009)." + suffix),
                 1010 => (ConnectionCloseSeverity.Error, "Mandatory WebSocket extension is missing (1010)." + suffix),
                 1011 => (ConnectionCloseSeverity.Error, "Internal server error (1011)." + suffix),
-                _ => (ConnectionCloseSeverity.Warn, $"Connection closed with code {code}." + suffix)
+                _ => (ConnectionCloseSeverity.Warning, $"Connection closed with code {code}." + suffix)
             };
         }
 

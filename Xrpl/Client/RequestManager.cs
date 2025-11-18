@@ -96,8 +96,14 @@ namespace Xrpl.Client
             }
         }
 
-        public XrplGRequest CreateGRequest<T, R>(R request, int timeout)
+        public XrplGRequest CreateGRequest<T, R>(R request, TimeSpan timeout)
         {
+            if (timeout != System.Threading.Timeout.InfiniteTimeSpan && timeout <= TimeSpan.Zero)
+            {
+                throw new ArgumentOutOfRangeException(nameof(timeout), 
+                    $"Timeout must be positive or Timeout.InfiniteTimeSpan, but was {timeout.TotalSeconds:F1}s");
+            }
+
             Guid newId;
             var info = request.GetType().GetProperty("Id");
             if (info.GetValue(request) == null)
@@ -127,12 +133,15 @@ namespace Xrpl.Client
             taskInfo.Type = typeof(T);
 
             promisesAwaitingResponse.TryAdd(newId, taskInfo);
-            // Serialize the request to JSON
 
-            Timer timer = new Timer(timeout);
-            timer.Elapsed += (sender, e) => this.Reject(newId, new TimeoutException($"Timeout for request: {newRequest} with id {newId}", request));
-            timer.Start();
-            timeoutsAwaitingResponse.TryAdd(newId, timer);
+            if (timeout != System.Threading.Timeout.InfiniteTimeSpan)
+            {
+                Timer timer = new Timer(timeout.TotalMilliseconds);
+                timer.AutoReset = false;
+                timer.Elapsed += (sender, e) => this.Reject(newId, new TimeoutException($"Timeout for request: {newRequest} with id {newId}", request));
+                timer.Start();
+                timeoutsAwaitingResponse.TryAdd(newId, timer);
+            }
 
             return new XrplGRequest()
             {
@@ -144,8 +153,14 @@ namespace Xrpl.Client
 
         /// <summary>
         /// </summary>
-        public XrplRequest CreateRequest(Dictionary<string, dynamic> request, int timeout)
+        public XrplRequest CreateRequest(Dictionary<string, dynamic> request, TimeSpan timeout)
         {
+            if (timeout != System.Threading.Timeout.InfiniteTimeSpan && timeout <= TimeSpan.Zero)
+            {
+                throw new ArgumentOutOfRangeException(nameof(timeout), 
+                    $"Timeout must be positive or Timeout.InfiniteTimeSpan, but was {timeout.TotalSeconds:F1}s");
+            }
+
             Guid newId;
             var _id = request.TryGetValue("id", out var id);
             if (!_id)
@@ -176,10 +191,14 @@ namespace Xrpl.Client
 
             promisesAwaitingResponse.TryAdd(newId, taskInfo);
 
-            Timer timer = new Timer(timeout);
-            timer.Elapsed += (sender, e) => this.Reject(newId, new TimeoutException($"Timeout for request: {newRequest} with id {newId}", request));
-            timer.Start();
-            timeoutsAwaitingResponse.TryAdd(newId, timer);
+            if (timeout != System.Threading.Timeout.InfiniteTimeSpan)
+            {
+                Timer timer = new Timer(timeout.TotalMilliseconds);
+                timer.AutoReset = false;
+                timer.Elapsed += (sender, e) => this.Reject(newId, new TimeoutException($"Timeout for request: {newRequest} with id {newId}", request));
+                timer.Start();
+                timeoutsAwaitingResponse.TryAdd(newId, timer);
+            }
 
             return new XrplRequest()
             {
