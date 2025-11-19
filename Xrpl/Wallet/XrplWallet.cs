@@ -3,15 +3,10 @@
 using Newtonsoft.Json;
 using Newtonsoft.Json.Linq;
 
-using Org.BouncyCastle.Asn1.Ocsp;
-using Org.BouncyCastle.Asn1.X509;
-
 using System;
 using System.Collections.Generic;
-using System.Globalization;
 using System.Linq;
 using System.Security.Cryptography;
-using System.Security.Principal;
 using System.Text;
 
 using Xrpl.AddressCodec;
@@ -21,12 +16,6 @@ using Xrpl.Keypairs;
 using Xrpl.Models.Transactions;
 using Xrpl.Models.Utils;
 using Xrpl.Utils.Hashes;
-using Xrpl.Wallet;
-
-using static NBitcoin.BIP322.BIP322Signature;
-using static NBitcoin.WalletPolicies.MiniscriptNode.ParameterRequirement;
-using static System.Reflection.Metadata.BlobBuilder;
-using static Xrpl.AddressCodec.B58;
 
 // https://github.com/XRPLF/xrpl.js/blob/main/packages/xrpl/src/Wallet/index.ts
 
@@ -42,6 +31,11 @@ namespace Xrpl.Wallet
             TxBlob = txBlob;
             Hash = hash;
         }
+    }
+    public enum TextWalletKdf
+    {
+        Sha256 = 0,
+        Pbkdf2 = 1,
     }
 
     public class XrplWallet
@@ -183,23 +177,64 @@ namespace Xrpl.Wallet
         /// <param name="algorithm">The digital signature algorithm to generate an address for.</param>
         /// <param name="salt">user salt as a password</param>
         /// <param name="caseInsensitive">is case-insensitive</param>
+        /// <param name="masterAddress">account master address, will use as account</param>
+        /// <param name="kdf">Key Derivation Function</param>
         /// <returns>generated wallet</returns>
-        public static XrplWallet FromNormalizedText(string text, string? salt = null, bool caseInsensitive = true, string algorithm = null)
+        public static XrplWallet FromNormalizedText(
+            string text,
+            string? salt = null,
+            bool caseInsensitive = true,
+            string algorithm = null,
+            string masterAddress = null, 
+            TextWalletKdf kdf = TextWalletKdf.Sha256)
         {
             var normalized = NormalizeText(text, caseInsensitive);
 
+            var seedBytes = kdf switch
+            {
+                TextWalletKdf.Sha256 => DeriveSeedWithSha256(normalized, salt),
+                TextWalletKdf.Pbkdf2 => DeriveSeedWithPbkdf2(normalized, salt),
+                _ => throw new ArgumentOutOfRangeException(nameof(kdf), kdf, "Unsupported KDF")
+            };
+
+            return XrplWallet.FromEntropy(seedBytes, masterAddress, algorithm ?? XrplWallet.DEFAULT_ALGORITHM);
+        }
+        private static byte[] DeriveSeedWithSha256(string text, string? salt, int seedLength = 16)
+        {
             if (!string.IsNullOrWhiteSpace(salt))
-                normalized += "::" + salt.Trim();
+                text += "::" + salt.Trim();
 
-            var entropy = SHA256.HashData(Encoding.UTF8.GetBytes(normalized));
-            var seedBytes = entropy.Take(16).ToArray();
+            var entropy = SHA256.HashData(Encoding.UTF8.GetBytes(text));
 
-            return XrplWallet.FromEntropy(seedBytes, null, algorithm ?? XrplWallet.DEFAULT_ALGORITHM);
+            return entropy.Take(seedLength).ToArray(); // 16 байт = 128 бит
+        }
+        private static byte[] DeriveSeedWithPbkdf2(
+            string normalized,
+            string? salt,
+            int iterations = 100_000,
+            int seedLength = 16)
+        {
+            var passwordBytes = Encoding.UTF8.GetBytes(normalized);
+
+            byte[] saltBytes = null;
+            if (!string.IsNullOrWhiteSpace(salt))
+            {
+                // salt as is, but with Trim
+                saltBytes = Encoding.UTF8.GetBytes(salt.Trim());
+            }
+
+            using var pbkdf2 = new Rfc2898DeriveBytes(
+                passwordBytes,
+                saltBytes ?? [],
+                iterations,
+                HashAlgorithmName.SHA256);
+
+            return pbkdf2.GetBytes(seedLength); // 16 bytes of entropy for seed
         }
 
         private static string NormalizeText(string input, bool caseInsensitive)
         {
-            // Убираем лишние пробелы, переводим в нижний регистр, нормализуем символы
+            // We remove extra spaces, convert to lowercase, and normalize characters.
             var normalized = input
                 .Trim()
                 .Replace("\r\n", "\n") // Windows → Unix
@@ -207,11 +242,11 @@ namespace Xrpl.Wallet
             if (caseInsensitive)
             {
                 normalized = normalized    // Mac → Unix
-                    .ToLowerInvariant();     // если важно быть case-insensitive
+                    .ToLowerInvariant();     // if it's important to be case-insensitive
             }
-            // Сжимаем множественные пробелы и переводы строк в один пробел
+            // Compressing multiple spaces and line breaks into a single space
             normalized = string.Join(" ", normalized
-                .Split(new char[] { ' ', '\n', '\t' }, StringSplitOptions.RemoveEmptyEntries));
+                .Split([' ', '\n', '\t',], StringSplitOptions.RemoveEmptyEntries));
 
             return normalized;
         }
