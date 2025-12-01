@@ -32,7 +32,14 @@ internal class Program
     //private static IXrplClient client = new XrplClient("wss://s.devnet.rippletest.net:51233");
     private static async Task Main(string[] args)
     {
-        var wallet = XrplWallet.FromNormalizedText("random text for get new wallet", "salt", true, null);
+        var wallet = XrplWallet.FromNormalizedText("random text for get new wallet", "salt", caseInsensitive:true, algorithm:XrplWallet.DEFAULT_ALGORITHM, masterAddress:null,kdf:TextWalletKdf.Sha256);
+        Console.WriteLine(wallet.ClassicAddress);
+        var wallet1 = XrplWallet.FromNormalizedText("random text for get new wallet", salt:null, caseInsensitive:true, algorithm:XrplWallet.DEFAULT_ALGORITHM, masterAddress:null,kdf:TextWalletKdf.Sha256);
+        Console.WriteLine(wallet1.ClassicAddress);
+        var wallet2 = XrplWallet.FromNormalizedText("random text for get new wallet", "salt", caseInsensitive:true, algorithm:XrplWallet.DEFAULT_ALGORITHM, masterAddress:null,kdf:TextWalletKdf.Pbkdf2);
+        Console.WriteLine(wallet2.ClassicAddress);
+        var wallet3 = XrplWallet.FromNormalizedText("random text for get new wallet", salt:null, caseInsensitive:true, algorithm:XrplWallet.DEFAULT_ALGORITHM, masterAddress:null,kdf:TextWalletKdf.Pbkdf2);
+        Console.WriteLine(wallet3.ClassicAddress);
         try
         {
             client.connection.OnConnected += async () => { Console.WriteLine("CONNECTED"); };
