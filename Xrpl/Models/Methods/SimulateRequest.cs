@@ -30,7 +30,7 @@ public class SimulateRequest : BaseRequest
     /// If you include this field, do not also include tx_blob.
     /// </summary>
     [JsonProperty("tx_json")]
-    public ITransactionCommon Transaction { get; set; }
+    public ITransactionRequest Transaction { get; set; }
 
     /// <summary>
     /// The default value is false, which returns data and metadata in JSON format.<br/>

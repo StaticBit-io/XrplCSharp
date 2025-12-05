@@ -10,13 +10,13 @@ using Xrpl.Models.Transactions;
 namespace Xrpl.Client.Json.Converters
 {
     /// <summary> Transaction json Converter </summary>
-    public class TransactionConverter : JsonConverter
+    public class TransactionResponseConverter : JsonConverter
     {
         /// <summary>
-        /// write <see cref="ITransactionResponseCommon"/>  to json object
+        /// write <see cref="ITransactionResponse"/>  to json object
         /// </summary>
         /// <param name="writer">writer</param>
-        /// <param name="value"><see cref="ITransactionResponseCommon"/> value</param>
+        /// <param name="value"><see cref="ITransactionResponse"/> value</param>
         /// <param name="serializer">json serializer</param>
         /// <exception cref="NotSupportedException">Cannot write this object type</exception>
         public override void WriteJson(JsonWriter writer, object value, JsonSerializer serializer)
@@ -25,11 +25,11 @@ namespace Xrpl.Client.Json.Converters
         }
 
         /// <summary>
-        /// create <see cref="ITransactionResponseCommon"/> 
+        /// create <see cref="ITransactionResponse"/> 
         /// </summary>
         /// <param name="jObject">json object LedgerEntity</param>
-        /// <returns><see cref="ITransactionResponseCommon"/> </returns>
-        public ITransactionResponseCommon Create(JObject jObject)
+        /// <returns><see cref="ITransactionResponse"/> </returns>
+        public ITransactionResponse Create(JObject jObject)
         {
             return jObject.Property("TransactionType")?.Value.ToString() switch
             {
@@ -74,29 +74,29 @@ namespace Xrpl.Client.Json.Converters
             };
         }
 
-        static TransactionResponseCommon SetUnknownType(JObject jObject)
+        static TransactionResponse SetUnknownType(JObject jObject)
         {
             jObject.Property("TransactionType").Value = "Unknown";
-            return new TransactionResponseCommon();
+            return new TransactionResponse();
         }
 
-        /// <summary> read  <see cref="ITransactionResponseCommon"/>   from json object </summary>
+        /// <summary> read  <see cref="ITransactionResponse"/>   from json object </summary>
         /// <param name="reader">json reader</param>
         /// <param name="objectType">object type</param>
         /// <param name="existingValue">object value</param>
         /// <param name="serializer">json serializer</param>
-        /// <returns><see cref="ITransactionResponseCommon"/> </returns>
+        /// <returns><see cref="ITransactionResponse"/> </returns>
         public override object ReadJson(JsonReader reader, Type objectType, object existingValue, JsonSerializer serializer)
         {
             JObject jObject = JObject.Load(reader);
             
-            ITransactionResponseCommon transactionCommon = Create(jObject);
-            serializer.Populate(jObject.CreateReader(), transactionCommon);
-            return transactionCommon;
+            ITransactionResponse transaction = Create(jObject);
+            serializer.Populate(jObject.CreateReader(), transaction);
+            return transaction;
         }
 
         /// <inheritdoc />
-        public override bool CanConvert(Type objectType) => objectType == typeof(ITransactionResponseCommon);
+        public override bool CanConvert(Type objectType) => typeof(ITransactionResponse).IsAssignableFrom(objectType);
 
         /// <inheritdoc />
         public override bool CanWrite => false;

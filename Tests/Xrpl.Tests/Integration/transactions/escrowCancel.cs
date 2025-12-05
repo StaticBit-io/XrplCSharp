@@ -57,7 +57,7 @@ namespace XrplTests.Xrpl.ClientLib.Integration
             LOEscrow escrow = (LOEscrow)response1.AccountObjectList[0];
 
             TxRequest request2 = new TxRequest(escrow.PreviousTxnID);
-            TransactionResponseCommon response2 = await runner.client.Tx(request2);
+            TransactionResponse response2 = await runner.client.Tx(request2);
             uint sequence = (uint)response2.Sequence;
 
             // actual test - EscrowCancel

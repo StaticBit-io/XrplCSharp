@@ -12,7 +12,7 @@ using Xrpl.Client.Json.Converters;
 namespace Xrpl.Models.Transactions
 {
     /// <inheritdoc cref="IPaymentChannelCreate" />
-    public class PaymentChannelCreate : TransactionCommon, IPaymentChannelCreate, IDestination
+    public class PaymentChannelCreate : TransactionRequest, IPaymentChannelCreate, IDestination
     {
         public PaymentChannelCreate()
         {
@@ -86,7 +86,7 @@ namespace Xrpl.Models.Transactions
     }
 
     /// <inheritdoc cref="IPaymentChannelCreate" />
-    public class PaymentChannelCreateResponse : TransactionResponseCommon, IPaymentChannelCreate, IDestination
+    public class PaymentChannelCreateResponse : TransactionResponse, IPaymentChannelCreate, IDestination
     {
         /// <inheritdoc />
         public string Amount { get; set; }

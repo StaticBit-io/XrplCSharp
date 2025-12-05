@@ -13,7 +13,7 @@ namespace Xrpl.Models.Transactions
     /// <summary>
     /// The Clawback transaction is used by the token issuer to claw back issued tokens from a holder.
     /// </summary>
-    public class ClawBack : TransactionCommon, IClawBack
+    public class ClawBack : TransactionRequest, IClawBack
     {
         public ClawBack()
         {
@@ -39,7 +39,7 @@ namespace Xrpl.Models.Transactions
     }
 
     /// <inheritdoc cref="IClawBack" />
-    public class ClawBackResponse : TransactionResponseCommon, IClawBack
+    public class ClawBackResponse : TransactionResponse, IClawBack
     {
         #region Implementation of IClawBack
 

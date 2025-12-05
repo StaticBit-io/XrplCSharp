@@ -41,7 +41,7 @@ namespace Xrpl.Models.Methods
         /// The length of this array is the same as  the problems array, and each entry is intended to fix the problem  described at the same index into that array.
         /// </summary>
         [JsonProperty("transactions")]
-        public List<TransactionCommon> Transactions { get; set; }
+        public List<TransactionRequest> Transactions { get; set; }
 
         [JsonProperty("validated")]
         public bool Validated { get; set; }

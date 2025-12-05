@@ -31,7 +31,7 @@ namespace Xrpl.Models.Transactions
         tfSellNFToken = 1, 
     }
     /// <inheritdoc cref="INFTokenCreateOffer" />
-    public class NFTokenCreateOffer : TransactionCommon, INFTokenCreateOffer, IDestination
+    public class NFTokenCreateOffer : TransactionRequest, INFTokenCreateOffer, IDestination
     {
         public NFTokenCreateOffer()
         {
@@ -103,7 +103,7 @@ namespace Xrpl.Models.Transactions
     }
 
     /// <inheritdoc cref="INFTokenCreateOffer" />
-    public class NFTokenCreateOfferResponse : TransactionResponseCommon, INFTokenCreateOffer, IDestination
+    public class NFTokenCreateOfferResponse : TransactionResponse, INFTokenCreateOffer, IDestination
     {
         /// <inheritdoc />
         [JsonConverter(typeof(RippleDateTimeConverter))]

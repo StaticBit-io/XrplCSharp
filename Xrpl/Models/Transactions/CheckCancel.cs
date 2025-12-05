@@ -10,7 +10,7 @@ using Xrpl.Client.Exceptions;
 namespace Xrpl.Models.Transactions
 {
     /// <inheritdoc cref="ICheckCancel" />
-    public class CheckCancel : TransactionCommon, ICheckCancel
+    public class CheckCancel : TransactionRequest, ICheckCancel
     {
         public CheckCancel()
         {
@@ -35,7 +35,7 @@ namespace Xrpl.Models.Transactions
     }
 
     /// <inheritdoc cref="ICheckCancel" />
-    public class CheckCancelResponse : TransactionResponseCommon, ICheckCancel
+    public class CheckCancelResponse : TransactionResponse, ICheckCancel
     {
         /// <inheritdoc />
         public string CheckID { get; set; }    

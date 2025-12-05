@@ -14,7 +14,7 @@ using Xrpl.Models.Common;
 namespace Xrpl.Models.Transactions
 {
     /// <inheritdoc cref="INFTokenAcceptOffer" />
-    public class NFTokenAcceptOffer : TransactionCommon, INFTokenAcceptOffer
+    public class NFTokenAcceptOffer : TransactionRequest, INFTokenAcceptOffer
     {
         public NFTokenAcceptOffer()
         {
@@ -75,7 +75,7 @@ namespace Xrpl.Models.Transactions
     }
 
     /// <inheritdoc cref="INFTokenAcceptOffer" />
-    public class NFTokenAcceptOfferResponse : TransactionResponseCommon, INFTokenAcceptOffer
+    public class NFTokenAcceptOfferResponse : TransactionResponse, INFTokenAcceptOffer
     {
         /// <inheritdoc />
         public string NFTokenID { get; set; }

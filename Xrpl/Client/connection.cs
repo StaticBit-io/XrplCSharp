@@ -209,6 +209,7 @@ namespace Xrpl.Client
         private DateTime? lastActivityTime = null;
         private Timer? pingTimer = null;
         private WebSocketClient? _userInitiatedSocket = null;
+        private volatile bool _permanentlyDisconnected = false;
 
         public ConnectionOptions config { get; private set; }
         public RequestManager requestManager = new RequestManager();
@@ -245,6 +246,8 @@ namespace Xrpl.Client
         {
             if (IsConnected())
                 return;
+
+            CheckIfNotConnected();
 
             var waitTimeout = timeout ?? config.ConnectionAcquisitionTimeout;
 
@@ -318,6 +321,7 @@ namespace Xrpl.Client
 
         private async Task ConnectInternalAsync()
         {
+            _permanentlyDisconnected = false;
             await _connectLock.WaitAsync();
             try
             {
@@ -340,7 +344,7 @@ namespace Xrpl.Client
                 }
 
                 timer = new Timer(this.config.ConnectionAttemptTimeout.TotalMilliseconds);
-                timer.Elapsed += async (sender, e) => await OnConnectionFailed(new ConnectionException($"Error: connect() timed out after {this.config.ConnectionAttemptTimeout.TotalSeconds:F1} seconds. If your internet connection is working, the rippled server may be blocked or inaccessible. You can also try setting the 'ConnectionAttemptTimeout' option in the Client constructor."));
+                timer.Elapsed += async (sender, e) => await OnConnectionFailed(new ConnectionException($"Error: connect() timed out after {this.config.ConnectionAttemptTimeout.TotalSeconds:F1} seconds. If your internet connection is working, the rippled server may be blocked or inaccessible. You can also try setting the 'ConnectionAttemptTimeout' option in the Client constructor."), this.ws);
                 timer.Start();
 
                 this.ws = CreateWebSocket(this.url, this.config);
@@ -351,10 +355,10 @@ namespace Xrpl.Client
 
                 ws.OnConnect(async (ws) => { await OnceOpen(); });
 
-                ws.OnConnectionError(async (e, ws) =>
+                ws.OnConnectionError(async (e, errorSocket) =>
                 {
                     timer.Stop();
-                    await OnConnectionFailed(e);
+                    await OnConnectionFailed(e, errorSocket);
                 });
 
                 ws.OnMessageReceived(async (m, ws) => { await IOnMessage(m); });
@@ -377,6 +381,7 @@ namespace Xrpl.Client
 
         public async Task<int> Disconnect()
         {
+            _permanentlyDisconnected = true;
             StopReconnectLoop();
             StopPingTimer();
 
@@ -391,12 +396,15 @@ namespace Xrpl.Client
             return 0;
         }
 
-        private async Task OnConnectionFailed(Exception error)
+        private async Task OnConnectionFailed(Exception error, WebSocketClient? errorSocket = null)
         {
             timer?.Stop();
             timer?.Dispose();
             timer = null;
 
+            var userInitiated = errorSocket != null
+                ? Interlocked.CompareExchange(ref _userInitiatedSocket, null, errorSocket) == errorSocket
+                : Interlocked.Exchange(ref _userInitiatedSocket, null) != null;
             var wasOpen = this.ws?.State == WebSocketState.Open;
 
             if (this.ws != null)
@@ -412,6 +420,20 @@ namespace Xrpl.Client
                 this.ws = null;
             }
             this.connectionManager.RejectAllAwaiting(new NotConnectedException(error.Message));
+
+            if (userInitiated)
+            {
+                OnConnectionStatus?.Invoke(new ConnectionStatusInfo
+                {
+                    Message = "Connection closed permanently. " + error.Message,
+                    Severity = ConnectionCloseSeverity.Info,
+                    Reconnect = null
+                });
+                if (OnDisconnect is not null)
+                    await OnDisconnect?.Invoke(null, error.Message)!;
+
+                return;
+            }
 
             var errorMessage = $"Initial connection failed: {error.Message}";
             OnConnectionStatus?.Invoke(new ConnectionStatusInfo
@@ -440,6 +462,8 @@ namespace Xrpl.Client
             if (this.ShouldBeConnected())
                 return;
 
+            CheckIfNotConnected();
+
             var policy = policyOverride ?? config.RequestPolicy;
 
             switch (policy)
@@ -456,6 +480,16 @@ namespace Xrpl.Client
                 default:
                     throw new NotConnectedException();
             }
+        }
+
+        private void CheckIfNotConnected()
+        {
+            if (_permanentlyDisconnected)
+                throw new NotConnectedException("Client has been disconnected. Call Connect() to reconnect.");
+
+            var noConnectionAttemptActive = this.ws == null && _reconnectCts == null;
+            if (noConnectionAttemptActive)
+                throw new NotConnectedException("No connection attempt in progress. Call Connect() first.");
         }
 
         public async Task<Dictionary<string, dynamic>> Request(Dictionary<string, dynamic> request, TimeSpan? timeout = null, RequestFailurePolicy? policyOverride = null)
@@ -518,6 +552,12 @@ namespace Xrpl.Client
                 this.connectionManager.ResolveAllAwaiting();
                 if (OnConnected is not null)
                     await this.OnConnected?.Invoke();
+                OnConnectionStatus?.Invoke(new ConnectionStatusInfo
+                {
+                    Message = $"Connected {url}",
+                    Severity = ConnectionCloseSeverity.Info,
+                    Reconnect = null
+                });
             }
             catch (Exception error)
             {

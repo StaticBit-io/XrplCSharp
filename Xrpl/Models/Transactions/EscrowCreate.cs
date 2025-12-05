@@ -12,7 +12,7 @@ using Xrpl.Models.Common;
 namespace Xrpl.Models.Transactions
 {
     /// <inheritdoc cref="IEscrowCreate" />
-    public class EscrowCreate : TransactionCommon, IEscrowCreate, IDestination
+    public class EscrowCreate : TransactionRequest, IEscrowCreate, IDestination
     {
         public EscrowCreate()
         {
@@ -84,7 +84,7 @@ namespace Xrpl.Models.Transactions
     }
 
     /// <inheritdoc cref="IEscrowCreate" />
-    public class EscrowCreateResponse : TransactionResponseCommon, IEscrowCreate, IDestination
+    public class EscrowCreateResponse : TransactionResponse, IEscrowCreate, IDestination
     {
         /// <inheritdoc />
         [JsonConverter(typeof(CurrencyConverter))]

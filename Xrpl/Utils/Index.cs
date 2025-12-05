@@ -27,12 +27,12 @@ namespace Xrpl.Utils
             }
         }
     
-        public static string Encode(this TransactionCommon transactionOrLedgerEntry)
+        public static string Encode(this TransactionRequest transactionOrLedgerEntry)
         {
             return XrplBinaryCodec.Encode(transactionOrLedgerEntry);
         }
     
-        public static string EncodeForSigning(this TransactionCommon transaction)
+        public static string EncodeForSigning(this TransactionRequest transaction)
         {
             return XrplBinaryCodec.EncodeForSigning(transaction);
         }
@@ -42,7 +42,7 @@ namespace Xrpl.Utils
             return XrplBinaryCodec.EncodeForSigningClaim(paymentChannelClaim);
         }
     
-        public static string EncodeForMultiSigning(this TransactionCommon transaction, string signer)
+        public static string EncodeForMultiSigning(this TransactionRequest transaction, string signer)
         {
             return XrplBinaryCodec.EncodeForMultiSigning(transaction, signer);
         }

@@ -16,7 +16,7 @@ public static class BatchBuilder
     /// Превращает список произвольных «обычных» транзакций (твоих C# моделей) во внутренние RawTransactions
     /// с нужными полями для Batch (Fee= "0", SigningPubKey = "", + tfInnerBatchTxn; без TxnSignature/Signers/LastLedgerSequence).
     /// </summary>
-    public static Batch Build(string account, IEnumerable<ITransactionCommon> transactions, BatchFlags? mode = null, List<BatchSigner>? batchSigners = null)
+    public static Batch Build(string account, IEnumerable<ITransactionRequest> transactions, BatchFlags? mode = null, List<BatchSigner>? batchSigners = null)
     {
         if (transactions == null) throw new ArgumentNullException(nameof(transactions));
 
@@ -37,7 +37,7 @@ public static class BatchBuilder
         return batch;
     }
 
-    public static RawTransactionWrapper ToBatchTx(this ITransactionCommon tx)
+    public static RawTransactionWrapper ToBatchTx(this ITransactionRequest tx)
     {
         // 1) Запрещаем Batch внутри Batch
         if (tx.TransactionType == TransactionType.Batch)

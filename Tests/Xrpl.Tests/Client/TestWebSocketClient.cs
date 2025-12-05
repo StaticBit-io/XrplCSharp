@@ -1,20 +1,27 @@
-﻿using System;
+﻿using Microsoft.VisualStudio.TestPlatform.CommunicationUtilities;
+using Microsoft.VisualStudio.TestTools.UnitTesting;
+
+using NBitcoin.Protocol;
+
+using Newtonsoft.Json;
+
+using Org.BouncyCastle.Asn1.Ocsp;
+
+using System;
 using System.Collections.Generic;
 using System.Diagnostics;
 using System.Net.WebSockets;
 using System.Threading;
 using System.Threading.Tasks;
 using System.Timers;
-using Microsoft.VisualStudio.TestPlatform.CommunicationUtilities;
-using Microsoft.VisualStudio.TestTools.UnitTesting;
-using Newtonsoft.Json;
-using Org.BouncyCastle.Asn1.Ocsp;
+
 using Xrpl.Client;
 using Xrpl.Client.Exceptions;
 using Xrpl.Models;
 using Xrpl.Models.Methods;
 using Xrpl.Models.Subscriptions;
 using Xrpl.Sugar;
+
 using Timer = System.Timers.Timer;
 
 
@@ -83,8 +90,12 @@ namespace Xrpl.Tests.ClientLib
                 isTested = true;
                 return Task.CompletedTask;
             };
-
-            Timer timer = new Timer(7000);
+            client.connection.OnTransaction += response =>
+            {
+                Console.WriteLine($"TX: {response.Transaction.TransactionType}");
+                return Task.CompletedTask;
+            };
+            Timer timer = new Timer(20000);
             timer.Elapsed += (sender, e) =>
             {
                 Debug.WriteLine("TIMEOUT!!");
@@ -94,14 +105,20 @@ namespace Xrpl.Tests.ClientLib
             timer.Start();
 
             await client.Connect();
-
             Debug.WriteLine($"BEFORE: {DateTime.Now}");
 
-            while (!isFinished)
-            {
-                Debug.WriteLine($"WAITING: {DateTime.Now}");
-                System.Threading.Thread.Sleep(TimeSpan.FromSeconds(1));
-            }
+            var task = Task.Run( //change thread
+                async () =>
+                {
+                    while (!isFinished)
+                    {
+                        Debug.WriteLine($"WAITING: {DateTime.Now}");
+                        await Task.Delay(500);
+                    }
+                });
+
+            await task;
+            await client.Disconnect();
             Debug.WriteLine($"AFTER: {DateTime.Now}");
             Debug.WriteLine($"IS FINISHED: {isFinished}");
             Debug.WriteLine($"IS TESTER: {isTested}");

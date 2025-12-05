@@ -28,7 +28,7 @@ namespace Xrpl.Models.Transactions
     }
 
     /// <inheritdoc cref="IAccountDelete" />
-    public class AccountDelete : TransactionCommon, IAccountDelete, IDestination
+    public class AccountDelete : TransactionRequest, IAccountDelete, IDestination
     {
         public AccountDelete()
         {
@@ -43,7 +43,7 @@ namespace Xrpl.Models.Transactions
     }
 
     /// <inheritdoc cref="IAccountDelete" />
-    public class AccountDeleteResponse : TransactionResponseCommon, IAccountDelete, IDestination
+    public class AccountDeleteResponse : TransactionResponse, IAccountDelete, IDestination
     {
         /// <inheritdoc />
         public string Destination { get; set; }
