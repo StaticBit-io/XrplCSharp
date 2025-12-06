@@ -1,7 +1,7 @@
 ﻿//https://xrpl.org/setfee.html
 namespace Xrpl.Models.Transactions
 {
-    public class SetFee : TransactionCommon, ISetFee
+    public class SetFee : TransactionRequest, ISetFee
     {
         public SetFee()
         {
@@ -51,7 +51,7 @@ namespace Xrpl.Models.Transactions
         uint ReserveIncrement { get; set; }
     }
 
-    public class SetFeeResponse : TransactionResponseCommon, ISetFee
+    public class SetFeeResponse : TransactionResponse, ISetFee
     {
         /// <inheritdoc />
         public string BaseFee { get; set; }

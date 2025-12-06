@@ -45,7 +45,7 @@ namespace Xrpl.Models.Transactions
         tfMutable = 16,
     }
     /// <inheritdoc cref="INFTokenMint" />
-    public class NFTokenMint : TransactionCommon, INFTokenMint
+    public class NFTokenMint : TransactionRequest, INFTokenMint
     {
         public NFTokenMint()
         {
@@ -109,7 +109,7 @@ namespace Xrpl.Models.Transactions
     }
 
     /// <inheritdoc cref="INFTokenMint" />
-    public class NFTokenMintResponse : TransactionResponseCommon, INFTokenMint
+    public class NFTokenMintResponse : TransactionResponse, INFTokenMint
     {
         public new NFTokenMintFlags? Flags
         {

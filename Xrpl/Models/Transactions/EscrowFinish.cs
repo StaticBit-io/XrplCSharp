@@ -10,7 +10,7 @@ using Xrpl.Client.Exceptions;
 namespace Xrpl.Models.Transactions
 {
     /// <inheritdoc cref="IEscrowFinish" />
-    public class EscrowFinish : TransactionCommon, IEscrowFinish
+    public class EscrowFinish : TransactionRequest, IEscrowFinish
     {
         public EscrowFinish()
         {
@@ -65,7 +65,7 @@ namespace Xrpl.Models.Transactions
     }
 
     /// <inheritdoc cref="IEscrowFinish" />
-    public class EscrowFinishResponse : TransactionResponseCommon, IEscrowFinish
+    public class EscrowFinishResponse : TransactionResponse, IEscrowFinish
     {
         /// <inheritdoc />
         public string Condition { get; set; }

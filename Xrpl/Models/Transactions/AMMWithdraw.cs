@@ -68,7 +68,7 @@ namespace Xrpl.Models.Transactions
     /// instance pool, thus redeeming some share of the pools that one owns in the form
     /// of LPTokenIn.
     /// </summary>
-    public class AMMWithdraw : TransactionCommon, IAMMWithdraw
+    public class AMMWithdraw : TransactionRequest, IAMMWithdraw
     {
         public AMMWithdraw()
         {
@@ -151,7 +151,7 @@ namespace Xrpl.Models.Transactions
     }
 
     /// <inheritdoc cref="IAMMWithdraw" />
-    public class AMMWithdrawResponse : TransactionResponseCommon, IAMMWithdraw
+    public class AMMWithdrawResponse : TransactionResponse, IAMMWithdraw
     {
         #region Implementation of IAMMWithdraw
         public new AMMWithdrawFlags? Flags

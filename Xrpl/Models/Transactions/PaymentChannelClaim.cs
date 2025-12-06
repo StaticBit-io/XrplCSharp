@@ -37,7 +37,7 @@ namespace Xrpl.Models.Transactions
         tfClose = 131072
     }
     /// <inheritdoc cref="IPaymentChannelClaim" />
-    public class PaymentChannelClaim : TransactionCommon, IPaymentChannelClaim
+    public class PaymentChannelClaim : TransactionRequest, IPaymentChannelClaim
     {
         public PaymentChannelClaim()
         {
@@ -123,7 +123,7 @@ namespace Xrpl.Models.Transactions
     }
 
     /// <inheritdoc cref="IPaymentChannelClaim" />
-    public class PaymentChannelClaimResponse : TransactionResponseCommon, IPaymentChannelClaim
+    public class PaymentChannelClaimResponse : TransactionResponse, IPaymentChannelClaim
     {
         /// <inheritdoc />
         public string Amount { get; set; }

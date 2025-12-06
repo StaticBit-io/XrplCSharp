@@ -13,7 +13,7 @@ using Xrpl.Models.Common;
 namespace Xrpl.Models.Transactions
 {
     /// <inheritdoc cref="ICheckCash" />
-    public class CheckCash : TransactionCommon, ICheckCash
+    public class CheckCash : TransactionRequest, ICheckCash
     {
         public CheckCash()
         {
@@ -59,7 +59,7 @@ namespace Xrpl.Models.Transactions
     }
 
     /// <inheritdoc cref="ICheckCash" />
-    public class CheckCashResponse : TransactionResponseCommon, ICheckCash
+    public class CheckCashResponse : TransactionResponse, ICheckCash
     {
         /// <inheritdoc />
         public string CheckID { get; set; }

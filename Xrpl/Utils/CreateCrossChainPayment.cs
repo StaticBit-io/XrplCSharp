@@ -47,15 +47,11 @@ namespace Xrpl.Utils
                 Flags = payment.Flags,
                 InvoiceID = payment.InvoiceID,
                 LastLedgerSequence = payment.LastLedgerSequence,
-                Meta = payment.Meta,
                 Paths = payment.Paths,
                 SendMax = payment.SendMax,
                 Sequence = payment.Sequence,
                 Signers = payment.Signers,
                 SigningPublicKey = payment.SigningPublicKey,
-                date = payment.date,
-                inLedger = payment.inLedger,
-                ledger_index = payment.ledger_index,
 
                 Memos = newMemos.Select(c => new MemoWrapper() { Memo = c }).ToList(),
                 TransactionSignature = null

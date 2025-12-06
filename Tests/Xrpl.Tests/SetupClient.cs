@@ -46,7 +46,7 @@ namespace Xrpl.Tests
 
             Timer timer = new Timer(25000);
             timer.Elapsed += (sender, e) => tcpListenerThread.Abort();
-            client = new XrplClient($"ws://127.0.0.1:{port}");
+            client = new XrplClient($"ws://127.0.0.1:{port}",new XrplClient.ClientOptions(){RequestPolicy = RequestFailurePolicy.ImmediateFail});
             client.connection.OnConnected += () =>
             {
                 Debug.WriteLine("SETUP CLIENT: CONECTED");

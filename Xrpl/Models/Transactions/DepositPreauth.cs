@@ -10,7 +10,7 @@ using Xrpl.Client.Exceptions;
 namespace Xrpl.Models.Transactions
 {
     /// <inheritdoc cref="IDepositPreauth" />
-    public class DepositPreauth : TransactionCommon, IDepositPreauth
+    public class DepositPreauth : TransactionRequest, IDepositPreauth
     {
         public DepositPreauth()
         {
@@ -41,7 +41,7 @@ namespace Xrpl.Models.Transactions
     }
 
     /// <inheritdoc cref="IDepositPreauth" />
-    public class DepositPreauthResponse : TransactionResponseCommon, IDepositPreauth
+    public class DepositPreauthResponse : TransactionResponse, IDepositPreauth
     {
         /// <inheritdoc />
         public string Authorize { get; set; }

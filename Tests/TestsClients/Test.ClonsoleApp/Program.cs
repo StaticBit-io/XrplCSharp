@@ -28,17 +28,17 @@ namespace MyApp;
 internal class Program
 {
     //private static IXrplClient client = new XrplClient("wss://s.altnet.rippletest.net:51233");
-    private static IXrplClient client = new XrplClient("wss://s2.ripple.com");
-    //private static IXrplClient client = new XrplClient("wss://s.devnet.rippletest.net:51233");
+    //private static IXrplClient client = new XrplClient("wss://s2.ripple.com");
+    private static IXrplClient client = new XrplClient("wss://s.devnet.rippletest.net:51233");
     private static async Task Main(string[] args)
     {
-        var wallet = XrplWallet.FromNormalizedText("random text for get new wallet", "salt", caseInsensitive:true, algorithm:XrplWallet.DEFAULT_ALGORITHM, masterAddress:null,kdf:TextWalletKdf.Sha256);
+        var wallet = XrplWallet.FromNormalizedText("random text for get new wallet", "salt", caseInsensitive: true, algorithm: XrplWallet.DEFAULT_ALGORITHM, masterAddress: null, kdf: TextWalletKdf.Sha256);
         Console.WriteLine(wallet.ClassicAddress);
-        var wallet1 = XrplWallet.FromNormalizedText("random text for get new wallet", salt:null, caseInsensitive:true, algorithm:XrplWallet.DEFAULT_ALGORITHM, masterAddress:null,kdf:TextWalletKdf.Sha256);
+        var wallet1 = XrplWallet.FromNormalizedText("random text for get new wallet", salt: null, caseInsensitive: true, algorithm: XrplWallet.DEFAULT_ALGORITHM, masterAddress: null, kdf: TextWalletKdf.Sha256);
         Console.WriteLine(wallet1.ClassicAddress);
-        var wallet2 = XrplWallet.FromNormalizedText("random text for get new wallet", "salt", caseInsensitive:true, algorithm:XrplWallet.DEFAULT_ALGORITHM, masterAddress:null,kdf:TextWalletKdf.Pbkdf2);
+        var wallet2 = XrplWallet.FromNormalizedText("random text for get new wallet", "salt", caseInsensitive: true, algorithm: XrplWallet.DEFAULT_ALGORITHM, masterAddress: null, kdf: TextWalletKdf.Pbkdf2);
         Console.WriteLine(wallet2.ClassicAddress);
-        var wallet3 = XrplWallet.FromNormalizedText("random text for get new wallet", salt:null, caseInsensitive:true, algorithm:XrplWallet.DEFAULT_ALGORITHM, masterAddress:null,kdf:TextWalletKdf.Pbkdf2);
+        var wallet3 = XrplWallet.FromNormalizedText("random text for get new wallet", salt: null, caseInsensitive: true, algorithm: XrplWallet.DEFAULT_ALGORITHM, masterAddress: null, kdf: TextWalletKdf.Pbkdf2);
         Console.WriteLine(wallet3.ClassicAddress);
         try
         {
@@ -59,10 +59,11 @@ internal class Program
             };
             await client.Connect();
             //await Simulate();
-            await MultiSignTest();
+            //await MultiSignTest();
             //await TestBatchSingle(); //Одно-аккаунтный Batch: у всех внутренних tx один владелец
             //await TestBatchSingleMultiSign(); //Одно-аккаунтный Batch с мультиподписью
             //await TestBatchMultiAccounts(); //Много-аккаунтный Batch: у каждого участника single-sig (через BatchSigners
+            await TestBatchMultiAccountsSignOnly();
             //await TestBatchMultiAccountsWithTopMultiSign(); //Много-аккаунтный Batch: внешняя подпись Multi-Sig
             //await TestBatchMultiAccountsWithInnerMultiSign(); //Много-аккаунтный Batch: внутри Multi-Sig
 
@@ -86,7 +87,7 @@ internal class Program
         var owner = XrplWallet.FromSeed("sEdTqY3295pcs14tHzHG3ZpLzR4VFND");
         // Подписанты (могут быть любые аккаунты/ключи)
         var dest = XrplWallet.FromSeed("sEdT5jzoGrDayKXtXsUHmg8X9ScGAwR");
-        IPayment tx = new Payment()
+        var tx = new Payment()
         {
             Account = owner.ClassicAddress,
             Destination = dest.ClassicAddress,
@@ -509,6 +510,66 @@ internal class Program
         var txr = submitRes.Transaction as BatchResponse;
         Console.WriteLine($"{submitRes.EngineResult}: {submitRes.EngineResultMessage}");
     }
+    private static async Task TestBatchMultiAccountsSignOnly()
+    {
+        var seed1 = "sEdTqL3zHQ18TKbKgdBoDdhkjz1rH3c";
+        var seed2 = "sEdVDJVXuGRqSnfRFAYzQy9Npko4F1X";
+        var seed3 = "sEd7MevQA3VnjMEk3spX3PB3Vqia7Es";
+
+        var w1 = XrplWallet.FromSeed(seed1);
+        var w2 = XrplWallet.FromSeed(seed2);
+        var w3 = XrplWallet.FromSeed(seed3);
+        // Внутренний #1 — от w1 (seq = next для w1)
+        var p1 = new Payment
+        {
+            Account = w1.ClassicAddress,
+            Destination = w2.ClassicAddress,
+            Amount = new Currency { ValueAsXrp = 1.1m },
+            Fee = new Currency { Value = "0" },
+        }.ToBatchTx();
+
+        // Внутренний #2 — от w2 (seq = next для w2)
+        var p2 = new Payment
+        {
+            Account = w2.ClassicAddress,
+            Destination = w1.ClassicAddress,
+            Amount = new Currency { ValueAsXrp = 1.2m },
+            Fee = new Currency { Value = "0" },
+        }.ToBatchTx();
+
+        // Внутренний #3 — от w3 (seq = next для w3)
+        var p3 = new Payment
+        {
+            Account = w3.ClassicAddress,
+            Destination = w1.ClassicAddress,
+            Amount = new Currency { ValueAsXrp = 1.3m },
+            Fee = new Currency { Value = "0" },
+        }.ToBatchTx();
+
+        // Внешний Batch — платит комиссию w1 (может быть любой плательщик)
+        var batch = new Batch
+        {
+            Account = w1.ClassicAddress,
+            Flags = BatchFlags.tfAllOrNothing,
+            RawTransactions = new List<RawTransactionWrapper> { p1, p2, p3 },
+            Fee = new Currency() { Value = "70" }
+            // Рекомендуется проставить LLS и Fee (не показано для краткости)
+        };
+
+        var filled = await client.Autofill(batch);
+
+        var signed2 = w2.SignAsBatchPart(filled, false, null);
+        var decoded = XrplBinaryCodec.Decode(signed2.TxBlob).ToString();
+
+        var signed3 = w3.SignAsBatchPart(filled, false, null);
+        decoded = XrplBinaryCodec.Decode(signed3.TxBlob).ToString();
+        var combined = XrplWallet.CombineBatchSigners(signed2.TxBlob, signed3.TxBlob);
+        var combinedJson = JObject.Parse(XrplBinaryCodec.Decode(combined.TxBlob).ToString());
+        var final = w1.Sign(JsonConvert.DeserializeObject<Dictionary<string, dynamic>>(combinedJson.ToString()));
+        var submitRes = await client.SubmitRequest(final.TxBlob, false);
+
+        Console.WriteLine($"{submitRes.EngineResult}: {submitRes.EngineResultMessage}");
+    }
 
     private static async Task TestBatchMultiAccountsWithInnerMultiSign() //todo пока ошибка подписей от сервера
     {
@@ -617,7 +678,7 @@ internal class Program
             // Рекомендуется проставить LLS и Fee (не показано для краткости)
         };
 
-        var submitRes = await client.SubmitMultiBatch(batch, new[] { w1, w2, owner,signer1,signer2 }, true);
+        var submitRes = await client.SubmitMultiBatch(batch, new[] { w1, w2, owner, signer1, signer2 }, true);
 
         var txr = submitRes.Transaction as BatchResponse;
         Console.WriteLine($"{submitRes.EngineResult}: {submitRes.EngineResultMessage}");

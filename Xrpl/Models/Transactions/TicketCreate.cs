@@ -9,7 +9,7 @@ using Xrpl.Client.Exceptions;
 namespace Xrpl.Models.Transactions
 {
     /// <inheritdoc cref="ITicketCreate" />
-    public class TicketCreate : TransactionCommon, ITicketCreate
+    public class TicketCreate : TransactionRequest, ITicketCreate
     {
         public TicketCreate()
         {
@@ -34,7 +34,7 @@ namespace Xrpl.Models.Transactions
     }
 
     /// <inheritdoc cref="ITicketCreate" />
-    public class TicketCreateResponse : TransactionResponseCommon, ITicketCreate
+    public class TicketCreateResponse : TransactionResponse, ITicketCreate
     {
         /// <inheritdoc/>
         public uint TicketCount { get; set; }

@@ -58,7 +58,7 @@ namespace Xrpl.Models.Transactions
     }
 
     /// <inheritdoc cref="ITrustSet" />
-    public class TrustSet : TransactionCommon, ITrustSet
+    public class TrustSet : TransactionRequest, ITrustSet
     {
         public TrustSet()
         {
@@ -125,7 +125,7 @@ namespace Xrpl.Models.Transactions
     }
 
     /// <inheritdoc cref="ITrustSet" />
-    public class TrustSetResponse : TransactionResponseCommon, ITrustSet
+    public class TrustSetResponse : TransactionResponse, ITrustSet
     {
         /// <inheritdoc />
         public new TrustSetFlags? Flags

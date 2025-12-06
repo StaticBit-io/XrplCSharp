@@ -9,7 +9,7 @@ using Xrpl.Client.Exceptions;
 namespace Xrpl.Models.Transactions
 {
     /// <inheritdoc cref="IEscrowCancel" />
-    public class EscrowCancel : TransactionCommon, IEscrowCancel
+    public class EscrowCancel : TransactionRequest, IEscrowCancel
     {
         public EscrowCancel()
         {
@@ -40,7 +40,7 @@ namespace Xrpl.Models.Transactions
     }
 
     /// <inheritdoc cref="IEscrowCancel" />
-    public class EscrowCancelResponse : TransactionResponseCommon, IEscrowCancel
+    public class EscrowCancelResponse : TransactionResponse, IEscrowCancel
     {
         /// <inheritdoc />
         public uint OfferSequence { get; set; }

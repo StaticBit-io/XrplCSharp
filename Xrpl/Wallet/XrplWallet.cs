@@ -23,8 +23,9 @@ namespace Xrpl.Wallet
 {
     public class SignatureResult
     {
-        public string TxBlob;
-        public string Hash;
+        [JsonProperty(propertyName: "tx_blob")]
+        public string TxBlob { get; set; }
+        public string Hash { get; set; }
 
         public SignatureResult(string txBlob, string hash)
         {
@@ -667,7 +668,7 @@ namespace Xrpl.Wallet
         /// <param name="multisign">Specify true/false to use multisign or actual address (classic/x-address) to make multisign tx request.</param>
         /// <param name="signingFor"></param>
         /// <returns>A Wallet derived from the seed.</returns>
-        public SignatureResult Sign(ITransactionCommon tx, bool multisign = false, string? signingFor = null)
+        public SignatureResult Sign(ITransactionRequest tx, bool multisign = false, string? signingFor = null)
         {
             Dictionary<string, dynamic> txJson = JsonConvert.DeserializeObject<Dictionary<string, dynamic>>(tx.ToJson());
             return Sign(txJson, multisign, signingFor);

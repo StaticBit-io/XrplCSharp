@@ -10,7 +10,7 @@ using Xrpl.Models.Utils;
 namespace Xrpl.Models.Transactions;
 //https://github.com/XRPLF/xrpl.js/blob/main/packages/xrpl/src/models/transactions/NFTokenModify.ts
 /// <inheritdoc cref="INFTokenModify" />
-public class NFTokenModify : TransactionCommon, INFTokenModify
+public class NFTokenModify : TransactionRequest, INFTokenModify
 {
     public NFTokenModify()
     {
@@ -55,7 +55,7 @@ public interface INFTokenModify : ITransactionCommon
 }
 
 /// <inheritdoc cref="INFTokenModify" />
-public class NFTokenModifyResponse : TransactionResponseCommon, INFTokenModify
+public class NFTokenModifyResponse : TransactionResponse, INFTokenModify
 {
     public string NFTokenID { get; set; }
 

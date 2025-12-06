@@ -42,7 +42,7 @@ namespace Xrpl.Models.Subscriptions
         public dynamic TransactionJson { get; set; }
 
         [JsonIgnore]
-        public ITransactionResponseCommon Transaction => JsonConvert.DeserializeObject<TransactionResponseCommon>(TransactionJson.ToString());
+        public ITransactionResponse Transaction => JsonConvert.DeserializeObject<TransactionResponse>(TransactionJson.ToString());
         /// <summary>
         /// If true, this transaction is included in a validated ledger and its outcome is final.<br/>
         /// Responses from the transaction stream should always be validated.

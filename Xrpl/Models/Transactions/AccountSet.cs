@@ -106,7 +106,7 @@ namespace Xrpl.Models.Transactions
     //}
 
     /// <inheritdoc cref="IAccountSet" />
-    public class AccountSet : TransactionCommon, IAccountSet
+    public class AccountSet : TransactionRequest, IAccountSet
     {
         public AccountSet()
         {
@@ -180,7 +180,7 @@ namespace Xrpl.Models.Transactions
     }
 
     /// <inheritdoc cref="IAccountSet" />
-    public class AccountSetResponse : TransactionResponseCommon, IAccountSet
+    public class AccountSetResponse : TransactionResponse, IAccountSet
     {
         /// <inheritdoc />
         public uint? ClearFlag { get; set; }

@@ -82,7 +82,7 @@ namespace Xrpl.Sugar
                 promises.Add(client.NormolizeBatch(tx));
             }
             await Task.WhenAll(promises);
-            string jsonData = JsonConvert.SerializeObject(tx);
+            //string jsonData = JsonConvert.SerializeObject(tx);
             return tx;
         }
 

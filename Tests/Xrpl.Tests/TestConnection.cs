@@ -67,7 +67,7 @@ namespace Xrpl.Tests
         [TestMethod]
         public async Task TestNotConnectedException()
         {
-            ConnectionOptions options = new ConnectionOptions();
+            ConnectionOptions options = new ConnectionOptions(){RequestPolicy = RequestFailurePolicy.ImmediateFail};
             Connection connection = new Connection("url", options);
 
             Dictionary<string, dynamic> tx = new Dictionary<string, dynamic>
@@ -88,7 +88,8 @@ namespace Xrpl.Tests
                    { "closeServer", true },
                 } },
             };
-            await Helper.ThrowsExceptionAsync<DisconnectedException>(() => runner.client.Request(tx));
+            await runner.client.Disconnect();
+            await Helper.ThrowsExceptionAsync<NotConnectedException>(() => runner.client.Request(tx));
         }
 
         //[TestMethod]
