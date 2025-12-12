@@ -612,8 +612,15 @@ namespace Xrpl.Wallet
                     ? signingFor
                     : XrplAddressCodec.XAddressToClassicAddress(signingFor).ClassicAddress;
 
-                // Подпись текущим кошельком НАД batch-preimage (ВАЖНО: не EncodeForMultiSigning)
-                var sig = Xrpl.Keypairs.XrplKeypairs.Sign(preimage, this.PrivateKey);
+                // Для inner multisign (BatchSigner.Signers[]) по XLS-56:
+                // preimage = batch-preimage + signer's account ID bytes
+                // (batch-preimage уже содержит HashPrefix.Batch, дополнительный TransactionMultiSig не нужен)
+                var signerAccountId = Xrpl.AddressCodec.XrplCodec.DecodeAccountID(this.ClassicAddress);
+                var fullPreimage = new byte[preimage.Length + signerAccountId.Length];
+                Buffer.BlockCopy(preimage, 0, fullPreimage, 0, preimage.Length);
+                Buffer.BlockCopy(signerAccountId, 0, fullPreimage, preimage.Length, signerAccountId.Length);
+
+                var sig = Xrpl.Keypairs.XrplKeypairs.Sign(fullPreimage, this.PrivateKey);
 
                 // Достаём/создаём BatchSigner для ownerAccount
                 var batchSigners = (outer["BatchSigners"] as JArray) ?? new JArray();

@@ -433,7 +433,6 @@ public class TestIBatch
             Account = w1.ClassicAddress,
             Destination = w2.ClassicAddress,
             Amount = new Currency { ValueAsXrp = 1.1m },
-            Fee = new Currency { Value = "0" },
         }.ToBatchTx();
 
         // ¬нутренний #2 Ч от w2 (seq = next дл€ w2)
@@ -442,7 +441,6 @@ public class TestIBatch
             Account = w2.ClassicAddress,
             Destination = w1.ClassicAddress,
             Amount = new Currency { ValueAsXrp = 1.2m },
-            Fee = new Currency { Value = "0" },
         }.ToBatchTx();
 
         // ¬нутренний #3 Ч от w3 (seq = next дл€ w3)
@@ -451,7 +449,6 @@ public class TestIBatch
             Account = owner.ClassicAddress,
             Destination = w1.ClassicAddress,
             Amount = new Currency { ValueAsXrp = 1.3m },
-            Fee = new Currency { Value = "0" },
         }.ToBatchTx();
 
         // ¬нешний Batch Ч платит комиссию w1 (может быть любой плательщик)
@@ -460,9 +457,8 @@ public class TestIBatch
             Account = w1.ClassicAddress,
             Flags = BatchFlags.tfAllOrNothing,
             RawTransactions = new List<RawTransactionWrapper> { p1, p2, p3 },
-            Fee = new Currency() { Value = "70" }
         };
-        batch = await runner.client.Autofill(batch, 4);
+        batch = await runner.client.Autofill(batch,2);
         return (owner, signer1, signer2, w1, w2, batch);
     }
 
