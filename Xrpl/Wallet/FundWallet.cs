@@ -53,7 +53,7 @@ namespace Xrpl.Wallet
         }
     }
 
-    public class WalletSugar
+    public static class WalletSugar
     {
         //Interval to check an account balance
         static int INTERVAL_SECONDS = 1;
@@ -105,7 +105,7 @@ namespace Xrpl.Wallet
             public static readonly string NFTDevnet = "faucet-nft.ripple.com";
         }
 
-        public static async Task<Funded> FundWallet(IXrplClient client, XrplWallet? wallet = null, string? faucetHost = null)
+        public static async Task<Funded> FundWallet(this IXrplClient client, XrplWallet? wallet = null, string? faucetHost = null)
         {
             //if (!client.IsConnected())
             //{
@@ -136,7 +136,7 @@ namespace Xrpl.Wallet
             return await ReturnPromise(httpOptions, client, startingBalance, walletToFund, jsonData);
         }
 
-        public static async Task<Funded> ReturnPromise(
+        private static async Task<Funded> ReturnPromise(
               Dictionary<string, dynamic> options,
               IXrplClient client,
               double startingBalance,
@@ -160,7 +160,7 @@ namespace Xrpl.Wallet
             );
         }
 
-        public static Dictionary<string, dynamic> GetHTTPOptions(
+        private static Dictionary<string, dynamic> GetHTTPOptions(
               IXrplClient client,
               byte[] postBody,
               string hostname
@@ -168,7 +168,7 @@ namespace Xrpl.Wallet
         {
             Dictionary<string, dynamic> options = new Dictionary<string, dynamic>
             {
-                { "hostname", hostname != null ? hostname : GetFaucetHost(client) },
+                { "hostname", hostname ?? GetFaucetHost(client) },
                 { "port", 443 },
                 { "path", "/accounts" },
                 { "method", "POST" },
@@ -179,7 +179,7 @@ namespace Xrpl.Wallet
             };
             return options;
         }
-        public static async Task<Funded> OnEnd(
+        private static async Task<Funded> OnEnd(
             HttpResponseMessage response,
             byte[] chunks,
             IXrplClient client,
@@ -211,7 +211,7 @@ namespace Xrpl.Wallet
             }
         }
 
-        public static async Task<Funded> ProcessSuccessfulResponse(
+        private static async Task<Funded> ProcessSuccessfulResponse(
               IXrplClient client,
               string body,
               double startingBalance,
@@ -313,7 +313,7 @@ namespace Xrpl.Wallet
             }
         }
 
-        public static async Task<double> GetUpdatedBalance(
+        private static async Task<double> GetUpdatedBalance(
             IXrplClient client,
             string address,
             double originalBalance

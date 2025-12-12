@@ -92,5 +92,10 @@ namespace XrplTests.Xrpl.ClientLib.Integration
             await LedgerAccept(client);
             await VerifySubmittedTransaction(client, response.TxJson);
         }
+
+        public static async Task TestTransaction(IXrplClient client, ITransactionRequest transaction, XrplWallet wallet)
+        {
+            await TestTransaction(client, transaction.ToDictionary(), wallet);
+        }
     }
 }

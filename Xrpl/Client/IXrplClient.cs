@@ -311,9 +311,26 @@ namespace Xrpl.Client
 
 
         #region Sugars
-
-        Task<Dictionary<string, dynamic>> Autofill(Dictionary<string, dynamic> tx);
-        Task<T> Autofill<T>(T tx) where T : ITransactionRequest;
+        /// <summary>
+        /// Autofills fields in a transaction. This will set `Sequence`, `Fee`,
+        /// `lastLedgerSequence` according to the current state of the server this Client
+        /// is connected to. It also converts all X-Addresses to classic addresses and
+        /// flags interfaces into numbers.
+        /// </summary>
+        /// <param name="tx">A {@link Transaction} in JSON format</param>
+        /// <param name="signersCount">The expected number of signers for this transaction. Only used for multisigned transactions.</param>
+        /// <returns>The autofilled transaction.</returns>
+        Task<Dictionary<string, dynamic>> Autofill(Dictionary<string, dynamic> tx, int? signersCount = null);
+        /// <summary>
+        /// Autofills fields in a transaction. This will set `Sequence`, `Fee`,
+        /// `lastLedgerSequence` according to the current state of the server this Client
+        /// is connected to. It also converts all X-Addresses to classic addresses and
+        /// flags interfaces into numbers.
+        /// </summary>
+        /// <param name="tx">A {@link Transaction} in JSON format</param>
+        /// <param name="signersCount">The expected number of signers for this transaction. Only used for multisigned transactions.</param>
+        /// <returns>The autofilled transaction.</returns>
+        Task<T> Autofill<T>(T tx, int? signersCount = null) where T : ITransactionRequest;
         Task<uint> GetLedgerIndex();
         Task<string> GetXrpBalance(string address);
         Task ChangeServer(string server, ClientOptions? options = null, CancellationToken cancellationToken = default);
@@ -446,15 +463,14 @@ namespace Xrpl.Client
         }
 
         // SUGARS
-        public Task<Dictionary<string, dynamic>> Autofill(Dictionary<string, dynamic> tx)
+        public Task<Dictionary<string, dynamic>> Autofill(Dictionary<string, dynamic> tx, int? signersCount = null)
         {
-            return this.Autofill(tx, null);
+            return AutofillSugar.Autofill(this, tx, signersCount);
         }
-
-        public async Task<T> Autofill<T>(T tx) where T : ITransactionRequest
+        public async Task<T> Autofill<T>(T tx, int? signersCount = null) where T : ITransactionRequest
         {
             var dic = tx.ToDictionary();
-            var filled = await this.Autofill(dic, null).ConfigureAwait(false);
+            var filled = await AutofillSugar.Autofill(this, dic, signersCount).ConfigureAwait(false);
             var jObject = JObject.FromObject(filled);
             var settings = new JsonSerializerSettings
             {
