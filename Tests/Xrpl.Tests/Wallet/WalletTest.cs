@@ -228,6 +228,15 @@ namespace Xrpl.Tests.Wallet.Tests.Mnemonic
         }
 
         [TestMethod]
+        public void TestInputPassPhrase()
+        {
+            string passPhrase = "my strong password";
+            XrplWallet wallet = XrplWallet.FromMnemonic(mnemonic, null, null, null, "secp256k1", passPhrase);
+            Assert.AreNotEqual(wallet.PublicKey, publicKey);
+            Assert.AreNotEqual(wallet.PrivateKey, privateKey);
+        }
+
+        [TestMethod]
         public void TestRegularKeypairSeed()
         {
             string masterAddress = "rUAi7pipxGpYfPNg3LtPcf2ApiS8aw9A93";

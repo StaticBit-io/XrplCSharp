@@ -16,6 +16,8 @@ using Xrpl.Client.Exceptions;
 using Xrpl.Models.Common;
 using Xrpl.Models.Ledger;
 using Xrpl.Models.Methods;
+using Xrpl.Models.Transactions;
+using Xrpl.Models.Utils;
 using Xrpl.Utils;
 
 using static Xrpl.AddressCodec.XrplAddressCodec;
@@ -45,7 +47,7 @@ namespace Xrpl.Sugar
         /// <param name="client">A client.</param>
         /// <param name="transaction">A {@link Transaction} in JSON format</param>
         /// <param name="signersCount">The expected number of signers for this transaction. Only used for multisigned transactions.</param>
-        // <returns>The autofilled transaction.</returns>
+        /// <returns>The autofilled transaction.</returns>
         public static async Task<Dictionary<string, dynamic>> Autofill(this IXrplClient client, Dictionary<string, dynamic> transaction, int? signersCount)
         {
 
@@ -219,7 +221,7 @@ namespace Xrpl.Sugar
             {
                 if (!wrapper.TryGetValue("RawTransaction", out var rawTxObj) || rawTxObj is null)
                     throw new ValidationException("Each item in RawTransactions must contain 'RawTransaction'.");
-
+                rawTxObj = BatchUtils.NormalizeInnerForBatch(rawTxObj);
                 // we guarantee a dictionary
                 var rawTx = rawTxObj as Dictionary<string, dynamic>
                             ?? JObject.FromObject(rawTxObj).ToObject<Dictionary<string, dynamic>>()!;
@@ -239,7 +241,6 @@ namespace Xrpl.Sugar
 
                 // ПРАВКА НА МЕСТЕ — изменения остаются в tx
                 rawTx["Sequence"] = next;
-                rawTx["Fee"] = "0";
 
                 Bump(account);
             }
@@ -277,6 +278,11 @@ namespace Xrpl.Sugar
             var netFeeXRP = await client.GetFeeXrp();
             var netFeeDrops = XrpConversion.XrpToDrops(netFeeXRP);
             var baseFee = BigInteger.Parse(netFeeDrops, NumberStyles.AllowDecimalPoint | NumberStyles.AllowLeadingSign | NumberStyles.AllowExponent);
+            if (netFeeXRP.Length == 9) // devnet 7 digits after dot
+            {
+                baseFee *= 12;
+            }
+
             BigInteger calculatedFee = 0;
             BigInteger signerFee = 0;
             // EscrowFinish Transaction with Fulfillment
@@ -322,19 +328,18 @@ namespace Xrpl.Sugar
                         calculatedFee += baseFee;
                 }
             }
-
+            else
+            {
+                calculatedFee = baseFee;
+            }
 
             /*
             * Multi-signed Transaction
             * 10 drops × (1 + Number of Signatures Provided)
             */
-            else if (signersCount > 0)
+            if (signersCount > 0)
             {
                 signerFee = BigInteger.Add(baseFee, BigInteger.Parse(ScaleValue(netFeeDrops, 1 + signersCount)));
-            }
-            else
-            {
-                calculatedFee = baseFee;
             }
 
             calculatedFee += signerFee;

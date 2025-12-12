@@ -38,9 +38,9 @@ public enum BatchFlags : uint
 public sealed class BatchSigner
 {
     [JsonProperty("BatchSigner", Required = Required.Always)]
-    public InnerSigner Value { get; set; } = new InnerSigner();
+    public BatchInnerSigner Value { get; set; } = new BatchInnerSigner();
 
-    public sealed class InnerSigner
+    public sealed class BatchInnerSigner
     {
         [JsonProperty("Account", Required = Required.Always)]
         public string Account { get; set; } = string.Empty;
@@ -52,7 +52,7 @@ public sealed class BatchSigner
         public string? TxnSignature { get; set; }
 
         [JsonProperty("Signers", NullValueHandling = NullValueHandling.Ignore)]
-        public List<Signer>? Signers { get; set; }
+        public List<SignerWrapper>? Signers { get; set; }
     }
 }
 

@@ -14,6 +14,8 @@ using Xrpl.Models.Common;
 using Xrpl.Models.Ledger;
 using Xrpl.Models.Utils;
 
+using static Xrpl.Models.Transactions.BatchSigner;
+
 // https://github.com/XRPLF/xrpl.js/blob/main/packages/xrpl/src/models/transactions/common.ts
 
 namespace Xrpl.Models.Transactions
@@ -276,7 +278,7 @@ namespace Xrpl.Models.Transactions
         [JsonProperty("SigningPubKey")]
         public string SigningPublicKey { get; set; }
         /// <inheritdoc />
-        public List<Signer> Signers { get; set; }
+        public List<SignerWrapper> Signers { get; set; }
         /// <inheritdoc />
         [JsonConverter(typeof(StringEnumConverter))]
         public TransactionType TransactionType { get; set; }
@@ -358,29 +360,6 @@ namespace Xrpl.Models.Transactions
         /// </summary>
         [JsonIgnore]
         public string MemoTypeAsText => MemoType.FromHexString();
-    }
-
-    /// <summary>
-    /// The Signers field contains a multi-signature, which has signatures from up to 8 key pairs, that together should authorize the transaction.
-    /// </summary>
-    public class Signer
-    {
-        /// <summary>
-        /// The address associated with this signature, as it appears in the signer list.
-        /// </summary>
-        public string Account { get; set; }
-
-        /// <summary>
-        /// A signature for this transaction, verifiable using the SigningPubKey.
-        /// </summary>
-        [JsonProperty("TxnSignature")]
-        public string TransactionSignature { get; set; }
-
-        /// <summary>
-        /// The public key used to create this signature.
-        /// </summary>
-        [JsonProperty("SigningPubKey")]
-        public string SigningPublicKey { get; set; }
     }
 
     /// <summary>
@@ -620,7 +599,7 @@ namespace Xrpl.Models.Transactions
         /// <summary>
         /// Array of objects that represent a multi-signature which authorizes this transaction.
         /// </summary>
-        List<Signer> Signers { get; set; }
+        List<SignerWrapper> Signers { get; set; }
 
         /// <summary>
         /// Hex representation of the public key that corresponds to the private key used to sign this transaction.<br/>
@@ -711,7 +690,7 @@ namespace Xrpl.Models.Transactions
         public string SigningPublicKey { get; set; }
 
         /// <inheritdoc/>
-        public List<Signer> Signers { get; set; }
+        public List<SignerWrapper> Signers { get; set; }
 
         /// <inheritdoc/>
         [JsonConverter(typeof(StringEnumConverter))]

@@ -4,6 +4,7 @@ using Newtonsoft.Json.Linq;
 using System;
 using System.Collections.Generic;
 using System.Linq;
+using System.Threading;
 using System.Threading.Tasks;
 
 using Xrpl.BinaryCodec;
@@ -62,12 +63,30 @@ public static class SubmitSugar
     /// <param name="failHard">If true, and the transaction fails locally, do not retry or relay the transaction to other servers.</param>
     /// <param name="wallet">A wallet to sign a transaction. It must be provided when submitting an unsigned transaction.</param>
     /// <returns>A promise that contains TxResponse, that will return when the transaction has been validated.</returns>
+    public static Task<TransactionSummary> SubmitAndWait(
+        this IXrplClient client,
+        ITransactionRequest transaction,
+        XrplWallet wallet = null,
+        bool autofill = false,
+        bool failHard = false) =>
+        SubmitAndWait(client, transaction.ToDictionary(), wallet, autofill, failHard);
+    /// <summary>
+    /// Asynchronously submits a transaction and verifies that it has been included in a
+    /// validated ledger(or has errored/will not be included for some reason).
+    /// See[Reliable Transaction Submission] (https://xrpl.org/reliable-transaction-submission.html).
+    /// </summary>
+    /// <param name="client">A Client.</param>
+    /// <param name="transaction">A transaction to autofill, sign and encode, and submit.</param>
+    /// <param name="autofill">If true, autofill a transaction.</param>
+    /// <param name="failHard">If true, and the transaction fails locally, do not retry or relay the transaction to other servers.</param>
+    /// <param name="wallet">A wallet to sign a transaction. It must be provided when submitting an unsigned transaction.</param>
+    /// <returns>A promise that contains TxResponse, that will return when the transaction has been validated.</returns>
     public static async Task<TransactionSummary> SubmitAndWait(
         this IXrplClient client,
         Dictionary<string, dynamic> transaction,
+        XrplWallet wallet = null,
         bool autofill = false,
-        bool failHard = false,
-        XrplWallet wallet = null)
+        bool failHard = false)
     {
         var (signedTx, tx) = await client.GetSignedTx(transaction, autofill, failHard, wallet);
         var lastLedger = GetLastLedgerSequence(tx);
@@ -86,6 +105,26 @@ public static class SubmitSugar
             response.EngineResult);
     }
 
+    public static async Task<TransactionSummary> SubmitRequestAndWait(this IXrplClient client, object signedTransaction, bool failHard)
+    {
+        var signedTx = GetTxBlob(signedTransaction);
+        var decoded = XrplBinaryCodec.Decode(signedTx).ToString();
+        var tx = JObject.Parse(decoded);
+        var lastLedger = GetLastLedgerSequence(tx);
+        if (lastLedger == null)
+        {
+            throw new ValidationException(
+                "Transaction must contain a LastLedgerSequence value for reliable submission.");
+        }
+
+        var response = await client.SubmitRequest(signedTx, failHard);
+        var txHash = HashLedger.HashSignedTx(signedTx);
+        return await WaitForFinalTransactionOutcome(
+            client,
+            txHash,
+            lastLedger,
+            response.EngineResult);
+    }
     /// <summary>
     /// Encodes and submits a signed transaction.
     /// </summary>
@@ -101,9 +140,8 @@ public static class SubmitSugar
         //    throw new ValidationException("Transaction must be signed");
         //}
 
-        var signedTxEncoded = signedTransaction is string transaction
-            ? transaction
-            : XrplBinaryCodec.Encode(signedTransaction);
+        var signedTxEncoded = GetTxBlob(signedTransaction);
+
         var request = new SubmitRequest
         {
             Command = "submit",
@@ -112,6 +150,25 @@ public static class SubmitSugar
         };
         var response = await client.GRequest<Submit, SubmitRequest>(request);
         return response;
+    }
+
+    private static string GetTxBlob(object signedTransaction)
+    {
+        string signedTxEncoded;
+        if (signedTransaction is string transaction)
+        {
+            signedTxEncoded = transaction;
+        }
+        else if (signedTransaction is SignatureResult { } sg)
+        {
+            signedTxEncoded = sg.TxBlob;
+        }
+        else
+        {
+            signedTxEncoded = XrplBinaryCodec.Encode(signedTransaction);
+        }
+
+        return signedTxEncoded;
     }
 
     /// <summary>
@@ -370,46 +427,68 @@ public static class SubmitSugar
     private static async Task<TransactionSummary> WaitForFinalTransactionOutcome(
         this IXrplClient client,
         string txHash,
-        uint? lastLedger,
-        string submissionResult)
+        uint? lastLedgerSequence,
+        string submissionResult,
+        CancellationToken cancellationToken = default)
     {
-        await Task.Delay(LEDGER_CLOSE_TIME);
-        var latestLedger = await client.GetLedgerIndex();
-        if (lastLedger < latestLedger)
+        while (true)
         {
-            throw new ValidationException(
-                "The latest ledger sequence ${ latestLedger } is greater than the transaction's LastLedgerSequence (${lastLedger}).\n" +
-                $"Preliminary result: {submissionResult}");
-        }
+            cancellationToken.ThrowIfCancellationRequested();
 
-        TransactionSummary txResponse = null;
-        try
-        {
-            txResponse = await client.TxV2(
-                new TxRequest(txHash)
-                {
-                    ApiVersion = 2,
-                });
-        }
-        catch (Exception error)
-        {
-            // error is of an unknown type and hence we assert type to extract the value we need.
-            var message = error?.Data["Error"] as string;
-            if (message == "txnNotFound")
+            // Ждём закрытие следующего леджера
+            await Task.Delay(LEDGER_CLOSE_TIME, cancellationToken);
+
+            var latestLedger = await client.GetLedgerIndex();
+
+            // Если у нас есть LastLedgerSequence и мы его уже перешагнули — транзакция точно не попадёт в леджер
+            if (lastLedgerSequence.HasValue && latestLedger > lastLedgerSequence.Value)
             {
-                return await WaitForFinalTransactionOutcome(client, txHash, lastLedger, submissionResult);
+                throw new ValidationException(
+                    $"Transaction {txHash} has expired. " +
+                    $"Latest ledger: {latestLedger}, LastLedgerSequence: {lastLedgerSequence}. " +
+                    $"Preliminary result: {submissionResult}");
             }
 
-            throw new ValidationException(
-                $"{message} \n Preliminary result: {submissionResult}.\nFull error details: {error.Message}");
-        }
+            TransactionSummary txResponse;
 
-        if (txResponse.Validated == true)
-        {
-            return txResponse;
-        }
+            try
+            {
+                txResponse = await client.TxV2(
+                    new TxRequest(txHash)
+                    {
+                        ApiVersion = 2,
+                    });
+            }
+            catch (Exception error)
+            {
+                var message = error?.Data["Error"] as string;
 
-        return await WaitForFinalTransactionOutcome(client, txHash, lastLedger, submissionResult);
+                // До наступления LastLedgerSequence txnNotFound — это норм, просто продолжаем ждать
+                if (message == "txnNotFound")
+                {
+                    continue;
+                }
+
+                throw new ValidationException(
+                    $"{message ?? "Unknown error"}\n" +
+                    $"Preliminary result: {submissionResult}.\n" +
+                    $"Full error details: {error.Message}", error);
+            }
+
+            Console.WriteLine();
+            // Как только транзакция валидирована — это финальный результат (успех или ошибка)
+            if (txResponse.Validated == true)
+            {
+                return txResponse;
+            }
+
+            if (submissionResult != "tesSUCCESS" && submissionResult != "terQUEUED")
+            { // Ошибочная транзакция тоже финальна, не валидируется сетью в большинстве случаев.
+                throw new RippleException($"Final tx result is not success: {submissionResult}");
+            }
+
+            // Не валидирована и не txnNotFound → просто ждём дальше
+        }
     }
 
     /// <summary>
@@ -489,7 +568,12 @@ public static class SubmitSugar
         {
             return txc.LastLedgerSequence;
         }
-
+        else if (transaction is JObject j)
+        {
+            return j.TryGetValue("LastLedgerSequence", out var token)
+                ? token.Value<uint?>()
+                : null;
+        }
         else
         {
             var ob = XrplBinaryCodec.Encode(transaction);

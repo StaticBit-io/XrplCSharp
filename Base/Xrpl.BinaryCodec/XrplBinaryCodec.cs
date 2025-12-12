@@ -5,6 +5,8 @@ using System.Collections.Generic;
 using System.Diagnostics;
 using System.Linq;
 
+using Newtonsoft.Json;
+
 using Xrpl.BinaryCodec.Binary;
 using Xrpl.BinaryCodec.Hashing;
 using Xrpl.BinaryCodec.Types;
@@ -47,7 +49,7 @@ namespace Xrpl.BinaryCodec
         /// <returns>string</returns>
         public static string Encode(object json)
         {
-            JToken token = JToken.FromObject(json);
+            JToken token = JToken.FromObject(json,new JsonSerializer(){NullValueHandling = NullValueHandling.Ignore});
             return Encode(token);
         }
 
