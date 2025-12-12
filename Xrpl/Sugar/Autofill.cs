@@ -81,7 +81,7 @@ namespace Xrpl.Sugar
             }
             if (tt == "Batch")
             {
-                promises.Add(client.NormolizeBatch(tx));
+                promises.Add(client.NormalizeBatchTransaction(tx));
             }
             await Task.WhenAll(promises);
             //string jsonData = JsonConvert.SerializeObject(tx);
@@ -162,11 +162,6 @@ namespace Xrpl.Sugar
             AccountInfo data = await client.AccountInfo(request);
             tx.TryAdd("Sequence", data.AccountData.Sequence);
             return data.AccountData.Sequence;
-        }
-
-        public static Task NormolizeBatch(this IXrplClient client, Dictionary<string, dynamic> tx)
-        {
-            return BatchNormalizer.NormalizeBatchTransaction(client, tx);
         }
 
         public static async Task<BigInteger> FetchReserveFee(this IXrplClient client)

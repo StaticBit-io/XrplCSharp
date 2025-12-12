@@ -1,4 +1,4 @@
-using Newtonsoft.Json;
+﻿using Newtonsoft.Json;
 using Newtonsoft.Json.Linq;
 
 using System;
@@ -20,7 +20,14 @@ public static class BatchNormalizer
 {
     private const uint TF_INNER_BATCH_TXN = (uint)XrplGlobalFlags.tfInnerBatchTxn;
 
-    public static JObject NormalizeInnerTransaction(JObject source)
+    /// <summary>
+    /// Нормализует внутреннюю транзакцию по правилам XLS‑56:
+    /// - добавляет флаг tfInnerBatchTxn;
+    /// - удаляет TxnSignature, Signers, LastLedgerSequence;
+    /// - принудительно выставляет Fee = "0" (строка), SigningPubKey = "".
+    /// Возвращает новый JObject (исходник не меняется).
+    /// </summary>
+    public static JObject NormalizeInnerTransaction(this JObject source)
     {
         if (source == null) throw new ArgumentNullException(nameof(source));
 
@@ -48,6 +55,9 @@ public static class BatchNormalizer
         return source;
     }
 
+    /// <summary>
+    /// Нормализует внутреннюю транзакцию (object → JObject).
+    /// </summary>
     public static JObject NormalizeInnerTransaction(object source)
     {
         if (source is JObject jo)
@@ -56,8 +66,11 @@ public static class BatchNormalizer
         return NormalizeInnerTransaction(JObject.FromObject(source));
     }
 
+    /// <summary>
+    /// Нормализует внутреннюю транзакцию (object → JObject).
+    /// </summary>
     public static async Task NormalizeBatchTransaction(
-        IXrplClient client,
+        this IXrplClient client,
         Dictionary<string, dynamic> tx)
     {
         if (!tx.TryGetValue("RawTransactions", out var rawTransactions) || rawTransactions == null)
@@ -137,7 +150,11 @@ public static class BatchNormalizer
         };
     }
 
-    public static string ComputeInnerTxId(JObject normalizedInnerTx)
+    /// <summary>
+    /// Вычисляет transactionID для нормализованной внутренней транзакции.
+    /// Алгоритм: txid = SHA512Half( HashPrefix.TXN + STObject(tx).ToBytes() ).
+    /// </summary>
+    public static string ComputeInnerTxId(this JObject normalizedInnerTx)
     {
         var st = Xrpl.BinaryCodec.Types.StObject.FromJson(normalizedInnerTx);
         var bytes = st.ToBytes();

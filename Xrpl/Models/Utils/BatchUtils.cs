@@ -68,29 +68,6 @@ public static class BatchUtils
         };
     }
 
-    /// <summary>
-    /// Нормализует внутреннюю транзакцию по правилам XLS‑56:
-    /// - добавляет флаг tfInnerBatchTxn;
-    /// - удаляет TxnSignature, Signers, LastLedgerSequence;
-    /// - принудительно выставляет Fee = "0" (строка), SigningPubKey = "".
-    /// Возвращает новый JObject (исходник не меняется).
-    /// </summary>
-    public static JObject NormalizeInnerForBatch(this JObject source)
-        => BatchNormalizer.NormalizeInnerTransaction(source);
-
-    /// <summary>
-    /// Нормализует внутреннюю транзакцию (object → JObject).
-    /// </summary>
-    public static JObject NormalizeInnerForBatch(object source)
-        => BatchNormalizer.NormalizeInnerTransaction(source);
-
-    /// <summary>
-    /// Вычисляет transactionID для нормализованной внутренней транзакции.
-    /// Алгоритм: txid = SHA512Half( HashPrefix.TXN + STObject(tx).ToBytes() ).
-    /// </summary>
-    public static string ComputeInnerTxId(JObject normalizedInnerTx)
-        => BatchNormalizer.ComputeInnerTxId(normalizedInnerTx);
-
     public static BatchSignerAccounts GetBatchSignerAccounts(this Dictionary<string, dynamic> tx)
     {
         if (tx is null)

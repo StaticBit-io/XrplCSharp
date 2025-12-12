@@ -537,12 +537,12 @@ namespace Xrpl.Wallet
                     throw new ValidationException("Inner tx SigningPubKey must be empty string when present.");
 
                 // Нормализуем под расчёт txid (Fee=\"0\", SigningPubKey=\"\", + tfInnerBatchTxn)
-                normalizedInners.Add(innerTx.NormalizeInnerForBatch());
+                normalizedInners.Add(innerTx.NormalizeInnerTransaction());
             }
 
 
             // 4) Считаем txIDs нормализованных внутренних
-            var txIds = normalizedInners.Select(BatchUtils.ComputeInnerTxId).ToList();
+            var txIds = normalizedInners.Select(BatchNormalizer.ComputeInnerTxId).ToList();
 
 
             // 5) Флаги внешнего батча
