@@ -335,13 +335,7 @@ namespace Xrpl.Wallet
         private string NormalizeClassic(string? signingFor)
         {
             string signerAccount = signingFor ?? this.ClassicAddress;
-            if (!Xrpl.AddressCodec.XrplCodec.IsValidClassicAddress(signerAccount))
-            {
-                var x = XrplAddressCodec.XAddressToClassicAddress(signerAccount);
-                signerAccount = x.ClassicAddress;
-            }
-
-            return signerAccount;
+            return BatchSigningHelper.NormalizeClassicAddress(signerAccount);
         }
 
 
@@ -593,7 +587,7 @@ namespace Xrpl.Wallet
                 batchSigners.Add(new JObject { ["BatchSigner"] = signerObj });
 
                 // Сортировка BatchSigners и вложенных Signers по account-id (как в XRPL)
-                outer["BatchSigners"] = SortBatchSigners(batchSigners);
+                outer["BatchSigners"] = BatchSigningHelper.SortBatchSigners(batchSigners);
 
                 // Для внешнего Batch при наличии BatchSigners: пустой SigningPubKey и БЕЗ TxnSignature
                 //outer["SigningPubKey"] = "";
@@ -624,7 +618,7 @@ namespace Xrpl.Wallet
 
                 // Достаём/создаём BatchSigner для ownerAccount
                 var batchSigners = (outer["BatchSigners"] as JArray) ?? new JArray();
-                var bs = FindOrCreateBatchSigner(batchSigners, ownerAccount);
+                var bs = BatchSigningHelper.FindOrCreateBatchSigner(batchSigners, ownerAccount);
 
                 // Переводим (если нужно) single-форму в мультисиг-форму
                 if (bs["Signers"] == null)
@@ -657,7 +651,7 @@ namespace Xrpl.Wallet
                     signersArr.Add(signerEntry);
 
                 // Каноническая сортировка и Signers, и BatchSigners
-                outer["BatchSigners"] = SortBatchSigners(batchSigners);
+                outer["BatchSigners"] = BatchSigningHelper.SortBatchSigners(batchSigners);
 
                 // Корень без подписи
                 //outer["SigningPubKey"] = "";
@@ -747,91 +741,6 @@ namespace Xrpl.Wallet
                 }
             }
 
-        }
-
-        static JObject FindOrCreateBatchSigner(JArray batchSigners, string owner)
-        {
-            // ищем { BatchSigner: { Account: owner, ... } }
-            foreach (var w in batchSigners.Children<JObject>())
-            {
-                var bs = w["BatchSigner"] as JObject;
-                if (bs == null) continue;
-                var acc = (string?)bs["Account"];
-                if (string.Equals(acc ?? "", owner, StringComparison.Ordinal))
-                    return bs;
-            }
-            var created = new JObject { ["Account"] = owner };
-            batchSigners.Add(new JObject { ["BatchSigner"] = created });
-            return created;
-        }
-        /// <summary>
-        /// Сортировка BatchSigners по Account (численно по account-id), а также сортировка внутренних Signers.
-        /// </summary>
-        private static JArray SortBatchSigners(JArray batchSigners)
-        {
-            if (batchSigners == null || batchSigners.Count == 0) return batchSigners ?? new JArray();
-
-            byte[] Aid(string acc) => Xrpl.AddressCodec.XrplCodec.DecodeAccountID(acc);
-            int Cmp(string a, string b)
-            {
-                var ab = Aid(a); var bb = Aid(b);
-                int n = Math.Min(ab.Length, bb.Length);
-                for (int i = 0; i < n; i++) { int d = ab[i].CompareTo(bb[i]); if (d != 0) return d; }
-                return ab.Length.CompareTo(bb.Length);
-            }
-
-            // helper: сортировка массива Signers внутри одного BatchSigner
-            void SortInnerSigners(JObject batchSignerObj)
-            {
-                var signersArr = batchSignerObj["Signers"] as JArray;
-                if (signersArr == null) return;
-                // Канонизируем Account каждого Signer к classic перед сортировкой
-                foreach (var j in signersArr.Children<JObject>())
-                {
-                    var so = j["Signer"] as JObject;
-                    if (so == null) continue;
-                    var accRaw = (string?)so["Account"] ?? "";
-                    if (!Xrpl.AddressCodec.XrplCodec.IsValidClassicAddress(accRaw))
-                        so["Account"] = XrplAddressCodec.XAddressToClassicAddress(accRaw).ClassicAddress;
-                }
-                var sorted = signersArr
-                     .Children<JObject>()
-                     .OrderBy(s =>
-                     {
-                         var acc = (string?)s["Signer"]?["Account"] ?? "";
-                         return acc;
-                     }, Comparer<string>.Create(Cmp))
-                     .Select(s => new JObject { ["Signer"] = s["Signer"] })
-                     .ToArray();
-                batchSignerObj["Signers"] = new JArray(sorted);
-                //var signersArr = batchSignerObj["Signers"] as JArray;
-                //if (signersArr == null) return;
-                //var sorted = signersArr
-                //                    .Children<JObject>()
-                //                    .OrderBy(s =>
-                //                    {
-                //                        var acc = (string?)s["Signer"]?["Account"] ?? "";
-                //                        return acc;
-                //                    }, Comparer<string>.Create(Cmp))
-                //                .Select(s => new JObject { ["Signer"] = s["Signer"] })
-                //                .ToArray();
-                //batchSignerObj["Signers"] = new JArray(sorted);
-            }
-
-            var sortedBatchSigners = batchSigners
-                            .Children<JObject>()
-                            .Select(o => o["BatchSigner"] as JObject)
-                            .Where(o => o != null)
-                            .Select(o =>
-                            {
-                                SortInnerSigners(o!);
-                                return o!;
-                            })
-                            .OrderBy(o => (string?)o["Account"] ?? "", Comparer<string>.Create(Cmp))
-                            .Select(o => new JObject { ["BatchSigner"] = o })
-                            .ToArray();
-
-            return new JArray(sortedBatchSigners);
         }
 
         /// <summary>
@@ -1017,7 +926,7 @@ namespace Xrpl.Wallet
 
             // Собираем в массив-обёртку
             var mergedBatchSignersArr = new JArray(byAccount.Values.Select(v => new JObject { ["BatchSigner"] = v }));
-            combined["BatchSigners"] = SortBatchSigners(mergedBatchSignersArr);
+            combined["BatchSigners"] = BatchSigningHelper.SortBatchSigners(mergedBatchSignersArr);
 
             // ---------- 5) собираем и мержим root Signers (top multisign) ----------
 
