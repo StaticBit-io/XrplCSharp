@@ -1,4 +1,4 @@
-using System.Threading.Tasks;
+﻿using System.Threading.Tasks;
 using Microsoft.VisualStudio.TestTools.UnitTesting;
 
 // https://github.com/XRPLF/xrpl.js/blob/main/packages/xrpl/test/integration/requests/subscribe.ts

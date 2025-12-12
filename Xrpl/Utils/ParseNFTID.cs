@@ -1,4 +1,4 @@
-using System;
+﻿using System;
 using Xrpl.AddressCodec;
 using Xrpl.BinaryCodec.Util;
 using Xrpl.Client.Exceptions;

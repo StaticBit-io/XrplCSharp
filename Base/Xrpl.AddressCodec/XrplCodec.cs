@@ -1,4 +1,4 @@
-// https://github.com/XRPLF/xrpl.js/blob/main/packages/ripple-address-codec/src/xrp-codec.ts
+﻿// https://github.com/XRPLF/xrpl.js/blob/main/packages/ripple-address-codec/src/xrp-codec.ts
 
 namespace Xrpl.AddressCodec
 {

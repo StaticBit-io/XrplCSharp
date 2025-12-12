@@ -1,4 +1,4 @@
-using Newtonsoft.Json;
+﻿using Newtonsoft.Json;
 
 // https://github.com/XRPLF/xrpl.js/blob/main/packages/xrpl/src/models/common/index.ts
 

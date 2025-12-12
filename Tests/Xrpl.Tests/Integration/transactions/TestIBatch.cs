@@ -1,4 +1,4 @@
-using Microsoft.VisualStudio.TestTools.UnitTesting;
+п»їusing Microsoft.VisualStudio.TestTools.UnitTesting;
 
 using Newtonsoft.Json;
 
@@ -105,7 +105,7 @@ public class TestIBatch
         var accountInfo = await runner.client.AccountInfo(request);
 
         //var flags = BatchGlobalFlags.tfInnerBatchTxn;
-        // Внутренний Payment #1
+        // Р’РЅСѓС‚СЂРµРЅРЅРёР№ Payment #1
         var payment1 = new Payment
         {
             Sequence = accountInfo.AccountData.Sequence + 1,
@@ -117,7 +117,7 @@ public class TestIBatch
             Destination = walletSecondary_1.ClassicAddress,
         }.ToBatchTx();
 
-        // Внутренний Payment #2
+        // Р’РЅСѓС‚СЂРµРЅРЅРёР№ Payment #2
         var payment2 = new Payment
         {
             Sequence = accountInfo.AccountData.Sequence + 2,
@@ -129,12 +129,12 @@ public class TestIBatch
             Destination = walletSecondary_2.ClassicAddress,
         }.ToBatchTx();
 
-        // Собираем внешний Batch
+        // РЎРѕР±РёСЂР°РµРј РІРЅРµС€РЅРёР№ Batch
         var tx = new Batch
         {
             Account = owner.ClassicAddress,
             Sequence = accountInfo.AccountData.Sequence,
-            Flags = BatchFlags.tfAllOrNothing, // режим: или все выполняются, или ни одна
+            Flags = BatchFlags.tfAllOrNothing, // СЂРµР¶РёРј: РёР»Рё РІСЃРµ РІС‹РїРѕР»РЅСЏСЋС‚СЃСЏ, РёР»Рё РЅРё РѕРґРЅР°
             RawTransactions = new List<RawTransactionWrapper>
             {
                 payment1,
@@ -218,7 +218,7 @@ public class TestIBatch
 
     private static async Task<Batch> GetTxForBatchMultiAccounts()
     {
-        // Внутренний #1 — от w1 (seq = next для w1)
+        // Р’РЅСѓС‚СЂРµРЅРЅРёР№ #1 вЂ” РѕС‚ w1 (seq = next РґР»СЏ w1)
         var p1 = new Payment
         {
             Account = walletPrimary.ClassicAddress,
@@ -227,7 +227,7 @@ public class TestIBatch
             Fee = new Currency { Value = "0" },
         }.ToBatchTx();
 
-        // Внутренний #2 — от w2 (seq = next для w2)
+        // Р’РЅСѓС‚СЂРµРЅРЅРёР№ #2 вЂ” РѕС‚ w2 (seq = next РґР»СЏ w2)
         var p2 = new Payment
         {
             Account = walletSecondary_1.ClassicAddress,
@@ -236,7 +236,7 @@ public class TestIBatch
             Fee = new Currency { Value = "0" },
         }.ToBatchTx();
 
-        // Внутренний #3 — от w3 (seq = next для w3)
+        // Р’РЅСѓС‚СЂРµРЅРЅРёР№ #3 вЂ” РѕС‚ w3 (seq = next РґР»СЏ w3)
         var p3 = new Payment
         {
             Account = walletSecondary_2.ClassicAddress,
@@ -245,14 +245,14 @@ public class TestIBatch
             Fee = new Currency { Value = "0" },
         }.ToBatchTx();
 
-        // Внешний Batch — платит комиссию w1 (может быть любой плательщик)
+        // Р’РЅРµС€РЅРёР№ Batch вЂ” РїР»Р°С‚РёС‚ РєРѕРјРёСЃСЃРёСЋ w1 (РјРѕР¶РµС‚ Р±С‹С‚СЊ Р»СЋР±РѕР№ РїР»Р°С‚РµР»СЊС‰РёРє)
         var batch = new Batch
         {
             Account = walletPrimary.ClassicAddress,
             Flags = BatchFlags.tfAllOrNothing,
             RawTransactions = new List<RawTransactionWrapper> { p1, p2, p3 },
             //Fee = new Currency() { Value = "70" }
-            // Рекомендуется проставить LLS и Fee (не показано для краткости)
+            // Р РµРєРѕРјРµРЅРґСѓРµС‚СЃСЏ РїСЂРѕСЃС‚Р°РІРёС‚СЊ LLS Рё Fee (РЅРµ РїРѕРєР°Р·Р°РЅРѕ РґР»СЏ РєСЂР°С‚РєРѕСЃС‚Рё)
         };
         batch = await runner.client.Autofill(batch);
         return batch;
@@ -315,16 +315,16 @@ public class TestIBatch
 
     private static async Task<(XrplWallet owner, XrplWallet signer1, XrplWallet signer2, XrplWallet w1, XrplWallet w2, Batch batch)> GetMultiAccountBatchWithTopMultiSign()
     {
-        // Владелец мультисиг-аккаунта
+        // Р’Р»Р°РґРµР»РµС† РјСѓР»СЊС‚РёСЃРёРі-Р°РєРєР°СѓРЅС‚Р°
         var owner = walletMultiSign;
-        // Подписанты (могут быть любые аккаунты/ключи)
+        // РџРѕРґРїРёСЃР°РЅС‚С‹ (РјРѕРіСѓС‚ Р±С‹С‚СЊ Р»СЋР±С‹Рµ Р°РєРєР°СѓРЅС‚С‹/РєР»СЋС‡Рё)
         var signer1 = walletMultiSigner_1;
         var signer2 = walletMultiSigner_2;
 
         var w1 = walletSecondary_1;
         var w2 = walletSecondary_2;
 
-        // Внутренний #1 — от w1 (seq = next для w1)
+        // Р’РЅСѓС‚СЂРµРЅРЅРёР№ #1 вЂ” РѕС‚ w1 (seq = next РґР»СЏ w1)
         var p1 = new Payment
         {
             Account = w1.ClassicAddress,
@@ -332,7 +332,7 @@ public class TestIBatch
             Amount = new Currency { ValueAsXrp = 1.1m },
         }.ToBatchTx();
 
-        // Внутренний #2 — от w2 (seq = next для w2)
+        // Р’РЅСѓС‚СЂРµРЅРЅРёР№ #2 вЂ” РѕС‚ w2 (seq = next РґР»СЏ w2)
         var p2 = new Payment
         {
             Account = w2.ClassicAddress,
@@ -340,7 +340,7 @@ public class TestIBatch
             Amount = new Currency { ValueAsXrp = 1.2m },
         }.ToBatchTx();
 
-        // Внутренний #3 — от w3 (seq = next для w3)
+        // Р’РЅСѓС‚СЂРµРЅРЅРёР№ #3 вЂ” РѕС‚ w3 (seq = next РґР»СЏ w3)
         var p3 = new Payment
         {
             Account = owner.ClassicAddress,
@@ -348,13 +348,13 @@ public class TestIBatch
             Amount = new Currency { ValueAsXrp = 1.3m },
         }.ToBatchTx();
 
-        // Внешний Batch — корневой аккаунт = owner (мультисиг)
+        // Р’РЅРµС€РЅРёР№ Batch вЂ” РєРѕСЂРЅРµРІРѕР№ Р°РєРєР°СѓРЅС‚ = owner (РјСѓР»СЊС‚РёСЃРёРі)
         var batch = new Batch
         {
             Account = owner.ClassicAddress,
             Flags = BatchFlags.tfAllOrNothing,
             RawTransactions = new List<RawTransactionWrapper> { p1, p2, p3 },
-            // Рекомендуется проставить LLS и Fee (не показано для краткости)
+            // Р РµРєРѕРјРµРЅРґСѓРµС‚СЃСЏ РїСЂРѕСЃС‚Р°РІРёС‚СЊ LLS Рё Fee (РЅРµ РїРѕРєР°Р·Р°РЅРѕ РґР»СЏ РєСЂР°С‚РєРѕСЃС‚Рё)
         };
         batch = await runner.client.Autofill(batch,4);
         return (owner, signer1, signer2, w1, w2, batch);
@@ -418,16 +418,16 @@ public class TestIBatch
 
     private static async Task<(XrplWallet owner, XrplWallet signer1, XrplWallet signer2, XrplWallet w1, XrplWallet w2, Batch batch)> GetBatchMultiAccountsWithInnerMultiSign()
     {
-        // Владелец мультисиг-аккаунта
+        // Р’Р»Р°РґРµР»РµС† РјСѓР»СЊС‚РёСЃРёРі-Р°РєРєР°СѓРЅС‚Р°
         var owner = walletMultiSign;
-        // Подписанты (могут быть любые аккаунты/ключи)
+        // РџРѕРґРїРёСЃР°РЅС‚С‹ (РјРѕРіСѓС‚ Р±С‹С‚СЊ Р»СЋР±С‹Рµ Р°РєРєР°СѓРЅС‚С‹/РєР»СЋС‡Рё)
         var signer1 = walletMultiSigner_1;
         var signer2 = walletMultiSigner_2;
 
         var w1 = walletSecondary_1;
         var w2 = walletSecondary_2;
 
-        // Внутренний #1 — от w1 (seq = next для w1)
+        // Р’РЅСѓС‚СЂРµРЅРЅРёР№ #1 вЂ” РѕС‚ w1 (seq = next РґР»СЏ w1)
         var p1 = new Payment
         {
             Account = w1.ClassicAddress,
@@ -435,7 +435,7 @@ public class TestIBatch
             Amount = new Currency { ValueAsXrp = 1.1m },
         }.ToBatchTx();
 
-        // Внутренний #2 — от w2 (seq = next для w2)
+        // Р’РЅСѓС‚СЂРµРЅРЅРёР№ #2 вЂ” РѕС‚ w2 (seq = next РґР»СЏ w2)
         var p2 = new Payment
         {
             Account = w2.ClassicAddress,
@@ -443,7 +443,7 @@ public class TestIBatch
             Amount = new Currency { ValueAsXrp = 1.2m },
         }.ToBatchTx();
 
-        // Внутренний #3 — от w3 (seq = next для w3)
+        // Р’РЅСѓС‚СЂРµРЅРЅРёР№ #3 вЂ” РѕС‚ w3 (seq = next РґР»СЏ w3)
         var p3 = new Payment
         {
             Account = owner.ClassicAddress,
@@ -451,7 +451,7 @@ public class TestIBatch
             Amount = new Currency { ValueAsXrp = 1.3m },
         }.ToBatchTx();
 
-        // Внешний Batch — платит комиссию w1 (может быть любой плательщик)
+        // Р’РЅРµС€РЅРёР№ Batch вЂ” РїР»Р°С‚РёС‚ РєРѕРјРёСЃСЃРёСЋ w1 (РјРѕР¶РµС‚ Р±С‹С‚СЊ Р»СЋР±РѕР№ РїР»Р°С‚РµР»СЊС‰РёРє)
         var batch = new Batch
         {
             Account = w1.ClassicAddress,
