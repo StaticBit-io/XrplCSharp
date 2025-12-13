@@ -1,33 +1,34 @@
 <Project Sdk="Microsoft.NET.Sdk">
 
-	<PropertyGroup>
-		<!-- <TargetFramework>netstandard2.0</TargetFramework> -->
-		<TargetFramework>net9.0</TargetFramework>
-		<RootNamespace>XrplTests</RootNamespace>
-	</PropertyGroup>
-	<PropertyGroup>
-		<InvariantGlobalization>true</InvariantGlobalization>
-	</PropertyGroup>
-	<ItemGroup>
-		<None Remove="Microsoft.NET.Test.Sdk" />
-		<None Remove="MSTest.TestFramework" />
-		<None Remove="MSTest.TestAdapter" />
-		<None Remove="Flurl.Http" />
-		<None Remove="Newtonsoft.Json" />
-	</ItemGroup>
-	<ItemGroup>
-		<PackageReference Include="Microsoft.NET.Test.Sdk" Version="18.0.1" />
-		<PackageReference Include="MSTest.TestFramework" Version="4.0.2" />
-		<PackageReference Include="MSTest.TestAdapter" Version="4.0.2" />
-		<PackageReference Include="Flurl.Http" Version="4.0.2" />
-		<PackageReference Include="Newtonsoft.Json" Version="13.0.3" />
-	</ItemGroup>
-	<ItemGroup>
-		<Compile Condition=" '$(EnableDefaultCompileItems)' == 'true' " Update="Keypairs.Tests\Properties\Resources.Designer.cs">
-			<DependentUpon>Resources.resx</DependentUpon>
-		</Compile>
-	</ItemGroup>
-	<ItemGroup>
-		<ProjectReference Include="..\..\Xrpl\Xrpl.csproj" />
-	</ItemGroup>
+        <PropertyGroup>
+                <!-- <TargetFramework>netstandard2.0</TargetFramework> -->
+                <TargetFramework>net9.0</TargetFramework>
+                <RootNamespace>XrplTests</RootNamespace>
+                <RollForward>Major</RollForward>
+        </PropertyGroup>
+        <PropertyGroup>
+                <InvariantGlobalization>true</InvariantGlobalization>
+        </PropertyGroup>
+        <ItemGroup>
+                <None Remove="Microsoft.NET.Test.Sdk" />
+                <None Remove="MSTest.TestFramework" />
+                <None Remove="MSTest.TestAdapter" />
+                <None Remove="Flurl.Http" />
+                <None Remove="Newtonsoft.Json" />
+        </ItemGroup>
+        <ItemGroup>
+                <PackageReference Include="Microsoft.NET.Test.Sdk" Version="18.0.1" />
+                <PackageReference Include="MSTest.TestFramework" Version="4.0.2" />
+                <PackageReference Include="MSTest.TestAdapter" Version="4.0.2" />
+                <PackageReference Include="Flurl.Http" Version="4.0.2" />
+                <PackageReference Include="Newtonsoft.Json" Version="13.0.3" />
+        </ItemGroup>
+        <ItemGroup>
+                <Compile Condition=" '$(EnableDefaultCompileItems)' == 'true' " Update="Keypairs.Tests\Properties\Resources.Designer.cs">
+                        <DependentUpon>Resources.resx</DependentUpon>
+                </Compile>
+        </ItemGroup>
+        <ItemGroup>
+                <ProjectReference Include="..\..\Xrpl\Xrpl.csproj" />
+        </ItemGroup>
 </Project>

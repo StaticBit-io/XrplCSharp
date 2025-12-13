@@ -44,7 +44,10 @@ namespace Xrpl.Sugar
             decimal fee = baseFeeXrp * (decimal)serverInfo.Info.LoadFactor * (decimal)feeCushion;
 
             // Cap fee to `client.maxFeeXRP`
-            fee = Math.Min(fee, decimal.Parse(client.maxFeeXRP));
+            if (!string.IsNullOrWhiteSpace(client.maxFeeXRP))
+            {
+                fee = Math.Min(fee, decimal.Parse(client.maxFeeXRP));
+            }
             // Round fee to 6 decimal places
             // TODO: Review To Fixed
             return fee.ToString(CultureInfo.InvariantCulture);
