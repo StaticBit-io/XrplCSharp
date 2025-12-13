@@ -10,7 +10,7 @@ using Xrpl.Client.Exceptions;
 namespace Xrpl.Models.Transactions
 {
     /// <inheritdoc cref="INFTokenCancelOffer" />
-    public class NFTokenCancelOffer : TransactionCommon, INFTokenCancelOffer
+    public class NFTokenCancelOffer : TransactionRequest, INFTokenCancelOffer
     {
         public NFTokenCancelOffer()
         {
@@ -37,7 +37,7 @@ namespace Xrpl.Models.Transactions
     }
 
     /// <inheritdoc cref="INFTokenCancelOffer" />
-    public class NFTokenCancelOfferResponse : TransactionResponseCommon, INFTokenCancelOffer
+    public class NFTokenCancelOfferResponse : TransactionResponse, INFTokenCancelOffer
     {
         /// <inheritdoc />
         public string[] NFTokenOffers { get; set; }

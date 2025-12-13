@@ -83,7 +83,7 @@ namespace Xrpl.Models.Methods
         /// <summary>
         /// (JSON mode) JSON object defining the transaction.
         /// </summary>
-        public TransactionResponseCommon Transaction { get; }
+        public TransactionResponse Transaction { get; }
 
         /// <summary>
         /// If true, this transaction is included in a validated ledger and its outcome is final.<br/>
@@ -122,7 +122,7 @@ namespace Xrpl.Models.Methods
         /// JSON object defining the transaction.
         /// </summary>
         [JsonProperty("tx_json")]
-        public TransactionResponseCommon Transaction { get; set; }
+        public TransactionResponse Transaction { get; set; }
 
         /// <summary>
         /// Unique hashed String representing the transaction.

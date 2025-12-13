@@ -10,7 +10,7 @@ using Xrpl.Models.Ledger;
 namespace Xrpl.Models.Transactions
 {
     /// <inheritdoc cref="ISignerListSet" />
-    public class SignerListSet : TransactionCommon, ISignerListSet
+    public class SignerListSet : TransactionRequest, ISignerListSet
     {
 
         public SignerListSet()
@@ -44,7 +44,7 @@ namespace Xrpl.Models.Transactions
     }
 
     /// <inheritdoc cref="ISignerListSet" />
-    public class SignerListSetResponse : TransactionResponseCommon, ISignerListSet
+    public class SignerListSetResponse : TransactionResponse, ISignerListSet
     {
         /// <inheritdoc />
         public List<SignerEntryWrapper> SignerEntries { get; set; }

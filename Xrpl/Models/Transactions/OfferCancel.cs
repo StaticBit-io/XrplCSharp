@@ -10,7 +10,7 @@ using Xrpl.Client.Exceptions;
 namespace Xrpl.Models.Transactions
 {
     /// <inheritdoc cref="IOfferCancel" />
-    public class OfferCancel : TransactionCommon, IOfferCancel
+    public class OfferCancel : TransactionRequest, IOfferCancel
     {
         public OfferCancel()
         {
@@ -36,7 +36,7 @@ namespace Xrpl.Models.Transactions
     }
 
     /// <inheritdoc cref="IOfferCancel" />
-    public class OfferCancelResponse : TransactionResponseCommon, IOfferCancel
+    public class OfferCancelResponse : TransactionResponse, IOfferCancel
     {
         /// <inheritdoc />
         public uint OfferSequence { get; set; }

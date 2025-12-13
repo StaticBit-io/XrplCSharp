@@ -68,7 +68,7 @@ public class Submit //todo rename to SubmitResponse extends BaseResponse
     /// <summary>
     /// The complete transaction.
     /// </summary>
-    public ITransactionResponseCommon Transaction => JsonConvert.DeserializeObject<TransactionResponseCommon>(TxJson.ToString());
+    public ITransactionResponse Transaction => JsonConvert.DeserializeObject<TransactionResponse>(TxJson.ToString());
 
 
     //todo not found fields accepted: boolean,  account_sequence_available: number, account_sequence_next: number, applied: boolean,  broadcast: boolean

@@ -61,7 +61,7 @@ namespace Xrpl.Models.Transactions
     }
 
     /// <inheritdoc cref="IOfferCreate" />
-    public class OfferCreate : TransactionCommon, IOfferCreate
+    public class OfferCreate : TransactionRequest, IOfferCreate
     {
         public OfferCreate()
         {
@@ -121,7 +121,7 @@ namespace Xrpl.Models.Transactions
     }
 
     /// <inheritdoc cref="IOfferCreate" />
-    public class OfferCreateResponse : TransactionResponseCommon, IOfferCreate
+    public class OfferCreateResponse : TransactionResponse, IOfferCreate
     {
         /// <inheritdoc />
         [JsonConverter(typeof(RippleDateTimeConverter))]

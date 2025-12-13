@@ -1,11 +1,13 @@
-﻿using System;
+﻿using Newtonsoft.Json;
+using Newtonsoft.Json.Linq;
+
+using System;
 using System.Collections.Concurrent;
 using System.Collections.Generic;
 using System.Threading;
 using System.Threading.Tasks;
 
-using Newtonsoft.Json;
-
+using Xrpl.Client.Json.Converters;
 using Xrpl.Models.Ledger;
 using Xrpl.Models.Methods;
 using Xrpl.Models.Subscriptions;
@@ -219,13 +221,13 @@ namespace Xrpl.Client
         /// <param name="autoFill">use autofill for tx</param>
         /// <param name="failHard">yse fail hard</param>
         /// <returns>An <see cref="Models.Transactions.Submit"/> response.</returns>
-        Task<Submit> Submit(ITransactionCommon tx, XrplWallet wallet, bool autoFill = true, bool failHard = false);
+        Task<Submit> Submit(ITransactionRequest tx, XrplWallet wallet, bool autoFill = true, bool failHard = false);
         /// <summary>
         /// The tx method retrieves information on a single transaction, by its identifying hash
         /// </summary>
         /// <param name="request">An <see cref="TxRequest"/> request.</param>
-        /// <returns>An <see cref="TransactionResponseCommon"/> response.</returns>
-        Task<TransactionResponseCommon> Tx(TxRequest request);
+        /// <returns>An <see cref="TransactionResponse"/> response.</returns>
+        Task<TransactionResponse> Tx(TxRequest request);
 
         Task<TransactionSummary> TxV2(TxRequest request);
         #endregion
@@ -309,8 +311,26 @@ namespace Xrpl.Client
 
 
         #region Sugars
-
-        Task<Dictionary<string, dynamic>> Autofill(Dictionary<string, dynamic> tx);
+        /// <summary>
+        /// Autofills fields in a transaction. This will set `Sequence`, `Fee`,
+        /// `lastLedgerSequence` according to the current state of the server this Client
+        /// is connected to. It also converts all X-Addresses to classic addresses and
+        /// flags interfaces into numbers.
+        /// </summary>
+        /// <param name="tx">A {@link Transaction} in JSON format</param>
+        /// <param name="signersCount">The expected number of signers for this transaction. Only used for multisigned transactions.</param>
+        /// <returns>The autofilled transaction.</returns>
+        Task<Dictionary<string, dynamic>> Autofill(Dictionary<string, dynamic> tx, int? signersCount = null);
+        /// <summary>
+        /// Autofills fields in a transaction. This will set `Sequence`, `Fee`,
+        /// `lastLedgerSequence` according to the current state of the server this Client
+        /// is connected to. It also converts all X-Addresses to classic addresses and
+        /// flags interfaces into numbers.
+        /// </summary>
+        /// <param name="tx">A {@link Transaction} in JSON format</param>
+        /// <param name="signersCount">The expected number of signers for this transaction. Only used for multisigned transactions.</param>
+        /// <returns>The autofilled transaction.</returns>
+        Task<T> Autofill<T>(T tx, int? signersCount = null) where T : ITransactionRequest;
         Task<uint> GetLedgerIndex();
         Task<string> GetXrpBalance(string address);
         Task ChangeServer(string server, ClientOptions? options = null, CancellationToken cancellationToken = default);
@@ -373,7 +393,7 @@ namespace Xrpl.Client
         private void SetSettings(ClientOptions options)
         {
             feeCushion = options?.feeCushion ?? 1.2;
-            maxFeeXRP = options?.maxFeeXRP ?? "2";
+            maxFeeXRP = options?.maxFeeXRP;
             networkID = options?.NetworkID;
             ApiVersion = options?.ApiVersion ?? 2;
         }
@@ -443,9 +463,25 @@ namespace Xrpl.Client
         }
 
         // SUGARS
-        public Task<Dictionary<string, dynamic>> Autofill(Dictionary<string, dynamic> tx)
+        public Task<Dictionary<string, dynamic>> Autofill(Dictionary<string, dynamic> tx, int? signersCount = null)
         {
-            return this.Autofill(tx, null);
+            return AutofillSugar.Autofill(this, tx, signersCount);
+        }
+        public async Task<T> Autofill<T>(T tx, int? signersCount = null) where T : ITransactionRequest
+        {
+            var dic = tx.ToDictionary();
+            var filled = await AutofillSugar.Autofill(this, dic, signersCount).ConfigureAwait(false);
+            var jObject = JObject.FromObject(filled);
+            var settings = new JsonSerializerSettings
+            {
+                ObjectCreationHandling = ObjectCreationHandling.Replace,
+                //ContractResolver = new NoTransactionConverterResolver()
+            };
+            var serializer = JsonSerializer.CreateDefault(settings);
+            await using var reader = jObject.CreateReader();
+            serializer.Populate(reader, tx);
+
+            return tx;
         }
 
         /// <inheritdoc />
@@ -459,7 +495,7 @@ namespace Xrpl.Client
             return this.Submit(tx, autoFill, failHard, wallet);
         }
         /// <inheritdoc />
-        public Task<Submit> Submit(ITransactionCommon tx, XrplWallet wallet, bool autoFill = true, bool failHard = false)
+        public Task<Submit> Submit(ITransactionRequest tx, XrplWallet wallet, bool autoFill = true, bool failHard = false)
         {
             if (this.networkID is { } network)
             {
@@ -679,10 +715,10 @@ namespace Xrpl.Client
         //}
 
         /// <inheritdoc />
-        public Task<TransactionResponseCommon> Tx(TxRequest request)
+        public Task<TransactionResponse> Tx(TxRequest request)
         {
             request.ApiVersion = 1;
-            return this.GRequest<TransactionResponseCommon, TxRequest>(request);
+            return this.GRequest<TransactionResponse, TxRequest>(request);
         }
 
         public Task<TransactionSummary> TxV2(TxRequest request)

@@ -1,7 +1,7 @@
 ﻿//https://xrpl.org/unlmodify.html
 namespace Xrpl.Models.Transactions
 {
-    public class UNLModify : TransactionCommon, IUNLModify
+    public class UNLModify : TransactionRequest, IUNLModify
     {
         public UNLModify()
         {
@@ -40,7 +40,7 @@ namespace Xrpl.Models.Transactions
         uint LedgerSequence { get; set; }
     }
 
-    public class UNLModifyResponse : TransactionResponseCommon, IUNLModify
+    public class UNLModifyResponse : TransactionResponse, IUNLModify
     {
         /// <inheritdoc />
         public string UNLModifyValidator { get; set; }

@@ -16,7 +16,7 @@ namespace Xrpl.Models.Transactions
     /// AMMCreate is used to create AccountRoot and the corresponding AMM ledger entries.
     /// This allows for the creation of only one AMM instance per unique asset pair.
     /// </summary>
-    public class AMMCreate : TransactionCommon, IAMMCreate
+    public class AMMCreate : TransactionRequest, IAMMCreate
     {
         public AMMCreate()
         {
@@ -58,7 +58,7 @@ namespace Xrpl.Models.Transactions
     }
 
     /// <inheritdoc cref="IAMMCreate" />
-    public class AMMCreateResponse : TransactionResponseCommon, IAMMCreate
+    public class AMMCreateResponse : TransactionResponse, IAMMCreate
     {
         #region Implementation of IAMMCreate
 

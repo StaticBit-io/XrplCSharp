@@ -1,4 +1,4 @@
-// https://github.com/XRPLF/xrpl.js/blob/main/packages/xrpl/test/models/trustSet.ts
+﻿// https://github.com/XRPLF/xrpl.js/blob/main/packages/xrpl/test/models/trustSet.ts
 
 using System;
 using System.Collections.Generic;
@@ -75,4 +75,3 @@ namespace XrplTests.Xrpl.Models
         }
     }
 }
-

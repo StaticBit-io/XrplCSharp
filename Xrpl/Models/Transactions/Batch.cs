@@ -38,9 +38,9 @@ public enum BatchFlags : uint
 public sealed class BatchSigner
 {
     [JsonProperty("BatchSigner", Required = Required.Always)]
-    public InnerSigner Value { get; set; } = new InnerSigner();
+    public BatchInnerSigner Value { get; set; } = new BatchInnerSigner();
 
-    public sealed class InnerSigner
+    public sealed class BatchInnerSigner
     {
         [JsonProperty("Account", Required = Required.Always)]
         public string Account { get; set; } = string.Empty;
@@ -52,15 +52,15 @@ public sealed class BatchSigner
         public string? TxnSignature { get; set; }
 
         [JsonProperty("Signers", NullValueHandling = NullValueHandling.Ignore)]
-        public List<Signer>? Signers { get; set; }
+        public List<SignerWrapper>? Signers { get; set; }
     }
 }
 
 public sealed class RawTransactionWrapper
 {
-    [JsonConverter(typeof(TransactionConverter))]
+    [JsonConverter(typeof(TransactionRequestConverter))]
     [JsonProperty("RawTransaction", Required = Required.Always)]
-    public ITransactionCommon RawTransaction { get; set; }
+    public ITransactionRequest RawTransaction { get; set; }
 }
 
 public interface IBatch : ITransactionCommon
@@ -72,7 +72,7 @@ public interface IBatch : ITransactionCommon
     List<RawTransactionWrapper> RawTransactions { get; set; }
 }
 
-public sealed class Batch : TransactionCommon, IBatch
+public sealed class Batch : TransactionRequest, IBatch
 {
     public Batch() => TransactionType = TransactionType.Batch;
 
@@ -92,7 +92,7 @@ public sealed class Batch : TransactionCommon, IBatch
     public List<RawTransactionWrapper> RawTransactions { get; set; } = new List<RawTransactionWrapper>();
 }
 
-public sealed class BatchResponse : TransactionResponseCommon, IBatch
+public sealed class BatchResponse : TransactionResponse, IBatch
 {
     // Допустимо — 0 или 1 режим (бит из BatchFlags) вместе с обычными глобальными флагами.
     [JsonProperty("Flags", NullValueHandling = NullValueHandling.Ignore)]

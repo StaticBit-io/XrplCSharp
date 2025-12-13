@@ -65,7 +65,7 @@ namespace Xrpl.Models.Transactions
     /// - Amount and LPTokenOut
     /// - Amount and EPrice
     /// </summary>
-    public class AMMDeposit : TransactionCommon, IAMMDeposit
+    public class AMMDeposit : TransactionRequest, IAMMDeposit
     {
         public AMMDeposit()
         {
@@ -148,7 +148,7 @@ namespace Xrpl.Models.Transactions
     }
 
     /// <inheritdoc cref="IAMMDeposit" />
-    public class AMMDepositResponse : TransactionResponseCommon, IAMMDeposit
+    public class AMMDepositResponse : TransactionResponse, IAMMDeposit
     {
         #region Implementation of IAMMDeposit
 

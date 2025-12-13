@@ -1,4 +1,4 @@
-using System.Collections.Generic;
+﻿using System.Collections.Generic;
 using System.Threading.Tasks;
 using Microsoft.VisualStudio.TestTools.UnitTesting;
 using Newtonsoft.Json;
@@ -39,7 +39,7 @@ namespace XrplTests.Xrpl.ClientLib.Integration
             Submit response = await runner.client.Submit(txRequest, runner.wallet);
             string hash = HashLedger.HashSignedTx(response.TxBlob);
             TxRequest request1 = new TxRequest(hash);
-            TransactionResponseCommon accountTx = await runner.client.Tx(request1);
+            TransactionResponse accountTx = await runner.client.Tx(request1);
             Assert.IsNotNull(accountTx);
         }
     }

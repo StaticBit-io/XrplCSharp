@@ -48,7 +48,7 @@ namespace Xrpl.Models.Transactions
     }
 
     /// <inheritdoc cref="IPayment" />
-    public class Payment : TransactionCommon, IPayment, IDestination
+    public class Payment : TransactionRequest, IPayment, IDestination
     {
         public Payment()
         {
@@ -167,7 +167,7 @@ namespace Xrpl.Models.Transactions
     }
 
     /// <inheritdoc cref="IPayment" />
-    public class PaymentResponse : TransactionResponseCommon, IPayment, IDestination
+    public class PaymentResponse : TransactionResponse, IPayment, IDestination
     {
         /// <inheritdoc />
         [JsonConverter(typeof(CurrencyConverter))]

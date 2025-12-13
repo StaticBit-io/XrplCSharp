@@ -14,6 +14,8 @@ using Xrpl.Models.Common;
 using Xrpl.Models.Ledger;
 using Xrpl.Models.Utils;
 
+using static Xrpl.Models.Transactions.BatchSigner;
+
 // https://github.com/XRPLF/xrpl.js/blob/main/packages/xrpl/src/models/transactions/common.ts
 
 namespace Xrpl.Models.Transactions
@@ -245,8 +247,8 @@ namespace Xrpl.Models.Transactions
     }
 
     /// <inheritdoc />
-    [JsonConverter(typeof(TransactionConverter))]
-    public abstract class TransactionCommon : ITransactionCommon //todo rename to BaseTransaction
+    [JsonConverter(typeof(TransactionRequestConverter))]
+    public abstract class TransactionRequest : ITransactionRequest //todo rename to BaseTransaction
     {
         //protected TransactionCommon()
         //{
@@ -276,7 +278,7 @@ namespace Xrpl.Models.Transactions
         [JsonProperty("SigningPubKey")]
         public string SigningPublicKey { get; set; }
         /// <inheritdoc />
-        public List<Signer> Signers { get; set; }
+        public List<SignerWrapper> Signers { get; set; }
         /// <inheritdoc />
         [JsonConverter(typeof(StringEnumConverter))]
         public TransactionType TransactionType { get; set; }
@@ -286,28 +288,6 @@ namespace Xrpl.Models.Transactions
         public string TransactionSignature { get; set; }
 
         /// <inheritdoc />
-        [JsonProperty("meta")]
-        public Meta Meta { get; set; }
-
-        /// <summary>
-        /// The date/time when this transaction was included in a validated ledger.
-        /// </summary>
-        [JsonProperty("date")]
-        public uint? date { get; set; } //todo not unknown field
-                                        //possible
-                                        //https://github.com/XRPLF/xrpl.js/blob/984a58e642a4cde09aee320efe195d4e651b7733/packages/xrpl/src/models/common/index.ts#L98
-
-
-        [JsonProperty("inLedger")]
-        public uint? inLedger { get; set; } //todo not unknown field
-
-        /// <summary>
-        /// The sequence number of the ledger that included this transaction.
-        /// </summary>
-        [JsonProperty("ledger_index")]
-        public uint? ledger_index { get; set; } //todo not unknown field
-
-        /// <inheritdoc />
         public string ToJson()
         {
             JsonSerializerSettings serializerSettings = new JsonSerializerSettings();
@@ -315,6 +295,12 @@ namespace Xrpl.Models.Transactions
             serializerSettings.DateTimeZoneHandling = DateTimeZoneHandling.Utc;
 
             return JsonConvert.SerializeObject(this, serializerSettings);
+        }
+
+        public Dictionary<string, dynamic> ToDictionary()
+        {
+            var json = ToJson();
+            return JsonConvert.DeserializeObject<Dictionary<string, dynamic>>(json) ?? throw new ValidationException("Failed to deserialize tx json");
         }
 
         /// <inheritdoc />
@@ -374,29 +360,6 @@ namespace Xrpl.Models.Transactions
         /// </summary>
         [JsonIgnore]
         public string MemoTypeAsText => MemoType.FromHexString();
-    }
-
-    /// <summary>
-    /// The Signers field contains a multi-signature, which has signatures from up to 8 key pairs, that together should authorize the transaction.
-    /// </summary>
-    public class Signer
-    {
-        /// <summary>
-        /// The address associated with this signature, as it appears in the signer list.
-        /// </summary>
-        public string Account { get; set; }
-
-        /// <summary>
-        /// A signature for this transaction, verifiable using the SigningPubKey.
-        /// </summary>
-        [JsonProperty("TxnSignature")]
-        public string TransactionSignature { get; set; }
-
-        /// <summary>
-        /// The public key used to create this signature.
-        /// </summary>
-        [JsonProperty("SigningPubKey")]
-        public string SigningPublicKey { get; set; }
     }
 
     /// <summary>
@@ -627,16 +590,6 @@ namespace Xrpl.Models.Transactions
         public string MemoValue => Memos is not { } memos ? null : memos.Aggregate(string.Empty, (current, memo) => current + $"{memo.Memo.MemoData.FromHexString()}");
 
         /// <summary>
-        /// Transaction metadata is a section of data that gets added to a transaction after it is processed.<br/>
-        /// Any transaction that gets included in a ledger has metadata, regardless of whether it is successful.<br/>
-        /// The transaction metadata describes the outcome of the transaction in detail.<br/>
-        /// <remarks>
-        /// Warning: The changes described in transaction metadata are only final if the transaction is in a validated ledger version.
-        /// </remarks>
-        /// </summary>
-        Meta Meta { get; set; }
-
-        /// <summary>
         /// The sequence number of the account sending the transaction.<br/>
         /// A transaction is only valid if the Sequence number is exactly 1 greater than the previous transaction from the same account.<br/>
         /// The special case 0 means the transaction is using a Ticket instead.
@@ -646,7 +599,7 @@ namespace Xrpl.Models.Transactions
         /// <summary>
         /// Array of objects that represent a multi-signature which authorizes this transaction.
         /// </summary>
-        List<Signer> Signers { get; set; }
+        List<SignerWrapper> Signers { get; set; }
 
         /// <summary>
         /// Hex representation of the public key that corresponds to the private key used to sign this transaction.<br/>
@@ -666,11 +619,7 @@ namespace Xrpl.Models.Transactions
         /// `PaymentChannelFund`, `PaymentChannelClaim`, and `DepositPreauth`.
         /// </summary>
         TransactionType TransactionType { get; set; }
-        /// <summary>
-        /// convert transaction to string json value
-        /// </summary>
-        /// <returns></returns>
-        string ToJson();
+
         /// <summary>
         /// (Optional) Arbitrary integer used to identify the reason for this payment, or a sender on whose behalf this transaction is made.<br/>
         /// Conventionally, a refund should specify the initial payment's SourceTag as the refund payment's DestinationTag.
@@ -681,19 +630,36 @@ namespace Xrpl.Models.Transactions
         /// If this is provided, Sequence must be 0. Cannot be used with AccountTxnID.
         /// </summary>
         public uint? TicketSequence { get; set; }
-
+        /// <summary>
+        /// convert transaction to string json value
+        /// </summary>
+        /// <returns></returns>
+        string ToJson();
+        Dictionary<string, dynamic> ToDictionary();
+    }
+    public interface ITransactionRequest : ITransactionCommon
+    {
     }
 
     /// <summary>
     /// Every transaction has the same set of common fields.
     /// </summary>
-    public interface ITransactionResponseCommon : IBaseTransactionResponse, ITransactionCommon
+    public interface ITransactionResponse : IBaseTransactionResponse, ITransactionCommon
     {
+        /// <summary>
+        /// Transaction metadata is a section of data that gets added to a transaction after it is processed.<br/>
+        /// Any transaction that gets included in a ledger has metadata, regardless of whether it is successful.<br/>
+        /// The transaction metadata describes the outcome of the transaction in detail.<br/>
+        /// <remarks>
+        /// Warning: The changes described in transaction metadata are only final if the transaction is in a validated ledger version.
+        /// </remarks>
+        /// </summary>
+        Meta Meta { get; set; }
     }
 
-    /// <inheritdoc cref="ITransactionResponseCommon" />
-    [JsonConverter(typeof(TransactionConverter))]
-    public class TransactionResponseCommon : BaseTransactionResponse, ITransactionResponseCommon
+    /// <inheritdoc cref="ITransactionResponse" />
+    [JsonConverter(typeof(TransactionResponseConverter))]
+    public class TransactionResponse : BaseTransactionResponse, ITransactionResponse
     {
         public uint? NetworkID { get; set; }
 
@@ -724,7 +690,7 @@ namespace Xrpl.Models.Transactions
         public string SigningPublicKey { get; set; }
 
         /// <inheritdoc/>
-        public List<Signer> Signers { get; set; }
+        public List<SignerWrapper> Signers { get; set; }
 
         /// <inheritdoc/>
         [JsonConverter(typeof(StringEnumConverter))]
@@ -746,6 +712,12 @@ namespace Xrpl.Models.Transactions
             serializerSettings.DateTimeZoneHandling = DateTimeZoneHandling.Utc;
 
             return JsonConvert.SerializeObject(this, serializerSettings);
+        }
+
+        public Dictionary<string, dynamic> ToDictionary()
+        {
+            var json = ToJson();
+            return JsonConvert.DeserializeObject<Dictionary<string, dynamic>>(json) ?? throw new ValidationException("Failed to deserialize tx json");
         }
 
         /// <inheritdoc />

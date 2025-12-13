@@ -10,7 +10,7 @@ using static Xrpl.Models.Common.Common;
 
 namespace Xrpl.Models.Transactions
 {
-    public class AMMVote : TransactionCommon, IAMMVote
+    public class AMMVote : TransactionRequest, IAMMVote
     {
         public AMMVote()
         {
@@ -46,7 +46,7 @@ namespace Xrpl.Models.Transactions
     }
 
     /// <inheritdoc cref="IAMMVote" />
-    public class AMMVoteResponse : TransactionResponseCommon, IAMMVote
+    public class AMMVoteResponse : TransactionResponse, IAMMVote
     {
         #region Implementation of IAMMVote
 

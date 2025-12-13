@@ -37,7 +37,8 @@ namespace XrplTests.Xrpl.ClientLib.Integration
                 Amount = new ICurrency { Value = "400000000", CurrencyCode = "XRP" }
             };
             var values = JsonConvert.DeserializeObject<Dictionary<string, dynamic>>(payment.ToJson());
-            Submit response = await client.Submit(values, XrplWallet.FromSeed(masterSecret));
+            var master = XrplWallet.FromSeed(masterSecret);
+            Submit response = await client.Submit(values, master);
             if (response.EngineResult != "tesSUCCESS")
             {
                 throw new Exception("Response not successful, ${ response.result.engine_result}");
@@ -58,7 +59,7 @@ namespace XrplTests.Xrpl.ClientLib.Integration
         {
             string hash = hashTx != null ? hashTx : HashLedger.HashSignedTx(tx);
             TxRequest request = new TxRequest(hash);
-            TransactionResponseCommon data = await client.Tx(request);
+            TransactionResponse data = await client.Tx(request);
               //assert(data.result)
               //assert.deepEqual(
               //  _.omit(data.result, [
@@ -90,6 +91,11 @@ namespace XrplTests.Xrpl.ClientLib.Integration
             response.TxJson.Property("hash").Remove();
             await LedgerAccept(client);
             await VerifySubmittedTransaction(client, response.TxJson);
+        }
+
+        public static async Task TestTransaction(IXrplClient client, ITransactionRequest transaction, XrplWallet wallet)
+        {
+            await TestTransaction(client, transaction.ToDictionary(), wallet);
         }
     }
 }

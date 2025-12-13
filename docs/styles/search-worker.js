@@ -1,4 +1,4 @@
-(function () {
+﻿(function () {
   importScripts('lunr.min.js');
 
   var lunrIndex;

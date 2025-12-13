@@ -20,7 +20,7 @@ namespace Xrpl.Models.Transactions
     /// to fully delete the trust lines and the associated AMM.
     /// In all cases, the AMM ledger entry and AMM account are deleted by the last such transaction.
     /// </summary>
-    public class AMMDelete : TransactionCommon, IAMMDelete
+    public class AMMDelete : TransactionRequest, IAMMDelete
     {
         public AMMDelete()
         {
@@ -57,7 +57,7 @@ namespace Xrpl.Models.Transactions
     }
 
     /// <inheritdoc cref="IAMMDelete" />
-    public class AMMDeleteResponse : TransactionResponseCommon, IAMMDelete
+    public class AMMDeleteResponse : TransactionResponse, IAMMDelete
     {
         #region Implementation of IAMMDelete
 

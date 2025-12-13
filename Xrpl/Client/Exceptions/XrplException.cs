@@ -1,4 +1,5 @@
 ﻿using System;
+using System.Text.RegularExpressions;
 
 namespace Xrpl.Client.Exceptions
 {
@@ -26,17 +27,34 @@ namespace Xrpl.Client.Exceptions
 
         public XrplException(string message) : base(message) { }
         public XrplException(string message, Exception? InnerException) : base(message, InnerException) { }
-        //public XrplException(string message, dynamic data) : base(message, data) { }
     }
 
     /// <summary>
     /// Exception thrown when rippled responds with an Exception.
     /// </summary>
-    public class RippledException : XrplException {
+    public class RippledException : XrplException
+    {
         public RippledException(string message, dynamic data = null) : base(message)
         {
         }
     }
+
+    public static class RippledErrorParser
+    {
+        private static readonly Regex RippledLineRegex =
+            new(@"^RippledError:\s*(?<msg>[^\r\n]+)",
+                RegexOptions.Multiline | RegexOptions.Compiled);
+
+        public static string? TryExtractRippledError(string errorMessage)
+        {
+            if (string.IsNullOrWhiteSpace(errorMessage))
+                return null;
+
+            var m = RippledLineRegex.Match(errorMessage);
+            return m.Success ? m.Groups["msg"].Value.Trim() : errorMessage;
+        }
+    }
+
     /// <summary>
     /// Exception thrown when xrpl.js cannot specify Exception type.
     /// </summary>
@@ -72,7 +90,6 @@ namespace Xrpl.Client.Exceptions
     /// Exception thrown when rippled is not initialized.
     /// </summary>
     public class RippledNotInitializedException : XrplException { }
-
     /// <summary>
     /// Exception thrown when xrpl.js times out.
     /// </summary>
@@ -80,7 +97,7 @@ namespace Xrpl.Client.Exceptions
     {
         public TimeoutException(string message, dynamic data = null) : base(message)
         {
-            
+
         }
     }
     /// <summary>

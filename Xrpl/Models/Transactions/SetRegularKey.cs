@@ -10,7 +10,7 @@ using Xrpl.Client.Exceptions;
 namespace Xrpl.Models.Transactions
 {
     /// <inheritdoc cref="ISetRegularKey" />
-    public class SetRegularKey : TransactionCommon, ISetRegularKey
+    public class SetRegularKey : TransactionRequest, ISetRegularKey
     {
         public SetRegularKey()
         {
@@ -36,7 +36,7 @@ namespace Xrpl.Models.Transactions
     }
 
     /// <inheritdoc cref="ISetRegularKey" />
-    public class SetRegularKeyResponse : TransactionResponseCommon, ISetRegularKey
+    public class SetRegularKeyResponse : TransactionResponse, ISetRegularKey
     {
         /// <inheritdoc />
         public string RegularKey { get; set; }

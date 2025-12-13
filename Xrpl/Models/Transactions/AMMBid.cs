@@ -21,7 +21,7 @@ namespace Xrpl.Models.Transactions
     /// Any XRPL account that holds LPToken for an AMM instance may submit this
     /// transaction to vote for the trading fee for that instance.
     /// </summary>
-    public class AMMBid : TransactionCommon, IAMMBid
+    public class AMMBid : TransactionRequest, IAMMBid
     {
         public AMMBid()
         {
@@ -79,7 +79,7 @@ namespace Xrpl.Models.Transactions
     }
 
     /// <inheritdoc cref="IAMMBid" />
-    public class AMMBidResponse : TransactionResponseCommon, IAMMBid
+    public class AMMBidResponse : TransactionResponse, IAMMBid
     {
         #region Implementation of IAMMBid
 
