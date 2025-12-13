@@ -1,7 +1,10 @@
-﻿using System.Collections.Generic;
+﻿using System;
+using System.Collections.Generic;
 using System.Diagnostics;
+using System.Linq;
 using Microsoft.VisualStudio.TestTools.UnitTesting;
 using Xrpl.BinaryCodec;
+using Xrpl.Client.Exceptions;
 using Xrpl.Wallet;
 
 // https://github.com/XRPLF/xrpl.js/blob/main/packages/xrpl/test/wallet/signer.ts
@@ -182,5 +185,113 @@ namespace Xrpl.Tests.Wallet.Tests
             decodedTx["SigningPubKey"] = "0330E7FC9D56BB25D6893BA3F317AE5BCF33B3291BD63DB32654A313222F7FD020";
             Assert.IsFalse(Signer.VerifySignature(decodedTx));
         }
+
+        #region Multisign Negative Cases
+
+        [TestMethod]
+        public void TestUMultisign_EmptyBlobArray_ThrowsValidationException()
+        {
+            bool thrown = false;
+            try { Signer.Multisign(Array.Empty<string>()); }
+            catch (ValidationException) { thrown = true; }
+            Assert.IsTrue(thrown, "Expected ValidationException for empty blob array");
+        }
+
+        [TestMethod]
+        public void TestUMultisign_NullBlobArray_ThrowsValidationException()
+        {
+            bool thrown = false;
+            try { Signer.Multisign((string[])null); }
+            catch (ValidationException) { thrown = true; }
+            Assert.IsTrue(thrown, "Expected ValidationException for null blob array");
+        }
+
+        [TestMethod]
+        public void TestUMultisign_EmptyDictArray_ThrowsValidationException()
+        {
+            bool thrown = false;
+            try { Signer.Multisign(Array.Empty<Dictionary<string, dynamic>>()); }
+            catch (ValidationException) { thrown = true; }
+            Assert.IsTrue(thrown, "Expected ValidationException for empty dict array");
+        }
+
+        [TestMethod]
+        public void TestUMultisign_NullDictArray_ThrowsValidationException()
+        {
+            bool thrown = false;
+            try { Signer.Multisign((Dictionary<string, dynamic>[])null); }
+            catch (ValidationException) { thrown = true; }
+            Assert.IsTrue(thrown, "Expected ValidationException for null dict array");
+        }
+
+        #endregion
+
+        #region CompareSigners Tests
+
+        [TestMethod]
+        public void TestUCompareSigners_SameAccount_ReturnsZero()
+        {
+            var signer1 = new Dictionary<string, dynamic>
+            {
+                ["Signer"] = new Dictionary<string, dynamic>
+                {
+                    ["Account"] = "rHb9CJAWyB4rj91VRWn96DkukG4bwdtyTh"
+                }
+            };
+            var signer2 = new Dictionary<string, dynamic>
+            {
+                ["Signer"] = new Dictionary<string, dynamic>
+                {
+                    ["Account"] = "rHb9CJAWyB4rj91VRWn96DkukG4bwdtyTh"
+                }
+            };
+            Assert.AreEqual(0, Signer.CompareSigners(signer1, signer2));
+        }
+
+        [TestMethod]
+        public void TestUCompareSigners_DifferentAccounts_ReturnsNonZero()
+        {
+            var signer1 = new Dictionary<string, dynamic>
+            {
+                ["Signer"] = new Dictionary<string, dynamic>
+                {
+                    ["Account"] = "rHb9CJAWyB4rj91VRWn96DkukG4bwdtyTh"
+                }
+            };
+            var signer2 = new Dictionary<string, dynamic>
+            {
+                ["Signer"] = new Dictionary<string, dynamic>
+                {
+                    ["Account"] = "rPT1Sjq2YGrBMTttX4GZHjKu9dyfzbpAYe"
+                }
+            };
+            int result = Signer.CompareSigners(signer1, signer2);
+            Assert.AreNotEqual(0, result);
+        }
+
+        [TestMethod]
+        public void TestUCompareSigners_Ordering()
+        {
+            var accounts = new[]
+            {
+                "rHb9CJAWyB4rj91VRWn96DkukG4bwdtyTh",
+                "rPT1Sjq2YGrBMTttX4GZHjKu9dyfzbpAYe",
+                "rsA2LpzuawewSBQXkiju3YQTMzW13pAAdW"
+            };
+
+            var signers = accounts.Select(acc => new Dictionary<string, dynamic>
+            {
+                ["Signer"] = new Dictionary<string, dynamic> { ["Account"] = acc }
+            }).ToArray();
+
+            var sorted = signers.OrderBy(s => s, Comparer<Dictionary<string, dynamic>>.Create(Signer.CompareSigners)).ToArray();
+
+            for (int i = 0; i < sorted.Length - 1; i++)
+            {
+                Assert.IsTrue(Signer.CompareSigners(sorted[i], sorted[i + 1]) <= 0);
+            }
+        }
+
+        #endregion
     }
 }

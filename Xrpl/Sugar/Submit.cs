@@ -222,7 +222,7 @@ public static class SubmitSugar
         }
 
         var signed = xrplWallets.Select(c => c.Sign(tx, multisign: true).TxBlob).ToArray();
-        var combined = XrplWallet.CombineMultiSigners(signed);
+        var combined = Signer.Multisign(signed);
         var txRes = XrplBinaryCodec.Decode(combined);
 
         var response = await client.SubmitRequest(combined, failHard: false);
@@ -291,25 +291,9 @@ public static class SubmitSugar
             if (hasSL)
             {
                 var sl = ai.SignerLists[0];
-                var need = sl.SignerQuorum;
-                var candidates = sl.SignerEntries
-                    .Select(se => (addr: se.SignerEntry.Account, w: se.SignerEntry.SignerWeight))
-                    .OrderByDescending(x => x.w)
-                    .ToList();
+                var (picked, sum) = BatchSigningHelper.PickWalletsForQuorum(sl, walletByAddr);
 
-                uint sum = 0;
-                var picked = new List<XrplWallet>();
-                foreach (var (addr, w) in candidates)
-                {
-                    if (walletByAddr.TryGetValue(addr, out var wlt))
-                    {
-                        picked.Add(wlt);
-                        sum += w;
-                        if (sum >= need) break;
-                    }
-                }
-
-                if (sum < need)
+                if (sum < sl.SignerQuorum)
                 {
                     throw new ValidationException($"Not enough signer wallets for multisig account {acct}.");
                 }
@@ -354,24 +338,9 @@ public static class SubmitSugar
         {
             // мультисиг корня: берём из wallets только тех, кто входит в SignerList(main)
             var sl = aiRoot.SignerLists[0];
-            var need = sl.SignerQuorum;
-            var cands = sl.SignerEntries
-                .Select(se => (addr: se.SignerEntry.Account, w: se.SignerEntry.SignerWeight))
-                .OrderByDescending(x => x.w)
-                .ToList();
-            uint sum = 0;
-            var picked = new List<XrplWallet>();
-            foreach (var (addr, w) in cands)
-            {
-                if (walletByAddr.TryGetValue(addr, out var wlt))
-                {
-                    picked.Add(wlt);
-                    sum += w;
-                    if (sum >= need) break;
-                }
-            }
+            var (picked, sum) = BatchSigningHelper.PickWalletsForQuorum(sl, walletByAddr);
 
-            if (sum < need) throw new ValidationException($"Not enough signer wallets for root multisig {mainAcc}.");
+            if (sum < sl.SignerQuorum) throw new ValidationException($"Not enough signer wallets for root multisig {mainAcc}.");
 
             //// корневой мультисиг: обязательно пустой SPK и без TxnSignature
             //combinedJson.Remove("TxnSignature");
@@ -380,7 +349,7 @@ public static class SubmitSugar
             var msBlobs = picked.Select(w => w.Sign(
                 JsonConvert.DeserializeObject<Dictionary<string, dynamic>>(combinedJson.ToString()),
                 multisign: true).TxBlob).ToArray();
-            var msCombined = XrplWallet.CombineMultiSigners(msBlobs);
+            var msCombined = Signer.Multisign(msBlobs);
             //var txRes = XrplBinaryCodec.Decode(msCombined);
 
             var submit = await client.SubmitRequest(msCombined, failHard);

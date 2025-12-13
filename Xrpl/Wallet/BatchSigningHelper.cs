@@ -1,5 +1,4 @@
-﻿using Newtonsoft.Json;
-using Newtonsoft.Json.Linq;
+﻿using Newtonsoft.Json.Linq;
 
 using System;
 using System.Collections.Generic;
@@ -8,10 +7,15 @@ using System.Linq;
 using Xrpl.AddressCodec;
 using Xrpl.BinaryCodec;
 using Xrpl.Client.Exceptions;
+using Xrpl.Models.Ledger;
 using Xrpl.Models.Utils;
 
 namespace Xrpl.Wallet;
 
+/// <summary>
+/// Helper methods for batch transaction signing operations.
+/// For general signer utilities, see <see cref="SignerUtilities"/>.
+/// </summary>
 public static class BatchSigningHelper
 {
     public static byte[] BuildBatchPreimage(JObject batchTx, uint? networkId = null)
@@ -39,23 +43,11 @@ public static class BatchSigningHelper
 
     public static byte[] BuildMultisignPreimage(byte[] batchPreimage, string signerAddress)
     {
-        var signerAccountId = XrplCodec.DecodeAccountID(NormalizeClassicAddress(signerAddress));
+        var signerAccountId = SignerUtilities.GetAccountIdBytes(signerAddress);
         var fullPreimage = new byte[batchPreimage.Length + signerAccountId.Length];
         Buffer.BlockCopy(batchPreimage, 0, fullPreimage, 0, batchPreimage.Length);
         Buffer.BlockCopy(signerAccountId, 0, fullPreimage, batchPreimage.Length, signerAccountId.Length);
         return fullPreimage;
-    }
-
-    public static JArray SortSignersArray(JArray signers)
-    {
-        return new JArray(
-            signers.OrderBy(s =>
-            {
-                var acc = (string?)s["Signer"]?["Account"] ?? "";
-                var accBytes = XrplCodec.DecodeAccountID(NormalizeClassicAddress(acc));
-                return BitConverter.ToString(accBytes);
-            })
-        );
     }
 
     public static JArray SortBatchSigners(JArray batchSigners)
@@ -65,7 +57,7 @@ public static class BatchSigningHelper
             var bs = wrapper["BatchSigner"] as JObject ?? wrapper;
             if (bs["Signers"] is JArray innerSigners && innerSigners.Count > 1)
             {
-                bs["Signers"] = SortSignersArray(innerSigners);
+                bs["Signers"] = SignerUtilities.SortSignersArray(innerSigners);
             }
         }
 
@@ -74,21 +66,20 @@ public static class BatchSigningHelper
             {
                 var bs = b["BatchSigner"] as JObject ?? b as JObject;
                 var acc = (string?)(bs?["Account"]) ?? "";
-                var accBytes = XrplCodec.DecodeAccountID(NormalizeClassicAddress(acc));
-                return BitConverter.ToString(accBytes);
-            })
+                return SignerUtilities.GetAccountIdBytes(acc);
+            }, SignerUtilities.ByteArrayComparer.Instance)
         );
     }
 
     public static JObject FindOrCreateBatchSigner(JArray batchSigners, string ownerAccount)
     {
-        var normalized = NormalizeClassicAddress(ownerAccount);
+        var normalized = SignerUtilities.NormalizeClassicAddress(ownerAccount);
 
         foreach (var wrapper in batchSigners.Children<JObject>())
         {
             var bs = wrapper["BatchSigner"] as JObject ?? wrapper;
             var acc = (string?)bs["Account"];
-            if (string.Equals(NormalizeClassicAddress(acc ?? ""), normalized, StringComparison.OrdinalIgnoreCase))
+            if (string.Equals(SignerUtilities.NormalizeClassicAddress(acc ?? ""), normalized, StringComparison.OrdinalIgnoreCase))
                 return bs;
         }
 
@@ -204,20 +195,92 @@ public static class BatchSigningHelper
         c.Remove("Signers");
         c.Remove("BatchSigners");
         if (c["Account"] is JValue v && v.Type == JTokenType.String)
-            c["Account"] = NormalizeClassicAddress((string)v!);
+            c["Account"] = SignerUtilities.NormalizeClassicAddress((string)v!);
         return c;
     }
 
-    public static string NormalizeClassicAddress(string address)
+    /// <summary>
+    /// Merges an incoming BatchSigner into an existing target BatchSigner.
+    /// Handles both single-sig (SigningPubKey/TxnSignature) and multi-sig (Signers[]) cases.
+    /// Preserves the original wrapper structure of signer entries.
+    /// </summary>
+    public static void MergeBatchSigner(JObject target, JObject incoming)
     {
-        if (string.IsNullOrWhiteSpace(address))
-            return address;
+        var targetSigners = target["Signers"] as JArray;
+        var incomingSigners = incoming["Signers"] as JArray;
 
-        if (!XrplCodec.IsValidClassicAddress(address))
+        if (incomingSigners != null)
         {
-            var x = XrplAddressCodec.XAddressToClassicAddress(address);
-            return x.ClassicAddress;
+            if (targetSigners == null)
+            {
+                target.Remove("SigningPubKey");
+                target.Remove("TxnSignature");
+                targetSigners = new JArray();
+                target["Signers"] = targetSigners;
+            }
+
+            var seen = new HashSet<string>(StringComparer.Ordinal);
+            foreach (var s in targetSigners.Children<JObject>())
+            {
+                var so = s["Signer"] as JObject ?? s;
+                var key = $"{(string?)so["Account"]}|{(string?)so["SigningPubKey"]}|{(string?)so["TxnSignature"]}";
+                seen.Add(key);
+            }
+
+            foreach (var s in incomingSigners.Children<JObject>())
+            {
+                var so = s["Signer"] as JObject ?? s;
+                var key = $"{(string?)so["Account"]}|{(string?)so["SigningPubKey"]}|{(string?)so["TxnSignature"]}";
+                if (seen.Add(key))
+                    targetSigners.Add((JObject)s.DeepClone());
+            }
+            return;
         }
-        return address;
+
+        if (targetSigners != null)
+            return;
+
+        var tPub = (string?)target["SigningPubKey"];
+        var tSig = (string?)target["TxnSignature"];
+        var iPub = (string?)incoming["SigningPubKey"];
+        var iSig = (string?)incoming["TxnSignature"];
+
+        if (string.Equals(tPub, iPub, StringComparison.Ordinal)
+            && string.Equals(tSig, iSig, StringComparison.Ordinal))
+        {
+            return;
+        }
     }
+
+    /// <summary>
+    /// Picks wallets from a dictionary that satisfy the quorum of a SignerList.
+    /// Wallets are selected by descending weight until the quorum is met.
+    /// </summary>
+    /// <returns>A tuple of (selected wallets, total weight achieved)</returns>
+    public static (List<XrplWallet> picked, uint totalWeight) PickWalletsForQuorum(
+        LOSignerList signerList,
+        IDictionary<string, XrplWallet> walletByAddr)
+    {
+        var need = signerList.SignerQuorum;
+        var candidates = signerList.SignerEntries
+            .Select(se => (addr: se.SignerEntry.Account, w: se.SignerEntry.SignerWeight))
+            .OrderByDescending(x => x.w)
+            .ToList();
+
+        uint sum = 0;
+        var picked = new List<XrplWallet>();
+
+        foreach (var (addr, w) in candidates)
+        {
+            if (walletByAddr.TryGetValue(addr, out var wlt))
+            {
+                picked.Add(wlt);
+                sum += w;
+                if (sum >= need) break;
+            }
+        }
+
+        return (picked, sum);
+    }
+
 }

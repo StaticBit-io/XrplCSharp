@@ -91,7 +91,7 @@ public class TestIBatch
         var sig1 = walletMultiSigner_1.Sign(tx, true);
         var stx1 = sig1.GetTx();
         var sig2 = walletMultiSigner_2.Sign(stx1, true);
-        var singed = XrplWallet.CombineMultiSigners([sig1.TxBlob, sig2.TxBlob]);
+        var singed = Signer.Multisign([sig1.TxBlob, sig2.TxBlob]);
         var res = await runner.client.SubmitRequest(singed, true);
         ValidateResult(res);
     }
@@ -463,6 +463,59 @@ public class TestIBatch
     }
 
     #endregion
+
+    #region DuplicateSignaturesTests
+
+    [TestMethod]
+    public async Task TestBatchWithDuplicateSignatures_AreDeduplicated()
+    {
+        var batch = await GetTxForBatchMultiAccounts();
+
+        var sig1 = walletPrimary.Sign(batch);
+        var sig2 = walletSecondary_1.Sign(batch);
+        var sig3 = walletSecondary_2.Sign(batch);
+        var sig1_dup = walletPrimary.Sign(batch);
+        var sig2_dup = walletSecondary_1.Sign(batch);
+
+        var combined = XrplWallet.CombineBatchSigners(new[] { sig1.TxBlob, sig2.TxBlob, sig3.TxBlob, sig1_dup.TxBlob, sig2_dup.TxBlob });
+        var res = await runner.client.SubmitRequest(combined.TxBlob, true);
+        ValidateResult(res);
+    }
+
+    [TestMethod]
+    public async Task TestBatchMultiSign_WithDuplicateSignatures_AreDeduplicated()
+    {
+        var (owner, signer1, signer2, w1, w2, batch) = await GetMultiAccountBatchWithTopMultiSign();
+
+        var sig1 = w1.Sign(batch);
+        var sig2 = w2.Sign(batch);
+        var sig3 = signer1.Sign(batch, true);
+        var sig4 = signer2.Sign(batch, true);
+        var sig3_dup = signer1.Sign(batch, true);
+
+        var combined = XrplWallet.CombineBatchSigners(sig1.TxBlob, sig2.TxBlob, sig3.TxBlob, sig4.TxBlob, sig3_dup.TxBlob);
+        var res = await runner.client.SubmitRequest(combined.TxBlob, true);
+
+        ValidateResult(res);
+    }
+
+    #endregion
+
+    #region NegativeTests
+
+    [TestMethod]
+    public async Task TestBatchMultiAccounts_NoSigners_Fails()
+    {
+        var batch = await GetTxForBatchMultiAccounts();
+
+        await Helper.ThrowsExceptionAsync<ValidationException>(async () =>
+        {
+            await runner.client.SubmitMultiBatch(batch, Array.Empty<XrplWallet>(), true);
+        });
+    }
+
+    #endregion
+
     private static void ValidateResult(Submit res)
     {
         if (res is not { EngineResult: "tesSUCCESS" or "terQUEUED" })
