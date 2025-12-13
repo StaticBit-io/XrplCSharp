@@ -1,4 +1,4 @@
-
+﻿
 // https://github.com/XRPLF/xrpl.js/blob/main/packages/xrpl/src/sugar/utils.ts
 
 using System.Collections.Generic;
@@ -61,4 +61,3 @@ namespace Xrpl.Sugar
     }
 
 }
-

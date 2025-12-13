@@ -1,4 +1,4 @@
-using Org.BouncyCastle.Utilities.Encoders;
+﻿using Org.BouncyCastle.Utilities.Encoders;
 
 public static class ExtensionHelpers
 {

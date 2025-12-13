@@ -393,7 +393,7 @@ namespace Xrpl.Client
         private void SetSettings(ClientOptions options)
         {
             feeCushion = options?.feeCushion ?? 1.2;
-            maxFeeXRP = options?.maxFeeXRP ?? "2";
+            maxFeeXRP = options?.maxFeeXRP;
             networkID = options?.NetworkID;
             ApiVersion = options?.ApiVersion ?? 2;
         }

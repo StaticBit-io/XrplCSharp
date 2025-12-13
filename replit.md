@@ -2,7 +2,7 @@
 
 ## Overview
 
-XrplCSharp is a pure C# implementation for interacting with the XRP Ledger. Its primary purpose is to simplify complex XRP Ledger operations, including serialization, transaction signing, wallet management, and network communication. It provides a comprehensive SDK for building applications on the XRP Ledger using C# and .NET technologies. The library is built on .NET 9.0 and features a modular architecture, enabling developers to integrate specific functionalities as needed.
+XrplCSharp is a pure C# implementation for interacting with the XRP Ledger. Its primary purpose is to simplify complex XRP Ledger operations, including serialization, transaction signing, wallet management, and network communication. It provides a comprehensive SDK for building applications on the XRP Ledger using C# and .NET technologies. The library is built on .NET 10.0 (SDK 10.0.101) and features a modular architecture, enabling developers to integrate specific functionalities as needed.
 
 ## User Preferences
 
