@@ -46,6 +46,13 @@ namespace Xrpl.Models.Common
             /// </summary>
             [JsonProperty("issuer")]
             public string Issuer { get; set; }
+
+            public bool IsXrp()
+            {
+                return Issuer is null;
+            }
+
+            public override string ToString() => $"{Currency.CurrencyReadableName()}";
         }
 
         /// <summary> currency with amount and issuer </summary>
