@@ -10,10 +10,18 @@ namespace Xrpl.Models.Ledger
     [JsonConverter(typeof(LOConverter))]
     public class BaseLedgerEntry
     {
+
         [JsonConverter(typeof(StringEnumConverter))]
         public LedgerEntryType LedgerEntryType { get; set; }
 
+        /// <summary>
+        /// The unique ID for this ledger entry.<br/>
+        /// In JSON, this field is represented with different names depending on the context and API method.<br/>
+        /// (Note, even though this is specified as "optional" in the code, every ledger entry should have one unless it's legacy data from very early in the XRP Ledger's history.)
+        /// </summary>
         [JsonProperty("index")]
         public string Index { get; set; }
+        [JsonProperty("LedgerIndex")]
+        public string LedgerIndex { get; set; }
     }
 }

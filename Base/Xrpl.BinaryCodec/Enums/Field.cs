@@ -78,8 +78,9 @@ namespace Xrpl.BinaryCodec.Enums
         public static readonly Uint8Field CloseResolution = new Uint8Field(nameof(CloseResolution), 1);
         public static readonly Uint8Field Method = new Uint8Field(nameof(Method), 2);
         public static readonly EngineResultField TransactionResult = new EngineResultField(nameof(TransactionResult), 3);
+        public static readonly Uint8Field AssetScale = new Uint8Field(nameof(AssetScale), 5);
         public static readonly Uint8Field TickSize = new Uint8Field(nameof(TickSize), 16);
-        public static readonly Uint8Field UNLModifyDisabling = new Uint8Field(nameof(TickSize), 17);
+        public static readonly Uint8Field UNLModifyDisabling = new Uint8Field(nameof(UNLModifyDisabling), 17);
         public static readonly Uint8Field HookResult = new Uint8Field(nameof(HookResult), 18);
 
         public static readonly LedgerEntryTypeField LedgerEntryType = new LedgerEntryTypeField(nameof(LedgerEntryType), 1);
@@ -162,8 +163,13 @@ namespace Xrpl.BinaryCodec.Enums
         public static readonly Uint64Field HookInstructionCount = new Uint64Field(nameof(HookInstructionCount), 17);
         public static readonly Uint64Field HookReturnCode = new Uint64Field(nameof(HookReturnCode), 18);
         public static readonly Uint64Field ReferenceCount = new Uint64Field(nameof(ReferenceCount), 19);
+        public static readonly Uint64Field MaximumAmount = new Uint64Field(nameof(MaximumAmount), 24);
+        public static readonly Uint64Field OutstandingAmount = new Uint64Field(nameof(OutstandingAmount), 25);
+        public static readonly Uint64Field MPTAmount = new Uint64Field(nameof(MPTAmount), 26);
 
         public static readonly Hash128Field EmailHash = new Hash128Field(nameof(EmailHash), 1);
+
+        public static readonly Hash192Field MPTokenIssuanceID = new Hash192Field(nameof(MPTokenIssuanceID), 1);
         
         public static readonly Hash160Field TakerPaysCurrency = new Hash160Field(nameof(TakerPaysCurrency), 1);
         public static readonly Hash160Field TakerPaysIssuer = new Hash160Field(nameof(TakerPaysIssuer), 2);
@@ -251,6 +257,7 @@ namespace Xrpl.BinaryCodec.Enums
         public static readonly BlobField HookReturnString = new BlobField(nameof(HookReturnString), 23);
         public static readonly BlobField HookParameterName = new BlobField(nameof(HookParameterName), 24);
         public static readonly BlobField HookParameterValue = new BlobField(nameof(HookParameterValue), 25);
+        public static readonly BlobField MPTokenMetadata = new BlobField(nameof(MPTokenMetadata), 30);
 
         public static readonly AccountIdField Account = new AccountIdField(nameof(Account), 1);
         public static readonly AccountIdField Owner = new AccountIdField(nameof(Owner), 2);
@@ -261,7 +268,7 @@ namespace Xrpl.BinaryCodec.Enums
         public static readonly AccountIdField RegularKey = new AccountIdField(nameof(RegularKey), 8);
         public static readonly AccountIdField NFTokenMinter = new AccountIdField(nameof(NFTokenMinter), 9);
         public static readonly AccountIdField EmitCallback = new AccountIdField(nameof(EmitCallback), 10);
-        public static readonly AccountIdField AMMAccount = new AccountIdField(nameof(AMMAccount), 11);
+        public static readonly AccountIdField Holder = new AccountIdField(nameof(Holder), 11);
         public static readonly AccountIdField HookAccount = new AccountIdField(nameof(HookAccount), 16);
 
         public static readonly Vector256Field Indexes = new Vector256Field(nameof(Indexes), 1);

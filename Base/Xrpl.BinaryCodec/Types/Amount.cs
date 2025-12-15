@@ -39,7 +39,7 @@ namespace Xrpl.BinaryCodec.Types
         {
         }
 
-        public void ToBytes(IBytesSink sink)
+        public virtual void ToBytes(IBytesSink sink)
         {
             sink.Put(Value.ToBytes());
             if (!IsNative())
@@ -49,7 +49,7 @@ namespace Xrpl.BinaryCodec.Types
             }
         }
 
-        public JToken ToJson()
+        public virtual JToken ToJson()
         {
             if (this.IsNative())
             {
@@ -73,6 +73,17 @@ namespace Xrpl.BinaryCodec.Types
                 case JTokenType.Integer:
                     return (ulong)token;
                 case JTokenType.Object:
+                    var mptIssuanceId = token["mpt_issuance_id"];
+                    if (mptIssuanceId != null)
+                    {
+                        var mptValue = token["value"];
+                        if (mptValue == null)
+                            throw new InvalidJsonException("MPT Amount object must contain property `value`.");
+                        if (token.Children().Count() > 2)
+                            throw new InvalidJsonException("MPT Amount object has too many properties.");
+                        return new MptAmount((string)mptValue, (string)mptIssuanceId);
+                    }
+
                     if ((string)token["currency"] == "XRP")
                     {
                         return new Amount(token["value"].ToString());
@@ -120,11 +131,38 @@ namespace Xrpl.BinaryCodec.Types
 
         public static Amount FromParser(BinaryParser parser, int? hint = null)
         {
-            var value = AmountValue.FromParser(parser);
-            if (!value.IsIou) return new Amount(value);
-            var curr = Currency.FromParser(parser);
-            var issuer = AccountId.FromParser(parser);
-            return new Amount(value, curr, issuer);
+            var firstByte = parser.Peek();
+            var isIou = (firstByte & 0x80) != 0;
+            
+            if (isIou)
+            {
+                var bytes = parser.Read(48);
+                
+                var valueBytes = new byte[8];
+                System.Array.Copy(bytes, 0, valueBytes, 0, 8);
+                var value = AmountValue.FromParser(new BufferParser(valueBytes));
+                
+                var currBytes = new byte[20];
+                System.Array.Copy(bytes, 8, currBytes, 0, 20);
+                var curr = Currency.FromParser(new BufferParser(currBytes));
+                
+                var issuerBytes = new byte[20];
+                System.Array.Copy(bytes, 28, issuerBytes, 0, 20);
+                var issuer = AccountId.FromParser(new BufferParser(issuerBytes));
+                
+                return new Amount(value, curr, issuer);
+            }
+            
+            var isMpt = (firstByte & 0x20) != 0;
+            if (isMpt)
+            {
+                var bytes = parser.Read(33);
+                return MptAmount.FromBytes(bytes);
+            }
+
+            var bytes8 = parser.Read(8);
+            var xrpValue = AmountValue.FromParser(new BufferParser(bytes8));
+            return new Amount(xrpValue);
         }
 
         public decimal DecimalValue()

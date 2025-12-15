@@ -124,4 +124,11 @@ public interface ITransactionMetadata
     /// Batch ID of the batch that this transaction belongs to, if any.
     /// </summary>
     public string? ParentBatchID { get; set; }
+
+    /// <summary>
+    /// Shows the MPTokenIssuanceID for the MPTokenIssuance that was created by this transaction.
+    /// Only present if the transaction is MPTokenIssuanceCreate.
+    /// </summary>
+    [JsonProperty("mpt_issuance_id")]
+    public string MptIssuanceId { get; set; }
 }
