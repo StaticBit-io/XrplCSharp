@@ -35,25 +35,32 @@ namespace Xrpl.Client.Json.Converters
             {
                 "AccountSet" => new AccountSetResponse(),
                 "AccountDelete" => new AccountDeleteResponse(),
+
                 "CheckCancel" => new CheckCancelResponse(),
                 "CheckCash" => new CheckCashResponse(),
                 "CheckCreate" => new CheckCreateResponse(),
+
                 "DepositPreauth" => new DepositPreauthResponse(),
+
                 "EscrowCancel" => new EscrowCancelResponse(),
                 "EscrowCreate" => new EscrowCreateResponse(),
                 "EscrowFinish" => new EscrowFinishResponse(),
+
                 "NFTokenAcceptOffer" => new NFTokenAcceptOfferResponse(),
                 "NFTokenCancelOffer" => new NFTokenCancelOfferResponse(),
                 "NFTokenBurn" => new NFTokenBurnResponse(),
                 "NFTokenModify" => new NFTokenModifyResponse(),
                 "NFTokenCreateOffer" => new NFTokenCreateOfferResponse(),
                 "NFTokenMint" => new NFTokenMintResponse(),
+
                 "OfferCancel" => new OfferCancelResponse(),
                 "OfferCreate" => new OfferCreateResponse(),
+
                 "Payment" => new PaymentResponse(),
                 "PaymentChannelClaim" => new PaymentChannelClaimResponse(),
                 "PaymentChannelCreate" => new PaymentChannelCreateResponse(),
                 "PaymentChannelFund" => new PaymentChannelFundResponse(),
+
                 "SetRegularKey" => new SetRegularKeyResponse(),
                 "SignerListSet" => new SignerListSetResponse(),
                 "TicketCreate" => new TicketCreateResponse(),
@@ -61,14 +68,22 @@ namespace Xrpl.Client.Json.Converters
                 "EnableAmendment" => new EnableAmendmentResponse(),
                 "SetFee" => new SetFeeResponse(),
                 "UNLModify" => new UNLModifyResponse(),
+
                 "AMMBid" => new AMMBidResponse(),
                 "AMMCreate" => new AMMCreateResponse(),
                 "AMMDelete" => new AMMDeleteResponse(),
                 "AMMDeposit" => new AMMDepositResponse(),
                 "AMMVote" => new AMMVoteResponse(),
                 "AMMWithdraw" => new AMMWithdrawResponse(),
+
                 "Clawback" => new ClawBackResponse(),
+
                 "Batch" => new BatchResponse(),
+
+                "MPTokenAuthorize" => new MPTokenAuthorizeResponse(),
+                "MPTokenIssuanceCreate" => new MPTokenIssuanceCreateResponse(),
+                "MPTokenIssuanceDestroy" => new MPTokenIssuanceDestroyResponse(),
+                "MPTokenIssuanceSet" => new MPTokenIssuanceSetResponse(),
                 //_ => throw new Exception("Can't create transaction type" + transactionType)
                 _ => SetUnknownType(jObject),
             };

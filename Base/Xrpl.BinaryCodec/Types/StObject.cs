@@ -50,6 +50,7 @@ namespace Xrpl.BinaryCodec.Types
                 [FieldType.Uint16] = new BuildFrom(Uint16.FromJson, Uint16.FromParser),
                 [FieldType.Amount] = new BuildFrom(Amount.FromJson, Amount.FromParser),
                 [FieldType.Hash128] = new BuildFrom(Hash128.FromJson, Hash128.FromParser),
+                [FieldType.Hash192] = new BuildFrom(Hash192.FromJson, Hash192.FromParser),
                 [FieldType.Hash256] = new BuildFrom(Hash256.FromJson, Hash256.FromParser),
                 [FieldType.Hash160] = new BuildFrom(Hash160.FromJson, Hash160.FromParser),
                 [FieldType.AccountId] = new BuildFrom(AccountId.FromJson, AccountId.FromParser),
@@ -274,6 +275,16 @@ namespace Xrpl.BinaryCodec.Types
         public Hash160 this[Hash160Field f]
         {
             get { return (Hash160)Fields[f]; }
+            set { Fields[f] = value; }
+        }
+        /// <summary>
+        /// add <see cref="Hash192Field"/> field to this object
+        /// </summary>
+        /// <param name="f"><see cref="Hash192Field"/>field</param>
+        /// <returns></returns>
+        public Hash192 this[Hash192Field f]
+        {
+            get { return (Hash192)Fields[f]; }
             set { Fields[f] = value; }
         }
         /// <summary>

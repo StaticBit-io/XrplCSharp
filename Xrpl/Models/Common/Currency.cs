@@ -7,6 +7,7 @@ using System.Text;
 using System.Text.RegularExpressions;
 
 using Xrpl.Client.Extensions;
+using Xrpl.Models.Methods;
 using Xrpl.Models.Utils;
 using Xrpl.Utils.Hashes;
 
@@ -22,10 +23,24 @@ namespace Xrpl.Models.Common;
 public class Currency
 {
     /// <summary>
-    /// base constructor.<br/>
-    /// base currency code = XRP
+    /// base constructor.
     /// </summary>
     public Currency() { CurrencyCode = "XRP"; }
+
+    /// <summary>
+    /// The ID of the MPT to authorize.
+    /// </summary>
+    [JsonProperty("mpt_issuance_id", NullValueHandling = NullValueHandling.Ignore)]
+    public string MPTokenIssuanceID
+    {
+        get => field;
+
+        set
+        {
+            field = value;
+            CurrencyCode = null;
+        }
+    }
 
     /// <summary>
     /// The standard format for currency codes is a three-character string such as USD.<br/>
@@ -35,7 +50,7 @@ public class Currency
     /// all uppercase and lowercase letters, digits, as well as the symbols ? ! @ # $ % ^ * ( ) { } [ ] | and symbols ampersand, less, greater<br/>
     /// Currency codes are case-sensitive.
     /// </summary>
-    [JsonProperty(propertyName: "currency")]
+    [JsonProperty(propertyName: "currency", NullValueHandling = NullValueHandling.Ignore)]
     public string CurrencyCode { get; set; }
 
     /// <summary>
@@ -44,14 +59,14 @@ public class Currency
     /// Both e and E may be used.<br/>
     /// This can be negative when displaying balances, but negative values are disallowed in other contexts such as specifying how much to send.
     /// </summary>
-    [JsonProperty(propertyName: "value")]
+    [JsonProperty(propertyName: "value", NullValueHandling = NullValueHandling.Ignore)]
     public string Value { get; set; }
 
     /// <summary>
     /// Generally, the account that issues this token.<br/>
     /// In special cases, this can refer to the account that holds the token instead.
     /// </summary>
-    [JsonProperty(propertyName: "issuer")]
+    [JsonProperty(propertyName: "issuer", NullValueHandling = NullValueHandling.Ignore)]
     public string Issuer { get; set; }
 
     /// <summary>
@@ -194,6 +209,12 @@ public class Currency
 
 public static class CurrencyExtensions
 {
+    public static Common.IssuedCurrency ToIssued(this Currency currency) =>
+        new Common.IssuedCurrency()
+        {
+            Currency = currency.CurrencyCode,
+            Issuer = currency.Issuer,
+        };
     /// <summary>
     /// check that currency is NFT XLS14D
     /// </summary>
@@ -222,9 +243,18 @@ public static class CurrencyExtensions
     {
         return currency.CurrencyCode.IsLpToken();
     }
+
+    public static bool IsMPTToken(this Currency currency)
+    {
+        return string.IsNullOrWhiteSpace(currency.MPTokenIssuanceID);
+    }
+    public static bool IsLpToken(this TrustLine currency)
+    {
+        return currency.Currency.IsLpToken();
+    }
     public static bool IsLpToken(this string currencyCode)
     {
-        return currencyCode.IsHexCurrencyCode() && currencyCode.StartsWith("03");
+        return !string.IsNullOrWhiteSpace(currencyCode) && currencyCode.IsHexCurrencyCode() && currencyCode.StartsWith("03");
     }
 
     public static string NormalizeCurrencyCode(this string currencyCode, int maxLength = 20)

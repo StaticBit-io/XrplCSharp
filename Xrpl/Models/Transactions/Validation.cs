@@ -148,6 +148,18 @@ namespace Xrpl.Models.Transactions
                 case "Batch":
                     await ValidateBatch(tx);
                     break;
+                case "MPTokenIssuanceCreate":
+                    await ValidateMPTokenIssuanceCreate(tx);
+                    break;
+                case "MPTokenIssuanceDestroy":
+                    await ValidateMPTokenIssuanceDestroy(tx);
+                    break;
+                case "MPTokenIssuanceSet":
+                    await ValidateMPTokenIssuanceSet(tx);
+                    break;
+                case "MPTokenAuthorize":
+                    await ValidateMPTokenAuthorize(tx);
+                    break;
                 default:
                     throw new ValidationException($"Invalid field TransactionType: {type}");
             }

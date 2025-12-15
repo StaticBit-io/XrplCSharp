@@ -33,25 +33,32 @@ public class TransactionRequestConverter : JsonConverter
         {
             "AccountSet" => new AccountSet(),
             "AccountDelete" => new AccountDelete(),
+
             "CheckCancel" => new CheckCancel(),
             "CheckCash" => new CheckCash(),
             "CheckCreate" => new CheckCreate(),
+
             "DepositPreauth" => new DepositPreauth(),
+
             "EscrowCancel" => new EscrowCancel(),
             "EscrowCreate" => new EscrowCreate(),
             "EscrowFinish" => new EscrowFinish(),
+
             "NFTokenAcceptOffer" => new NFTokenAcceptOffer(),
             "NFTokenCancelOffer" => new NFTokenCancelOffer(),
             "NFTokenBurn" => new NFTokenBurn(),
             "NFTokenCreateOffer" => new NFTokenCreateOffer(),
             "NFTokenMint" => new NFTokenMint(),
             "NFTokenModify" => new NFTokenModify(),
+
             "OfferCancel" => new OfferCancel(),
             "OfferCreate" => new OfferCreate(),
+
             "Payment" => new Payment(),
             "PaymentChannelClaim" => new PaymentChannelClaim(),
             "PaymentChannelCreate" => new PaymentChannelCreate(),
             "PaymentChannelFund" => new PaymentChannelFund(),
+
             "SetRegularKey" => new SetRegularKey(),
             "SignerListSet" => new SignerListSet(),
             "TicketCreate" => new TicketCreate(),
@@ -59,14 +66,22 @@ public class TransactionRequestConverter : JsonConverter
             "EnableAmendment" => new EnableAmendment(),
             "SetFee" => new SetFee(),
             "UNLModify" => new UNLModify(),
+
             "AMMBid" => new AMMBid(),
             "AMMCreate" => new AMMCreate(),
             "AMMDelete" => new AMMDelete(),
             "AMMDeposit" => new AMMDeposit(),
             "AMMVote" => new AMMVote(),
             "AMMWithdraw" => new AMMWithdraw(),
+
             "Clawback" => new ClawBack(),
+
             "Batch" => new Batch(),
+
+            "MPTokenAuthorize" => new MPTokenAuthorize(),
+            "MPTokenIssuanceCreate" => new MPTokenIssuanceCreate(),
+            "MPTokenIssuanceDestroy" => new MPTokenIssuanceDestroy(),
+            "MPTokenIssuanceSet" => new MPTokenIssuanceSet(),
             //_ => throw new Exception("Can't create transaction type" + transactionType)
             _ => SetUnknownType(jObject),
         };

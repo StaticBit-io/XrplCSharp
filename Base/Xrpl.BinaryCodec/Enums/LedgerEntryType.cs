@@ -26,6 +26,11 @@ namespace Xrpl.BinaryCodec.Enums
         public static readonly LedgerEntryType Ticket = Add(nameof(Ticket), 'T');
         public static readonly LedgerEntryType SignerList = Add(nameof(SignerList), 'S');
 
+        /// <summary>Represents an MPT issuance object in the ledger.</summary>
+        public static readonly LedgerEntryType MPTokenIssuance = Add(nameof(MPTokenIssuance), 126);
+        /// <summary>Represents an MPT holder object in the ledger.</summary>
+        public static readonly LedgerEntryType MPToken = Add(nameof(MPToken), 127);
+
         public static LedgerEntryType FromJson(JToken jToken)
         {
             return Values.FromJson(jToken);

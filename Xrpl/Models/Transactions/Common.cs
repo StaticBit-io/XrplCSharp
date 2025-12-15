@@ -414,6 +414,13 @@ namespace Xrpl.Models.Transactions
         public string? ParentBatchID { get; set; }
 
         /// <summary>
+        /// Shows the MPTokenIssuanceID for the MPTokenIssuance that was created by this transaction.
+        /// Only present if the transaction is MPTokenIssuanceCreate.
+        /// </summary>
+        [JsonProperty("mpt_issuance_id")]
+        public string MptIssuanceId { get; set; }
+
+        /// <summary>
         /// (Omitted for non-Payment transactions) The Currency Amount actually received by the Destination account.<br/>
         /// Use this field to determine how much was delivered, regardless of whether the transaction is a partial payment.<br/>
         /// See this description for details.

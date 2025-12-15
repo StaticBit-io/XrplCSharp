@@ -89,6 +89,22 @@ namespace Xrpl.Client
         /// <param name="request">An <see cref="ServerStateRequest"/> request.</param>
         /// <returns>A <see cref="ServerState"/> response.</returns>
         Task<ServerState> ServerState(ServerStateRequest request);
+
+        /// <summary>
+        /// The feature command returns information about amendments this server knows about,<br/>
+        /// including whether they are enabled and if the server knows how to apply the amendments.<br/><br/>
+        /// 
+        /// This is the non-admin version of the feature admin command.<br/>
+        /// It follows the same formatting as the admin command, but hides potentially sensitive data.
+        /// </summary>
+        /// <param name="feature">
+        /// (Optional) The unique ID of an amendment, as hexadecimal;<br/>
+        /// or the short name of the amendment.<br/>
+        /// If provided, limits the response to one amendment. Otherwise, the response lists all amendments.
+        /// </param>
+        /// <returns>A <see cref="ServerFeatures"/> response. Feature and their states</returns>
+        Task<ServerFeatures> ServerFeatures(string feature = null);
+
         /// <summary> The fee command reports the current state of the open-ledger requirements for the transaction cost. </summary>
         /// <param name="request">An <see cref="FeeRequest"/> request.</param>
         /// <returns>An <see cref="Models.Methods.Fee"/> response.</returns>
@@ -674,14 +690,25 @@ namespace Xrpl.Client
         //    return this.GRequest<object, PingRequest>(request);
         //}
 
+        /// <inheritdoc />
         public Task<ServerInfo> ServerInfo(ServerInfoRequest request)
         {
             return this.GRequest<ServerInfo, ServerInfoRequest>(request);
         }
 
+        /// <inheritdoc />
         public Task<ServerState> ServerState(ServerStateRequest request)
         {
             return this.GRequest<ServerState, ServerStateRequest>(request);
+        }
+        /// <inheritdoc />
+        public Task<ServerFeatures> ServerFeatures(string feature = null)
+        {
+            var request = new ServerFeaturesRequest()
+            {
+                Feature = feature
+            };
+            return this.GRequest<ServerFeatures, ServerFeaturesRequest>(request);
         }
 
         /// <inheritdoc />

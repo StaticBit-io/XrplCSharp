@@ -3,20 +3,18 @@
 using Newtonsoft.Json;
 
 using System.Diagnostics;
-using System.Security.Cryptography.X509Certificates;
 
-using Xrpl.BinaryCodec;
 using Xrpl.Client;
 using Xrpl.Client.Exceptions;
 using Xrpl.Models;
-using Xrpl.Models.Common;
 using Xrpl.Models.Ledger;
 using Xrpl.Models.Methods;
 using Xrpl.Models.Subscriptions;
 using Xrpl.Models.Transactions;
-using Xrpl.Models.Utils;
 using Xrpl.Sugar;
 using Xrpl.Wallet;
+
+using Currency = Xrpl.Models.Common.Currency;
 
 namespace MyApp;
 
@@ -28,7 +26,8 @@ internal class Program
     {
         testNet,
         devNet,
-        mainNet
+        mainNet,
+        standalone,
     }
     static XrplWallet walletPrimary = XrplWallet.FromNormalizedText("primary test account");
     static XrplWallet walletSecondary_1 = XrplWallet.FromNormalizedText("secondary test account 1");
@@ -44,7 +43,15 @@ internal class Program
         //TestWalletFromText();
         try
         {
-            await InitTestData(TestDataType.devNet);
+            await InitTestData(TestDataType.standalone);
+
+            var features = await client.ServerFeatures();
+            var canBe = features.GetCanBeEnabled();
+            var mpts = features.GetByNameContains("mpt");
+            foreach (var mpt in canBe)
+            {
+                Console.WriteLine(mpt.Value.Name);
+            }
 
             //await Simulate();
             //await MultiSignTest();
@@ -71,6 +78,7 @@ internal class Program
             TestDataType.testNet => new XrplClient("wss://s.altnet.rippletest.net:51233"),
             TestDataType.devNet => new XrplClient("wss://s.devnet.rippletest.net:51233"),
             TestDataType.mainNet => new XrplClient("wss://s1.ripple.com"),
+            TestDataType.standalone => new XrplClient($"ws://localhost:6006"),
             _ => throw new ArgumentOutOfRangeException(nameof(serverType), serverType, null)
         };
 
@@ -91,7 +99,14 @@ internal class Program
         };
         await client.Connect();
 
-        //await TryFillAccounts(walletPrimary, walletSecondary_1, walletSecondary_2, walletMultiSign, walletMultiSigner_1, walletMultiSigner_2, walletRegularKey, walletRegularKey_signer);
+        if (serverType == TestDataType.standalone)
+        {
+            await StandAloneUtils.FundAccount(client, walletPrimary, walletSecondary_1, walletSecondary_2, walletMultiSign, walletMultiSigner_1, walletMultiSigner_2, walletRegularKey, walletRegularKey_signer);
+        }
+        else if(client.Url().Contains("test"))
+        {
+            await TryFillAccounts(walletPrimary, walletSecondary_1, walletSecondary_2, walletMultiSign, walletMultiSigner_1, walletMultiSigner_2, walletRegularKey, walletRegularKey_signer);
+        }
     }
 
     private static async Task TryFillAccounts(params XrplWallet[] wallets)

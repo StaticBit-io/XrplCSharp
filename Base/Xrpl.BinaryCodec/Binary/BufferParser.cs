@@ -31,7 +31,7 @@ namespace Xrpl.BinaryCodec.Binary
         public byte[] ToBytes() => Bytes;
 
         /// <inheritdoc />
-        public override byte Peek() => Bytes[0];
+        public override byte Peek() => Bytes[Cursor];
 
         /// <inheritdoc />
         public override void Skip(int n) => Cursor += n;

@@ -109,7 +109,27 @@
         /// </summary>
         Unknown,
 
-        Batch
+        Batch,
+
+        /// <summary>
+        /// The MPTokenIssuanceCreate transaction creates an MPTokenIssuance object.
+        /// </summary>
+        MPTokenIssuanceCreate,
+
+        /// <summary>
+        /// The MPTokenIssuanceDestroy transaction removes an MPTokenIssuance object.
+        /// </summary>
+        MPTokenIssuanceDestroy,
+
+        /// <summary>
+        /// The MPTokenIssuanceSet transaction is used to globally lock/unlock an MPTokenIssuance.
+        /// </summary>
+        MPTokenIssuanceSet,
+
+        /// <summary>
+        /// The MPTokenAuthorize transaction authorizes an account to hold an MPT.
+        /// </summary>
+        MPTokenAuthorize
     }
 }
 

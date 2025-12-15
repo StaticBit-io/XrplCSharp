@@ -89,6 +89,15 @@ namespace Xrpl.BinaryCodec.Types
         public static readonly TransactionType AMMBid = Add(nameof(AMMBid), 39);
         public static readonly TransactionType AMMDelete = Add(nameof(AMMDelete), 40);
 
+        /// <summary>This transaction creates a new Multi-Purpose Token (MPT) issuance.</summary>
+        public static readonly TransactionType MPTokenIssuanceCreate = Add(nameof(MPTokenIssuanceCreate), 54);
+        /// <summary>This transaction destroys an existing MPT issuance.</summary>
+        public static readonly TransactionType MPTokenIssuanceDestroy = Add(nameof(MPTokenIssuanceDestroy), 55);
+        /// <summary>This transaction modifies settings of an existing MPT issuance.</summary>
+        public static readonly TransactionType MPTokenIssuanceSet = Add(nameof(MPTokenIssuanceSet), 56);
+        /// <summary>This transaction authorizes or unauthorizes a holder for an MPT.</summary>
+        public static readonly TransactionType MPTokenAuthorize = Add(nameof(MPTokenAuthorize), 57);
+
         /// <summary>
         /// Batch Transactions let you package multiple transactions together and execute them as a single unit.<br/>
         /// It eliminates the risk of partial completion and unexpected outcomes,<br/>
