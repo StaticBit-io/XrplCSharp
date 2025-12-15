@@ -22,7 +22,7 @@ namespace Xrpl.Models.Methods
         /// A map of account flags parsed out.  This will only be available for rippled nodes 1.11.0 and higher.
         /// </summary>
         [JsonProperty("account_flags")]
-        public AccountInfoAccountFlags? AccountFlags { get; set; }
+        public AccountInfoAccountFlags AccountFlags { get; set; }
         /// <summary>
         /// If requested, array of SignerList ledger objects associated with this account for Multi-Signing.
         ///Since an account can own at most one SignerList, this array must have exactly one
@@ -55,8 +55,6 @@ namespace Xrpl.Models.Methods
         /// </summary>
         [JsonProperty("validated")]
         public bool Validated { get; set; }
-
-        //todo not found fields - signer_lists?: SignerList[],  ledger_index?: number,
     }
 
     //https://github.com/XRPLF/xrpl.js/blob/b20c05c3680d80344006d20c44b4ae1c3b0ffcac/packages/xrpl/src/models/methods/accountInfo.ts#L42

@@ -7,6 +7,7 @@ using System.Text;
 using System.Text.RegularExpressions;
 
 using Xrpl.Client.Extensions;
+using Xrpl.Models.Methods;
 using Xrpl.Models.Utils;
 using Xrpl.Utils.Hashes;
 
@@ -194,6 +195,12 @@ public class Currency
 
 public static class CurrencyExtensions
 {
+    public static Common.IssuedCurrency ToIssued(this Currency currency) =>
+        new Common.IssuedCurrency()
+        {
+            Currency = currency.CurrencyCode,
+            Issuer = currency.Issuer,
+        };
     /// <summary>
     /// check that currency is NFT XLS14D
     /// </summary>
@@ -221,6 +228,10 @@ public static class CurrencyExtensions
     public static bool IsLpToken(this Currency currency)
     {
         return currency.CurrencyCode.IsLpToken();
+    }
+    public static bool IsLpToken(this TrustLine currency)
+    {
+        return currency.Currency.IsLpToken();
     }
     public static bool IsLpToken(this string currencyCode)
     {
