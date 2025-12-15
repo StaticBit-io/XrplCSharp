@@ -347,6 +347,8 @@ internal sealed class FeeTestClient : IXrplClient
         return Task.FromResult(state);
     }
 
+    public Task<ServerFeatures> ServerFeatures(string feature = null) => throw new NotImplementedException();
+
     public Task<uint> GetLedgerIndex() => Task.FromResult(100u);
     public Task<string> GetXrpBalance(string address) => throw new NotSupportedException();
 
