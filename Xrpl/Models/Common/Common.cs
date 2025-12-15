@@ -63,13 +63,26 @@ namespace Xrpl.Models.Common
             public string Value { get; set; }
         }
 
+        /// <summary>
+        /// Represents a Multi-Purpose Token (MPT) currency identifier.
+        /// </summary>
         public class MPTCurrency
         {
+            /// <summary>
+            /// The unique identifier for the MPT issuance.
+            /// </summary>
             [JsonProperty("mpt_issuance_id")]
             public string MptIssuanceId { get; set; }
         }
-        public class MPTAmount: MPTCurrency
+
+        /// <summary>
+        /// Represents a Multi-Purpose Token (MPT) amount with value.
+        /// </summary>
+        public class MPTAmount : MPTCurrency
         {
+            /// <summary>
+            /// The amount of MPT tokens.
+            /// </summary>
             [JsonProperty("value")]
             public string Value { get; set; }
         }

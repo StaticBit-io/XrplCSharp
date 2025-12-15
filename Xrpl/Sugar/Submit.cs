@@ -524,36 +524,7 @@ public static class SubmitSugar
     /// </summary>
     /// <param name="transaction">tx</param>
     /// <returns></returns>
-    public static uint? GetLastLedgerSequence(object transaction)
-    {
-        if (transaction is Dictionary<string, dynamic> { } tx)
-        {
-            return tx.TryGetValue(key: "LastLedgerSequence", value: out var LastLedgerSequence) &&
-                   LastLedgerSequence is uint
-                ? LastLedgerSequence
-                : null;
-        }
-        else if (transaction is TransactionRequest txc)
-        {
-            return txc.LastLedgerSequence;
-        }
-        else if (transaction is JObject j)
-        {
-            return j.TryGetValue("LastLedgerSequence", out var token)
-                ? token.Value<uint?>()
-                : null;
-        }
-        else
-        {
-            var ob = XrplBinaryCodec.Encode(transaction);
-            var json = JObject.Parse($"{ob}");
-
-            return json.TryGetValue(propertyName: "LastLedgerSequence", value: out var LastLedgerSequence) &&
-                   uint.TryParse(s: LastLedgerSequence.ToString(), result: out var seq)
-                ? seq
-                : null;
-        }
-    }
+    public static uint? GetLastLedgerSequence(object transaction) => LedgerSequenceHelper.GetLastLedgerSequence(transaction);
 
     /// <summary>
     /// checks if the transaction is an AccountDelete transaction

@@ -19,7 +19,16 @@ namespace Xrpl.Client.Json.Converters
         {
             if (value is Currency currency)
             {
-                if (currency.CurrencyCode == "XRP")
+                if (!string.IsNullOrEmpty(currency.MPTokenIssuanceID))
+                {
+                    var mptObject = new JObject
+                    {
+                        ["mpt_issuance_id"] = currency.MPTokenIssuanceID,
+                        ["value"] = currency.Value
+                    };
+                    mptObject.WriteTo(writer);
+                }
+                else if (currency.CurrencyCode == "XRP" || string.IsNullOrEmpty(currency.CurrencyCode))
                 {
                     writer.WriteValue(currency.Value);
                 }
@@ -44,18 +53,30 @@ namespace Xrpl.Client.Json.Converters
         public override object ReadJson(JsonReader reader, Type objectType, object existingValue,
             JsonSerializer serializer)
         {
-            return reader.TokenType switch
+            switch (reader.TokenType)
             {
-                JsonToken.Null => null,
-                JsonToken.String => new Currency
-                {
-                    CurrencyCode = "XRP",
-                    Value = reader.Value?.ToString()
-                },
-
-                JsonToken.StartObject => serializer.Deserialize<Currency>(reader),
-                _ => throw new NotSupportedException("Cannot convert value " + objectType)
-            };
+                case JsonToken.Null:
+                    return null;
+                case JsonToken.String:
+                    return new Currency
+                    {
+                        CurrencyCode = "XRP",
+                        Value = reader.Value?.ToString()
+                    };
+                case JsonToken.StartObject:
+                    var jObject = JObject.Load(reader);
+                    if (jObject.ContainsKey("mpt_issuance_id"))
+                    {
+                        return new Currency
+                        {
+                            MPTokenIssuanceID = jObject["mpt_issuance_id"]?.ToString(),
+                            Value = jObject["value"]?.ToString()
+                        };
+                    }
+                    return jObject.ToObject<Currency>();
+                default:
+                    throw new NotSupportedException("Cannot convert value " + objectType);
+            }
         }
         /// <summary> Can convert object to currency </summary>
         /// <param name="objectType">object type</param>

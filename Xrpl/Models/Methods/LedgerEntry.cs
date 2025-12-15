@@ -19,7 +19,9 @@ namespace Xrpl.Models.Methods
         [EnumMember(Value = "offer")]
         Offer,
         [EnumMember(Value = "ripple_state")]
-        RippleState
+        RippleState,
+        [EnumMember(Value = "mptoken")]
+        MPToken
     }
     /// <summary>
     /// The `ledger_entry` method returns a single ledger object from the XRP Ledger  in its raw format.<br/>
@@ -27,9 +29,9 @@ namespace Xrpl.Models.Methods
     /// </summary>
     /// <code>
     ///  ```ts  const ledgerEntry: LedgerEntryRequest ={
-    /// 	command: "ledger_entry",
-    /// 	ledger_index: 60102302,
-    /// 	index: "7DB0788C020F02780A673DC74757F23823FA3014C1866E72CC4CD8B226CD6EF4"}
+    ///         command: "ledger_entry",
+    ///         ledger_index: 60102302,
+    ///         index: "7DB0788C020F02780A673DC74757F23823FA3014C1866E72CC4CD8B226CD6EF4"}
     /// ```
     /// </code>
     public class LedgerEntryRequest : BaseLedgerRequest
@@ -73,7 +75,33 @@ namespace Xrpl.Models.Methods
         [JsonProperty("binary")]
         public bool? Binary { get; set; }
 
+        /// <summary>
+        /// Object specifying the MPToken object to retrieve.<br/>
+        /// The mpt_issuance_id and account sub-fields are required.
+        /// </summary>
+        [JsonProperty("mptoken")]
+        public MPTokenQuery MPToken { get; set; }
+
         //todo not found fields -  directory?:, offer?:, check?: string, escrow?:, payment_channel?: string,  deposit_preauth?:, ticket?:
+    }
+
+    /// <summary>
+    /// Object specifying the MPToken object to retrieve.<br/>
+    /// The mpt_issuance_id and account sub-fields are required.
+    /// </summary>
+    public class MPTokenQuery
+    {
+        /// <summary>
+        /// The MPTokenIssuanceID of the MPT.
+        /// </summary>
+        [JsonProperty("mpt_issuance_id")]
+        public string MPTokenIssuanceID { get; set; }
+
+        /// <summary>
+        /// The account address of the MPT holder.
+        /// </summary>
+        [JsonProperty("account")]
+        public string Account { get; set; }        
     }
 
     /// <summary>
