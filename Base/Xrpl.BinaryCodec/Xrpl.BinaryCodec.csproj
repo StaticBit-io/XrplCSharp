@@ -13,7 +13,7 @@
     <PackageLicenseUrl>https://github.com/Transia-RnD/XrplCSharp/LICENSE</PackageLicenseUrl>
     <PackageProjectUrl>https://github.com/Transia-RnD/XrplCSharp</PackageProjectUrl>
     <Title>XrplCSharp</Title>
-    <PackageVersion>9.6.0-MPToken</PackageVersion>
+    <PackageVersion>9.6.1-MPToken</PackageVersion>
   </PropertyGroup>
 
   <PropertyGroup>
