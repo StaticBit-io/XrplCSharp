@@ -16,9 +16,9 @@
     <PackageVersion>9.0.0-beta</PackageVersion>
   </PropertyGroup>
 
-  <PropertyGroup Condition=" '$(Configuration)|$(Platform)' == 'Debug|AnyCPU' ">
+  <PropertyGroup>
     <WarningLevel>4</WarningLevel>
-    <DocumentationFile>bin\Debug\net9.0\XrplCSharp.xml</DocumentationFile>
+    <GenerateDocumentationFile>true</GenerateDocumentationFile>
   </PropertyGroup>
   <ItemGroup>
     <PackageReference Include="Newtonsoft.Json" Version="13.0.3" />

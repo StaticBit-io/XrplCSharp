@@ -3,11 +3,14 @@ using System.Linq;
 
 using Xrpl.Models;
 using Xrpl.Models.Common;
-using Xrpl.Models.Ledger; // Contains Balance, IssuedCurrencyAmount
+using Xrpl.Models.Ledger;
 using Xrpl.Models.Transactions;
+
+// Contains Balance, IssuedCurrencyAmount
+
 // https://github.com/XRPLF/xrpl.js/blob/main/packages/xrpl/test/utils/getBalanceChanges.ts
 
-namespace XrplTests.Xrpl.Utils;
+namespace Xrpl.Utils;
 
 /// <summary>
 /// Utilities for computing balance changes (XRP and issued currencies)

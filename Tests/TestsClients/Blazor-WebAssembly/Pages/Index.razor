@@ -9,13 +9,35 @@
 
 <div style="margin: 20px 0;">
     <h3>Connection Status</h3>
+    @{
+        var stateColor = CurrentConnectionState switch
+        {
+            XrpConnectionState.Connected => "#28a745",
+            XrpConnectionState.Connecting => "#17a2b8",
+            XrpConnectionState.RestoringConnection => "#ffc107",
+            XrpConnectionState.Disconnected => "#dc3545",
+            _ => "#6c757d"
+        };
+        var stateIcon = CurrentConnectionState switch
+        {
+            XrpConnectionState.Connected => "&#10003;",
+            XrpConnectionState.Connecting => "&#8635;",
+            XrpConnectionState.RestoringConnection => "&#8634;",
+            XrpConnectionState.Disconnected => "&#10007;",
+            _ => "?"
+        };
+    }
+    <div style="display: flex; align-items: center; gap: 10px; padding: 10px; background: @stateColor; color: white; border-radius: 5px; font-weight: bold;">
+        <span style="font-size: 20px;">@((MarkupString)stateIcon)</span>
+        <span>@CurrentConnectionState</span>
+    </div>
     @if (IsConnected)
     {
-        <p style="color: green; font-weight: bold;">✓ Connected to XRPL</p>
+        <p style="color: green; font-weight: bold; margin-top: 10px;">Connected to XRPL</p>
     }
     else
     {
-        <p style="color: red; font-weight: bold;">✗ Not connected to XRPL</p>
+        <p style="color: red; font-weight: bold; margin-top: 10px;">Not connected to XRPL</p>
     }
     <p style="color: #666; font-size: 14px; margin-top: 5px;">
         <strong>Current Server:</strong> @CurrentServerUrl
@@ -155,6 +177,7 @@
 @code
 {
     bool IsConnected { get; set; }
+    XrpConnectionState CurrentConnectionState { get; set; } = XrpConnectionState.Disconnected;
     List<StatusMessage> ConnectionStatusMessages { get; set; } = new List<StatusMessage>();
     string AccountAddress { get; set; } = "rN7n7otQDd6FczFgLdlqtyMVrn3VqhBqy2";
     bool IsLoading { get; set; }
@@ -260,9 +283,11 @@
                 };
                 
                 CurrentReconnectInfo = statusInfo.Reconnect;
+                CurrentConnectionState = statusInfo.ConnectionState;
+                IsConnected = statusInfo.ConnectionState == XrpConnectionState.Connected;
                 
-                AddStatusMessage(statusInfo.Message, type);
-                Console.WriteLine($"Connection Status: {statusInfo.Message}");
+                AddStatusMessage($"[{statusInfo.ConnectionState}] {statusInfo.Message}", type);
+                Console.WriteLine($"Connection Status: [{statusInfo.ConnectionState}] {statusInfo.Message}");
                 StateHasChanged();
             });
         };
@@ -322,6 +347,7 @@
         client.connection.OnServerWarning += _onWarning2Handler;
         
         CurrentServerUrl = client.connection.GetUrl();
+        CurrentConnectionState = client.connection.CurrentConnectionState;
         
         await base.OnInitializedAsync();
         
@@ -331,6 +357,7 @@
         {
             IsConnected = true;
             CurrentServerUrl = client.connection.GetUrl();
+            CurrentConnectionState = client.connection.CurrentConnectionState;
             StateHasChanged();
         }
     }

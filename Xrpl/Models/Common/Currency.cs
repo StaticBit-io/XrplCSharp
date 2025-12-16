@@ -22,6 +22,8 @@ namespace Xrpl.Models.Common;
 /// </summary>
 public class Currency
 {
+    private string _mpTokenIssuanceId;
+
     /// <summary>
     /// base constructor.
     /// </summary>
@@ -33,11 +35,11 @@ public class Currency
     [JsonProperty("mpt_issuance_id", NullValueHandling = NullValueHandling.Ignore)]
     public string MPTokenIssuanceID
     {
-        get => field;
+        get => _mpTokenIssuanceId;
 
         set
         {
-            field = value;
+            _mpTokenIssuanceId = value;
             CurrencyCode = null;
         }
     }
