@@ -23,6 +23,14 @@ namespace Xrpl.Client
         WaitForConnection
     }
 
+    public enum XrpConnectionState
+    {
+        Disconnected,
+        Connecting,
+        Connected,
+        RestoringConnection
+    }
+
     public class ReconnectInfo
     {
         public int CurrentAttempt { get; set; }
@@ -35,6 +43,7 @@ namespace Xrpl.Client
         public string Message { get; set; }
         public ConnectionCloseSeverity Severity { get; set; }
         public ReconnectInfo? Reconnect { get; set; }
+        public XrpConnectionState ConnectionState { get; set; }
     }
 
     public class Connection
@@ -117,7 +126,7 @@ namespace Xrpl.Client
             /// </summary>
             /// <remarks>Set this property to limit how many reconnection attempts are made before
             /// giving up. A value of 0 disables automatic reconnection.</remarks>
-            public int MaxReconnectAttempts { get; set; } = 10;
+            public int MaxReconnectAttempts { get; set; } = 5;
 
             /// <summary>
             /// Gets or sets a value indicating whether the operation should stop after reaching the maximum number of
@@ -126,7 +135,7 @@ namespace Xrpl.Client
             /// <remarks>Set this property to <see langword="true"/> to prevent further retries once
             /// the maximum attempt count is reached. If set to <see langword="false"/>, the operation may continue
             /// beyond the maximum attempts, depending on the retry policy.</remarks>
-            public bool StopAfterMaxAttempts { get; set; } = false;
+            public bool StopAfterMaxAttempts { get; set; } = true;
 
             /// <summary>
             /// Gets or sets a value indicating whether to use a custom ping<br/>
@@ -210,6 +219,39 @@ namespace Xrpl.Client
         private Timer? pingTimer = null;
         private WebSocketClient? _userInitiatedSocket = null;
         private volatile bool _permanentlyDisconnected = false;
+        private volatile XrpConnectionState _currentConnectionState = XrpConnectionState.Disconnected;
+
+        public XrpConnectionState CurrentConnectionState => _currentConnectionState;
+
+        private XrpConnectionState _previousNotifiedState = XrpConnectionState.Disconnected;
+        private string _previousNotifiedMessage = string.Empty;
+        
+        private void SetConnectionState(XrpConnectionState newState, string message, ConnectionCloseSeverity severity = ConnectionCloseSeverity.Info, ReconnectInfo? reconnect = null)
+        {
+            var previousState = _currentConnectionState;
+            _currentConnectionState = newState;
+            
+            bool stateChanged = previousState != newState;
+            bool hasReconnectInfo = reconnect != null;
+            bool messageChanged = _previousNotifiedMessage != message;
+            bool isRestoringConnection = newState == XrpConnectionState.RestoringConnection;
+            
+            if (!stateChanged && !hasReconnectInfo && !(isRestoringConnection && messageChanged))
+            {
+                return;
+            }
+            
+            _previousNotifiedState = newState;
+            _previousNotifiedMessage = message;
+            
+            OnConnectionStatus?.Invoke(new ConnectionStatusInfo
+            {
+                Message = message,
+                Severity = severity,
+                Reconnect = reconnect,
+                ConnectionState = newState
+            });
+        }
 
         public ConnectionOptions config { get; private set; }
         public RequestManager requestManager = new RequestManager();
@@ -314,7 +356,13 @@ namespace Xrpl.Client
 
         public async Task Connect(CancellationToken cancellationToken)
         {
+            if (IsConnected())
+            {
+                SetConnectionState(XrpConnectionState.Connected, $"Already connected to {url}");
+                return;
+            }
             StopReconnectLoop();
+            SetConnectionState(XrpConnectionState.Connecting, $"Connecting to {url}...");
             await ConnectInternalAsync();
             await WaitForConnectionAsync(config.ConnectionAcquisitionTimeout, cancellationToken);
         }
@@ -423,12 +471,7 @@ namespace Xrpl.Client
 
             if (userInitiated)
             {
-                OnConnectionStatus?.Invoke(new ConnectionStatusInfo
-                {
-                    Message = "Connection closed permanently. " + error.Message,
-                    Severity = ConnectionCloseSeverity.Info,
-                    Reconnect = null
-                });
+                SetConnectionState(XrpConnectionState.Disconnected, "Connection closed permanently. " + error.Message);
                 if (OnDisconnect is not null)
                     await OnDisconnect?.Invoke(null, error.Message)!;
 
@@ -436,12 +479,7 @@ namespace Xrpl.Client
             }
 
             var errorMessage = $"Initial connection failed: {error.Message}";
-            OnConnectionStatus?.Invoke(new ConnectionStatusInfo
-            {
-                Message = errorMessage,
-                Severity = ConnectionCloseSeverity.Error,
-                Reconnect = null
-            });
+            SetConnectionState(XrpConnectionState.Disconnected, errorMessage, ConnectionCloseSeverity.Error);
 
             if (!wasOpen)
             {
@@ -552,12 +590,7 @@ namespace Xrpl.Client
                 this.connectionManager.ResolveAllAwaiting();
                 if (OnConnected is not null)
                     await this.OnConnected?.Invoke();
-                OnConnectionStatus?.Invoke(new ConnectionStatusInfo
-                {
-                    Message = $"Connected {url}",
-                    Severity = ConnectionCloseSeverity.Info,
-                    Reconnect = null
-                });
+                SetConnectionState(XrpConnectionState.Connected, $"Connected {url}");
             }
             catch (Exception error)
             {
@@ -596,35 +629,20 @@ namespace Xrpl.Client
             {
                 _reconnectAttempts = 0;
                 var noReconnectMessage = $"Connection closed permanently. {userMessage}";
-                OnConnectionStatus?.Invoke(new ConnectionStatusInfo
-                {
-                    Message = noReconnectMessage,
-                    Severity = ConnectionCloseSeverity.Warning,
-                    Reconnect = null
-                });
+                SetConnectionState(XrpConnectionState.Disconnected, noReconnectMessage, ConnectionCloseSeverity.Warning);
                 return;
             }
 
             if (ShouldReconnect(code) || code == 1000)
             {
-                OnConnectionStatus?.Invoke(new ConnectionStatusInfo
-                {
-                    Message = userMessage,
-                    Severity = severity,
-                    Reconnect = null
-                });
+                SetConnectionState(XrpConnectionState.RestoringConnection, userMessage, severity);
                 StartReconnectLoop();
             }
             else
             {
                 _reconnectAttempts = 0;
                 var noReconnectMessage = $"Connection closed permanently. {userMessage}";
-                OnConnectionStatus?.Invoke(new ConnectionStatusInfo
-                {
-                    Message = noReconnectMessage,
-                    Severity = ConnectionCloseSeverity.Warning,
-                    Reconnect = null
-                });
+                SetConnectionState(XrpConnectionState.Disconnected, noReconnectMessage, ConnectionCloseSeverity.Warning);
             }
         }
 
@@ -663,28 +681,18 @@ namespace Xrpl.Client
                 {
                     if (config.StopAfterMaxAttempts)
                     {
-                        OnConnectionStatus?.Invoke(new ConnectionStatusInfo
-                        {
-                            Message = $"Reconnection stopped after {config.MaxReconnectAttempts} attempts.",
-                            Severity = ConnectionCloseSeverity.Error,
-                            Reconnect = null
-                        });
+                        SetConnectionState(XrpConnectionState.Disconnected, $"Reconnection stopped after {config.MaxReconnectAttempts} attempts.", ConnectionCloseSeverity.Error);
                         break;
                     }
 
                     reconnectMessage = $"Reconnection in {delay.TotalSeconds:F1} seconds... attempt #{_reconnectAttempts} (exceeded max {config.MaxReconnectAttempts}). Will keep trying, but this may indicate a persistent issue.";
                     type = ConnectionCloseSeverity.Warning;
                 }
-                OnConnectionStatus?.Invoke(new ConnectionStatusInfo
+                SetConnectionState(XrpConnectionState.RestoringConnection, reconnectMessage, type, new ReconnectInfo
                 {
-                    Message = reconnectMessage,
-                    Severity = type,
-                    Reconnect = new ReconnectInfo
-                    {
-                        CurrentAttempt = _reconnectAttempts,
-                        MaxAttempts = config.MaxReconnectAttempts,
-                        RemainingDelay = delay
-                    }
+                    CurrentAttempt = _reconnectAttempts,
+                    MaxAttempts = config.MaxReconnectAttempts,
+                    RemainingDelay = delay
                 });
 
                 try
@@ -714,12 +722,7 @@ namespace Xrpl.Client
                 catch (Exception ex)
                 {
                     var errorMessage = $"Reconnection attempt #{_reconnectAttempts} failed: {ex.Message}";
-                    OnConnectionStatus?.Invoke(new ConnectionStatusInfo
-                    {
-                        Message = errorMessage,
-                        Severity = ConnectionCloseSeverity.Error,
-                        Reconnect = null
-                    });
+                    SetConnectionState(XrpConnectionState.RestoringConnection, errorMessage, ConnectionCloseSeverity.Error);
                 }
             }
 
@@ -761,12 +764,7 @@ namespace Xrpl.Client
                     if (timeSinceLastActivity > 60)
                     {
                         StopPingTimer();
-                        OnConnectionStatus?.Invoke(new ConnectionStatusInfo
-                        {
-                            Message = "Connection timeout detected (no activity for 60+ seconds). Reconnecting...",
-                            Severity = ConnectionCloseSeverity.Error,
-                            Reconnect = null
-                        });
+                        SetConnectionState(XrpConnectionState.RestoringConnection, "Connection timeout detected (no activity for 60+ seconds). Reconnecting...", ConnectionCloseSeverity.Error);
 
                         this.ws?.Disconnect();
                         this.ws = null;
