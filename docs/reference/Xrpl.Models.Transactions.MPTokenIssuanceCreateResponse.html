@@ -1,0 +1,423 @@
+<!DOCTYPE html>
+<!--[if IE]><![endif]-->
+<html>
+
+  <head>
+    <meta charset="utf-8">
+    <meta http-equiv="X-UA-Compatible" content="IE=edge,chrome=1">
+    <title>Class MPTokenIssuanceCreateResponse </title>
+    <meta name="viewport" content="width=device-width">
+    <meta name="title" content="Class MPTokenIssuanceCreateResponse ">
+    <meta name="generator" content="docfx ">
+  
+    <link rel="shortcut icon" href="../favicon.ico">
+    <link rel="stylesheet" href="../styles/docfx.vendor.css">
+    <link rel="stylesheet" href="../styles/docfx.css">
+    <link rel="stylesheet" href="../styles/main.css">
+    <link href="https://fonts.googleapis.com/css?family=Roboto" rel="stylesheet"> 
+    <meta property="docfx:navrel" content="../toc.html">
+    <meta property="docfx:tocrel" content="toc.html">
+  
+  
+  
+  </head>  <body data-spy="scroll" data-target="#affix" data-offset="120">
+    <div id="wrapper">
+      <header>
+
+        <nav id="autocollapse" class="navbar navbar-inverse ng-scope" role="navigation">
+          <div class="container">
+            <div class="navbar-header">
+              <button type="button" class="navbar-toggle" data-toggle="collapse" data-target="#navbar">
+                <span class="sr-only">Toggle navigation</span>
+                <span class="icon-bar"></span>
+                <span class="icon-bar"></span>
+                <span class="icon-bar"></span>
+              </button>
+
+              <a class="navbar-brand" href="../index.html">
+                <img id="logo" class="svg" src="../logo.svg" alt="">
+              </a>
+            </div>
+            <div class="collapse navbar-collapse" id="navbar">
+              <form class="navbar-form navbar-right" role="search" id="search">
+                <div class="form-group">
+                  <input type="text" class="form-control" id="search-query" placeholder="Search" autocomplete="off">
+                </div>
+              </form>
+            </div>
+          </div>
+        </nav>
+
+        <div class="subnav navbar navbar-default">
+          <div class="container hide-when-search" id="breadcrumb">
+            <ul class="breadcrumb">
+              <li></li>
+            </ul>
+          </div>
+        </div>
+      </header>
+      <div role="main" class="container body-content hide-when-search">
+
+        <div class="sidenav hide-when-search">
+          <a class="btn toc-toggle collapse" data-toggle="collapse" href="#sidetoggle" aria-expanded="false" aria-controls="sidetoggle">Show / Hide Table of Contents</a>
+          <div class="sidetoggle collapse" id="sidetoggle">
+            <div id="sidetoc"></div>
+          </div>
+        </div>
+        <div class="article row grid-right">
+          <div class="col-md-10">
+            <article class="content wrap" id="_content" data-uid="Xrpl.Models.Transactions.MPTokenIssuanceCreateResponse">
+
+
+
+  <h1 id="Xrpl_Models_Transactions_MPTokenIssuanceCreateResponse" data-uid="Xrpl.Models.Transactions.MPTokenIssuanceCreateResponse" class="text-break">Class MPTokenIssuanceCreateResponse</h1>
+  <div class="markdown level0 summary"><p>The MPTokenIssuanceCreate transaction creates an MPTokenIssuance object
+and adds it to the relevant directory node of the creator account.</p>
+</div>
+  <div class="markdown level0 conceptual"></div>
+  <div class="inheritance">
+    <h5>Inheritance</h5>
+    <div class="level0"><span class="xref">object</span></div>
+    <div class="level1"><a class="xref" href="Xrpl.Models.Transactions.BaseTransactionResponse.html">BaseTransactionResponse</a></div>
+    <div class="level2"><a class="xref" href="Xrpl.Models.Transactions.TransactionResponse.html">TransactionResponse</a></div>
+    <div class="level3"><span class="xref">MPTokenIssuanceCreateResponse</span></div>
+  </div>
+  <div class="implements">
+    <h5>Implements</h5>
+    <div><a class="xref" href="Xrpl.Models.Transactions.ITransactionResponse.html">ITransactionResponse</a></div>
+    <div><a class="xref" href="Xrpl.Models.Transactions.IBaseTransactionResponse.html">IBaseTransactionResponse</a></div>
+    <div><a class="xref" href="Xrpl.Models.Transactions.IMPTokenIssuanceCreate.html">IMPTokenIssuanceCreate</a></div>
+    <div><a class="xref" href="Xrpl.Models.Transactions.ITransactionCommon.html">ITransactionCommon</a></div>
+  </div>
+  <div class="inheritedMembers">
+    <h5>Inherited Members</h5>
+    <div>
+      <a class="xref" href="Xrpl.Models.Transactions.TransactionResponse.html#Xrpl_Models_Transactions_TransactionResponse_NetworkID">TransactionResponse.NetworkID</a>
+    </div>
+    <div>
+      <a class="xref" href="Xrpl.Models.Transactions.TransactionResponse.html#Xrpl_Models_Transactions_TransactionResponse_Account">TransactionResponse.Account</a>
+    </div>
+    <div>
+      <a class="xref" href="Xrpl.Models.Transactions.TransactionResponse.html#Xrpl_Models_Transactions_TransactionResponse_AccountTxnID">TransactionResponse.AccountTxnID</a>
+    </div>
+    <div>
+      <a class="xref" href="Xrpl.Models.Transactions.TransactionResponse.html#Xrpl_Models_Transactions_TransactionResponse_Fee">TransactionResponse.Fee</a>
+    </div>
+    <div>
+      <a class="xref" href="Xrpl.Models.Transactions.TransactionResponse.html#Xrpl_Models_Transactions_TransactionResponse_LastLedgerSequence">TransactionResponse.LastLedgerSequence</a>
+    </div>
+    <div>
+      <a class="xref" href="Xrpl.Models.Transactions.TransactionResponse.html#Xrpl_Models_Transactions_TransactionResponse_Memos">TransactionResponse.Memos</a>
+    </div>
+    <div>
+      <a class="xref" href="Xrpl.Models.Transactions.TransactionResponse.html#Xrpl_Models_Transactions_TransactionResponse_MemoValue">TransactionResponse.MemoValue</a>
+    </div>
+    <div>
+      <a class="xref" href="Xrpl.Models.Transactions.TransactionResponse.html#Xrpl_Models_Transactions_TransactionResponse_Sequence">TransactionResponse.Sequence</a>
+    </div>
+    <div>
+      <a class="xref" href="Xrpl.Models.Transactions.TransactionResponse.html#Xrpl_Models_Transactions_TransactionResponse_SigningPublicKey">TransactionResponse.SigningPublicKey</a>
+    </div>
+    <div>
+      <a class="xref" href="Xrpl.Models.Transactions.TransactionResponse.html#Xrpl_Models_Transactions_TransactionResponse_Signers">TransactionResponse.Signers</a>
+    </div>
+    <div>
+      <a class="xref" href="Xrpl.Models.Transactions.TransactionResponse.html#Xrpl_Models_Transactions_TransactionResponse_TransactionType">TransactionResponse.TransactionType</a>
+    </div>
+    <div>
+      <a class="xref" href="Xrpl.Models.Transactions.TransactionResponse.html#Xrpl_Models_Transactions_TransactionResponse_TransactionSignature">TransactionResponse.TransactionSignature</a>
+    </div>
+    <div>
+      <a class="xref" href="Xrpl.Models.Transactions.TransactionResponse.html#Xrpl_Models_Transactions_TransactionResponse_Meta">TransactionResponse.Meta</a>
+    </div>
+    <div>
+      <a class="xref" href="Xrpl.Models.Transactions.TransactionResponse.html#Xrpl_Models_Transactions_TransactionResponse_ToJson">TransactionResponse.ToJson()</a>
+    </div>
+    <div>
+      <a class="xref" href="Xrpl.Models.Transactions.TransactionResponse.html#Xrpl_Models_Transactions_TransactionResponse_ToDictionary">TransactionResponse.ToDictionary()</a>
+    </div>
+    <div>
+      <a class="xref" href="Xrpl.Models.Transactions.TransactionResponse.html#Xrpl_Models_Transactions_TransactionResponse_SourceTag">TransactionResponse.SourceTag</a>
+    </div>
+    <div>
+      <a class="xref" href="Xrpl.Models.Transactions.TransactionResponse.html#Xrpl_Models_Transactions_TransactionResponse_TicketSequence">TransactionResponse.TicketSequence</a>
+    </div>
+    <div>
+      <a class="xref" href="Xrpl.Models.Transactions.BaseTransactionResponse.html#Xrpl_Models_Transactions_BaseTransactionResponse_Date">BaseTransactionResponse.Date</a>
+    </div>
+    <div>
+      <a class="xref" href="Xrpl.Models.Transactions.BaseTransactionResponse.html#Xrpl_Models_Transactions_BaseTransactionResponse_Hash">BaseTransactionResponse.Hash</a>
+    </div>
+    <div>
+      <a class="xref" href="Xrpl.Models.Transactions.BaseTransactionResponse.html#Xrpl_Models_Transactions_BaseTransactionResponse_InLedger">BaseTransactionResponse.InLedger</a>
+    </div>
+    <div>
+      <a class="xref" href="Xrpl.Models.Transactions.BaseTransactionResponse.html#Xrpl_Models_Transactions_BaseTransactionResponse_LedgerIndex">BaseTransactionResponse.LedgerIndex</a>
+    </div>
+    <div>
+      <a class="xref" href="Xrpl.Models.Transactions.BaseTransactionResponse.html#Xrpl_Models_Transactions_BaseTransactionResponse_Validated">BaseTransactionResponse.Validated</a>
+    </div>
+  </div>
+  <h6><strong>Namespace</strong>: <a class="xref" href="Xrpl.html">Xrpl</a>.<a class="xref" href="Xrpl.Models.html">Models</a>.<a class="xref" href="Xrpl.Models.Transactions.html">Transactions</a></h6>
+  <h6><strong>Assembly</strong>: Xrpl.dll</h6>
+  <h5 id="Xrpl_Models_Transactions_MPTokenIssuanceCreateResponse_syntax">Syntax</h5>
+  <div class="codewrapper">
+    <pre><code class="lang-csharp hljs">public class MPTokenIssuanceCreateResponse : TransactionResponse, ITransactionResponse, IBaseTransactionResponse, IMPTokenIssuanceCreate, ITransactionCommon</code></pre>
+  </div>
+  <h3 id="properties">Properties
+</h3>
+  <span class="small pull-right mobile-hide">
+    <span class="divider">|</span>
+    <a href="https://github.com/Platonenkov/XrplCSharp/new/feature/rep/apiSpec/new?filename=Xrpl_Models_Transactions_MPTokenIssuanceCreateResponse_AssetScale.md&amp;value=---%0Auid%3A%20Xrpl.Models.Transactions.MPTokenIssuanceCreateResponse.AssetScale%0Asummary%3A%20&#39;*You%20can%20override%20summary%20for%20the%20API%20here%20using%20*MARKDOWN*%20syntax&#39;%0A---%0A%0A*Please%20type%20below%20more%20information%20about%20this%20API%3A*%0A%0A">Edit this page</a>
+  </span>
+  <span class="small pull-right mobile-hide">
+    <a href="https://github.com/Platonenkov/XrplCSharp/blob/feature/rep/Xrpl/Models/Transactions/MPTokenIssuanceCreate.cs/#L135">View Source</a>
+  </span>
+  <a id="Xrpl_Models_Transactions_MPTokenIssuanceCreateResponse_AssetScale_" data-uid="Xrpl.Models.Transactions.MPTokenIssuanceCreateResponse.AssetScale*"></a>
+  <h4 id="Xrpl_Models_Transactions_MPTokenIssuanceCreateResponse_AssetScale" data-uid="Xrpl.Models.Transactions.MPTokenIssuanceCreateResponse.AssetScale">AssetScale</h4>
+  <div class="markdown level1 summary"><p>An asset scale is the difference, in orders of magnitude, between a standard unit and
+a corresponding fractional unit.More formally, the asset scale is a non-negative integer
+(0, 1, 2, …) such that one standard unit equals 10^(-scale) of a corresponding
+fractional unit.If the fractional unit equals the standard unit, then the asset scale is 0.
+Note that this value is optional, and will default to 0 if not supplied.</p>
+</div>
+  <div class="markdown level1 conceptual"></div>
+  <h5 class="declaration">Declaration</h5>
+  <div class="codewrapper">
+    <pre><code class="lang-csharp hljs">[JsonProperty(&quot;AssetScale&quot;)]
+public uint? AssetScale { get; set; }</code></pre>
+  </div>
+  <h5 class="propertyValue">Property Value</h5>
+  <table class="table table-bordered table-condensed">
+    <thead>
+      <tr>
+        <th>Type</th>
+        <th>Description</th>
+      </tr>
+    </thead>
+    <tbody>
+      <tr>
+        <td><span class="xref">uint</span>?</td>
+        <td></td>
+      </tr>
+    </tbody>
+  </table>
+  <span class="small pull-right mobile-hide">
+    <span class="divider">|</span>
+    <a href="https://github.com/Platonenkov/XrplCSharp/new/feature/rep/apiSpec/new?filename=Xrpl_Models_Transactions_MPTokenIssuanceCreateResponse_Flags.md&amp;value=---%0Auid%3A%20Xrpl.Models.Transactions.MPTokenIssuanceCreateResponse.Flags%0Asummary%3A%20&#39;*You%20can%20override%20summary%20for%20the%20API%20here%20using%20*MARKDOWN*%20syntax&#39;%0A---%0A%0A*Please%20type%20below%20more%20information%20about%20this%20API%3A*%0A%0A">Edit this page</a>
+  </span>
+  <span class="small pull-right mobile-hide">
+    <a href="https://github.com/Platonenkov/XrplCSharp/blob/feature/rep/Xrpl/Models/Transactions/MPTokenIssuanceCreate.cs/#L154">View Source</a>
+  </span>
+  <a id="Xrpl_Models_Transactions_MPTokenIssuanceCreateResponse_Flags_" data-uid="Xrpl.Models.Transactions.MPTokenIssuanceCreateResponse.Flags*"></a>
+  <h4 id="Xrpl_Models_Transactions_MPTokenIssuanceCreateResponse_Flags" data-uid="Xrpl.Models.Transactions.MPTokenIssuanceCreateResponse.Flags">Flags</h4>
+  <div class="markdown level1 summary"></div>
+  <div class="markdown level1 conceptual"></div>
+  <h5 class="declaration">Declaration</h5>
+  <div class="codewrapper">
+    <pre><code class="lang-csharp hljs">public MPTokenIssuanceCreateFlags? Flags { get; set; }</code></pre>
+  </div>
+  <h5 class="propertyValue">Property Value</h5>
+  <table class="table table-bordered table-condensed">
+    <thead>
+      <tr>
+        <th>Type</th>
+        <th>Description</th>
+      </tr>
+    </thead>
+    <tbody>
+      <tr>
+        <td><a class="xref" href="Xrpl.Models.Transactions.MPTokenIssuanceCreateFlags.html">MPTokenIssuanceCreateFlags</a>?</td>
+        <td></td>
+      </tr>
+    </tbody>
+  </table>
+  <span class="small pull-right mobile-hide">
+    <span class="divider">|</span>
+    <a href="https://github.com/Platonenkov/XrplCSharp/new/feature/rep/apiSpec/new?filename=Xrpl_Models_Transactions_MPTokenIssuanceCreateResponse_MPTokenMetadata.md&amp;value=---%0Auid%3A%20Xrpl.Models.Transactions.MPTokenIssuanceCreateResponse.MPTokenMetadata%0Asummary%3A%20&#39;*You%20can%20override%20summary%20for%20the%20API%20here%20using%20*MARKDOWN*%20syntax&#39;%0A---%0A%0A*Please%20type%20below%20more%20information%20about%20this%20API%3A*%0A%0A">Edit this page</a>
+  </span>
+  <span class="small pull-right mobile-hide">
+    <a href="https://github.com/Platonenkov/XrplCSharp/blob/feature/rep/Xrpl/Models/Transactions/MPTokenIssuanceCreate.cs/#L147">View Source</a>
+  </span>
+  <a id="Xrpl_Models_Transactions_MPTokenIssuanceCreateResponse_MPTokenMetadata_" data-uid="Xrpl.Models.Transactions.MPTokenIssuanceCreateResponse.MPTokenMetadata*"></a>
+  <h4 id="Xrpl_Models_Transactions_MPTokenIssuanceCreateResponse_MPTokenMetadata" data-uid="Xrpl.Models.Transactions.MPTokenIssuanceCreateResponse.MPTokenMetadata">MPTokenMetadata</h4>
+  <div class="markdown level1 summary"><p>Arbitrary metadata about this issuance, in hex format.
+The limit for this field is 1024 bytes.</p>
+</div>
+  <div class="markdown level1 conceptual"></div>
+  <h5 class="declaration">Declaration</h5>
+  <div class="codewrapper">
+    <pre><code class="lang-csharp hljs">[JsonProperty(&quot;MPTokenMetadata&quot;)]
+public string? MPTokenMetadata { get; set; }</code></pre>
+  </div>
+  <h5 class="propertyValue">Property Value</h5>
+  <table class="table table-bordered table-condensed">
+    <thead>
+      <tr>
+        <th>Type</th>
+        <th>Description</th>
+      </tr>
+    </thead>
+    <tbody>
+      <tr>
+        <td><span class="xref">string</span></td>
+        <td></td>
+      </tr>
+    </tbody>
+  </table>
+  <span class="small pull-right mobile-hide">
+    <span class="divider">|</span>
+    <a href="https://github.com/Platonenkov/XrplCSharp/new/feature/rep/apiSpec/new?filename=Xrpl_Models_Transactions_MPTokenIssuanceCreateResponse_MPTokenMetadataRow.md&amp;value=---%0Auid%3A%20Xrpl.Models.Transactions.MPTokenIssuanceCreateResponse.MPTokenMetadataRow%0Asummary%3A%20&#39;*You%20can%20override%20summary%20for%20the%20API%20here%20using%20*MARKDOWN*%20syntax&#39;%0A---%0A%0A*Please%20type%20below%20more%20information%20about%20this%20API%3A*%0A%0A">Edit this page</a>
+  </span>
+  <span class="small pull-right mobile-hide">
+    <a href="https://github.com/Platonenkov/XrplCSharp/blob/feature/rep/Xrpl/Models/Transactions/MPTokenIssuanceCreate.cs/#L149">View Source</a>
+  </span>
+  <a id="Xrpl_Models_Transactions_MPTokenIssuanceCreateResponse_MPTokenMetadataRow_" data-uid="Xrpl.Models.Transactions.MPTokenIssuanceCreateResponse.MPTokenMetadataRow*"></a>
+  <h4 id="Xrpl_Models_Transactions_MPTokenIssuanceCreateResponse_MPTokenMetadataRow" data-uid="Xrpl.Models.Transactions.MPTokenIssuanceCreateResponse.MPTokenMetadataRow">MPTokenMetadataRow</h4>
+  <div class="markdown level1 summary"></div>
+  <div class="markdown level1 conceptual"></div>
+  <h5 class="declaration">Declaration</h5>
+  <div class="codewrapper">
+    <pre><code class="lang-csharp hljs">[JsonIgnore]
+public string? MPTokenMetadataRow { get; }</code></pre>
+  </div>
+  <h5 class="propertyValue">Property Value</h5>
+  <table class="table table-bordered table-condensed">
+    <thead>
+      <tr>
+        <th>Type</th>
+        <th>Description</th>
+      </tr>
+    </thead>
+    <tbody>
+      <tr>
+        <td><span class="xref">string</span></td>
+        <td></td>
+      </tr>
+    </tbody>
+  </table>
+  <span class="small pull-right mobile-hide">
+    <span class="divider">|</span>
+    <a href="https://github.com/Platonenkov/XrplCSharp/new/feature/rep/apiSpec/new?filename=Xrpl_Models_Transactions_MPTokenIssuanceCreateResponse_MaximumAmount.md&amp;value=---%0Auid%3A%20Xrpl.Models.Transactions.MPTokenIssuanceCreateResponse.MaximumAmount%0Asummary%3A%20&#39;*You%20can%20override%20summary%20for%20the%20API%20here%20using%20*MARKDOWN*%20syntax&#39;%0A---%0A%0A*Please%20type%20below%20more%20information%20about%20this%20API%3A*%0A%0A">Edit this page</a>
+  </span>
+  <span class="small pull-right mobile-hide">
+    <a href="https://github.com/Platonenkov/XrplCSharp/blob/feature/rep/Xrpl/Models/Transactions/MPTokenIssuanceCreate.cs/#L139">View Source</a>
+  </span>
+  <a id="Xrpl_Models_Transactions_MPTokenIssuanceCreateResponse_MaximumAmount_" data-uid="Xrpl.Models.Transactions.MPTokenIssuanceCreateResponse.MaximumAmount*"></a>
+  <h4 id="Xrpl_Models_Transactions_MPTokenIssuanceCreateResponse_MaximumAmount" data-uid="Xrpl.Models.Transactions.MPTokenIssuanceCreateResponse.MaximumAmount">MaximumAmount</h4>
+  <div class="markdown level1 summary"><p>Specifies the maximum asset amount of this token that should ever be issued.
+Valid values for this field are between 0 and 9223372036854775807 (the maximum signed 64-bit integer).
+If this value is not specified, the issuance does not have a limit.</p>
+</div>
+  <div class="markdown level1 conceptual"></div>
+  <h5 class="declaration">Declaration</h5>
+  <div class="codewrapper">
+    <pre><code class="lang-csharp hljs">[JsonProperty(&quot;MaximumAmount&quot;)]
+public string? MaximumAmount { get; set; }</code></pre>
+  </div>
+  <h5 class="propertyValue">Property Value</h5>
+  <table class="table table-bordered table-condensed">
+    <thead>
+      <tr>
+        <th>Type</th>
+        <th>Description</th>
+      </tr>
+    </thead>
+    <tbody>
+      <tr>
+        <td><span class="xref">string</span></td>
+        <td></td>
+      </tr>
+    </tbody>
+  </table>
+  <span class="small pull-right mobile-hide">
+    <span class="divider">|</span>
+    <a href="https://github.com/Platonenkov/XrplCSharp/new/feature/rep/apiSpec/new?filename=Xrpl_Models_Transactions_MPTokenIssuanceCreateResponse_TransferFee.md&amp;value=---%0Auid%3A%20Xrpl.Models.Transactions.MPTokenIssuanceCreateResponse.TransferFee%0Asummary%3A%20&#39;*You%20can%20override%20summary%20for%20the%20API%20here%20using%20*MARKDOWN*%20syntax&#39;%0A---%0A%0A*Please%20type%20below%20more%20information%20about%20this%20API%3A*%0A%0A">Edit this page</a>
+  </span>
+  <span class="small pull-right mobile-hide">
+    <a href="https://github.com/Platonenkov/XrplCSharp/blob/feature/rep/Xrpl/Models/Transactions/MPTokenIssuanceCreate.cs/#L143">View Source</a>
+  </span>
+  <a id="Xrpl_Models_Transactions_MPTokenIssuanceCreateResponse_TransferFee_" data-uid="Xrpl.Models.Transactions.MPTokenIssuanceCreateResponse.TransferFee*"></a>
+  <h4 id="Xrpl_Models_Transactions_MPTokenIssuanceCreateResponse_TransferFee" data-uid="Xrpl.Models.Transactions.MPTokenIssuanceCreateResponse.TransferFee">TransferFee</h4>
+  <div class="markdown level1 summary"><p>The value specifies the fee to charged by the issuer for secondary sales of the token,
+if such sales are allowed. Valid values for this field are between 0 and 50000 inclusive,
+allowing transfer rates of between 0.00% and 50.00% in increments of 0.001.</p>
+</div>
+  <div class="markdown level1 conceptual"></div>
+  <h5 class="declaration">Declaration</h5>
+  <div class="codewrapper">
+    <pre><code class="lang-csharp hljs">[JsonProperty(&quot;TransferFee&quot;)]
+public ushort? TransferFee { get; set; }</code></pre>
+  </div>
+  <h5 class="propertyValue">Property Value</h5>
+  <table class="table table-bordered table-condensed">
+    <thead>
+      <tr>
+        <th>Type</th>
+        <th>Description</th>
+      </tr>
+    </thead>
+    <tbody>
+      <tr>
+        <td><span class="xref">ushort</span>?</td>
+        <td></td>
+      </tr>
+    </tbody>
+  </table>
+  <h3 id="implements">Implements</h3>
+  <div>
+      <a class="xref" href="Xrpl.Models.Transactions.ITransactionResponse.html">ITransactionResponse</a>
+  </div>
+  <div>
+      <a class="xref" href="Xrpl.Models.Transactions.IBaseTransactionResponse.html">IBaseTransactionResponse</a>
+  </div>
+  <div>
+      <a class="xref" href="Xrpl.Models.Transactions.IMPTokenIssuanceCreate.html">IMPTokenIssuanceCreate</a>
+  </div>
+  <div>
+      <a class="xref" href="Xrpl.Models.Transactions.ITransactionCommon.html">ITransactionCommon</a>
+  </div>
+
+</article>
+          </div>
+
+          <div class="hidden-sm col-md-2" role="complementary">
+            <div class="sideaffix">
+              <div class="contribution">
+                <ul class="nav">
+                  <li>
+                    <a href="https://github.com/Platonenkov/XrplCSharp/new/feature/rep/apiSpec/new?filename=Xrpl_Models_Transactions_MPTokenIssuanceCreateResponse.md&amp;value=---%0Auid%3A%20Xrpl.Models.Transactions.MPTokenIssuanceCreateResponse%0Asummary%3A%20&#39;*You%20can%20override%20summary%20for%20the%20API%20here%20using%20*MARKDOWN*%20syntax&#39;%0A---%0A%0A*Please%20type%20below%20more%20information%20about%20this%20API%3A*%0A%0A" class="contribution-link">Edit this page</a>
+                  </li>
+                  <li>
+                    <a href="https://github.com/Platonenkov/XrplCSharp/blob/feature/rep/Xrpl/Models/Transactions/MPTokenIssuanceCreate.cs/#L130" class="contribution-link">View Source</a>
+                  </li>
+                </ul>
+              </div>
+              <nav class="bs-docs-sidebar hidden-print hidden-xs hidden-sm affix" id="affix">
+                <h5>In this article</h5>
+                <div></div>
+              </nav>
+            </div>
+          </div>
+        </div>
+      </div>
+
+      <footer>
+        <div class="grad-bottom"></div>
+        <div class="footer">
+          <div class="container">
+            <span class="pull-right">
+              <a href="#top">Back to top</a>
+            </span>
+      
+      <span>Generated by <strong>DocFX</strong></span>
+          </div>
+        </div>
+      </footer>
+    </div>
+
+    <script type="text/javascript" src="../styles/docfx.vendor.min.js"></script>
+    <script type="text/javascript" src="../styles/docfx.js"></script>
+    <script type="text/javascript" src="../styles/main.js"></script>
+  </body>
+</html>

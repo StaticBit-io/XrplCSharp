@@ -1,0 +1,447 @@
+<!DOCTYPE html>
+<!--[if IE]><![endif]-->
+<html>
+
+  <head>
+    <meta charset="utf-8">
+    <meta http-equiv="X-UA-Compatible" content="IE=edge,chrome=1">
+    <title>Interface ITransactionMetadata </title>
+    <meta name="viewport" content="width=device-width">
+    <meta name="title" content="Interface ITransactionMetadata ">
+    <meta name="generator" content="docfx ">
+  
+    <link rel="shortcut icon" href="../favicon.ico">
+    <link rel="stylesheet" href="../styles/docfx.vendor.css">
+    <link rel="stylesheet" href="../styles/docfx.css">
+    <link rel="stylesheet" href="../styles/main.css">
+    <link href="https://fonts.googleapis.com/css?family=Roboto" rel="stylesheet"> 
+    <meta property="docfx:navrel" content="../toc.html">
+    <meta property="docfx:tocrel" content="toc.html">
+  
+  
+  
+  </head>  <body data-spy="scroll" data-target="#affix" data-offset="120">
+    <div id="wrapper">
+      <header>
+
+        <nav id="autocollapse" class="navbar navbar-inverse ng-scope" role="navigation">
+          <div class="container">
+            <div class="navbar-header">
+              <button type="button" class="navbar-toggle" data-toggle="collapse" data-target="#navbar">
+                <span class="sr-only">Toggle navigation</span>
+                <span class="icon-bar"></span>
+                <span class="icon-bar"></span>
+                <span class="icon-bar"></span>
+              </button>
+
+              <a class="navbar-brand" href="../index.html">
+                <img id="logo" class="svg" src="../logo.svg" alt="">
+              </a>
+            </div>
+            <div class="collapse navbar-collapse" id="navbar">
+              <form class="navbar-form navbar-right" role="search" id="search">
+                <div class="form-group">
+                  <input type="text" class="form-control" id="search-query" placeholder="Search" autocomplete="off">
+                </div>
+              </form>
+            </div>
+          </div>
+        </nav>
+
+        <div class="subnav navbar navbar-default">
+          <div class="container hide-when-search" id="breadcrumb">
+            <ul class="breadcrumb">
+              <li></li>
+            </ul>
+          </div>
+        </div>
+      </header>
+      <div role="main" class="container body-content hide-when-search">
+
+        <div class="sidenav hide-when-search">
+          <a class="btn toc-toggle collapse" data-toggle="collapse" href="#sidetoggle" aria-expanded="false" aria-controls="sidetoggle">Show / Hide Table of Contents</a>
+          <div class="sidetoggle collapse" id="sidetoggle">
+            <div id="sidetoc"></div>
+          </div>
+        </div>
+        <div class="article row grid-right">
+          <div class="col-md-10">
+            <article class="content wrap" id="_content" data-uid="Xrpl.Models.Transactions.ITransactionMetadata">
+
+
+
+  <h1 id="Xrpl_Models_Transactions_ITransactionMetadata" data-uid="Xrpl.Models.Transactions.ITransactionMetadata" class="text-break">Interface ITransactionMetadata</h1>
+  <div class="markdown level0 summary"></div>
+  <div class="markdown level0 conceptual"></div>
+  <h6><strong>Namespace</strong>: <a class="xref" href="Xrpl.html">Xrpl</a>.<a class="xref" href="Xrpl.Models.html">Models</a>.<a class="xref" href="Xrpl.Models.Transactions.html">Transactions</a></h6>
+  <h6><strong>Assembly</strong>: Xrpl.dll</h6>
+  <h5 id="Xrpl_Models_Transactions_ITransactionMetadata_syntax">Syntax</h5>
+  <div class="codewrapper">
+    <pre><code class="lang-csharp hljs">public interface ITransactionMetadata</code></pre>
+  </div>
+  <h3 id="properties">Properties
+</h3>
+  <span class="small pull-right mobile-hide">
+    <span class="divider">|</span>
+    <a href="https://github.com/Platonenkov/XrplCSharp/new/feature/rep/apiSpec/new?filename=Xrpl_Models_Transactions_ITransactionMetadata_ActuallyDeliveredAmount.md&amp;value=---%0Auid%3A%20Xrpl.Models.Transactions.ITransactionMetadata.ActuallyDeliveredAmount%0Asummary%3A%20&#39;*You%20can%20override%20summary%20for%20the%20API%20here%20using%20*MARKDOWN*%20syntax&#39;%0A---%0A%0A*Please%20type%20below%20more%20information%20about%20this%20API%3A*%0A%0A">Edit this page</a>
+  </span>
+  <span class="small pull-right mobile-hide">
+    <a href="https://github.com/Platonenkov/XrplCSharp/blob/feature/rep/Xrpl/Models/Transactions/Metadata.cs/#L89">View Source</a>
+  </span>
+  <a id="Xrpl_Models_Transactions_ITransactionMetadata_ActuallyDeliveredAmount_" data-uid="Xrpl.Models.Transactions.ITransactionMetadata.ActuallyDeliveredAmount*"></a>
+  <h4 id="Xrpl_Models_Transactions_ITransactionMetadata_ActuallyDeliveredAmount" data-uid="Xrpl.Models.Transactions.ITransactionMetadata.ActuallyDeliveredAmount">ActuallyDeliveredAmount</h4>
+  <div class="markdown level1 summary"><p>Gets or sets the delivered amount (may be 'unavailable' for transactions before 2014-01-20).</p>
+</div>
+  <div class="markdown level1 conceptual"></div>
+  <h5 class="declaration">Declaration</h5>
+  <div class="codewrapper">
+    <pre><code class="lang-csharp hljs">[JsonConverter(typeof(CurrencyConverter))]
+[JsonProperty(&quot;delivered_amount&quot;)]
+Currency ActuallyDeliveredAmount { get; set; }</code></pre>
+  </div>
+  <h5 class="propertyValue">Property Value</h5>
+  <table class="table table-bordered table-condensed">
+    <thead>
+      <tr>
+        <th>Type</th>
+        <th>Description</th>
+      </tr>
+    </thead>
+    <tbody>
+      <tr>
+        <td><a class="xref" href="Xrpl.Models.Common.Currency.html">Currency</a></td>
+        <td></td>
+      </tr>
+    </tbody>
+  </table>
+  <span class="small pull-right mobile-hide">
+    <span class="divider">|</span>
+    <a href="https://github.com/Platonenkov/XrplCSharp/new/feature/rep/apiSpec/new?filename=Xrpl_Models_Transactions_ITransactionMetadata_AffectedNodes.md&amp;value=---%0Auid%3A%20Xrpl.Models.Transactions.ITransactionMetadata.AffectedNodes%0Asummary%3A%20&#39;*You%20can%20override%20summary%20for%20the%20API%20here%20using%20*MARKDOWN*%20syntax&#39;%0A---%0A%0A*Please%20type%20below%20more%20information%20about%20this%20API%3A*%0A%0A">Edit this page</a>
+  </span>
+  <span class="small pull-right mobile-hide">
+    <a href="https://github.com/Platonenkov/XrplCSharp/blob/feature/rep/Xrpl/Models/Transactions/Metadata.cs/#L77">View Source</a>
+  </span>
+  <a id="Xrpl_Models_Transactions_ITransactionMetadata_AffectedNodes_" data-uid="Xrpl.Models.Transactions.ITransactionMetadata.AffectedNodes*"></a>
+  <h4 id="Xrpl_Models_Transactions_ITransactionMetadata_AffectedNodes" data-uid="Xrpl.Models.Transactions.ITransactionMetadata.AffectedNodes">AffectedNodes</h4>
+  <div class="markdown level1 summary"></div>
+  <div class="markdown level1 conceptual"></div>
+  <h5 class="declaration">Declaration</h5>
+  <div class="codewrapper">
+    <pre><code class="lang-csharp hljs">List&lt;AffectedNode&gt; AffectedNodes { get; set; }</code></pre>
+  </div>
+  <h5 class="propertyValue">Property Value</h5>
+  <table class="table table-bordered table-condensed">
+    <thead>
+      <tr>
+        <th>Type</th>
+        <th>Description</th>
+      </tr>
+    </thead>
+    <tbody>
+      <tr>
+        <td><span class="xref">List</span>&lt;<a class="xref" href="Xrpl.Models.Transactions.AffectedNode.html">AffectedNode</a>&gt;</td>
+        <td></td>
+      </tr>
+    </tbody>
+  </table>
+  <span class="small pull-right mobile-hide">
+    <span class="divider">|</span>
+    <a href="https://github.com/Platonenkov/XrplCSharp/new/feature/rep/apiSpec/new?filename=Xrpl_Models_Transactions_ITransactionMetadata_MptIssuanceId.md&amp;value=---%0Auid%3A%20Xrpl.Models.Transactions.ITransactionMetadata.MptIssuanceId%0Asummary%3A%20&#39;*You%20can%20override%20summary%20for%20the%20API%20here%20using%20*MARKDOWN*%20syntax&#39;%0A---%0A%0A*Please%20type%20below%20more%20information%20about%20this%20API%3A*%0A%0A">Edit this page</a>
+  </span>
+  <span class="small pull-right mobile-hide">
+    <a href="https://github.com/Platonenkov/XrplCSharp/blob/feature/rep/Xrpl/Models/Transactions/Metadata.cs/#L132">View Source</a>
+  </span>
+  <a id="Xrpl_Models_Transactions_ITransactionMetadata_MptIssuanceId_" data-uid="Xrpl.Models.Transactions.ITransactionMetadata.MptIssuanceId*"></a>
+  <h4 id="Xrpl_Models_Transactions_ITransactionMetadata_MptIssuanceId" data-uid="Xrpl.Models.Transactions.ITransactionMetadata.MptIssuanceId">MptIssuanceId</h4>
+  <div class="markdown level1 summary"><p>Shows the MPTokenIssuanceID for the MPTokenIssuance that was created by this transaction.
+Only present if the transaction is MPTokenIssuanceCreate.</p>
+</div>
+  <div class="markdown level1 conceptual"></div>
+  <h5 class="declaration">Declaration</h5>
+  <div class="codewrapper">
+    <pre><code class="lang-csharp hljs">[JsonProperty(&quot;mpt_issuance_id&quot;)]
+string MptIssuanceId { get; set; }</code></pre>
+  </div>
+  <h5 class="propertyValue">Property Value</h5>
+  <table class="table table-bordered table-condensed">
+    <thead>
+      <tr>
+        <th>Type</th>
+        <th>Description</th>
+      </tr>
+    </thead>
+    <tbody>
+      <tr>
+        <td><span class="xref">string</span></td>
+        <td></td>
+      </tr>
+    </tbody>
+  </table>
+  <span class="small pull-right mobile-hide">
+    <span class="divider">|</span>
+    <a href="https://github.com/Platonenkov/XrplCSharp/new/feature/rep/apiSpec/new?filename=Xrpl_Models_Transactions_ITransactionMetadata_NFTokenId.md&amp;value=---%0Auid%3A%20Xrpl.Models.Transactions.ITransactionMetadata.NFTokenId%0Asummary%3A%20&#39;*You%20can%20override%20summary%20for%20the%20API%20here%20using%20*MARKDOWN*%20syntax&#39;%0A---%0A%0A*Please%20type%20below%20more%20information%20about%20this%20API%3A*%0A%0A">Edit this page</a>
+  </span>
+  <span class="small pull-right mobile-hide">
+    <a href="https://github.com/Platonenkov/XrplCSharp/blob/feature/rep/Xrpl/Models/Transactions/Metadata.cs/#L113">View Source</a>
+  </span>
+  <a id="Xrpl_Models_Transactions_ITransactionMetadata_NFTokenId_" data-uid="Xrpl.Models.Transactions.ITransactionMetadata.NFTokenId*"></a>
+  <h4 id="Xrpl_Models_Transactions_ITransactionMetadata_NFTokenId" data-uid="Xrpl.Models.Transactions.ITransactionMetadata.NFTokenId">NFTokenId</h4>
+  <div class="markdown level1 summary"><p>Shows the NFTokenID for the NFToken that changed on the ledger as a result of the transaction.
+Only present if the transaction is NFTokenMint or NFTokenAcceptOffer</p>
+</div>
+  <div class="markdown level1 conceptual"></div>
+  <h5 class="declaration">Declaration</h5>
+  <div class="codewrapper">
+    <pre><code class="lang-csharp hljs">[JsonProperty(&quot;nftoken_id&quot;)]
+string NFTokenId { get; set; }</code></pre>
+  </div>
+  <h5 class="propertyValue">Property Value</h5>
+  <table class="table table-bordered table-condensed">
+    <thead>
+      <tr>
+        <th>Type</th>
+        <th>Description</th>
+      </tr>
+    </thead>
+    <tbody>
+      <tr>
+        <td><span class="xref">string</span></td>
+        <td></td>
+      </tr>
+    </tbody>
+  </table>
+  <span class="small pull-right mobile-hide">
+    <span class="divider">|</span>
+    <a href="https://github.com/Platonenkov/XrplCSharp/new/feature/rep/apiSpec/new?filename=Xrpl_Models_Transactions_ITransactionMetadata_NFTokenIds.md&amp;value=---%0Auid%3A%20Xrpl.Models.Transactions.ITransactionMetadata.NFTokenIds%0Asummary%3A%20&#39;*You%20can%20override%20summary%20for%20the%20API%20here%20using%20*MARKDOWN*%20syntax&#39;%0A---%0A%0A*Please%20type%20below%20more%20information%20about%20this%20API%3A*%0A%0A">Edit this page</a>
+  </span>
+  <span class="small pull-right mobile-hide">
+    <a href="https://github.com/Platonenkov/XrplCSharp/blob/feature/rep/Xrpl/Models/Transactions/Metadata.cs/#L120">View Source</a>
+  </span>
+  <a id="Xrpl_Models_Transactions_ITransactionMetadata_NFTokenIds_" data-uid="Xrpl.Models.Transactions.ITransactionMetadata.NFTokenIds*"></a>
+  <h4 id="Xrpl_Models_Transactions_ITransactionMetadata_NFTokenIds" data-uid="Xrpl.Models.Transactions.ITransactionMetadata.NFTokenIds">NFTokenIds</h4>
+  <div class="markdown level1 summary"><p>Shows all the NFTokenIDs for the NFTokens that changed on the ledger as a result of the transaction.
+Only present if the transaction is NFTokenCancelOffer.</p>
+</div>
+  <div class="markdown level1 conceptual"></div>
+  <h5 class="declaration">Declaration</h5>
+  <div class="codewrapper">
+    <pre><code class="lang-csharp hljs">[JsonProperty(&quot;nftoken_ids&quot;)]
+string[] NFTokenIds { get; set; }</code></pre>
+  </div>
+  <h5 class="propertyValue">Property Value</h5>
+  <table class="table table-bordered table-condensed">
+    <thead>
+      <tr>
+        <th>Type</th>
+        <th>Description</th>
+      </tr>
+    </thead>
+    <tbody>
+      <tr>
+        <td><span class="xref">string</span>[]</td>
+        <td></td>
+      </tr>
+    </tbody>
+  </table>
+  <span class="small pull-right mobile-hide">
+    <span class="divider">|</span>
+    <a href="https://github.com/Platonenkov/XrplCSharp/new/feature/rep/apiSpec/new?filename=Xrpl_Models_Transactions_ITransactionMetadata_OfferID.md&amp;value=---%0Auid%3A%20Xrpl.Models.Transactions.ITransactionMetadata.OfferID%0Asummary%3A%20&#39;*You%20can%20override%20summary%20for%20the%20API%20here%20using%20*MARKDOWN*%20syntax&#39;%0A---%0A%0A*Please%20type%20below%20more%20information%20about%20this%20API%3A*%0A%0A">Edit this page</a>
+  </span>
+  <span class="small pull-right mobile-hide">
+    <a href="https://github.com/Platonenkov/XrplCSharp/blob/feature/rep/Xrpl/Models/Transactions/Metadata.cs/#L106">View Source</a>
+  </span>
+  <a id="Xrpl_Models_Transactions_ITransactionMetadata_OfferID_" data-uid="Xrpl.Models.Transactions.ITransactionMetadata.OfferID*"></a>
+  <h4 id="Xrpl_Models_Transactions_ITransactionMetadata_OfferID" data-uid="Xrpl.Models.Transactions.ITransactionMetadata.OfferID">OfferID</h4>
+  <div class="markdown level1 summary"><p>Shows the OfferIDof a new NFTokenOffer in a response from a NFTokenCreateOffer transaction.</p>
+</div>
+  <div class="markdown level1 conceptual"></div>
+  <h5 class="declaration">Declaration</h5>
+  <div class="codewrapper">
+    <pre><code class="lang-csharp hljs">[JsonProperty(&quot;offer_id&quot;)]
+string OfferID { get; set; }</code></pre>
+  </div>
+  <h5 class="propertyValue">Property Value</h5>
+  <table class="table table-bordered table-condensed">
+    <thead>
+      <tr>
+        <th>Type</th>
+        <th>Description</th>
+      </tr>
+    </thead>
+    <tbody>
+      <tr>
+        <td><span class="xref">string</span></td>
+        <td></td>
+      </tr>
+    </tbody>
+  </table>
+  <span class="small pull-right mobile-hide">
+    <span class="divider">|</span>
+    <a href="https://github.com/Platonenkov/XrplCSharp/new/feature/rep/apiSpec/new?filename=Xrpl_Models_Transactions_ITransactionMetadata_ParentBatchID.md&amp;value=---%0Auid%3A%20Xrpl.Models.Transactions.ITransactionMetadata.ParentBatchID%0Asummary%3A%20&#39;*You%20can%20override%20summary%20for%20the%20API%20here%20using%20*MARKDOWN*%20syntax&#39;%0A---%0A%0A*Please%20type%20below%20more%20information%20about%20this%20API%3A*%0A%0A">Edit this page</a>
+  </span>
+  <span class="small pull-right mobile-hide">
+    <a href="https://github.com/Platonenkov/XrplCSharp/blob/feature/rep/Xrpl/Models/Transactions/Metadata.cs/#L126">View Source</a>
+  </span>
+  <a id="Xrpl_Models_Transactions_ITransactionMetadata_ParentBatchID_" data-uid="Xrpl.Models.Transactions.ITransactionMetadata.ParentBatchID*"></a>
+  <h4 id="Xrpl_Models_Transactions_ITransactionMetadata_ParentBatchID" data-uid="Xrpl.Models.Transactions.ITransactionMetadata.ParentBatchID">ParentBatchID</h4>
+  <div class="markdown level1 summary"><p>Batch ID of the batch that this transaction belongs to, if any.</p>
+</div>
+  <div class="markdown level1 conceptual"></div>
+  <h5 class="declaration">Declaration</h5>
+  <div class="codewrapper">
+    <pre><code class="lang-csharp hljs">string? ParentBatchID { get; set; }</code></pre>
+  </div>
+  <h5 class="propertyValue">Property Value</h5>
+  <table class="table table-bordered table-condensed">
+    <thead>
+      <tr>
+        <th>Type</th>
+        <th>Description</th>
+      </tr>
+    </thead>
+    <tbody>
+      <tr>
+        <td><span class="xref">string</span></td>
+        <td></td>
+      </tr>
+    </tbody>
+  </table>
+  <span class="small pull-right mobile-hide">
+    <span class="divider">|</span>
+    <a href="https://github.com/Platonenkov/XrplCSharp/new/feature/rep/apiSpec/new?filename=Xrpl_Models_Transactions_ITransactionMetadata_PartialDeliveredAmount.md&amp;value=---%0Auid%3A%20Xrpl.Models.Transactions.ITransactionMetadata.PartialDeliveredAmount%0Asummary%3A%20&#39;*You%20can%20override%20summary%20for%20the%20API%20here%20using%20*MARKDOWN*%20syntax&#39;%0A---%0A%0A*Please%20type%20below%20more%20information%20about%20this%20API%3A*%0A%0A">Edit this page</a>
+  </span>
+  <span class="small pull-right mobile-hide">
+    <a href="https://github.com/Platonenkov/XrplCSharp/blob/feature/rep/Xrpl/Models/Transactions/Metadata.cs/#L82">View Source</a>
+  </span>
+  <a id="Xrpl_Models_Transactions_ITransactionMetadata_PartialDeliveredAmount_" data-uid="Xrpl.Models.Transactions.ITransactionMetadata.PartialDeliveredAmount*"></a>
+  <h4 id="Xrpl_Models_Transactions_ITransactionMetadata_PartialDeliveredAmount" data-uid="Xrpl.Models.Transactions.ITransactionMetadata.PartialDeliveredAmount">PartialDeliveredAmount</h4>
+  <div class="markdown level1 summary"><p>Gets or sets the amount that was actually delivered.</p>
+</div>
+  <div class="markdown level1 conceptual"></div>
+  <h5 class="declaration">Declaration</h5>
+  <div class="codewrapper">
+    <pre><code class="lang-csharp hljs">[JsonConverter(typeof(CurrencyConverter))]
+[JsonProperty(&quot;DeliveredAmount&quot;)]
+Currency PartialDeliveredAmount { get; set; }</code></pre>
+  </div>
+  <h5 class="propertyValue">Property Value</h5>
+  <table class="table table-bordered table-condensed">
+    <thead>
+      <tr>
+        <th>Type</th>
+        <th>Description</th>
+      </tr>
+    </thead>
+    <tbody>
+      <tr>
+        <td><a class="xref" href="Xrpl.Models.Common.Currency.html">Currency</a></td>
+        <td></td>
+      </tr>
+    </tbody>
+  </table>
+  <span class="small pull-right mobile-hide">
+    <span class="divider">|</span>
+    <a href="https://github.com/Platonenkov/XrplCSharp/new/feature/rep/apiSpec/new?filename=Xrpl_Models_Transactions_ITransactionMetadata_TransactionIndex.md&amp;value=---%0Auid%3A%20Xrpl.Models.Transactions.ITransactionMetadata.TransactionIndex%0Asummary%3A%20&#39;*You%20can%20override%20summary%20for%20the%20API%20here%20using%20*MARKDOWN*%20syntax&#39;%0A---%0A%0A*Please%20type%20below%20more%20information%20about%20this%20API%3A*%0A%0A">Edit this page</a>
+  </span>
+  <span class="small pull-right mobile-hide">
+    <a href="https://github.com/Platonenkov/XrplCSharp/blob/feature/rep/Xrpl/Models/Transactions/Metadata.cs/#L96">View Source</a>
+  </span>
+  <a id="Xrpl_Models_Transactions_ITransactionMetadata_TransactionIndex_" data-uid="Xrpl.Models.Transactions.ITransactionMetadata.TransactionIndex*"></a>
+  <h4 id="Xrpl_Models_Transactions_ITransactionMetadata_TransactionIndex" data-uid="Xrpl.Models.Transactions.ITransactionMetadata.TransactionIndex">TransactionIndex</h4>
+  <div class="markdown level1 summary"><p>Gets or sets the transaction index.</p>
+</div>
+  <div class="markdown level1 conceptual"></div>
+  <h5 class="declaration">Declaration</h5>
+  <div class="codewrapper">
+    <pre><code class="lang-csharp hljs">int TransactionIndex { get; set; }</code></pre>
+  </div>
+  <h5 class="propertyValue">Property Value</h5>
+  <table class="table table-bordered table-condensed">
+    <thead>
+      <tr>
+        <th>Type</th>
+        <th>Description</th>
+      </tr>
+    </thead>
+    <tbody>
+      <tr>
+        <td><span class="xref">int</span></td>
+        <td></td>
+      </tr>
+    </tbody>
+  </table>
+  <span class="small pull-right mobile-hide">
+    <span class="divider">|</span>
+    <a href="https://github.com/Platonenkov/XrplCSharp/new/feature/rep/apiSpec/new?filename=Xrpl_Models_Transactions_ITransactionMetadata_TransactionResult.md&amp;value=---%0Auid%3A%20Xrpl.Models.Transactions.ITransactionMetadata.TransactionResult%0Asummary%3A%20&#39;*You%20can%20override%20summary%20for%20the%20API%20here%20using%20*MARKDOWN*%20syntax&#39;%0A---%0A%0A*Please%20type%20below%20more%20information%20about%20this%20API%3A*%0A%0A">Edit this page</a>
+  </span>
+  <span class="small pull-right mobile-hide">
+    <a href="https://github.com/Platonenkov/XrplCSharp/blob/feature/rep/Xrpl/Models/Transactions/Metadata.cs/#L101">View Source</a>
+  </span>
+  <a id="Xrpl_Models_Transactions_ITransactionMetadata_TransactionResult_" data-uid="Xrpl.Models.Transactions.ITransactionMetadata.TransactionResult*"></a>
+  <h4 id="Xrpl_Models_Transactions_ITransactionMetadata_TransactionResult" data-uid="Xrpl.Models.Transactions.ITransactionMetadata.TransactionResult">TransactionResult</h4>
+  <div class="markdown level1 summary"><p>Gets or sets the transaction result.</p>
+</div>
+  <div class="markdown level1 conceptual"></div>
+  <h5 class="declaration">Declaration</h5>
+  <div class="codewrapper">
+    <pre><code class="lang-csharp hljs">string TransactionResult { get; set; }</code></pre>
+  </div>
+  <h5 class="propertyValue">Property Value</h5>
+  <table class="table table-bordered table-condensed">
+    <thead>
+      <tr>
+        <th>Type</th>
+        <th>Description</th>
+      </tr>
+    </thead>
+    <tbody>
+      <tr>
+        <td><span class="xref">string</span></td>
+        <td></td>
+      </tr>
+    </tbody>
+  </table>
+
+</article>
+          </div>
+
+          <div class="hidden-sm col-md-2" role="complementary">
+            <div class="sideaffix">
+              <div class="contribution">
+                <ul class="nav">
+                  <li>
+                    <a href="https://github.com/Platonenkov/XrplCSharp/new/feature/rep/apiSpec/new?filename=Xrpl_Models_Transactions_ITransactionMetadata.md&amp;value=---%0Auid%3A%20Xrpl.Models.Transactions.ITransactionMetadata%0Asummary%3A%20&#39;*You%20can%20override%20summary%20for%20the%20API%20here%20using%20*MARKDOWN*%20syntax&#39;%0A---%0A%0A*Please%20type%20below%20more%20information%20about%20this%20API%3A*%0A%0A" class="contribution-link">Edit this page</a>
+                  </li>
+                  <li>
+                    <a href="https://github.com/Platonenkov/XrplCSharp/blob/feature/rep/Xrpl/Models/Transactions/Metadata.cs/#L75" class="contribution-link">View Source</a>
+                  </li>
+                </ul>
+              </div>
+              <nav class="bs-docs-sidebar hidden-print hidden-xs hidden-sm affix" id="affix">
+                <h5>In this article</h5>
+                <div></div>
+              </nav>
+            </div>
+          </div>
+        </div>
+      </div>
+
+      <footer>
+        <div class="grad-bottom"></div>
+        <div class="footer">
+          <div class="container">
+            <span class="pull-right">
+              <a href="#top">Back to top</a>
+            </span>
+      
+      <span>Generated by <strong>DocFX</strong></span>
+          </div>
+        </div>
+      </footer>
+    </div>
+
+    <script type="text/javascript" src="../styles/docfx.vendor.min.js"></script>
+    <script type="text/javascript" src="../styles/docfx.js"></script>
+    <script type="text/javascript" src="../styles/main.js"></script>
+  </body>
+</html>
