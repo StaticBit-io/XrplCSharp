@@ -1,4 +1,4 @@
-using System;
+﻿using System;
 using Newtonsoft.Json.Linq;
 using Xrpl.BinaryCodec.Binary;
 using Xrpl.BinaryCodec.Util;
