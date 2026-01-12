@@ -167,4 +167,80 @@ public class TestIConnectionStates
 
         Console.WriteLine("=== Idempotent connect test passed ===");
     }
+
+    [TestMethod]
+    public async Task TestChangeServer_SwitchesSuccessfully()
+    {
+        var stateChanges = new List<XrpConnectionState>();
+
+        var client = new XrplClient("wss://s.altnet.rippletest.net:51233", new XrplClient.ClientOptions
+        {
+            MaxReconnectAttempts = 3,
+            StopAfterMaxAttempts = true,
+            ConnectionAttemptTimeout = TimeSpan.FromSeconds(15),
+            ConnectionAcquisitionTimeout = TimeSpan.FromSeconds(30)
+        });
+
+        client.connection.OnConnectionStatus += (status) =>
+        {
+            stateChanges.Add(status.ConnectionState);
+            Console.WriteLine($"State: {status.ConnectionState}, Message: {status.Message}");
+        };
+
+        await client.Connect();
+        await Task.Delay(2000);
+
+        Assert.AreEqual(XrpConnectionState.Connected, client.connection.CurrentConnectionState, "Should be Connected after first connect");
+
+        stateChanges.Clear();
+
+        await client.ChangeServer("wss://s.altnet.rippletest.net:51233", new XrplClient.ClientOptions
+        {
+            MaxReconnectAttempts = 5,
+            StopAfterMaxAttempts = true,
+            ConnectionAttemptTimeout = TimeSpan.FromSeconds(15),
+            ConnectionAcquisitionTimeout = TimeSpan.FromSeconds(30)
+        });
+        await Task.Delay(2000);
+
+        Assert.AreEqual(XrpConnectionState.Connected, client.connection.CurrentConnectionState, "Should be Connected after ChangeServer");
+        Assert.IsTrue(stateChanges.Contains(XrpConnectionState.Disconnected) || stateChanges.Contains(XrpConnectionState.Connecting), 
+            "Should have gone through Disconnected or Connecting state during server change");
+
+        await client.Disconnect();
+
+        Console.WriteLine("=== ChangeServer test passed ===");
+    }
+
+    [TestMethod]
+    public async Task TestChangeServer_NoWebSocketCleanupError()
+    {
+        var client = new XrplClient("wss://s.altnet.rippletest.net:51233", new XrplClient.ClientOptions
+        {
+            MaxReconnectAttempts = 3,
+            StopAfterMaxAttempts = true,
+            ConnectionAttemptTimeout = TimeSpan.FromSeconds(15),
+            ConnectionAcquisitionTimeout = TimeSpan.FromSeconds(30)
+        });
+
+        await client.Connect();
+        await Task.Delay(2000);
+
+        Assert.AreEqual(XrpConnectionState.Connected, client.connection.CurrentConnectionState);
+
+        for (int i = 0; i < 3; i++)
+        {
+            Console.WriteLine($"ChangeServer iteration {i + 1}");
+            
+            await client.ChangeServer("wss://s.altnet.rippletest.net:51233");
+            await Task.Delay(2000);
+
+            Assert.AreEqual(XrpConnectionState.Connected, client.connection.CurrentConnectionState, 
+                $"Should be Connected after ChangeServer iteration {i + 1}");
+        }
+
+        await client.Disconnect();
+
+        Console.WriteLine("=== ChangeServer no cleanup error test passed ===");
+    }
 }

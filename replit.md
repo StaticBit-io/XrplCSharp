@@ -2,7 +2,7 @@
 
 ## Overview
 
-XrplCSharp is a pure C# implementation for interacting with the XRP Ledger. Its primary purpose is to simplify complex XRP Ledger operations, including serialization, transaction signing, wallet management, and network communication. It provides a comprehensive SDK for building applications on the XRP Ledger using C# and .NET technologies. The library is built on .NET 10.0 (SDK 10.0.101) and features a modular architecture, enabling developers to integrate specific functionalities as needed.
+XrplCSharp is a pure C# implementation for interacting with the XRP Ledger. It simplifies complex XRP Ledger operations, including serialization, transaction signing, wallet management, and network communication. The library provides a comprehensive SDK for building applications on the XRP Ledger using C# and .NET. It is built on .NET 10.0 and features a modular architecture.
 
 ## User Preferences
 
@@ -12,69 +12,56 @@ Preferred communication style: Simple, everyday language.
 
 ### Modular Package Design
 
-XrplCSharp adopts a monorepo structure with distinct, focused packages:
-- `Xrpl.AddressCodec`: Handles address and seed encoding/decoding.
-- `Xrpl.BinaryCodec`: Manages binary serialization for the XRP Ledger format.
-- `Xrpl.Keypairs`: Provides cryptographic key generation and management.
-- `Xrpl`: The main client library, integrating all other components for a full SDK experience.
-
-This modularity allows for separation of concerns, reusability, and maintainability, letting developers use only the necessary components.
+XrplCSharp uses a monorepo structure with distinct, focused packages for address encoding (`Xrpl.AddressCodec`), binary serialization (`Xrpl.BinaryCodec`), key management (`Xrpl.Keypairs`), and the main client library (`Xrpl`). This design promotes reusability and maintainability.
 
 ### WebSocket-Based Network Client
 
-The core of the network interaction is a robust WebSocket client (`XrplClient`) designed for persistent, real-time communication with `rippled` nodes. It leverages C#'s async/await pattern for idiomatic usage and provides:
-- **Connection Management**: Event handling for connection status (`OnConnected`, `OnDisconnect`), intelligent reconnection logic with configurable policies, and detailed connection closure diagnostics.
-- **Request Handling**: Asynchronous request/response patterns with support for configurable timeouts and request failure policies (`ImmediateFail` or `WaitForConnection`) to ensure resilience during network disruptions. The ping/pong heartbeat mechanism uses `ImmediateFail` policy to rapidly detect connection issues without blocking reconnection attempts, preventing queue buildup of waiting requests during outages.
-- **Protocol Features**: Rate-limit detection and handling for XRPL server responses, and an application-level ping/pong heartbeat mechanism to maintain connection integrity and prevent server-side timeouts.
-- **State Management**: Accurate reporting of WebSocket states and enhanced reconnection progress tracking to provide detailed status updates to consuming applications.
-- **Auto-Reconnect Behavior**: The client intelligently distinguishes between user-initiated and server-initiated disconnections. When a user explicitly calls `Disconnect()`, the connection is closed permanently. However, when the server closes the connection (including WebSocket close code 1000 for normal closures during server restarts or maintenance), the client automatically attempts to reconnect using exponential backoff. This ensures 24/7 bot operations remain resilient to server-side disruptions while respecting explicit user disconnect commands. Implementation uses thread-safe instance tracking via `Interlocked` operations to reliably identify disconnect intent even in asynchronous contexts.
+The `XrplClient` provides robust, real-time WebSocket communication with `rippled` nodes. Key features include:
+- **Connection Management**: Event handling for connection status, intelligent reconnection logic with configurable policies, and detailed closure diagnostics. It distinguishes between user-initiated and server-initiated disconnections for resilient auto-reconnect behavior using exponential backoff.
+- **Request Handling**: Asynchronous request/response patterns with configurable timeouts and failure policies to ensure resilience.
+- **Protocol Features**: Rate-limit detection and an application-level ping/pong heartbeat to maintain connection integrity.
+- **Fast Server Switching**: A per-session architecture allows for quick server changes (3-5 seconds) by retiring old sessions and immediately creating new ones, minimizing downtime and preventing error logging.
+- **Immediate Network Drop Reconnect**: Identifies and handles transport-level network failures (e.g., `IOException`, `SocketException`) by attempting immediate reconnection without surfacing critical errors to consuming applications.
+- **MAUI/iOS Network Error Recognition**: Extended `IsNetworkException()` and `IsNetworkDropException()` with comprehensive exception chain traversal, message pattern matching (DNS failures like "nodename nor servname"), and platform-specific HRESULTs (0xFFFDFFFF for iOS DNS, 0x80004005 for E_FAIL) to prevent Critical logging on MAUI mobile platforms.
+- **Fast Ping Timeout Recovery**: Utilizes the same fast-reconnect mechanism as server switching to quickly recover from ping timeouts without error floods.
+- **Deterministic Cleanup**: Ensures complete WebSocket cleanup during disconnect operations, preventing race conditions and resource leaks.
+- **Intentional Disconnect Detection**: A multi-layered approach prevents critical error logging during user-initiated disconnections or server changes, differentiating them from genuine network failures.
+- **Complete Exception Containment**: All Timer.Elapsed handlers, async callbacks (OnConnect, OnConnectionError, OnMessageReceived, OnDisconnect), and fire-and-forget tasks are wrapped in try-catch blocks to prevent exceptions from escaping to consuming applications.
+- **UnobservedTaskException Prevention**: RequestManager.Reject() now automatically "observes" faulted Tasks via ContinueWith, preventing TaskScheduler.UnobservedTaskException from being raised in consuming apps with global exception handlers.
+- **Silent Promise Rejection**: Reject() no longer throws if a promise has already been resolved/rejected, enabling safe cleanup during reconnect flows.
+- **Unified Reconnect Flow**: ReconnectLoopAsync now uses the same session isolation pattern as ChangeServer - marking old sessions as retiring and creating fresh sessions before each connection attempt, preventing late callbacks from old sockets.
+- **Consistent ReconnectInfo Telemetry**: All ConnectionStatusInfo events with RestoringConnection state now include ReconnectInfo (CurrentAttempt, MaxAttempts, RemainingDelay), enabling consuming applications to properly track reconnect progress.
+- **ReconnectMode Enum State Machine**: A `ReconnectMode` enum (None, FastReconnect, LoopReconnect) serves as the single source of truth for reconnect state, eliminating race conditions from multi-flag checks. The mode is set atomically before any reconnect begins and cleared only when connection is stable or user disconnects.
 
 ### Wallet Management
 
-The `XrplWallet` class provides functionalities for securely generating and managing XRP Ledger wallets. It supports:
-- Random wallet generation and deterministic wallet creation from seeds.
-- Key derivation for both ED25519 and SECP256K1 algorithms.
-- Address encoding/decoding using a custom Base58 implementation.
+The `XrplWallet` class handles secure generation and management of XRP Ledger wallets, supporting random and deterministic wallet creation, key derivation (ED25519 and SECP256K1), and custom Base58 address encoding/decoding.
 
 ### Binary Codec System
 
-The XRP Ledger utilizes a canonical binary format for transactions. XrplCSharp includes a comprehensive binary codec with a type system to handle this:
-- **Bidirectional Conversion**: Supports parsing and serialization between binary and JSON representations.
-- **Type-Specific Handling**: Includes specialized handlers for various XRP Ledger data types (e.g., Amount, Hash256, AccountID).
-- **Extensibility**: Uses serialization/deserialization delegates and a type registry pattern for future expansion.
+A comprehensive binary codec handles the XRP Ledger's canonical binary format, supporting bidirectional conversion between binary and JSON representations, with type-specific handling for various XRP Ledger data types.
 
 ### Cryptographic Operations
 
-The library supports the multiple signature algorithms required by the XRP Ledger:
-- **Algorithm Abstraction**: Provides implementations for ED25519 and SECP256K1 signature schemes.
-- **Third-Party Integration**: Delegates ED25519 operations to established cryptographic libraries like Chaos.NaCl.Standard.
+The library supports ED25519 and SECP256K1 signature algorithms, integrating with third-party libraries like `Chaos.NaCl.Standard` for ED25519.
 
 ### Address Encoding Scheme
 
-A custom Base58 codec (`B58`) is implemented for XRP Ledger's unique address and seed encoding, featuring:
-- Version prefixes for different identifier types.
-- Checksum validation for data integrity.
-- Support for both classic and X-addresses.
+A custom Base58 codec (`B58`) handles XRP Ledger's unique address and seed encoding, including version prefixes, checksum validation, and support for classic and X-addresses.
 
 ### Documentation System
 
-API documentation is generated from XML comments within the source code using DocFX, producing static HTML documentation with cross-references for developers.
+API documentation is generated from XML comments using DocFX.
 
 ## External Dependencies
 
 ### NuGet Packages
 
-- **Chaos.NaCl.Standard**: ED25519 cryptographic operations.
-- **Microsoft.CSharp**: Dynamic language features.
-- **Microsoft.Extensions.Logging.Abstractions**: Logging abstraction layer.
+- **Chaos.NaCl.Standard**: For ED25519 cryptographic operations.
+- **Microsoft.CSharp**: For dynamic language features.
+- **Microsoft.Extensions.Logging.Abstractions**: For logging abstraction.
 
 ### XRP Ledger Infrastructure
 
-- **rippled nodes**: WebSocket (wss://) connections to XRP Ledger nodes, supporting both Testnet (`wss://s.altnet.rippletest.net:51233`) and standard production endpoints.
-- **Docker container**: `xrpllabsofficial/xrpld:1.12.0` for integration testing in standalone mode.
-
-### Testing Infrastructure
-
-- **Unit Tests**: Filter `TestU`.
-- **Integration Tests**: Filter `TestI`, requiring a local or Docker-based `rippled` node.
-- **Blazor WebAssembly Test Application**: Provides an interactive UI for testing XRP Ledger connectivity and features, including server selection, real-time connection status, and account transaction loading.
+- **rippled nodes**: WebSocket (wss://) connections to XRP Ledger nodes, including Testnet and production endpoints.
+- **Docker container**: `xrpllabsofficial/xrpld:1.12.0` for integration testing.

@@ -64,6 +64,12 @@ namespace Xrpl.Client
         Task Connect(System.Threading.CancellationToken cancellationToken = default);
         /// <summary> Disconnect from server </summary>
         Task Disconnect();
+        /// <summary>
+        /// Disconnects and waits for the WebSocket to be fully closed and cleaned up.
+        /// </summary>
+        /// <param name="timeout">Maximum time to wait for cleanup.</param>
+        /// <param name="cancellationToken">Cancellation token.</param>
+        Task DisconnectAndWaitAsync(TimeSpan timeout, CancellationToken cancellationToken = default);
         /// <summary> if the websocket is connected </summary>
         bool IsConnected();
         /// <summary> The subscribe method requests periodic notifications from the server when certain events happen. </summary>
@@ -408,6 +414,11 @@ namespace Xrpl.Client
 
         private void SetSettings(ClientOptions options)
         {
+            if (feeCushion != 0 && options is null)
+            {
+                return;
+            }
+
             feeCushion = options?.feeCushion ?? 1.2;
             maxFeeXRP = options?.maxFeeXRP;
             networkID = options?.NetworkID;
@@ -470,6 +481,12 @@ namespace Xrpl.Client
         public async Task Disconnect()
         {
             await connection.Disconnect();
+        }
+
+        /// <inheritdoc />
+        public async Task DisconnectAndWaitAsync(TimeSpan timeout, CancellationToken cancellationToken = default)
+        {
+            await connection.DisconnectAndWaitAsync(timeout, cancellationToken);
         }
 
         /// <inheritdoc />
