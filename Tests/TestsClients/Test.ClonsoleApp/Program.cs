@@ -12,6 +12,7 @@ using Xrpl.Models.Methods;
 using Xrpl.Models.Subscriptions;
 using Xrpl.Models.Transactions;
 using Xrpl.Sugar;
+using Xrpl.Utils;
 using Xrpl.Wallet;
 
 using Currency = Xrpl.Models.Common.Currency;
@@ -45,7 +46,9 @@ internal class Program
         {
             //await TestReconnection();
             //return;
-            await InitTestData(TestDataType.standalone);
+            await InitTestData(TestDataType.testNet);
+
+            await SetSigners(walletMultiSign, walletMultiSigner_1, walletMultiSigner_2);
 
             var features = await client.ServerFeatures();
             var canBe = features.GetCanBeEnabled();
@@ -179,7 +182,8 @@ internal class Program
         {
             TestDataType.testNet => new XrplClient("wss://s.altnet.rippletest.net:51233"),
             TestDataType.devNet => new XrplClient("wss://s.devnet.rippletest.net:51233"),
-            TestDataType.mainNet => new XrplClient("wss://s1.ripple.com"),
+            TestDataType.mainNet => new XrplClient("wss://xrplcluster.com"),
+            //TestDataType.mainNet => new XrplClient("wss://s1.ripple.com"),
             TestDataType.standalone => new XrplClient($"ws://localhost:6006"),
             _ => throw new ArgumentOutOfRangeException(nameof(serverType), serverType, null)
         };
@@ -700,8 +704,8 @@ internal class Program
             SignerQuorum = 2,
             SignerEntries = new()
             {
-                new SignerEntryWrapper{ SignerEntry = new SignerEntry { Account = signer1.ClassicAddress, SignerWeight = 1 }},
-                new SignerEntryWrapper{ SignerEntry = new SignerEntry { Account = signer2.ClassicAddress, SignerWeight = 1, }},
+                new SignerEntryWrapper{ SignerEntry = new SignerEntry { Account = signer1.ClassicAddress, SignerWeight = 1, WalletLocator = "test wallet sig 1"}},
+                new SignerEntryWrapper{ SignerEntry = new SignerEntry { Account = signer2.ClassicAddress, SignerWeight = 1, WalletLocator = "test wallet sig 2"}},
             },
             Fee = new Currency { Value = "15" },              // нормальная комиссия
             Sequence = acc.AccountData.Sequence,
