@@ -1,0 +1,302 @@
+<!DOCTYPE html>
+<!--[if IE]><![endif]-->
+<html>
+
+  <head>
+    <meta charset="utf-8">
+    <meta http-equiv="X-UA-Compatible" content="IE=edge,chrome=1">
+    <title>Class AMMDelete </title>
+    <meta name="viewport" content="width=device-width">
+    <meta name="title" content="Class AMMDelete ">
+    <meta name="generator" content="docfx ">
+  
+    <link rel="shortcut icon" href="../favicon.ico">
+    <link rel="stylesheet" href="../styles/docfx.vendor.css">
+    <link rel="stylesheet" href="../styles/docfx.css">
+    <link rel="stylesheet" href="../styles/main.css">
+    <link href="https://fonts.googleapis.com/css?family=Roboto" rel="stylesheet"> 
+    <meta property="docfx:navrel" content="../toc.html">
+    <meta property="docfx:tocrel" content="toc.html">
+  
+  
+  
+  </head>  <body data-spy="scroll" data-target="#affix" data-offset="120">
+    <div id="wrapper">
+      <header>
+
+        <nav id="autocollapse" class="navbar navbar-inverse ng-scope" role="navigation">
+          <div class="container">
+            <div class="navbar-header">
+              <button type="button" class="navbar-toggle" data-toggle="collapse" data-target="#navbar">
+                <span class="sr-only">Toggle navigation</span>
+                <span class="icon-bar"></span>
+                <span class="icon-bar"></span>
+                <span class="icon-bar"></span>
+              </button>
+
+              <a class="navbar-brand" href="../index.html">
+                <img id="logo" class="svg" src="../logo.svg" alt="">
+              </a>
+            </div>
+            <div class="collapse navbar-collapse" id="navbar">
+              <form class="navbar-form navbar-right" role="search" id="search">
+                <div class="form-group">
+                  <input type="text" class="form-control" id="search-query" placeholder="Search" autocomplete="off">
+                </div>
+              </form>
+            </div>
+          </div>
+        </nav>
+
+        <div class="subnav navbar navbar-default">
+          <div class="container hide-when-search" id="breadcrumb">
+            <ul class="breadcrumb">
+              <li></li>
+            </ul>
+          </div>
+        </div>
+      </header>
+      <div role="main" class="container body-content hide-when-search">
+
+        <div class="sidenav hide-when-search">
+          <a class="btn toc-toggle collapse" data-toggle="collapse" href="#sidetoggle" aria-expanded="false" aria-controls="sidetoggle">Show / Hide Table of Contents</a>
+          <div class="sidetoggle collapse" id="sidetoggle">
+            <div id="sidetoc"></div>
+          </div>
+        </div>
+        <div class="article row grid-right">
+          <div class="col-md-10">
+            <article class="content wrap" id="_content" data-uid="Xrpl.Models.Transactions.AMMDelete">
+
+
+
+  <h1 id="Xrpl_Models_Transactions_AMMDelete" data-uid="Xrpl.Models.Transactions.AMMDelete" class="text-break">Class AMMDelete</h1>
+  <div class="markdown level0 summary"><p>Delete an empty Automated Market Maker (AMM) instance that could not be fully deleted automatically.
+Tip: The AMMWithdraw transaction automatically tries to delete an AMM, along with associated ledger
+entries such as empty trust lines, if it withdrew all the assets from the AMM's pool.
+However, if there are too many trust lines to the AMM account to remove in one transaction,
+it may stop before fully removing the AMM.Similarly, an AMMDelete transaction removes up to
+a maximum number of trust lines; in extreme cases, it may take several AMMDelete transactions
+to fully delete the trust lines and the associated AMM.
+In all cases, the AMM ledger entry and AMM account are deleted by the last such transaction.</p>
+</div>
+  <div class="markdown level0 conceptual"></div>
+  <div class="inheritance">
+    <h5>Inheritance</h5>
+    <div class="level0"><span class="xref">object</span></div>
+    <div class="level1"><a class="xref" href="Xrpl.Models.Transactions.TransactionRequest.html">TransactionRequest</a></div>
+    <div class="level2"><span class="xref">AMMDelete</span></div>
+  </div>
+  <div class="implements">
+    <h5>Implements</h5>
+    <div><a class="xref" href="Xrpl.Models.Transactions.ITransactionRequest.html">ITransactionRequest</a></div>
+    <div><a class="xref" href="Xrpl.Models.Transactions.IAMMDelete.html">IAMMDelete</a></div>
+    <div><a class="xref" href="Xrpl.Models.Transactions.ITransactionCommon.html">ITransactionCommon</a></div>
+  </div>
+  <div class="inheritedMembers">
+    <h5>Inherited Members</h5>
+    <div>
+      <a class="xref" href="Xrpl.Models.Transactions.TransactionRequest.html#Xrpl_Models_Transactions_TransactionRequest_NetworkID">TransactionRequest.NetworkID</a>
+    </div>
+    <div>
+      <a class="xref" href="Xrpl.Models.Transactions.TransactionRequest.html#Xrpl_Models_Transactions_TransactionRequest_Account">TransactionRequest.Account</a>
+    </div>
+    <div>
+      <a class="xref" href="Xrpl.Models.Transactions.TransactionRequest.html#Xrpl_Models_Transactions_TransactionRequest_AccountTxnID">TransactionRequest.AccountTxnID</a>
+    </div>
+    <div>
+      <a class="xref" href="Xrpl.Models.Transactions.TransactionRequest.html#Xrpl_Models_Transactions_TransactionRequest_Fee">TransactionRequest.Fee</a>
+    </div>
+    <div>
+      <a class="xref" href="Xrpl.Models.Transactions.TransactionRequest.html#Xrpl_Models_Transactions_TransactionRequest_Flags">TransactionRequest.Flags</a>
+    </div>
+    <div>
+      <a class="xref" href="Xrpl.Models.Transactions.TransactionRequest.html#Xrpl_Models_Transactions_TransactionRequest_LastLedgerSequence">TransactionRequest.LastLedgerSequence</a>
+    </div>
+    <div>
+      <a class="xref" href="Xrpl.Models.Transactions.TransactionRequest.html#Xrpl_Models_Transactions_TransactionRequest_Memos">TransactionRequest.Memos</a>
+    </div>
+    <div>
+      <a class="xref" href="Xrpl.Models.Transactions.TransactionRequest.html#Xrpl_Models_Transactions_TransactionRequest_Sequence">TransactionRequest.Sequence</a>
+    </div>
+    <div>
+      <a class="xref" href="Xrpl.Models.Transactions.TransactionRequest.html#Xrpl_Models_Transactions_TransactionRequest_SigningPublicKey">TransactionRequest.SigningPublicKey</a>
+    </div>
+    <div>
+      <a class="xref" href="Xrpl.Models.Transactions.TransactionRequest.html#Xrpl_Models_Transactions_TransactionRequest_Signers">TransactionRequest.Signers</a>
+    </div>
+    <div>
+      <a class="xref" href="Xrpl.Models.Transactions.TransactionRequest.html#Xrpl_Models_Transactions_TransactionRequest_TransactionType">TransactionRequest.TransactionType</a>
+    </div>
+    <div>
+      <a class="xref" href="Xrpl.Models.Transactions.TransactionRequest.html#Xrpl_Models_Transactions_TransactionRequest_TransactionSignature">TransactionRequest.TransactionSignature</a>
+    </div>
+    <div>
+      <a class="xref" href="Xrpl.Models.Transactions.TransactionRequest.html#Xrpl_Models_Transactions_TransactionRequest_ToJson">TransactionRequest.ToJson()</a>
+    </div>
+    <div>
+      <a class="xref" href="Xrpl.Models.Transactions.TransactionRequest.html#Xrpl_Models_Transactions_TransactionRequest_ToDictionary">TransactionRequest.ToDictionary()</a>
+    </div>
+    <div>
+      <a class="xref" href="Xrpl.Models.Transactions.TransactionRequest.html#Xrpl_Models_Transactions_TransactionRequest_SourceTag">TransactionRequest.SourceTag</a>
+    </div>
+    <div>
+      <a class="xref" href="Xrpl.Models.Transactions.TransactionRequest.html#Xrpl_Models_Transactions_TransactionRequest_TicketSequence">TransactionRequest.TicketSequence</a>
+    </div>
+  </div>
+  <h6><strong>Namespace</strong>: <a class="xref" href="Xrpl.html">Xrpl</a>.<a class="xref" href="Xrpl.Models.html">Models</a>.<a class="xref" href="Xrpl.Models.Transactions.html">Transactions</a></h6>
+  <h6><strong>Assembly</strong>: Xrpl.dll</h6>
+  <h5 id="Xrpl_Models_Transactions_AMMDelete_syntax">Syntax</h5>
+  <div class="codewrapper">
+    <pre><code class="lang-csharp hljs">public class AMMDelete : TransactionRequest, ITransactionRequest, IAMMDelete, ITransactionCommon</code></pre>
+  </div>
+  <h3 id="constructors">Constructors
+</h3>
+  <span class="small pull-right mobile-hide">
+    <span class="divider">|</span>
+    <a href="https://github.com/Platonenkov/XrplCSharp/new/feature/rep/apiSpec/new?filename=Xrpl_Models_Transactions_AMMDelete__ctor.md&amp;value=---%0Auid%3A%20Xrpl.Models.Transactions.AMMDelete.%23ctor%0Asummary%3A%20&#39;*You%20can%20override%20summary%20for%20the%20API%20here%20using%20*MARKDOWN*%20syntax&#39;%0A---%0A%0A*Please%20type%20below%20more%20information%20about%20this%20API%3A*%0A%0A">Edit this page</a>
+  </span>
+  <span class="small pull-right mobile-hide">
+    <a href="https://github.com/Platonenkov/XrplCSharp/blob/feature/rep/Xrpl/Models/Transactions/AMMDelete.cs/#L25">View Source</a>
+  </span>
+  <a id="Xrpl_Models_Transactions_AMMDelete__ctor_" data-uid="Xrpl.Models.Transactions.AMMDelete.#ctor*"></a>
+  <h4 id="Xrpl_Models_Transactions_AMMDelete__ctor" data-uid="Xrpl.Models.Transactions.AMMDelete.#ctor">AMMDelete()</h4>
+  <div class="markdown level1 summary"></div>
+  <div class="markdown level1 conceptual"></div>
+  <h5 class="declaration">Declaration</h5>
+  <div class="codewrapper">
+    <pre><code class="lang-csharp hljs">public AMMDelete()</code></pre>
+  </div>
+  <h3 id="properties">Properties
+</h3>
+  <span class="small pull-right mobile-hide">
+    <span class="divider">|</span>
+    <a href="https://github.com/Platonenkov/XrplCSharp/new/feature/rep/apiSpec/new?filename=Xrpl_Models_Transactions_AMMDelete_Asset.md&amp;value=---%0Auid%3A%20Xrpl.Models.Transactions.AMMDelete.Asset%0Asummary%3A%20&#39;*You%20can%20override%20summary%20for%20the%20API%20here%20using%20*MARKDOWN*%20syntax&#39;%0A---%0A%0A*Please%20type%20below%20more%20information%20about%20this%20API%3A*%0A%0A">Edit this page</a>
+  </span>
+  <span class="small pull-right mobile-hide">
+    <a href="https://github.com/Platonenkov/XrplCSharp/blob/feature/rep/Xrpl/Models/Transactions/AMMDelete.cs/#L31">View Source</a>
+  </span>
+  <a id="Xrpl_Models_Transactions_AMMDelete_Asset_" data-uid="Xrpl.Models.Transactions.AMMDelete.Asset*"></a>
+  <h4 id="Xrpl_Models_Transactions_AMMDelete_Asset" data-uid="Xrpl.Models.Transactions.AMMDelete.Asset">Asset</h4>
+  <div class="markdown level1 summary"><p>The definition for one of the assets in the AMM's pool.</p>
+</div>
+  <div class="markdown level1 conceptual"></div>
+  <h5 class="declaration">Declaration</h5>
+  <div class="codewrapper">
+    <pre><code class="lang-csharp hljs">[JsonConverter(typeof(IssuedCurrencyConverter))]
+public Common.IssuedCurrency Asset { get; set; }</code></pre>
+  </div>
+  <h5 class="propertyValue">Property Value</h5>
+  <table class="table table-bordered table-condensed">
+    <thead>
+      <tr>
+        <th>Type</th>
+        <th>Description</th>
+      </tr>
+    </thead>
+    <tbody>
+      <tr>
+        <td><a class="xref" href="Xrpl.Models.Common.Common.html">Common</a>.<a class="xref" href="Xrpl.Models.Common.Common.IssuedCurrency.html">IssuedCurrency</a></td>
+        <td></td>
+      </tr>
+    </tbody>
+  </table>
+  <span class="small pull-right mobile-hide">
+    <span class="divider">|</span>
+    <a href="https://github.com/Platonenkov/XrplCSharp/new/feature/rep/apiSpec/new?filename=Xrpl_Models_Transactions_AMMDelete_Asset2.md&amp;value=---%0Auid%3A%20Xrpl.Models.Transactions.AMMDelete.Asset2%0Asummary%3A%20&#39;*You%20can%20override%20summary%20for%20the%20API%20here%20using%20*MARKDOWN*%20syntax&#39;%0A---%0A%0A*Please%20type%20below%20more%20information%20about%20this%20API%3A*%0A%0A">Edit this page</a>
+  </span>
+  <span class="small pull-right mobile-hide">
+    <a href="https://github.com/Platonenkov/XrplCSharp/blob/feature/rep/Xrpl/Models/Transactions/AMMDelete.cs/#L34">View Source</a>
+  </span>
+  <a id="Xrpl_Models_Transactions_AMMDelete_Asset2_" data-uid="Xrpl.Models.Transactions.AMMDelete.Asset2*"></a>
+  <h4 id="Xrpl_Models_Transactions_AMMDelete_Asset2" data-uid="Xrpl.Models.Transactions.AMMDelete.Asset2">Asset2</h4>
+  <div class="markdown level1 summary"><p>The definition for the other asset in the AMM's pool.</p>
+</div>
+  <div class="markdown level1 conceptual"></div>
+  <h5 class="declaration">Declaration</h5>
+  <div class="codewrapper">
+    <pre><code class="lang-csharp hljs">[JsonConverter(typeof(IssuedCurrencyConverter))]
+public Common.IssuedCurrency Asset2 { get; set; }</code></pre>
+  </div>
+  <h5 class="propertyValue">Property Value</h5>
+  <table class="table table-bordered table-condensed">
+    <thead>
+      <tr>
+        <th>Type</th>
+        <th>Description</th>
+      </tr>
+    </thead>
+    <tbody>
+      <tr>
+        <td><a class="xref" href="Xrpl.Models.Common.Common.html">Common</a>.<a class="xref" href="Xrpl.Models.Common.Common.IssuedCurrency.html">IssuedCurrency</a></td>
+        <td></td>
+      </tr>
+    </tbody>
+  </table>
+  <h3 id="implements">Implements</h3>
+  <div>
+      <a class="xref" href="Xrpl.Models.Transactions.ITransactionRequest.html">ITransactionRequest</a>
+  </div>
+  <div>
+      <a class="xref" href="Xrpl.Models.Transactions.IAMMDelete.html">IAMMDelete</a>
+  </div>
+  <div>
+      <a class="xref" href="Xrpl.Models.Transactions.ITransactionCommon.html">ITransactionCommon</a>
+  </div>
+  <h3 id="extensionmethods">Extension Methods</h3>
+  <div>
+      <a class="xref" href="Xrpl.Models.Utils.BatchUtils.html#Xrpl_Models_Utils_BatchUtils_ToBatchTx_Xrpl_Models_Transactions_ITransactionRequest_">BatchUtils.ToBatchTx(ITransactionRequest)</a>
+  </div>
+  <div>
+      <a class="xref" href="Xrpl.Utils.Utilities.html#Xrpl_Utils_Utilities_Encode_Xrpl_Models_Transactions_TransactionRequest_">Utilities.Encode(TransactionRequest)</a>
+  </div>
+  <div>
+      <a class="xref" href="Xrpl.Utils.Utilities.html#Xrpl_Utils_Utilities_EncodeForMultiSigning_Xrpl_Models_Transactions_TransactionRequest_System_String_">Utilities.EncodeForMultiSigning(TransactionRequest, string)</a>
+  </div>
+  <div>
+      <a class="xref" href="Xrpl.Utils.Utilities.html#Xrpl_Utils_Utilities_EncodeForSigning_Xrpl_Models_Transactions_TransactionRequest_">Utilities.EncodeForSigning(TransactionRequest)</a>
+  </div>
+
+</article>
+          </div>
+
+          <div class="hidden-sm col-md-2" role="complementary">
+            <div class="sideaffix">
+              <div class="contribution">
+                <ul class="nav">
+                  <li>
+                    <a href="https://github.com/Platonenkov/XrplCSharp/new/feature/rep/apiSpec/new?filename=Xrpl_Models_Transactions_AMMDelete.md&amp;value=---%0Auid%3A%20Xrpl.Models.Transactions.AMMDelete%0Asummary%3A%20&#39;*You%20can%20override%20summary%20for%20the%20API%20here%20using%20*MARKDOWN*%20syntax&#39;%0A---%0A%0A*Please%20type%20below%20more%20information%20about%20this%20API%3A*%0A%0A" class="contribution-link">Edit this page</a>
+                  </li>
+                  <li>
+                    <a href="https://github.com/Platonenkov/XrplCSharp/blob/feature/rep/Xrpl/Models/Transactions/AMMDelete.cs/#L23" class="contribution-link">View Source</a>
+                  </li>
+                </ul>
+              </div>
+              <nav class="bs-docs-sidebar hidden-print hidden-xs hidden-sm affix" id="affix">
+                <h5>In this article</h5>
+                <div></div>
+              </nav>
+            </div>
+          </div>
+        </div>
+      </div>
+
+      <footer>
+        <div class="grad-bottom"></div>
+        <div class="footer">
+          <div class="container">
+            <span class="pull-right">
+              <a href="#top">Back to top</a>
+            </span>
+      
+      <span>Generated by <strong>DocFX</strong></span>
+          </div>
+        </div>
+      </footer>
+    </div>
+
+    <script type="text/javascript" src="../styles/docfx.vendor.min.js"></script>
+    <script type="text/javascript" src="../styles/docfx.js"></script>
+    <script type="text/javascript" src="../styles/main.js"></script>
+  </body>
+</html>

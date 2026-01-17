@@ -1,10 +1,11 @@
-using Microsoft.VisualStudio.TestTools.UnitTesting;
+﻿using Microsoft.VisualStudio.TestTools.UnitTesting;
 
 using Newtonsoft.Json.Linq;
 
 using System;
 using System.Collections.Generic;
 using System.Numerics;
+using System.Threading;
 using System.Threading.Tasks;
 
 using Xrpl.Client;
@@ -363,6 +364,9 @@ internal sealed class FeeTestClient : IXrplClient
     public string Url() => throw new NotSupportedException();
     public Task Connect(System.Threading.CancellationToken cancellationToken = default) => throw new NotSupportedException();
     public Task Disconnect() => throw new NotSupportedException();
+
+    public Task DisconnectAndWaitAsync(TimeSpan timeout, CancellationToken cancellationToken = default) => throw new NotImplementedException();
+
     public bool IsConnected() => throw new NotSupportedException();
     public Task<object> Subscribe(SubscribeRequest request) => throw new NotSupportedException();
     public Task<object> Unsubscribe(UnsubscribeRequest request) => throw new NotSupportedException();

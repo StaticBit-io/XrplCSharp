@@ -1,29 +1,29 @@
-﻿<!DOCTYPE html>
+<!DOCTYPE html>
 <!--[if IE]><![endif]-->
 <html>
-  
+
   <head>
     <meta charset="utf-8">
     <meta http-equiv="X-UA-Compatible" content="IE=edge,chrome=1">
     <title>XrplCSharp </title>
     <meta name="viewport" content="width=device-width">
     <meta name="title" content="XrplCSharp ">
-    <meta name="generator" content="docfx 2.59.4.0">
-    
+    <meta name="generator" content="docfx ">
+  
     <link rel="shortcut icon" href="favicon.ico">
     <link rel="stylesheet" href="styles/docfx.vendor.css">
     <link rel="stylesheet" href="styles/docfx.css">
     <link rel="stylesheet" href="styles/main.css">
     <link href="https://fonts.googleapis.com/css?family=Roboto" rel="stylesheet"> 
-    <meta property="docfx:navrel" content="toc">
-    <meta property="docfx:tocrel" content="toc">
-    
-    
-    
+    <meta property="docfx:navrel" content="toc.html">
+    <meta property="docfx:tocrel" content="toc.html">
+  
+  
+  
   </head>  <body data-spy="scroll" data-target="#affix" data-offset="120">
     <div id="wrapper">
       <header>
-        
+
         <nav id="autocollapse" class="navbar navbar-inverse ng-scope" role="navigation">
           <div class="container">
             <div class="navbar-header">
@@ -33,7 +33,7 @@
                 <span class="icon-bar"></span>
                 <span class="icon-bar"></span>
               </button>
-              
+
               <a class="navbar-brand" href="index.html">
                 <img id="logo" class="svg" src="logo.svg" alt="">
               </a>
@@ -44,15 +44,10 @@
                   <input type="text" class="form-control" id="search-query" placeholder="Search" autocomplete="off">
                 </div>
               </form>
-                
-                <ul class="nav level1 navbar-nav">
-                      <li>
-                          <a href="reference/Xrpl.AddressCodec.html" title="Reference">Reference</a>
-                      </li>
-                </ul>    </div>
+            </div>
           </div>
         </nav>
-        
+
         <div class="subnav navbar navbar-default">
           <div class="container hide-when-search" id="breadcrumb">
             <ul class="breadcrumb">
@@ -65,31 +60,82 @@
         <div class="article row grid">
           <div class="col-md-10">
             <article class="content wrap" id="_content" data-uid="">
-<h1 id="xrplcsharp"><strong>XrplCSharp</strong></h1>
+<h1 id="xrplcsharp">XrplCSharp</h1>
 
-<p>This package includes the xrpl library. This repository uses a monorepo layout. Please find the README for xrpl <a href="http://github.com/transia-RnD/XrplCSharp/">here</a>.</p>
-<p>READMEs for other packages in this monorepo are located at the root of their package, but since newcomers to XRPL are likely to want to use the xrpl package this README is at the root of the project.</p>
+<p>A pure C# implementation for interacting with the XRP Ledger. This library simplifies complex XRP Ledger operations including serialization, transaction signing, wallet management, and network communication.</p>
+<h2 id="packages">Packages</h2>
+<h3 id="xrpladdresscodec"><a href="reference/Xrpl.AddressCodec.html">Xrpl.AddressCodec</a></h3>
+<p>Functions for encoding and decoding XRP Ledger addresses and seeds.</p>
+<ul>
+<li><a href="reference/Xrpl.AddressCodec.XrplAddressCodec.html">XrplAddressCodec</a> - Main address encoding/decoding class</li>
+<li><a href="reference/Xrpl.AddressCodec.XrplCodec.html">XrplCodec</a> - Seed and key encoding utilities</li>
+<li><a href="reference/Xrpl.AddressCodec.B58.html">B58</a> - Base58 encoding implementation</li>
+</ul>
+<h3 id="xrplbinarycodec"><a href="reference/Xrpl.BinaryCodec.html">Xrpl.BinaryCodec</a></h3>
+<p>Functions for encoding objects into the XRP Ledger's canonical binary format and decoding them.</p>
+<ul>
+<li><a href="reference/Xrpl.BinaryCodec.XrplBinaryCodec.html">XrplBinaryCodec</a> - Main binary codec class</li>
+<li><a href="reference/Xrpl.BinaryCodec.Types.html">Types</a> - Serializable type implementations</li>
+<li><a href="reference/Xrpl.BinaryCodec.Binary.html">Binary</a> - Binary parsing and serialization</li>
+</ul>
+<h3 id="xrplkeypairs"><a href="reference/Xrpl.Keypairs.html">Xrpl.Keypairs</a></h3>
+<p>Low-level functions for creating and using cryptographic keys with the XRP Ledger.</p>
+<ul>
+<li><a href="reference/Xrpl.Keypairs.XrplKeypairs.html">XrplKeypairs</a> - Key generation and signing</li>
+<li><a href="reference/Xrpl.Keypairs.Ed25519.html">Ed25519</a> - ED25519 algorithm implementation</li>
+<li><a href="reference/Xrpl.Keypairs.K256.html">K256</a> - SECP256K1 algorithm implementation</li>
+</ul>
+<h3 id="xrplclient"><a href="reference/Xrpl.Client.html">Xrpl.Client</a></h3>
+<p>WebSocket client for communicating with XRP Ledger nodes.</p>
+<ul>
+<li><a href="reference/Xrpl.Client.XrplClient.html">XrplClient</a> - Main client class</li>
+<li><a href="reference/Xrpl.Client.connection.html">Connection</a> - Connection management</li>
+<li><a href="reference/Xrpl.Models.html">Models</a> - Request/Response models</li>
+</ul>
+<h2 id="quick-start">Quick Start</h2>
+<pre><code class="lang-csharp">using Xrpl.Client;
+
+// Create and connect client
+var client = new XrplClient(&quot;wss://s.altnet.rippletest.net:51233&quot;);
+await client.Connect();
+
+// Get account info
+var response = await client.Request(new AccountInfoRequest 
+{ 
+    Account = &quot;rHb9CJAWyB4rj91VRWn96DkukG4bwdtyTh&quot; 
+});
+
+// Disconnect when done
+await client.Disconnect();
+</code></pre>
+<h2 id="documentation">Documentation</h2>
+<ul>
+<li><a href="Connection-Guide.html">Connection Guide (EN)</a> - How to configure and manage connections</li>
+<li><a href="Connection-Guide.ru.html">Connection Guide (RU)</a> - Руководство по подключению</li>
+<li><a href="reference/">API Reference</a> - Full API documentation</li>
+</ul>
+
 </article>
           </div>
-          
+
           <div class="hidden-sm col-md-2" role="complementary">
             <div class="sideaffix">
               <div class="contribution">
                 <ul class="nav">
                   <li>
-                    <a href="https://github.com/Transia-RnD/XrplCSharp/blob/docs/DocFx/index.md/#L1" class="contribution-link">Improve this Doc</a>
+                    <a href="https://github.com/Platonenkov/XrplCSharp/blob/feature/rep/DocFx/index.md/#L1" class="contribution-link">Edit this page</a>
                   </li>
                 </ul>
               </div>
               <nav class="bs-docs-sidebar hidden-print hidden-xs hidden-sm affix" id="affix">
-                <h5>In This Article</h5>
+                <h5>In this article</h5>
                 <div></div>
               </nav>
             </div>
           </div>
         </div>
       </div>
-      
+
       <footer>
         <div class="grad-bottom"></div>
         <div class="footer">
@@ -97,14 +143,14 @@
             <span class="pull-right">
               <a href="#top">Back to top</a>
             </span>
-            
-            <span>Generated by <strong>DocFX</strong></span>
+      
+      <span>Generated by <strong>DocFX</strong></span>
           </div>
         </div>
       </footer>
     </div>
-    
-    <script type="text/javascript" src="styles/docfx.vendor.js"></script>
+
+    <script type="text/javascript" src="styles/docfx.vendor.min.js"></script>
     <script type="text/javascript" src="styles/docfx.js"></script>
     <script type="text/javascript" src="styles/main.js"></script>
   </body>

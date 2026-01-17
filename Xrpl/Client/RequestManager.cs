@@ -68,31 +68,83 @@ namespace Xrpl.Client
         }
 
         /// <summary>
+        /// Rejects a pending request with the specified exception.
+        /// Safe to call even if the promise no longer exists (e.g., already resolved).
+        /// The exception is automatically "observed" to prevent UnobservedTaskException 
+        /// from being raised in consuming applications like DaddyWallet.
         /// </summary>
         public void Reject(Guid id, Exception error)
         {
             var promise = promisesAwaitingResponse.TryGetValue(id, out var taskInfo);
             if (taskInfo == null)
             {
-                throw new XrplException($"No existing promise with id {id}");
+                Debug.WriteLine($"Reject called for non-existent promise {id} (likely already resolved)");
+                return;
             }
-            // todo: should stop task timout if need to
             var hasTimer = this.timeoutsAwaitingResponse.TryRemove(id, out var timer);
             if (hasTimer)
                 timer.Stop();
             var setException = taskInfo.TaskCompletionResult.GetType().GetMethod("TrySetException", new Type[] { typeof(Exception) }, null);
             setException.Invoke(taskInfo.TaskCompletionResult, new[] { error });
+            
+            // Observe the exception to prevent UnobservedTaskException in consuming apps
+            // This is critical for MAUI/mobile apps that have global exception handlers
+            ObserveTaskException(taskInfo.TaskCompletionResult);
+            
             this.DeletePromise(id, taskInfo);
+        }
+        
+        /// <summary>
+        /// Observes the exception on a TaskCompletionSource's Task to prevent UnobservedTaskException.
+        /// When a Task faults but is never awaited, .NET raises UnobservedTaskException event.
+        /// By adding a ContinueWith that reads the exception, we mark it as "observed".
+        /// </summary>
+        private void ObserveTaskException(dynamic taskCompletionSource)
+        {
+            try
+            {
+                // Get the Task property from TaskCompletionSource<T>
+                var taskProperty = taskCompletionSource.GetType().GetProperty("Task");
+                if (taskProperty == null) return;
+                
+                var task = taskProperty.GetValue(taskCompletionSource) as Task;
+                if (task == null) return;
+                
+                // Add a continuation that observes the exception (reads it to mark as handled)
+                // This prevents UnobservedTaskException from being raised
+                task.ContinueWith(t => 
+                {
+                    // Reading t.Exception marks it as observed
+                    _ = t.Exception;
+                }, TaskContinuationOptions.OnlyOnFaulted);
+            }
+            catch
+            {
+                // Ignore any reflection errors - this is a best-effort operation
+            }
         }
 
         /// <summary>
+        /// Rejects all pending requests with the specified exception.
         /// </summary>
         public void RejectAll(Exception error)
         {
             foreach (var id in this.promisesAwaitingResponse.Keys)
             {
                 this.Reject(id, error);
-                this.DeletePromise(id, null);
+            }
+        }
+
+        /// <summary>
+        /// Rejects all pending requests with OperationCanceledException.
+        /// Used for intentional disconnects to avoid logging as Critical errors.
+        /// </summary>
+        public void RejectAllWithCancellation()
+        {
+            var cancellationError = new OperationCanceledException("Connection was intentionally closed.");
+            foreach (var id in this.promisesAwaitingResponse.Keys)
+            {
+                this.Reject(id, cancellationError);
             }
         }
 
@@ -138,7 +190,17 @@ namespace Xrpl.Client
             {
                 Timer timer = new Timer(timeout.TotalMilliseconds);
                 timer.AutoReset = false;
-                timer.Elapsed += (sender, e) => this.Reject(newId, new TimeoutException($"Timeout for request: {newRequest} with id {newId}", request));
+                timer.Elapsed += (sender, e) =>
+                {
+                    try
+                    {
+                        this.Reject(newId, new TimeoutException($"Timeout for request: {newRequest} with id {newId}", request));
+                    }
+                    catch (Exception ex)
+                    {
+                        Debug.WriteLine($"Timer.Elapsed Reject error (already resolved?): {ex.Message}");
+                    }
+                };
                 timer.Start();
                 timeoutsAwaitingResponse.TryAdd(newId, timer);
             }
@@ -195,7 +257,17 @@ namespace Xrpl.Client
             {
                 Timer timer = new Timer(timeout.TotalMilliseconds);
                 timer.AutoReset = false;
-                timer.Elapsed += (sender, e) => this.Reject(newId, new TimeoutException($"Timeout for request: {newRequest} with id {newId}", request));
+                timer.Elapsed += (sender, e) =>
+                {
+                    try
+                    {
+                        this.Reject(newId, new TimeoutException($"Timeout for request: {newRequest} with id {newId}", request));
+                    }
+                    catch (Exception ex)
+                    {
+                        Debug.WriteLine($"Timer.Elapsed Reject error (already resolved?): {ex.Message}");
+                    }
+                };
                 timer.Start();
                 timeoutsAwaitingResponse.TryAdd(newId, timer);
             }
@@ -221,7 +293,6 @@ namespace Xrpl.Client
             }
             if (!promisesAwaitingResponse.ContainsKey(id))
             {
-                Debug.WriteLine("Valid id not found in promises");
                 return;
             }
 

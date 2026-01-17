@@ -1,4 +1,4 @@
-namespace Xrpl.BinaryCodec.Enums
+﻿namespace Xrpl.BinaryCodec.Enums
 {
     public class Hash192Field : Field {
         public Hash192Field(string name, int nthOfType,

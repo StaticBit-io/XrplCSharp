@@ -71,6 +71,7 @@
                 <option value="@ServerType.Mainnet">Mainnet (s2.ripple.com)</option>
                 <option value="@ServerType.Testnet">Testnet / Altnet (s.altnet.rippletest.net)</option>
                 <option value="@ServerType.Devnet">Devnet (s.devnet.rippletest.net)</option>
+                <option value="@ServerType.Standalone">Local Docker (ws://localhost:6006)</option>
                 <option value="@ServerType.Custom">Custom URL</option>
             </select>
         </div>
@@ -199,6 +200,7 @@
         Mainnet,
         Testnet,
         Devnet,
+        Standalone,
         Custom
     }
     
@@ -206,7 +208,8 @@
     {
         { ServerType.Mainnet, "wss://s2.ripple.com" },
         { ServerType.Testnet, "wss://s.altnet.rippletest.net:51233" },
-        { ServerType.Devnet, "wss://s.devnet.rippletest.net:51233" }
+        { ServerType.Devnet, "wss://s.devnet.rippletest.net:51233" },
+        { ServerType.Standalone, "ws://localhost:6006" }
     };
 
     public enum MessageType
