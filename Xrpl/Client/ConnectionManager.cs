@@ -30,6 +30,16 @@ namespace Xrpl.Client
             PromisesAwaitingConnection = new List<(Action resolve, Action<Exception> reject)>();
         }
 
+        public void RejectAllAwaitingWithCancellation()
+        {
+            foreach (var (_, reject) in PromisesAwaitingConnection)
+            {
+                reject(new OperationCanceledException("Connection was intentionally closed."));
+            }
+
+            PromisesAwaitingConnection = new List<(Action resolve, Action<Exception> reject)>();
+        }
+
         public async Task AwaitConnection()
         {
             var tcs = new TaskCompletionSource<object>();

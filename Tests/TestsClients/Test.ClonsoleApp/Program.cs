@@ -12,6 +12,7 @@ using Xrpl.Models.Methods;
 using Xrpl.Models.Subscriptions;
 using Xrpl.Models.Transactions;
 using Xrpl.Sugar;
+using Xrpl.Utils;
 using Xrpl.Wallet;
 
 using Currency = Xrpl.Models.Common.Currency;
@@ -43,7 +44,11 @@ internal class Program
         //TestWalletFromText();
         try
         {
-            await InitTestData(TestDataType.standalone);
+            //await TestReconnection();
+            //return;
+            await InitTestData(TestDataType.testNet);
+
+            await SetSigners(walletMultiSign, walletMultiSigner_1, walletMultiSigner_2);
 
             var features = await client.ServerFeatures();
             var canBe = features.GetCanBeEnabled();
@@ -71,13 +76,114 @@ internal class Program
         //await WebsocketChangeServerTest();
     }
 
+    private static async Task TestReconnection()
+    {
+        var options = new XrplClient.ClientOptions()
+        {
+            ApiVersion = 2,
+            MaxReconnectAttempts = 3,
+            RequestPolicy = RequestFailurePolicy.ImmediateFail,
+            UseCustomPing = true,
+            StopAfterMaxAttempts = true,
+        };
+        var servers = new List<string>
+        {
+            "wss://s1.ripple.com/",
+            "wss://s2.ripple.com/",
+            "wss://xrplcluster.com/",
+            "wss://s.altnet.rippletest.net:51233"
+        };
+        IXrplClient client = new XrplClient(servers[0], options);
+
+        client.connection.OnConnectionStatus += info =>
+        {
+            if (info.Reconnect != null)
+            {
+                Console.WriteLine($"{info.Severity.ToString()} {info.ConnectionState.ToString()} {info.Reconnect.CurrentAttempt}/{info.Reconnect.MaxAttempts} {info.Message}");
+            }
+            else
+            {
+                Console.WriteLine($"{info.Severity.ToString()} {info.ConnectionState.ToString()} {info.Message}");
+            }
+        };
+        client.connection.OnDisconnect += (code, description) =>
+        {
+            Console.WriteLine($"D {code} {description}");
+            return Task.CompletedTask;
+        };
+        client.connection.OnPing += ping =>
+        {
+            Console.WriteLine(ping);
+            return Task.CompletedTask;
+        };
+        client.connection.OnLedgerClosed += r =>
+        {
+            Console.WriteLine($"LEDGER {r.LedgerIndex}");
+            return Task.CompletedTask;
+        };
+        await client.Connect();
+
+        var task = Task.Run(async () =>
+        {
+            while (true)
+            {
+                try
+                {
+
+                    var server = servers[new Random().Next(servers.Count)];
+                    if (server == client.Url())
+                    {
+                        continue;
+                    }
+
+                    //await client.Subscribe(
+                    //    new SubscribeRequest()
+                    //    {
+                    //        Streams = new List<StreamType>()
+                    //        {
+                    //            StreamType.Ledger
+                    //        }
+                    //    });
+                    //Console.WriteLine("ledger subscribe successful");
+
+                    Console.WriteLine($"next change: {server}");
+                    await Task.Run(Console.ReadLine);
+
+                    await client.ChangeServer(server);
+                    ServerState? serverInfo = await client.ServerState(new ServerStateRequest());
+                    string lineReserveFee = serverInfo.State.ValidatedLedger.ReserveInc.ToString();
+                    string accReserveFee = serverInfo.State.ValidatedLedger.ReserveBase.ToString();
+                    var _lineReserveFee = new Currency
+                    {
+                        Value = lineReserveFee,
+                    };
+                    var _accReserveFee = new Currency
+                    {
+                        Value = accReserveFee,
+                    };
+                    Console.WriteLine($"{nameof(lineReserveFee)} - {_lineReserveFee}" );
+                    Console.WriteLine($"{nameof(accReserveFee)} - {_accReserveFee}" );
+                }
+                catch (Exception e)
+                {
+                    Console.WriteLine(e);
+                    continue;
+                }
+            }
+        });
+
+        await task;
+        Console.WriteLine("END");
+    }
+
     private static async Task InitTestData(TestDataType serverType)
     {
         client = serverType switch
         {
             TestDataType.testNet => new XrplClient("wss://s.altnet.rippletest.net:51233"),
             TestDataType.devNet => new XrplClient("wss://s.devnet.rippletest.net:51233"),
-            TestDataType.mainNet => new XrplClient("wss://s1.ripple.com"),
+            TestDataType.mainNet => new XrplClient("wss://xrplcluster.com"),
+            //TestDataType.mainNet => new XrplClient("wss://s1.ripple.com"),
             TestDataType.standalone => new XrplClient($"ws://localhost:6006"),
             _ => throw new ArgumentOutOfRangeException(nameof(serverType), serverType, null)
         };
@@ -598,8 +704,8 @@ internal class Program
             SignerQuorum = 2,
             SignerEntries = new()
             {
-                new SignerEntryWrapper{ SignerEntry = new SignerEntry { Account = signer1.ClassicAddress, SignerWeight = 1 }},
-                new SignerEntryWrapper{ SignerEntry = new SignerEntry { Account = signer2.ClassicAddress, SignerWeight = 1, }},
+                new SignerEntryWrapper{ SignerEntry = new SignerEntry { Account = signer1.ClassicAddress, SignerWeight = 1, WalletLocator = "test wallet sig 1"}},
+                new SignerEntryWrapper{ SignerEntry = new SignerEntry { Account = signer2.ClassicAddress, SignerWeight = 1, WalletLocator = "test wallet sig 2"}},
             },
             Fee = new Currency { Value = "15" },              // нормальная комиссия
             Sequence = acc.AccountData.Sequence,

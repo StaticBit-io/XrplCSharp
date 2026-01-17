@@ -743,6 +743,7 @@ namespace Xrpl.Models.Transactions
         /// </summary>
         [JsonProperty("NewFields")]
         public dynamic NewFields { get; set; }
+        [JsonIgnore]
         public BaseLedgerEntry New => LOConverter.GetBaseRippleLO(LedgerEntryType, NewFields);
     }
 
@@ -756,6 +757,7 @@ namespace Xrpl.Models.Transactions
         /// </summary>
         [JsonProperty("FinalFields")]
         public dynamic FinalFields { get; set; }
+        [JsonIgnore]
         public BaseLedgerEntry Final => LOConverter.GetBaseRippleLO(LedgerEntryType, FinalFields);
 
         /// <summary>
@@ -763,6 +765,7 @@ namespace Xrpl.Models.Transactions
         /// </summary>
         [JsonProperty("PreviousFields")]
         public dynamic PreviousFields { get; set; }
+        [JsonIgnore]
         public BaseLedgerEntry Previous => LOConverter.GetBaseRippleLO(LedgerEntryType, PreviousFields);
 
         /// <summary>
@@ -789,6 +792,7 @@ namespace Xrpl.Models.Transactions
         /// </summary>
         [JsonProperty("FinalFields")]
         public dynamic FinalFields { get; set; }
+        [JsonIgnore]
         public BaseLedgerEntry Final => LOConverter.GetBaseRippleLO(LedgerEntryType, FinalFields);
 
         /// <summary>
@@ -797,6 +801,7 @@ namespace Xrpl.Models.Transactions
         /// </summary>
         [JsonProperty("PreviousFields")]
         public dynamic PreviousFields { get; set; }
+        [JsonIgnore]
         public BaseLedgerEntry Previous => LOConverter.GetBaseRippleLO(LedgerEntryType, PreviousFields);
     }
     /// <summary>

@@ -174,9 +174,22 @@ public class Currency
 
     public override bool Equals(object o) { return o is Currency model && model.Issuer == Issuer && model.CurrencyCode == CurrencyCode; }
 
-    public static bool operator ==(Currency c1, Currency c2) { return c1.Equals(c2); }
+    public static bool operator ==(Currency? left, Currency? right)
+    {
+        if (ReferenceEquals(left, right))
+            return true;
 
-    public static bool operator !=(Currency c1, Currency c2) { return !c1.Equals(c2); }
+        if (left is null || right is null)
+            return false;
+
+        return left.Equals(right);
+    }
+
+
+    public static bool operator !=(Currency? left, Currency? right)
+    {
+        return !(left == right);
+    }
 
     /// <summary>
     /// Implicit conversion from string → Currency

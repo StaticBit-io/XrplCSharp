@@ -37,6 +37,9 @@
                 "files": [
                     "toc.yml",
                     "*.md"
+                ],
+                "exclude": [
+                    "README.md"
                 ]
             }
         ],
@@ -48,7 +51,7 @@
         "dest": "../docs",
         "globalMetadataFiles": [],
         "fileMetadataFiles": [],
-        "template": [ "statictoc", "templates/unity" ],
+        "template": [ "default", "templates/unity" ],
         "postProcessors": [],
         "markdownEngineName": "markdig",
         "noLangKeyword": false,
