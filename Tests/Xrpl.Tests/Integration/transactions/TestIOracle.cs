@@ -24,6 +24,8 @@ namespace XrplTests.Xrpl.ClientLib.Integration;
 /// <summary>
 /// Integration tests for Oracle transactions (OracleSet and OracleDelete).
 /// Tests the complete lifecycle of Oracle price feeds on testnet or standalone.
+/// Uses IntegrationTestConfig to support both testnet and standalone node.
+/// Set XRPL_TEST_NODE environment variable to "standalone" or "testnet" to switch modes.
 /// </summary>
 [TestClass]
 [DoNotParallelize]
@@ -37,25 +39,9 @@ public class TestIOracle
     [ClassInitialize]
     public static async Task MyClassInitializeAsync(TestContext testContext)
     {
-        client = new XrplClient("wss://s.altnet.rippletest.net:51233");
-        client.connection.OnConnected += () =>
-        {
-            Console.WriteLine($"SetupIntegration CONNECTED");
-            return Task.CompletedTask;
-        };
-        client.connection.OnDisconnect += (code, description) =>
-        {
-            Console.WriteLine($"SetupIntegration DISCONNECTED: {code}, description: {description}");
-            return Task.CompletedTask;
-        };
-        client.connection.OnError += (error, errorMessage, message, data) =>
-        {
-            Console.WriteLine($"SetupIntegration ERROR: {message}");
-            return Task.CompletedTask;
-        };
-        await client.Connect();
+        client = await IntegrationTestConfig.CreateClientAsync(TestNodeType.TestNet);
 
-        await TryFillAccount(walletOracle);
+        await IntegrationTestConfig.TryFundWalletAsync(client, walletOracle);
     }
 
     [ClassCleanup]
@@ -541,29 +527,6 @@ public class TestIOracle
         byte[] hash = Sha512.Half(input);
         
         return BitConverter.ToString(hash).Replace("-", "").ToUpperInvariant();
-    }
-
-    /// <summary>
-    /// Attempts to fund the account if balance is low.
-    /// </summary>
-    private static async Task TryFillAccount(XrplWallet wallet)
-    {
-        try
-        {
-            var balance = await client.GetXrpFreeBalance(wallet.ClassicAddress);
-            Console.WriteLine($"Balance {wallet.ClassicAddress} - {balance} XRP");
-
-            if (balance <= 50)
-            {
-                await client.FundWallet(wallet);
-                Console.WriteLine($"Funded {wallet.ClassicAddress}");
-            }
-        }
-        catch (Exception)
-        {
-            await client.FundWallet(wallet);
-            Console.WriteLine($"Funded new account {wallet.ClassicAddress}");
-        }
     }
 
     #endregion

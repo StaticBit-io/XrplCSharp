@@ -131,3 +131,30 @@ Fixed critical issues preventing Oracle transactions from being accepted by the 
 - **Currency Binary Encoding**: Oracle BaseAsset/QuoteAsset use XLS-47 format (left-aligned bytes 0-2) for 3-letter codes, matching xrpl.js Oracle serializer. Standard IOU currencies use bytes 12-14. Non-standard currencies (40-hex) use direct bytes.
 - **EncodeOracleCurrency Method**: New method in Currency.cs specifically for Oracle XLS-47 format encoding at bytes 0-2.
 - **Scale Field Fix (Critical)**: Added missing `Scale` field (UInt8, nth=4) to Field.cs. This field was defined in definitions.json but not registered in Field.cs, causing Scale values in Oracle PriceData to be silently dropped during binary serialization. Now Scale values (0-10) are correctly serialized and deserialized in OracleSet transactions.
+
+### Clawback Transaction Support (January 2026)
+
+Complete implementation of Clawback transactions for token issuer recovery:
+- **Clawback Transaction Model**: Full model with Amount (required Currency) and optional Holder (AccountID for MPT support) fields. Includes complete XML documentation.
+- **BinaryCodec Updates**: Added Clawback (30) to TransactionType enum.
+- **TxFormat Updates**: Added Clawback transaction format with Amount and Holder fields.
+- **Validation.cs Updates**: Clawback transactions routed to ClawbackValidation class.
+- **5 Unit Tests**: Validates Clawback transaction construction, required Amount field, and optional Holder field.
+- **5 Integration Tests**: End-to-end tests on testnet including basic clawback, partial clawback, full clawback, self-clawback rejection, and complete lifecycle (enable flag → issue → clawback).
+
+**Important**: The `asfAllowTrustLineClawback` flag (AccountSetAsfFlags.asfAllowTrustLineClawback = 16) must be set on the issuer account BEFORE issuing any tokens. Once tokens are issued, clawback cannot be enabled for existing trust lines.
+
+### Integration Test Infrastructure (January 2026)
+
+Universal integration test configuration supporting multiple XRPL node types:
+- **TestNodeType Enum**: Defines test environments (TestNet, DevNet, Standalone, MainNet).
+- **IntegrationTestConfig Class**: Central configuration for integration tests with:
+  - `GetNodeType()`: Returns configured node type from XRPL_TEST_NODE env variable.
+  - `GetNodeUrl()`: Returns WebSocket URL for each node type.
+  - `CreateClientAsync()`: Creates and connects IXrplClient with diagnostic event handlers.
+  - `FundWalletAsync()`: Funds wallet using faucet (testnet/devnet) or master account (standalone).
+  - `TryFundWalletAsync()`: Checks balance before funding to avoid redundant requests.
+  - `LedgerAcceptAsync()`: Advances ledger on standalone nodes only.
+- **Environment Variable**: Set `XRPL_TEST_NODE=standalone` for local Docker testing, defaults to testnet.
+- **Docker Setup**: `docker run -p 6006:6006 -it xrpllabsofficial/xrpld:1.12.0` for standalone node.
+- **Migrated Tests**: TestIClawback and TestIOracle now use IntegrationTestConfig for consistent multi-node support.

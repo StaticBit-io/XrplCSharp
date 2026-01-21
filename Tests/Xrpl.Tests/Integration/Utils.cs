@@ -1,4 +1,4 @@
-﻿using System;
+using System;
 using System.Threading.Tasks;
 using Microsoft.VisualStudio.TestTools.UnitTesting;
 using Xrpl.Models.Methods;
@@ -9,16 +9,277 @@ using Xrpl.Client;
 using Xrpl.Models.Transactions;
 using Xrpl.Utils.Hashes;
 using Xrpl.Wallet;
+using Xrpl.Sugar;
 using ICurrency = Xrpl.Models.Common.Currency;
-using Microsoft.VisualStudio.TestPlatform.CommunicationUtilities;
 
 // https://github.com/XRPLF/xrpl.js/blob/main/packages/xrpl/test/integration/utils.ts
 
 namespace XrplTests.Xrpl.ClientLib.Integration
 {
+    /// <summary>
+    /// Specifies the type of XRPL node to connect to for integration tests.
+    /// </summary>
+    public enum TestNodeType
+    {
+        /// <summary>
+        /// XRPL Testnet - public test network with faucet funding.
+        /// </summary>
+        TestNet,
+
+        /// <summary>
+        /// XRPL Devnet - development network with faucet funding.
+        /// </summary>
+        DevNet,
+
+        /// <summary>
+        /// Local standalone rippled node - uses master account for funding.
+        /// Requires running: docker run -p 6006:6006 -it xrpllabsofficial/xrpld:1.12.0
+        /// </summary>
+        Standalone,
+
+        /// <summary>
+        /// XRPL Mainnet - production network, use with caution.
+        /// </summary>
+        MainNet
+    }
+
+    /// <summary>
+    /// Configuration and utilities for integration tests supporting multiple node types.
+    /// Automatically handles client creation and wallet funding based on the node type.
+    /// </summary>
+    public static class IntegrationTestConfig
+    {
+        /// <summary>
+        /// Current node type for integration tests.
+        /// Can be set via environment variable XRPL_TEST_NODE or directly.
+        /// Default is TestNet.
+        /// </summary>
+        public static TestNodeType CurrentNodeType { get; set; } = GetNodeTypeFromEnvironment();
+
+        /// <summary>
+        /// Master account address for standalone node funding.
+        /// </summary>
+        public const string MasterAccount = "rHb9CJAWyB4rj91VRWn96DkukG4bwdtyTh";
+
+        /// <summary>
+        /// Master account secret for standalone node funding.
+        /// </summary>
+        public const string MasterSecret = "snoPBrXtMeMyMHUVTgbuqAfg1SUTb";
+
+        /// <summary>
+        /// Minimum XRP balance threshold for funding check.
+        /// </summary>
+        public const decimal MinBalanceThreshold = 50m;
+
+        /// <summary>
+        /// Gets the WebSocket URL for the specified node type.
+        /// </summary>
+        /// <param name="nodeType">The type of node to connect to.</param>
+        /// <returns>WebSocket URL string.</returns>
+        public static string GetNodeUrl(TestNodeType nodeType)
+        {
+            return nodeType switch
+            {
+                TestNodeType.TestNet => "wss://s.altnet.rippletest.net:51233",
+                TestNodeType.DevNet => "wss://s.devnet.rippletest.net:51233",
+                TestNodeType.Standalone => "ws://localhost:6006",
+                TestNodeType.MainNet => "wss://xrplcluster.com",
+                _ => throw new ArgumentOutOfRangeException(nameof(nodeType), nodeType, null)
+            };
+        }
+
+        /// <summary>
+        /// Gets the node type from the XRPL_TEST_NODE environment variable.
+        /// Defaults to TestNet if not set or invalid.
+        /// </summary>
+        private static TestNodeType GetNodeTypeFromEnvironment()
+        {
+            var envValue = Environment.GetEnvironmentVariable("XRPL_TEST_NODE");
+            if (string.IsNullOrEmpty(envValue))
+                return TestNodeType.Standalone;
+
+            return envValue.ToLowerInvariant() switch
+            {
+                "testnet" or "test" => TestNodeType.TestNet,
+                "devnet" or "dev" => TestNodeType.DevNet,
+                "standalone" or "local" => TestNodeType.Standalone,
+                "mainnet" or "main" => TestNodeType.MainNet,
+                _ => TestNodeType.TestNet
+            };
+        }
+
+        /// <summary>
+        /// Creates and connects an XRPL client for the current node type.
+        /// </summary>
+        /// <param name="nodeType">Optional node type override. Uses CurrentNodeType if null.</param>
+        /// <returns>Connected IXrplClient instance.</returns>
+        public static async Task<IXrplClient> CreateClientAsync(TestNodeType? nodeType = null)
+        {
+            var type = nodeType ?? CurrentNodeType;
+            var url = GetNodeUrl(type);
+            var client = new XrplClient(url);
+
+            client.connection.OnConnected += () =>
+            {
+                Console.WriteLine($"[IntegrationTest] Connected to {type} at {url}");
+                return Task.CompletedTask;
+            };
+
+            client.connection.OnDisconnect += (code, description) =>
+            {
+                Console.WriteLine($"[IntegrationTest] Disconnected: {code}, {description}");
+                return Task.CompletedTask;
+            };
+
+            client.connection.OnError += (error, errorMessage, message, data) =>
+            {
+                Console.WriteLine($"[IntegrationTest] Error: {message}");
+                return Task.CompletedTask;
+            };
+
+            await client.Connect();
+            return client;
+        }
+
+        /// <summary>
+        /// Funds a wallet using the appropriate method for the current node type.
+        /// For testnet/devnet: uses the faucet API.
+        /// For standalone: uses the master account with ledger_accept.
+        /// </summary>
+        /// <param name="client">Connected XRPL client.</param>
+        /// <param name="wallet">Wallet to fund.</param>
+        /// <param name="nodeType">Optional node type override.</param>
+        public static async Task FundWalletAsync(IXrplClient client, XrplWallet wallet, TestNodeType? nodeType = null)
+        {
+            var type = nodeType ?? CurrentNodeType;
+
+            if (type == TestNodeType.Standalone)
+            {
+                await FundFromMasterAsync(client, wallet);
+            }
+            else if (type == TestNodeType.TestNet || type == TestNodeType.DevNet)
+            {
+                await FundFromFaucetAsync(client, wallet);
+            }
+            else
+            {
+                throw new InvalidOperationException($"Cannot fund wallet on {type}");
+            }
+        }
+
+        /// <summary>
+        /// Attempts to fund a wallet only if the balance is below threshold.
+        /// </summary>
+        /// <param name="client">Connected XRPL client.</param>
+        /// <param name="wallet">Wallet to check and potentially fund.</param>
+        /// <param name="nodeType">Optional node type override.</param>
+        public static async Task TryFundWalletAsync(IXrplClient client, XrplWallet wallet, TestNodeType? nodeType = null)
+        {
+            try
+            {
+                var balance = await client.GetXrpFreeBalance(wallet.ClassicAddress);
+                Console.WriteLine($"[IntegrationTest] Balance {wallet.ClassicAddress}: {balance} XRP");
+
+                if (balance <= MinBalanceThreshold)
+                {
+                    await FundWalletAsync(client, wallet, nodeType);
+                    Console.WriteLine($"[IntegrationTest] Funded {wallet.ClassicAddress}");
+                }
+            }
+            catch (Exception)
+            {
+                await FundWalletAsync(client, wallet, nodeType);
+                Console.WriteLine($"[IntegrationTest] Funded new account {wallet.ClassicAddress}");
+            }
+        }
+
+        /// <summary>
+        /// Funds multiple wallets, checking balance before each.
+        /// </summary>
+        /// <param name="client">Connected XRPL client.</param>
+        /// <param name="wallets">Wallets to fund.</param>
+        public static async Task TryFundWalletsAsync(IXrplClient client, params XrplWallet[] wallets)
+        {
+            foreach (var wallet in wallets)
+            {
+                await TryFundWalletAsync(client, wallet);
+            }
+        }
+
+        /// <summary>
+        /// Funds a wallet from the testnet/devnet faucet.
+        /// </summary>
+        private static async Task FundFromFaucetAsync(IXrplClient client, XrplWallet wallet)
+        {
+            var result = await client.FundWallet(wallet);
+            Console.WriteLine($"[IntegrationTest] Faucet funded {wallet.ClassicAddress}: {result.Balance} XRP");
+        }
+
+        /// <summary>
+        /// Funds a wallet from the standalone master account.
+        /// </summary>
+        private static async Task FundFromMasterAsync(IXrplClient client, XrplWallet wallet)
+        {
+            Payment payment = new Payment
+            {
+                Account = MasterAccount,
+                Destination = wallet.ClassicAddress,
+                Amount = new ICurrency { Value = "400000000", CurrencyCode = "XRP" }
+            };
+            var values = JsonConvert.DeserializeObject<Dictionary<string, dynamic>>(payment.ToJson());
+            var master = XrplWallet.FromSeed(MasterSecret);
+            Submit response = await client.Submit(values, master);
+
+            if (response.EngineResult != "tesSUCCESS")
+            {
+                throw new Exception($"Master funding failed: {response.EngineResult}");
+            }
+
+            await LedgerAcceptAsync(client);
+            Console.WriteLine($"[IntegrationTest] Master funded {wallet.ClassicAddress}");
+        }
+
+        /// <summary>
+        /// Advances the ledger on standalone node.
+        /// No-op on public networks.
+        /// </summary>
+        /// <param name="client">Connected XRPL client.</param>
+        /// <param name="nodeType">Optional node type override.</param>
+        public static async Task LedgerAcceptAsync(IXrplClient client, TestNodeType? nodeType = null)
+        {
+            var type = nodeType ?? CurrentNodeType;
+            if (type != TestNodeType.Standalone)
+                return;
+
+            var request = new BaseRequest { Command = "ledger_accept" };
+            await client.AnyRequest(request);
+        }
+
+        /// <summary>
+        /// Returns true if running on a public network with faucet support.
+        /// </summary>
+        public static bool IsFaucetNetwork(TestNodeType? nodeType = null)
+        {
+            var type = nodeType ?? CurrentNodeType;
+            return type == TestNodeType.TestNet || type == TestNodeType.DevNet;
+        }
+
+        /// <summary>
+        /// Returns true if running on standalone node.
+        /// </summary>
+        public static bool IsStandalone(TestNodeType? nodeType = null)
+        {
+            var type = nodeType ?? CurrentNodeType;
+            return type == TestNodeType.Standalone;
+        }
+    }
+
+    /// <summary>
+    /// Legacy utilities for standalone integration tests.
+    /// Consider using IntegrationTestConfig for new tests.
+    /// </summary>
     public class Utils
     {
-
         private static string masterAccount = "rHb9CJAWyB4rj91VRWn96DkukG4bwdtyTh";
         private static string masterSecret = "snoPBrXtMeMyMHUVTgbuqAfg1SUTb";
 
@@ -60,33 +321,12 @@ namespace XrplTests.Xrpl.ClientLib.Integration
             string hash = hashTx != null ? hashTx : HashLedger.HashSignedTx(tx);
             TxRequest request = new TxRequest(hash);
             TransactionResponse data = await client.Tx(request);
-              //assert(data.result)
-              //assert.deepEqual(
-              //  _.omit(data.result, [
-              //    'date',
-              //    'hash',
-              //    'inLedger',
-              //    'ledger_index',
-              //    'meta',
-              //    'validated',
-              //  ]),
-              //  typeof tx == 'string' ? decode(tx) : tx,
-              //)
-              //if (typeof data.result.meta === 'object')
-              //          {
-              //    assert.strictEqual(data.result.meta.TransactionResult, 'tesSUCCESS')
-              //}
-              //          else
-              //          {
-              //    assert.strictEqual(data.result.meta, 'tesSUCCESS')
-              //}
         }
 
         public static async Task TestTransaction(IXrplClient client, Dictionary<string, dynamic> transaction, XrplWallet wallet)
         {
             await LedgerAccept(client);
             Submit response = await client.Submit(transaction, wallet);
-            //Assert.IsNotNull(response.Type, "response");
             Assert.AreEqual("tesSUCCESS", response.EngineResult);
             response.TxJson.Property("hash").Remove();
             await LedgerAccept(client);

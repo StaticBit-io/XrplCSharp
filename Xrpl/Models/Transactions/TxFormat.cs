@@ -353,6 +353,11 @@ namespace Xrpl.Models.Transaction
                 {
                     [Field.OracleDocumentID] = Requirement.Required,
                 },
+                [BinaryCodec.Types.TransactionType.Clawback] = new TxFormat
+                {
+                    [Field.Amount] = Requirement.Required,
+                    [Field.Holder] = Requirement.Optional,
+                },
 
             };
         }

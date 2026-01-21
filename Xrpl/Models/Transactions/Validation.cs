@@ -166,6 +166,9 @@ namespace Xrpl.Models.Transactions
                 case "OracleDelete":
                     await ValidateOracleDelete(tx);
                     break;
+                case "Clawback":
+                    await ValidateClawBack(tx);
+                    break;
                 default:
                     throw new ValidationException($"Invalid field TransactionType: {type}");
             }
