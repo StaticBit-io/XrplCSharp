@@ -78,6 +78,8 @@ namespace Xrpl.BinaryCodec.Enums
         public static readonly Uint8Field CloseResolution = new Uint8Field(nameof(CloseResolution), 1);
         public static readonly Uint8Field Method = new Uint8Field(nameof(Method), 2);
         public static readonly EngineResultField TransactionResult = new EngineResultField(nameof(TransactionResult), 3);
+        /// <summary>The decimal precision level (0-10) for the asset price in Oracle PriceData.</summary>
+
         public static readonly Uint8Field AssetScale = new Uint8Field(nameof(AssetScale), 5);
         public static readonly Uint8Field TickSize = new Uint8Field(nameof(TickSize), 16);
         public static readonly Uint8Field UNLModifyDisabling = new Uint8Field(nameof(UNLModifyDisabling), 17);
@@ -108,6 +110,8 @@ namespace Xrpl.BinaryCodec.Enums
         public static readonly Uint32Field WalletSize = new Uint32Field(nameof(WalletSize), 12);
         public static readonly Uint32Field OwnerCount = new Uint32Field(nameof(OwnerCount), 13);
         public static readonly Uint32Field DestinationTag = new Uint32Field(nameof(DestinationTag), 14);
+        /// <summary>The time the oracle data was last updated, as a unix timestamp.</summary>
+        public static readonly Uint32Field LastUpdateTime = new Uint32Field(nameof(LastUpdateTime), 15);
         
         public static readonly Uint32Field HighQualityIn = new Uint32Field(nameof(HighQualityIn), 16);
         public static readonly Uint32Field HighQualityOut = new Uint32Field(nameof(HighQualityOut), 17);
@@ -145,6 +149,8 @@ namespace Xrpl.BinaryCodec.Enums
         public static readonly Uint32Field EmitGeneration = new Uint32Field(nameof(EmitGeneration), 46);
         public static readonly Uint32Field VoteWeight = new Uint32Field(nameof(VoteWeight), 47);
         public static readonly Uint32Field DiscountedFee = new Uint32Field(nameof(DiscountedFee), 48);
+        /// <summary>A unique identifier of the price oracle for the Account.</summary>
+        public static readonly Uint32Field OracleDocumentID = new Uint32Field(nameof(OracleDocumentID), 51);
 
         public static readonly Uint64Field IndexNext = new Uint64Field(nameof(IndexNext), 1);
         public static readonly Uint64Field IndexPrevious = new Uint64Field(nameof(IndexPrevious), 2);
@@ -166,6 +172,8 @@ namespace Xrpl.BinaryCodec.Enums
         public static readonly Uint64Field MaximumAmount = new Uint64Field(nameof(MaximumAmount), 24);
         public static readonly Uint64Field OutstandingAmount = new Uint64Field(nameof(OutstandingAmount), 25);
         public static readonly Uint64Field MPTAmount = new Uint64Field(nameof(MPTAmount), 26);
+        /// <summary>The asset price after applying the Scale precision level.</summary>
+        public static readonly Uint64Field AssetPrice = new Uint64Field(nameof(AssetPrice), 23);
 
         public static readonly Hash128Field EmailHash = new Hash128Field(nameof(EmailHash), 1);
 
@@ -258,6 +266,10 @@ namespace Xrpl.BinaryCodec.Enums
         public static readonly BlobField HookParameterName = new BlobField(nameof(HookParameterName), 24);
         public static readonly BlobField HookParameterValue = new BlobField(nameof(HookParameterValue), 25);
         public static readonly BlobField MPTokenMetadata = new BlobField(nameof(MPTokenMetadata), 30);
+        /// <summary>Describes the type of asset, such as "currency", "commodity", or "index".</summary>
+        public static readonly BlobField AssetClass = new BlobField(nameof(AssetClass), 28);
+        /// <summary>An arbitrary value that identifies an oracle provider.</summary>
+        public static readonly BlobField Provider = new BlobField(nameof(Provider), 29);
 
         public static readonly AccountIdField Account = new AccountIdField(nameof(Account), 1);
         public static readonly AccountIdField Owner = new AccountIdField(nameof(Owner), 2);
@@ -281,6 +293,12 @@ namespace Xrpl.BinaryCodec.Enums
 
         public static readonly IssueField Asset = new IssueField(nameof(Asset), 3);
         public static readonly IssueField Asset2 = new IssueField(nameof(Asset2), 4);
+
+        /// <summary>The primary asset in a trading pair for Oracle price data.</summary>
+        public static readonly CurrencyField BaseAsset = new CurrencyField(nameof(BaseAsset), 1);
+        /// <summary>The quote asset in a trading pair for Oracle price data.</summary>
+        public static readonly CurrencyField QuoteAsset = new CurrencyField(nameof(QuoteAsset), 2);
+        public static readonly Uint8Field Scale = new Uint8Field(nameof(Scale), 4);
 
         public static readonly StObjectField TransactionMetaData = new StObjectField(nameof(TransactionMetaData), 2);
         public static readonly StObjectField CreatedNode = new StObjectField(nameof(CreatedNode), 3);

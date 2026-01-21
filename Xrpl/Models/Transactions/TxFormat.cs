@@ -335,6 +335,24 @@ namespace Xrpl.Models.Transaction
                     [Field.RawTransactions] = Requirement.Required,
                     [Field.BatchSigners] = Requirement.Optional,
                 },
+                [BinaryCodec.Types.TransactionType.OracleSet] = new TxFormat
+                {
+                    [Field.OracleDocumentID] = Requirement.Required,
+                    [Field.LastUpdateTime] = Requirement.Required,
+                    [Field.PriceDataSeries] = Requirement.Required,
+                    [Field.Provider] = Requirement.Optional,
+                    [Field.AssetClass] = Requirement.Optional,
+                    [Field.URI] = Requirement.Optional,
+
+                    [Field.BaseAsset] = Requirement.Required,
+                    [Field.QuoteAsset] = Requirement.Required,
+                    [Field.AssetPrice] = Requirement.Optional,
+                    [Field.Scale] = Requirement.Optional,
+                },
+                [BinaryCodec.Types.TransactionType.OracleDelete] = new TxFormat
+                {
+                    [Field.OracleDocumentID] = Requirement.Required,
+                },
 
             };
         }

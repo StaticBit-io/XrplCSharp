@@ -82,6 +82,9 @@ public class TransactionRequestConverter : JsonConverter
             "MPTokenIssuanceCreate" => new MPTokenIssuanceCreate(),
             "MPTokenIssuanceDestroy" => new MPTokenIssuanceDestroy(),
             "MPTokenIssuanceSet" => new MPTokenIssuanceSet(),
+
+            "OracleSet" => new OracleSet(),
+            "OracleDelete" => new OracleDelete(),
             //_ => throw new Exception("Can't create transaction type" + transactionType)
             _ => SetUnknownType(jObject),
         };

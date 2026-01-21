@@ -129,7 +129,17 @@
         /// <summary>
         /// The MPTokenAuthorize transaction authorizes an account to hold an MPT.
         /// </summary>
-        MPTokenAuthorize
+        MPTokenAuthorize,
+
+        /// <summary>
+        /// Creates a new Oracle ledger entry or updates the fields of an existing one.
+        /// </summary>
+        OracleSet,
+
+        /// <summary>
+        /// Deletes an Oracle ledger entry.
+        /// </summary>
+        OracleDelete
     }
 }
 

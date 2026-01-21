@@ -107,6 +107,11 @@ namespace Xrpl.BinaryCodec.Types
         /// </summary>
         public static readonly TransactionType Batch = Add(nameof(Batch), 71);
 
+        /// <summary>Creates or updates a price oracle on the ledger.</summary>
+        public static readonly TransactionType OracleSet = Add(nameof(OracleSet), 51);
+        /// <summary>Deletes a price oracle from the ledger.</summary>
+        public static readonly TransactionType OracleDelete = Add(nameof(OracleDelete), 52);
+
         /// <summary>
         /// This system-generated transaction type is used to update the status of the various amendments. <br/>
         /// For details, see: https://xrpl.org/amendments.html

@@ -84,6 +84,9 @@ namespace Xrpl.Client.Json.Converters
                 "MPTokenIssuanceCreate" => new MPTokenIssuanceCreateResponse(),
                 "MPTokenIssuanceDestroy" => new MPTokenIssuanceDestroyResponse(),
                 "MPTokenIssuanceSet" => new MPTokenIssuanceSetResponse(),
+
+                "OracleSet" => new OracleSetResponse(),
+                "OracleDelete" => new OracleDeleteResponse(),
                 //_ => throw new Exception("Can't create transaction type" + transactionType)
                 _ => SetUnknownType(jObject),
             };
