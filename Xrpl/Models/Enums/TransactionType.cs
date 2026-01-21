@@ -155,7 +155,17 @@
         /// <summary>
         /// Deletes the DID (Decentralized Identifier) associated with an account.
         /// </summary>
-        DIDDelete
+        DIDDelete,
+
+        /// <summary>
+        /// Create a permissioned domain, or modify one that you own.
+        /// </summary>
+        PermissionedDomainSet,
+
+        /// <summary>
+        /// Delete a permissioned domain that you own.
+        /// </summary>
+        PermissionedDomainDelete
     }
 }
 

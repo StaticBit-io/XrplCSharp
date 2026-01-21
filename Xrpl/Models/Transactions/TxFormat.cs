@@ -108,7 +108,8 @@ namespace Xrpl.Models.Transaction
                     [Field.Paths] = Requirement.Default,
                     [Field.InvoiceID] = Requirement.Optional,
                     [Field.DestinationTag] = Requirement.Optional,
-                    [Field.DeliverMin] = Requirement.Optional
+                    [Field.DeliverMin] = Requirement.Optional,
+                    [Field.DomainID] = Requirement.Optional
                 },
                 [BinaryCodec.Types.TransactionType.EscrowCreate] = new TxFormat
                 {
@@ -154,7 +155,8 @@ namespace Xrpl.Models.Transaction
                     [Field.TakerPays] = Requirement.Required,
                     [Field.TakerGets] = Requirement.Required,
                     [Field.Expiration] = Requirement.Optional,
-                    [Field.OfferSequence] = Requirement.Optional
+                    [Field.OfferSequence] = Requirement.Optional,
+                    [Field.DomainID] = Requirement.Optional
                 },
                 [BinaryCodec.Types.TransactionType.OfferCancel] = new TxFormat
                 {
@@ -373,6 +375,15 @@ namespace Xrpl.Models.Transaction
                 },
                 [BinaryCodec.Types.TransactionType.DIDDelete] = new TxFormat
                 {
+                },
+                [BinaryCodec.Types.TransactionType.PermissionedDomainSet] = new TxFormat
+                {
+                    [Field.DomainID] = Requirement.Optional,
+                    [Field.AcceptedCredentials] = Requirement.Required,
+                },
+                [BinaryCodec.Types.TransactionType.PermissionedDomainDelete] = new TxFormat
+                {
+                    [Field.DomainID] = Requirement.Required,
                 },
 
             };

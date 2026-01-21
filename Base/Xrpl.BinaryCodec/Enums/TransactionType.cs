@@ -120,6 +120,11 @@ namespace Xrpl.BinaryCodec.Types
         /// <summary>Deletes a price oracle from the ledger.</summary>
         public static readonly TransactionType OracleDelete = Add(nameof(OracleDelete), 52);
 
+        /// <summary>Create a permissioned domain, or modify one that you own.</summary>
+        public static readonly TransactionType PermissionedDomainSet = Add(nameof(PermissionedDomainSet), 62);
+        /// <summary>Delete a permissioned domain that you own.</summary>
+        public static readonly TransactionType PermissionedDomainDelete = Add(nameof(PermissionedDomainDelete), 63);
+
         /// <summary>
         /// This system-generated transaction type is used to update the status of the various amendments. <br/>
         /// For details, see: https://xrpl.org/amendments.html

@@ -216,6 +216,8 @@ namespace Xrpl.BinaryCodec.Enums
         public static readonly Hash256Field HookHash = new Hash256Field(nameof(HookHash), 31);
         public static readonly Hash256Field HookNamespace = new Hash256Field(nameof(HookNamespace), 32);
         public static readonly Hash256Field HookSetTxnID = new Hash256Field(nameof(HookSetTxnID), 33);
+        /// <summary>The ledger entry ID of a permissioned domain.</summary>
+        public static readonly Hash256Field DomainID = new Hash256Field(nameof(DomainID), 34);
         
         public static readonly AmountField Amount = new AmountField(nameof(Amount), 1);
         public static readonly AmountField Balance = new AmountField(nameof(Balance), 2);
@@ -274,6 +276,8 @@ namespace Xrpl.BinaryCodec.Enums
         /// <summary>An arbitrary value that identifies an oracle provider.</summary>
         public static readonly BlobField Provider = new BlobField(nameof(Provider), 29);
         public static readonly BlobField MPTokenMetadata = new BlobField(nameof(MPTokenMetadata), 30);
+        /// <summary>The type of credential, as hexadecimal. This is an arbitrary value from 1 to 64 bytes.</summary>
+        public static readonly BlobField CredentialType = new BlobField(nameof(CredentialType), 31);
 
         public static readonly AccountIdField Account = new AccountIdField(nameof(Account), 1);
         public static readonly AccountIdField Owner = new AccountIdField(nameof(Owner), 2);
