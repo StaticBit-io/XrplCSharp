@@ -100,6 +100,12 @@
         Clawback,
 
         /// <summary>
+        /// The AMMClawback transaction claws back tokens from an Automated Market Maker (AMM) pool.
+        /// It allows the issuer to recover tokens that a holder has deposited into an AMM.
+        /// </summary>
+        AMMClawback,
+
+        /// <summary>
         /// The NFTokenModify transaction modifies an NFToken's URI if its tfMutable is set to true.
         /// </summary>
         NFTokenModify,

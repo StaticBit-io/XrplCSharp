@@ -82,6 +82,8 @@ namespace Xrpl.BinaryCodec.Types
         public static readonly TransactionType NFTokenAcceptOffer = Add(nameof(NFTokenAcceptOffer), 29);
         /// <summary>Claw back tokens issued by your account from a holder.</summary>
         public static readonly TransactionType Clawback = Add(nameof(Clawback), 30);
+        /// <summary>Claw back tokens from an Automated Market Maker (AMM) pool.</summary>
+        public static readonly TransactionType AMMClawback = Add(nameof(AMMClawback), 31);
         public static readonly TransactionType NFTokenModify = Add(nameof(NFTokenModify), 61);
 
         public static readonly TransactionType AMMCreate = Add(nameof(AMMCreate), 35);

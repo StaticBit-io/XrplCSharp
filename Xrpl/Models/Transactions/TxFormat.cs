@@ -330,6 +330,13 @@ namespace Xrpl.Models.Transaction
                     [Field.EPrice] = Requirement.Optional,
                     [Field.LPTokenIn] = Requirement.Optional,
                 },
+                [BinaryCodec.Types.TransactionType.AMMClawback] = new TxFormat
+                {
+                    [Field.Holder] = Requirement.Required,
+                    [Field.Asset] = Requirement.Required,
+                    [Field.Asset2] = Requirement.Required,
+                    [Field.Amount] = Requirement.Optional,
+                },
                 [BinaryCodec.Types.TransactionType.Batch] = new TxFormat
                 {
                     [Field.RawTransactions] = Requirement.Required,

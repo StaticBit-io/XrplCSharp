@@ -75,6 +75,7 @@ public class TransactionRequestConverter : JsonConverter
             "AMMWithdraw" => new AMMWithdraw(),
 
             "Clawback" => new ClawBack(),
+            "AMMClawback" => new AMMClawBack(),
 
             "Batch" => new Batch(),
 

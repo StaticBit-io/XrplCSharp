@@ -197,12 +197,13 @@ namespace XrplTests.Xrpl.ClientLib.Integration
         /// Funds multiple wallets, checking balance before each.
         /// </summary>
         /// <param name="client">Connected XRPL client.</param>
+        /// <param name="nodeType">Optional node type override.</param>
         /// <param name="wallets">Wallets to fund.</param>
-        public static async Task TryFundWalletsAsync(IXrplClient client, params XrplWallet[] wallets)
+        public static async Task TryFundWalletsAsync(IXrplClient client, TestNodeType? nodeType, params XrplWallet[] wallets)
         {
             foreach (var wallet in wallets)
             {
-                await TryFundWalletAsync(client, wallet);
+                await TryFundWalletAsync(client, wallet, nodeType);
             }
         }
 

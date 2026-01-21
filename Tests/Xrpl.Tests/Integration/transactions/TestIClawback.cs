@@ -44,7 +44,7 @@ public class TestIClawback
     {
         client = await IntegrationTestConfig.CreateClientAsync(TestNodeType.TestNet);
 
-        await IntegrationTestConfig.TryFundWalletsAsync(client, walletIssuer, walletHolder);
+        await IntegrationTestConfig.TryFundWalletsAsync(client, TestNodeType.TestNet, walletIssuer, walletHolder);
 
         await SetupIssuerWithClawbackFlag();
         await SetupHolderTrustLine();

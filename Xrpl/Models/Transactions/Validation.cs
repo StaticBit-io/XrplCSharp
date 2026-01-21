@@ -169,6 +169,9 @@ namespace Xrpl.Models.Transactions
                 case "Clawback":
                     await ValidateClawBack(tx);
                     break;
+                case "AMMClawback":
+                    await ValidateAMMClawBack(tx);
+                    break;
                 default:
                     throw new ValidationException($"Invalid field TransactionType: {type}");
             }

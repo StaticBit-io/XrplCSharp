@@ -77,6 +77,7 @@ namespace Xrpl.Client.Json.Converters
                 "AMMWithdraw" => new AMMWithdrawResponse(),
 
                 "Clawback" => new ClawBackResponse(),
+                "AMMClawback" => new AMMClawBackResponse(),
 
                 "Batch" => new BatchResponse(),
 
