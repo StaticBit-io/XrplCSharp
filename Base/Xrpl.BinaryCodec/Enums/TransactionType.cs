@@ -111,6 +111,10 @@ namespace Xrpl.BinaryCodec.Types
         /// </summary>
         public static readonly TransactionType Batch = Add(nameof(Batch), 71);
 
+        /// <summary>Creates or updates a Decentralized Identifier (DID) associated with the sending account.</summary>
+        public static readonly TransactionType DIDSet = Add(nameof(DIDSet), 49);
+        /// <summary>Deletes the DID associated with the sending account.</summary>
+        public static readonly TransactionType DIDDelete = Add(nameof(DIDDelete), 50);
         /// <summary>Creates or updates a price oracle on the ledger.</summary>
         public static readonly TransactionType OracleSet = Add(nameof(OracleSet), 51);
         /// <summary>Deletes a price oracle from the ledger.</summary>

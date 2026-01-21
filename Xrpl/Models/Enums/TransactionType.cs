@@ -145,7 +145,17 @@
         /// <summary>
         /// Deletes an Oracle ledger entry.
         /// </summary>
-        OracleDelete
+        OracleDelete,
+
+        /// <summary>
+        /// Creates or updates the DID (Decentralized Identifier) associated with an account.
+        /// </summary>
+        DIDSet,
+
+        /// <summary>
+        /// Deletes the DID (Decentralized Identifier) associated with an account.
+        /// </summary>
+        DIDDelete
     }
 }
 

@@ -33,6 +33,7 @@ A custom Base58 codec (`B58`) handles XRP Ledger's unique address and seed encod
 - **Oracle Support (XLS-47 Price Feeds)**: Implementation for `OracleSet` and `OracleDelete` transactions, `LOOracle` ledger entries, and `PriceData` models. Includes specific `BinaryCodec` updates for Oracle-related fields and comprehensive test suites. This also includes critical fixes for `LastUpdateTime` epoch, hex case normalization, currency binary encoding, and the missing `Scale` field.
 - **Clawback Transaction Support**: Full implementation of the `Clawback` transaction type, allowing token issuers to recover tokens. This requires the `asfAllowTrustLineClawback` flag to be set on the issuer account.
 - **AMMClawback Transaction Support**: Full implementation of the `AMMClawback` transaction type, enabling token issuers to recover tokens deposited into Automated Market Maker (AMM) pools. This also requires the `asfAllowTrustLineClawback` flag.
+- **DID (Decentralized Identifier) Support**: Full implementation of `DIDSet` and `DIDDelete` transaction types, and `LODID` ledger entry type for managing decentralized identifiers on the XRP Ledger. DIDSet supports Data, DIDDocument, and URI fields (at least one required, each max 256 bytes hex-encoded).
 
 ### Documentation
 API documentation is generated from XML comments using DocFX.

@@ -88,6 +88,8 @@ namespace Xrpl.Client.Json.Converters
 
                 "OracleSet" => new OracleSetResponse(),
                 "OracleDelete" => new OracleDeleteResponse(),
+                "DIDSet" => new DIDSetResponse(),
+                "DIDDelete" => new DIDDeleteResponse(),
                 //_ => throw new Exception("Can't create transaction type" + transactionType)
                 _ => SetUnknownType(jObject),
             };

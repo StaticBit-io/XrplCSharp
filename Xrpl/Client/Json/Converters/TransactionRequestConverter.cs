@@ -86,6 +86,8 @@ public class TransactionRequestConverter : JsonConverter
 
             "OracleSet" => new OracleSet(),
             "OracleDelete" => new OracleDelete(),
+            "DIDSet" => new DIDSet(),
+            "DIDDelete" => new DIDDelete(),
             //_ => throw new Exception("Can't create transaction type" + transactionType)
             _ => SetUnknownType(jObject),
         };

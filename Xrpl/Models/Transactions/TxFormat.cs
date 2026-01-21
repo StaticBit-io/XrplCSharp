@@ -365,6 +365,15 @@ namespace Xrpl.Models.Transaction
                     [Field.Amount] = Requirement.Required,
                     [Field.Holder] = Requirement.Optional,
                 },
+                [BinaryCodec.Types.TransactionType.DIDSet] = new TxFormat
+                {
+                    [Field.Data] = Requirement.Optional,
+                    [Field.DIDDocument] = Requirement.Optional,
+                    [Field.URI] = Requirement.Optional,
+                },
+                [BinaryCodec.Types.TransactionType.DIDDelete] = new TxFormat
+                {
+                },
 
             };
         }

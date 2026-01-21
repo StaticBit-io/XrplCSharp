@@ -42,6 +42,7 @@ namespace Xrpl.Client.Json.Converters
                 LedgerEntryType.MPToken => JsonConvert.DeserializeObject<LOMPToken>($"{field}"),
                 LedgerEntryType.MPTokenIssuance => JsonConvert.DeserializeObject<LOMPTokenIssuance>($"{field}"),
                 LedgerEntryType.Oracle => JsonConvert.DeserializeObject<LOOracle>($"{field}"),
+                LedgerEntryType.DID => JsonConvert.DeserializeObject<LODID>($"{field}"),
                 //LedgerEntryType.DepositPreauth => expr,
                 _ => new BaseLedgerEntry() //throw new ArgumentOutOfRangeException()
             };
@@ -105,6 +106,8 @@ namespace Xrpl.Client.Json.Converters
                     return new LOMPTokenIssuance();
                 case "LOOracle":
                     return new LOOracle();
+                case "LODID":
+                    return new LODID();
             }
 
             string ledgerEntryType = jObject.Property("LedgerEntryType")?.Value.ToString();
@@ -130,6 +133,7 @@ namespace Xrpl.Client.Json.Converters
                 "MPToken" => new LOMPToken(),
                 "MPTokenIssuance" => new LOMPTokenIssuance(),
                 "Oracle" => new LOOracle(),
+                "DID" => new LODID(),
                 _ => new BaseLedgerEntry()// throw new Exception("Can't create ledger type" + ledgerEntryType)
             };
         }

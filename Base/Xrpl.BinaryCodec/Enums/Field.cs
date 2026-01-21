@@ -265,11 +265,15 @@ namespace Xrpl.BinaryCodec.Enums
         public static readonly BlobField HookReturnString = new BlobField(nameof(HookReturnString), 23);
         public static readonly BlobField HookParameterName = new BlobField(nameof(HookParameterName), 24);
         public static readonly BlobField HookParameterValue = new BlobField(nameof(HookParameterValue), 25);
-        public static readonly BlobField MPTokenMetadata = new BlobField(nameof(MPTokenMetadata), 30);
+        /// <summary>The DID document for the DID. This field is encoded as a hexadecimal string.</summary>
+        public static readonly BlobField DIDDocument = new BlobField(nameof(DIDDocument), 26);
+        /// <summary>The public attestations of identity credentials associated with the DID.</summary>
+        public static readonly BlobField Data = new BlobField(nameof(Data), 27);
         /// <summary>Describes the type of asset, such as "currency", "commodity", or "index".</summary>
         public static readonly BlobField AssetClass = new BlobField(nameof(AssetClass), 28);
         /// <summary>An arbitrary value that identifies an oracle provider.</summary>
         public static readonly BlobField Provider = new BlobField(nameof(Provider), 29);
+        public static readonly BlobField MPTokenMetadata = new BlobField(nameof(MPTokenMetadata), 30);
 
         public static readonly AccountIdField Account = new AccountIdField(nameof(Account), 1);
         public static readonly AccountIdField Owner = new AccountIdField(nameof(Owner), 2);

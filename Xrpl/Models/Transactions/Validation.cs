@@ -172,6 +172,12 @@ namespace Xrpl.Models.Transactions
                 case "AMMClawback":
                     await ValidateAMMClawBack(tx);
                     break;
+                case "DIDSet":
+                    await ValidateDIDSet(tx);
+                    break;
+                case "DIDDelete":
+                    await ValidateDIDDelete(tx);
+                    break;
                 default:
                     throw new ValidationException($"Invalid field TransactionType: {type}");
             }
