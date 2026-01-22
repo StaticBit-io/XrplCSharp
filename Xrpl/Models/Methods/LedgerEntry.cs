@@ -82,6 +82,12 @@ namespace Xrpl.Models.Methods
         [JsonProperty("mptoken")]
         public MPTokenQuery MPToken { get; set; }
 
+        /// <summary>
+        /// Retrieve a DID object by the account that owns it.
+        /// </summary>
+        [JsonProperty("did")]
+        public string DID { get; set; }
+
         //todo not found fields -  directory?:, offer?:, check?: string, escrow?:, payment_channel?: string,  deposit_preauth?:, ticket?:
     }
 

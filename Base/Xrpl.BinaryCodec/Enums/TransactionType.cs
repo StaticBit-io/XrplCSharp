@@ -80,6 +80,10 @@ namespace Xrpl.BinaryCodec.Types
         public static readonly TransactionType NFTokenCancelOffer = Add(nameof(NFTokenCancelOffer), 28);
         /// <summary> This transaction accepts an existing offer to buy or sell an existing  NFT. </summary>
         public static readonly TransactionType NFTokenAcceptOffer = Add(nameof(NFTokenAcceptOffer), 29);
+        /// <summary>Claw back tokens issued by your account from a holder.</summary>
+        public static readonly TransactionType Clawback = Add(nameof(Clawback), 30);
+        /// <summary>Claw back tokens from an Automated Market Maker (AMM) pool.</summary>
+        public static readonly TransactionType AMMClawback = Add(nameof(AMMClawback), 31);
         public static readonly TransactionType NFTokenModify = Add(nameof(NFTokenModify), 61);
 
         public static readonly TransactionType AMMCreate = Add(nameof(AMMCreate), 35);
@@ -106,6 +110,15 @@ namespace Xrpl.BinaryCodec.Types
         /// For details, see: https://xrpl.org/docs/concepts/transactions/batch-transactions
         /// </summary>
         public static readonly TransactionType Batch = Add(nameof(Batch), 71);
+
+        /// <summary>Creates or updates a Decentralized Identifier (DID) associated with the sending account.</summary>
+        public static readonly TransactionType DIDSet = Add(nameof(DIDSet), 49);
+        /// <summary>Deletes the DID associated with the sending account.</summary>
+        public static readonly TransactionType DIDDelete = Add(nameof(DIDDelete), 50);
+        /// <summary>Creates or updates a price oracle on the ledger.</summary>
+        public static readonly TransactionType OracleSet = Add(nameof(OracleSet), 51);
+        /// <summary>Deletes a price oracle from the ledger.</summary>
+        public static readonly TransactionType OracleDelete = Add(nameof(OracleDelete), 52);
 
         /// <summary>
         /// This system-generated transaction type is used to update the status of the various amendments. <br/>

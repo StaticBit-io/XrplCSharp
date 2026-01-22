@@ -145,6 +145,94 @@ await client.Connect();
 
 This resets the attempt counter and starts fresh.
 
+### Fast Reconnect
+
+For certain scenarios, the library uses **fast reconnect** (3-5 seconds) instead of exponential backoff:
+
+| Scenario | Behavior | Time |
+|----------|----------|------|
+| `ChangeServer()` called | Immediate switch to new server | 3-5 seconds |
+| Ping timeout (no pong for 15s) | Immediate reconnect to same server | 3-5 seconds |
+| Network drop (IOException, SocketException) | Immediate reconnect when network restored | 3-5 seconds |
+
+Fast reconnect differs from standard reconnect:
+- **No exponential backoff** - connects immediately
+- **Session isolation** - old session is retired, new session created
+- **Pending requests cancelled** - avoids stale responses from old connection
+- **ReconnectInfo available** - `CurrentAttempt = 1` during fast reconnect
+
+```csharp
+client.connection.OnConnectionStatus += (status) =>
+{
+    if (status.ConnectionState == XrpConnectionState.RestoringConnection)
+    {
+        // ReconnectInfo is always available during reconnect (including fast reconnect)
+        Console.WriteLine($"Reconnecting: attempt {status.Reconnect?.CurrentAttempt}");
+    }
+};
+```
+
+---
+
+## MAUI and Mobile Considerations
+
+When using XrplCSharp in MAUI or mobile applications, the library provides special handling for mobile network conditions.
+
+### No Critical Error Logging
+
+The library suppresses Critical-level logging for common mobile network exceptions:
+- `ObjectDisposedException` - socket disposed during reconnect
+- `IOException` - network I/O errors
+- `SocketException` - low-level socket failures
+- `TaskCanceledException` - operations cancelled during disconnect
+- DNS failures on iOS (e.g., "nodename nor servname provided")
+
+This prevents your app's global exception handlers from being flooded with expected network events.
+
+### Automatic Network Recovery
+
+When network connectivity is restored (e.g., switching from WiFi to cellular), the library:
+1. Detects the network drop via ping timeout or socket exception
+2. Initiates fast reconnect (not slow exponential backoff)
+3. Reconnects within 3-5 seconds
+4. Emits `RestoringConnection` → `Connected` status updates
+
+### iOS-Specific Handling
+
+The library recognizes iOS-specific network errors:
+- DNS resolution failures with HRESULT `0xFFFDFFFF`
+- Generic failures with HRESULT `0x80004005` (E_FAIL)
+- Exception message patterns like "nodename nor servname"
+
+These are treated as recoverable network drops, not critical errors.
+
+### Best Practices for Mobile
+
+```csharp
+var client = new XrplClient(url, new XrplClient.ClientOptions
+{
+    // Mobile networks are unreliable - be patient
+    MaxReconnectAttempts = 50,
+    StopAfterMaxAttempts = false,
+    
+    // Wait for connection - mobile may temporarily lose connectivity
+    RequestPolicy = RequestFailurePolicy.WaitForConnection,
+    ConnectionAcquisitionTimeout = TimeSpan.FromMinutes(5),
+    
+    // Keep ping enabled for proactive failure detection
+    UseCustomPing = true
+});
+
+// Monitor connection for UI updates
+client.connection.OnConnectionStatus += (status) =>
+{
+    MainThread.BeginInvokeOnMainThread(() =>
+    {
+        UpdateConnectionIndicator(status.ConnectionState);
+    });
+};
+```
+
 ---
 
 ## Request Handling Policies

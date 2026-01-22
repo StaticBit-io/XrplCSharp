@@ -58,6 +58,7 @@ namespace Xrpl.BinaryCodec.Types
                 [FieldType.PathSet] = new BuildFrom(PathSet.FromJson, PathSet.FromParser),
                 [FieldType.Vector256] = new BuildFrom(Vector256.FromJson, Vector256.FromParser),
                 [FieldType.Issue] = new BuildFrom(Issue.FromJson, Issue.FromParser),
+                [FieldType.Currency] = new BuildFrom(Currency.FromOracleJson, Currency.FromParser),
             };
             foreach (var field in Field.Values.Where(
                          field => d2.ContainsKey(field.Type)))

@@ -30,6 +30,10 @@ namespace Xrpl.BinaryCodec.Enums
         public static readonly LedgerEntryType MPTokenIssuance = Add(nameof(MPTokenIssuance), 126);
         /// <summary>Represents an MPT holder object in the ledger.</summary>
         public static readonly LedgerEntryType MPToken = Add(nameof(MPToken), 127);
+        /// <summary>Represents a Decentralized Identifier (DID) object in the ledger.</summary>
+        public static readonly LedgerEntryType DID = Add(nameof(DID), 73);
+        /// <summary>Represents a price oracle object in the ledger.</summary>
+        public static readonly LedgerEntryType Oracle = Add(nameof(Oracle), 128);
 
         public static LedgerEntryType FromJson(JToken jToken)
         {

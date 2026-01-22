@@ -160,6 +160,24 @@ namespace Xrpl.Models.Transactions
                 case "MPTokenAuthorize":
                     await ValidateMPTokenAuthorize(tx);
                     break;
+                case "OracleSet":
+                    await ValidateOracleSet(tx);
+                    break;
+                case "OracleDelete":
+                    await ValidateOracleDelete(tx);
+                    break;
+                case "Clawback":
+                    await ValidateClawBack(tx);
+                    break;
+                case "AMMClawback":
+                    await ValidateAMMClawBack(tx);
+                    break;
+                case "DIDSet":
+                    await ValidateDIDSet(tx);
+                    break;
+                case "DIDDelete":
+                    await ValidateDIDDelete(tx);
+                    break;
                 default:
                     throw new ValidationException($"Invalid field TransactionType: {type}");
             }

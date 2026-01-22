@@ -77,6 +77,7 @@ namespace Xrpl.Client.Json.Converters
                 "AMMWithdraw" => new AMMWithdrawResponse(),
 
                 "Clawback" => new ClawBackResponse(),
+                "AMMClawback" => new AMMClawBackResponse(),
 
                 "Batch" => new BatchResponse(),
 
@@ -84,6 +85,11 @@ namespace Xrpl.Client.Json.Converters
                 "MPTokenIssuanceCreate" => new MPTokenIssuanceCreateResponse(),
                 "MPTokenIssuanceDestroy" => new MPTokenIssuanceDestroyResponse(),
                 "MPTokenIssuanceSet" => new MPTokenIssuanceSetResponse(),
+
+                "OracleSet" => new OracleSetResponse(),
+                "OracleDelete" => new OracleDeleteResponse(),
+                "DIDSet" => new DIDSetResponse(),
+                "DIDDelete" => new DIDDeleteResponse(),
                 //_ => throw new Exception("Can't create transaction type" + transactionType)
                 _ => SetUnknownType(jObject),
             };
