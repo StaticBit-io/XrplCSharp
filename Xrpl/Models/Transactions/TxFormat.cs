@@ -330,10 +330,49 @@ namespace Xrpl.Models.Transaction
                     [Field.EPrice] = Requirement.Optional,
                     [Field.LPTokenIn] = Requirement.Optional,
                 },
+                [BinaryCodec.Types.TransactionType.AMMClawback] = new TxFormat
+                {
+                    [Field.Holder] = Requirement.Required,
+                    [Field.Asset] = Requirement.Required,
+                    [Field.Asset2] = Requirement.Required,
+                    [Field.Amount] = Requirement.Optional,
+                },
                 [BinaryCodec.Types.TransactionType.Batch] = new TxFormat
                 {
                     [Field.RawTransactions] = Requirement.Required,
                     [Field.BatchSigners] = Requirement.Optional,
+                },
+                [BinaryCodec.Types.TransactionType.OracleSet] = new TxFormat
+                {
+                    [Field.OracleDocumentID] = Requirement.Required,
+                    [Field.LastUpdateTime] = Requirement.Required,
+                    [Field.PriceDataSeries] = Requirement.Required,
+                    [Field.Provider] = Requirement.Optional,
+                    [Field.AssetClass] = Requirement.Optional,
+                    [Field.URI] = Requirement.Optional,
+
+                    [Field.BaseAsset] = Requirement.Required,
+                    [Field.QuoteAsset] = Requirement.Required,
+                    [Field.AssetPrice] = Requirement.Optional,
+                    [Field.Scale] = Requirement.Optional,
+                },
+                [BinaryCodec.Types.TransactionType.OracleDelete] = new TxFormat
+                {
+                    [Field.OracleDocumentID] = Requirement.Required,
+                },
+                [BinaryCodec.Types.TransactionType.Clawback] = new TxFormat
+                {
+                    [Field.Amount] = Requirement.Required,
+                    [Field.Holder] = Requirement.Optional,
+                },
+                [BinaryCodec.Types.TransactionType.DIDSet] = new TxFormat
+                {
+                    [Field.Data] = Requirement.Optional,
+                    [Field.DIDDocument] = Requirement.Optional,
+                    [Field.URI] = Requirement.Optional,
+                },
+                [BinaryCodec.Types.TransactionType.DIDDelete] = new TxFormat
+                {
                 },
 
             };

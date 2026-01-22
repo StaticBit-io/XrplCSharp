@@ -75,6 +75,7 @@ public class TransactionRequestConverter : JsonConverter
             "AMMWithdraw" => new AMMWithdraw(),
 
             "Clawback" => new ClawBack(),
+            "AMMClawback" => new AMMClawBack(),
 
             "Batch" => new Batch(),
 
@@ -82,6 +83,11 @@ public class TransactionRequestConverter : JsonConverter
             "MPTokenIssuanceCreate" => new MPTokenIssuanceCreate(),
             "MPTokenIssuanceDestroy" => new MPTokenIssuanceDestroy(),
             "MPTokenIssuanceSet" => new MPTokenIssuanceSet(),
+
+            "OracleSet" => new OracleSet(),
+            "OracleDelete" => new OracleDelete(),
+            "DIDSet" => new DIDSet(),
+            "DIDDelete" => new DIDDelete(),
             //_ => throw new Exception("Can't create transaction type" + transactionType)
             _ => SetUnknownType(jObject),
         };

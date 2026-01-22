@@ -100,6 +100,12 @@
         Clawback,
 
         /// <summary>
+        /// The AMMClawback transaction claws back tokens from an Automated Market Maker (AMM) pool.
+        /// It allows the issuer to recover tokens that a holder has deposited into an AMM.
+        /// </summary>
+        AMMClawback,
+
+        /// <summary>
         /// The NFTokenModify transaction modifies an NFToken's URI if its tfMutable is set to true.
         /// </summary>
         NFTokenModify,
@@ -129,7 +135,27 @@
         /// <summary>
         /// The MPTokenAuthorize transaction authorizes an account to hold an MPT.
         /// </summary>
-        MPTokenAuthorize
+        MPTokenAuthorize,
+
+        /// <summary>
+        /// Creates a new Oracle ledger entry or updates the fields of an existing one.
+        /// </summary>
+        OracleSet,
+
+        /// <summary>
+        /// Deletes an Oracle ledger entry.
+        /// </summary>
+        OracleDelete,
+
+        /// <summary>
+        /// Creates or updates the DID (Decentralized Identifier) associated with an account.
+        /// </summary>
+        DIDSet,
+
+        /// <summary>
+        /// Deletes the DID (Decentralized Identifier) associated with an account.
+        /// </summary>
+        DIDDelete
     }
 }
 
