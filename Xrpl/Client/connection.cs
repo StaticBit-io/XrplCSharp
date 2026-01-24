@@ -1385,8 +1385,16 @@ public class Connection
         }
     }
 
+    /// <summary>
+    /// Sends a message through the WebSocket connection.
+    /// </summary>
+    /// <param name="ws">The WebSocket client to send through.</param>
+    /// <param name="message">The message to send.</param>
+    /// <exception cref="DisconnectedException">Thrown when the WebSocket connection is null or closed.</exception>
     public void WebsocketSendAsync(WebSocketClient ws, string message)
     {
+        if (ws == null)
+            throw new DisconnectedException("WebSocket connection was closed before request could be sent");
         ws.SendMessage(message);
     }
 
