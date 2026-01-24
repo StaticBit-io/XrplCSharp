@@ -48,15 +48,22 @@ namespace Xrpl.Client.Json.Converters
             };
 
         /// <summary>
-        /// write <see cref="BaseLedgerEntry"/>  to json object
+        /// Writes a <see cref="BaseLedgerEntry"/> to JSON.
+        /// Null fields are ignored based on the serializer settings.
         /// </summary>
-        /// <param name="writer">writer</param>
-        /// <param name="value"> <see cref="BaseLedgerEntry"/>  value</param>
-        /// <param name="serializer">json serializer</param>
-        /// <exception cref="NotSupportedException">Can't create ledger type</exception>
+        /// <param name="writer">The JSON writer.</param>
+        /// <param name="value">The <see cref="BaseLedgerEntry"/> value to serialize.</param>
+        /// <param name="serializer">The JSON serializer.</param>
         public override void WriteJson(JsonWriter writer, object value, JsonSerializer serializer)
         {
-            throw new NotImplementedException();
+            if (value == null)
+            {
+                writer.WriteNull();
+                return;
+            }
+
+            var jObject = JObject.FromObject(value, serializer);
+            jObject.WriteTo(writer);
         }
         /// <summary>
         /// create <see cref="BaseLedgerEntry"/> 
@@ -154,9 +161,10 @@ namespace Xrpl.Client.Json.Converters
             return target;
         }
 
+        /// <inheritdoc />
         public override bool CanConvert(Type objectType)
         {
-            throw new NotImplementedException();
+            return typeof(BaseLedgerEntry).IsAssignableFrom(objectType);
         }
 
         public override bool CanWrite => false;

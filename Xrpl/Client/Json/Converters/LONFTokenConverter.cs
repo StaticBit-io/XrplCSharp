@@ -13,15 +13,25 @@ public class LONFTokenConverter : JsonConverter
 {
 
     /// <summary>
-    /// write <see cref="NFToken"/>  to json object
+    /// Writes an <see cref="NFToken"/> to JSON, wrapping it in an NFToken property.
+    /// Null fields are ignored based on the serializer settings.
     /// </summary>
-    /// <param name="writer">writer</param>
-    /// <param name="value"> <see cref="NFToken"/>  value</param>
-    /// <param name="serializer">json serializer</param>
-    /// <exception cref="NotSupportedException">Can't create ledger type</exception>
+    /// <param name="writer">The JSON writer.</param>
+    /// <param name="value">The <see cref="NFToken"/> value to serialize.</param>
+    /// <param name="serializer">The JSON serializer.</param>
     public override void WriteJson(JsonWriter writer, object value, JsonSerializer serializer)
     {
-        throw new NotImplementedException();
+        if (value == null)
+        {
+            writer.WriteNull();
+            return;
+        }
+
+        writer.WriteStartObject();
+        writer.WritePropertyName("NFToken");
+        var jObject = JObject.FromObject(value, serializer);
+        jObject.WriteTo(writer);
+        writer.WriteEndObject();
     }
 
 
@@ -42,9 +52,10 @@ public class LONFTokenConverter : JsonConverter
         return target;
     }
 
+    /// <inheritdoc />
     public override bool CanConvert(Type objectType)
     {
-        throw new NotImplementedException();
+        return typeof(NFToken).IsAssignableFrom(objectType);
     }
 
     public override bool CanWrite => false;
