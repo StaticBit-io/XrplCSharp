@@ -11,15 +11,22 @@ namespace Xrpl.Client.Json.Converters;
 public class TransactionRequestConverter : JsonConverter
 {
     /// <summary>
-    /// write <see cref="ITransactionResponse"/>  to json object
+    /// Writes an <see cref="ITransactionRequest"/> to JSON.
+    /// Null fields are ignored based on the serializer settings.
     /// </summary>
-    /// <param name="writer">writer</param>
-    /// <param name="value"><see cref="ITransactionResponse"/> value</param>
-    /// <param name="serializer">json serializer</param>
-    /// <exception cref="NotSupportedException">Cannot write this object type</exception>
+    /// <param name="writer">The JSON writer.</param>
+    /// <param name="value">The <see cref="ITransactionRequest"/> value to serialize.</param>
+    /// <param name="serializer">The JSON serializer.</param>
     public override void WriteJson(JsonWriter writer, object value, JsonSerializer serializer)
     {
-        throw new NotImplementedException();
+        if (value == null)
+        {
+            writer.WriteNull();
+            return;
+        }
+
+        var jObject = JObject.FromObject(value, serializer);
+        jObject.WriteTo(writer);
     }
 
     /// <summary>

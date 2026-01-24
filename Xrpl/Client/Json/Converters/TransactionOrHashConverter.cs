@@ -1,4 +1,5 @@
 ﻿using Newtonsoft.Json;
+using Newtonsoft.Json.Linq;
 
 using System;
 
@@ -12,15 +13,35 @@ namespace Xrpl.Client.Json.Converters
     public class TransactionOrHashConverter : JsonConverter
     {
         /// <summary>
-        /// write  <see cref="HashOrTransaction"/>  to json object
+        /// Writes a <see cref="HashOrTransaction"/> to JSON.
+        /// If the transaction hash is set, writes just the hash string.
+        /// Otherwise, writes the full transaction object.
         /// </summary>
-        /// <param name="writer">writer</param>
-        /// <param name="value"> <see cref="HashOrTransaction"/> value</param>
-        /// <param name="serializer">json serializer</param>
-        /// <exception cref="NotSupportedException">Cannot write this object type</exception>
+        /// <param name="writer">The JSON writer.</param>
+        /// <param name="value">The <see cref="HashOrTransaction"/> value to serialize.</param>
+        /// <param name="serializer">The JSON serializer.</param>
         public override void WriteJson(JsonWriter writer, object value, JsonSerializer serializer)
         {
-            throw new NotImplementedException();
+            if (value == null)
+            {
+                writer.WriteNull();
+                return;
+            }
+
+            var hashOrTransaction = (HashOrTransaction)value;
+            if (!string.IsNullOrEmpty(hashOrTransaction.TransactionHash))
+            {
+                writer.WriteValue(hashOrTransaction.TransactionHash);
+            }
+            else if (hashOrTransaction.Transaction != null)
+            {
+                var jObject = JObject.FromObject(hashOrTransaction.Transaction, serializer);
+                jObject.WriteTo(writer);
+            }
+            else
+            {
+                writer.WriteNull();
+            }
         }
 
         /// <summary> read  <see cref="HashOrTransaction"/>  from json object </summary>
