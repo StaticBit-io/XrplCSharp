@@ -63,7 +63,9 @@ namespace Xrpl.Wallet
     public class XrplWallet
     {
 
-        public static string DEFAULT_ALGORITHM = "ed25519";
+        public static string DEFAULT_ALGORITHM = Secp256k1;
+        public const string Ed25519 = "ed25519";
+        public const string Secp256k1 = "secp256k1";
 
         public readonly string PublicKey;
         public readonly string PrivateKey;
@@ -90,7 +92,7 @@ namespace Xrpl.Wallet
         /// </summary>
         /// <param name="algorithm">The digital signature algorithm to generate an address for.</param>
         /// <returns>A new Wallet derived from a generated seed.</returns>
-        public static XrplWallet Generate(string algorithm = "ed25519")
+        public static XrplWallet Generate(string algorithm = Ed25519)
         {
             string seed = XrplKeypairs.GenerateSeed(null, algorithm);
             return XrplWallet.FromSeed(seed, null, algorithm);
@@ -117,16 +119,6 @@ namespace Xrpl.Wallet
             string falgorithm = algorithm ?? XrplWallet.DEFAULT_ALGORITHM;
             string seed = XrplKeypairs.GenerateSeed(entropy, falgorithm);
             return XrplWallet.DeriveWallet(seed, masterAddress, falgorithm);
-        }
-
-        /// <summary>
-        /// Creates a Wallet from xumm numbers.
-        /// </summary>
-        /// <returns>A Wallet from xumm numbers.</returns>
-        public static XrplWallet FromXummNumbers(string[] numbers)
-        {
-            byte[] entropy = XummExtension.EntropyFromXummNumbers(numbers);
-            return FromEntropy(entropy);
         }
 
         public static XrplWallet FromMnemonic(string mnemonic,
@@ -158,7 +150,7 @@ namespace Xrpl.Wallet
         private static XrplWallet FromRFC1751Mnemonic(string mnemonic, string? masterAddress = null, string? algorithm = null)
         {
             var seed = RFC1751.RFC1751MnemonicToKey(mnemonic);
-            var encodeAlgorithm = algorithm == "ed25519" ? "ed25519" : "secp256k1";
+            var encodeAlgorithm = algorithm == Ed25519 ? Ed25519 : Secp256k1;
             var encodedSeed = XrplCodec.EncodeSeed(seed, encodeAlgorithm);
             return FromSeed(encodedSeed, masterAddress, algorithm);
         }
@@ -191,10 +183,47 @@ namespace Xrpl.Wallet
         /// Creates a Wallet from xumm numbers.
         /// </summary>
         /// <returns>A Wallet from xumm numbers.</returns>
-        public static XrplWallet FromXummNumbers(string[] numbers, string algorithm = "secp256k1")
+        public static XrplWallet FromXummNumbers(string[] numbers, string algorithm = Secp256k1, string? masterAddress = null)
         {
             byte[] entropy = XummExtension.EntropyFromXummNumbers(numbers);
-            return FromEntropy(entropy, null, algorithm);
+            return FromEntropy(entropy, masterAddress, algorithm);
+        }
+
+        /// <summary>
+        /// Creates a Wallet from a space-separated secret numbers string.
+        /// Accepts formats like "554872 394230 209376 323698 140250 387423 652803 258676".
+        /// </summary>
+        /// <param name="secretString">Space-separated secret numbers string (8 groups of 6 digits)</param>
+        /// <param name="algorithm">The digital signature algorithm to use. Default is secp256k1.</param>
+        /// <returns>A Wallet created from the secret numbers.</returns>
+        public static XrplWallet FromSecretString(string secretString, string algorithm = Secp256k1)
+        {
+            string[] numbers = XummExtension.ParseSecretString(secretString);
+            return FromXummNumbers(numbers, algorithm);
+        }
+
+        /// <summary>
+        /// Gets the Secret Numbers representation of this wallet's seed.
+        /// Returns 8 groups of 6 digits each, where 5 digits are entropy and 1 digit is checksum.
+        /// </summary>
+        /// <returns>Array of 8 secret number strings, or null if the wallet was not created from a seed.</returns>
+        public string[] GetSecretNumbers()
+        {
+            if (string.IsNullOrEmpty(Seed))
+                return null;
+
+            var decoded = XrplCodec.DecodeSeed(Seed);
+            return XummExtension.EntropyToSecretNumbers(decoded.Bytes);
+        }
+
+        /// <summary>
+        /// Gets the Secret Numbers as a formatted string with spaces between groups.
+        /// </summary>
+        /// <returns>Space-separated secret numbers string, or null if the wallet was not created from a seed.</returns>
+        public string GetSecretString()
+        {
+            var numbers = GetSecretNumbers();
+            return numbers != null ? string.Join(" ", numbers) : null;
         }
 
         /// <summary>
