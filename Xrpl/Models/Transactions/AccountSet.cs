@@ -90,6 +90,12 @@ namespace Xrpl.Models.Transactions
         /// </summary>
         asfAllowTrustLineClawback = 16,
 
+        /// <summary>
+        /// Allow Trust Line tokens issued by this account to be held in escrow.
+        /// If not enabled, tokens issued by this account can't be escrowed.
+        /// After you enable this flag, it cannot be disabled.
+        /// </summary>
+        asfAllowTrustLineLocking = 17, // 0x00000010
     }
 
     //todo enum AccountSetTfFlags https://github.com/XRPLF/xrpl.js/blob/b20c05c3680d80344006d20c44b4ae1c3b0ffcac/packages/xrpl/src/models/transactions/accountSet.ts#L54
