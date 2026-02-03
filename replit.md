@@ -35,6 +35,7 @@ A custom Base58 codec (`B58`) handles XRP Ledger's unique address and seed encod
 - **AMMClawback Transaction Support**: Full implementation of the `AMMClawback` transaction type, enabling token issuers to recover tokens deposited into Automated Market Maker (AMM) pools. This also requires the `asfAllowTrustLineClawback` flag.
 - **DID (Decentralized Identifier) Support**: Full implementation of `DIDSet` and `DIDDelete` transaction types, and `LODID` ledger entry type for managing decentralized identifiers on the XRP Ledger. DIDSet supports Data, DIDDocument, and URI fields (at least one required, each max 256 bytes hex-encoded).
 - **Secret Numbers Support (XLS-12d)**: Full implementation of the Secret Numbers format for encoding XRPL account secrets as 8 groups of 6 digits. This user-friendly, language-agnostic format includes position-dependent checksums for real-time typo detection. Key methods: `XummExtension.EntropyToSecretNumbers()`, `XummExtension.RandomSecretNumbers()`, `XummExtension.CalculateChecksum()`, `XrplWallet.FromSecretString()`, `XrplWallet.GetSecretNumbers()`, `XrplWallet.GetSecretString()`.
+- **BIP-39 Mnemonic Generation**: Full implementation of BIP-39 mnemonic phrase generation with configurable word counts. Supports 12, 15, 18, 21, or 24 words with corresponding entropy levels (128-256 bits). Key method: `XrplWallet.GenerateMnemonic(wordCount)`.
 
 ### Documentation
 API documentation is generated from XML comments using DocFX.

@@ -167,6 +167,60 @@ namespace Xrpl.Wallet
                 return false;
             }
         }
+
+        /// <summary>
+        /// Generates a random BIP-39 mnemonic phrase.
+        /// <para>
+        /// BIP-39 defines a standard for mnemonic phrases - human-readable word sequences
+        /// that encode cryptographic entropy. The words are selected from a standardized
+        /// 2048-word English wordlist.
+        /// </para>
+        /// <para>
+        /// The number of words determines the entropy strength:
+        /// <list type="bullet">
+        ///   <item><description>12 words = 128 bits of entropy (standard)</description></item>
+        ///   <item><description>15 words = 160 bits of entropy</description></item>
+        ///   <item><description>18 words = 192 bits of entropy</description></item>
+        ///   <item><description>21 words = 224 bits of entropy</description></item>
+        ///   <item><description>24 words = 256 bits of entropy (maximum)</description></item>
+        /// </list>
+        /// </para>
+        /// </summary>
+        /// <param name="wordCount">The number of words to generate (12, 15, 18, 21, or 24). Default is 12.</param>
+        /// <returns>An array of mnemonic words.</returns>
+        /// <exception cref="ArgumentException">Thrown when wordCount is not 12, 15, 18, 21, or 24.</exception>
+        /// <remarks>
+        /// Reference: https://github.com/bitcoin/bips/blob/master/bip-0039.mediawiki
+        /// </remarks>
+        /// <example>
+        /// <code>
+        /// // Generate 12-word mnemonic (default)
+        /// string[] words12 = XrplWallet.GenerateMnemonic();
+        /// 
+        /// // Generate 24-word mnemonic for maximum security
+        /// string[] words24 = XrplWallet.GenerateMnemonic(24);
+        /// 
+        /// // Create wallet from mnemonic
+        /// var wallet = XrplWallet.FromMnemonic(string.Join(" ", words24));
+        /// </code>
+        /// </example>
+        public static string[] GenerateMnemonic(int wordCount = 12)
+        {
+            WordCount nbWordCount = wordCount switch
+            {
+                12 => WordCount.Twelve,
+                15 => WordCount.Fifteen,
+                18 => WordCount.Eighteen,
+                21 => WordCount.TwentyOne,
+                24 => WordCount.TwentyFour,
+                _ => throw new ArgumentException(
+                    $"Invalid word count: {wordCount}. Must be one of: 12, 15, 18, 21, 24.",
+                    nameof(wordCount))
+            };
+
+            var mnemonic = new Mnemonic(Wordlist.English, nbWordCount);
+            return mnemonic.Words;
+        }
         /// <summary>
         /// Derive a Wallet from a seed.
         /// </summary>
