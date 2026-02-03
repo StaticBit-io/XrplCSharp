@@ -118,7 +118,7 @@ namespace Xrpl.Models.Transactions
             Account = account;
         }
         /// <inheritdoc />
-        public uint? ClearFlag { get; set; }
+        public AccountSetAsfFlags? ClearFlag { get; set; }
         /// <inheritdoc />
         public string Domain { get; set; }
         /// <inheritdoc />
@@ -143,7 +143,7 @@ namespace Xrpl.Models.Transactions
         /// <summary>
         /// Unique identifier of a flag to disable for this account.
         /// </summary>
-        uint? ClearFlag { get; set; }
+        AccountSetAsfFlags? ClearFlag { get; set; }
         /// <summary>
         /// The domain that owns this account, as a string of hex representing the.<br/>
         /// ASCII for the domain in lowercase.
@@ -183,7 +183,7 @@ namespace Xrpl.Models.Transactions
     public class AccountSetResponse : TransactionResponse, IAccountSet
     {
         /// <inheritdoc />
-        public uint? ClearFlag { get; set; }
+        public AccountSetAsfFlags? ClearFlag { get; set; }
         /// <inheritdoc />
         public string Domain { get; set; }
         /// <inheritdoc />
