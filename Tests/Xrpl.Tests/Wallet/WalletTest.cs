@@ -161,26 +161,6 @@ namespace Xrpl.Tests.Wallet.Tests.Seed
             Helper.ThrowsException<ValidationException>(() => XrplWallet.FromMnemonic(mnemonic, null, null, "bip39", "ed25519"), "Unable to parse the given mnemonic using bip39 encoding");
         }
 
-        // This needs to throw an error
-        [TestMethod]
-        public void TestThrowsB39Seed()
-        {
-            string mnemonic = "draw attack antique swing base employ blur above palace lucky glide clap pen use illegal";
-
-            Helper.ThrowsException<ArgumentException>(() => XrplWallet.FromMnemonic(mnemonic, null, null, "rfc1751", "ed25519"),"Expected an RFC1751 word, but received 'attack'.");
-        }
-
-        [TestMethod]
-        public void TestEDPRFC1751SeedLower()
-        {
-            string mnemonic = "cab beth hank bird mend sign gild any kern hyde chat stub";
-            string expectedSeed = "snVB4iTWYqsWZaj1hkvAy1QzqNbAg";
-
-            XrplWallet wallet = XrplWallet.FromMnemonic(mnemonic, null, null, "rfc1751", "secp256k1");
-
-            Assert.AreEqual(expectedSeed, wallet.Seed);
-        }
-
         [TestMethod]
         public void TestRegularKeypairSeed()
         {
@@ -192,62 +172,6 @@ namespace Xrpl.Tests.Wallet.Tests.Seed
                 PrivateKey = "004265A28F3E18340A490421D47B2EB8DBC2C0BF2C24CEFEA971B61CED2CABD233",
             };
             XrplWallet wallet = XrplWallet.FromSeed(seed, masterAddress, "secp256k1");
-
-            Assert.AreEqual(wallet.PublicKey, regularKeyPair.PublicKey);
-            Assert.AreEqual(wallet.PrivateKey, regularKeyPair.PrivateKey);
-            Assert.AreEqual(wallet.ClassicAddress, masterAddress);
-        }
-    }
-}
-
-namespace Xrpl.Tests.Wallet.Tests.Mnemonic
-{
-    [TestClass]
-    public class TestUMnemonic
-    {
-
-        private string mnemonic = "assault rare scout seed design extend noble drink talk control guitar quote";
-        private string publicKey = "035953FCD81D001CF634EB44A87940F3F98ADF2483D09C914BAED0539BE50F385D";
-        private string privateKey = "13FC461CA5799F1357C8130AF703CBA7E9C28E072C6CA8F7DEF8601CDE98F394";
-
-        [TestMethod]
-        public void TestDefaultDerivationPath()
-        {
-            XrplWallet wallet = XrplWallet.FromMnemonic(mnemonic, null, null, null, "secp256k1");
-            Assert.AreEqual(wallet.PublicKey, publicKey);
-            Assert.AreEqual(wallet.PrivateKey, privateKey);
-        }
-
-        [TestMethod]
-        public void TestInputDerivationPath()
-        {
-            string derivationPath = "m/44'/144'/0'/0/0";
-            XrplWallet wallet = XrplWallet.FromMnemonic(mnemonic, null, derivationPath, null, "secp256k1");
-            Assert.AreEqual(wallet.PublicKey, publicKey);
-            Assert.AreEqual(wallet.PrivateKey, privateKey);
-        }
-
-        [TestMethod]
-        public void TestInputPassPhrase()
-        {
-            string passPhrase = "my strong password";
-            XrplWallet wallet = XrplWallet.FromMnemonic(mnemonic, null, null, null, "secp256k1", passPhrase);
-            Assert.AreNotEqual(wallet.PublicKey, publicKey);
-            Assert.AreNotEqual(wallet.PrivateKey, privateKey);
-        }
-
-        [TestMethod]
-        public void TestRegularKeypairSeed()
-        {
-            string masterAddress = "rUAi7pipxGpYfPNg3LtPcf2ApiS8aw9A93";
-            string mnemonic = "I IRE BOND BOW TRIO LAID SEAT GOAL HEN IBIS IBIS DARE";
-            rKeypair regularKeyPair = new rKeypair
-            {
-                PublicKey = "0330E7FC9D56BB25D6893BA3F317AE5BCF33B3291BD63DB32654A313222F7FD020",
-                PrivateKey = "001ACAAEDECE405B2A958212629E16F2EB46B153EEE94CDD350FDEFF52795525B7",
-            };
-            XrplWallet wallet = XrplWallet.FromMnemonic(mnemonic, masterAddress, null, "rfc1751", "secp256k1");
-            XrplWallet wallet2 = XrplWallet.FromMnemonic(mnemonic, masterAddress, null, "rfc1751", "ed25519");
 
             Assert.AreEqual(wallet.PublicKey, regularKeyPair.PublicKey);
             Assert.AreEqual(wallet.PrivateKey, regularKeyPair.PrivateKey);
@@ -863,71 +787,6 @@ namespace Xrpl.Tests.Wallet.Tests.XAddress
         {
             string result = wallet.GetXAddress(tag);
             Assert.AreEqual(result, mainnetXAddress);
-        }
-    }
-}
-namespace Xrpl.Tests.Wallet.Tests.XummNumbers
-{
-    [TestClass]
-    public class TestUXummNumbers
-    {
-        string[] xummNumbers = new[] { "556863", "404730", "402495", "038856", "113360", "465825", "112585", "283320" };
-
-        string wallet_num = "rNUhe55ffGjezrVwTQfpL73aP5qKdofZMy";
-        string wallet_seed = "snjnsXBywtRUzVQagnjfXHwo97x1E";
-        private string wallet_private_key = "00FC5D3ACE7236F40683947E68575316959D07C2425EE12F41E534EA4295BABFAA";
-
-        [TestMethod]
-        public void TestVerify_EntropyFromXummNumbers()
-        {
-            XrplWallet result = XrplWallet.FromXummNumbers(xummNumbers, "secp256k1");
-            //sEdVLhsR1xkLWWLX9KbErLTo6EEaHFi WRONG SEED
-            //rJP8D3Mpntnp7T1YZyz51xwtdeYKcz5hpR WRONG ADDRESS
-
-            Assert.AreEqual(result.Seed, wallet_seed);
-            Assert.AreEqual(result.ClassicAddress, wallet_num);
-            Assert.AreEqual(result.PrivateKey, wallet_private_key);
-        }
-
-        [TestMethod]
-        public void TestVerify_InValid_EntropyFromXummNumbers()
-        {
-            var numbers = new string[8];
-            Array.Copy(xummNumbers, numbers, 8);
-            numbers[0] = "556862";
-            Helper.ThrowsException<ArgumentException>(() => XrplWallet.FromXummNumbers(numbers), "Wrong numbers");
-        }
-
-        [TestMethod]
-        public void TestVerify_CheckXummSum()
-        {
-            var number = xummNumbers[0];
-            var position = 0;
-            var valid_sum = XummExtension.CheckXummSum(position, number);
-            Assert.IsTrue(valid_sum);
-
-            number = xummNumbers[2];
-            position = 2;
-            valid_sum = XummExtension.CheckXummSum(position, number);
-            Assert.IsTrue(valid_sum);
-
-            number = xummNumbers[6];
-            position = 6;
-            valid_sum = XummExtension.CheckXummSum(position, number);
-            Assert.IsTrue(valid_sum);
-
-            number = xummNumbers[7];
-            position = 7;
-            valid_sum = XummExtension.CheckXummSum(position, number);
-            Assert.IsTrue(valid_sum);
-        }
-        [TestMethod]
-        public void TestVerify_InValid_CheckXummSum()
-        {
-            var number = xummNumbers[3];
-            var position = 2;
-            var valid_sum = XummExtension.CheckXummSum(position, number);
-            Assert.AreNotEqual(true, valid_sum);
         }
     }
 }

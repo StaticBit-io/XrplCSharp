@@ -14,8 +14,8 @@ The `XrplClient` facilitates robust, real-time WebSocket communication with `rip
 - **Connection Management**: Advanced event handling for connection status, intelligent reconnection logic with configurable policies, and detailed diagnostics, including fast server switching and immediate network drop recovery. It includes specific handling for MAUI/iOS network errors to prevent critical logging.
 - **Request Handling**: Asynchronous request/response patterns with configurable timeouts and failure policies for resilience.
 - **Protocol Features**: Rate-limit detection and an application-level ping/pong heartbeat.
-- **Error Handling**: Comprehensive exception containment and prevention of `UnobservedTaskException` and silent promise rejection.
-- **Reconnect Logic**: A unified reconnect flow using session isolation and a `ReconnectMode` enum for consistent state management and telemetry.
+- **Error Handling**: Comprehensive exception containment and prevention of `UnobservedTaskException` and silent promise rejection. The `CheckIfNotConnected()` method now correctly treats `Connecting` and `RestoringConnection` states as active attempts, preventing race conditions when calling `ChangeServer()` or manual retry after max reconnect attempts.
+- **Reconnect Logic**: A unified reconnect flow using session isolation and a `ReconnectMode` enum for consistent state management and telemetry. `ConnectInternalAsync` now accepts `CancellationToken` with pre- and post-WebSocket-creation cancellation checks, ensuring `ChangeServer()` during active reconnect properly aborts stale connection attempts. Triple-guard protection in `OnceClose`, `OnConnectionFailed`, and `StartReconnectLoop` prevents reconnect counter resets during active loops, ensuring proper attempt count monotonicity.
 
 ### Wallet Management
 The `XrplWallet` class provides secure generation and management of XRP Ledger wallets, supporting random and deterministic creation, ED25519 and SECP256K1 key derivation, and custom Base58 encoding/decoding.
@@ -34,6 +34,8 @@ A custom Base58 codec (`B58`) handles XRP Ledger's unique address and seed encod
 - **Clawback Transaction Support**: Full implementation of the `Clawback` transaction type, allowing token issuers to recover tokens. This requires the `asfAllowTrustLineClawback` flag to be set on the issuer account.
 - **AMMClawback Transaction Support**: Full implementation of the `AMMClawback` transaction type, enabling token issuers to recover tokens deposited into Automated Market Maker (AMM) pools. This also requires the `asfAllowTrustLineClawback` flag.
 - **DID (Decentralized Identifier) Support**: Full implementation of `DIDSet` and `DIDDelete` transaction types, and `LODID` ledger entry type for managing decentralized identifiers on the XRP Ledger. DIDSet supports Data, DIDDocument, and URI fields (at least one required, each max 256 bytes hex-encoded).
+- **Secret Numbers Support (XLS-12d)**: Full implementation of the Secret Numbers format for encoding XRPL account secrets as 8 groups of 6 digits. This user-friendly, language-agnostic format includes position-dependent checksums for real-time typo detection. Key methods: `XummExtension.EntropyToSecretNumbers()`, `XummExtension.RandomSecretNumbers()`, `XummExtension.CalculateChecksum()`, `XrplWallet.FromSecretString()`, `XrplWallet.GetSecretNumbers()`, `XrplWallet.GetSecretString()`.
+- **BIP-39 Mnemonic Generation**: Full implementation of BIP-39 mnemonic phrase generation with configurable word counts. Supports 12, 15, 18, 21, or 24 words with corresponding entropy levels (128-256 bits). Key method: `XrplWallet.GenerateMnemonic(wordCount)`.
 
 ### Documentation
 API documentation is generated from XML comments using DocFX.

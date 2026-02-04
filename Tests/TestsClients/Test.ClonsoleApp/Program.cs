@@ -46,9 +46,12 @@ internal class Program
         {
             //await TestReconnection();
             //return;
-            await InitTestData(TestDataType.testNet);
+            await InitTestData(TestDataType.mainNet);
 
-            await SetSigners(walletMultiSign, walletMultiSigner_1, walletMultiSigner_2);
+
+            //await InitForDataForTest();
+
+            //await SetSigners(walletMultiSign, walletMultiSigner_1, walletMultiSigner_2);
 
             var features = await client.ServerFeatures();
             var canBe = features.GetCanBeEnabled();
@@ -74,6 +77,25 @@ internal class Program
         //await SubmitTestTx();
         //await WebsocketTest();
         //await WebsocketChangeServerTest();
+    }
+
+    private static async Task InitForDataForTest()
+    {
+        await new TestAccountBuilder(client, TestNodeType.Standalone)
+            .AddPrimaryAccount(walletPrimary)       // ваш кошелёк - владелец всех объектов
+            .AddTrustlines("USD", "EUR", "BTC")
+            .AddNFTs(3)
+            .AddOffers(5)
+            .AddTickets(5)
+            .AddChecks(2)
+            .AddEscrows()
+            .AddSignerList()
+            .BuildAsync();
+        // Теперь можно использовать готовые аккаунты для тестов:
+        Console.WriteLine($"Issuer: {TestAccountBuilder.IssuerAccount.ClassicAddress}");
+        // Пример: получить NFT созданные builder-ом
+        var nfts = await client.AccountNFTs(new AccountNFTsRequest(
+            walletPrimary.ClassicAddress));
     }
 
     private static async Task TestReconnection()
@@ -176,7 +198,7 @@ internal class Program
         Console.WriteLine("END");
     }
 
-    private static async Task InitTestData(TestDataType serverType)
+    private static async Task InitTestData(TestDataType serverType, bool withAccounts = true)
     {
         client = serverType switch
         {
@@ -203,8 +225,20 @@ internal class Program
 
             return Task.CompletedTask;
         };
+        client.connection.OnError += (error, message, s, data) =>
+        {
+            Console.WriteLine(error);
+            Console.WriteLine(message);
+            Console.WriteLine(s);
+            Console.WriteLine(data);
+            return Task.CompletedTask;
+        };
         await client.Connect();
 
+        if (!withAccounts)
+        {
+            return;
+        }
         if (serverType == TestDataType.standalone)
         {
             await StandAloneUtils.FundAccount(client, walletPrimary, walletSecondary_1, walletSecondary_2, walletMultiSign, walletMultiSigner_1, walletMultiSigner_2, walletRegularKey, walletRegularKey_signer);

@@ -90,6 +90,12 @@ namespace Xrpl.Models.Transactions
         /// </summary>
         asfAllowTrustLineClawback = 16,
 
+        /// <summary>
+        /// Allow Trust Line tokens issued by this account to be held in escrow.
+        /// If not enabled, tokens issued by this account can't be escrowed.
+        /// After you enable this flag, it cannot be disabled.
+        /// </summary>
+        asfAllowTrustLineLocking = 17, // 0x00000010
     }
 
     //todo enum AccountSetTfFlags https://github.com/XRPLF/xrpl.js/blob/b20c05c3680d80344006d20c44b4ae1c3b0ffcac/packages/xrpl/src/models/transactions/accountSet.ts#L54
@@ -118,7 +124,7 @@ namespace Xrpl.Models.Transactions
             Account = account;
         }
         /// <inheritdoc />
-        public uint? ClearFlag { get; set; }
+        public AccountSetAsfFlags? ClearFlag { get; set; }
         /// <inheritdoc />
         public string Domain { get; set; }
         /// <inheritdoc />
@@ -143,7 +149,7 @@ namespace Xrpl.Models.Transactions
         /// <summary>
         /// Unique identifier of a flag to disable for this account.
         /// </summary>
-        uint? ClearFlag { get; set; }
+        AccountSetAsfFlags? ClearFlag { get; set; }
         /// <summary>
         /// The domain that owns this account, as a string of hex representing the.<br/>
         /// ASCII for the domain in lowercase.
@@ -183,7 +189,7 @@ namespace Xrpl.Models.Transactions
     public class AccountSetResponse : TransactionResponse, IAccountSet
     {
         /// <inheritdoc />
-        public uint? ClearFlag { get; set; }
+        public AccountSetAsfFlags? ClearFlag { get; set; }
         /// <inheritdoc />
         public string Domain { get; set; }
         /// <inheritdoc />

@@ -22,7 +22,7 @@ internal class Program
             RequestPolicy = Xrpl.Client.RequestFailurePolicy.ImmediateFail,
             ConnectionAcquisitionTimeout = System.TimeSpan.FromSeconds(30),
             MaxReconnectAttempts = 4,
-            StopAfterMaxAttempts = true,
+            StopAfterMaxAttempts = false,
             ReconnectMaxDelay = TimeSpan.FromSeconds(6),
             ReconnectBaseDelay = TimeSpan.FromSeconds(3),
         });

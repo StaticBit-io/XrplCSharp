@@ -101,22 +101,25 @@
                 }
             </button>
             
-            <button @onclick="ToggleConnectionAsync" 
-                    disabled="@(IsChangingServer || IsTogglingConnection)"
-                    style="background: @(IsConnected ? "#dc3545" : "#28a745"); color: white; padding: 10px 20px; border: none; border-radius: 4px; cursor: pointer; font-weight: bold; flex: 1; max-width: 200px;">
-                @if (IsTogglingConnection)
-                {
-                    <span>@(IsConnected ? "Disconnecting..." : "Connecting...")</span>
-                }
-                else if (IsConnected)
-                {
-                    <span>Disconnect</span>
-                }
-                else
-                {
-                    <span>Connect</span>
-                }
-            </button>
+            @if (!IsSelectedServerDifferent)
+            {
+                <button @onclick="ToggleConnectionAsync" 
+                        disabled="@(IsChangingServer || IsTogglingConnection)"
+                        style="background: @(IsConnected ? "#dc3545" : "#28a745"); color: white; padding: 10px 20px; border: none; border-radius: 4px; cursor: pointer; font-weight: bold; flex: 1; max-width: 200px;">
+                    @if (IsTogglingConnection)
+                    {
+                        <span>@(IsConnected ? "Disconnecting..." : "Connecting...")</span>
+                    }
+                    else if (IsConnected)
+                    {
+                        <span>Disconnect</span>
+                    }
+                    else
+                    {
+                        <span>Connect</span>
+                    }
+                </button>
+            }
         </div>
     </div>
 </div>
@@ -191,6 +194,12 @@
     string CurrentServerUrl { get; set; } = "wss://s2.ripple.com";
     string? PreviousServerUrl { get; set; }
     ReconnectInfo? CurrentReconnectInfo { get; set; }
+    
+    string SelectedServerUrl => SelectedServerType == ServerType.Custom 
+        ? CustomServerUrl 
+        : ServerUrls.GetValueOrDefault(SelectedServerType, "");
+    
+    bool IsSelectedServerDifferent => !string.Equals(SelectedServerUrl, CurrentServerUrl, StringComparison.OrdinalIgnoreCase);
     
     [Inject]
     IXrplClient client { get; set; }

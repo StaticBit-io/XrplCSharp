@@ -692,12 +692,15 @@ public class Connection
         await WaitForConnectionAsync(config.ConnectionAcquisitionTimeout, cancellationToken);
     }
 
-    private async Task ConnectInternalAsync()
+    private async Task ConnectInternalAsync(CancellationToken ct = default)
     {
         _permanentlyDisconnected = false;
-        await _connectLock.WaitAsync();
+        await _connectLock.WaitAsync(ct);
         try
         {
+            // Check cancellation before proceeding
+            ct.ThrowIfCancellationRequested();
+            
             if (IsConnected())
             {
                 return;
@@ -719,9 +722,28 @@ public class Connection
                 throw new XrplException("Websocket connection never cleaned up.");
             }
 
+            // Check cancellation again before creating WebSocket
+            ct.ThrowIfCancellationRequested();
+            
             this.ws = CreateWebSocket(url, config);
             _lastActiveSocket = this.ws;
             var capturedSocket = this.ws;
+
+            // Check cancellation AFTER creating WebSocket - if cancelled, close the socket and exit
+            if (ct.IsCancellationRequested)
+            {
+                try
+                {
+                    capturedSocket?.SetIntentionalDisconnect();
+                    _ = capturedSocket?.InitiateGracefulCloseAsync();
+                }
+                catch { /* swallow */ }
+                finally
+                {
+                    this.ws = null;
+                }
+                ct.ThrowIfCancellationRequested();
+            }
 
             // Create session for this connection
             var newSession = new ConnectionSession(this.ws);
@@ -1381,7 +1403,15 @@ public class Connection
                 await OnDisconnect?.Invoke(code: null, disconnectMessage)!;
             }
 
-            StartReconnectLoop();
+            // Only start reconnect loop if not already running
+            // This prevents _reconnectAttempts from being reset when OnConnectionFailed
+            // is called from within the reconnect loop (each failed attempt triggers this callback)
+            // Check both _reconnectMode AND actual loop task status for accuracy
+            var loopIsRunning = _reconnectLoop != null && !_reconnectLoop.IsCompleted;
+            if (!loopIsRunning)
+            {
+                StartReconnectLoop();
+            }
         }
     }
 
@@ -1435,7 +1465,10 @@ public class Connection
             throw new NotConnectedException("Client has been disconnected. Call Connect() to reconnect.");
         }
 
-        var noConnectionAttemptActive = ws == null && _reconnectCts == null;
+        // Connecting or RestoringConnection states indicate an active attempt even if ws is null
+        var isActiveState = _currentConnectionState == XrpConnectionState.Connecting ||
+                            _currentConnectionState == XrpConnectionState.RestoringConnection;
+        var noConnectionAttemptActive = ws == null && _reconnectCts == null && !isActiveState;
         if (noConnectionAttemptActive)
         {
             throw new NotConnectedException("No connection attempt in progress. Call Connect() first.");
@@ -1676,14 +1709,20 @@ public class Connection
 
         if (ShouldReconnect(code) || code == 1000)
         {
-            // Set _reconnectAttempts = 1 before notification so BuildReconnectInfo returns correct value
-            _reconnectAttempts = 1;
-            SetConnectionState(
-                XrpConnectionState.RestoringConnection,
-                userMessage,
-                severity,
-                reconnect: BuildReconnectInfo());
-            StartReconnectLoop();
+            // Check if reconnect loop is already running - don't reset counter or start new loop
+            var loopIsRunning = _reconnectLoop != null && !_reconnectLoop.IsCompleted;
+            if (!loopIsRunning)
+            {
+                // Set _reconnectAttempts = 1 before notification so BuildReconnectInfo returns correct value
+                _reconnectAttempts = 1;
+                SetConnectionState(
+                    XrpConnectionState.RestoringConnection,
+                    userMessage,
+                    severity,
+                    reconnect: BuildReconnectInfo());
+                StartReconnectLoop();
+            }
+            // else: loop is already running and will handle reconnection, don't reset _reconnectAttempts
         }
         else
         {
@@ -1723,19 +1762,23 @@ public class Connection
         // Set reconnect mode to LoopReconnect (upgrades from FastReconnect or sets from None)
         _reconnectMode = ReconnectMode.LoopReconnect;
         
+        // CRITICAL: If a loop is already running, don't start another or reset the counter
+        // This prevents _reconnectAttempts from being reset mid-loop when callbacks trigger
+        // reconnect logic (OnceClose, OnConnectionFailed, etc.)
+        var loopIsRunning = _reconnectLoop != null && !_reconnectLoop.IsCompleted;
+        if (loopIsRunning)
+        {
+            // Loop is already running - let it continue, don't reset _reconnectAttempts
+            return;
+        }
+        
         // If we have a valid pre-created CTS (from RetireCurrentSessionAndReconnectAsync),
         // we should reuse it. Check for this case first.
         var existingCts = _reconnectCts;
         var hasValidPreCreatedCts = existingCts != null && !existingCts.IsCancellationRequested;
         
-        // If a loop is running with the SAME CTS we want to use, don't start another
-        if (_reconnectLoop != null && !_reconnectLoop.IsCompleted && hasValidPreCreatedCts)
-        {
-            // A loop is already running with this CTS - don't start another
-            return;
-        }
-        
         // If no valid pre-created CTS, create a new one
+        // Only reset _reconnectAttempts when creating a FRESH CTS (new reconnect sequence)
         if (!hasValidPreCreatedCts)
         {
             // Cancel/dispose old CTS if any
@@ -1745,6 +1788,7 @@ public class Connection
             _reconnectAttempts = 0;
         }
         // else: Reuse existing valid CTS (pre-created for fast reconnect)
+        // Don't reset _reconnectAttempts - this is continuation of existing reconnect sequence
         // Note: _reconnectLoop was already cleared by RetireCurrentSessionAndReconnectAsync
         
         _reconnectLoop = ReconnectLoopAsync(_reconnectCts.Token);
@@ -1844,13 +1888,20 @@ public class Connection
                     _ = RetireOldSessionAsync(oldSession, oldSocket);
                 }
 
-                await ConnectInternalAsync();
+                await ConnectInternalAsync(ct);
 
                 if (IsConnected())
                 {
                     _reconnectAttempts = 0;
                     break;
                 }
+            }
+            catch (OperationCanceledException)
+            {
+                // Reconnect loop was cancelled (e.g., by ChangeServer or StopReconnectLoop)
+                // Exit the loop quietly without logging an error
+                Debug.WriteLine("Reconnect loop cancelled");
+                break;
             }
             catch (Exception ex)
             {
@@ -2195,6 +2246,10 @@ public class Connection
                 await OnError?.Invoke(error: "error", data.Error, message: "data.ErrorMessage", data)!;
             }
 
+            if (data.Id is not null)
+            {
+                requestManager.HandleResponse(data);
+            }
             return;
         }
 
