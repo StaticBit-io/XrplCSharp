@@ -46,12 +46,12 @@ internal class Program
         {
             //await TestReconnection();
             //return;
-            await InitTestData(TestDataType.standalone);
+            await InitTestData(TestDataType.mainNet);
 
 
-            await InitForDataForTest();
+            //await InitForDataForTest();
 
-            await SetSigners(walletMultiSign, walletMultiSigner_1, walletMultiSigner_2);
+            //await SetSigners(walletMultiSign, walletMultiSigner_1, walletMultiSigner_2);
 
             var features = await client.ServerFeatures();
             var canBe = features.GetCanBeEnabled();
@@ -223,6 +223,14 @@ internal class Program
                 Console.WriteLine(responseWarning.Message);
             }
 
+            return Task.CompletedTask;
+        };
+        client.connection.OnError += (error, message, s, data) =>
+        {
+            Console.WriteLine(error);
+            Console.WriteLine(message);
+            Console.WriteLine(s);
+            Console.WriteLine(data);
             return Task.CompletedTask;
         };
         await client.Connect();

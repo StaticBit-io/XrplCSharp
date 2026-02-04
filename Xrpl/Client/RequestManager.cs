@@ -298,13 +298,26 @@ namespace Xrpl.Client
 
             if (response.Status == null)
             {
-                ResponseFormatException error = new ResponseFormatException("Response has no status");
-                this.Reject(id, error);
+                if (response.Error is not null || response.ErrorMessage is not null)
+                {
+                    var message = response.Error is null
+                        ? response.ErrorMessage
+                        : $"{response.Error} - {response.ErrorMessage}";
+                    XrplException error = new XrplException(message);
+                    this.Reject(id, error);
+                    return;
+                }
+
+                ResponseFormatException responseError = new ResponseFormatException("Response has no status");
+                this.Reject(id, responseError);
             }
 
-            if (response.Status == "error")
+            if (response.Status == "error" )
             {
-                XrplException error = new XrplException(response.ErrorMessage ?? response.Error);
+                var message = response.Error is null
+                    ? response.ErrorMessage
+                    : $"{response.Error} - {response.ErrorMessage}";
+                XrplException error = new XrplException(message);
                 this.Reject(id, error);
                 return;
             }
