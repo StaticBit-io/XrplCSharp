@@ -5,6 +5,7 @@ using System.Threading;
 using System.Threading.Tasks;
 using Microsoft.VisualStudio.TestTools.UnitTesting;
 using Xrpl.Client;
+using Xrpl.Client.Exceptions;
 
 namespace Xrpl.Tests.Integration;
 
@@ -242,5 +243,73 @@ public class TestIConnectionStates
         await client.Disconnect();
 
         Console.WriteLine("=== ChangeServer no cleanup error test passed ===");
+    }
+
+    [TestMethod]
+    public async Task TestChangeServer_AfterMaxReconnectAttempts_NoNotConnectedException()
+    {
+        var stateChanges = new List<XrpConnectionState>();
+        var disconnectedPermanently = new TaskCompletionSource<bool>();
+
+        var client = new XrplClient("wss://invalid-server-that-does-not-exist.example.com:51233", new XrplClient.ClientOptions
+        {
+            MaxReconnectAttempts = 2,
+            StopAfterMaxAttempts = true,
+            ConnectionAttemptTimeout = TimeSpan.FromSeconds(3),
+            ReconnectBaseDelay = TimeSpan.FromMilliseconds(500),
+            ReconnectMaxDelay = TimeSpan.FromSeconds(1)
+        });
+
+        client.connection.OnConnectionStatus += (status) =>
+        {
+            stateChanges.Add(status.ConnectionState);
+            Console.WriteLine($"State: {status.ConnectionState}, Message: {status.Message}");
+
+            if (status.ConnectionState == XrpConnectionState.Disconnected && status.Message.Contains("stopped"))
+            {
+                disconnectedPermanently.TrySetResult(true);
+            }
+        };
+
+        try
+        {
+            using var cts = new CancellationTokenSource(TimeSpan.FromSeconds(30));
+            await client.Connect(cts.Token);
+        }
+        catch
+        {
+        }
+
+        var completed = await Task.WhenAny(disconnectedPermanently.Task, Task.Delay(TimeSpan.FromSeconds(30)));
+
+        Assert.AreEqual(XrpConnectionState.Disconnected, client.connection.CurrentConnectionState, 
+            "Should be Disconnected after max reconnect attempts");
+
+        stateChanges.Clear();
+
+        try
+        {
+            await client.ChangeServer("wss://s.altnet.rippletest.net:51233", new XrplClient.ClientOptions
+            {
+                MaxReconnectAttempts = 3,
+                StopAfterMaxAttempts = true,
+                ConnectionAttemptTimeout = TimeSpan.FromSeconds(15),
+                ConnectionAcquisitionTimeout = TimeSpan.FromSeconds(30)
+            });
+            await Task.Delay(3000);
+
+            Assert.AreEqual(XrpConnectionState.Connected, client.connection.CurrentConnectionState, 
+                "Should be Connected after ChangeServer to valid server");
+
+            Console.WriteLine("=== ChangeServer after max reconnect attempts test PASSED ===");
+        }
+        catch (NotConnectedException ex)
+        {
+            Assert.Fail($"ChangeServer should not throw NotConnectedException after max reconnect attempts: {ex.Message}");
+        }
+        finally
+        {
+            await client.Disconnect();
+        }
     }
 }
