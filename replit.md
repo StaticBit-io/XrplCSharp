@@ -14,8 +14,8 @@ The `XrplClient` facilitates robust, real-time WebSocket communication with `rip
 - **Connection Management**: Advanced event handling for connection status, intelligent reconnection logic with configurable policies, and detailed diagnostics, including fast server switching and immediate network drop recovery. It includes specific handling for MAUI/iOS network errors to prevent critical logging.
 - **Request Handling**: Asynchronous request/response patterns with configurable timeouts and failure policies for resilience.
 - **Protocol Features**: Rate-limit detection and an application-level ping/pong heartbeat.
-- **Error Handling**: Comprehensive exception containment and prevention of `UnobservedTaskException` and silent promise rejection.
-- **Reconnect Logic**: A unified reconnect flow using session isolation and a `ReconnectMode` enum for consistent state management and telemetry.
+- **Error Handling**: Comprehensive exception containment and prevention of `UnobservedTaskException` and silent promise rejection. The `CheckIfNotConnected()` method now correctly treats `Connecting` and `RestoringConnection` states as active attempts, preventing race conditions when calling `ChangeServer()` or manual retry after max reconnect attempts.
+- **Reconnect Logic**: A unified reconnect flow using session isolation and a `ReconnectMode` enum for consistent state management and telemetry. `ConnectInternalAsync` now accepts `CancellationToken` with pre- and post-WebSocket-creation cancellation checks, ensuring `ChangeServer()` during active reconnect properly aborts stale connection attempts. Triple-guard protection in `OnceClose`, `OnConnectionFailed`, and `StartReconnectLoop` prevents reconnect counter resets during active loops, ensuring proper attempt count monotonicity.
 
 ### Wallet Management
 The `XrplWallet` class provides secure generation and management of XRP Ledger wallets, supporting random and deterministic creation, ED25519 and SECP256K1 key derivation, and custom Base58 encoding/decoding.
