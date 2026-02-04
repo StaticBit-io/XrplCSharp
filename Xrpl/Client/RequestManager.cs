@@ -310,6 +310,7 @@ namespace Xrpl.Client
 
                 ResponseFormatException responseError = new ResponseFormatException("Response has no status");
                 this.Reject(id, responseError);
+                return;
             }
 
             if (response.Status == "error" )
