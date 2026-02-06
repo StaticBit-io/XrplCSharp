@@ -14,6 +14,7 @@ public class XrplClientSettings
     public bool StopAfterMaxAttempts { get; set; } = false;
     public int ReconnectMaxDelaySeconds { get; set; } = 6;
     public int ReconnectBaseDelaySeconds { get; set; } = 3;
+    public int RequestTimeoutSeconds { get; set; } = 40;
 
     public XrplClient.ClientOptions ToClientOptions() => new()
     {
@@ -26,5 +27,6 @@ public class XrplClientSettings
         StopAfterMaxAttempts = StopAfterMaxAttempts,
         ReconnectMaxDelay = TimeSpan.FromSeconds(ReconnectMaxDelaySeconds),
         ReconnectBaseDelay = TimeSpan.FromSeconds(ReconnectBaseDelaySeconds),
+        RequestTimeout = TimeSpan.FromSeconds(RequestTimeoutSeconds),
     };
 }

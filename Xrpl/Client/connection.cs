@@ -140,9 +140,9 @@ public class Connection
         /// <summary>
         /// Timeout for individual API requests after connection is established.
         /// This controls how long to wait for a response to a single request (e.g., account_info, submit).
-        /// Default: 20 seconds.
+        /// Default: 40 seconds.
         /// </summary>
-        public TimeSpan RequestTimeout { get; set; } = TimeSpan.FromSeconds(20);
+        public TimeSpan RequestTimeout { get; set; } = TimeSpan.FromSeconds(40);
 
         /// <summary>
         /// Timeout for a single WebSocket connection attempt.
@@ -2073,8 +2073,7 @@ public class Connection
                     currentSocket?.SendMessage("{\"command\":\"ping\",\"id\":\"00000000-0000-0000-0000-000000000000\"}");
                     if (OnPing != null)
                     {
-                        await OnPing.Invoke("Ping");
-                        await OnPing.Invoke("Pong");
+                        await OnPing.Invoke("Ping/Pong");
                     }
                 }
                 catch (Exception ex)
