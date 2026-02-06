@@ -462,6 +462,7 @@ namespace Xrpl.Client
                     byte[] byteResult = Array.Empty<byte>();
 
                     WebSocketReceiveResult result;
+                    bool timedOut = false;
                     do
                     {
                         result = await _ws.ReceiveAsync(new ArraySegment<byte>(buffer), _cancellationToken).ConfigureAwait(false);
@@ -481,6 +482,9 @@ namespace Xrpl.Client
                         }
 
                     } while (!result.EndOfMessage);
+
+                    if (timedOut)
+                        continue;
 
                     CallOnMessage(byteResult);
                 }

@@ -44,7 +44,7 @@ internal class Program
         //TestWalletFromText();
         try
         {
-            //await TestReconnection();
+            await TestReconnection();
             //return;
             await InitTestData(TestDataType.mainNet);
 
@@ -105,8 +105,9 @@ internal class Program
             ApiVersion = 2,
             MaxReconnectAttempts = 3,
             RequestPolicy = RequestFailurePolicy.ImmediateFail,
-            UseCustomPing = true,
+            UseCustomPing = false,
             StopAfterMaxAttempts = true,
+            UseCheckHealth = true,
         };
         var servers = new List<string>
         {
@@ -116,8 +117,8 @@ internal class Program
             "wss://s.altnet.rippletest.net:51233"
         };
         IXrplClient client = new XrplClient(servers[0], options);
-
-        client.connection.OnConnectionStatus += info =>
+        var watch = Stopwatch.StartNew();
+        client.connection.OnConnectionStatus += async info =>
         {
             if (info.Reconnect != null)
             {
@@ -127,9 +128,35 @@ internal class Program
             {
                 Console.WriteLine($"{info.Severity.ToString()} {info.ConnectionState.ToString()} {info.Message}");
             }
+
+            if (info.ConnectionState == XrpConnectionState.Connected)
+            {
+                watch.Restart();
+                //try
+                //{
+                //    var subscribe = await client.Subscribe(
+                //        new SubscribeRequest()
+                //        {
+                //            Streams = new List<StreamType>(
+                //                new[]
+                //                {
+                //                    StreamType.Ledger,
+                //                    StreamType.Transactions,
+                //                }),
+                //        });
+                //    Console.WriteLine(subscribe);
+                //}
+                //catch (Exception e)
+                //{
+                //    Console.WriteLine(e);
+                //}
+            }
         };
         client.connection.OnDisconnect += (code, description) =>
         {
+            var time = watch.Elapsed;
+            Console.Title = $"{time:g}";
+            Debug.WriteLine($"Session time: {time:g}");
             Console.WriteLine($"D {code} {description}");
             return Task.CompletedTask;
         };
@@ -143,7 +170,25 @@ internal class Program
             Console.WriteLine($"LEDGER {r.LedgerIndex}");
             return Task.CompletedTask;
         };
+        client.connection.OnTransaction += OnTransaction;
+
         await client.Connect();
+        var task1 = Task.Run(
+            async () =>
+            {
+                while (true)
+                {
+                    await Task.Delay(1000);
+                    Console.WriteLine($"[{DateTime.UtcNow}]{client.connection.State()} - {watch.Elapsed.TotalSeconds}c");
+                    //if (Math.Round(watch.Elapsed.TotalSeconds) % 140 == 0)
+                    //{
+                    //    Console.WriteLine(await client.Ping());
+                    //    ;
+                    //}
+                }
+            });
+
+        await task1;
 
         var task = Task.Run(async () =>
         {
@@ -183,8 +228,8 @@ internal class Program
                     {
                         Value = accReserveFee,
                     };
-                    Console.WriteLine($"{nameof(lineReserveFee)} - {_lineReserveFee}" );
-                    Console.WriteLine($"{nameof(accReserveFee)} - {_accReserveFee}" );
+                    Console.WriteLine($"{nameof(lineReserveFee)} - {_lineReserveFee}");
+                    Console.WriteLine($"{nameof(accReserveFee)} - {_accReserveFee}");
                 }
                 catch (Exception e)
                 {
@@ -243,7 +288,7 @@ internal class Program
         {
             await StandAloneUtils.FundAccount(client, walletPrimary, walletSecondary_1, walletSecondary_2, walletMultiSign, walletMultiSigner_1, walletMultiSigner_2, walletRegularKey, walletRegularKey_signer);
         }
-        else if(client.Url().Contains("test"))
+        else if (client.Url().Contains("test"))
         {
             await TryFillAccounts(walletPrimary, walletSecondary_1, walletSecondary_2, walletMultiSign, walletMultiSigner_1, walletMultiSigner_2, walletRegularKey, walletRegularKey_signer);
         }
