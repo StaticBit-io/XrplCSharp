@@ -1,4 +1,4 @@
-﻿using Blazor_WebAssembly;
+using Blazor_WebAssembly;
 
 using Microsoft.AspNetCore.Components.Web;
 using Microsoft.AspNetCore.Components.WebAssembly.Hosting;
@@ -15,17 +15,10 @@ internal class Program
 
         builder.Services.AddScoped(sp => new HttpClient { BaseAddress = new Uri(builder.HostEnvironment.BaseAddress) });
 
-        var client = new XrplClient("wss://s2.ripple.com", new XrplClient.ClientOptions()
-        {
-            ApiVersion = 2,
-            UseCustomPing = true,
-            RequestPolicy = Xrpl.Client.RequestFailurePolicy.ImmediateFail,
-            ConnectionAcquisitionTimeout = System.TimeSpan.FromSeconds(30),
-            MaxReconnectAttempts = 4,
-            StopAfterMaxAttempts = false,
-            ReconnectMaxDelay = TimeSpan.FromSeconds(6),
-            ReconnectBaseDelay = TimeSpan.FromSeconds(3),
-        });
+        var settings = new XrplClientSettings();
+        builder.Configuration.GetSection("XrplClient").Bind(settings);
+
+        var client = new XrplClient(settings.ServerUrl, settings.ToClientOptions());
         builder.Services.AddSingleton<IXrplClient>(client);
 
         await builder.Build().RunAsync();

@@ -4,6 +4,7 @@ using System.Diagnostics;
 using System.IO;
 using System.Net.WebSockets;
 using System.Threading;
+using System.Threading.Channels;
 using System.Threading.Tasks;
 
 using Newtonsoft.Json;
@@ -139,9 +140,9 @@ public class Connection
         /// <summary>
         /// Timeout for individual API requests after connection is established.
         /// This controls how long to wait for a response to a single request (e.g., account_info, submit).
-        /// Default: 20 seconds.
+        /// Default: 40 seconds.
         /// </summary>
-        public TimeSpan RequestTimeout { get; set; } = TimeSpan.FromSeconds(20);
+        public TimeSpan RequestTimeout { get; set; } = TimeSpan.FromSeconds(40);
 
         /// <summary>
         /// Timeout for a single WebSocket connection attempt.
@@ -185,6 +186,16 @@ public class Connection
         /// implementation instead of the default behavior.
         /// </summary>
         public bool UseCustomPing { get; set; } = true;
+
+        /// <summary>
+        /// Gets or sets a value indicating whether to enable periodic background health monitoring of the WebSocket connection.<br/>
+        /// When enabled, the connection state is checked every 20 seconds. If the WebSocket is detected as Closed or Aborted,
+        /// or if no data has been received for more than 60 seconds, an automatic reconnection is triggered.<br/>
+        /// This check does not send any network requests — it only inspects the local connection state.<br/>
+        /// Automatically enabled when <see cref="UseCustomPing"/> is set to <see langword="true"/>.<br/>
+        /// Default: <see langword="false"/>.
+        /// </summary>
+        public bool UseCheckHealth { get; set; } = false;
 
         /// <summary>
         /// Gets or sets the policy that determines how failed requests are handled.
@@ -288,6 +299,15 @@ public class Connection
 
     // Socket that was closed due to network drop - late callbacks from this socket should be ignored
     private volatile WebSocketClient? _networkDropSocket = null;
+
+    // Fast-path message processing: prioritize request responses (including ping/pong) over stream data
+    // to prevent head-of-line blocking that causes ping timeouts under high stream load
+    // Channel is created per-session to prevent cross-session message leakage
+    // Using Channel<T> instead of BlockingCollection for true async support in WebAssembly
+    private Channel<string>? _streamMessageChannel = null;
+    private CancellationTokenSource? _messageProcessorCts = null;
+    private Task? _messageProcessorTask = null;
+    private readonly object _messageProcessorLock = new();
 
     // Reconnect mode enum for reliable state tracking across all reconnect paths
     private enum ReconnectMode { None, FastReconnect, LoopReconnect }
@@ -767,7 +787,7 @@ public class Connection
                 }
                 catch (Exception ex)
                 {
-                    Debug.WriteLine($"Connection timer error: {ex.Message}");
+                    Debug.WriteLine($"{DateTime.Now}Connection timer error: {ex.Message}");
                 }
             };
             timer.Start();
@@ -784,7 +804,7 @@ public class Connection
                 }
                 catch (Exception ex)
                 {
-                    Debug.WriteLine($"OnConnect callback error: {ex.Message}");
+                    Debug.WriteLine($"{DateTime.Now}OnConnect callback error: {ex.Message}");
                 }
             });
 
@@ -803,7 +823,7 @@ public class Connection
                 }
                 catch (Exception ex)
                 {
-                    Debug.WriteLine($"OnConnectionError callback error: {ex.Message}");
+                    Debug.WriteLine($"{DateTime.Now}OnConnectionError callback error: {ex.Message}");
                 }
             });
 
@@ -811,11 +831,13 @@ public class Connection
             {
                 try
                 {
-                    await IOnMessage(m);
+                    // Use fast-path processing to prioritize ping/pong responses
+                    // and prevent head-of-line blocking from high-volume stream data
+                    await IOnMessageFastPath(m);
                 }
                 catch (Exception ex)
                 {
-                    Debug.WriteLine($"OnMessageReceived callback error: {ex.Message}");
+                    Debug.WriteLine($"{DateTime.Now}OnMessageReceived callback error: {ex.Message}");
                 }
             });
             ws.OnDisconnect(async (closeStatus, closeDescription, closingSocket) =>
@@ -833,7 +855,7 @@ public class Connection
                 }
                 catch (Exception ex)
                 {
-                    Debug.WriteLine($"OnDisconnect callback error: {ex.Message}");
+                    Debug.WriteLine($"{DateTime.Now}OnDisconnect callback error: {ex.Message}");
                 }
             });
 
@@ -1592,6 +1614,9 @@ public class Connection
         // Start ping timer AFTER connection is fully established and all callbacks completed
         // This is outside try/catch to ensure it always runs on successful connection
         StartPingTimer();
+        
+        // Start background message processor for stream messages
+        StartMessageProcessor();
     }
 
     private async Task OnceClose(int? code, string? description, WebSocketClient closingSocket, long sessionId)
@@ -1900,7 +1925,7 @@ public class Connection
             {
                 // Reconnect loop was cancelled (e.g., by ChangeServer or StopReconnectLoop)
                 // Exit the loop quietly without logging an error
-                Debug.WriteLine("Reconnect loop cancelled");
+                Debug.WriteLine($"{DateTime.Now}Reconnect loop cancelled");
                 break;
             }
             catch (Exception ex)
@@ -1939,9 +1964,191 @@ public class Connection
 
     private volatile int _pingRunning = 0;
 
+    private Task? _pingLoopTask = null;
+
+    private System.Threading.Timer? _wasmPingTimer;
+
+    private void StartWasmPingTimer(CancellationTokenSource cts)
+    {
+        _wasmPingTimer = new System.Threading.Timer(
+            callback: state =>
+            {
+                var innerCts = (CancellationTokenSource)state!;
+                if (innerCts.IsCancellationRequested) return;
+
+                if (Interlocked.CompareExchange(ref _pingRunning, value: 1, comparand: 0) != 0)
+                    return;
+
+                Debug.WriteLine($"{DateTime.Now}[PING-WASM] Timer fired, executing ping check...");
+
+                var tcs = new TaskCompletionSource<bool>(TaskCreationOptions.RunContinuationsAsynchronously);
+                Interlocked.Exchange(ref _currentPingTask, tcs.Task);
+
+                _ = ExecutePingCheckAndReleaseAsync(innerCts, tcs);
+            },
+            state: cts,
+            dueTime: 20000,
+            period: 20000);
+    }
+
+    private async Task ExecutePingCheckAndReleaseAsync(CancellationTokenSource cts, TaskCompletionSource<bool> tcs)
+    {
+        try
+        {
+            await ExecutePingCheckAsync(cts);
+            Debug.WriteLine($"{DateTime.Now}[PING-WASM] Ping check completed.");
+        }
+        catch (Exception ex)
+        {
+            Debug.WriteLine($"{DateTime.Now}[PING-WASM] Ping check error: {ex.GetType().Name}: {ex.Message}");
+        }
+        finally
+        {
+            Interlocked.Exchange(ref _pingRunning, value: 0);
+            tcs.TrySetResult(true);
+        }
+    }
+
+    private async Task ExecutePingCheckAsync(CancellationTokenSource cts)
+    {
+        try
+        {
+            if (cts.IsCancellationRequested)
+            {
+                Debug.WriteLine($"{DateTime.Now}[PING-CHECK] Early exit: CTS cancelled");
+                return;
+            }
+
+            WebSocketClient? currentSocket;
+            lock (_disconnectLock)
+            {
+                currentSocket = ws;
+            }
+
+            if (currentSocket == null || cts.IsCancellationRequested)
+            {
+                Debug.WriteLine($"{DateTime.Now}[PING-CHECK] Early exit: socket={currentSocket != null}, cts={cts.IsCancellationRequested}");
+                return;
+            }
+
+            var now = DateTime.UtcNow;
+            var timeSinceLastActivity = lastActivityTime.HasValue
+                ? (now - lastActivityTime.Value).TotalSeconds
+                : double.MaxValue;
+
+            Debug.WriteLine($"{DateTime.Now}[PING-CHECK] timeSinceLastActivity={timeSinceLastActivity:F1}s, IsConnected={IsConnected()}, State={State()}");
+
+            if (!IsConnected())
+            {
+                Debug.WriteLine($"{DateTime.Now}[PING-CHECK] Not connected (State={State()}), triggering reconnect");
+                _pingTimeoutSocket = ws;
+                await RetireCurrentSessionAndReconnectAsync($"Ping detected disconnected state ({State()}).");
+                return;
+            }
+
+            if (!config.UseCustomPing)
+            {
+                return;
+            }
+
+            if (cts.IsCancellationRequested)
+            {
+                Debug.WriteLine($"{DateTime.Now}[PING-CHECK] Early exit: CTS cancelled before connect check");
+                return;
+            }
+
+            if (timeSinceLastActivity > 60)
+            {
+                _pingTimeoutSocket = ws;
+
+                await RetireCurrentSessionAndReconnectAsync("Connection timeout (no activity for 60+ seconds).");
+                return;
+            }
+
+            if (timeSinceLastActivity < 30)
+            {
+                try
+                {
+                    Debug.WriteLine($"{DateTime.Now}[PING-CHECK] Fire-and-forget keepalive ping (active connection)");
+                    currentSocket?.SendMessage("{\"command\":\"ping\",\"id\":\"00000000-0000-0000-0000-000000000000\"}");
+                    if (OnPing != null)
+                    {
+                        await OnPing.Invoke("Ping/Pong");
+                    }
+                }
+                catch (Exception ex)
+                {
+                    Debug.WriteLine($"{DateTime.Now}[PING-CHECK] Keepalive send failed: {ex.Message}");
+                }
+                return;
+            }
+
+            try
+            {
+                Debug.WriteLine($"{DateTime.Now}[PING-CHECK] Sending actual server ping...");
+                if (OnPing != null)
+                {
+                    await OnPing.Invoke("Ping");
+                }
+
+                if (cts.IsCancellationRequested)
+                {
+                    return;
+                }
+
+                await Request(
+                    request: new Dictionary<string, dynamic>
+                    {
+                        { "command", "ping" },
+                    },
+                    timeout: TimeSpan.FromSeconds(45),
+                    RequestFailurePolicy.ImmediateFail);
+
+                Debug.WriteLine($"{DateTime.Now}[PING-CHECK] Server pong received");
+                if (OnPing != null && !cts.IsCancellationRequested)
+                {
+                    await OnPing.Invoke("Pong");
+                }
+            }
+            catch (OperationCanceledException)
+            {
+            }
+            catch (ObjectDisposedException)
+            {
+            }
+            catch (NotConnectedException)
+            {
+            }
+            catch (Exception pingEx)
+            {
+                if (cts.IsCancellationRequested)
+                {
+                    return;
+                }
+
+                Debug.WriteLine($"{DateTime.Now}Ping request error: {pingEx.Message}");
+
+                _pingTimeoutSocket = ws;
+
+                await RetireCurrentSessionAndReconnectAsync("Ping failed.");
+                return;
+            }
+        }
+        catch (ObjectDisposedException)
+        {
+        }
+        catch (OperationCanceledException)
+        {
+        }
+        catch (Exception ex)
+        {
+            Debug.WriteLine($"{DateTime.Now}Ping timer error: {ex.Message}");
+        }
+    }
+
     private void StartPingTimer()
     {
-        if (!config.UseCustomPing)
+        if (!config.UseCustomPing && !config.UseCheckHealth)
         {
             return;
         }
@@ -1953,149 +2160,63 @@ public class Connection
         var cts = new CancellationTokenSource();
         _pingCts = cts;
 
-        pingTimer = new Timer(20000);
-        pingTimer.Elapsed += (sender, e) =>
+        if (OperatingSystem.IsBrowser())
         {
-            if (cts.IsCancellationRequested)
+            StartWasmPingTimer(cts);
+        }
+        else
+        {
+            pingTimer = new Timer(20000);
+            pingTimer.Elapsed += (sender, e) =>
             {
-                return;
-            }
-
-            if (Interlocked.CompareExchange(ref _pingRunning, value: 1, comparand: 0) != 0)
-            {
-                return;
-            }
-
-            if (cts.IsCancellationRequested)
-            {
-                Interlocked.Exchange(ref _pingRunning, value: 0);
-                return;
-            }
-
-            var tcs = new TaskCompletionSource<bool>(TaskCreationOptions.RunContinuationsAsynchronously);
-            Interlocked.Exchange(ref _currentPingTask, tcs.Task);
-
-            _ = Task.Run(async () =>
-            {
-                try
+                if (cts.IsCancellationRequested)
                 {
-                    if (cts.IsCancellationRequested)
-                    {
-                        return;
-                    }
-
-                    WebSocketClient? currentSocket;
-                    lock (_disconnectLock)
-                    {
-                        currentSocket = ws;
-                    }
-
-                    if (currentSocket == null || cts.IsCancellationRequested)
-                    {
-                        return;
-                    }
-
-                    var now = DateTime.UtcNow;
-                    var timeSinceLastActivity = lastActivityTime.HasValue
-                        ? (now - lastActivityTime.Value).TotalSeconds
-                        : double.MaxValue;
-
-                    if (timeSinceLastActivity > 60)
-                    {
-                        // Track the socket being closed so late callbacks are filtered
-                        _pingTimeoutSocket = ws;
-
-                        // Use fast reconnect flow (same as ChangeServer) instead of slow StartReconnectLoop
-                        await RetireCurrentSessionAndReconnectAsync("Connection timeout (no activity for 60+ seconds).");
-                        return;
-                    }
-
-                    if (!IsConnected() || cts.IsCancellationRequested)
-                    {
-                        return;
-                    }
-
-                    try
-                    {
-                        if (OnPing != null)
-                        {
-                            await OnPing.Invoke("Ping");
-                        }
-
-                        if (cts.IsCancellationRequested)
-                        {
-                            return;
-                        }
-
-                        await Request(
-                            request: new Dictionary<string, dynamic>
-                            {
-                                { "command", "ping" },
-                            },
-                            timeout: TimeSpan.FromSeconds(15),
-                            RequestFailurePolicy.ImmediateFail);
-
-                        if (OnPing != null && !cts.IsCancellationRequested)
-                        {
-                            await OnPing.Invoke("Pong");
-                        }
-                    }
-                    catch (OperationCanceledException)
-                    {
-                    }
-                    catch (ObjectDisposedException)
-                    {
-                    }
-                    catch (NotConnectedException)
-                    {
-                        // Not connected - will be handled by reconnect loop
-                    }
-                    catch (Exception pingEx)
-                    {
-                        if (cts.IsCancellationRequested)
-                        {
-                            return;
-                        }
-
-                        Debug.WriteLine($"Ping request error: {pingEx.Message}");
-
-                        // Track the socket being closed so late callbacks are filtered
-                        _pingTimeoutSocket = ws;
-
-                        // Use fast reconnect flow (same as ChangeServer) instead of slow OnConnectionFailed
-                        // This retires the session, resets reconnect attempts, and connects immediately
-                        await RetireCurrentSessionAndReconnectAsync("Ping failed.");
-                        return;
-                    }
+                    return;
                 }
-                catch (ObjectDisposedException)
+
+                if (Interlocked.CompareExchange(ref _pingRunning, value: 1, comparand: 0) != 0)
                 {
+                    return;
                 }
-                catch (OperationCanceledException)
-                {
-                }
-                catch (Exception ex)
-                {
-                    Debug.WriteLine($"Ping timer error: {ex.Message}");
-                }
-                finally
+
+                if (cts.IsCancellationRequested)
                 {
                     Interlocked.Exchange(ref _pingRunning, value: 0);
-                    tcs.TrySetResult(true);
+                    return;
                 }
-            });
-        };
 
-        pingTimer.AutoReset = true;
-        pingTimer.Start();
+                var tcs = new TaskCompletionSource<bool>(TaskCreationOptions.RunContinuationsAsynchronously);
+                Interlocked.Exchange(ref _currentPingTask, tcs.Task);
+
+                _ = Task.Run(async () =>
+                {
+                    try
+                    {
+                        await ExecutePingCheckAsync(cts).ConfigureAwait(false);
+                    }
+                    finally
+                    {
+                        Interlocked.Exchange(ref _pingRunning, value: 0);
+                        tcs.TrySetResult(true);
+                    }
+                });
+            };
+
+            pingTimer.AutoReset = true;
+            pingTimer.Start();
+        }
     }
 
     private void StopPingTimerSync()
     {
         var cts = _pingCts;
         var timer = pingTimer;
+        var loopTask = _pingLoopTask;
+        var wasmTimer = _wasmPingTimer;
         _pingCts = null;
         pingTimer = null;
+        _pingLoopTask = null;
+        _wasmPingTimer = null;
 
         cts?.Cancel();
 
@@ -2105,7 +2226,11 @@ public class Connection
             timer.Dispose();
         }
 
+        wasmTimer?.Dispose();
+
         cts?.Dispose();
+        
+        StopMessageProcessor();
     }
 
     /// <summary>
@@ -2372,5 +2497,413 @@ public class Connection
     public async Task OnMessage(string message)
     {
         await IOnMessage(message);
+    }
+
+    /// <summary>
+    /// Reliably detects if message is a response by scanning for top-level "id" field.
+    /// 
+    /// XRPL protocol observation:
+    /// - Response messages always have "id" as one of the FIRST properties (typically first)
+    /// - Stream messages have "type" as first property (never have top-level "id")
+    /// 
+    /// Optimization: Use fast string scan first, then confirm with JsonTextReader if needed.
+    /// This is critical for performance under high stream load.
+    /// 
+    /// IMPORTANT: This method uses ONLY string scanning, no JSON parsing.
+    /// In single-threaded WebAssembly, any JSON parsing overhead causes
+    /// WebSocket receive delays that lead to ping timeouts.
+    /// </summary>
+    private bool IsLikelyResponse(string message)
+    {
+        if (string.IsNullOrEmpty(message) || message.Length < 10)
+            return false;
+        
+        // PURE STRING SCAN - no JSON parsing for maximum performance
+        // Response format: {"id":"...", ...} - ALWAYS has "id" property
+        // Stream format: {"type":"transaction|ledgerClosed|...", ...} - never has "id"
+        //
+        // Note: Response messages also have "type":"response", but they ALWAYS have "id".
+        // Stream messages have "type":"transaction" etc but NEVER have "id".
+        // So the reliable discriminator is presence of "id" field.
+        
+        // Find opening brace
+        var firstBrace = message.IndexOf('{');
+        if (firstBrace < 0 || firstBrace + 10 >= message.Length)
+            return false;
+        
+        // Search ENTIRE message for "id" property
+        // XRPL responses can have large "result" objects before the "id" field,
+        // so we can't limit the search to just the first N characters.
+        // Example response: {"result":{"info":{...large data...}},"id":"...","status":"success"}
+        var pos = firstBrace + 1;
+        
+        // Look for "id" property - this is the ONLY reliable discriminator
+        var idIndex = message.IndexOf("\"id\"", pos, StringComparison.Ordinal);
+        if (idIndex >= 0)
+        {
+            // Verify it's followed by colon (confirming it's a property name)
+            // Only need to check the next few characters after "id"
+            var checkEnd = Math.Min(message.Length, idIndex + 10);
+            for (var i = idIndex + 4; i < checkEnd; i++)
+            {
+                var c = message[i];
+                if (c == ':') return true; // This is a response
+                if (c != ' ' && c != '\t' && c != '\n' && c != '\r') break;
+            }
+        }
+        
+        // No "id" found - this is a stream message
+        return false;
+    }
+
+    /// <summary>
+    /// Starts the background message processor for stream messages.
+    /// Creates a new session-bound channel and processor task.
+    /// Uses Channel&lt;T&gt; for true async support in WebAssembly single-threaded environment.
+    /// </summary>
+    private void StartMessageProcessor()
+    {
+        lock (_messageProcessorLock)
+        {
+            // Stop any existing processor first
+            StopMessageProcessorInternal();
+            
+            // Create new session-bound channel and CTS
+            // Using bounded channel to prevent memory issues under high load
+            _streamMessageChannel = System.Threading.Channels.Channel.CreateBounded<string>(new BoundedChannelOptions(10000)
+            {
+                SingleReader = true,
+                SingleWriter = false,
+                FullMode = BoundedChannelFullMode.DropOldest
+            });
+            _messageProcessorCts = new CancellationTokenSource();
+            
+            var channel = _streamMessageChannel;
+            var cts = _messageProcessorCts;
+            
+            // Use truly async reader - works correctly in WebAssembly single-threaded environment
+            _messageProcessorTask = Task.Run(async () =>
+            {
+                try
+                {
+                    var reader = channel.Reader;
+                    while (await reader.WaitToReadAsync(cts.Token).ConfigureAwait(false))
+                    {
+                        while (reader.TryRead(out var message))
+                        {
+                            if (cts.Token.IsCancellationRequested)
+                                return;
+                            
+                            try
+                            {
+                                await ProcessStreamMessageAsync(message).ConfigureAwait(false);
+                            }
+                            catch (Exception ex)
+                            {
+                                Debug.WriteLine($"{DateTime.Now}Stream message processing error: {ex.Message}");
+                            }
+                        }
+                    }
+                }
+                catch (OperationCanceledException)
+                {
+                    // Expected when stopping
+                }
+                catch (ChannelClosedException)
+                {
+                    // Channel was completed - expected on session end
+                }
+            }, cts.Token);
+        }
+    }
+
+    /// <summary>
+    /// Stops the background message processor and disposes resources.
+    /// </summary>
+    private void StopMessageProcessor()
+    {
+        lock (_messageProcessorLock)
+        {
+            StopMessageProcessorInternal();
+        }
+    }
+
+    /// <summary>
+    /// Internal stop logic - must be called with _messageProcessorLock held.
+    /// Completes the channel, cancels the CTS, and awaits task completion.
+    /// </summary>
+    private void StopMessageProcessorInternal()
+    {
+        var channel = _streamMessageChannel;
+        var cts = _messageProcessorCts;
+        var task = _messageProcessorTask;
+        
+        _streamMessageChannel = null;
+        _messageProcessorCts = null;
+        _messageProcessorTask = null;
+        
+        // Complete the channel first to unblock WaitToReadAsync
+        if (channel != null)
+        {
+            try { channel.Writer.Complete(); } catch { }
+        }
+        
+        // Then cancel the CTS
+        if (cts != null)
+        {
+            try { cts.Cancel(); } catch { }
+        }
+        
+        // Wait for task to complete (with timeout to prevent deadlock)
+        if (task != null)
+        {
+            try { task.Wait(TimeSpan.FromSeconds(2)); } catch { }
+        }
+        
+        // Dispose resources
+        cts?.Dispose();
+    }
+
+    /// <summary>
+    /// Processes a single stream message (transaction, ledger, etc.) in the background.
+    /// This is the async version of stream handling, decoupled from the receive loop.
+    /// </summary>
+    private async Task ProcessStreamMessageAsync(string message)
+    {
+        lastActivityTime = DateTime.UtcNow;
+
+        BaseResponse data;
+        try
+        {
+            data = JsonConvert.DeserializeObject<BaseResponse>(message);
+        }
+        catch (Exception error)
+        {
+            if (OnError is not null)
+            {
+                await OnError?.Invoke(error: "error", errorMessage: "badMessage", error.Message, message)!;
+            }
+            return;
+        }
+
+        if (data.Warning != null && OnWarning is not null)
+        {
+            await OnWarning.Invoke(data.Warning, message);
+        }
+
+        if (data.Warnings is { Count: > 0, } && OnServerWarning is not null)
+        {
+            await OnServerWarning.Invoke(data.Warnings, message);
+        }
+
+        // Process stream messages by type
+        if (data.Type != null)
+        {
+            Enum.TryParse(value: data.Type.ToString(), result: out ResponseStreamType type);
+            switch (type)
+            {
+                case ResponseStreamType.ledgerClosed:
+                {
+                    var response = JsonConvert.DeserializeObject<LedgerStream>(message);
+                    if (OnLedgerClosed is not null)
+                    {
+                        await OnLedgerClosed.Invoke(response)!;
+                    }
+                    break;
+                }
+
+                case ResponseStreamType.validationReceived:
+                {
+                    var response = JsonConvert.DeserializeObject<ValidationStream>(message);
+                    if (OnManifestReceived is not null)
+                    {
+                        await OnManifestReceived.Invoke(response)!;
+                    }
+                    break;
+                }
+
+                case ResponseStreamType.transaction:
+                {
+                    var response = JsonConvert.DeserializeObject<TransactionStream>(message);
+                    if (OnTransaction is not null)
+                    {
+                        await OnTransaction.Invoke(response)!;
+                    }
+                    break;
+                }
+
+                case ResponseStreamType.peerStatusChange:
+                {
+                    var response = JsonConvert.DeserializeObject<PeerStatusStream>(message);
+                    if (OnPeerStatusChange is not null)
+                    {
+                        await OnPeerStatusChange.Invoke(response)!;
+                    }
+                    break;
+                }
+
+                case ResponseStreamType.consensusPhase:
+                {
+                    var response = JsonConvert.DeserializeObject<ConsensusStream>(message);
+                    if (OnConsensusPhase is not null)
+                    {
+                        await OnConsensusPhase.Invoke(response)!;
+                    }
+                    break;
+                }
+
+                case ResponseStreamType.path_find:
+                {
+                    var response = JsonConvert.DeserializeObject<PathFindStream>(message);
+                    if (OnPathFind is not null)
+                    {
+                        await OnPathFind.Invoke(response)!;
+                    }
+                    break;
+                }
+            }
+        }
+    }
+
+    /// <summary>
+    /// Fast-path message handler that prioritizes request responses over stream data.
+    /// This prevents ping timeouts by ensuring pong responses are processed immediately,
+    /// while stream messages are queued for background processing.
+    /// 
+    /// Threading Model:
+    /// - Response handling (requestManager.HandleResponse) is SYNCHRONOUS and immediate
+    /// - Warning/error callbacks are dispatched via fire-and-forget Task.Run for performance
+    /// - Stream messages are queued to a background processor
+    /// 
+    /// IMPORTANT: Event handlers (OnWarning, OnError, OnServerWarning) may be invoked
+    /// concurrently from the ThreadPool. Handler implementations MUST be thread-safe
+    /// or marshal to their own synchronization context (e.g., UI thread).
+    /// </summary>
+    private async Task IOnMessageFastPath(string message)
+    {
+        lastActivityTime = DateTime.UtcNow;
+
+        // Scan message for "id" property to detect response messages
+        var isResponse = IsLikelyResponse(message);
+        
+        if (isResponse)
+        {
+            // This is a response (including ping/pong) - process immediately with full parsing
+            // CRITICAL: Minimize async operations here to prevent blocking subsequent messages
+            BaseResponse data;
+            try
+            {
+                data = JsonConvert.DeserializeObject<BaseResponse>(message);
+            }
+            catch (Exception error)
+            {
+                // Fire-and-forget for error callback - don't block
+                _ = Task.Run(async () =>
+                {
+                    if (OnError is not null)
+                    {
+                        await OnError.Invoke(error: "error", errorMessage: "badMessage", error.Message, message);
+                    }
+                });
+                return;
+            }
+            
+            // FIRST: Handle response immediately to unblock any waiting requests (like ping)
+            // This is the most time-critical operation
+            if (data.Id is not null)
+            {
+                requestManager.HandleResponse(data);
+            }
+
+            // THEN: Handle warnings and errors in background (fire-and-forget)
+            // These are informational and should not delay response processing
+            if (data.Warning != null || data.Warnings is { Count: > 0 } || (data.Type == null && data.Error != null))
+            {
+                var capturedData = data;
+                var capturedMessage = message;
+                _ = Task.Run(async () =>
+                {
+                    if (capturedData.Warning != null && OnWarning is not null)
+                    {
+                        await OnWarning.Invoke(capturedData.Warning, capturedMessage);
+                    }
+
+                    if (capturedData.Warnings is { Count: > 0 } && OnServerWarning is not null)
+                    {
+                        await OnServerWarning.Invoke(capturedData.Warnings, capturedMessage);
+                    }
+
+                    // Handle error responses
+                    if (capturedData.Type == null && capturedData.Error != null)
+                    {
+                        if (capturedData.Error == "slowDown" || capturedData.Error == "tooBusy")
+                        {
+                            var rateLimitMessage = capturedData.Error == "slowDown"
+                                ? "Rate limit warning: Server requests to slow down. Reduce request frequency to avoid connection issues."
+                                : "Rate limit warning: Server is too busy. Consider implementing exponential backoff or reducing load.";
+
+                            if (OnError is not null)
+                            {
+                                await OnError.Invoke(error: "rate_limit", capturedData.Error, rateLimitMessage, capturedData);
+                            }
+                            return;
+                        }
+
+                        if (OnError is not null)
+                        {
+                            await OnError.Invoke(error: "error", capturedData.Error, message: "data.ErrorMessage", capturedData);
+                        }
+                    }
+                });
+            }
+        }
+        else
+        {
+            // This is a stream message (no "id") - process asynchronously
+            // to avoid blocking the receive loop and causing ping timeouts
+            
+            if (OperatingSystem.IsBrowser())
+            {
+                // WebAssembly is single-threaded - Channel/Task.Run don't work as expected
+                // Use fire-and-forget with ConfigureAwait(false) to allow continuation scheduling
+                // This queues the work to run after the current synchronous block completes
+                _ = ProcessStreamMessageFireAndForgetAsync(message);
+            }
+            else
+            {
+                // Desktop/MAUI - use Channel for true background processing
+                var channel = _streamMessageChannel;
+                if (channel != null)
+                {
+                    if (!channel.Writer.TryWrite(message))
+                    {
+                        // Channel is full or completed - oldest messages are dropped automatically
+                        // with BoundedChannelFullMode.DropOldest
+                        Debug.WriteLine($"{DateTime.Now}Warning: Stream message channel full, message dropped");
+                    }
+                }
+                else
+                {
+                    // Channel not available - fall back to fire-and-forget
+                    _ = ProcessStreamMessageFireAndForgetAsync(message);
+                }
+            }
+        }
+    }
+    
+    /// <summary>
+    /// Fire-and-forget stream message processing for single-threaded environments like WebAssembly.
+    /// Uses ConfigureAwait(false) to prevent deadlocks and allow proper continuation scheduling.
+    /// </summary>
+    private async Task ProcessStreamMessageFireAndForgetAsync(string message)
+    {
+        try
+        {
+            await ProcessStreamMessageAsync(message).ConfigureAwait(false);
+        }
+        catch (Exception ex)
+        {
+            Debug.WriteLine($"{DateTime.Now}Stream message processing error: {ex.Message}");
+        }
     }
 }

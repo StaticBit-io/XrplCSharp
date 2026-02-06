@@ -224,8 +224,8 @@ namespace Xrpl.Client
             }
 
             Guid newId;
-            var _id = request.TryGetValue("id", out var id);
-            if (!_id)
+            var hasId = request.TryGetValue("id", out var id);
+            if (!hasId)
             {
                 newId = this.nextId;
                 this.nextId = Guid.NewGuid();
