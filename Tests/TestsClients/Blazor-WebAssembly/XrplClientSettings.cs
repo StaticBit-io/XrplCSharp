@@ -5,7 +5,7 @@ namespace Blazor_WebAssembly;
 public class XrplClientSettings
 {
     public string ServerUrl { get; set; } = "wss://s2.ripple.com";
-    public int ApiVersion { get; set; } = 2;
+    public uint ApiVersion { get; set; } = 2;
     public bool UseCustomPing { get; set; } = true;
     public bool UseCheckHealth { get; set; } = true;
     public RequestFailurePolicy RequestPolicy { get; set; } = RequestFailurePolicy.ImmediateFail;
