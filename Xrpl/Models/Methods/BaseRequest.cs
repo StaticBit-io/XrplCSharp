@@ -32,6 +32,6 @@ namespace Xrpl.Models.Methods
         /// If omitted, use version 1.
         /// </summary>
         [JsonProperty("api_version")]
-        public uint? ApiVersion { get; set; } = 2;
+        public uint? ApiVersion { get; set; }
     }
 }

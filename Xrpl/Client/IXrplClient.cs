@@ -374,7 +374,7 @@ namespace Xrpl.Client
             /// <summary>
             /// The API version to use when making requests.
             /// </summary>
-            public int? ApiVersion { get; set; }
+            public uint? ApiVersion { get; set; }
         }
 
         public Connection connection { get; set; }
@@ -385,7 +385,7 @@ namespace Xrpl.Client
         /// <summary>
         /// The API version to use when making requests.
         /// </summary>
-        public int ApiVersion { get; set; }
+        public uint ApiVersion { get; set; }
         //public event OnError OnError;
         //public event OnConnected OnConnected;
         //public event OnDisconnect OnDisconnect;
@@ -782,6 +782,10 @@ namespace Xrpl.Client
         {
             //string account = request["Account"] ? EnsureClassicAddress((string)request["account"]) : null;
             //request["Account"] = account;
+            if(!request.TryGetValue(nameof(ApiVersion), out var value)){
+            {
+                request[nameof(ApiVersion)] = ApiVersion;
+            }}
             var response = await this.connection.Request(request);
 
             // mutates `response` to add warnings
@@ -796,7 +800,7 @@ namespace Xrpl.Client
             //string account = request["Account"] ? EnsureClassicAddress((string)request["account"]) : null;
             //request["Account"] = account
             //
-
+            request.ApiVersion ??= ApiVersion;
             var response = await this.connection.GRequest<T, R>(request);
 
             // mutates `response` to add warnings
