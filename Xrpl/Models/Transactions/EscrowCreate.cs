@@ -43,14 +43,12 @@ namespace Xrpl.Models.Transactions
     }
 
     /// <summary>
-    /// Sequester XRP until the escrow process either finishes or is canceled.
+    /// Sequester XRP or fungible tokens (IOUs, MPTs) until the escrow process either finishes or is canceled. Requires the TokenEscrow amendment for fungible token support.
     /// </summary>
     public interface IEscrowCreate : ITransactionCommon, IDestination
     {
         /// <summary>
-        /// Amount of XRP, in drops, to deduct from the sender's balance and escrow.<br/>
-        /// Once escrowed, the XRP can either go to the Destination address (after the.<br/>
-        /// FinishAfter time) or returned to the sender (after the CancelAfter time).
+        /// The amount to deduct from the sender's balance and set aside in escrow. Can be XRP (in drops, as a string), an IOU token, or an MPT. Must always be a positive value. With the TokenEscrow amendment, this field supports fungible tokens in addition to XRP.
         /// </summary>
         Currency Amount { get; set; }
         /// <summary>
@@ -66,7 +64,7 @@ namespace Xrpl.Models.Transactions
         /// </summary>
         string Condition { get; set; }
         /// <summary>
-        /// Address to receive escrowed XRP.
+        /// Address to receive escrowed funds.
         /// </summary>
         string Destination { get; set; }
         /// <summary>
@@ -124,8 +122,8 @@ namespace Xrpl.Models.Transactions
             if (Amount is null)
                 throw new ValidationException("EscrowCreate: missing field Amount");
 
-            if (Amount is not string)
-                throw new ValidationException("EscrowCreate: Amount must be a string");
+            if (Amount is not string && Amount is not Dictionary<string, dynamic>)
+                throw new ValidationException("EscrowCreate: Amount must be a string (XRP) or object (IOU/MPT)");
 
 
             tx.TryGetValue("Destination", out var Destination);
