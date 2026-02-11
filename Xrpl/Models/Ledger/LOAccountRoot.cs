@@ -70,6 +70,20 @@ namespace Xrpl.Models.Ledger
         /// </summary>
         lsfDisallowIncomingCheck = 134217728,
 
+        /// <summary>
+        /// Allow this account to claw back tokens it has issued.
+        /// Once enabled, cannot be disabled.
+        /// Requires the Clawback amendment.
+        /// </summary>
+        lsfAllowTrustLineClawback = 2147483648, // 0x80000000
+
+        /// <summary>
+        /// Allow Trust Line Tokens issued by this account to be held in escrow.
+        /// Once enabled, cannot be disabled.
+        /// Requires the TokenEscrow amendment.
+        /// </summary>
+        lsfAllowTrustLineLocking = 1073741824, // 0x40000000
+
     }
     /// <summary>
     /// The AccountRoot object type describes a single account, its settings, and XRP balance.

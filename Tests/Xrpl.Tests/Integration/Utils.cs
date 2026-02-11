@@ -151,7 +151,13 @@ namespace XrplTests.Xrpl.ClientLib.Integration
         /// <param name="nodeType">Optional node type override.</param>
         public static async Task FundWalletAsync(IXrplClient client, XrplWallet wallet, TestNodeType? nodeType = null)
         {
-            var type = nodeType ?? CurrentNodeType;
+            var type = nodeType ?? client.Url() switch
+            {
+                { } url when url.Contains("altnet") => TestNodeType.TestNet,
+                { } url when url.Contains("devnet") => TestNodeType.DevNet,
+                { } url when url.Contains("localhost") => TestNodeType.Standalone,
+                _ => TestNodeType.MainNet,
+            };
 
             if (type == TestNodeType.Standalone)
             {

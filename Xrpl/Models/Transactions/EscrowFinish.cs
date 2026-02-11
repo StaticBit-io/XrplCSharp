@@ -39,7 +39,7 @@ namespace Xrpl.Models.Transactions
     }
 
     /// <summary>
-    /// Deliver XRP from a held payment to the recipient.
+    /// Deliver XRP or escrowed fungible tokens (IOUs, MPTs) from a held payment to the recipient. Requires the TokenEscrow amendment for fungible token support.
     /// </summary>
     public interface IEscrowFinish : ITransactionCommon
     {
@@ -59,7 +59,7 @@ namespace Xrpl.Models.Transactions
         /// </summary>
         uint OfferSequence { get; set; }
         /// <summary>
-        /// Address of the source account that funded the held payment.
+        /// Address of the source account that funded the escrow.
         /// </summary>
         string Owner { get; set; }
     }
