@@ -199,25 +199,32 @@ public class Currency
     public static implicit operator Currency(string value)
         => new Currency { Value = value };
     /// <summary>
-    /// Implicit conversion from string → Currency
+    /// Implicit conversion from decimal → Currency
     /// </summary>
     /// <param name="value">value</param>
     /// <returns>currency</returns>
     public static implicit operator Currency(decimal value)
         => new Currency { Value = value.ToString(CultureInfo.InvariantCulture) };
     /// <summary>
-    /// Implicit conversion from string → Currency
+    /// Implicit conversion from double → Currency
     /// </summary>
     /// <param name="value">value</param>
     /// <returns>currency</returns>
     public static implicit operator Currency(double value)
         => new Currency { Value = value.ToString(CultureInfo.InvariantCulture) };
     /// <summary>
-    /// Implicit conversion from string → Currency
+    /// Implicit conversion from int → Currency
     /// </summary>
     /// <param name="value">value</param>
     /// <returns>currency</returns>
     public static implicit operator Currency(int value)
+        => new Currency { Value = value.ToString(CultureInfo.InvariantCulture) };
+    /// <summary>
+    /// Implicit conversion from uint → Currency
+    /// </summary>
+    /// <param name="value">value</param>
+    /// <returns>currency</returns>
+    public static implicit operator Currency(uint value)
         => new Currency { Value = value.ToString(CultureInfo.InvariantCulture) };
     #endregion
 }
