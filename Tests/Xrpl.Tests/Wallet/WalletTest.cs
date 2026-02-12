@@ -206,16 +206,16 @@ namespace Xrpl.Tests.Wallet.Tests.Entropy
         [TestMethod]
         public void TestSECPAlgorithmEntropy()
         {
-            XrplWallet wallet = XrplWallet.FromEntropy(entropy, "secp256k1");
+            XrplWallet wallet = XrplWallet.FromEntropy(entropy, algorithm: "secp256k1");
 
-            Assert.AreEqual(wallet.PublicKey, publicKeyED25519);
-            Assert.AreEqual(wallet.PrivateKey, privateKeyED25519);
+            Assert.AreEqual(wallet.PublicKey, publicKey);
+            Assert.AreEqual(wallet.PrivateKey, privateKey);
         }
 
         [TestMethod]
         public void TestEDAlgorithmEntropy()
         {
-            XrplWallet wallet = XrplWallet.FromEntropy(entropy, "ed25519");
+            XrplWallet wallet = XrplWallet.FromEntropy(entropy, algorithm: "ed25519");
 
             Assert.AreEqual(wallet.PublicKey, publicKeyED25519);
             Assert.AreEqual(wallet.PrivateKey, privateKeyED25519);
@@ -225,7 +225,7 @@ namespace Xrpl.Tests.Wallet.Tests.Entropy
         public void TestRegularKeypairEntropy()
         {
             string masterAddress = "rUAi7pipxGpYfPNg3LtPcf2ApiS8aw9A93";
-            XrplWallet wallet = XrplWallet.FromEntropy(entropy, masterAddress);
+            XrplWallet wallet = XrplWallet.FromEntropy(entropy, masterAddress: masterAddress);
 
             Assert.AreEqual(wallet.PublicKey, publicKeyED25519);
             Assert.AreEqual(wallet.PrivateKey, privateKeyED25519);

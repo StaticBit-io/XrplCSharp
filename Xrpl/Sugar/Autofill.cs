@@ -134,7 +134,7 @@ namespace Xrpl.Sugar
 
         public static AddressNTag GetClassicAccountAndTag(this string account, uint? expectedTag)
         {
-            if (XrplAddressCodec.IsValidXAddress(account))
+            if (!account.StartsWith('r') && XrplAddressCodec.IsValidXAddress(account))
             {
                 CodecAddress codecAddress = XrplAddressCodec.XAddressToClassicAddress(account);
                 if (expectedTag != null && codecAddress.Tag != expectedTag)

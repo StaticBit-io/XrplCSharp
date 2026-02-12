@@ -21,7 +21,7 @@ namespace XrplTests.Xrpl.Models
                     { "Credential", new Dictionary<string, dynamic>
                         {
                             { "Issuer", "ra5nK24KXen9AHvsdFTKHSANinZseWnPcX" },
-                            { "CredentialType", "6D795F63726564656E7469616C" }
+                            { "CredentialType", $"6D795F63726564656E7469616C{i:D2}" }
                         }
                     }
                 });
@@ -202,7 +202,7 @@ namespace XrplTests.Xrpl.Models
             };
             await Helper.ThrowsExceptionAsync<ValidationException>(
                 () => Validation.ValidatePermissionedDomainSet(tx),
-                "PermissionedDomainSet: Credential.CredentialType cannot exceed 64 bytes");
+                "PermissionedDomainSet: Credential.CredentialType cannot exceed 64 bytes (128 hex characters)");
         }
 
         [TestMethod]
