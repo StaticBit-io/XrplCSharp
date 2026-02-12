@@ -6,11 +6,11 @@ using Newtonsoft.Json.Linq;
 using Newtonsoft.Json;
 using System.Collections.Generic;
 using Xrpl.Client;
+using Xrpl.Models.Common;
 using Xrpl.Models.Transactions;
 using Xrpl.Utils.Hashes;
 using Xrpl.Wallet;
 using Xrpl.Sugar;
-using ICurrency = Xrpl.Models.Common.Currency;
 
 // https://github.com/XRPLF/xrpl.js/blob/main/packages/xrpl/test/integration/utils.ts
 
@@ -213,13 +213,55 @@ namespace XrplTests.Xrpl.ClientLib.Integration
             }
         }
 
+        private static XrplWallet FaucetFiller = null;
+
         /// <summary>
         /// Funds a wallet from the testnet/devnet faucet.
         /// </summary>
         private static async Task FundFromFaucetAsync(IXrplClient client, XrplWallet wallet)
         {
-            var result = await client.FundWallet(wallet);
-            Console.WriteLine($"[IntegrationTest] Faucet funded {wallet.ClassicAddress}: {result.Balance} XRP");
+            if (FaucetFiller is null)
+            {
+                FaucetFiller = XrplWallet.Generate();
+                Console.WriteLine($"[IntegrationTest] FaucetFiller generated {FaucetFiller.ClassicAddress}");
+                var result = await client.FundWallet(FaucetFiller);
+                Console.WriteLine($"[IntegrationTest] FaucetFiller funded {FaucetFiller.ClassicAddress}: {result.Balance} XRP");
+            }
+
+            if (await client.GetXrpFreeBalance(FaucetFiller.ClassicAddress) is { } balance and > 50)
+            {
+                await  FundFromFaucetFillerAsync(client, wallet, 10);
+            }
+            else
+            {
+                var result = await client.FundWallet(FaucetFiller);
+                Console.WriteLine($"[IntegrationTest] FaucetFiller funded {FaucetFiller.ClassicAddress}: {result.Balance} XRP");
+                await FundFromFaucetFillerAsync(client, wallet, 10);
+            }
+        }
+
+        /// <summary>
+        /// Funds a wallet from the faucetFiller.
+        /// </summary>
+        private static async Task FundFromFaucetFillerAsync(IXrplClient client, XrplWallet wallet, decimal xrpSize)
+        {
+            Payment payment = new Payment
+            {
+                Account = FaucetFiller.ClassicAddress,
+                Destination = wallet.ClassicAddress,
+                Amount = new Currency { ValueAsXrp = xrpSize, CurrencyCode = "XRP" }
+            };
+            
+            var values = JsonConvert.DeserializeObject<Dictionary<string, dynamic>>(payment.ToJson());
+            var master = XrplWallet.FromSeed(FaucetFiller.Seed);
+            var response = await client.SubmitAndWait(values, master, autofill:true);
+
+            if (response.Meta.TransactionResult != "tesSUCCESS")
+            {
+                throw new Exception($"Filler funding failed: {response.Meta.TransactionResult}");
+            }
+
+            Console.WriteLine($"[IntegrationTest] Filler funded {wallet.ClassicAddress}");
         }
 
         /// <summary>
@@ -231,7 +273,7 @@ namespace XrplTests.Xrpl.ClientLib.Integration
             {
                 Account = MasterAccount,
                 Destination = wallet.ClassicAddress,
-                Amount = new ICurrency { Value = "400000000", CurrencyCode = "XRP" }
+                Amount = new Currency { Value = "400000000", CurrencyCode = "XRP" }
             };
             var values = JsonConvert.DeserializeObject<Dictionary<string, dynamic>>(payment.ToJson());
             var master = XrplWallet.FromSeed(MasterSecret);
@@ -302,7 +344,7 @@ namespace XrplTests.Xrpl.ClientLib.Integration
             {
                 Account = masterAccount,
                 Destination = wallet.ClassicAddress,
-                Amount = new ICurrency { Value = "400000000", CurrencyCode = "XRP" }
+                Amount = new Currency { Value = "400000000", CurrencyCode = "XRP" }
             };
             var values = JsonConvert.DeserializeObject<Dictionary<string, dynamic>>(payment.ToJson());
             var master = XrplWallet.FromSeed(masterSecret);

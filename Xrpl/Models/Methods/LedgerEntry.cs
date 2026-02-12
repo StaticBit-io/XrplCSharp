@@ -88,6 +88,12 @@ namespace Xrpl.Models.Methods
         [JsonProperty("did")]
         public string DID { get; set; }
 
+        /// <summary>
+        /// Retrieve a PermissionedDomain object by its ID (hash).
+        /// </summary>
+        [JsonProperty("permissioned_domain")]
+        public string PermissionedDomain { get; set; }
+
         //todo not found fields -  directory?:, offer?:, check?: string, escrow?:, payment_channel?: string,  deposit_preauth?:, ticket?:
     }
 

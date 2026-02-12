@@ -63,7 +63,7 @@ namespace Xrpl.Wallet
     public class XrplWallet
     {
 
-        public static string DEFAULT_ALGORITHM = Secp256k1;
+        public static string DEFAULT_ALGORITHM = Ed25519;
         public const string Ed25519 = "ed25519";
         public const string Secp256k1 = "secp256k1";
 

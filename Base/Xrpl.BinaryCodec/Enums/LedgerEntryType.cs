@@ -34,6 +34,8 @@ namespace Xrpl.BinaryCodec.Enums
         public static readonly LedgerEntryType DID = Add(nameof(DID), 73);
         /// <summary>Represents a price oracle object in the ledger.</summary>
         public static readonly LedgerEntryType Oracle = Add(nameof(Oracle), 128);
+        /// <summary>Represents a permissioned domain object in the ledger.</summary>
+        public static readonly LedgerEntryType PermissionedDomain = Add(nameof(PermissionedDomain), 130);
 
         public static LedgerEntryType FromJson(JToken jToken)
         {

@@ -1,8 +1,9 @@
 ﻿using System;
 using System.Collections.Generic;
-using System.Text;
 
 using Newtonsoft.Json;
+
+using Xrpl.Models.Utils;
 
 // https://github.com/XRPLF/xrpl.js/blob/main/packages/xrpl/src/models/ledger/SignerList.ts
 
@@ -83,7 +84,7 @@ public class SignerEntry
     public string WalletLocator
     {
         get => _walletLocator;
-        set => _walletLocator = NormalizeWalletLocator(value);
+        set => _walletLocator = HexStringHelper.NormalizeToHex(value, padToBytes: 32, fieldName: nameof(WalletLocator));
     }
 
     /// <summary>
@@ -93,70 +94,5 @@ public class SignerEntry
     public string WalletLocatorValue =>
         string.IsNullOrEmpty(_walletLocator)
             ? null
-            : FromWalletLocator(_walletLocator);
-
-    // =======================
-    // Helpers
-    // =======================
-
-    private static string NormalizeWalletLocator(string value)
-    {
-        if (string.IsNullOrWhiteSpace(value))
-            return null;
-
-        value = value.Trim();
-
-        // 1️⃣ Если это уже валидный UInt256 HEX — принимаем как есть
-        if (IsValidWalletLocatorHex(value))
-            return value.ToUpperInvariant();
-
-        // 2️⃣ Иначе считаем, что это текст → кодируем
-        return ToWalletLocator(value);
-    }
-
-    private static bool IsValidWalletLocatorHex(string value)
-    {
-        if (value.Length != 64)
-            return false;
-
-        for (int i = 0; i < value.Length; i++)
-        {
-            char c = value[i];
-            bool isHex =
-                (c >= '0' && c <= '9') ||
-                (c >= 'a' && c <= 'f') ||
-                (c >= 'A' && c <= 'F');
-
-            if (!isHex)
-                return false;
-        }
-
-        return true;
-    }
-
-    private static string ToWalletLocator(string text)
-    {
-        var bytes = Encoding.UTF8.GetBytes(text);
-
-        if (bytes.Length > 32)
-            throw new ArgumentException(
-                "Text is too long for WalletLocator (max 32 bytes UTF-8)"
-            );
-
-        var buffer = new byte[32];
-        Array.Copy(bytes, buffer, bytes.Length);
-
-        return Convert.ToHexString(buffer);
-    }
-
-    private static string FromWalletLocator(string hex)
-    {
-        var bytes = Convert.FromHexString(hex);
-
-        int len = Array.IndexOf(bytes, (byte)0x00);
-        if (len < 0)
-            len = bytes.Length;
-
-        return Encoding.UTF8.GetString(bytes, 0, len);
-    }
+            : HexStringHelper.FromHex(_walletLocator);
 }

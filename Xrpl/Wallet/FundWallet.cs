@@ -149,6 +149,12 @@ namespace Xrpl.Wallet
             httpsClient.DefaultRequestHeaders.Accept.Add(new MediaTypeWithQualityHeaderValue("application/json"));
             StringContent contentData = new StringContent(postBody, Encoding.UTF8, "application/json");
             var response = await httpsClient.PostAsync(options["path"], contentData);
+            var row = await response.Content.ReadAsStringAsync();
+            if (!response.IsSuccessStatusCode)
+            {
+                Console.WriteLine(response.StatusCode);
+                Console.WriteLine(row);
+            }
             HttpContent content = response.Content;
             byte[] chunks = await content.ReadAsByteArrayAsync();
             return await OnEnd(

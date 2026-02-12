@@ -20,18 +20,13 @@ public class TestIEscrow
     public TestContext TestContext { get; set; }
     public static IXrplClient client;
 
-    static XrplWallet walletIssuer = XrplWallet.FromNormalizedText("token escrow issuer v2");
-    static XrplWallet walletHolder1 = XrplWallet.FromNormalizedText("token escrow holder1 v2");
-    static XrplWallet walletHolder2 = XrplWallet.FromNormalizedText("token escrow holder2 v2");
+    //static XrplWallet walletIssuer = XrplWallet.Generate();
+    //static XrplWallet walletHolder1 = XrplWallet.Generate();
 
     [ClassInitialize]
     public static async Task MyClassInitializeAsync(TestContext testContext)
     {
         client = await IntegrationTestConfig.CreateClientAsync(TestNodeType.DevNet);
-
-        await IntegrationTestConfig.TryFundWalletAsync(client, walletIssuer, TestNodeType.DevNet);
-        await IntegrationTestConfig.TryFundWalletAsync(client, walletHolder1, TestNodeType.DevNet);
-        await IntegrationTestConfig.TryFundWalletAsync(client, walletHolder2, TestNodeType.DevNet);
     }
 
     [ClassCleanup]
@@ -45,6 +40,13 @@ public class TestIEscrow
     [TestMethod]
     public async Task TestXrpEscrowCreate_AndFinish()
     {
+        var walletIssuer = XrplWallet.Generate();
+        var walletHolder1 = XrplWallet.Generate();
+        var walletHolder2 = XrplWallet.Generate();
+        await IntegrationTestConfig.TryFundWalletAsync(client, walletIssuer, TestNodeType.DevNet);
+        await IntegrationTestConfig.TryFundWalletAsync(client, walletHolder1, TestNodeType.DevNet);
+        await IntegrationTestConfig.TryFundWalletAsync(client, walletHolder2, TestNodeType.DevNet);
+
         LedgerRequest ledgerReq = new LedgerRequest() { LedgerIndex = new LedgerIndex(LedgerIndexType.Validated) };
         LOLedger ledgerResponse = await client.Ledger(ledgerReq);
         LedgerEntity ledgerEntity = (LedgerEntity)ledgerResponse.LedgerEntity;
@@ -53,7 +55,7 @@ public class TestIEscrow
         var escrowCreateTx = new EscrowCreate
         {
             Account = walletHolder1.ClassicAddress,
-            Amount = new Currency { ValueAsXrp = 10 },
+            Amount = new Currency { ValueAsXrp = 1 },
             Destination = walletHolder2.ClassicAddress,
             FinishAfter = closeTime + 2,
         };
@@ -82,6 +84,13 @@ public class TestIEscrow
     [TestMethod]
     public async Task TestXrpEscrowCreate_AndCancel()
     {
+        var walletIssuer = XrplWallet.Generate();
+        var walletHolder1 = XrplWallet.Generate();
+        var walletHolder2 = XrplWallet.Generate();
+        await IntegrationTestConfig.TryFundWalletAsync(client, walletIssuer, TestNodeType.DevNet);
+        await IntegrationTestConfig.TryFundWalletAsync(client, walletHolder1, TestNodeType.DevNet);
+        await IntegrationTestConfig.TryFundWalletAsync(client, walletHolder2, TestNodeType.DevNet);
+
         LedgerRequest ledgerReq = new LedgerRequest() { LedgerIndex = new LedgerIndex(LedgerIndexType.Validated) };
         LOLedger ledgerResponse = await client.Ledger(ledgerReq);
         LedgerEntity ledgerEntity = (LedgerEntity)ledgerResponse.LedgerEntity;
@@ -91,7 +100,7 @@ public class TestIEscrow
         var escrowCreateTx = new EscrowCreate
         {
             Account = walletHolder1.ClassicAddress,
-            Amount = new Currency { ValueAsXrp = 10 },
+            Amount = new Currency { ValueAsXrp = 1 },
             Destination = walletHolder2.ClassicAddress,
             CancelAfter = cancelAfterTime,
             FinishAfter = closeTime + 2,
@@ -125,6 +134,13 @@ public class TestIEscrow
     [TestMethod]
     public async Task TestIOUEscrowCreate_AndFinish()
     {
+        var walletIssuer = XrplWallet.Generate();
+        var walletHolder1 = XrplWallet.Generate();
+        var walletHolder2 = XrplWallet.Generate();
+        await IntegrationTestConfig.TryFundWalletAsync(client, walletIssuer, TestNodeType.DevNet);
+        await IntegrationTestConfig.TryFundWalletAsync(client, walletHolder1, TestNodeType.DevNet);
+        await IntegrationTestConfig.TryFundWalletAsync(client, walletHolder2, TestNodeType.DevNet);
+
         var accountSetTx = new AccountSet
         {
             Account = walletIssuer.ClassicAddress,
@@ -199,6 +215,13 @@ public class TestIEscrow
     [TestMethod]
     public async Task TestIOUEscrowCreate_AndCancel()
     {
+        var walletIssuer = XrplWallet.Generate();
+        var walletHolder1 = XrplWallet.Generate();
+        var walletHolder2 = XrplWallet.Generate();
+        await IntegrationTestConfig.TryFundWalletAsync(client, walletIssuer, TestNodeType.DevNet);
+        await IntegrationTestConfig.TryFundWalletAsync(client, walletHolder1, TestNodeType.DevNet);
+        await IntegrationTestConfig.TryFundWalletAsync(client, walletHolder2, TestNodeType.DevNet);
+
         var accountSetTx = new AccountSet
         {
             Account = walletIssuer.ClassicAddress,
@@ -279,6 +302,13 @@ public class TestIEscrow
     [TestMethod]
     public async Task TestMPTEscrowCreate_AndFinish()
     {
+        var walletIssuer = XrplWallet.Generate();
+        var walletHolder1 = XrplWallet.Generate();
+        var walletHolder2 = XrplWallet.Generate();
+        await IntegrationTestConfig.TryFundWalletAsync(client, walletIssuer, TestNodeType.DevNet);
+        await IntegrationTestConfig.TryFundWalletAsync(client, walletHolder1, TestNodeType.DevNet);
+        await IntegrationTestConfig.TryFundWalletAsync(client, walletHolder2, TestNodeType.DevNet);
+
         var createTx = new MPTokenIssuanceCreate
         {
             Account = walletIssuer.ClassicAddress,
@@ -319,6 +349,15 @@ public class TestIEscrow
         var payResult = await client.SubmitAndWait(paymentTx, walletIssuer, true);
         ValidateResult(payResult);
 
+        var authHolder2 = new MPTokenAuthorize
+        {
+            Account = walletHolder2.ClassicAddress,
+            MPTokenIssuanceID = issuanceId,
+        };
+        authHolder2 = await client.Autofill(authHolder2);
+        var authResult2 = await client.SubmitAndWait(authHolder2, walletHolder2, true);
+        ValidateResult(authResult2);
+
         LedgerRequest ledgerReq = new LedgerRequest() { LedgerIndex = new LedgerIndex(LedgerIndexType.Validated) };
         LOLedger ledgerResponse = await client.Ledger(ledgerReq);
         LedgerEntity ledgerEntity = (LedgerEntity)ledgerResponse.LedgerEntity;
@@ -331,6 +370,7 @@ public class TestIEscrow
             Destination = walletHolder2.ClassicAddress,
             FinishAfter = closeTime + 2,
         };
+
         escrowCreateTx = await client.Autofill(escrowCreateTx);
         uint escrowSequence = (uint)escrowCreateTx.Sequence;
         var escrowCreateResult = await client.SubmitAndWait(escrowCreateTx, walletHolder1, true);
@@ -342,14 +382,6 @@ public class TestIEscrow
 
         await WaitForLedgerCloseTime(client, closeTime + 2);
 
-        var authHolder2 = new MPTokenAuthorize
-        {
-            Account = walletHolder2.ClassicAddress,
-            MPTokenIssuanceID = issuanceId,
-        };
-        authHolder2 = await client.Autofill(authHolder2);
-        var authResult2 = await client.SubmitAndWait(authHolder2, walletHolder2, true);
-        ValidateResult(authResult2);
 
         EscrowFinish finishTx = new EscrowFinish
         {
@@ -365,6 +397,13 @@ public class TestIEscrow
     [TestMethod]
     public async Task TestMPTEscrowCreate_AndCancel()
     {
+        var walletIssuer = XrplWallet.Generate();
+        var walletHolder1 = XrplWallet.Generate();
+        var walletHolder2 = XrplWallet.Generate();
+        await IntegrationTestConfig.TryFundWalletAsync(client, walletIssuer, TestNodeType.DevNet);
+        await IntegrationTestConfig.TryFundWalletAsync(client, walletHolder1, TestNodeType.DevNet);
+        await IntegrationTestConfig.TryFundWalletAsync(client, walletHolder2, TestNodeType.DevNet);
+
         var createTx = new MPTokenIssuanceCreate
         {
             Account = walletIssuer.ClassicAddress,

@@ -92,6 +92,9 @@ namespace Xrpl.Models.Transactions
         /// <inheritdoc />
         [JsonConverter(typeof(CurrencyConverter))]
         public Currency DeliverMin { get; set; }
+
+        /// <inheritdoc />
+        public string DomainID { get; set; }
     }
 
     /// <summary>
@@ -101,16 +104,16 @@ namespace Xrpl.Models.Transactions
     /// ```typescript
     /// const partialPayment: Payment =
     /// {
-    /// 	TransactionType: 'Payment',
-    /// 	Account: 'rM9WCfJU6udpFkvKThRaFHDMsp7L8rpgN',
-    /// 	Amount:{
-    /// 	currency: 'FOO',
-    /// 	value: '4000',
-    /// 	issuer: 'rPzwM2JfCSDjhbesdTCqFjWWdK7eFtTwZz',
+    ///         TransactionType: 'Payment',
+    ///         Account: 'rM9WCfJU6udpFkvKThRaFHDMsp7L8rpgN',
+    ///         Amount:{
+    ///         currency: 'FOO',
+    ///         value: '4000',
+    ///         issuer: 'rPzwM2JfCSDjhbesdTCqFjWWdK7eFtTwZz',
     ///     },
-    /// 	Destination: 'rPzwM2JfCSDjhbesdTCqFjWWdK7eFtTwZz',
-    /// 	Flags:{
-    /// 	tfPartialPayment: true
+    ///         Destination: 'rPzwM2JfCSDjhbesdTCqFjWWdK7eFtTwZz',
+    ///         Flags:{
+    ///         tfPartialPayment: true
     ///     }
     /// }
     /// ```
@@ -164,6 +167,11 @@ namespace Xrpl.Models.Transactions
         /// Must be omitted for XRP-to-XRP Payments.
         /// </summary>
         Currency SendMax { get; set; }
+        /// <summary>
+        /// The domain the sender intends to use for cross-currency payments through the permissioned DEX.
+        /// Both sender and destination must be part of this domain if it interacts with the DEX.
+        /// </summary>
+        string DomainID { get; set; }
     }
 
     /// <inheritdoc cref="IPayment" />
@@ -207,6 +215,9 @@ namespace Xrpl.Models.Transactions
         /// <inheritdoc />
         [JsonConverter(typeof(CurrencyConverter))]
         public Currency DeliverMin { get; set; }
+
+        /// <inheritdoc />
+        public string DomainID { get; set; }
     }
 
     public partial class Validation
@@ -241,6 +252,14 @@ namespace Xrpl.Models.Transactions
                 throw new ValidationException("PaymentTransaction: invalid Paths");
             if (tx.TryGetValue("SendMax", out var SendMax) && !Common.IsAmount(SendMax))
                 throw new ValidationException("PaymentTransaction: invalid SendMax");
+
+            if (tx.TryGetValue("DomainID", out var domainId) && domainId is not null)
+            {
+                if (domainId is not string domainIdStr)
+                    throw new ValidationException("PaymentTransaction: DomainID must be a string");
+                if (domainIdStr.Length != 64 || !System.Text.RegularExpressions.Regex.IsMatch(domainIdStr, "^[0-9A-Fa-f]{64}$"))
+                    throw new ValidationException("PaymentTransaction: DomainID must be a 64-character hexadecimal string (256-bit hash)");
+            }
 
             await CheckPartialPayment(tx);
         }
