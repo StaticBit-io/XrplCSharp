@@ -1,5 +1,12 @@
 # Changes
 
+### 10.0.0
+* Upgrade to .NET 10.0
+* TokenEscrow (XLS-85) — extended escrow support for fungible tokens (IOU/MPT)
+* Credentials (XLS-70) — CredentialCreate, CredentialAccept, CredentialDelete transactions, LOCredential ledger entry
+* PermissionedDomain (XLS-80) — PermissionedDomainSet, PermissionedDomainDelete transactions, LOPermissionedDomain ledger entry
+* Permissioned DEX (XLS-81) — DomainID and tfHybrid flag for OfferCreate, DomainID for Payment
+
 ### 9.8.3-implicit 02/11/2026
 * Add Currency uint implicit conversion
 
