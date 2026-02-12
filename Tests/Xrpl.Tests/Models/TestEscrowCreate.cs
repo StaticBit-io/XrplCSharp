@@ -61,8 +61,18 @@ namespace XrplTests.Xrpl.Models
 
             // Invalid Amount
             escrowCreate["Amount"] = 1000;
-            await Helper.ThrowsExceptionAsync<ValidationException>(() => Validation.ValidateEscrowCreate(escrowCreate), "EscrowCreate: Amount must be a string");
-            await Helper.ThrowsExceptionAsync<ValidationException>(() => Validation.Validate(escrowCreate), "EscrowCreate: Amount must be a string");
+            await Helper.ThrowsExceptionAsync<ValidationException>(() => Validation.ValidateEscrowCreate(escrowCreate), "EscrowCreate: Amount must be a string (XRP) or object (IOU/MPT)");
+            await Helper.ThrowsExceptionAsync<ValidationException>(() => Validation.Validate(escrowCreate), "EscrowCreate: Amount must be a string (XRP) or object (IOU/MPT)");
+            escrowCreate["Amount"] = "10000";
+
+            // Valid Amount as object (MPT/IOU - TokenEscrow amendment)
+            escrowCreate["Amount"] = new Dictionary<string, dynamic>
+            {
+                {"mpt_issuance_id", "00000001A407AF5856CEDA4CE40E27FC80A38EC23A1DEFCD"},
+                {"value", "1000"}
+            };
+            await Validation.ValidateEscrowCreate(escrowCreate);
+            await Validation.Validate(escrowCreate);
             escrowCreate["Amount"] = "10000";
 
             // Invalid CancelAfter

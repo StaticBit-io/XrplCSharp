@@ -24,7 +24,7 @@ namespace Xrpl.Models.Transactions
     }
 
     /// <summary>
-    /// Return escrowed XRP to the sender.
+    /// Return escrowed XRP or fungible tokens (IOUs, MPTs) to the sender. Requires the TokenEscrow amendment for fungible token support.
     /// </summary>
     public interface IEscrowCancel : ITransactionCommon
     {
@@ -34,7 +34,7 @@ namespace Xrpl.Models.Transactions
         /// </summary>
         uint OfferSequence { get; set; }
         /// <summary>
-        /// Address of the source account that funded the escrow payment.
+        /// Address of the source account that funded the escrow.
         /// </summary>
         string Owner { get; set; }
     }

@@ -86,6 +86,8 @@ namespace Xrpl.Models.Transactions
         /// <inheritdoc />
         [JsonConverter(typeof(CurrencyConverter))]
         public Currency TakerPays { get; set; }
+        /// <inheritdoc />
+        public string DomainID { get; set; }
     }
 
     /// <summary>
@@ -117,6 +119,10 @@ namespace Xrpl.Models.Transactions
         /// The amount and type of currency being requested by the offer creator.
         /// </summary>
         Currency TakerPays { get; set; }
+        /// <summary>
+        /// The domain that the offer must be a part of. Required for permissioned DEX offers.
+        /// </summary>
+        string DomainID { get; set; }
 
     }
 
@@ -144,6 +150,9 @@ namespace Xrpl.Models.Transactions
         /// <inheritdoc />
         [JsonConverter(typeof(CurrencyConverter))]
         public Currency TakerPays { get; set; }
+
+        /// <inheritdoc />
+        public string DomainID { get; set; }
     }
 
     public partial class Validation
@@ -172,6 +181,22 @@ namespace Xrpl.Models.Transactions
             if (tx.TryGetValue("OfferSequence", out var OfferSequence) && OfferSequence is not uint { })
                 throw new ValidationException("OfferCreate: invalid OfferSequence");
 
+            if (tx.TryGetValue("DomainID", out var domainId) && domainId is not null)
+            {
+                if (domainId is not string domainIdStr)
+                    throw new ValidationException("OfferCreate: DomainID must be a string");
+                if (domainIdStr.Length != 64 || !System.Text.RegularExpressions.Regex.IsMatch(domainIdStr, "^[0-9A-Fa-f]{64}$"))
+                    throw new ValidationException("OfferCreate: DomainID must be a 64-character hexadecimal string (256-bit hash)");
+            }
+
+            if (tx.TryGetValue("Flags", out var flags) && flags is uint flagValue)
+            {
+                bool hasTfHybrid = (flagValue & (uint)OfferCreateFlags.tfHybrid) != 0;
+                if (hasTfHybrid && (domainId is null || domainId is not string || string.IsNullOrEmpty((string)domainId)))
+                {
+                    throw new ValidationException("OfferCreate: tfHybrid flag cannot be set if DomainID is not present");
+                }
+            }
         }
     }
 

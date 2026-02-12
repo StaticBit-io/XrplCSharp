@@ -178,6 +178,21 @@ namespace Xrpl.Models.Transactions
                 case "DIDDelete":
                     await ValidateDIDDelete(tx);
                     break;
+                case "PermissionedDomainSet":
+                    await ValidatePermissionedDomainSet(tx);
+                    break;
+                case "PermissionedDomainDelete":
+                    await ValidatePermissionedDomainDelete(tx);
+                    break;
+                case "CredentialCreate":
+                    await ValidateCredentialCreate(tx);
+                    break;
+                case "CredentialAccept":
+                    await ValidateCredentialAccept(tx);
+                    break;
+                case "CredentialDelete":
+                    await ValidateCredentialDelete(tx);
+                    break;
                 default:
                     throw new ValidationException($"Invalid field TransactionType: {type}");
             }

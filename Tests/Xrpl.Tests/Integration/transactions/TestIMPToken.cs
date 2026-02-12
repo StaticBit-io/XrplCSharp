@@ -4,6 +4,8 @@ using System;
 using System.Collections.Generic;
 using System.Threading.Tasks;
 
+using Newtonsoft.Json;
+
 using Xrpl.Client;
 using Xrpl.Client.Exceptions;
 using Xrpl.Models;
@@ -34,25 +36,11 @@ public class TestIMPToken
     [ClassInitialize]
     public static async Task MyClassInitializeAsync(TestContext testContext)
     {
-        client = new XrplClient("wss://s.altnet.rippletest.net:51233");
-        client.connection.OnConnected += () =>
-        {
-            Console.WriteLine($"SetupIntegration CONNECTED");
-            return Task.CompletedTask;
-        };
-        client.connection.OnDisconnect += (code, description) =>
-        {
-            Console.WriteLine($"SetupIntegration DISCONNECTED: {code}, description: {description}");
-            return Task.CompletedTask;
-        };
-        client.connection.OnError += (error, errorMessage, message, data) =>
-        {
-            Console.WriteLine($"SetupIntegration ERROR: {message}");
-            return Task.CompletedTask;
-        };
-        await client.Connect();
+        client = await IntegrationTestConfig.CreateClientAsync(TestNodeType.DevNet);
 
-        await TryFillAccounts(walletIssuer, walletHolder1, walletHolder2);
+        await IntegrationTestConfig.TryFundWalletAsync(client, walletIssuer);
+        await IntegrationTestConfig.TryFundWalletAsync(client, walletHolder1);
+        await IntegrationTestConfig.TryFundWalletAsync(client, walletHolder2);
     }
 
     [ClassCleanup]
@@ -752,32 +740,5 @@ public class TestIMPToken
         }
         return null;
     }
-
-    private static async Task TryFillAccounts(params XrplWallet[] wallets)
-    {
-        foreach (var xrplWallet in wallets)
-        {
-            try
-            {
-                var info = await client.GetXrpFreeBalance(xrplWallet.ClassicAddress);
-                Console.WriteLine($"Balance {xrplWallet.ClassicAddress} - {info} XRP");
-
-                if (info <= 10)
-                {
-                    var addFunds = await client.FundWallet(xrplWallet);
-                    Console.WriteLine($"Fund {xrplWallet.ClassicAddress} - {addFunds.Balance} XRP");
-                }
-                continue;
-            }
-            catch (Exception e)
-            {
-
-            }
-            var funded = await client.FundWallet(xrplWallet);
-            Console.WriteLine($"Fund {xrplWallet.ClassicAddress} - {funded.Balance} XRP");
-        }
-
-    }
-
     #endregion
 }
