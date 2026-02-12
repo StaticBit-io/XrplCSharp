@@ -125,6 +125,13 @@ namespace Xrpl.BinaryCodec.Types
         /// <summary>Delete a permissioned domain that you own.</summary>
         public static readonly TransactionType PermissionedDomainDelete = Add(nameof(PermissionedDomainDelete), 63);
 
+        /// <summary>Creates a new credential issued to a subject account.</summary>
+        public static readonly TransactionType CredentialCreate = Add(nameof(CredentialCreate), 58);
+        /// <summary>Accepts a provisionally-issued credential, making it valid.</summary>
+        public static readonly TransactionType CredentialAccept = Add(nameof(CredentialAccept), 59);
+        /// <summary>Deletes (revokes) a credential from the ledger.</summary>
+        public static readonly TransactionType CredentialDelete = Add(nameof(CredentialDelete), 60);
+
         /// <summary>
         /// This system-generated transaction type is used to update the status of the various amendments. <br/>
         /// For details, see: https://xrpl.org/amendments.html

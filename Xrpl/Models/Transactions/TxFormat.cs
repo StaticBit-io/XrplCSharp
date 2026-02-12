@@ -385,6 +385,24 @@ namespace Xrpl.Models.Transaction
                 {
                     [Field.DomainID] = Requirement.Required,
                 },
+                [BinaryCodec.Types.TransactionType.CredentialCreate] = new TxFormat
+                {
+                    [Field.Subject] = Requirement.Required,
+                    [Field.CredentialType] = Requirement.Required,
+                    [Field.Expiration] = Requirement.Optional,
+                    [Field.URI] = Requirement.Optional,
+                },
+                [BinaryCodec.Types.TransactionType.CredentialAccept] = new TxFormat
+                {
+                    [Field.Issuer] = Requirement.Required,
+                    [Field.CredentialType] = Requirement.Required,
+                },
+                [BinaryCodec.Types.TransactionType.CredentialDelete] = new TxFormat
+                {
+                    [Field.Subject] = Requirement.Optional,
+                    [Field.Issuer] = Requirement.Optional,
+                    [Field.CredentialType] = Requirement.Required,
+                },
 
             };
         }

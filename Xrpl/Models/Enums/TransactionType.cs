@@ -165,7 +165,25 @@
         /// <summary>
         /// Delete a permissioned domain that you own.
         /// </summary>
-        PermissionedDomainDelete
+        PermissionedDomainDelete,
+
+        /// <summary>
+        /// Creates a new credential issued to a subject account.
+        /// Requires the Credentials amendment.
+        /// </summary>
+        CredentialCreate,
+
+        /// <summary>
+        /// Accepts a provisionally-issued credential, making it valid.
+        /// Requires the Credentials amendment.
+        /// </summary>
+        CredentialAccept,
+
+        /// <summary>
+        /// Deletes (revokes) a credential from the ledger.
+        /// Requires the Credentials amendment.
+        /// </summary>
+        CredentialDelete,
     }
 }
 

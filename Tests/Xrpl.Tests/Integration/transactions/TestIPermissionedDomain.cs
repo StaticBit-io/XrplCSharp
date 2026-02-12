@@ -22,12 +22,12 @@ public class TestIPermissionedDomain
 {
     public TestContext TestContext { get; set; }
     public static IXrplClient client;
-    public static TestNodeType nodeType = TestNodeType.TestNet;
+    public static TestNodeType nodeType = TestNodeType.DevNet;
 
     [ClassInitialize]
     public static async Task MyClassInitializeAsync(TestContext testContext)
     {
-        client = await IntegrationTestConfig.CreateClientAsync(TestNodeType.TestNet);
+        client = await IntegrationTestConfig.CreateClientAsync(nodeType);
     }
 
     [ClassCleanup]
@@ -72,24 +72,7 @@ public class TestIPermissionedDomain
         Assert.Fail($"{testName}: Unexpected result {result}");
         return false;
     }
-
-    private async Task<bool> VerifyPermissionedDomainExists(string domainId)
-    {
-        try
-        {
-            var request = new LedgerEntryRequest
-            {
-                PermissionedDomain = domainId
-            };
-            var response = await client.LedgerEntry(request);
-            return response?.Node != null;
-        }
-        catch
-        {
-            return false;
-        }
-    }
-
+    
     private static List<AcceptedCredentialWrapper> CreateCredentials(string issuer, string credentialType)
     {
         return new List<AcceptedCredentialWrapper>
@@ -105,6 +88,7 @@ public class TestIPermissionedDomain
         };
     }
 
+
     #endregion
 
     #region PermissionedDomainSet Tests
@@ -112,7 +96,7 @@ public class TestIPermissionedDomain
     [TestMethod]
     public async Task TestPermissionedDomainSet_CreateNewDomain()
     {
-        var wallet = XrplWallet.FromNormalizedText("permissioned domain create test");
+        var wallet = XrplWallet.Generate();
         await IntegrationTestConfig.TryFundWalletAsync(client, wallet, nodeType);
 
         var domainSet = new PermissionedDomainSet
@@ -135,7 +119,7 @@ public class TestIPermissionedDomain
     [TestMethod]
     public async Task TestPermissionedDomainSet_CreateWithMultipleCredentials()
     {
-        var wallet = XrplWallet.FromNormalizedText("permissioned domain multiple creds");
+        var wallet = XrplWallet.Generate();
         await IntegrationTestConfig.TryFundWalletAsync(client, wallet, nodeType);
 
         var credentials = new List<AcceptedCredentialWrapper>
@@ -182,7 +166,7 @@ public class TestIPermissionedDomain
     [TestMethod]
     public async Task TestPermissionedDomainDelete_DeleteExistingDomain()
     {
-        var wallet = XrplWallet.FromNormalizedText("permissioned domain delete test");
+        var wallet = XrplWallet.Generate();
         await IntegrationTestConfig.TryFundWalletAsync(client, wallet, nodeType);
 
         var createDomain = new PermissionedDomainSet
@@ -250,7 +234,7 @@ public class TestIPermissionedDomain
     [TestMethod]
     public async Task TestPermissionedDomain_FullLifecycle()
     {
-        var wallet = XrplWallet.FromNormalizedText("permissioned domain lifecycle test");
+        var wallet = XrplWallet.Generate();
         await IntegrationTestConfig.TryFundWalletAsync(client, wallet, nodeType);
 
         Console.WriteLine($"Starting PermissionedDomain lifecycle test for: {wallet.ClassicAddress}");
@@ -284,8 +268,8 @@ public class TestIPermissionedDomain
     [TestMethod]
     public async Task TestOfferCreate_WithDomainID()
     {
-        var issuerWallet = XrplWallet.FromNormalizedText("dex issuer account test");
-        var traderWallet = XrplWallet.FromNormalizedText("dex trader account test");
+        var issuerWallet = XrplWallet.Generate();
+        var traderWallet = XrplWallet.Generate();
         await IntegrationTestConfig.TryFundWalletAsync(client, issuerWallet, nodeType);
         await IntegrationTestConfig.TryFundWalletAsync(client, traderWallet, nodeType);
 
@@ -340,6 +324,19 @@ public class TestIPermissionedDomain
 
         Console.WriteLine($"Created PermissionedDomain with ID: {domainId}");
 
+        string credTypeHex = ToHex("dex_credential");
+
+        var credCreate = new CredentialCreate
+        {
+            Account = traderWallet.ClassicAddress,
+            Subject = traderWallet.ClassicAddress,
+            CredentialType = credTypeHex,
+        };
+        var autofilledCredCreate = await client.Autofill(credCreate);
+        var resCredCreate = await client.SubmitAndWait(autofilledCredCreate, traderWallet, true);
+        if (!ValidateSuccessResultOrSkip(resCredCreate, "CredentialCreate for trader (self-issued, auto-accepted)"))
+            return;
+
         await Task.Delay(1000);
 
         var offerCreate = new OfferCreate
@@ -376,8 +373,8 @@ public class TestIPermissionedDomain
     [TestMethod]
     public async Task TestOfferCreate_HybridFlag_WithDomainID()
     {
-        var issuerWallet = XrplWallet.FromNormalizedText("hybrid issuer account test");
-        var traderWallet = XrplWallet.FromNormalizedText("hybrid trader account test");
+        var issuerWallet = XrplWallet.Generate();
+        var traderWallet = XrplWallet.Generate();
         await IntegrationTestConfig.TryFundWalletAsync(client, issuerWallet, nodeType);
         await IntegrationTestConfig.TryFundWalletAsync(client, traderWallet, nodeType);
 
@@ -430,6 +427,19 @@ public class TestIPermissionedDomain
         }
 
         Console.WriteLine($"Created PermissionedDomain for hybrid test: {domainId}");
+
+        string hybridCredTypeHex = ToHex("hybrid_credential");
+
+        var credCreate = new CredentialCreate
+        {
+            Account = traderWallet.ClassicAddress,
+            Subject = traderWallet.ClassicAddress,
+            CredentialType = hybridCredTypeHex,
+        };
+        var autofilledCredCreate = await client.Autofill(credCreate);
+        var resCredCreate = await client.SubmitAndWait(autofilledCredCreate, traderWallet, true);
+        if (!ValidateSuccessResultOrSkip(resCredCreate, "CredentialCreate for trader (self-issued, auto-accepted)"))
+            return;
 
         await Task.Delay(1000);
 
@@ -540,10 +550,45 @@ public class TestIPermissionedDomain
     [TestMethod]
     public async Task TestPayment_WithDomainID()
     {
-        var wallet = XrplWallet.FromNormalizedText("payment with domain test");
-        var wallet2 = XrplWallet.FromNormalizedText("payment destination domain test");
+        var wallet = XrplWallet.Generate();
+        var wallet2 = XrplWallet.Generate();
         await IntegrationTestConfig.TryFundWalletAsync(client, wallet, nodeType);
         await IntegrationTestConfig.TryFundWalletAsync(client, wallet2, nodeType);
+
+        string credTypeHex = ToHex("payment_credential");
+
+        var credCreate1 = new CredentialCreate
+        {
+            Account = wallet.ClassicAddress,
+            Subject = wallet.ClassicAddress,
+            CredentialType = credTypeHex,
+        };
+        var autofilledCredCreate1 = await client.Autofill(credCreate1);
+        var resCredCreate1 = await client.SubmitAndWait(autofilledCredCreate1, wallet, true);
+        if (!ValidateSuccessResultOrSkip(resCredCreate1, "CredentialCreate for wallet (self-issued, auto-accepted)"))
+            return;
+
+        var credCreate2 = new CredentialCreate
+        {
+            Account = wallet.ClassicAddress,
+            Subject = wallet2.ClassicAddress,
+            CredentialType = credTypeHex,
+        };
+        var autofilledCredCreate2 = await client.Autofill(credCreate2);
+        var resCredCreate2 = await client.SubmitAndWait(autofilledCredCreate2, wallet, true);
+        if (!ValidateSuccessResultOrSkip(resCredCreate2, "CredentialCreate for wallet2"))
+            return;
+
+        var credAccept2 = new CredentialAccept
+        {
+            Account = wallet2.ClassicAddress,
+            Issuer = wallet.ClassicAddress,
+            CredentialType = credTypeHex,
+        };
+        var autofilledCredAccept2 = await client.Autofill(credAccept2);
+        var resCredAccept2 = await client.SubmitAndWait(autofilledCredAccept2, wallet2, true);
+        if (!ValidateSuccessResultOrSkip(resCredAccept2, "CredentialAccept for wallet2"))
+            return;
 
         var createDomain = new PermissionedDomainSet
         {

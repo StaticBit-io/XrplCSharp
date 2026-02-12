@@ -5,6 +5,7 @@ XrplCSharp is a pure C# implementation for interacting with the XRP Ledger, desi
 
 ## User Preferences
 Preferred communication style: Simple, everyday language.
+Preferred language: Russian (русский).
 
 ## System Architecture
 XrplCSharp utilizes a monorepo structure with distinct packages for core functionalities: `Xrpl.AddressCodec` for address encoding, `Xrpl.BinaryCodec` for binary serialization, `Xrpl.Keypairs` for key management, and `Xrpl` as the main client library.
@@ -36,6 +37,10 @@ A custom Base58 codec (`B58`) handles XRP Ledger's unique address and seed encod
 - **DID (Decentralized Identifier) Support**: Full implementation of `DIDSet` and `DIDDelete` transaction types, and `LODID` ledger entry type for managing decentralized identifiers on the XRP Ledger. DIDSet supports Data, DIDDocument, and URI fields (at least one required, each max 256 bytes hex-encoded).
 - **PermissionedDomain Support (XLS-80)**: Full implementation of `PermissionedDomainSet` and `PermissionedDomainDelete` transaction types, and `LOPermissionedDomain` ledger entry type for credential-based access control. AcceptedCredentials array supports 1-10 unique credentials, each with Issuer and CredentialType (max 64 bytes hex-encoded). Requires the PermissionedDomains amendment.
 - **Permissioned DEX Support (XLS-81)**: Implementation of permissioned decentralized exchange functionality. Adds `DomainID` field to `OfferCreate` and `Payment` transactions for domain-restricted trading. `LOOffer` ledger entry includes `DomainID`, `AdditionalBooks` array (for hybrid offers), and `lsfHybrid` flag (0x00040000). Transaction flag `tfHybrid` (0x00100000) enables hybrid offers that participate in both domain and open order books. Validation enforces 64-character hex format for DomainID and requires DomainID when tfHybrid is set. Requires PermissionedDomains amendment.
+- **Credentials Support (XLS-70)**: Full implementation of `CredentialCreate`, `CredentialAccept`, and `CredentialDelete` transaction types for on-chain identity verification and KYC/AML compliance. CredentialCreate requires Subject and CredentialType (max 64 bytes hex), with optional Expiration and URI fields. CredentialAccept requires Issuer and CredentialType. CredentialDelete requires CredentialType and at least one of Subject/Issuer. Credentials must be created then accepted to become valid; they are required for permissioned domain participation. Requires the Credentials amendment. All hex VL fields (CredentialType, URI) use `HexStringHelper` for automatic normalization (text→hex on set, hex→text via `[JsonIgnore]` decoded properties). `LOCredential` ledger entry model with `CredentialFlags.lsfAccepted` and full converter registration in `LedgerObjectConverter`, `TransactionRequestConverter`, `TransactionResponseConverter`.
+
+### Shared Utilities
+- **HexStringHelper** (`Xrpl/Models/Utils/HexStringHelper.cs`): Reusable static utility for hex-encoded variable-length fields. `NormalizeToHex(value, maxBytes, fieldName)` auto-detects hex vs plain text and normalizes to uppercase hex. `FromHex(hex)` decodes back to UTF-8. `IsValidHex(value)` validates hex format. Used by Credential transaction models and `LOCredential` ledger entry.
 
 ### Documentation
 API documentation is generated from XML comments using DocFX.

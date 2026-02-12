@@ -92,6 +92,9 @@ namespace Xrpl.Client.Json.Converters
                 "DIDDelete" => new DIDDeleteResponse(),
                 "PermissionedDomainSet" => new PermissionedDomainSetResponse(),
                 "PermissionedDomainDelete" => new PermissionedDomainDeleteResponse(),
+                "CredentialCreate" => new CredentialCreateResponse(),
+                "CredentialAccept" => new CredentialAcceptResponse(),
+                "CredentialDelete" => new CredentialDeleteResponse(),
                 //_ => throw new Exception("Can't create transaction type" + transactionType)
                 _ => SetUnknownType(jObject),
             };

@@ -290,6 +290,7 @@ namespace Xrpl.BinaryCodec.Enums
         public static readonly AccountIdField EmitCallback = new AccountIdField(nameof(EmitCallback), 10);
         public static readonly AccountIdField Holder = new AccountIdField(nameof(Holder), 11);
         public static readonly AccountIdField HookAccount = new AccountIdField(nameof(HookAccount), 16);
+        public static readonly AccountIdField Subject = new AccountIdField(nameof(Subject), 24);
 
         public static readonly Vector256Field Indexes = new Vector256Field(nameof(Indexes), 1);
         public static readonly Vector256Field Hashes = new Vector256Field(nameof(Hashes), 2);
