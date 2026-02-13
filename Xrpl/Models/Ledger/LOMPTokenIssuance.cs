@@ -3,6 +3,7 @@
 using System;
 
 using Xrpl.Client.Json.Converters;
+using Xrpl.Models.Utils;
 using Xrpl.Utils;
 
 // https://github.com/XRPLF/xrpl.js/blob/main/packages/xrpl/src/models/ledger/MPTokenIssuance.ts
@@ -118,8 +119,17 @@ namespace Xrpl.Models.Ledger
         /// </summary>
         [JsonProperty("MPTokenMetadata")]
         public string? MPTokenMetadata { get; init; }
+
         [JsonIgnore]
         public string? MPTokenMetadataRow => MPTokenMetadata?.FromHexString();
+
+
+        /// <summary>
+        /// Parsed metadata object conforming to the XLS-89 Multi-Purpose Token Metadata Schema.
+        /// Lazily deserialized from the <see cref="MPTokenMetadata"/> hex field.
+        /// </summary>
+        [JsonIgnore]
+        public MPTokenMetadataSchema? Metadata=> MPTokenMetadataSchema.FromHex(MPTokenMetadata);
 
         /// <summary>
         /// Owner directory page hint.

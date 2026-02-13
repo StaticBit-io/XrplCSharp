@@ -7,6 +7,7 @@ using System.Threading.Tasks;
 
 using Xrpl.BinaryCodec.Types;
 using Xrpl.Client.Exceptions;
+using Xrpl.Models.Utils;
 using Xrpl.Utils;
 
 namespace Xrpl.Models.Transactions
@@ -85,6 +86,17 @@ namespace Xrpl.Models.Transactions
         [JsonIgnore]
         public string? MPTokenMetadataRow => MPTokenMetadata?.FromHexString();
 
+        /// <summary>
+        /// Parsed metadata object conforming to the XLS-89 Multi-Purpose Token Metadata Schema.
+        /// Setting this property automatically serializes the schema to the <see cref="MPTokenMetadata"/> hex field.
+        /// </summary>
+        [JsonIgnore]
+        MPTokenMetadataSchema? Metadata
+        {
+            get => MPTokenMetadataSchema.FromHex(MPTokenMetadata);
+            set => MPTokenMetadata = value?.ToHex();
+        }
+
         public new MPTokenIssuanceCreateFlags? Flags { get; set; }
     }
 
@@ -116,8 +128,18 @@ namespace Xrpl.Models.Transactions
         /// <inheritdoc />
         [JsonProperty("MPTokenMetadata")]
         public string? MPTokenMetadata { get; set; }
+
         [JsonIgnore]
         public string? MPTokenMetadataRow => MPTokenMetadata?.FromHexString();
+
+
+        /// <inheritdoc />
+        [JsonIgnore]
+        public MPTokenMetadataSchema? Metadata
+        {
+            get => MPTokenMetadataSchema.FromHex(MPTokenMetadata);
+            set => MPTokenMetadata = value?.ToHex();
+        }
 
         public new MPTokenIssuanceCreateFlags? Flags
         {
@@ -144,11 +166,31 @@ namespace Xrpl.Models.Transactions
         public ushort? TransferFee { get; set; }
 
         /// <inheritdoc />
+        private string? _mpTokenMetadata;
+
         [JsonProperty("MPTokenMetadata")]
-        public string? MPTokenMetadata { get; set; }
+        public string? MPTokenMetadata
+        {
+            get => _mpTokenMetadata;
+            set { _mpTokenMetadata = value; _metadata = null; }
+        }
+
         [JsonIgnore]
         public string? MPTokenMetadataRow => MPTokenMetadata?.FromHexString();
 
+        private MPTokenMetadataSchema? _metadata;
+
+        /// <inheritdoc />
+        [JsonIgnore]
+        public MPTokenMetadataSchema? Metadata
+        {
+            get => _metadata ??= MPTokenMetadataSchema.FromHex(MPTokenMetadata);
+            set
+            {
+                _metadata = value;
+                _mpTokenMetadata = value?.ToHex();
+            }
+        }
 
         #endregion
         public new MPTokenIssuanceCreateFlags? Flags
