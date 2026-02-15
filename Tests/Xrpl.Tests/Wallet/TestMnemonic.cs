@@ -154,4 +154,147 @@ public class TestMnemonic
         bool areDifferent = !words1.SequenceEqual(words2);
         Assert.IsTrue(areDifferent, "Two generated mnemonics should be different");
     }
+
+    [TestMethod]
+    public void TestValidateMnemonicWord_ValidWord()
+    {
+        Assert.IsTrue(XrplWallet.ValidateMnemonicWord("abandon"));
+        Assert.IsTrue(XrplWallet.ValidateMnemonicWord("zoo"));
+        Assert.IsTrue(XrplWallet.ValidateMnemonicWord("ability"));
+    }
+
+    [TestMethod]
+    public void TestValidateMnemonicWord_CaseInsensitive()
+    {
+        Assert.IsTrue(XrplWallet.ValidateMnemonicWord("Abandon"));
+        Assert.IsTrue(XrplWallet.ValidateMnemonicWord("ABANDON"));
+        Assert.IsTrue(XrplWallet.ValidateMnemonicWord("aBaNdOn"));
+    }
+
+    [TestMethod]
+    public void TestValidateMnemonicWord_InvalidWord()
+    {
+        Assert.IsFalse(XrplWallet.ValidateMnemonicWord("xyz123"));
+        Assert.IsFalse(XrplWallet.ValidateMnemonicWord("notaword"));
+        Assert.IsFalse(XrplWallet.ValidateMnemonicWord("abandonn"));
+    }
+
+    [TestMethod]
+    public void TestValidateMnemonicWord_EmptyAndNull()
+    {
+        Assert.IsFalse(XrplWallet.ValidateMnemonicWord(""));
+        Assert.IsFalse(XrplWallet.ValidateMnemonicWord("   "));
+        Assert.IsFalse(XrplWallet.ValidateMnemonicWord(null));
+    }
+
+    [TestMethod]
+    public void TestValidateMnemonicWord_WithWhitespace()
+    {
+        Assert.IsTrue(XrplWallet.ValidateMnemonicWord(" abandon "));
+        Assert.IsTrue(XrplWallet.ValidateMnemonicWord("  zoo  "));
+    }
+
+    [TestMethod]
+    public void TestSuggestMnemonicWords_PrefixMatch()
+    {
+        string[] suggestions = XrplWallet.SuggestMnemonicWords("aban");
+        Assert.IsTrue(suggestions.Length > 0);
+        Assert.Contains("abandon", suggestions);
+    }
+
+    [TestMethod]
+    public void TestSuggestMnemonicWords_ExactMatch()
+    {
+        string[] suggestions = XrplWallet.SuggestMnemonicWords("abandon");
+        Assert.IsTrue(suggestions.Length == 1);
+        Assert.AreEqual("abandon", suggestions[0]);
+    }
+
+    [TestMethod]
+    public void TestSuggestMnemonicWords_TypoCorrection()
+    {
+        string[] suggestions = XrplWallet.SuggestMnemonicWords("abandonn");
+        Assert.IsTrue(suggestions.Length > 0);
+        Assert.IsTrue(suggestions.Contains("abandon"));
+    }
+
+    [TestMethod]
+    public void TestSuggestMnemonicWords_MaxSuggestions()
+    {
+        string[] suggestions = XrplWallet.SuggestMnemonicWords("a", 3);
+        Assert.AreEqual(3, suggestions.Length);
+    }
+
+    [TestMethod]
+    public void TestSuggestMnemonicWords_EmptyInput()
+    {
+        string[] suggestions = XrplWallet.SuggestMnemonicWords("");
+        Assert.AreEqual(0, suggestions.Length);
+
+        string[] suggestionsNull = XrplWallet.SuggestMnemonicWords(null);
+        Assert.AreEqual(0, suggestionsNull.Length);
+    }
+
+    [TestMethod]
+    public void TestSuggestMnemonicWords_NoMatch()
+    {
+        string[] suggestions = XrplWallet.SuggestMnemonicWords("zzzzzzzzzzz");
+        Assert.AreEqual(0, suggestions.Length);
+    }
+
+    [TestMethod]
+    public void TestSuggestMnemonicWords_PrefixBeforeFuzzy()
+    {
+        string[] suggestions = XrplWallet.SuggestMnemonicWords("ab", 5);
+        Assert.IsTrue(suggestions.Length > 0);
+        foreach (var s in suggestions.Take(Math.Min(suggestions.Length, 3)))
+        {
+            Assert.IsTrue(s.StartsWith("ab"), $"Expected prefix match, got '{s}'");
+        }
+    }
+
+    [TestMethod]
+    public void TestValidateMnemonicChecksum_ValidMnemonic()
+    {
+        string[] words = "assault rare scout seed design extend noble drink talk control guitar quote".Split(' ');
+        Assert.IsTrue(XrplWallet.ValidateMnemonicChecksum(words));
+    }
+
+    [TestMethod]
+    public void TestValidateMnemonicChecksum_InvalidLastWord()
+    {
+        string[] words = "assault rare scout seed design extend noble drink talk control guitar abandon".Split(' ');
+        Assert.IsFalse(XrplWallet.ValidateMnemonicChecksum(words));
+    }
+
+    [TestMethod]
+    public void TestValidateMnemonicChecksum_InvalidWordInPhrase()
+    {
+        string[] words = "assault rare scout seed design extend noble drink talk control guitar notaword".Split(' ');
+        Assert.IsFalse(XrplWallet.ValidateMnemonicChecksum(words));
+    }
+
+    [TestMethod]
+    public void TestValidateMnemonicChecksum_WrongWordCount()
+    {
+        string[] words = "assault rare scout".Split(' ');
+        Assert.IsFalse(XrplWallet.ValidateMnemonicChecksum(words));
+    }
+
+    [TestMethod]
+    public void TestValidateMnemonicChecksum_NullAndEmpty()
+    {
+        Assert.IsFalse(XrplWallet.ValidateMnemonicChecksum(null));
+        Assert.IsFalse(XrplWallet.ValidateMnemonicChecksum(Array.Empty<string>()));
+    }
+
+    [TestMethod]
+    public void TestValidateMnemonicChecksum_GeneratedMnemonic()
+    {
+        string[] words = XrplWallet.GenerateMnemonic(12);
+        Assert.IsTrue(XrplWallet.ValidateMnemonicChecksum(words));
+
+        string[] words24 = XrplWallet.GenerateMnemonic(24);
+        Assert.IsTrue(XrplWallet.ValidateMnemonicChecksum(words24));
+    }
 }

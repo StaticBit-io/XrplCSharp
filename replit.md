@@ -1,68 +1,59 @@
 # XrplCSharp
 
 ## Overview
-XrplCSharp is a pure C# implementation for interacting with the XRP Ledger, designed to simplify complex operations like serialization, transaction signing, wallet management, and network communication. It provides a comprehensive SDK for building .NET applications on the XRP Ledger, built on .NET 10.0 with a modular architecture. The project aims to offer robust, real-time capabilities for integrating with the XRP Ledger.
+XrplCSharp is a comprehensive .NET SDK providing a pure C# implementation for interacting with the XRP Ledger. It simplifies complex operations such as serialization, transaction signing, wallet management, and network communication, enabling robust, real-time application development on the XRP Ledger. The project aims to offer a complete toolkit for .NET developers to build and integrate with the XRP Ledger efficiently.
 
 ## User Preferences
 Preferred communication style: Simple, everyday language.
 Preferred language: Russian (русский).
 
 ## System Architecture
-XrplCSharp utilizes a monorepo structure with distinct packages for core functionalities: `Xrpl.AddressCodec` for address encoding, `Xrpl.BinaryCodec` for binary serialization, `Xrpl.Keypairs` for key management, and `Xrpl` as the main client library.
+XrplCSharp is structured as a monorepo, with core functionalities divided into distinct packages: `Xrpl.AddressCodec`, `Xrpl.BinaryCodec`, `Xrpl.Keypairs`, and the main `Xrpl` client library.
 
 ### Network Client
-The `XrplClient` facilitates robust, real-time WebSocket communication with `rippled` nodes. Key architectural features include:
-- **Connection Management**: Advanced event handling for connection status, intelligent reconnection logic with configurable policies, and detailed diagnostics, including fast server switching and immediate network drop recovery. It includes specific handling for MAUI/iOS network errors to prevent critical logging.
-- **Request Handling**: Asynchronous request/response patterns with configurable timeouts and failure policies for resilience.
-- **Protocol Features**: Rate-limit detection and an application-level ping/pong heartbeat with fast-path message processing.
-- **Fast-Path Message Processing**: Under high-volume stream subscriptions (transactions, ledgers), response messages (including ping/pong) are prioritized over stream data to prevent head-of-line blocking. The `IsLikelyResponse()` method uses pure string scanning of the ENTIRE message (no JSON parsing) to detect responses by presence of `"id"` property - responses always have `"id"`, streams never do. CRITICAL: XRPL places large `"result"` objects BEFORE the `"id"` field, so full-message scanning is required (early versions that only scanned first N characters failed for server_info and other large responses). Stream messages use `Channel<T>` for async background processing on desktop/MAUI, or fire-and-forget pattern on WebAssembly. Response handling calls `requestManager.HandleResponse()` immediately.
-- **Connection Health Monitoring (`UseCheckHealth`)**: A lightweight background health check that runs every 20 seconds on all platforms. It only inspects local WebSocket state via `IsConnected()` (State == Open) — no network requests are sent. If the WebSocket is not connected (Closed/Aborted/etc.), automatic reconnection is triggered. The 60-second inactivity timeout only applies when `UseCustomPing` is also enabled, since without keepalive pings there is no expectation of regular activity on idle connections. Automatically enabled when `UseCustomPing` is `true`. Can be enabled independently for fast disconnect detection without keepalive overhead.
-- **Unified Fire-and-Forget Keepalive Ping (`UseCustomPing`)**: On ALL platforms (Desktop/MAUI/WebAssembly), when `lastActivityTime` shows activity within 30 seconds (data flowing), a fire-and-forget `{"command":"ping"}` is sent directly to the WebSocket without awaiting a response. This keeps the server-side connection alive without blocking the thread waiting for a pong through the stream backlog (200+ tx/sec on mainnet). WebSocket-level `KeepAliveInterval` (RFC 6455 ping/pong frames) is NOT sufficient — XRPL servers (s1/s2.ripple.com) require application-level activity and will close connections after ~60-80 seconds of client silence regardless of transport-level keepalive. When no activity for 30+ seconds, a full request-response ping is sent with 45-second timeout. In WASM: `ReceiveAsync` uses only the general cancellation token without artificial timeout — connection health is monitored by `UseCheckHealth`. `System.Threading.Timer` (backed by JS `setTimeout`) fires reliably every 20 seconds. If ping check detects `!IsConnected()` (State=Closed/Aborted), it triggers immediate reconnection.
-- **Error Handling**: Comprehensive exception containment and prevention of `UnobservedTaskException` and silent promise rejection. The `CheckIfNotConnected()` method now correctly treats `Connecting` and `RestoringConnection` states as active attempts, preventing race conditions when calling `ChangeServer()` or manual retry after max reconnect attempts.
-- **Reconnect Logic**: A unified reconnect flow using session isolation and a `ReconnectMode` enum for consistent state management and telemetry. `ConnectInternalAsync` now accepts `CancellationToken` with pre- and post-WebSocket-creation cancellation checks, ensuring `ChangeServer()` during active reconnect properly aborts stale connection attempts. Triple-guard protection in `OnceClose`, `OnConnectionFailed`, and `StartReconnectLoop` prevents reconnect counter resets during active loops, ensuring proper attempt count monotonicity.
+The `XrplClient` manages real-time WebSocket communication with `rippled` nodes, featuring:
+- **Connection Management**: Advanced event handling, intelligent reconnection logic with configurable policies, fast server switching, and immediate network drop recovery. Includes specific handling for MAUI/iOS network errors.
+- **Request Handling**: Asynchronous request/response patterns with configurable timeouts and failure policies.
+- **Protocol Features**: Rate-limit detection and application-level ping/pong heartbeat with fast-path message processing.
+- **Fast-Path Message Processing**: Prioritizes response messages over stream data using full-message string scanning for `id` presence to prevent head-of-line blocking under high stream volumes.
+- **Connection Health Monitoring (`UseCheckHealth`)**: A lightweight background check of local WebSocket state to trigger automatic reconnection if not connected.
+- **Unified Fire-and-Forget Keepalive Ping (`UseCustomPing`)**: Sends application-level pings to maintain server-side connections on all platforms, complementing WebSocket-level keepalives.
+- **Error Handling**: Comprehensive exception containment and prevention of unhandled task exceptions.
+- **Reconnect Logic**: A unified flow using session isolation and a `ReconnectMode` enum for consistent state management and telemetry.
 
 ### Wallet Management
-The `XrplWallet` class provides secure generation and management of XRP Ledger wallets, supporting random and deterministic creation, ED25519 and SECP256K1 key derivation, and custom Base58 encoding/decoding.
+The `XrplWallet` class supports secure generation and management of XRP Ledger wallets, including random and deterministic creation, ED25519 and SECP256K1 key derivation, and custom Base58 encoding/decoding. This includes support for Secret Numbers (XLS-12d) and BIP-39 mnemonic generation/validation.
 
 ### Binary Codec System
-A comprehensive binary codec handles the XRP Ledger's canonical binary format, supporting bidirectional conversion between binary and JSON for various data types.
+A comprehensive binary codec handles bidirectional conversion between the XRP Ledger's canonical binary format and JSON for various data types.
 
 ### Cryptographic Operations
-The library supports ED25519 and SECP256K1 signature algorithms, integrating with external libraries like `Chaos.NaCl.Standard` for ED25519.
+The library supports ED25519 and SECP256K1 signature algorithms.
 
 ### Address Encoding Scheme
 A custom Base58 codec (`B58`) handles XRP Ledger's unique address and seed encoding, including version prefixes, checksum validation, and support for classic and X-addresses.
 
 ### Feature Specifications
-- **Oracle Support (XLS-47 Price Feeds)**: Implementation for `OracleSet` and `OracleDelete` transactions, `LOOracle` ledger entries, and `PriceData` models. Includes specific `BinaryCodec` updates for Oracle-related fields and comprehensive test suites. This also includes critical fixes for `LastUpdateTime` epoch, hex case normalization, currency binary encoding, and the missing `Scale` field.
-- **Clawback Transaction Support**: Full implementation of the `Clawback` transaction type, allowing token issuers to recover tokens. This requires the `asfAllowTrustLineClawback` flag to be set on the issuer account.
-- **AMMClawback Transaction Support**: Full implementation of the `AMMClawback` transaction type, enabling token issuers to recover tokens deposited into Automated Market Maker (AMM) pools. This also requires the `asfAllowTrustLineClawback` flag.
-- **DID (Decentralized Identifier) Support**: Full implementation of `DIDSet` and `DIDDelete` transaction types, and `LODID` ledger entry type for managing decentralized identifiers on the XRP Ledger. DIDSet supports Data, DIDDocument, and URI fields (at least one required, each max 256 bytes hex-encoded).
-
-- **Secret Numbers Support (XLS-12d)**: Full implementation of the Secret Numbers format for encoding XRPL account secrets as 8 groups of 6 digits. This user-friendly, language-agnostic format includes position-dependent checksums for real-time typo detection. Key methods: `XummExtension.EntropyToSecretNumbers()`, `XummExtension.RandomSecretNumbers()`, `XummExtension.CalculateChecksum()`, `XrplWallet.FromSecretString()`, `XrplWallet.GetSecretNumbers()`, `XrplWallet.GetSecretString()`.
-- **BIP-39 Mnemonic Generation**: Full implementation of BIP-39 mnemonic phrase generation with configurable word counts. Supports 12, 15, 18, 21, or 24 words with corresponding entropy levels (128-256 bits). Key method: `XrplWallet.GenerateMnemonic(wordCount)`.
-- **TokenEscrow Support (XLS-85)**: Extended escrow functionality to support fungible tokens (IOUs and MPTs) in addition to XRP. `EscrowCreate` now accepts `Currency` Amount (XRP string, IOU object, or MPT object). `LOEscrow` ledger entry updated with `TransferRate` (locked at creation) and `IssuerNode` fields. `AccountRootFlags` extended with `lsfAllowTrustLineClawback` and `lsfAllowTrustLineLocking`. Validation updated to accept token objects. Integration tests cover MPT escrow create→finish and create→cancel flows. Requires `asfAllowTrustLineLocking` for IOU issuers and `tfMPTCanEscrow` + `tfMPTCanTransfer` flags for MPT issuances.
-- **Stream Subscriptions**: Real-time subscription to transaction and ledger streams via `client.Subscribe()`. The Blazor test app demonstrates thread-safe event handling with throttled UI updates (500ms intervals), bounded work per tick (max 50 logs), bounded queue (max 500 entries), reentrancy guards using Interlocked operations, automatic cleanup on disconnect, and automatic subscription restoration on reconnect. Statistics include transaction counts by type (Payment, OfferCreate, etc.). **WebAssembly Optimization**: Fire-and-forget keepalive pings maintain server-side connection without blocking the single WASM thread. ReceiveAsync uses only the general cancellation token without artificial timeout — connection health is monitored by UseCheckHealth which checks WebSocket state every 20 seconds. Ping check triggers immediate reconnection when disconnected state is detected. Desktop/MAUI uses `Channel<T>` for true background processing and WebSocket-level keepalive frames. **Known Limitation**: Under heavy mainnet stream subscriptions (200+ tx/sec), request-response commands may timeout because server buffers stream messages ahead of responses (head-of-line blocking). RequestTimeout default is 40 seconds, configurable per-request.
-
-- **PermissionedDomain Support (XLS-80)**: Full implementation of `PermissionedDomainSet` and `PermissionedDomainDelete` transaction types, and `LOPermissionedDomain` ledger entry type for credential-based access control. AcceptedCredentials array supports 1-10 unique credentials, each with Issuer and CredentialType (max 64 bytes hex-encoded). Requires the PermissionedDomains amendment.
-- **Permissioned DEX Support (XLS-81)**: Implementation of permissioned decentralized exchange functionality. Adds `DomainID` field to `OfferCreate` and `Payment` transactions for domain-restricted trading. `LOOffer` ledger entry includes `DomainID`, `AdditionalBooks` array (for hybrid offers), and `lsfHybrid` flag (0x00040000). Transaction flag `tfHybrid` (0x00100000) enables hybrid offers that participate in both domain and open order books. Validation enforces 64-character hex format for DomainID and requires DomainID when tfHybrid is set. Requires PermissionedDomains amendment.
-- **Credentials Support (XLS-70)**: Full implementation of `CredentialCreate`, `CredentialAccept`, and `CredentialDelete` transaction types for on-chain identity verification and KYC/AML compliance. CredentialCreate requires Subject and CredentialType (max 64 bytes hex), with optional Expiration and URI fields. CredentialAccept requires Issuer and CredentialType. CredentialDelete requires CredentialType and at least one of Subject/Issuer. Credentials must be created then accepted to become valid; they are required for permissioned domain participation. Requires the Credentials amendment. All hex VL fields (CredentialType, URI) use `HexStringHelper` for automatic normalization (text→hex on set, hex→text via `[JsonIgnore]` decoded properties). `LOCredential` ledger entry model with `CredentialFlags.lsfAccepted` and full converter registration in `LedgerObjectConverter`, `TransactionRequestConverter`, `TransactionResponseConverter`.
-
-- **MPToken Metadata Schema (XLS-89)**: Full implementation of the standardized metadata schema for Multi-Purpose Tokens. `MPTokenMetadataSchema` class (`Xrpl/Models/Utils/MPTokenMetadataSchema.cs`) provides typed access to on-chain metadata fields: `Ticker` (max 6 chars, A-Z/0-9), `Name`, `Description`, `Icon` (URI), `AssetClass` (rwa/memes/wrapped/gaming/defi/other), `AssetSubclass` (stablecoin/commodity/real_estate/private_credit/equity/treasury/other — required when AssetClass=rwa), `IssuerName`, `Uris` (list of `MPTokenMetadataUri` with uri/category/title), and `AdditionalInfo` (freeform Dictionary). Static string-constant classes: `MPTokenAssetClass`, `MPTokenAssetSubclass`, `MPTokenUriCategory`. Key methods: `ToHex()` serializes to compact JSON with short keys (t,n,d,i,ac,as,in,us,ai) → hex with 1024-byte limit enforcement; `FromHex(hex)` decodes hex → JSON → typed object; `FromJson(json)` supports both short and long key formats; `ToJson(useShortKeys)` for debugging; `GetByteSize()` for pre-submit size check. Integrated via `[JsonIgnore] Metadata` property on `MPTokenIssuanceCreate`, `MPTokenIssuanceCreateResponse`, and `LOMPTokenIssuance` — setting `Metadata` auto-serializes to `MPTokenMetadata` hex field, reading lazily deserializes from hex.
+- **Oracle Support (XLS-47)**: Implements `OracleSet`, `OracleDelete` transactions, `LOOracle` ledger entries, and `PriceData` models.
+- **Clawback & AMMClawback Transactions**: Supports `Clawback` and `AMMClawback` transactions for token recovery by issuers, requiring the `asfAllowTrustLineClawback` flag.
+- **DID (Decentralized Identifier) Support**: Implements `DIDSet`, `DIDDelete` transactions, and `LODID` ledger entry type for managing DIDs.
+- **TokenEscrow (XLS-85)**: Extends escrow functionality to include fungible tokens (IOUs and MPTs) in `EscrowCreate`, with updated `LOEscrow` ledger entry and `AccountRootFlags`.
+- **Stream Subscriptions**: Provides real-time subscriptions to transaction and ledger streams, with optimizations for WebAssembly and robust event handling.
+- **PermissionedDomain (XLS-80)**: Implements `PermissionedDomainSet`, `PermissionedDomainDelete` transactions, and `LOPermissionedDomain` ledger entry for credential-based access control.
+- **Permissioned DEX (XLS-81)**: Adds `DomainID` to `OfferCreate` and `Payment` transactions, `LOOffer` ledger entries, and `tfHybrid` flag for domain-restricted and hybrid trading.
+- **Credentials (XLS-70)**: Implements `CredentialCreate`, `CredentialAccept`, and `CredentialDelete` for on-chain identity verification, with `LOCredential` ledger entry support.
+- **MPToken Metadata Schema (XLS-89)**: Implements a standardized metadata schema for Multi-Purpose Tokens, allowing typed access to on-chain metadata fields and serialization/deserialization utilities.
 
 ### Shared Utilities
-- **HexStringHelper** (`Xrpl/Models/Utils/HexStringHelper.cs`): Reusable static utility for hex-encoded variable-length fields. `NormalizeToHex(value, maxBytes, fieldName)` auto-detects hex vs plain text and normalizes to uppercase hex. `FromHex(hex)` decodes back to UTF-8. `IsValidHex(value)` validates hex format. Used by Credential transaction models and `LOCredential` ledger entry.
-
-### Documentation
-API documentation is generated from XML comments using DocFX.
+- **HexStringHelper**: A utility for normalizing and handling hex-encoded variable-length fields, ensuring proper format and conversion.
 
 ## External Dependencies
 
 ### NuGet Packages
-- **Chaos.NaCl.Standard**: Used for ED25519 cryptographic operations.
-- **Microsoft.CSharp**: Utilized for dynamic language features.
-- **Microsoft.Extensions.Logging.Abstractions**: Provides logging abstraction.
+- **Chaos.NaCl.Standard**: For ED25519 cryptographic operations.
+- **Microsoft.CSharp**: For dynamic language features.
+- **Microsoft.Extensions.Logging.Abstractions**: For logging abstraction.
 
 ### XRP Ledger Infrastructure
-- **rippled nodes**: WebSocket connections (wss://) to XRP Ledger nodes, including Testnet and production environments.
-- **Docker container**: `xrpllabsofficial/xrpld:1.12.0` used for integration testing purposes.
+- **rippled nodes**: WebSocket connections (wss://) to XRP Ledger nodes (Testnet and production).
+- **Docker container**: `xrpllabsofficial/xrpld:1.12.0` for integration testing.

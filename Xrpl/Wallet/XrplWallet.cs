@@ -67,6 +67,14 @@ namespace Xrpl.Wallet
         public const string Ed25519 = "ed25519";
         public const string Secp256k1 = "secp256k1";
 
+        private static readonly Lazy<string[]> _bip39WordlistCache = new Lazy<string[]>(() =>
+        {
+            var words = new string[2048];
+            for (int i = 0; i < 2048; i++)
+                words[i] = Wordlist.English.GetWordAtIndex(i);
+            return words;
+        });
+
         public readonly string PublicKey;
         public readonly string PrivateKey;
         public readonly string ClassicAddress;
@@ -221,6 +229,180 @@ namespace Xrpl.Wallet
             var mnemonic = new Mnemonic(Wordlist.English, nbWordCount);
             return mnemonic.Words;
         }
+
+        /// <summary>
+        /// Validates whether a word exists in the BIP-39 English wordlist.
+        /// <para>
+        /// The BIP-39 standard defines a fixed set of 2048 English words used for mnemonic phrases.
+        /// This method checks if a given word is present in that wordlist.
+        /// Use this for real-time validation as the user types each word.
+        /// </para>
+        /// </summary>
+        /// <param name="word">The word to validate (case-insensitive).</param>
+        /// <returns><c>true</c> if the word exists in the BIP-39 English wordlist; otherwise, <c>false</c>.</returns>
+        /// <remarks>
+        /// Note: In BIP-39, any valid word can appear at any position in the mnemonic.
+        /// Position-level correctness can only be verified via checksum validation
+        /// after all words have been entered (see <see cref="ValidateMnemonicChecksum"/>).
+        /// <para>Reference: https://github.com/bitcoin/bips/blob/master/bip-0039.mediawiki</para>
+        /// </remarks>
+        /// <example>
+        /// <code>
+        /// bool valid = XrplWallet.ValidateMnemonicWord("abandon"); // true
+        /// bool invalid = XrplWallet.ValidateMnemonicWord("xyz123"); // false
+        /// </code>
+        /// </example>
+        public static bool ValidateMnemonicWord(string word)
+        {
+            if (string.IsNullOrWhiteSpace(word))
+                return false;
+            return Wordlist.English.WordExists(word.Trim().ToLowerInvariant(), out _);
+        }
+
+        /// <summary>
+        /// Suggests BIP-39 words similar to the given input for autocomplete and typo correction.
+        /// <para>
+        /// Returns matching words in priority order: exact prefix matches first (sorted alphabetically),
+        /// then fuzzy matches by Levenshtein distance (for typo correction).
+        /// Duplicates are removed so prefix matches are not repeated in fuzzy results.
+        /// </para>
+        /// </summary>
+        /// <param name="input">The partial or misspelled word to find suggestions for.</param>
+        /// <param name="maxSuggestions">Maximum number of suggestions to return. Default is 5.</param>
+        /// <returns>
+        /// An array of suggested words from the BIP-39 English wordlist, ordered by relevance.
+        /// Returns an empty array if input is null or empty.
+        /// </returns>
+        /// <remarks>
+        /// The algorithm uses two strategies:
+        /// <list type="number">
+        ///   <item><description>Prefix matching: words that start with the input string.</description></item>
+        ///   <item><description>Levenshtein distance: words within edit distance 2 of the input (for typo correction).</description></item>
+        /// </list>
+        /// <para>Reference: https://github.com/bitcoin/bips/blob/master/bip-0039.mediawiki</para>
+        /// </remarks>
+        /// <example>
+        /// <code>
+        /// // Prefix matching
+        /// string[] suggestions = XrplWallet.SuggestMnemonicWords("aban");
+        /// // Returns: ["abandon", "ability", ...] — words starting with "aban"
+        ///
+        /// // Typo correction
+        /// string[] typoFix = XrplWallet.SuggestMnemonicWords("abandonn");
+        /// // Returns: ["abandon"] — corrects the typo
+        /// </code>
+        /// </example>
+        public static string[] SuggestMnemonicWords(string input, int maxSuggestions = 5)
+        {
+            if (string.IsNullOrWhiteSpace(input))
+                return Array.Empty<string>();
+
+            string normalized = input.Trim().ToLowerInvariant();
+            var allWords = _bip39WordlistCache.Value;
+
+            var prefixMatches = allWords
+                .Where(w => w.StartsWith(normalized, StringComparison.Ordinal))
+                .OrderBy(w => w)
+                .ToList();
+
+            if (prefixMatches.Count >= maxSuggestions)
+                return prefixMatches.Take(maxSuggestions).ToArray();
+
+            var prefixSet = new HashSet<string>(prefixMatches);
+            var fuzzyMatches = allWords
+                .Where(w => !prefixSet.Contains(w))
+                .Select(w => new { Word = w, Distance = LevenshteinDistance(normalized, w) })
+                .Where(x => x.Distance <= 2)
+                .OrderBy(x => x.Distance)
+                .ThenBy(x => x.Word)
+                .Select(x => x.Word)
+                .ToList();
+
+            var result = new List<string>(prefixMatches);
+            result.AddRange(fuzzyMatches);
+            return result.Take(maxSuggestions).ToArray();
+        }
+
+        private static int LevenshteinDistance(string source, string target)
+        {
+            if (string.IsNullOrEmpty(source)) return target?.Length ?? 0;
+            if (string.IsNullOrEmpty(target)) return source.Length;
+
+            int sourceLength = source.Length;
+            int targetLength = target.Length;
+            var distance = new int[sourceLength + 1, targetLength + 1];
+
+            for (int i = 0; i <= sourceLength; i++) distance[i, 0] = i;
+            for (int j = 0; j <= targetLength; j++) distance[0, j] = j;
+
+            for (int i = 1; i <= sourceLength; i++)
+            {
+                for (int j = 1; j <= targetLength; j++)
+                {
+                    int cost = source[i - 1] == target[j - 1] ? 0 : 1;
+                    distance[i, j] = Math.Min(
+                        Math.Min(distance[i - 1, j] + 1, distance[i, j - 1] + 1),
+                        distance[i - 1, j - 1] + cost);
+                }
+            }
+
+            return distance[sourceLength, targetLength];
+        }
+
+        /// <summary>
+        /// Validates the checksum of a complete BIP-39 mnemonic phrase.
+        /// <para>
+        /// In BIP-39, the last word of a mnemonic contains checksum bits derived from the
+        /// SHA-256 hash of the entropy. This method verifies that the checksum is correct,
+        /// which confirms that all words are valid and in the correct order.
+        /// </para>
+        /// </summary>
+        /// <param name="words">The complete mnemonic phrase as an array of words.</param>
+        /// <returns><c>true</c> if the mnemonic has a valid checksum; otherwise, <c>false</c>.</returns>
+        /// <remarks>
+        /// This method performs three levels of validation:
+        /// <list type="number">
+        ///   <item><description>Word count: must be 12, 15, 18, 21, or 24.</description></item>
+        ///   <item><description>Word validity: all words must exist in the BIP-39 English wordlist.</description></item>
+        ///   <item><description>Checksum: the last word's checksum bits must match the SHA-256 hash of the entropy.</description></item>
+        /// </list>
+        /// <para>
+        /// Call this method after the user has entered all mnemonic words.
+        /// For per-word validation during input, use <see cref="ValidateMnemonicWord"/>.
+        /// </para>
+        /// <para>Reference: https://github.com/bitcoin/bips/blob/master/bip-0039.mediawiki</para>
+        /// </remarks>
+        /// <example>
+        /// <code>
+        /// string[] words = { "assault", "rare", "scout", "seed", "design", "extend",
+        ///                     "noble", "drink", "talk", "control", "guitar", "quote" };
+        /// bool valid = XrplWallet.ValidateMnemonicChecksum(words); // true
+        ///
+        /// words[11] = "abandon"; // corrupt last word
+        /// bool invalid = XrplWallet.ValidateMnemonicChecksum(words); // false
+        /// </code>
+        /// </example>
+        public static bool ValidateMnemonicChecksum(string[] words)
+        {
+            if (words == null || words.Length == 0)
+                return false;
+
+            int count = words.Length;
+            if (count != 12 && count != 15 && count != 18 && count != 21 && count != 24)
+                return false;
+
+            string sentence = string.Join(" ", words);
+            try
+            {
+                var mnemo = new Mnemonic(sentence);
+                return mnemo.IsValidChecksum;
+            }
+            catch
+            {
+                return false;
+            }
+        }
+
         /// <summary>
         /// Derive a Wallet from a seed.
         /// </summary>
