@@ -1,5 +1,37 @@
 ﻿@inherits LayoutComponentBase
+@inject NavigationManager Nav
+
+<div style="background: #f8f9fa; border-bottom: 1px solid #dee2e6;">
+    <div style="display: flex; max-width: 100%; height: 56px;">
+        <a href="/" 
+           style="@GetTabStyle(Nav.Uri.EndsWith("/") || Nav.Uri.EndsWith("/index.html"))"
+           class="nav-tab">
+            Connection Test
+        </a>
+        <a href="/swap" 
+           style="@GetTabStyle(Nav.Uri.Contains("/swap"))"
+           class="nav-tab">
+            Swap
+        </a>
+    </div>
+</div>
 
 <main>
     @Body
 </main>
+
+@code {
+    private string GetTabStyle(bool isActive)
+    {
+        string baseStyle = "display: flex; align-items: center; padding: 0 20px; text-decoration: none; color: #495057; font-weight: 500; cursor: pointer; border: none; background: none; transition: all 0.3s ease; flex: 1; justify-content: center;";
+        
+        if (isActive)
+        {
+            return baseStyle + " color: #0066cc; border-bottom: 3px solid #0066cc;";
+        }
+        else
+        {
+            return baseStyle + " color: #6c757d; border-bottom: 3px solid transparent;";
+        }
+    }
+}

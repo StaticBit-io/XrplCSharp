@@ -1,0 +1,256 @@
+@page "/swap"
+@using Xrpl.Client
+@using Xrpl.Models.Utils
+@using System.Linq
+@using System.Globalization
+@using Newtonsoft.Json
+
+@inject IXrplClient client
+
+<style>
+    @@keyframes spin {
+        0% { transform: rotate(0deg); }
+        100% { transform: rotate(360deg); }
+    }
+</style>
+
+<h1>Swap Simulator</h1>
+
+<div style="display: flex; gap: 20px; flex-wrap: wrap; align-items: flex-start;">
+    <div style="max-width: 480px;">
+        <div style="background: #1e1e2f; border-radius: 12px; padding: 20px; color: #fff;">
+            <div style="margin-bottom: 6px; font-size: 14px; color: #8a8fa8;">You pay</div>
+            <div style="display: flex; align-items: center; gap: 10px; background: #2a2d3e; border-radius: 8px; padding: 12px;">
+                <input type="text" value="@AmountInput" @oninput="OnAmountChanged"
+                       placeholder="0.0"
+                       style="flex: 1; background: transparent; border: none; outline: none; color: #fff; font-size: 24px; font-weight: 600; width: 100%;" />
+                <span style="background: #3a3d4e; padding: 6px 14px; border-radius: 20px; font-weight: 600; font-size: 14px; white-space: nowrap;">
+                    @(xrpOnTop ? "XRP" : (string.IsNullOrWhiteSpace(CurrencyCode) ? "TOKEN" : CurrencyCode))
+                </span>
+            </div>
+
+            <div style="display: flex; justify-content: center; margin: 8px 0;">
+                <button @onclick="ToggleDirection"
+                        style="background: #3a3d4e; border: 3px solid #1e1e2f; color: #8a8fa8; width: 36px; height: 36px; border-radius: 50%; cursor: pointer; font-size: 18px; display: flex; align-items: center; justify-content: center;">
+                    ↕
+                </button>
+            </div>
+
+            <div style="margin-bottom: 6px; font-size: 14px; color: #8a8fa8;">You get</div>
+            <div style="display: flex; align-items: center; gap: 10px; background: #2a2d3e; border-radius: 8px; padding: 12px; min-height: 48px;">
+                @if (isCalculating)
+                {
+                    <div style="width: 24px; height: 24px; border: 3px solid #3a3d4e; border-top-color: #6c5ce7; border-radius: 50%; animation: spin 0.8s linear infinite;"></div>
+                    <span style="color: #8a8fa8; font-size: 14px;">Calculating...</span>
+                }
+                else if (tradeResult != null)
+                {
+                    <span style="color: #fff; font-size: 24px; font-weight: 600;">@FormatDecimal(tradeResult.TotalReceived)</span>
+                    <span style="background: #3a3d4e; padding: 6px 14px; border-radius: 20px; font-weight: 600; font-size: 14px; white-space: nowrap; margin-left: auto;">
+                        @(!xrpOnTop ? "XRP" : (string.IsNullOrWhiteSpace(CurrencyCode) ? "TOKEN" : CurrencyCode))
+                    </span>
+                }
+                else
+                {
+                    <span style="color: #555; font-size: 24px;">0.0</span>
+                    <span style="background: #3a3d4e; padding: 6px 14px; border-radius: 20px; font-weight: 600; font-size: 14px; white-space: nowrap; margin-left: auto;">
+                        @(!xrpOnTop ? "XRP" : (string.IsNullOrWhiteSpace(CurrencyCode) ? "TOKEN" : CurrencyCode))
+                    </span>
+                }
+            </div>
+        </div>
+
+        <div style="background: #f5f5f5; padding: 15px; border-radius: 8px; margin-top: 15px;">
+            <div style="font-weight: bold; margin-bottom: 10px;">Token Configuration</div>
+            <div style="margin-bottom: 10px;">
+                <label style="display: block; margin-bottom: 4px; font-size: 13px; color: #666;">Currency Code</label>
+                <input @bind="CurrencyCode" @oninput="OnCurrencyChanged" placeholder="e.g. USD, XGO"
+                       style="width: 100%; padding: 8px; border: 1px solid #ccc; border-radius: 4px; box-sizing: border-box;" />
+            </div>
+            <div>
+                <label style="display: block; margin-bottom: 4px; font-size: 13px; color: #666;">Issuer Address</label>
+                <input @bind="IssuerAddress" @oninput="OnIssuerChanged" placeholder="e.g. rvYAfWj5gh67oV6fW32ZzP3Aw4Eubs59B"
+                       style="width: 100%; padding: 8px; border: 1px solid #ccc; border-radius: 4px; box-sizing: border-box;" />
+            </div>
+        </div>
+    </div>
+
+    <div style="flex: 1; min-width: 380px; background: #0d1117; border-radius: 12px; padding: 16px; color: #d4d4d4; font-family: 'Consolas', 'Monaco', monospace; font-size: 13px;">
+        <div style="display: flex; justify-content: space-between; align-items: center; margin-bottom: 12px;">
+            <span style="font-weight: bold; font-size: 15px; color: #fff;">Order Book</span>
+            <span style="font-size: 12px; color: #8a8fa8;">@(string.IsNullOrWhiteSpace(CurrencyCode) ? "TOKEN" : CurrencyCode) / XRP</span>
+        </div>
+
+        <div style="display: flex; padding: 4px 0; margin-bottom: 4px; font-size: 11px; color: #8a8fa8; border-bottom: 1px solid #1e2633;">
+            <span style="flex: 1;">Цена (XRP)</span>
+            <span style="flex: 1; text-align: right;">Сумма (@(string.IsNullOrWhiteSpace(CurrencyCode) ? "TOKEN" : CurrencyCode))</span>
+            <span style="flex: 1; text-align: right;">Итого (XRP)</span>
+        </div>
+
+        @if (isLoadingOrderBook)
+        {
+            <div style="display: flex; align-items: center; justify-content: center; padding: 40px 0; gap: 10px;">
+                <div style="width: 20px; height: 20px; border: 2px solid #1e2633; border-top-color: #6c5ce7; border-radius: 50%; animation: spin 0.8s linear infinite;"></div>
+                <span style="color: #8a8fa8; font-size: 12px;">Loading order book...</span>
+            </div>
+        }
+        else if (askRows != null && bidRows != null)
+        {
+            @RenderOrderBookContent()
+        }
+        else
+        {
+            <div style="text-align: center; padding: 40px 0; color: #8a8fa8; font-size: 12px;">
+                Enter currency code and issuer to load order book
+            </div>
+        }
+    </div>
+</div>
+
+@if (!string.IsNullOrEmpty(errorMessage))
+{
+    <div style="margin: 15px 0; padding: 12px; background: #fff3cd; border: 1px solid #ffc107; border-radius: 5px; color: #856404; max-width: 900px;">
+        @errorMessage
+    </div>
+}
+
+@if (tradeResult != null || simulateResponse != null)
+{
+    <div style="display: flex; gap: 20px; flex-wrap: wrap; margin: 20px 0;">
+        @if (tradeResult != null)
+        {
+            <div style="flex: 1; min-width: 380px; background: #1e1e1e; color: #d4d4d4; padding: 15px; border-radius: 8px; font-family: 'Consolas', 'Monaco', monospace; font-size: 13px;">
+                <div style="color: #569cd6; font-weight: bold; margin-bottom: 12px; font-size: 14px;">TradeSimulator Results</div>
+                <div style="display: grid; grid-template-columns: auto 1fr; gap: 6px 15px;">
+                    <span style="color: #8a8fa8;">Effective Price:</span>
+                    <span style="color: #4ec9b0;">@FormatDecimal(tradeResult.EffectivePrice)</span>
+                    <span style="color: #8a8fa8;">Spot Price Before:</span>
+                    <span style="color: #4ec9b0;">@FormatDecimal(tradeResult.SpotPriceBefore)</span>
+                    <span style="color: #8a8fa8;">Spot Price After:</span>
+                    <span style="color: #4ec9b0;">@FormatDecimal(tradeResult.SpotPriceAfter)</span>
+                    <span style="color: #8a8fa8;">Price Impact %:</span>
+                    <span style="color: @(tradeResult.PriceImpactPercent > 1 ? "#e06c75" : "#98c379");">@FormatDecimal(tradeResult.PriceImpactPercent)%</span>
+                    <span style="color: #8a8fa8;">From Order Book:</span>
+                    <span style="color: #dcdcaa;">@FormatDecimal(tradeResult.FromOrderBook)</span>
+                    <span style="color: #8a8fa8;">From AMM:</span>
+                    <span style="color: #dcdcaa;">@FormatDecimal(tradeResult.FromAmm)</span>
+                    <span style="color: #8a8fa8;">AMM Pool Fee:</span>
+                    <span style="color: #dcdcaa;">@FormatDecimal(tradeResult.AmmPoolFee)</span>
+                    <span style="color: #8a8fa8;">Total Spent:</span>
+                    <span style="color: #c678dd;">@FormatDecimal(tradeResult.TotalSpent)</span>
+                    <span style="color: #8a8fa8;">Total Received:</span>
+                    <span style="color: #c678dd;">@FormatDecimal(tradeResult.TotalReceived)</span>
+                </div>
+
+                @if (tradeResult.Steps != null && tradeResult.Steps.Any())
+                {
+                    <div style="margin-top: 15px; color: #569cd6; font-weight: bold; margin-bottom: 8px;">Fill Steps</div>
+                    <table style="width: 100%; border-collapse: collapse; font-size: 12px;">
+                        <thead>
+                            <tr style="border-bottom: 1px solid #3a3d4e;">
+                                <th style="text-align: left; padding: 4px 8px; color: #8a8fa8;">Source</th>
+                                <th style="text-align: right; padding: 4px 8px; color: #8a8fa8;">AmountIn</th>
+                                <th style="text-align: right; padding: 4px 8px; color: #8a8fa8;">AmountOut</th>
+                                <th style="text-align: right; padding: 4px 8px; color: #8a8fa8;">Price</th>
+                            </tr>
+                        </thead>
+                        <tbody>
+                            @foreach (var step in tradeResult.Steps)
+                            {
+                                <tr style="border-bottom: 1px solid #2a2d3e;">
+                                    <td style="padding: 4px 8px; color: @(step.Source == FillStep.SourceType.Amm ? "#e5c07b" : "#61afef");">
+                                        @(step.Source == FillStep.SourceType.Amm ? "AMM" : "OrderBook")
+                                    </td>
+                                    <td style="padding: 4px 8px; text-align: right; color: #d4d4d4;">@FormatDecimal(step.AmountIn)</td>
+                                    <td style="padding: 4px 8px; text-align: right; color: #d4d4d4;">@FormatDecimal(step.AmountOut)</td>
+                                    <td style="padding: 4px 8px; text-align: right; color: #d4d4d4;">@FormatDecimal(step.Price)</td>
+                                </tr>
+                            }
+                        </tbody>
+                    </table>
+                }
+            </div>
+        }
+
+        @if (simulateResponse != null)
+        {
+            <div style="flex: 1; min-width: 380px; background: #1e1e1e; color: #d4d4d4; padding: 15px; border-radius: 8px; font-family: 'Consolas', 'Monaco', monospace; font-size: 13px;">
+                <div style="color: #569cd6; font-weight: bold; margin-bottom: 12px; font-size: 14px;">Simulate (Payment) Result</div>
+                <div style="display: grid; grid-template-columns: auto 1fr; gap: 6px 15px;">
+                    <span style="color: #8a8fa8;">Engine Result:</span>
+                    <span style="color: @(simulateResponse.EngineResult == "tesSUCCESS" ? "#98c379" : "#e06c75");">@simulateResponse.EngineResult</span>
+                    <span style="color: #8a8fa8;">Engine Message:</span>
+                    <span style="color: #d4d4d4;">@simulateResponse.EngineResultMessage</span>
+                    <span style="color: #8a8fa8;">Delivered Amount:</span>
+                    <span style="color: #4ec9b0;">@GetDeliveredAmount()</span>
+                    <span style="color: #8a8fa8;">Affected Nodes:</span>
+                    <span style="color: #dcdcaa;">@(simulateResponse.Meta?.AffectedNodes?.Count ?? 0)</span>
+                </div>
+
+                @if (simulateResponse.Meta != null)
+                {
+                    <div style="margin-top: 15px; color: #569cd6; font-weight: bold; margin-bottom: 8px;">Metadata (JSON)</div>
+                    <div style="background: #161622; padding: 10px; border-radius: 4px; max-height: 250px; overflow-y: auto; white-space: pre-wrap; word-break: break-all; font-size: 11px; color: #abb2bf;">@GetMetaJson()</div>
+                }
+            </div>
+        }
+        else if (simulateError != null)
+        {
+            <div style="flex: 1; min-width: 380px; background: #1e1e1e; color: #d4d4d4; padding: 15px; border-radius: 8px; font-family: 'Consolas', 'Monaco', monospace; font-size: 13px;">
+                <div style="color: #569cd6; font-weight: bold; margin-bottom: 12px; font-size: 14px;">Simulate (Payment) Result</div>
+                <div style="color: #e06c75;">Error: @simulateError</div>
+            </div>
+        }
+    </div>
+}
+
+
+@code {
+
+    RenderFragment RenderOrderBookContent() => __builder =>
+    {
+        var displayAsks = askRows.Take(15).ToList();
+        var maxAskTotal = displayAsks.Any() ? displayAsks.Max(r => r.Total) : 1m;
+        var reversedAsks = Enumerable.Reverse(displayAsks).ToList();
+
+        foreach (var row in reversedAsks)
+        {
+            var askBarPercent = maxAskTotal > 0 ? (row.Total / maxAskTotal) * 100m : 0m;
+            <div style="position: relative;" title="@JsonConvert.SerializeObject(row.SourceOffer, Formatting.Indented)">
+                <div style="position: absolute; right: 0; top: 0; bottom: 0; width: @(askBarPercent.ToString("F2", CultureInfo.InvariantCulture))%; background: rgba(234, 57, 67, 0.15);"></div>
+                <div style="position: relative; display: flex; padding: 2px 0;">
+                    <span style="flex: 1; color: #ea3943;">@FormatPrice(row.Price)</span>
+                    <span style="flex: 1; text-align: right;">@FormatDecimal(row.Amount)</span>
+                    <span style="flex: 1; text-align: right;">@FormatDecimal(row.Total)</span>
+                </div>
+            </div>
+        }
+
+        var lowestAsk = askRows.Any() ? askRows.First().Price : 0m;
+        var highestBid = bidRows.Any() ? bidRows.First().Price : 0m;
+        var spread = lowestAsk - highestBid;
+        var spreadPercent = lowestAsk > 0 ? (spread / lowestAsk) * 100m : 0m;
+        var tokenLabel = string.IsNullOrWhiteSpace(CurrencyCode) ? "TOKEN" : CurrencyCode;
+
+        <div style="text-align: center; font-weight: bold; font-size: 14px; color: #fff; padding: 6px 0; border-top: 1px solid #1e2633; border-bottom: 1px solid #1e2633; margin: 4px 0;">
+            Спред: @FormatPrice(spread) XRP  @(spreadPercent.ToString("F2", CultureInfo.InvariantCulture))%
+        </div>
+
+        var displayBids = bidRows.Take(15).ToList();
+        var maxBidTotal = displayBids.Any() ? displayBids.Max(r => r.Total) : 1m;
+        var reversedBids = Enumerable.Reverse(displayBids).ToList();
+
+        foreach (var row in reversedBids)
+        {
+            var bidBarPercent = maxBidTotal > 0 ? (row.Total / maxBidTotal) * 100m : 0m;
+            <div style="position: relative;" title="@JsonConvert.SerializeObject(row.SourceOffer, Formatting.Indented)">
+                <div style="position: absolute; right: 0; top: 0; bottom: 0; width: @(bidBarPercent.ToString("F2", CultureInfo.InvariantCulture))%; background: rgba(22, 199, 132, 0.15);"></div>
+                <div style="position: relative; display: flex; padding: 2px 0;">
+                    <span style="flex: 1; color: #16c784;">@FormatPrice(row.Price)</span>
+                    <span style="flex: 1; text-align: right;">@FormatDecimal(row.Amount)</span>
+                    <span style="flex: 1; text-align: right;">@FormatDecimal(row.Total)</span>
+                </div>
+            </div>
+        }
+    };
+}

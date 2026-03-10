@@ -44,8 +44,26 @@ A custom Base58 codec (`B58`) handles XRP Ledger's unique address and seed encod
 - **Credentials (XLS-70)**: Implements `CredentialCreate`, `CredentialAccept`, and `CredentialDelete` for on-chain identity verification, with `LOCredential` ledger entry support.
 - **MPToken Metadata Schema (XLS-89)**: Implements a standardized metadata schema for Multi-Purpose Tokens, allowing typed access to on-chain metadata fields and serialization/deserialization utilities.
 
+- **AMM Pool Calculations**: Extension methods on `AMMInfo` (`Xrpl/Models/Utils/AmmInfoExtensions.cs`) providing constant-product (50/50) AMM calculations: `PriceForOneAmount2InAmount()`, `PriceForOneAmountInAmount2()`, `InvariantK()`, `MintLpSingleAssetAmount()`, `MintLpSingleAssetAmount2()`, `MintLpDual()`, `MintLpDualProportional()`, `RedeemDual()`, `RedeemSingleToAmount()`, `RedeemSingleToAmount2()`, `BurnLpForExactAmountOut()`. Uses analytical formulas with fee handling (basis points). Static helper `FeeBpsToDecimal()`. Optimized: uses `DecimalMath.Sqrt` instead of `Power(x, 0.5)`, deduplicated single-sided redemption via private helper.
+- **AMM Swap Methods**: `SwapAmount1ForAmount2()`, `SwapAmount2ForAmount1()` — constant-product swap with trading fee, returns `AmmSwapResult` (AmountIn, AmountOut, Fee, UpdatedPool). `GetEffectiveAmmPrice()` returns price in order-book-compatible units. `SpotPrice()` returns raw ratio. `ClonePool()` deep-copies pool state.
+- **Trade Simulator** (`Xrpl/Models/Utils/TradeSimulator.cs`): `TradeSimulator.SimulateTrade()` — simulates XRPL trade execution interleaving DEX order book and AMM. Supports three modes: only order book (AMM=null), only AMM (empty book), or both with best-price interleaving. Solves quadratic for AMM delta-to-price alignment. Returns `TradeSimulationResult`: TotalReceived, TotalSpent, FromOrderBook, FromAmm, AmmPoolFee, EffectivePrice, SpotPriceBefore/After, PriceImpactPercent, RemainingOffers, UpdatedAmm, Steps (list of `FillStep` with Source/AmountIn/AmountOut/Price). Filters unfunded offers automatically.
+
+### Blazor WebAssembly UI
+- **Location**: `Tests/TestsClients/Blazor-WebAssembly/`
+- **Tabs**: Connection Test (`/`) and Swap (`/swap`) via `MainLayout.razor`
+- **Swap Simulator** (`Pages/Swap.razor`): Interactive swap calculator for XRP token pairs.
+  - Input: Amount, Currency Code, Issuer Address; direction toggle (sell/buy XRP)
+  - Debounced input (2s) triggers: `book_offers` + `amm_info` fetch → `TradeSimulator.SimulateTrade()` → `Payment.Simulate()`
+  - Results: Two-column display — TradeSimulator metrics (effective price, spot prices, price impact, fill steps) and Payment simulate result (engine result, delivered amount, metadata)
+  - XRP amounts converted to drops for TradeSimulator and Payment construction
+  - Handles AMM not found gracefully (order-book-only mode)
+  - **Order Book (Стакан)**: Full order book visualization next to swap form. Two `book_offers` requests (asks: taker_gets=XRP/taker_pays=Token, bids: reversed). Dark-themed panel with red asks on top (sorted ascending, displayed reversed), green bids on bottom (sorted descending), spread row in middle showing absolute and percentage spread. Colored volume bars (opacity gradient) behind prices proportional to cumulative total. Columns: Цена/Сумма/Итого. Refreshes on token config or amount change via unified debounce.
+
 ### Shared Utilities
 - **HexStringHelper**: A utility for normalizing and handling hex-encoded variable-length fields, ensuring proper format and conversion.
+- **DecimalMath** (`Xrpl/Utils/DecimalMath.cs`): Internal high-precision decimal math library. Provides `Sqrt` (Newton's method), `Power`, `Log`, `Exp`, `PowerN`, `Log10`, `Abs`. Used by AMM calculations and token precision.
+- **TokenPrecision** (`Xrpl/Utils/TokenPrecision.cs`): Internal utility for XRPL token amount rounding. XRP: 6 decimal places. Non-XRP: up to 15 significant digits. Methods: `RoundTokenAmount()`, `FormatTokenAmount()`, `TruncateValue()`. Enum `PrecisionRoundingMode`.
+- **CurrencyExtensions**: `GetValue()` returns human-readable value (XRP in XRP units, tokens raw). `IsXrp()` checks if currency is native XRP. In `Xrpl/Models/Common/Currency.cs`.
 
 ## External Dependencies
 
