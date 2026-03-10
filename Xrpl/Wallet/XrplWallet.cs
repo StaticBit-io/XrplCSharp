@@ -13,7 +13,6 @@ using Xrpl.AddressCodec;
 using Xrpl.BinaryCodec;
 using Xrpl.Client.Exceptions;
 using Xrpl.Keypairs;
-using Xrpl.Models;
 using Xrpl.Models.Transactions;
 using Xrpl.Models.Utils;
 using Xrpl.Utils.Hashes;
@@ -26,6 +25,8 @@ namespace Xrpl.Wallet
     {
         [JsonProperty(propertyName: "tx_blob")]
         public string TxBlob { get; set; }
+
+        [JsonProperty(propertyName: "hash")]
         public string Hash { get; set; }
 
         public SignatureResult(string txBlob, string hash)
@@ -40,8 +41,10 @@ namespace Xrpl.Wallet
             {
                 throw new NullReferenceException(nameof(TxBlob));
             }
-            return JsonConvert.DeserializeObject<Dictionary<string, dynamic>>(
-                XrplBinaryCodec.Decode(TxBlob).ToString());
+
+            var dic = XrplBinaryCodec.Decode(TxBlob);
+            dic["hash"] = Hash; // add hash to the dictionary for convenience
+            return JsonConvert.DeserializeObject<Dictionary<string, dynamic>>(dic.ToString());
         }
 
         public ITransactionRequest GetTx()
@@ -116,6 +119,26 @@ namespace Xrpl.Wallet
         {
             return XrplWallet.DeriveWallet(seed, masterAddress, algorithm);
         }
+
+        /// <summary>
+        /// Creates a new instance of the XrplWallet class using the specified private key and an optional master
+        /// address.
+        /// </summary>
+        /// <remarks>The method derives the public key from the provided private key using XRPL keypair
+        /// functionality. Supplying an invalid private key will result in an exception during wallet creation. Ensure
+        /// that the private key is valid and securely managed.</remarks>
+        /// <param name="privateKey">The private key used to derive the wallet's public key. Must be a valid XRPL private key format and should
+        /// be kept secure.</param>
+        /// <param name="masterAddress">An optional master address associated with the wallet. If provided, it is used as part of the wallet's
+        /// initialization; otherwise, the wallet is initialized without a master address.</param>
+        /// <returns>An XrplWallet instance containing the derived public key, the provided private key, and the optional master
+        /// address.</returns>
+        public static XrplWallet FromPrivateKey(string privateKey, string? masterAddress = null)
+        {
+            var publicKey = XrplKeypairs.DerivePublicKeyFromPrivateKey(privateKey);
+            return new XrplWallet(publicKey, privateKey, masterAddress);
+        }
+
         /// <summary>
         /// An array of random numbers to generate a seed used to derive a wallet.
         /// </summary>
