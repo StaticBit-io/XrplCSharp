@@ -461,7 +461,7 @@ namespace XrplTests.Xrpl.Models
             {
                 Account = "rME8MrCTc1eCn3cs2HhnzfgJWuJnRNWenK",
                 OracleDocumentID = 12345,
-                LastUpdateTime = 1715097600,
+                LastUpdateTime = DateTime.UtcNow,
                 Provider = "MultiProvider",
                 AssetClass = "currency",
                 Fee = "12",
@@ -542,7 +542,7 @@ namespace XrplTests.Xrpl.Models
             {
                 Account = "rME8MrCTc1eCn3cs2HhnzfgJWuJnRNWenK",
                 OracleDocumentID = 12345,
-                LastUpdateTime = 1715097600,
+                LastUpdateTime = DateTime.UtcNow,
                 Provider = "TestProvider",
                 AssetClass = "currency",
                 Fee = "12",

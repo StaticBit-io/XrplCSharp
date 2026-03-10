@@ -224,6 +224,30 @@ public class Currency
 
 public static class CurrencyExtensions
 {
+    /// <summary>
+    /// Returns the human-readable value of this currency amount.
+    /// For XRP, returns the value in XRP (drops / 1,000,000).
+    /// For tokens, returns the raw numeric value.
+    /// </summary>
+    /// <param name="currency">The currency to get the value from.</param>
+    /// <param name="round">Optional number of decimal places to round to.</param>
+    /// <returns>The decimal value, or null if the currency is null.</returns>
+    public static decimal? GetValue(this Currency currency, int? round = null)
+        => currency is null
+            ? null
+            : currency.CurrencyCode is "XRP"
+                ? round is { } r1 && currency.ValueAsXrp is { } v1 ? Math.Round(v1, r1) : currency.ValueAsXrp
+                : round is { } r2 ? Math.Round(currency.ValueAsNumber, r2) : currency.ValueAsNumber;
+
+    /// <summary>
+    /// Determines whether this currency represents XRP.
+    /// A currency is XRP if its code (case-insensitive) is "XRP" and it has no issuer.
+    /// </summary>
+    /// <param name="currency">The currency to check.</param>
+    /// <returns><c>true</c> if this currency is XRP; otherwise, <c>false</c>.</returns>
+    public static bool IsXrp(this Currency currency)
+        => currency is not null && currency.CurrencyCode?.ToUpper() is "XRP" && currency.Issuer == null;
+
     public static Common.IssuedCurrency ToIssued(this Currency currency) =>
         new Common.IssuedCurrency()
         {

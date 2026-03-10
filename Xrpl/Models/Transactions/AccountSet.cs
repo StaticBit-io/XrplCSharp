@@ -142,7 +142,11 @@ namespace Xrpl.Models.Transactions
     }
 
     /// <summary>
-    /// An AccountSet transaction modifies the properties of an account in the XRP  Ledger.
+    /// An AccountSet transaction modifies the properties of an account in the XRP  Ledger.<br/>
+    /// The AccountSet transaction type has several "AccountSet Flags" (prefixed asf) that can enable an option when passed as the SetFlag parameter,<br/>
+    /// or disable an option when passed as the ClearFlag parameter.<br/>
+    /// Newer options have only this style of flag.<br/>
+    /// You can enable up to one asf flag per transaction, and disable up to one asf flag per transaction.
     /// </summary>
     public interface IAccountSet : ITransactionCommon
     {

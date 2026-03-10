@@ -141,7 +141,7 @@ public class TestIAMMClawback
                 Issuer = walletIssuer.ClassicAddress,
                 Value = "1000"
             },
-            Amount2 = new Currency { Value = "10000000" },
+            Amount2 = new Currency { ValueAsXrp = 1 },
             TradingFee = 500
         };
 
