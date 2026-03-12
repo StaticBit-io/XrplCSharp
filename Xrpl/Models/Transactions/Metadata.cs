@@ -15,9 +15,7 @@ public interface ICreatedNode
 
     string LedgerIndex { get; set; }
 
-    dynamic NewFields { get; set; }
-
-    public BaseLedgerEntry New { get; }
+    BaseLedgerEntry NewFields { get; set; }
 }
 
 public interface IModifiedNode
@@ -26,13 +24,9 @@ public interface IModifiedNode
 
     string LedgerIndex { get; set; }
 
-    dynamic FinalFields { get; set; }
+    BaseLedgerEntry FinalFields { get; set; }
 
-    public BaseLedgerEntry Final { get; }
-
-    dynamic PreviousFields { get; set; }
-
-    public BaseLedgerEntry Previous { get; }
+    BaseLedgerEntry? PreviousFields { get; set; }
 
     string PreviousTxnID { get; set; }
 
@@ -45,13 +39,9 @@ public interface IDeletedNode
 
     string LedgerIndex { get; set; }
 
-    dynamic FinalFields { get; set; }
+    BaseLedgerEntry FinalFields { get; set; }
 
-    public BaseLedgerEntry Final { get; }
-
-    dynamic PreviousFields { get; set; }
-
-    public BaseLedgerEntry Previous { get; }
+    BaseLedgerEntry PreviousFields { get; set; }
 }
 
 public interface IAffectedNode
