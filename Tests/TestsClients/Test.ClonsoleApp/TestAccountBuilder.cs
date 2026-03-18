@@ -1,8 +1,10 @@
 using Newtonsoft.Json;
+
 using System;
 using System.Collections.Generic;
 using System.Linq;
 using System.Threading.Tasks;
+
 using Xrpl.Client;
 using Xrpl.Models;
 using Xrpl.Models.Common;
@@ -39,16 +41,16 @@ public enum TestNodeType
 public class TestAccountBuilder
 {
     #region Static Helper Wallets
-    
+
     /// <summary>Issuer account - issues tokens/MPT, acts as counterparty for checks/escrows.</summary>
     public static readonly XrplWallet IssuerAccount = XrplWallet.FromNormalizedText("test builder issuer account");
-    
+
     /// <summary>Signer 1 for multi-sign.</summary>
     public static readonly XrplWallet Signer1Account = XrplWallet.FromNormalizedText("test builder signer 1 account");
-    
+
     /// <summary>Signer 2 for multi-sign.</summary>
     public static readonly XrplWallet Signer2Account = XrplWallet.FromNormalizedText("test builder signer 2 account");
-    
+
     /// <summary>Signer 3 for multi-sign.</summary>
     public static readonly XrplWallet Signer3Account = XrplWallet.FromNormalizedText("test builder signer 3 account");
 
@@ -76,8 +78,7 @@ public class TestAccountBuilder
     private readonly List<Func<Task>> _buildActions = new();
     private XrplWallet _primaryAccount;
 
-    private const string MasterAccount = "rHb9CJAWyB4rj91VRWn96DkukG4bwdtyTh";
-    private const string MasterSecret = "snoPBrXtMeMyMHUVTgbuqAfg1SUTb";
+    static XrplWallet MasterAccount = XrplWallet.FromNormalizedText("Master account test");
     private const decimal MinBalanceThreshold = 50m;
 
     #endregion
@@ -250,7 +251,7 @@ public class TestAccountBuilder
     private async Task FundAllAccountsAsync()
     {
         await TryFundWalletAsync(_primaryAccount);
-        
+
         foreach (var wallet in HelperWallets)
         {
             await TryFundWalletAsync(wallet);
@@ -302,14 +303,13 @@ public class TestAccountBuilder
     {
         var payment = new Payment
         {
-            Account = MasterAccount,
+            Account = MasterAccount.ClassicAddress,
             Destination = wallet.ClassicAddress,
-            Amount = new Currency { Value = "400000000", CurrencyCode = "XRP" }
+            Amount = new Currency { ValueAsXrp = 10, CurrencyCode = "XRP" }
         };
 
-        var master = XrplWallet.FromSeed(MasterSecret);
         var autofilled = await _client.Autofill(payment);
-        var response = await _client.SubmitAndWait(autofilled, master, true);
+        var response = await _client.SubmitAndWait(autofilled, MasterAccount, true);
 
         if (response.Meta?.TransactionResult != "tesSUCCESS")
         {
@@ -758,15 +758,13 @@ public class TestAccountBuilder
         try
         {
             var finishAfter = DateTime.UtcNow.AddMinutes(5);
-            var rippleEpoch = new DateTime(2000, 1, 1, 0, 0, 0, DateTimeKind.Utc);
-            var finishAfterRipple = (uint)(finishAfter - rippleEpoch).TotalSeconds;
 
             var escrowCreate = new EscrowCreate
             {
                 Account = _primaryAccount.ClassicAddress,
                 Destination = IssuerAccount.ClassicAddress,
                 Amount = new Currency { ValueAsXrp = 50 },
-                FinishAfter = finishAfterRipple
+                FinishAfter = finishAfter
             };
 
             var autofilled = await _client.Autofill(escrowCreate);
