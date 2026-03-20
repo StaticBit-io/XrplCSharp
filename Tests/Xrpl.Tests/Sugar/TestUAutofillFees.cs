@@ -379,7 +379,7 @@ internal sealed class FeeTestClient : IXrplClient
     public Task<AccountChannels> AccountChannels(AccountChannelsRequest request) => throw new NotSupportedException();
     public Task<AccountObjects> AccountObjects(AccountObjectsRequest request) => throw new NotSupportedException();
     public Task<AccountTransactions> AccountTransactions(AccountTransactionsRequest request) => throw new NotSupportedException();
-    public Task<GatewayBalances> GatewayBalances(GatewayBalancesRequest request) => throw new NotSupportedException();
+    public Task<GatewayBalancesResponse> GatewayBalances(GatewayBalancesRequest request) => throw new NotSupportedException();
     public Task<NoRippleCheck> NoRippleCheck(NoRippleCheckRequest request) => throw new NotSupportedException();
     public Task<LOLedger> Ledger(LedgerRequest request) => throw new NotSupportedException();
     public Task<LOBaseLedger> LedgerClosed(LedgerClosedRequest request) => throw new NotSupportedException();

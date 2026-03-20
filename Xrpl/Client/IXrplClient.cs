@@ -165,8 +165,8 @@ namespace Xrpl.Client
         /// <summary> The gateway_balances command calculates the total balances issued by a given account,
         /// optionally excluding amounts held by operational addresses. </summary>
         /// <param name="request">An <see cref="GatewayBalancesRequest"/> request.</param>
-        /// <returns>An <see cref="Models.Methods.GatewayBalances"/> response.</returns>
-        Task<GatewayBalances> GatewayBalances(GatewayBalancesRequest request);
+        /// <returns>An <see cref="GatewayBalancesResponse"/> response.</returns>
+        Task<GatewayBalancesResponse> GatewayBalances(GatewayBalancesRequest request);
 
 
         /// <summary> The account_tx method retrieves a list of transactions that involved the specified account </summary>
@@ -660,9 +660,9 @@ namespace Xrpl.Client
         }
 
         /// <inheritdoc />
-        public Task<GatewayBalances> GatewayBalances(GatewayBalancesRequest request)
+        public Task<GatewayBalancesResponse> GatewayBalances(GatewayBalancesRequest request)
         {
-            return this.GRequest<GatewayBalances, GatewayBalancesRequest>(request);
+            return this.GRequest<GatewayBalancesResponse, GatewayBalancesRequest>(request);
         }
 
         /// <inheritdoc />
