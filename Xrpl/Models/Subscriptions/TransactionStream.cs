@@ -25,13 +25,16 @@ namespace Xrpl.Models.Subscriptions
         /// </summary>
         [JsonProperty("close_time_iso")]
         [JsonConverter(typeof(IsoDateTimeConverter))]
-        public DateTime CloseTimeIso { get; set; }
+        public DateTime? CloseTimeIso { get; set; }
 
         /// <summary>
         /// String Transaction result code
         /// </summary>
         [JsonProperty("engine_result")]
         public string EngineResult { get; set; }
+
+        [JsonProperty("status")]
+        public string Status { get; set; }
         /// <summary>
         /// Numeric transaction response code, if applicable.
         /// </summary>
@@ -75,9 +78,14 @@ namespace Xrpl.Models.Subscriptions
         //[JsonProperty("transaction")]
         [JsonProperty("tx_json")]
         public dynamic TransactionJson { get; set; }
+        /// <summary>
+        /// The definition of the proposed transaction in JSON format<br/>
+        /// </summary>
+        [JsonProperty("transaction")]
+        public dynamic Proposed { get; set; }
 
         [JsonIgnore]
-        public TransactionResponse Transaction => JsonConvert.DeserializeObject<TransactionResponse>(TransactionJson.ToString());
+        public TransactionResponse Transaction => JsonConvert.DeserializeObject<TransactionResponse>((TransactionJson ?? Proposed).ToString());
 
         /// <summary>
         /// If true, this transaction is included in a validated ledger and its outcome is final.<br/>
