@@ -1,4 +1,5 @@
-﻿using System.Collections.Generic;
+﻿using System;
+using System.Collections.Generic;
 using System.Threading.Tasks;
 
 using Newtonsoft.Json;
@@ -27,19 +28,18 @@ namespace Xrpl.Models.Transactions
         public string Destination { get; set; }
 
         /// <inheritdoc />
-        public uint? CancelAfter { get; set; }
+        [JsonConverter(typeof(RippleDateTimeConverter))]
+        public DateTime? CancelAfter { get; set; }
 
         /// <inheritdoc />
-        public uint? FinishAfter { get; set; }
+        [JsonConverter(typeof(RippleDateTimeConverter))]
+        public DateTime? FinishAfter { get; set; }
 
         /// <inheritdoc />
         public string Condition { get; set; }
 
         /// <inheritdoc />
         public uint? DestinationTag { get; set; }
-
-        /// <inheritdoc />
-        public uint? SourceTag { get; set; }
     }
 
     /// <summary>
@@ -56,7 +56,7 @@ namespace Xrpl.Models.Transactions
         /// This value is immutable; the funds can only be returned the sender after.<br/>
         /// this time.
         /// </summary>
-        uint? CancelAfter { get; set; }
+        DateTime? CancelAfter { get; set; }
         /// <summary>
         /// Hex value representing a PREIMAGE-SHA-256 crypto-condition.<br/>
         /// The funds can.<br/>
@@ -77,8 +77,7 @@ namespace Xrpl.Models.Transactions
         /// This value is immutable; the funds cannot move.<br/>
         /// until this time is reached.
         /// </summary>
-        uint? FinishAfter { get; set; }
-        uint? SourceTag { get; set; } //todo unknown field
+        DateTime? FinishAfter { get; set; }
     }
 
     /// <inheritdoc cref="IEscrowCreate" />
@@ -92,19 +91,18 @@ namespace Xrpl.Models.Transactions
         public string Destination { get; set; }
 
         /// <inheritdoc />
-        public uint? CancelAfter { get; set; }
+        [JsonConverter(typeof(RippleDateTimeConverter))]
+        public DateTime? CancelAfter { get; set; }
 
         /// <inheritdoc />
-        public uint? FinishAfter { get; set; }
+        [JsonConverter(typeof(RippleDateTimeConverter))]
+        public DateTime? FinishAfter { get; set; }
 
         /// <inheritdoc />
         public string Condition { get; set; }
 
         /// <inheritdoc />
         public uint? DestinationTag { get; set; }
-
-        /// <inheritdoc />
-        public uint? SourceTag { get; set; }
     }
 
     public partial class Validation

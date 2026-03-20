@@ -27,7 +27,8 @@ namespace Xrpl.Models.Transactions
         /// The time the data was last updated, represented as a unix timestamp in seconds.
         /// The value must be within 300 seconds (5 minutes) of the ledger's close time.
         /// </summary>
-        uint LastUpdateTime { get; set; }
+        [JsonConverter(typeof(UnixDateTimeConverter))]
+        public DateTime? LastUpdateTime { get; set; }
 
         /// <summary>
         /// An array of up to 10 PriceData objects, each representing the price information
@@ -73,7 +74,8 @@ namespace Xrpl.Models.Transactions
 
         /// <inheritdoc />
         [JsonProperty("LastUpdateTime")]
-        public uint LastUpdateTime { get; set; }
+        [JsonConverter(typeof(UnixDateTimeConverter))]
+        public DateTime? LastUpdateTime { get; set; }
 
         /// <inheritdoc />
         [JsonProperty("PriceDataSeries")]
@@ -104,7 +106,8 @@ namespace Xrpl.Models.Transactions
 
         /// <inheritdoc />
         [JsonProperty("LastUpdateTime")]
-        public uint LastUpdateTime { get; set; }
+        [JsonConverter(typeof(UnixDateTimeConverter))]
+        public DateTime? LastUpdateTime { get; set; }
 
         /// <inheritdoc />
         [JsonProperty("PriceDataSeries")]

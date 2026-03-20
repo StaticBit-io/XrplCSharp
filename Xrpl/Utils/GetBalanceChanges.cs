@@ -40,9 +40,9 @@ public static class BalanceChanges
 
         decimal? value = null;
         string account = null;
-        var newField = node.New is LOAccountRoot { } newNode ? newNode : null;
-        var finalField = node.Final is LOAccountRoot { } finalNode ? finalNode : null;
-        var previousField = node.Previous is LOAccountRoot { } previousNode ? previousNode : null;
+        var newField = node.NewFields is LOAccountRoot { } newNode ? newNode : null;
+        var finalField = node.FinalFields is LOAccountRoot { } finalNode ? finalNode : null;
+        var previousField = node.PreviousFields is LOAccountRoot { } previousNode ? previousNode : null;
 
         if (newField?.Balance is { } newBalance)
         {
@@ -85,9 +85,9 @@ public static class BalanceChanges
         string account = null;
         string code = null;
         string issuer = null;
-        var newField = node.New is LORippleState { } newNode ? newNode : null;
-        var finalField = node.Final is LORippleState { } finalNode ? finalNode : null;
-        var previousField = node.Previous is LORippleState { } previousNode ? previousNode : null;
+        var newField = node.NewFields is LORippleState { } newNode ? newNode : null;
+        var finalField = node.FinalFields is LORippleState { } finalNode ? finalNode : null;
+        var previousField = node.PreviousFields is LORippleState { } previousNode ? previousNode : null;
 
         if (newField?.Balance is { } newBalance)
         {

@@ -1,5 +1,18 @@
 # Changes
 
+### 10.0.1 20/03/2026
+* Refactor gateway_balances request
+* Add v1 transaction response support
+* Fix test account builder
+* Refactor metadata with converters for ledger types
+* Add missing ledger entry request parameters
+* Add wallet FromPrivateKey method
+* Fix LedgerObject date conversion
+* Add mnemonic verification
+
+### 10.0.0.1-mptmeta 02/13/2026
+* MPToken Metadata parser
+
 ### 10.0.0
 * Upgrade to .NET 10.0
 * TokenEscrow (XLS-85) — extended escrow support for fungible tokens (IOU/MPT)
