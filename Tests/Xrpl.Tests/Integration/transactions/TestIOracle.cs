@@ -429,24 +429,15 @@ public class TestIOracle
 
     /// <summary>
     /// Gets the ledger close_time from the XRPL server (validated ledger) and converts to Unix epoch.
-    /// XRPL close_time is in Ripple epoch (seconds since 2000-01-01).
-    /// LastUpdateTime for Oracle must be in Unix epoch (seconds since 1970-01-01).
-    /// LastUpdateTime must be within ±300 seconds of ledger close time.
     /// </summary>
-    private static async Task<uint> GetLedgerCloseTimeAsync()
+    private static async Task<DateTime> GetLedgerCloseTimeAsync()
     {
-        const uint RippleEpochOffset = 946684800; // Seconds between Unix epoch (1970) and Ripple epoch (2000)
-        
         var ledgerRequest = new LedgerRequest { LedgerIndex = new LedgerIndex(LedgerIndexType.Validated) };
         var ledgerResponse = await client.Ledger(ledgerRequest);
-        
-        // close_time in response is Ripple epoch - convert to Unix epoch for LastUpdateTime
         var ledgerEntity = ledgerResponse.LedgerEntity as LedgerEntity;
-        var rippleCloseTime = ledgerEntity?.CloseTime ?? 0;
-        var unixCloseTime = rippleCloseTime + RippleEpochOffset;
-        
-        Console.WriteLine($"Ledger close_time (Ripple): {rippleCloseTime}, Unix: {unixCloseTime}");
-        return unixCloseTime;
+        var closeTime = ledgerEntity?.CloseTime ?? DateTime.UtcNow;
+        Console.WriteLine($"Ledger close_time: {closeTime:u}");
+        return closeTime;
     }
 
     /// <summary>

@@ -1,5 +1,7 @@
 ﻿using Newtonsoft.Json;
 
+using System;
+
 using Xrpl.Client.Json.Converters;
 using Xrpl.Models.Common;
 using Xrpl.Models.Transactions;
@@ -70,7 +72,8 @@ namespace Xrpl.Models.Ledger
         /// <summary>
         /// Indicates the time after which this Check is considered expired.
         /// </summary>
-        public uint? Expiration { get; set; }
+        [JsonConverter(typeof(RippleDateTimeConverter))]
+        public DateTime? Expiration { get; set; }
         /// <summary>
         /// Arbitrary 256-bit hash provided by the sender as a specific reason or identifier for this Check.
         /// </summary>

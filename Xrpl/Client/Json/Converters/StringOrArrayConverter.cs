@@ -17,19 +17,26 @@ namespace Xrpl.Client.Json.Converters
         /// <exception cref="Exception">Cannot write value</exception>
         public override void WriteJson(JsonWriter writer, object value, JsonSerializer serializer)
         {
-            JToken t = JToken.FromObject(value);
-            if (t.Type != JTokenType.Object)
-            {
-                t.WriteTo(writer);
-            }
-
             switch (value)
             {
-                case string:
-                    writer.WriteValue(value);
+                case null:
+                    writer.WriteNull();
                     break;
-                case List<string>: break;
-                case Array: throw new Exception("Cannot write value");
+
+                case string s:
+                    writer.WriteValue(s);
+                    break;
+
+                case List<string> list:
+                    serializer.Serialize(writer, list);
+                    break;
+
+                case string[] array:
+                    serializer.Serialize(writer, array);
+                    break;
+
+                default:
+                    throw new JsonSerializationException($"Cannot write value of type {value.GetType()}");
             }
         }
 
@@ -45,14 +52,14 @@ namespace Xrpl.Client.Json.Converters
             return reader.TokenType switch
             {
                 JsonToken.Null => null,
-                JsonToken.String => reader.Value,
+                JsonToken.String => reader.Value?.ToString(),
                 JsonToken.StartObject => serializer.Deserialize<List<string>>(reader),
-                _ => throw new Exception("Cannot convert value")
+                _ => throw new JsonSerializationException($"Cannot convert token {reader.TokenType} to {objectType}")
             };
         }
 
         /// <inheritdoc />
         public override bool CanConvert(Type objectType)
-            => objectType == typeof(string) || objectType == typeof(List<string>) || objectType == typeof(Array);
+            => objectType == typeof(string) || objectType == typeof(List<string>) || objectType == typeof(Array) || objectType == typeof(string[]);
     }
 }

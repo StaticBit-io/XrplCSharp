@@ -645,7 +645,6 @@ public class TestIMPToken
         var ledgerEntryRequest = new LedgerEntryRequest
         {
             LedgerIndex = new LedgerIndex(LedgerIndexType.Validated),
-            LedgerEntryRequestType = LedgerEntryRequestType.MPToken,
             MPToken = new MPTokenQuery
             {
                 Account = walletHolder1.ClassicAddress,
@@ -725,7 +724,7 @@ public class TestIMPToken
             {
                 foreach (var node in result.Meta.AffectedNodes)
                 {
-                    if (node.ModifiedNode is { LedgerEntryType: LedgerEntryType.MPToken, Final: LOMPToken { } finalFields })
+                    if (node.ModifiedNode is { LedgerEntryType: LedgerEntryType.MPToken, FinalFields: LOMPToken { } finalFields })
                     {
                         if (finalFields is { Flags: not null })
                         {

@@ -1,7 +1,8 @@
-using System;
-
 using Newtonsoft.Json;
 
+using System;
+
+using Xrpl.Client.Json.Converters;
 using Xrpl.Models.Utils;
 
 // https://xrpl.org/docs/references/protocol/ledger-data/ledger-entry-types/credential
@@ -71,7 +72,8 @@ namespace Xrpl.Models.Ledger
         /// The time after which the credential expires, in seconds since the Ripple Epoch.
         /// </summary>
         [JsonProperty("Expiration", NullValueHandling = NullValueHandling.Ignore)]
-        public uint? Expiration { get; set; }
+        [JsonConverter(typeof(RippleDateTimeConverter))]
+        public DateTime? Expiration { get; set; }
 
         private string _uri;
 

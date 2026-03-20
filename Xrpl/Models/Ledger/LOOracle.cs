@@ -1,7 +1,9 @@
-using System.Collections.Generic;
-
 using Newtonsoft.Json;
 
+using System;
+using System.Collections.Generic;
+
+using Xrpl.Client.Json.Converters;
 using Xrpl.Models.Common;
 
 // https://xrpl.org/docs/references/protocol/ledger-data/ledger-entry-types/oracle
@@ -55,7 +57,8 @@ namespace Xrpl.Models.Ledger
         /// Note: Unlike many other time values on the XRP Ledger, this value does not use the Ripple Epoch.
         /// </summary>
         [JsonProperty("LastUpdateTime")]
-        public uint LastUpdateTime { get; set; }
+        [JsonConverter(typeof(UnixDateTimeConverter))]
+        public DateTime? LastUpdateTime { get; set; }
 
         /// <summary>
         /// An optional Universal Resource Identifier to reference price data off-chain.

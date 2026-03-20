@@ -59,7 +59,7 @@ namespace Xrpl.Models.Methods
         /// <summary>
         /// The ledger close time represented in ISO 8601 time format.
         /// </summary>
-        public DateTime CloseTimeIso { get; set; }
+        public DateTime? CloseTimeIso { get; set; }
 
         /// <summary>
         /// The unique hash identifier of the transaction.
@@ -99,7 +99,7 @@ namespace Xrpl.Models.Methods
         /// </summary>
         [JsonProperty("close_time_iso")]
         [JsonConverter(typeof(IsoDateTimeConverter))]
-        public DateTime CloseTimeIso { get; set; }
+        public DateTime? CloseTimeIso { get; set; }
 
         /// <summary>
         /// A hex string of the ledger version that included this transaction.
