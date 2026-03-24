@@ -652,15 +652,15 @@ public class TestIMPToken
             },
         };
         var ledgerEntryResponse = await client.LedgerEntry(ledgerEntryRequest);
-        
+
         Assert.IsNotNull(ledgerEntryResponse, "LedgerEntry response should not be null");
         Assert.IsNotNull(ledgerEntryResponse.Node, "LedgerEntry node should not be null");
-        
+
         var mpToken = ledgerEntryResponse.Node as LOMPToken;
         Assert.IsNotNull(mpToken, "Node should be LOMPToken type");
         Assert.AreEqual(walletHolder1.ClassicAddress, mpToken.Account, "MPToken account should match holder");
         Assert.AreEqual(issuanceId, mpToken.MPTokenIssuanceID, "MPTokenIssuanceID should match");
-        
+
         Console.WriteLine($"MPToken balance: {mpToken.MPTAmount}");
         Assert.IsNotNull(mpToken.MPTAmount, "MPTAmount should not be null after payment");
         Assert.AreEqual(transferAmount, mpToken.MPTAmount.Value, $"MPTAmount should be {transferAmount}");

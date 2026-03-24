@@ -20,13 +20,14 @@ public class TestIEscrow
     public TestContext TestContext { get; set; }
     public static IXrplClient client;
 
+    private static TestNodeType nodeType = TestNodeType.DevNet;
     //static XrplWallet walletIssuer = XrplWallet.Generate();
     //static XrplWallet walletHolder1 = XrplWallet.Generate();
 
     [ClassInitialize]
     public static async Task MyClassInitializeAsync(TestContext testContext)
     {
-        client = await IntegrationTestConfig.CreateClientAsync(TestNodeType.DevNet);
+        client = await IntegrationTestConfig.CreateClientAsync(nodeType);
     }
 
     [ClassCleanup]
@@ -43,9 +44,9 @@ public class TestIEscrow
         var walletIssuer = XrplWallet.Generate();
         var walletHolder1 = XrplWallet.Generate();
         var walletHolder2 = XrplWallet.Generate();
-        await IntegrationTestConfig.TryFundWalletAsync(client, walletIssuer, TestNodeType.DevNet);
-        await IntegrationTestConfig.TryFundWalletAsync(client, walletHolder1, TestNodeType.DevNet);
-        await IntegrationTestConfig.TryFundWalletAsync(client, walletHolder2, TestNodeType.DevNet);
+        await IntegrationTestConfig.TryFundWalletAsync(client, walletIssuer, nodeType);
+        await IntegrationTestConfig.TryFundWalletAsync(client, walletHolder1, nodeType);
+        await IntegrationTestConfig.TryFundWalletAsync(client, walletHolder2, nodeType);
 
         LedgerRequest ledgerReq = new LedgerRequest() { LedgerIndex = new LedgerIndex(LedgerIndexType.Validated) };
         LOLedger ledgerResponse = await client.Ledger(ledgerReq);
@@ -87,9 +88,9 @@ public class TestIEscrow
         var walletIssuer = XrplWallet.Generate();
         var walletHolder1 = XrplWallet.Generate();
         var walletHolder2 = XrplWallet.Generate();
-        await IntegrationTestConfig.TryFundWalletAsync(client, walletIssuer, TestNodeType.DevNet);
-        await IntegrationTestConfig.TryFundWalletAsync(client, walletHolder1, TestNodeType.DevNet);
-        await IntegrationTestConfig.TryFundWalletAsync(client, walletHolder2, TestNodeType.DevNet);
+        await IntegrationTestConfig.TryFundWalletAsync(client, walletIssuer, nodeType);
+        await IntegrationTestConfig.TryFundWalletAsync(client, walletHolder1, nodeType);
+        await IntegrationTestConfig.TryFundWalletAsync(client, walletHolder2, nodeType);
 
         LedgerRequest ledgerReq = new LedgerRequest() { LedgerIndex = new LedgerIndex(LedgerIndexType.Validated) };
         LOLedger ledgerResponse = await client.Ledger(ledgerReq);
@@ -137,9 +138,9 @@ public class TestIEscrow
         var walletIssuer = XrplWallet.Generate();
         var walletHolder1 = XrplWallet.Generate();
         var walletHolder2 = XrplWallet.Generate();
-        await IntegrationTestConfig.TryFundWalletAsync(client, walletIssuer, TestNodeType.DevNet);
-        await IntegrationTestConfig.TryFundWalletAsync(client, walletHolder1, TestNodeType.DevNet);
-        await IntegrationTestConfig.TryFundWalletAsync(client, walletHolder2, TestNodeType.DevNet);
+        await IntegrationTestConfig.TryFundWalletAsync(client, walletIssuer, nodeType);
+        await IntegrationTestConfig.TryFundWalletAsync(client, walletHolder1, nodeType);
+        await IntegrationTestConfig.TryFundWalletAsync(client, walletHolder2, nodeType);
 
         var accountSetTx = new AccountSet
         {
@@ -218,9 +219,9 @@ public class TestIEscrow
         var walletIssuer = XrplWallet.Generate();
         var walletHolder1 = XrplWallet.Generate();
         var walletHolder2 = XrplWallet.Generate();
-        await IntegrationTestConfig.TryFundWalletAsync(client, walletIssuer, TestNodeType.DevNet);
-        await IntegrationTestConfig.TryFundWalletAsync(client, walletHolder1, TestNodeType.DevNet);
-        await IntegrationTestConfig.TryFundWalletAsync(client, walletHolder2, TestNodeType.DevNet);
+        await IntegrationTestConfig.TryFundWalletAsync(client, walletIssuer, nodeType);
+        await IntegrationTestConfig.TryFundWalletAsync(client, walletHolder1, nodeType);
+        await IntegrationTestConfig.TryFundWalletAsync(client, walletHolder2, nodeType);
 
         var accountSetTx = new AccountSet
         {
@@ -305,9 +306,9 @@ public class TestIEscrow
         var walletIssuer = XrplWallet.Generate();
         var walletHolder1 = XrplWallet.Generate();
         var walletHolder2 = XrplWallet.Generate();
-        await IntegrationTestConfig.TryFundWalletAsync(client, walletIssuer, TestNodeType.DevNet);
-        await IntegrationTestConfig.TryFundWalletAsync(client, walletHolder1, TestNodeType.DevNet);
-        await IntegrationTestConfig.TryFundWalletAsync(client, walletHolder2, TestNodeType.DevNet);
+        await IntegrationTestConfig.TryFundWalletAsync(client, walletIssuer, nodeType);
+        await IntegrationTestConfig.TryFundWalletAsync(client, walletHolder1, nodeType);
+        await IntegrationTestConfig.TryFundWalletAsync(client, walletHolder2, nodeType);
 
         var createTx = new MPTokenIssuanceCreate
         {
@@ -400,9 +401,9 @@ public class TestIEscrow
         var walletIssuer = XrplWallet.Generate();
         var walletHolder1 = XrplWallet.Generate();
         var walletHolder2 = XrplWallet.Generate();
-        await IntegrationTestConfig.TryFundWalletAsync(client, walletIssuer, TestNodeType.DevNet);
-        await IntegrationTestConfig.TryFundWalletAsync(client, walletHolder1, TestNodeType.DevNet);
-        await IntegrationTestConfig.TryFundWalletAsync(client, walletHolder2, TestNodeType.DevNet);
+        await IntegrationTestConfig.TryFundWalletAsync(client, walletIssuer, nodeType);
+        await IntegrationTestConfig.TryFundWalletAsync(client, walletHolder1, nodeType);
+        await IntegrationTestConfig.TryFundWalletAsync(client, walletHolder2, nodeType);
 
         var createTx = new MPTokenIssuanceCreate
         {
@@ -487,7 +488,7 @@ public class TestIEscrow
     private static async Task WaitForLedgerCloseTime(IXrplClient client, DateTime targetTime, int maxWaitSeconds = 60)
     {
         var sw = System.Diagnostics.Stopwatch.StartNew();
-        while (sw.Elapsed.TotalSeconds < maxWaitSeconds)
+        while (sw.Elapsed.TotalSeconds < maxWaitSeconds+10)
         {
             await Task.Delay(3000);
             LedgerRequest req = new LedgerRequest() { LedgerIndex = new LedgerIndex(LedgerIndexType.Validated) };

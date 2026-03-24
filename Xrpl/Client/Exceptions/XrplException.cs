@@ -1,6 +1,8 @@
 ﻿using System;
 using System.Text.RegularExpressions;
 
+using Xrpl.Models.Subscriptions;
+
 namespace Xrpl.Client.Exceptions
 {
     public class RippleException : Exception
@@ -34,8 +36,11 @@ namespace Xrpl.Client.Exceptions
     /// </summary>
     public class RippledException : XrplException
     {
-        public RippledException(string message, dynamic data = null) : base(message)
+        public ErrorResponse Response { get; }
+
+        public RippledException(string message, ErrorResponse response) : base(message)
         {
+            Response = response;
         }
     }
 

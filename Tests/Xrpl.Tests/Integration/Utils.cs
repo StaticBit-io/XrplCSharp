@@ -253,8 +253,7 @@ namespace XrplTests.Xrpl.ClientLib.Integration
             };
             
             var values = JsonConvert.DeserializeObject<Dictionary<string, dynamic>>(payment.ToJson());
-            var master = XrplWallet.FromSeed(FaucetFiller.Seed);
-            var response = await client.SubmitAndWait(values, master, autofill:true);
+            var response = await client.SubmitAndWait(values, FaucetFiller, autofill:true);
 
             if (response.Meta.TransactionResult != "tesSUCCESS")
             {
@@ -277,11 +276,11 @@ namespace XrplTests.Xrpl.ClientLib.Integration
             };
             var values = JsonConvert.DeserializeObject<Dictionary<string, dynamic>>(payment.ToJson());
             var master = XrplWallet.FromSeed(MasterSecret);
-            Submit response = await client.Submit(values, master);
+            var response = await client.SubmitAndWait(values, master);
 
-            if (response.EngineResult != "tesSUCCESS")
+            if (response.Meta.TransactionResult != "tesSUCCESS")
             {
-                throw new Exception($"Master funding failed: {response.EngineResult}");
+                throw new Exception($"Master funding failed: {response.Meta.TransactionResult}");
             }
 
             await LedgerAcceptAsync(client);
@@ -348,14 +347,12 @@ namespace XrplTests.Xrpl.ClientLib.Integration
             };
             var values = JsonConvert.DeserializeObject<Dictionary<string, dynamic>>(payment.ToJson());
             var master = XrplWallet.FromSeed(masterSecret);
-            Submit response = await client.Submit(values, master);
-            if (response.EngineResult != "tesSUCCESS")
+            var response = await client.SubmitAndWait(values, master);
+            if (response.Meta.TransactionResult != "tesSUCCESS")
             {
-                throw new Exception("Response not successful, ${ response.result.engine_result}");
+                throw new Exception($"Response not successful, { response.Meta.TransactionResult}");
             }
             await LedgerAccept(client);
-            response.TxJson.Property("hash").Remove();
-            await VerifySubmittedTransaction(client, response.TxJson);
         }
 
         public static async Task<XrplWallet> GenerateFundedWallet(IXrplClient client)

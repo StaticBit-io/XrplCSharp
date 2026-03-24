@@ -44,10 +44,8 @@ internal class Program
         //TestWalletFromText();
         try
         {
-            await TestReconnection();
-            //return;
             await InitTestData(TestDataType.mainNet);
-
+            var info = await client.AccountInfo(new("rKeiNfRJcDBUhu4rcjQjGLWqa4"));
 
             //await InitForDataForTest();
 
@@ -66,9 +64,17 @@ internal class Program
 
             await client.Disconnect();
         }
+        catch (Xrpl.Client.Exceptions.RippledException e)
+        {
+            throw e;
+        }
+        catch (Xrpl.Client.Exceptions.XrplException e)
+        {
+            throw e;
+        }
         catch (Exception e)
         {
-            throw;
+            throw e;
         }
 
         //await SampleClient();

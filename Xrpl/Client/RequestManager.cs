@@ -1,13 +1,18 @@
-﻿using System;
-using System.Collections.Concurrent;
-using System.Threading.Tasks;
+﻿using NBitcoin.Protocol;
+
 using Newtonsoft.Json;
+
+using System;
+using System.Collections.Concurrent;
+using System.Collections.Generic;
+using System.Diagnostics;
+using System.Threading.Tasks;
+
 using Xrpl.Client.Exceptions;
 using Xrpl.Models.Subscriptions;
-using System.Diagnostics;
-using System.Collections.Generic;
-using Timer = System.Timers.Timer;
+
 using TimeoutException = Xrpl.Client.Exceptions.TimeoutException;
+using Timer = System.Timers.Timer;
 
 // https://github.com/XRPLF/xrpl.js/blob/main/packages/xrpl/src/client/RequestManager.ts
 
@@ -73,7 +78,7 @@ namespace Xrpl.Client
         /// The exception is automatically "observed" to prevent UnobservedTaskException 
         /// from being raised in consuming applications like DaddyWallet.
         /// </summary>
-        public void Reject(Guid id, Exception error)
+        public void Reject<T>(Guid id, T error) where T : Exception
         {
             var promise = promisesAwaitingResponse.TryGetValue(id, out var taskInfo);
             if (taskInfo == null)
@@ -280,56 +285,71 @@ namespace Xrpl.Client
             };
         }
 
-        public void HandleResponse(BaseResponse response)
+        public BaseResponse HandleResponse(string message)
         {
+            var response = JsonConvert.DeserializeObject<ErrorResponse>(message);
+
             if (response.Id == null)
             {
-                throw new XrplException("Valid id not found in response");
+                return response;
             }
 
             if(!Guid.TryParse($"{response.Id}", out var id))
             {
                 throw new XrplException("invalid id type");
             }
+
             if (!promisesAwaitingResponse.ContainsKey(id))
             {
-                return;
+                return response;
             }
 
             if (response.Status == null)
             {
                 if (response.Error is not null || response.ErrorMessage is not null)
                 {
-                    var message = response.Error is null
+                    var errMessage = response.Error is null
                         ? response.ErrorMessage
                         : $"{response.Error} - {response.ErrorMessage}";
-                    XrplException error = new XrplException(message);
+                    XrplException error = new XrplException(errMessage);
                     this.Reject(id, error);
-                    return;
+                    return response;
                 }
 
                 ResponseFormatException responseError = new ResponseFormatException("Response has no status");
                 this.Reject(id, responseError);
-                return;
+                return response;
             }
 
             if (response.Status == "error" )
             {
-                var message = response.Error is null
+                ErrorResponse errorResponse = null;
+                try
+                {
+                    errorResponse = JsonConvert.DeserializeObject<ErrorResponse>(message);
+
+                }
+                catch (Exception e)
+                {
+                    
+                }
+                var errMessage = response.Error is null
                     ? response.ErrorMessage
                     : $"{response.Error} - {response.ErrorMessage}";
-                XrplException error = new XrplException(message);
+                var error = new RippledException(errMessage, errorResponse);
                 this.Reject(id, error);
-                return;
+                return response;
             }
 
             if (response.Status != "success")
             {
                 XrplException error = new XrplException($"unrecognized response.status: ${response.Status ?? ""}");
                 this.Reject(id, error);
-                return;
+                return response;
             }
+
             this.Resolve(id, response);
+            return response;
         }
 
         /// <summary>
