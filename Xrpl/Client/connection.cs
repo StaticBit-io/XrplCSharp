@@ -1,4 +1,6 @@
-﻿using System;
+﻿using Newtonsoft.Json;
+
+using System;
 using System.Collections.Generic;
 using System.Diagnostics;
 using System.IO;
@@ -7,15 +9,13 @@ using System.Threading;
 using System.Threading.Channels;
 using System.Threading.Tasks;
 
-using Newtonsoft.Json;
-
-using Xrpl.Client.Exceptions;
-
-using static Xrpl.Client.RequestManager;
-
 using Xrpl.AddressCodec;
-using Xrpl.Models.Subscriptions;
+using Xrpl.Client.Exceptions;
 using Xrpl.Models.Methods;
+using Xrpl.Models.Subscriptions;
+
+using static System.Runtime.InteropServices.JavaScript.JSType;
+using static Xrpl.Client.RequestManager;
 
 using Timer = System.Timers.Timer;
 
@@ -332,8 +332,6 @@ public class Connection
 
     public XrpConnectionState CurrentConnectionState => _currentConnectionState;
 
-    private XrpConnectionState _previousNotifiedState = XrpConnectionState.Disconnected;
-
     private string _previousNotifiedMessage = string.Empty;
 
     private void SetConnectionState(
@@ -342,10 +340,10 @@ public class Connection
         ConnectionCloseSeverity severity = ConnectionCloseSeverity.Info,
         ReconnectInfo? reconnect = null)
     {
-        var previousState = _currentConnectionState;
+
+        var stateChanged = _currentConnectionState != newState;
         _currentConnectionState = newState;
 
-        var stateChanged = previousState != newState;
         var hasReconnectInfo = reconnect != null;
         var messageChanged = _previousNotifiedMessage != message;
         var isRestoringConnection = newState == XrpConnectionState.RestoringConnection;
@@ -355,7 +353,6 @@ public class Connection
             return;
         }
 
-        _previousNotifiedState = newState;
         _previousNotifiedMessage = message;
 
         OnConnectionStatus?.Invoke(
@@ -2259,12 +2256,6 @@ public class Connection
             await Task.Delay(20).ConfigureAwait(false);
         }
     }
-    
-    private async Task StopPingTimerAndWaitAsync()
-    {
-        StopPingTimerSync();
-        await WaitForPingToFinishAsync();
-    }
 
     private static (ConnectionCloseSeverity severity, string message) DescribeClose(int? code, string? reason)
     {
@@ -2321,182 +2312,9 @@ public class Connection
         return TimeSpan.FromSeconds(Math.Max(val1: 0, finalDelay));
     }
 
-    private async Task IOnMessage(string message)
-    {
-        lastActivityTime = DateTime.UtcNow;
-
-        BaseResponse data;
-        try
-        {
-            data = JsonConvert.DeserializeObject<BaseResponse>(message);
-        }
-        catch (Exception error)
-        {
-            if (OnError is not null)
-            {
-                await OnError?.Invoke(error: "error", errorMessage: "badMessage", error.Message, message)!;
-            }
-
-            return;
-        }
-
-        if (data.Warning != null && OnWarning is not null)
-        {
-            await OnWarning.Invoke(data.Warning, message);
-        }
-
-        if (data.Warnings is { Count: > 0, } && OnServerWarning is not null)
-        {
-            await OnServerWarning.Invoke(data.Warnings, message);
-        }
-
-        if (data.Type == null && data.Error != null)
-        {
-            if (data.Error == "slowDown" || data.Error == "tooBusy")
-            {
-                var rateLimitMessage = data.Error == "slowDown"
-                    ? "Rate limit warning: Server requests to slow down. Reduce request frequency to avoid connection issues."
-                    : "Rate limit warning: Server is too busy. Consider implementing exponential backoff or reducing load.";
-
-                if (OnError is not null)
-                {
-                    await OnError?.Invoke(error: "rate_limit", data.Error, rateLimitMessage, data)!;
-                }
-
-                return;
-            }
-
-            if (OnError is not null)
-            {
-                await OnError?.Invoke(error: "error", data.Error, message: "data.ErrorMessage", data)!;
-            }
-
-            if (data.Id is not null)
-            {
-                requestManager.HandleResponse(data);
-            }
-            return;
-        }
-
-        if (data.Type != null)
-        {
-            Enum.TryParse(value: data.Type.ToString(), result: out ResponseStreamType type);
-            switch (type)
-            {
-                case ResponseStreamType.ledgerClosed:
-                {
-                    var response = JsonConvert.DeserializeObject<LedgerStream>(message);
-
-                    if (OnLedgerClosed is not null)
-                    {
-                        await OnLedgerClosed.Invoke(response)!;
-                    }
-
-                    break;
-                }
-
-                case ResponseStreamType.validationReceived:
-                {
-                    var response = JsonConvert.DeserializeObject<ValidationStream>(message);
-
-                    if (OnManifestReceived is not null)
-                    {
-                        await OnManifestReceived.Invoke(response)!;
-                    }
-
-                    break;
-                }
-
-                case ResponseStreamType.transaction:
-                {
-                    var response = JsonConvert.DeserializeObject<TransactionStream>(message);
-
-                    if (OnTransaction is not null)
-                    {
-                        await OnTransaction.Invoke(response)!;
-                    }
-
-                    break;
-                }
-
-                case ResponseStreamType.peerStatusChange:
-                {
-                    var response = JsonConvert.DeserializeObject<PeerStatusStream>(message);
-
-                    if (OnPeerStatusChange is not null)
-                    {
-                        await OnPeerStatusChange.Invoke(response)!;
-                    }
-
-                    break;
-                }
-
-                case ResponseStreamType.consensusPhase:
-                {
-                    var response = JsonConvert.DeserializeObject<ConsensusStream>(message);
-
-                    if (OnConsensusPhase is not null)
-                    {
-                        await OnConsensusPhase.Invoke(response)!;
-                    }
-
-                    break;
-                }
-
-                case ResponseStreamType.path_find:
-                {
-                    var response = JsonConvert.DeserializeObject<PathFindStream>(message);
-
-                    if (OnPathFind is not null)
-                    {
-                        await OnPathFind.Invoke(response)!;
-                    }
-
-                    break;
-                }
-
-                case ResponseStreamType.error:
-                {
-                    var response = JsonConvert.DeserializeObject<ErrorResponse>(message);
-                    if (OnError is not null)
-                    {
-                        await OnError.Invoke(response.Error, response.ErrorMessage, response.ErrorCode, response);
-                    }
-
-                    break;
-                }
-
-                default:
-                    break;
-            }
-        }
-
-        if (data.Type == "response")
-        {
-            try
-            {
-                requestManager.HandleResponse(data);
-            }
-            catch (XrplException error)
-            {
-                if (OnError is not null)
-                {
-                    await OnError.Invoke(error: "error", errorMessage: "badMessage", error.Message, error);
-                }
-            }
-            catch (Exception error)
-            {
-                if (OnError is not null)
-                {
-                    await OnError.Invoke(error: "error", errorMessage: "badMessage", error.Message, error);
-                }
-            }
-        }
-    }
-
     public async Task OnMessage(string message)
     {
-        await IOnMessage(message);
+        await IOnMessageFastPath(message);
     }
 
     /// <summary>
@@ -2761,6 +2579,17 @@ public class Connection
                     }
                     break;
                 }
+
+                case ResponseStreamType.error:
+                {
+                    var response = JsonConvert.DeserializeObject<ErrorResponse>(message);
+                    if (OnError is not null)
+                    {
+                        await OnError.Invoke(response.Error, response.ErrorMessage, response.ErrorCode, response);
+                    }
+
+                    break;
+                }
             }
         }
     }
@@ -2790,10 +2619,13 @@ public class Connection
         {
             // This is a response (including ping/pong) - process immediately with full parsing
             // CRITICAL: Minimize async operations here to prevent blocking subsequent messages
-            BaseResponse data;
+           BaseResponse data;
             try
-            {
-                data = JsonConvert.DeserializeObject<BaseResponse>(message);
+            {    
+                // FIRST: Handle response immediately to unblock any waiting requests (like ping)
+                // This is the most time-critical operation
+
+                data = requestManager.HandleResponse(message);
             }
             catch (Exception error)
             {
@@ -2807,17 +2639,10 @@ public class Connection
                 });
                 return;
             }
-            
-            // FIRST: Handle response immediately to unblock any waiting requests (like ping)
-            // This is the most time-critical operation
-            if (data.Id is not null)
-            {
-                requestManager.HandleResponse(data);
-            }
 
             // THEN: Handle warnings and errors in background (fire-and-forget)
             // These are informational and should not delay response processing
-            if (data.Warning != null || data.Warnings is { Count: > 0 } || (data.Type == null && data.Error != null))
+            if (data.Warning != null || data.Warnings is { Count: > 0 })
             {
                 var capturedData = data;
                 var capturedMessage = message;
@@ -2833,27 +2658,27 @@ public class Connection
                         await OnServerWarning.Invoke(capturedData.Warnings, capturedMessage);
                     }
 
-                    // Handle error responses
-                    if (capturedData.Type == null && capturedData.Error != null)
-                    {
-                        if (capturedData.Error == "slowDown" || capturedData.Error == "tooBusy")
-                        {
-                            var rateLimitMessage = capturedData.Error == "slowDown"
-                                ? "Rate limit warning: Server requests to slow down. Reduce request frequency to avoid connection issues."
-                                : "Rate limit warning: Server is too busy. Consider implementing exponential backoff or reducing load.";
+                    //// Handle error responses
+                    //if (capturedData.Type == null && capturedData.Error != null)
+                    //{
+                    //    if (capturedData.Error == "slowDown" || capturedData.Error == "tooBusy")
+                    //    {
+                    //        var rateLimitMessage = capturedData.Error == "slowDown"
+                    //            ? "Rate limit warning: Server requests to slow down. Reduce request frequency to avoid connection issues."
+                    //            : "Rate limit warning: Server is too busy. Consider implementing exponential backoff or reducing load.";
 
-                            if (OnError is not null)
-                            {
-                                await OnError.Invoke(error: "rate_limit", capturedData.Error, rateLimitMessage, capturedData);
-                            }
-                            return;
-                        }
+                    //        if (OnError is not null)
+                    //        {
+                    //            await OnError.Invoke(error: "rate_limit", capturedData.Error, rateLimitMessage, capturedData);
+                    //        }
+                    //        return;
+                    //    }
 
-                        if (OnError is not null)
-                        {
-                            await OnError.Invoke(error: "error", capturedData.Error, message: "data.ErrorMessage", capturedData);
-                        }
-                    }
+                    //    if (OnError is not null)
+                    //    {
+                    //        await OnError.Invoke(error: "error", capturedData.Error, message: "data.ErrorMessage", capturedData);
+                    //    }
+                    //}
                 });
             }
         }

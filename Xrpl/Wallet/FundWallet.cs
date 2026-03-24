@@ -287,6 +287,7 @@ namespace Xrpl.Wallet
             {
                 attempts -= 1;
             }
+
             try
             {
                 double newBalance = 0;
@@ -302,20 +303,17 @@ namespace Xrpl.Wallet
                 {
                     /* newBalance remains undefined */
                 }
+
                 if (newBalance > _originalBalance)
                 {
                     finalBalance = newBalance;
                     aTimer.Enabled = false;
                 }
             }
-            catch (InvalidCastException err)
+            catch (Exception err) when (err is RippledException or InvalidCastException)
             {
                 aTimer.Enabled = false;
-                if (err is RippledException)
-                {
-                    throw new XRPLFaucetException($"Unable to check if the address {_address} balance has increased.Error: {"err.message"}");
-                }
-                throw new XRPLFaucetException($"Unable to check if the address {_address} balance has increased.Error: {"err.message"}");
+                throw new XRPLFaucetException($"Unable to check if the address {_address} balance has increased.Error: {err.Message}");
             }
         }
 

@@ -3,6 +3,9 @@
 using System;
 using System.Collections.Generic;
 
+using Xrpl.Client.Json.Converters;
+using Xrpl.Models.Transactions;
+
 //https://github.com/XRPLF/xrpl.js/blob/main/packages/xrpl/src/models/methods/baseMethod.ts
 //https://xrpl.org/response-formatting.html
 
@@ -16,6 +19,9 @@ namespace Xrpl.Models.Subscriptions
         [JsonProperty("id")]
         public object? Id { get; set; }
 
+        /// <summary>
+        /// "error" if the request caused an error
+        /// </summary>
         [JsonProperty("status")]
         public string Status { get; set; }
         /// <summary>
@@ -24,17 +30,6 @@ namespace Xrpl.Models.Subscriptions
         /// </summary>
         [JsonProperty("type")]
         public string Type { get; set; }
-        /// <summary>
-        /// The result of the query; contents vary depending on the command.
-        /// </summary>
-        [JsonProperty("error")]
-        public string Error { get; set; }
-        /// <summary>
-        /// (WebSocket only) The value success indicates the request was successfully received and understood by the server.<br/>
-        /// Some client libraries omit this field on success.
-        /// </summary>
-        [JsonProperty("error_message")]
-        public string ErrorMessage { get; set; }
         /// <summary>
         /// (WebSocket only) The value success indicates the request was successfully received and understood by the server.<br/>
         /// Some client libraries omit this field on success.
@@ -60,6 +55,9 @@ namespace Xrpl.Models.Subscriptions
         /// </summary>
         [JsonProperty("forwarded")]
         public bool? Forwarded { get; set; }
+        /// <summary>
+        /// (May be omitted) The api_version specified in the request, if any.
+        /// </summary>
         [JsonProperty("api_version")]
         public uint? ApiVersion { get; set; }
     }
