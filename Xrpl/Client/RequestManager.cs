@@ -57,13 +57,12 @@ namespace Xrpl.Client
         /// </summary>
         public void Resolve(Guid id, BaseResponse response)
         {
-            var promise = promisesAwaitingResponse.TryGetValue(id, out var taskInfo);
-            if (taskInfo == null)
+            if (!promisesAwaitingResponse.TryGetValue(id, out var taskInfo) || taskInfo == null)
             {
                 throw new XrplException($"No existing promise with id {id}");
             }
-            var hasTimer = this.timeoutsAwaitingResponse.TryRemove(id, out var timer);
-            if (hasTimer)
+
+            if (timeoutsAwaitingResponse.TryRemove(id, out var timer))
                 timer.Stop();
 
             var deserialized = JsonConvert.DeserializeObject($"{response.Result}", taskInfo.Type, serializerSettings);
@@ -80,14 +79,12 @@ namespace Xrpl.Client
         /// </summary>
         public void Reject<T>(Guid id, T error) where T : Exception
         {
-            var promise = promisesAwaitingResponse.TryGetValue(id, out var taskInfo);
-            if (taskInfo == null)
+            if (!promisesAwaitingResponse.TryGetValue(id, out var taskInfo) || taskInfo == null)
             {
                 Debug.WriteLine($"Reject called for non-existent promise {id} (likely already resolved)");
                 return;
             }
-            var hasTimer = this.timeoutsAwaitingResponse.TryRemove(id, out var timer);
-            if (hasTimer)
+            if (timeoutsAwaitingResponse.TryRemove(id, out var timer))
                 timer.Stop();
             var setException = taskInfo.TaskCompletionResult.GetType().GetMethod("TrySetException", new Type[] { typeof(Exception) }, null);
             setException.Invoke(taskInfo.TaskCompletionResult, new[] { error });
