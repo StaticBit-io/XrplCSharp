@@ -1,5 +1,9 @@
 # Changes
 
+### 10.0.1.1 24/03/2026
+* Fix ErrorResponse
+* Fix RippledException when error in response
+
 ### 10.0.1 20/03/2026
 * Refactor gateway_balances request
 * Add v1 transaction response support
