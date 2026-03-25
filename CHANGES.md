@@ -1,5 +1,11 @@
 # Changes
 
+### 10.0.2 25/03/2026
+* Add XRPL error classifier with normalized `XrplErrorInfo`
+* Add structured XRPL error metadata: category, subject, retryable/user-fixable flags, command, field, and warnings
+* Add tests and documentation for XRPL error classification
+* Minor RequestManager cleanup for pending response handling
+
 ### 10.0.1.1 24/03/2026
 * Fix ErrorResponse
 * Fix RippledException when error in response
