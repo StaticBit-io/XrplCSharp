@@ -59,4 +59,5 @@ await client.Disconnect();
 
 - [Connection Guide (EN)](Connection-Guide.html) - How to configure and manage connections
 - [Connection Guide (RU)](Connection-Guide.ru.html) - Руководство по подключению
+- [Error Classifier](ErrorClassifier.html) - How to normalize exceptions and XRPL error responses with `XrplErrorClassifier`
 - [API Reference](reference/) - Full API documentation
