@@ -42,11 +42,30 @@ internal class Program
     private static async Task Main(string[] args)
     {
         //TestWalletFromText();
+        await InitTestData(TestDataType.mainNet);
         try
         {
-            await InitTestData(TestDataType.mainNet);
-            var info = await client.AccountInfo(new("rKeiNfRJcDBUhu4rcjQjGLWqa4"));
+            throw new NotImplementedException("Test exception");
+            //var info = await client.AccountInfo(new("rKeiNfRJcDBUhu4rcjQjGLWqa4"));
+        }
+        //catch (Xrpl.Client.Exceptions.RippledException e)
+        //{
+        //    var info = XrplErrorClassifier.Classify(e);
+        //    throw e;
+        //}
+        catch (Exception e)
+        {
+            var info = XrplErrorClassifier.Classify(e);
+        }
 
+        try
+        {
+            //var info = await client.AccountInfo(new("rKeiNfRJcDBUhu4rcjQjGLWqa4"));
+            var state = await client.LedgerEntry(new LedgerEntryRequest(){RippleState = new RippleStateQuery()
+            {
+                Addresses = ["rXPMxBeefHGxx2K7g5qmmWq3gFsgawkoa", "rLiooJRSKeiNfRJcDBUhu4rcjQjGLWqa4p"],
+                Currency = "XRT"
+            }});
             //await InitForDataForTest();
 
             //await SetSigners(walletMultiSign, walletMultiSigner_1, walletMultiSigner_2);
@@ -66,6 +85,7 @@ internal class Program
         }
         catch (Xrpl.Client.Exceptions.RippledException e)
         {
+            var info = XrplErrorClassifier.Classify(e);
             throw e;
         }
         catch (Xrpl.Client.Exceptions.XrplException e)
