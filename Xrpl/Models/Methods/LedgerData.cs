@@ -1,4 +1,5 @@
 ﻿using Newtonsoft.Json;
+using Newtonsoft.Json.Converters;
 
 //https://github.com/XRPLF/xrpl.js/blob/main/packages/xrpl/src/models/methods/ledgerData.ts
 namespace Xrpl.Models.Methods
@@ -38,6 +39,13 @@ namespace Xrpl.Models.Methods
         /// Resume retrieving data where that response left off.
         /// </summary>
         [JsonProperty("marker")]
-        public object Marker { get; set; }
+        public object? Marker { get; set; }
+
+        /// <summary>
+        /// Filter results to a specific type of ledger entry. This field accepts canonical names of ledger entry types (case insensitive) or short names. If omitted, return ledger entries of all types.
+        /// </summary>
+        [JsonProperty("type")]
+        [JsonConverter(typeof(StringEnumConverter))]
+        public LedgerEntryType? LedgerEntryType { get; set; }
     }
 }

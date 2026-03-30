@@ -323,14 +323,14 @@ public class TicketQuery
     /// <summary>
     /// The Ticket Sequence number of the Ticket entry to retrieve.
     /// </summary>
-    [JsonProperty("ticket_sequence")]
+    [JsonProperty("ticket_seq")]
     public uint TicketSequence { get; set; }
 
     /// <summary>
     /// The owner of the Ticket object.
     /// </summary>
-    [JsonProperty("owner")]
-    public string owner { get; set; }
+    [JsonProperty("account")]
+    public string Account { get; set; }
 }
 
 /// <summary>

@@ -1,7 +1,9 @@
-﻿using System.Collections.Generic;
+﻿using Newtonsoft.Json;
+using Newtonsoft.Json.Converters;
 
-using Newtonsoft.Json;
+using System.Collections.Generic;
 
+using Xrpl.Client.Json.Converters;
 using Xrpl.Models.Methods;
 
 //https://github.com/XRPLF/xrpl.js/blob/main/packages/xrpl/src/models/methods/ledgerData.ts
@@ -25,22 +27,22 @@ namespace Xrpl.Models.Ledger
         /// <summary>
         /// Array of JSON objects containing data from the ledger's state tree,  as defined below.
         /// </summary>
-        [JsonProperty("state")]
-        public List<LedgerDataBinaryOrJson> State { get; set; }
+        [JsonProperty("state", ItemConverterType = typeof(LOConverter))]
+        public List<BaseLedgerEntry> State { get; set; }
         /// <summary>
         /// Server-defined value indicating the response is paginated.<br/>
         /// Pass this to  the next call to resume where this call left off.
         /// </summary>
         [JsonProperty("marker")]
         public object Marker { get; set; }
-        //todo non found field validated?: boolean
-    }
 
-    public class LedgerDataBinaryOrJson
-    {
-        //[JsonProperty("data")]
-        //public string Data { get; set; }
-
-        public BaseLedgerEntry LedgerObject { get; set; }
+        [JsonProperty("ledger")]
+        public LedgerEntity Ledger { get; set; }
+        /// <summary>
+        /// True if this data is from a validated ledger version;<br/>
+        /// if omitted or set to false, this data is not final.
+        /// </summary>
+        [JsonProperty("validated")]
+        public bool? Validated { get; set; }
     }
 }
