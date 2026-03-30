@@ -1,7 +1,7 @@
-﻿using System;
+﻿using Newtonsoft.Json;
+using Newtonsoft.Json.Converters;
 
-using Newtonsoft.Json;
-
+using System;
 using System.Collections.Generic;
 
 using Xrpl.Client.Json.Converters;
@@ -87,6 +87,10 @@ namespace Xrpl.Models.Ledger
         [JsonProperty("close_time")]
         [JsonConverter(typeof(RippleDateTimeConverter))]
         public DateTime? CloseTime { get; set; }
+
+        [JsonProperty("close_time_iso")]
+        [JsonConverter(typeof(IsoDateTimeConverter))]
+        public DateTime? CloseTimeIso { get; set; }
         /// <summary>
         /// The approximate time this ledger was closed, in human-readable format.<br/>
         /// Always uses the UTC time zone.

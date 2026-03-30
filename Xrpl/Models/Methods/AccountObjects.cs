@@ -3,6 +3,7 @@ using Newtonsoft.Json.Converters;
 
 using System.Collections.Generic;
 
+using Xrpl.Client.Json.Converters;
 using Xrpl.Models.Ledger;
 
 //https://github.com/XRPLF/xrpl.js/blob/main/packages/xrpl/src/models/methods/accountObjects.ts
@@ -23,7 +24,7 @@ namespace Xrpl.Models.Methods
         /// Array of objects owned by this account.<br/>
         /// Each object is in its raw  ledger format.
         /// </summary>
-        [JsonProperty("account_objects")]
+        [JsonProperty("account_objects", ItemConverterType = typeof(LOConverter))]
         public List<BaseLedgerEntry> AccountObjectList { get; set; } //todo change from class to interface and parse same as transactionResponse
         /// <summary>
         /// The identifying hash of the ledger that was used to generate this  response.

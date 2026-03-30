@@ -1,5 +1,10 @@
 # Changes
 
+### 10.0.2.1 30/03/2026
+* Fix polymorphic ledger entry deserialization for `account_objects`
+* Fix `ledger_data` JSON response mapping for `state`
+* Add missing `ledger`, `validated`, and ledger entry type filter support
+
 ### 10.0.2 25/03/2026
 * Add XRPL error classifier with normalized `XrplErrorInfo`
 * Add structured XRPL error metadata: category, subject, retryable/user-fixable flags, command, field, and warnings
