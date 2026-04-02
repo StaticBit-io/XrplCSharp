@@ -38,13 +38,14 @@ public class TestIClawback
     const string CurrencyCode = "CLW";
     static bool issuerInitialized = false;
     static bool holderInitialized = false;
+    public static TestNodeType nodeType = TestNodeType.Standalone;
 
     [ClassInitialize]
     public static async Task MyClassInitializeAsync(TestContext testContext)
     {
-        client = await IntegrationTestConfig.CreateClientAsync(TestNodeType.TestNet);
+        client = await IntegrationTestConfig.CreateClientAsync(nodeType);
 
-        await IntegrationTestConfig.TryFundWalletsAsync(client, TestNodeType.TestNet, walletIssuer, walletHolder);
+        await IntegrationTestConfig.TryFundWalletsAsync(client, nodeType, walletIssuer, walletHolder);
 
         await SetupIssuerWithClawbackFlag();
         await SetupHolderTrustLine();

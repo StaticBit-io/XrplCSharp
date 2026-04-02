@@ -37,11 +37,12 @@ public class TestIAMMClawback
     private XrplWallet walletHolder;
 
     const string CurrencyCode = "AMC";
+    public static TestNodeType nodeType = TestNodeType.Standalone;
 
     [ClassInitialize]
     public static async Task ClassInitializeAsync(TestContext testContext)
     {
-        client = await IntegrationTestConfig.CreateClientAsync(TestNodeType.TestNet);
+        client = await IntegrationTestConfig.CreateClientAsync(TestNodeType.Standalone);
     }
 
     [ClassCleanup]
@@ -60,7 +61,7 @@ public class TestIAMMClawback
         Console.WriteLine($"Issuer: {walletIssuer.ClassicAddress}");
         Console.WriteLine($"Holder: {walletHolder.ClassicAddress}");
 
-        await IntegrationTestConfig.TryFundWalletsAsync(client, TestNodeType.TestNet, walletIssuer, walletHolder);
+        await IntegrationTestConfig.TryFundWalletsAsync(client, nodeType, walletIssuer, walletHolder);
 
         await SetupIssuerFlags();
         await SetupHolderTrustLine();

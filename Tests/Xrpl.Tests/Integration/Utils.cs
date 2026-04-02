@@ -276,7 +276,7 @@ namespace XrplTests.Xrpl.ClientLib.Integration
             };
             var values = JsonConvert.DeserializeObject<Dictionary<string, dynamic>>(payment.ToJson());
             var master = XrplWallet.FromSeed(MasterSecret);
-            var response = await client.SubmitAndWait(values, master);
+            var response = await client.SubmitAndWait(values, master, autofill: true);
 
             if (response.Meta.TransactionResult != "tesSUCCESS")
             {
@@ -347,7 +347,7 @@ namespace XrplTests.Xrpl.ClientLib.Integration
             };
             var values = JsonConvert.DeserializeObject<Dictionary<string, dynamic>>(payment.ToJson());
             var master = XrplWallet.FromSeed(masterSecret);
-            var response = await client.SubmitAndWait(values, master);
+            var response = await client.SubmitAndWait(values, master, autofill: true);
             if (response.Meta.TransactionResult != "tesSUCCESS")
             {
                 throw new Exception($"Response not successful, { response.Meta.TransactionResult}");

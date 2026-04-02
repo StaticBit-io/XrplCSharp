@@ -1,4 +1,4 @@
-﻿using Newtonsoft.Json;
+using Newtonsoft.Json;
 
 using System;
 using System.Collections.Generic;
@@ -1447,7 +1447,7 @@ public class Connection
         ws.SendMessage(message);
     }
 
-    private async Task EnsureConnectionForRequest(RequestFailurePolicy? policyOverride = null)
+    private async Task EnsureConnectionForRequest(RequestFailurePolicy? policyOverride = null, CancellationToken cancellationToken = default)
     {
         if (ShouldBeConnected())
         {
@@ -1464,7 +1464,7 @@ public class Connection
                 throw new NotConnectedException();
 
             case RequestFailurePolicy.WaitForConnection:
-                await WaitForConnectionAsync();
+                await WaitForConnectionAsync(cancellationToken: cancellationToken);
                 if (!ShouldBeConnected())
                 {
                     throw new NotConnectedException("Failed to establish connection within timeout period");
@@ -1497,11 +1497,12 @@ public class Connection
     public async Task<Dictionary<string, dynamic>> Request(
         Dictionary<string, dynamic> request,
         TimeSpan? timeout = null,
-        RequestFailurePolicy? policyOverride = null)
+        RequestFailurePolicy? policyOverride = null,
+        CancellationToken cancellationToken = default)
     {
-        await EnsureConnectionForRequest(policyOverride);
+        await EnsureConnectionForRequest(policyOverride, cancellationToken);
 
-        var _request = requestManager.CreateRequest(request, timeout: timeout ?? config.RequestTimeout);
+        var _request = requestManager.CreateRequest(request, timeout: timeout ?? config.RequestTimeout, cancellationToken: cancellationToken);
         try
         {
             WebsocketSendAsync(ws, _request.Message);
@@ -1517,11 +1518,12 @@ public class Connection
     public async Task<dynamic> GRequest<T, R>(
         R request,
         TimeSpan? timeout = null,
-        RequestFailurePolicy? policyOverride = null)
+        RequestFailurePolicy? policyOverride = null,
+        CancellationToken cancellationToken = default)
     {
-        await EnsureConnectionForRequest(policyOverride);
+        await EnsureConnectionForRequest(policyOverride, cancellationToken);
 
-        var _request = requestManager.CreateGRequest<T, R>(request, timeout: timeout ?? config.RequestTimeout);
+        var _request = requestManager.CreateGRequest<T, R>(request, timeout: timeout ?? config.RequestTimeout, cancellationToken: cancellationToken);
         try
         {
             WebsocketSendAsync(ws, _request.Message);

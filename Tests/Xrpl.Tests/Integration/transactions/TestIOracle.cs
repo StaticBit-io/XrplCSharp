@@ -35,11 +35,12 @@ public class TestIOracle
     public static IXrplClient client;
 
     static XrplWallet walletOracle = XrplWallet.FromNormalizedText("oracle test account");
+    public static TestNodeType nodeType = TestNodeType.Standalone;
 
     [ClassInitialize]
     public static async Task MyClassInitializeAsync(TestContext testContext)
     {
-        client = await IntegrationTestConfig.CreateClientAsync(TestNodeType.TestNet);
+        client = await IntegrationTestConfig.CreateClientAsync(nodeType);
 
         await IntegrationTestConfig.TryFundWalletAsync(client, walletOracle);
     }

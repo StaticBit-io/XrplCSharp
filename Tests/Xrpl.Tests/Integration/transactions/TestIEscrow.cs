@@ -20,7 +20,7 @@ public class TestIEscrow
     public TestContext TestContext { get; set; }
     public static IXrplClient client;
 
-    private static TestNodeType nodeType = TestNodeType.DevNet;
+    private static TestNodeType nodeType = TestNodeType.Standalone;
     //static XrplWallet walletIssuer = XrplWallet.Generate();
     //static XrplWallet walletHolder1 = XrplWallet.Generate();
 

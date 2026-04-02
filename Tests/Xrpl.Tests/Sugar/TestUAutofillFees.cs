@@ -1,4 +1,4 @@
-﻿using Microsoft.VisualStudio.TestTools.UnitTesting;
+using Microsoft.VisualStudio.TestTools.UnitTesting;
 
 using Newtonsoft.Json.Linq;
 
@@ -317,7 +317,7 @@ internal sealed class FeeTestClient : IXrplClient
     public string maxFeeXRP { get; set; }
     public uint? networkID { get; set; }
 
-    public Task<ServerInfo> ServerInfo(ServerInfoRequest request)
+    public Task<ServerInfo> ServerInfo(ServerInfoRequest request, CancellationToken cancellationToken = default)
     {
         var info = new ServerInfo
         {
@@ -333,7 +333,7 @@ internal sealed class FeeTestClient : IXrplClient
         return Task.FromResult(info);
     }
 
-    public Task<ServerState> ServerState(ServerStateRequest request)
+    public Task<ServerState> ServerState(ServerStateRequest request, CancellationToken cancellationToken = default)
     {
         var state = new ServerState
         {
@@ -348,13 +348,13 @@ internal sealed class FeeTestClient : IXrplClient
         return Task.FromResult(state);
     }
 
-    public Task<ServerFeatures> ServerFeatures(string feature = null) => throw new NotImplementedException();
+    public Task<ServerFeatures> ServerFeatures(string feature = null, CancellationToken cancellationToken = default) => throw new NotImplementedException();
 
-    public Task<uint> GetLedgerIndex() => Task.FromResult(100u);
-    public Task<string> GetXrpBalance(string address) => throw new NotSupportedException();
+    public Task<uint> GetLedgerIndex(CancellationToken cancellationToken = default) => Task.FromResult(100u);
+    public Task<string> GetXrpBalance(string address, CancellationToken cancellationToken = default) => throw new NotSupportedException();
 
-    public Task<Dictionary<string, dynamic>> Autofill(Dictionary<string, dynamic> tx, int? signersCount = null) => throw new NotSupportedException();
-    public Task<T> Autofill<T>(T tx, int? signersCount = null) where T : ITransactionRequest => throw new NotSupportedException();
+    public Task<Dictionary<string, dynamic>> Autofill(Dictionary<string, dynamic> tx, int? signersCount = null, CancellationToken cancellationToken = default) => throw new NotSupportedException();
+    public Task<T> Autofill<T>(T tx, int? signersCount = null, CancellationToken cancellationToken = default) where T : ITransactionRequest => throw new NotSupportedException();
 
     public Task ChangeServer(string server, XrplClient.ClientOptions? options = null, System.Threading.CancellationToken cancellationToken = default) => throw new NotSupportedException();
     public string EnsureClassicAddress(string address) => throw new NotSupportedException();
@@ -368,38 +368,38 @@ internal sealed class FeeTestClient : IXrplClient
     public Task DisconnectAndWaitAsync(TimeSpan timeout, CancellationToken cancellationToken = default) => throw new NotImplementedException();
 
     public bool IsConnected() => throw new NotSupportedException();
-    public Task<object> Subscribe(SubscribeRequest request) => throw new NotSupportedException();
-    public Task<object> Unsubscribe(UnsubscribeRequest request) => throw new NotSupportedException();
-    public Task<object> Ping() => throw new NotSupportedException();
-    public Task<Fee> Fee() => throw new NotSupportedException();
-    public Task<AccountInfo> AccountInfo(AccountInfoRequest request) => throw new NotSupportedException();
-    public Task<AccountOffers> AccountOffers(AccountOffersRequest request) => throw new NotSupportedException();
-    public Task<AccountCurrencies> AccountCurrencies(AccountCurrenciesRequest request) => throw new NotSupportedException();
-    public Task<AccountLines> AccountLines(AccountLinesRequest request) => throw new NotSupportedException();
-    public Task<AccountChannels> AccountChannels(AccountChannelsRequest request) => throw new NotSupportedException();
-    public Task<AccountObjects> AccountObjects(AccountObjectsRequest request) => throw new NotSupportedException();
-    public Task<AccountTransactions> AccountTransactions(AccountTransactionsRequest request) => throw new NotSupportedException();
-    public Task<GatewayBalancesResponse> GatewayBalances(GatewayBalancesRequest request) => throw new NotSupportedException();
-    public Task<NoRippleCheck> NoRippleCheck(NoRippleCheckRequest request) => throw new NotSupportedException();
-    public Task<LOLedger> Ledger(LedgerRequest request) => throw new NotSupportedException();
-    public Task<LOBaseLedger> LedgerClosed(LedgerClosedRequest request) => throw new NotSupportedException();
-    public Task<LOLedgerCurrentIndex> LedgerCurrent(LedgerCurrentRequest request) => throw new NotSupportedException();
-    public Task<LOLedgerData> LedgerData(LedgerDataRequest request) => throw new NotSupportedException();
-    public Task<LedgerEntryResponse> LedgerEntry(LedgerEntryRequest request) => throw new NotSupportedException();
-    public Task<Submit> Submit(Dictionary<string, dynamic> tx, XrplWallet wallet, bool autoFill = true, bool failHard = false) => throw new NotSupportedException();
-    public Task<Submit> Submit(ITransactionRequest tx, XrplWallet wallet, bool autoFill = true, bool failHard = false) => throw new NotSupportedException();
-    public Task<TransactionResponse> Tx(TxRequest request) => throw new NotSupportedException();
-    public Task<TransactionSummary> TxV2(TxRequest request) => throw new NotSupportedException();
-    public Task<BookOffers> BookOffers(BookOffersRequest request) => throw new NotSupportedException();
-    public Task<NFTBuyOffers> NFTBuyOffers(NFTBuyOffersRequest request) => throw new NotSupportedException();
-    public Task<NFTSellOffers> NFTSellOffers(NFTSellOffersRequest request) => throw new NotSupportedException();
-    public Task<AccountNFTs> AccountNFTs(AccountNFTsRequest request) => throw new NotSupportedException();
-    public Task<AMMInfoResponse> AmmInfo(AMMInfoRequest request) => throw new NotSupportedException();
-    public Task<object> Random() => throw new NotSupportedException();
-    public Task<object> AnyRequest(BaseRequest request) => throw new NotSupportedException();
-    public Task<Dictionary<string, dynamic>> Request(Dictionary<string, dynamic> request) => throw new NotSupportedException();
-    public Task<T> GRequest<T, R>(R request) where R : BaseRequest => throw new NotSupportedException();
-    public Task<SimulateResponse> Simulate(SimulateRequest request) => throw new NotSupportedException();
+    public Task<object> Subscribe(SubscribeRequest request, CancellationToken cancellationToken = default) => throw new NotSupportedException();
+    public Task<object> Unsubscribe(UnsubscribeRequest request, CancellationToken cancellationToken = default) => throw new NotSupportedException();
+    public Task<object> Ping(CancellationToken cancellationToken = default) => throw new NotSupportedException();
+    public Task<Fee> Fee(CancellationToken cancellationToken = default) => throw new NotSupportedException();
+    public Task<AccountInfo> AccountInfo(AccountInfoRequest request, CancellationToken cancellationToken = default) => throw new NotSupportedException();
+    public Task<AccountOffers> AccountOffers(AccountOffersRequest request, CancellationToken cancellationToken = default) => throw new NotSupportedException();
+    public Task<AccountCurrencies> AccountCurrencies(AccountCurrenciesRequest request, CancellationToken cancellationToken = default) => throw new NotSupportedException();
+    public Task<AccountLines> AccountLines(AccountLinesRequest request, CancellationToken cancellationToken = default) => throw new NotSupportedException();
+    public Task<AccountChannels> AccountChannels(AccountChannelsRequest request, CancellationToken cancellationToken = default) => throw new NotSupportedException();
+    public Task<AccountObjects> AccountObjects(AccountObjectsRequest request, CancellationToken cancellationToken = default) => throw new NotSupportedException();
+    public Task<AccountTransactions> AccountTransactions(AccountTransactionsRequest request, CancellationToken cancellationToken = default) => throw new NotSupportedException();
+    public Task<GatewayBalancesResponse> GatewayBalances(GatewayBalancesRequest request, CancellationToken cancellationToken = default) => throw new NotSupportedException();
+    public Task<NoRippleCheck> NoRippleCheck(NoRippleCheckRequest request, CancellationToken cancellationToken = default) => throw new NotSupportedException();
+    public Task<LOLedger> Ledger(LedgerRequest request, CancellationToken cancellationToken = default) => throw new NotSupportedException();
+    public Task<LOBaseLedger> LedgerClosed(LedgerClosedRequest request, CancellationToken cancellationToken = default) => throw new NotSupportedException();
+    public Task<LOLedgerCurrentIndex> LedgerCurrent(LedgerCurrentRequest request, CancellationToken cancellationToken = default) => throw new NotSupportedException();
+    public Task<LOLedgerData> LedgerData(LedgerDataRequest request, CancellationToken cancellationToken = default) => throw new NotSupportedException();
+    public Task<LedgerEntryResponse> LedgerEntry(LedgerEntryRequest request, CancellationToken cancellationToken = default) => throw new NotSupportedException();
+    public Task<Submit> Submit(Dictionary<string, dynamic> tx, XrplWallet wallet, bool autoFill = true, bool failHard = false, CancellationToken cancellationToken = default) => throw new NotSupportedException();
+    public Task<Submit> Submit(ITransactionRequest tx, XrplWallet wallet, bool autoFill = true, bool failHard = false, CancellationToken cancellationToken = default) => throw new NotSupportedException();
+    public Task<TransactionResponse> Tx(TxRequest request, CancellationToken cancellationToken = default) => throw new NotSupportedException();
+    public Task<TransactionSummary> TxV2(TxRequest request, CancellationToken cancellationToken = default) => throw new NotSupportedException();
+    public Task<BookOffers> BookOffers(BookOffersRequest request, CancellationToken cancellationToken = default) => throw new NotSupportedException();
+    public Task<NFTBuyOffers> NFTBuyOffers(NFTBuyOffersRequest request, CancellationToken cancellationToken = default) => throw new NotSupportedException();
+    public Task<NFTSellOffers> NFTSellOffers(NFTSellOffersRequest request, CancellationToken cancellationToken = default) => throw new NotSupportedException();
+    public Task<AccountNFTs> AccountNFTs(AccountNFTsRequest request, CancellationToken cancellationToken = default) => throw new NotSupportedException();
+    public Task<AMMInfoResponse> AmmInfo(AMMInfoRequest request, CancellationToken cancellationToken = default) => throw new NotSupportedException();
+    public Task<object> Random(CancellationToken cancellationToken = default) => throw new NotSupportedException();
+    public Task<object> AnyRequest(BaseRequest request, CancellationToken cancellationToken = default) => throw new NotSupportedException();
+    public Task<Dictionary<string, dynamic>> Request(Dictionary<string, dynamic> request, CancellationToken cancellationToken = default) => throw new NotSupportedException();
+    public Task<T> GRequest<T, R>(R request, CancellationToken cancellationToken = default) where R : BaseRequest => throw new NotSupportedException();
+    public Task<SimulateResponse> Simulate(SimulateRequest request, CancellationToken cancellationToken = default) => throw new NotSupportedException();
     public void Dispose() { }
 
     #endregion

@@ -1,5 +1,6 @@
-﻿using System;
+using System;
 using System.Globalization;
+using System.Threading;
 using System.Threading.Tasks;
 
 using Xrpl.Client;
@@ -22,11 +23,11 @@ namespace Xrpl.Sugar
         /// <param name="client">The Client used to connect to the ledger.</param>
         /// <param name="cushion">The fee cushion to use</param>
         /// <returns>The transaction fee</returns>
-        public static async Task<string> GetFeeXrp(this IXrplClient client, double? cushion = null)
+        public static async Task<string> GetFeeXrp(this IXrplClient client, double? cushion = null, CancellationToken cancellationToken = default)
         {
             double feeCushion = cushion ?? client.feeCushion;
             ServerInfoRequest request = new ServerInfoRequest();
-            ServerInfo serverInfo = await client.ServerInfo(request);
+            ServerInfo serverInfo = await client.ServerInfo(request, cancellationToken);
             double? baseFee = serverInfo.Info.ValidatedLedger?.BaseFeeXrp;
             if (baseFee == null)
             {
