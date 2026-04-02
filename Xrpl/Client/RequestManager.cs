@@ -1,4 +1,4 @@
-﻿using NBitcoin.Protocol;
+using NBitcoin.Protocol;
 
 using Newtonsoft.Json;
 
@@ -6,6 +6,7 @@ using System;
 using System.Collections.Concurrent;
 using System.Collections.Generic;
 using System.Diagnostics;
+using System.Threading;
 using System.Threading.Tasks;
 
 using Xrpl.Client.Exceptions;
@@ -59,7 +60,8 @@ namespace Xrpl.Client
         {
             if (!promisesAwaitingResponse.TryGetValue(id, out var taskInfo) || taskInfo == null)
             {
-                throw new XrplException($"No existing promise with id {id}");
+                Debug.WriteLine($"Resolve called for non-existent promise {id} (likely already cancelled/timed out)");
+                return;
             }
 
             if (timeoutsAwaitingResponse.TryRemove(id, out var timer))
@@ -150,7 +152,7 @@ namespace Xrpl.Client
             }
         }
 
-        public XrplGRequest CreateGRequest<T, R>(R request, TimeSpan timeout)
+        public XrplGRequest CreateGRequest<T, R>(R request, TimeSpan timeout, CancellationToken cancellationToken = default)
         {
             if (timeout != System.Threading.Timeout.InfiniteTimeSpan && timeout <= TimeSpan.Zero)
             {
@@ -188,6 +190,22 @@ namespace Xrpl.Client
 
             promisesAwaitingResponse.TryAdd(newId, taskInfo);
 
+            if (cancellationToken.CanBeCanceled)
+            {
+                CancellationTokenRegistration registration = cancellationToken.Register(() =>
+                {
+                    try
+                    {
+                        this.Reject(newId, new OperationCanceledException("Request was cancelled"));
+                    }
+                    catch (Exception ex)
+                    {
+                        Debug.WriteLine($"CancellationToken callback error: {ex.Message}");
+                    }
+                });
+                taskInfo.CancellationRegistration = registration;
+            }
+
             if (timeout != System.Threading.Timeout.InfiniteTimeSpan)
             {
                 Timer timer = new Timer(timeout.TotalMilliseconds);
@@ -217,7 +235,7 @@ namespace Xrpl.Client
 
         /// <summary>
         /// </summary>
-        public XrplRequest CreateRequest(Dictionary<string, dynamic> request, TimeSpan timeout)
+        public XrplRequest CreateRequest(Dictionary<string, dynamic> request, TimeSpan timeout, CancellationToken cancellationToken = default)
         {
             if (timeout != System.Threading.Timeout.InfiniteTimeSpan && timeout <= TimeSpan.Zero)
             {
@@ -254,6 +272,22 @@ namespace Xrpl.Client
             taskInfo.Type = typeof(Dictionary<string, dynamic>);
 
             promisesAwaitingResponse.TryAdd(newId, taskInfo);
+
+            if (cancellationToken.CanBeCanceled)
+            {
+                CancellationTokenRegistration registration = cancellationToken.Register(() =>
+                {
+                    try
+                    {
+                        this.Reject(newId, new OperationCanceledException("Request was cancelled"));
+                    }
+                    catch (Exception ex)
+                    {
+                        Debug.WriteLine($"CancellationToken callback error: {ex.Message}");
+                    }
+                });
+                taskInfo.CancellationRegistration = registration;
+            }
 
             if (timeout != System.Threading.Timeout.InfiniteTimeSpan)
             {
@@ -353,7 +387,11 @@ namespace Xrpl.Client
         /// </summary>
         public void DeletePromise(Guid id, TaskInfo taskInfo)
         {
-            this.promisesAwaitingResponse.TryRemove(id, out taskInfo);
+            this.promisesAwaitingResponse.TryRemove(id, out _);
+            if (taskInfo.CancellationRegistration is { } reg)
+            {
+                _ = reg.DisposeAsync();
+            }
         }
     }
 }

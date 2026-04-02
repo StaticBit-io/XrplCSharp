@@ -1,4 +1,5 @@
-﻿using System;
+using System;
+using System.Threading;
 using System.Threading.Tasks;
 
 using Xrpl.Client;
@@ -17,11 +18,11 @@ namespace Xrpl.Sugar
         /// </summary>
         /// <param name="client">The Client used to connect to the ledger.</param>
         // <returns>The most recently validated ledger index.</returns>
-        public static async Task<uint> GetLedgerIndex(this IXrplClient client)
+        public static async Task<uint> GetLedgerIndex(this IXrplClient client, CancellationToken cancellationToken = default)
         {
             LedgerIndex index = new LedgerIndex(LedgerIndexType.Current);
             LedgerRequest request = new LedgerRequest() { LedgerIndex = index };
-            LOLedger ledgerResponse = await client.Ledger(request);
+            LOLedger ledgerResponse = await client.Ledger(request, cancellationToken);
             LedgerEntity ledger = (LedgerEntity)ledgerResponse.LedgerEntity;
             return Convert.ToUInt32(ledger.LedgerIndex);
         }

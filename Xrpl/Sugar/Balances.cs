@@ -1,5 +1,6 @@
-﻿using System.Collections.Generic;
+using System.Collections.Generic;
 using System.Linq;
+using System.Threading;
 using System.Threading.Tasks;
 
 using Xrpl.Client;
@@ -48,7 +49,7 @@ namespace Xrpl.Sugar
         /// <param name="ledgerHash">Retrieve the account balances at the ledger with a given ledger_hash.</param>
         /// <param name="client">Client.</param>
         /// <returns/> The XRP balance of the account (as a string).
-        public static async Task<string> GetXrpBalance(this IXrplClient client, string address, string ledgerHash = null, LedgerIndex lederIndex = null)
+        public static async Task<string> GetXrpBalance(this IXrplClient client, string address, string ledgerHash = null, LedgerIndex lederIndex = null, CancellationToken cancellationToken = default)
         {
             LedgerIndex index = new LedgerIndex(LedgerIndexType.Validated);
             AccountInfoRequest xrpRequest = new AccountInfoRequest(address)
@@ -57,7 +58,7 @@ namespace Xrpl.Sugar
                 LedgerIndex = lederIndex ?? index,
                 Strict = true
             };
-            AccountInfo accountInfo = await client.AccountInfo(xrpRequest);
+            AccountInfo accountInfo = await client.AccountInfo(xrpRequest, cancellationToken);
             return accountInfo.AccountData.Balance.ValueAsXrp.ToString();
         }
 
@@ -76,7 +77,7 @@ namespace Xrpl.Sugar
         /// <param name="client">Client.</param>
         /// <returns>A decimal value representing the amount of XRP that is available for spending or transfer from the specified
         /// account, after subtracting the account and owner reserve requirements.</returns>
-        public static async Task<decimal> GetXrpFreeBalance(this IXrplClient client, string address, string? ledgerHash = null, LedgerIndex? lederIndex = null)
+        public static async Task<decimal> GetXrpFreeBalance(this IXrplClient client, string address, string? ledgerHash = null, LedgerIndex? lederIndex = null, CancellationToken cancellationToken = default)
         {
             LedgerIndex index = new LedgerIndex(LedgerIndexType.Validated);
             AccountInfoRequest xrpRequest = new AccountInfoRequest(address)
@@ -85,9 +86,9 @@ namespace Xrpl.Sugar
                 LedgerIndex = lederIndex ?? index,
                 Strict = true
             };
-            AccountInfo accountInfo = await client.AccountInfo(xrpRequest);
+            AccountInfo accountInfo = await client.AccountInfo(xrpRequest, cancellationToken);
 
-            var serverInfo = await client.ServerState(new ServerStateRequest());
+            var serverInfo = await client.ServerState(new ServerStateRequest(), cancellationToken);
             var FlineReserveFee = serverInfo.State.ValidatedLedger.ReserveInc.ToString();
             var FaccReserveFee = serverInfo.State.ValidatedLedger.ReserveBase.ToString();
             var lineReserveFee = (decimal)new Currency()
@@ -106,7 +107,7 @@ namespace Xrpl.Sugar
         }
 
         /// <param name="client">Client.</param>
-        public static async Task<List<Balance>> GetBalances(this IXrplClient client, string address, GetBalancesOptions options = null)
+        public static async Task<List<Balance>> GetBalances(this IXrplClient client, string address, GetBalancesOptions options = null, CancellationToken cancellationToken = default)
         {
             var linesRequest = new AccountLinesRequest(address)
             {
@@ -117,12 +118,12 @@ namespace Xrpl.Sugar
                 Limit = options?.Limit
             };
 
-            var response = await client.AccountLines(linesRequest);
+            var response = await client.AccountLines(linesRequest, cancellationToken);
             var lines = response.TrustLines;
             while (response.Marker is not null && lines.Count > 0)
             {
                 linesRequest.Marker = response.Marker;
-                response = await client.AccountLines(linesRequest);
+                response = await client.AccountLines(linesRequest, cancellationToken);
                 if (response.TrustLines.Count > 0)
                     lines.AddRange(response.TrustLines);
                 if (options?.Limit is not null && lines.Count >= options.Limit)
@@ -132,7 +133,7 @@ namespace Xrpl.Sugar
 
             if (options?.Peer == null)
             {
-                var xrp_balance = await GetXrpBalance(client, address, options?.LedgerHash, options?.LedgerIndex);
+                var xrp_balance = await GetXrpBalance(client, address, options?.LedgerHash, options?.LedgerIndex, cancellationToken);
                 if (!string.IsNullOrWhiteSpace(xrp_balance))
                 {
                     balances.Insert(0, new Balance { Currency = "XRP", Value = xrp_balance });

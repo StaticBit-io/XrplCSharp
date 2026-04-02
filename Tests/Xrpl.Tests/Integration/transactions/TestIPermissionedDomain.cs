@@ -22,7 +22,7 @@ public class TestIPermissionedDomain
 {
     public TestContext TestContext { get; set; }
     public static IXrplClient client;
-    public static TestNodeType nodeType = TestNodeType.DevNet;
+    public static TestNodeType nodeType = TestNodeType.Standalone;
 
     [ClassInitialize]
     public static async Task MyClassInitializeAsync(TestContext testContext)

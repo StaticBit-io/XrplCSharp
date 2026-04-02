@@ -29,7 +29,7 @@ public class TestICredential
 
     static XrplWallet walletIssuer;
     static XrplWallet walletSubject;
-    public static TestNodeType nodeType = TestNodeType.DevNet;
+    public static TestNodeType nodeType = TestNodeType.Standalone;
 
     [ClassInitialize]
     public static async Task MyClassInitializeAsync(TestContext testContext)

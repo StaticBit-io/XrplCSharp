@@ -1,10 +1,11 @@
-﻿using Newtonsoft.Json;
+using Newtonsoft.Json;
 using Newtonsoft.Json.Linq;
 
 using System;
 using System.Collections;
 using System.Collections.Generic;
 using System.Linq;
+using System.Threading;
 using System.Threading.Tasks;
 
 using Xrpl.Client;
@@ -71,7 +72,8 @@ public static class BatchNormalizer
     /// </summary>
     public static async Task NormalizeBatchTransaction(
         this IXrplClient client,
-        Dictionary<string, dynamic> tx)
+        Dictionary<string, dynamic> tx,
+        CancellationToken cancellationToken = default)
     {
         if (!tx.TryGetValue("RawTransactions", out var rawTransactions) || rawTransactions == null)
             throw new ValidationException("Batch transaction must have RawTransactions field.");
@@ -90,7 +92,7 @@ public static class BatchNormalizer
             var ai = await client.AccountInfo(new AccountInfoRequest(account)
             {
                 LedgerIndex = new LedgerIndex(LedgerIndexType.Current)
-            });
+            }, cancellationToken);
             var start = ai.AccountData.Sequence;
             nextSeqByAccount[account] = start;
             return start;

@@ -1,4 +1,4 @@
-﻿using Newtonsoft.Json;
+using Newtonsoft.Json;
 using Newtonsoft.Json.Linq;
 
 using System;
@@ -45,11 +45,12 @@ public static class SubmitSugar
         Dictionary<string, dynamic> transaction,
         bool autofill = false,
         bool failHard = false,
-        XrplWallet wallet = null
+        XrplWallet wallet = null,
+        CancellationToken cancellationToken = default
     )
     {
-        var (signedTx, _) = await client.GetSignedTx(transaction, autofill, failHard: false, wallet);
-        return await SubmitRequest(client, signedTx, failHard);
+        var (signedTx, _) = await client.GetSignedTx(transaction, autofill, failHard: false, wallet, cancellationToken);
+        return await SubmitRequest(client, signedTx, failHard, cancellationToken);
     }
 
     /// <summary>
@@ -68,8 +69,9 @@ public static class SubmitSugar
         ITransactionRequest transaction,
         XrplWallet wallet = null,
         bool autofill = false,
-        bool failHard = false) =>
-        SubmitAndWait(client, transaction.ToDictionary(), wallet, autofill, failHard);
+        bool failHard = false,
+        CancellationToken cancellationToken = default) =>
+        SubmitAndWait(client, transaction.ToDictionary(), wallet, autofill, failHard, cancellationToken);
     /// <summary>
     /// Asynchronously submits a transaction and verifies that it has been included in a
     /// validated ledger(or has errored/will not be included for some reason).
@@ -86,9 +88,10 @@ public static class SubmitSugar
         Dictionary<string, dynamic> transaction,
         XrplWallet wallet = null,
         bool autofill = false,
-        bool failHard = false)
+        bool failHard = false,
+        CancellationToken cancellationToken = default)
     {
-        var (signedTx, tx) = await client.GetSignedTx(transaction, autofill, failHard, wallet);
+        var (signedTx, tx) = await client.GetSignedTx(transaction, autofill, failHard, wallet, cancellationToken);
         var lastLedger = GetLastLedgerSequence(tx);
         if (lastLedger == null)
         {
@@ -96,16 +99,17 @@ public static class SubmitSugar
                 "Transaction must contain a LastLedgerSequence value for reliable submission.");
         }
 
-        var response = await client.SubmitRequest(signedTx, failHard);
+        var response = await client.SubmitRequest(signedTx, failHard, cancellationToken);
         var txHash = HashLedger.HashSignedTx(signedTx);
         return await WaitForFinalTransactionOutcome(
             client,
             txHash,
             lastLedger,
-            response.EngineResult);
+            response.EngineResult,
+            cancellationToken);
     }
 
-    public static async Task<TransactionSummary> SubmitRequestAndWait(this IXrplClient client, object signedTransaction, bool failHard)
+    public static async Task<TransactionSummary> SubmitRequestAndWait(this IXrplClient client, object signedTransaction, bool failHard, CancellationToken cancellationToken = default)
     {
         var signedTx = GetTxBlob(signedTransaction);
         var decoded = XrplBinaryCodec.Decode(signedTx).ToString();
@@ -117,13 +121,14 @@ public static class SubmitSugar
                 "Transaction must contain a LastLedgerSequence value for reliable submission.");
         }
 
-        var response = await client.SubmitRequest(signedTx, failHard);
+        var response = await client.SubmitRequest(signedTx, failHard, cancellationToken);
         var txHash = HashLedger.HashSignedTx(signedTx);
         return await WaitForFinalTransactionOutcome(
             client,
             txHash,
             lastLedger,
-            response.EngineResult);
+            response.EngineResult,
+            cancellationToken);
     }
     /// <summary>
     /// Encodes and submits a signed transaction.
@@ -132,7 +137,7 @@ public static class SubmitSugar
     /// <param name="signedTransaction">signed Transaction</param>
     /// <param name="failHard">If true, and the transaction fails locally, do not retry or relay the transaction to other servers.</param>
     /// <returns></returns>
-    public static async Task<Submit> SubmitRequest(this IXrplClient client, object signedTransaction, bool failHard)
+    public static async Task<Submit> SubmitRequest(this IXrplClient client, object signedTransaction, bool failHard, CancellationToken cancellationToken = default)
     {
         //todo activate after fix
         //if (!IsSigned(signedTransaction))
@@ -148,7 +153,7 @@ public static class SubmitSugar
             TxBlob = signedTxEncoded,
             FailHard = failHard,
         };
-        var response = await client.GRequest<Submit, SubmitRequest>(request);
+        var response = await client.GRequest<Submit, SubmitRequest>(request, cancellationToken);
         return response;
     }
 
@@ -185,12 +190,13 @@ public static class SubmitSugar
         ITransactionRequest tx,
         IEnumerable<XrplWallet> wallets,
         bool autofill = true,
-        bool failHard = false)
+        bool failHard = false,
+        CancellationToken cancellationToken = default)
     {
         var json = tx.ToJson();
         var txJson = JsonConvert.DeserializeObject<Dictionary<string, dynamic>>(json)
                      ?? throw new ValidationException("Failed to deserialize tx json");
-        var response = await SubmitMulti(client, txJson, wallets, autofill, failHard);
+        var response = await SubmitMulti(client, txJson, wallets, autofill, failHard, cancellationToken);
         return response;
     }
 
@@ -208,7 +214,8 @@ public static class SubmitSugar
         Dictionary<string, dynamic> tx,
         IEnumerable<XrplWallet> wallets,
         bool autofill = true,
-        bool failHard = false)
+        bool failHard = false,
+        CancellationToken cancellationToken = default)
     {
         if (wallets is null)
         {
@@ -218,14 +225,14 @@ public static class SubmitSugar
         var xrplWallets = wallets as XrplWallet[] ?? wallets.ToArray();
         if (autofill)
         {
-            tx = await client.Autofill(tx, signersCount: xrplWallets.Length);
+            tx = await client.Autofill(tx, signersCount: xrplWallets.Length, cancellationToken: cancellationToken);
         }
 
         var signed = xrplWallets.Select(c => c.Sign(tx, multisign: true).TxBlob).ToArray();
         var combined = Signer.Multisign(signed);
         var txRes = XrplBinaryCodec.Decode(combined);
 
-        var response = await client.SubmitRequest(combined, failHard: false);
+        var response = await client.SubmitRequest(combined, failHard: false, cancellationToken: cancellationToken);
         return response;
     }
 
@@ -243,7 +250,8 @@ public static class SubmitSugar
         Dictionary<string, dynamic> txJson,
         IEnumerable<XrplWallet> wallets,
         bool autofill = true,
-        bool failHard = false)
+        bool failHard = false,
+        CancellationToken cancellationToken = default)
     {
         var walletList = wallets as IList<XrplWallet> ?? wallets.ToList();
         if (walletList.Count == 0)
@@ -260,7 +268,7 @@ public static class SubmitSugar
 
         if (autofill)
         {
-            txJson = await client.Autofill(txJson, signersCount: walletList.Count);
+            txJson = await client.Autofill(txJson, signersCount: walletList.Count, cancellationToken: cancellationToken);
         }
 
         var root = JObject.FromObject(txJson);
@@ -286,7 +294,7 @@ public static class SubmitSugar
                 new AccountInfoRequest(acct)
                 {
                     SignerLists = true
-                });
+                }, cancellationToken);
             var hasSL = ai.SignerLists?.Length > 0 && ai.AccountFlags!.DisableMasterKey;
             if (hasSL)
             {
@@ -322,7 +330,7 @@ public static class SubmitSugar
             new AccountInfoRequest(mainAcc)
             {
                 SignerLists = true
-            });
+            }, cancellationToken);
         var rootHasSL = aiRoot.SignerLists?.Length > 0 && aiRoot.AccountFlags!.DisableMasterKey;
         if (!rootHasSL)
         {
@@ -330,7 +338,7 @@ public static class SubmitSugar
             if (!walletByAddr.TryGetValue(mainAcc, out var main))
                 throw new ValidationException($"Main account {mainAcc} not found in provided wallets");
             var final = main.Sign(JsonConvert.DeserializeObject<Dictionary<string, dynamic>>(combinedJson.ToString()));
-            var submit = await client.SubmitRequest(final.TxBlob, failHard);
+            var submit = await client.SubmitRequest(final.TxBlob, failHard, cancellationToken);
             //var txRes = XrplBinaryCodec.Decode(submit.TxBlob);
             return submit;
         }
@@ -352,7 +360,7 @@ public static class SubmitSugar
             var msCombined = Signer.Multisign(msBlobs);
             //var txRes = XrplBinaryCodec.Decode(msCombined);
 
-            var submit = await client.SubmitRequest(msCombined, failHard);
+            var submit = await client.SubmitRequest(msCombined, failHard, cancellationToken);
             return submit;
         }
     }
@@ -371,13 +379,14 @@ public static class SubmitSugar
     Batch tx,
     IEnumerable<XrplWallet> wallets,
     bool autofill = true,
-    bool failHard = false)
+    bool failHard = false,
+    CancellationToken cancellationToken = default)
     {
         var json = tx.ToJson();
         var txJson = JsonConvert.DeserializeObject<Dictionary<string, dynamic>>(json)
                     ?? throw new ValidationException("Failed to deserialize tx json");
 
-        var response = await client.SubmitMultiBatch(txJson, wallets, autofill, failHard);
+        var response = await client.SubmitMultiBatch(txJson, wallets, autofill, failHard, cancellationToken);
         return response;
     }
 
@@ -407,7 +416,7 @@ public static class SubmitSugar
             // Ждём закрытие следующего леджера
             await Task.Delay(LEDGER_CLOSE_TIME, cancellationToken);
 
-            var latestLedger = await client.GetLedgerIndex();
+            var latestLedger = await client.GetLedgerIndex(cancellationToken);
 
             // Если у нас есть LastLedgerSequence и мы его уже перешагнули — транзакция точно не попадёт в леджер
             if (lastLedgerSequence.HasValue && latestLedger > lastLedgerSequence.Value)
@@ -426,7 +435,7 @@ public static class SubmitSugar
                     new TxRequest(txHash)
                     {
                         ApiVersion = 2,
-                    });
+                    }, cancellationToken);
             }
             catch (Exception error)
             {
@@ -474,7 +483,8 @@ public static class SubmitSugar
         Dictionary<string, dynamic> transaction,
         bool autofill = false,
         bool failHard = false,
-        XrplWallet? wallet = null
+        XrplWallet? wallet = null,
+        CancellationToken cancellationToken = default
     )
     {
         //if (IsSigned(transaction))
@@ -495,7 +505,7 @@ public static class SubmitSugar
         //    : transaction
         if (autofill)
         {
-            tx = await client.Autofill(tx);
+            tx = await client.Autofill(tx, cancellationToken: cancellationToken);
         }
 
         return (wallet.Sign(tx, multisign: false).TxBlob, tx);

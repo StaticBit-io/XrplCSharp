@@ -42,36 +42,16 @@ internal class Program
     private static async Task Main(string[] args)
     {
         //TestWalletFromText();
-        await InitTestData(TestDataType.mainNet);
-        try
-        {
-            throw new NotImplementedException("Test exception");
-            //var info = await client.AccountInfo(new("rKeiNfRJcDBUhu4rcjQjGLWqa4"));
-        }
-        //catch (Xrpl.Client.Exceptions.RippledException e)
-        //{
-        //    var info = XrplErrorClassifier.Classify(e);
-        //    throw e;
-        //}
-        catch (Exception e)
-        {
-            var info = XrplErrorClassifier.Classify(e);
-        }
+        await InitTestData(TestDataType.devNet);
 
         try
         {
-            //var info = await client.AccountInfo(new("rKeiNfRJcDBUhu4rcjQjGLWqa4"));
-            var state = await client.LedgerEntry(new LedgerEntryRequest(){RippleState = new RippleStateQuery()
-            {
-                Addresses = ["rXPMxBeefHGxx2K7g5qmmWq3gFsgawkoa", "rLiooJRSKeiNfRJcDBUhu4rcjQjGLWqa4p"],
-                Currency = "XRT"
-            }});
             //await InitForDataForTest();
 
             //await SetSigners(walletMultiSign, walletMultiSigner_1, walletMultiSigner_2);
 
             var features = await client.ServerFeatures();
-            var canBe = features.GetCanBeEnabled();
+            var canBe = features.GetActivated();
             var mpts = features.GetByNameContains("mpt");
             foreach (var mpt in canBe)
             {
@@ -112,6 +92,7 @@ internal class Program
             .AddTrustlines("USD", "EUR", "BTC")
             .AddNFTs(3)
             .AddOffers(5)
+            .AddIssuerOffers(5)
             .AddTickets(5)
             .AddChecks(2)
             .AddEscrows()

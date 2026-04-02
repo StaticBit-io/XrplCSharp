@@ -160,6 +160,10 @@ public class TestAccountBuilder
     {
         _buildActions.Add(() => CreateDEXOffersAsync(count));
         return this;
+    }    public TestAccountBuilder AddIssuerOffers(int count = 5)
+    {
+        _buildActions.Add(() => CreateDEXOffersForIssuerAsync(count));
+        return this;
     }
 
     /// <summary>
@@ -613,6 +617,42 @@ public class TestAccountBuilder
 
                 var autofilled = await _client.Autofill(offerCreate);
                 var response = await _client.SubmitAndWait(autofilled, _primaryAccount, true);
+                Console.WriteLine($"[TestAccountBuilder] OfferCreate buy {code}: {response.Meta?.TransactionResult}");
+
+                if (_nodeType == TestNodeType.Standalone) await LedgerAcceptAsync();
+            }
+            catch (Exception ex)
+            {
+                Console.WriteLine($"[TestAccountBuilder] OfferCreate failed: {ex.Message}");
+            }
+        }
+    }
+
+
+    private async Task CreateDEXOffersForIssuerAsync(int count)
+    {
+        Console.WriteLine($"[TestAccountBuilder] Creating {count} DEX offers from primary account...");
+
+        for (int i = 0; i < count && i < TokenCodes.Length; i++)
+        {
+            try
+            {
+                var code = TokenCodes[i];
+
+                var offerCreate = new OfferCreate
+                {
+                    Account = IssuerAccount.ClassicAddress,
+                    TakerGets = new Currency { ValueAsXrp = 10 },
+                    TakerPays = new Currency
+                    {
+                        CurrencyCode = code,
+                        Issuer = IssuerAccount.ClassicAddress,
+                        Value = "100"
+                    }
+                };
+
+                var autofilled = await _client.Autofill(offerCreate);
+                var response = await _client.SubmitAndWait(autofilled, IssuerAccount, true);
                 Console.WriteLine($"[TestAccountBuilder] OfferCreate buy {code}: {response.Meta?.TransactionResult}");
 
                 if (_nodeType == TestNodeType.Standalone) await LedgerAcceptAsync();

@@ -1,5 +1,13 @@
 # Changes
 
+### 10.1.0.0 02/04/2026
+* Add optional CancellationToken support for all client requests (IXrplClient, Connection, RequestManager)
+* Thread CancellationToken through all Sugar methods (Autofill, Submit, Balances, GetOrderBook, GetFeeXrp, GetLedgerIndex)
+* Make RequestManager.Resolve idempotent — no longer throws when promise is already cancelled/timed out
+* Add safe async dispose of CancellationTokenRegistration to prevent deadlocks in cancellation callbacks
+* Add 9 unit and E2E tests for CancellationToken (cancellation, race conditions, timeout priority, connection isolation)
+* Full backward compatibility — all CancellationToken parameters are optional with default value
+
 ### 10.0.2.1 30/03/2026
 * Fix polymorphic ledger entry deserialization for `account_objects`
 * Fix `ledger_data` JSON response mapping for `state`

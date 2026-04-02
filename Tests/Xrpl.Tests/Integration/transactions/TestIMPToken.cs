@@ -32,11 +32,12 @@ public class TestIMPToken
     static XrplWallet walletHolder2 = XrplWallet.FromNormalizedText("mpt holder test account 2");
 
     private static string lastIssuanceId;
+    public static TestNodeType nodeType = TestNodeType.Standalone;
 
     [ClassInitialize]
     public static async Task MyClassInitializeAsync(TestContext testContext)
     {
-        client = await IntegrationTestConfig.CreateClientAsync(TestNodeType.DevNet);
+        client = await IntegrationTestConfig.CreateClientAsync(nodeType);
 
         await IntegrationTestConfig.TryFundWalletAsync(client, walletIssuer);
         await IntegrationTestConfig.TryFundWalletAsync(client, walletHolder1);

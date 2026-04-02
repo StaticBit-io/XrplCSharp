@@ -1,4 +1,5 @@
-﻿using System;
+using System;
+using System.Threading;
 
 namespace Xrpl.Client
 {
@@ -11,6 +12,8 @@ namespace Xrpl.Client
         public dynamic TaskCompletionResult { get; set; }
 
         public bool RemoveUponCompletion { get; set; }
+
+        public CancellationTokenRegistration? CancellationRegistration { get; set; }
 
         public TaskInfo()
         {
