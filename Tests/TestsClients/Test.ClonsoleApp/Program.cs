@@ -21,6 +21,8 @@ namespace MyApp;
 
 internal class Program
 {
+    private const string tx =
+        "{\"Amount\":\"1000000000000000\",\"Destination\":\"r4f4xLpXJtCh9PwdzsQ6KYwLevVnBpJV6f\",\"Flags\":131072,\"SendMax\":{\"currency\":\"USD\",\"value\":\"190\",\"issuer\":\"rQUSmV11JUe71qEJNsTQcw4rqzYDyEHZEG\"},\"DeliverMin\":\"1\",\"Account\":\"r4f4xLpXJtCh9PwdzsQ6KYwLevVnBpJV6f\",\"TransactionType\":\"Payment\"}";
     private static IXrplClient client;
 
     private enum TestDataType
@@ -43,33 +45,63 @@ internal class Program
     {
         //TestWalletFromText();
         await InitTestData(TestDataType.standalone);
-        object marker = null;
-        do
-        {
-            var nfts = await client.AccountNFTs(
-                new AccountNFTsRequest(
-                    walletPrimary.ClassicAddress)
-                {
-                    Marker = marker
-                });
-            marker = nfts.Marker;
-            foreach (var nft in nfts.NFTs)
-            {
-                Console.WriteLine(nft.NFTokenID);
-                var burn = await client.Submit(
-                    new NFTokenBurn
-                    {
-                        Account = walletPrimary.ClassicAddress,
-                        NFTokenID = nft.NFTokenID,
-                    },
-                    walletPrimary);
-                Console.WriteLine($"{burn.EngineResult}: {nft.NFTokenID}");
-            }
-        }
-        while (marker != null);
 
         try
         {
+            var payment = JsonConvert.DeserializeObject<Payment>(tx);
+
+            //var offers = await client.AccountOffers(
+            //    new AccountOffersRequest(TestAccountBuilder.IssuerAccount.ClassicAddress)
+            //    {
+            //    });
+            //foreach (var offersOffer in offers.Offers.Where(o => o.TakerPays.CurrencyCode == payment.SendMax.CurrencyCode))
+            //{
+            //    var delOffer = await client.Submit(
+            //        new OfferCancel()
+            //        {
+            //            Account = TestAccountBuilder.IssuerAccount.ClassicAddress,
+            //            OfferSequence = offersOffer.Sequence
+            //        },
+            //        TestAccountBuilder.IssuerAccount);
+            //    Console.WriteLine($"Dal offer: {offersOffer.Sequence}: {delOffer.EngineResult}");
+            //}
+
+            //foreach (var i in Enumerable.Range(0,5))
+            //{
+            //    var create = await client.Submit(new OfferCreate()
+            //    {
+            //        Account = TestAccountBuilder.IssuerAccount.ClassicAddress,
+            //        TakerGets = new Currency() { ValueAsXrp = 10 },
+            //        TakerPays = new Currency() { CurrencyCode = payment.SendMax.CurrencyCode, Issuer = payment.SendMax.Issuer, ValueAsNumber = 10 },
+            //    }, TestAccountBuilder.IssuerAccount);
+            //}
+
+            var offer = new OfferCreate()
+            {
+                Account = payment.Account,
+                TakerGets = payment.SendMax,
+                TakerPays = payment.DeliverMin,
+                Flags = OfferCreateFlags.tfImmediateOrCancel | OfferCreateFlags.tfSell,
+            };
+            var simulate = await client.Simulate(new SimulateRequest() { Transaction = payment });
+            var simulate2 = await client.Simulate(new SimulateRequest() { Transaction = offer });
+            var changes = BalanceChanges.GetBalanceChanges(simulate.Meta);
+            var changes2 = BalanceChanges.GetBalanceChanges(simulate2.Meta);
+            var jsonSimulate = JsonConvert.SerializeObject(
+                simulate2,
+                new JsonSerializerSettings
+                {
+                    ObjectCreationHandling = ObjectCreationHandling.Replace,
+                });
+
+            //var res = await client.SubmitAndWait(offer, walletPrimary);
+            //var changes3 = BalanceChanges.GetBalanceChanges(res.Meta);
+            //var jsonChanges3 = JsonConvert.SerializeObject(
+            //    changes3,
+            //    new JsonSerializerSettings
+            //    {
+            //        ObjectCreationHandling = ObjectCreationHandling.Replace,
+            //    });
             await InitForDataForTest();
 
             //await SetSigners(walletMultiSign, walletMultiSigner_1, walletMultiSigner_2);

@@ -719,7 +719,7 @@ public class TestAccountBuilder
                     {
                         CurrencyCode = code,
                         Issuer = IssuerAccount.ClassicAddress,
-                        Value = "100"
+                        Value = "10"
                     }
                 };
 
