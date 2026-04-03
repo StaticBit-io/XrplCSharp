@@ -58,6 +58,7 @@ namespace Xrpl.Client.Json.Converters
                 case JsonToken.Null:
                     return null;
                 case JsonToken.String:
+                case JsonToken.Integer:
                     return new Currency
                     {
                         CurrencyCode = "XRP",

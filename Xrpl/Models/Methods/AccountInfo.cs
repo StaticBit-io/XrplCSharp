@@ -174,6 +174,9 @@ namespace Xrpl.Models.Methods
         /// </summary>
         [JsonProperty("allowTrustLineClawback")]
         public bool AllowTrustLineClawback { get; set; }
+
+        [JsonProperty("allowTrustLineLocking")]
+        public bool AllowTrustLineLocking { get; set; }
     }
     /// <summary>
     /// Information about queued transactions sent by account.<br/>

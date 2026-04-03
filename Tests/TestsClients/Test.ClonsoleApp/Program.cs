@@ -42,11 +42,35 @@ internal class Program
     private static async Task Main(string[] args)
     {
         //TestWalletFromText();
-        await InitTestData(TestDataType.devNet);
+        await InitTestData(TestDataType.standalone);
+        object marker = null;
+        do
+        {
+            var nfts = await client.AccountNFTs(
+                new AccountNFTsRequest(
+                    walletPrimary.ClassicAddress)
+                {
+                    Marker = marker
+                });
+            marker = nfts.Marker;
+            foreach (var nft in nfts.NFTs)
+            {
+                Console.WriteLine(nft.NFTokenID);
+                var burn = await client.Submit(
+                    new NFTokenBurn
+                    {
+                        Account = walletPrimary.ClassicAddress,
+                        NFTokenID = nft.NFTokenID,
+                    },
+                    walletPrimary);
+                Console.WriteLine($"{burn.EngineResult}: {nft.NFTokenID}");
+            }
+        }
+        while (marker != null);
 
         try
         {
-            //await InitForDataForTest();
+            await InitForDataForTest();
 
             //await SetSigners(walletMultiSign, walletMultiSigner_1, walletMultiSigner_2);
 
@@ -65,11 +89,12 @@ internal class Program
         }
         catch (Xrpl.Client.Exceptions.RippledException e)
         {
-            var info = XrplErrorClassifier.Classify(e);
+            var info = e.Classify();
             throw e;
         }
         catch (Xrpl.Client.Exceptions.XrplException e)
         {
+            var info = e.Classify();
             throw e;
         }
         catch (Exception e)
@@ -89,20 +114,36 @@ internal class Program
     {
         await new TestAccountBuilder(client, TestNodeType.Standalone)
             .AddPrimaryAccount(walletPrimary)       // ваш кошелёк - владелец всех объектов
-            .AddTrustlines("USD", "EUR", "BTC")
+            .AddTrustlines()
+            .AddTokensAsync()
+            //.AddAmmPools(3)
             .AddNFTs(3)
+            //.AddNFTOffers()
             .AddOffers(5)
+            //.AddMPTokens()
             .AddIssuerOffers(5)
             .AddTickets(5)
             .AddChecks(2)
             .AddEscrows()
             .AddSignerList()
             .BuildAsync();
+
+        var noRippleCheck = await client.NoRippleCheck(
+            new NoRippleCheckRequest(TestAccountBuilder.IssuerAccount.ClassicAddress)
+            {
+                Role = RoleType.Gateway,
+                Transactions = true,
+                Limit = 100
+            });
+        foreach (var request in noRippleCheck.Transactions)
+        {
+            Console.WriteLine(request.ToJson());
+            var submit = await client.Submit(request, TestAccountBuilder.IssuerAccount);
+            Console.WriteLine(submit.EngineResult);
+        }
+
         // Теперь можно использовать готовые аккаунты для тестов:
         Console.WriteLine($"Issuer: {TestAccountBuilder.IssuerAccount.ClassicAddress}");
-        // Пример: получить NFT созданные builder-ом
-        var nfts = await client.AccountNFTs(new AccountNFTsRequest(
-            walletPrimary.ClassicAddress));
     }
 
     private static async Task TestReconnection()
