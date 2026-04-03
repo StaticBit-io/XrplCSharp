@@ -1,8 +1,11 @@
 using Newtonsoft.Json;
 
+using Org.BouncyCastle.Utilities.Encoders;
+
 using System;
 using System.Collections.Generic;
 using System.Linq;
+using System.Text;
 using System.Threading.Tasks;
 
 using Xrpl.Client;
@@ -11,7 +14,9 @@ using Xrpl.Models.Common;
 using Xrpl.Models.Ledger;
 using Xrpl.Models.Methods;
 using Xrpl.Models.Transactions;
+using Xrpl.Models.Utils;
 using Xrpl.Sugar;
+using Xrpl.Utils.Hashes;
 using Xrpl.Wallet;
 
 namespace MyApp;
@@ -78,7 +83,6 @@ public class TestAccountBuilder
     private readonly List<Func<Task>> _buildActions = new();
     private XrplWallet _primaryAccount;
 
-    static XrplWallet MasterAccount = XrplWallet.FromNormalizedText("Master account test");
     private const decimal MinBalanceThreshold = 50m;
 
     #endregion
@@ -121,6 +125,12 @@ public class TestAccountBuilder
         _buildActions.Add(() => CreateTrustlinesAsync(codes));
         return this;
     }
+    public TestAccountBuilder AddTokensAsync(params string[] tokenCodes)
+    {
+        var codes = tokenCodes.Length > 0 ? tokenCodes : TokenCodes;
+        _buildActions.Add(() => SendTokensAsync(codes));
+        return this;
+    }
 
     /// <summary>
     /// Adds AMM pools for specified number of token pairs.
@@ -160,7 +170,9 @@ public class TestAccountBuilder
     {
         _buildActions.Add(() => CreateDEXOffersAsync(count));
         return this;
-    }    public TestAccountBuilder AddIssuerOffers(int count = 5)
+    }
+    
+    public TestAccountBuilder AddIssuerOffers(int count = 5)
     {
         _buildActions.Add(() => CreateDEXOffersForIssuerAsync(count));
         return this;
@@ -230,6 +242,7 @@ public class TestAccountBuilder
         Console.WriteLine($"[TestAccountBuilder] Primary account: {_primaryAccount.ClassicAddress}");
 
         await FundAllAccountsAsync();
+        await EnableDefaultRippleAsync();
 
         Console.WriteLine($"[TestAccountBuilder] Executing {_buildActions.Count} build actions...");
 
@@ -285,7 +298,7 @@ public class TestAccountBuilder
     {
         if (_nodeType == TestNodeType.Standalone)
         {
-            await FundFromMasterAsync(wallet);
+            await StandAloneUtils.FundAccount(_client, wallet);
         }
         else if (_nodeType == TestNodeType.TestNet || _nodeType == TestNodeType.DevNet)
         {
@@ -303,29 +316,6 @@ public class TestAccountBuilder
         Console.WriteLine($"[TestAccountBuilder] Faucet funded {wallet.ClassicAddress}: {result.Balance} XRP");
     }
 
-    private async Task FundFromMasterAsync(XrplWallet wallet)
-    {
-        var payment = new Payment
-        {
-            Account = MasterAccount.ClassicAddress,
-            Destination = wallet.ClassicAddress,
-            Amount = new Currency { ValueAsXrp = 10, CurrencyCode = "XRP" }
-        };
-
-        var autofilled = await _client.Autofill(payment);
-        var response = await _client.SubmitAndWait(autofilled, MasterAccount, true);
-
-        if (response.Meta?.TransactionResult != "tesSUCCESS")
-        {
-            Console.WriteLine($"[TestAccountBuilder] Master funding warning: {response.Meta?.TransactionResult}");
-        }
-
-        if (_nodeType == TestNodeType.Standalone)
-        {
-            await LedgerAcceptAsync();
-        }
-    }
-
     private async Task LedgerAcceptAsync()
     {
         if (_nodeType != TestNodeType.Standalone) return;
@@ -337,6 +327,41 @@ public class TestAccountBuilder
         catch { }
     }
 
+    private async Task EnableDefaultRippleAsync()
+    {
+        try
+        {
+            AccountInfoRequest infoRequest = new AccountInfoRequest(IssuerAccount.ClassicAddress);
+            AccountInfo info = await _client.AccountInfo(infoRequest);
+            if (info.AccountFlags.DefaultRipple)
+            {
+                Console.WriteLine("[TestAccountBuilder] DefaultRipple: already enabled, skipping");
+                return;
+            }
+        }
+        catch { }
+
+        try
+        {
+            AccountSet accountSet = new AccountSet
+            {
+                Account = IssuerAccount.ClassicAddress,
+                SetFlag = AccountSetAsfFlags.asfDefaultRipple
+            };
+
+            var autofilled = await _client.Autofill(accountSet);
+            var response = await _client.SubmitAndWait(autofilled, IssuerAccount, true);
+            Console.WriteLine($"[TestAccountBuilder] DefaultRipple: {response.Meta?.TransactionResult}");
+
+            if (_nodeType == TestNodeType.Standalone)
+                await LedgerAcceptAsync();
+        }
+        catch (Exception ex)
+        {
+            Console.WriteLine($"[TestAccountBuilder] DefaultRipple failed: {ex.Message}");
+        }
+    }
+
     #endregion
 
     #region Existence Checks
@@ -345,7 +370,7 @@ public class TestAccountBuilder
     {
         try
         {
-            var request = new AccountLinesRequest(_primaryAccount.ClassicAddress) { Peer = issuer };
+            var request = new AccountLinesRequest(_primaryAccount.ClassicAddress) { Peer = issuer, Limit = 500};
             var response = await _client.AccountLines(request);
             return response.TrustLines?.Any(l => l.Currency == currencyCode) == true;
         }
@@ -448,11 +473,52 @@ public class TestAccountBuilder
                 var response = await _client.SubmitAndWait(autofilled, _primaryAccount, true);
                 Console.WriteLine($"[TestAccountBuilder] TrustSet {code}: {response.Meta?.TransactionResult}");
 
-                if (_nodeType == TestNodeType.Standalone) await LedgerAcceptAsync();
+                if (_nodeType == TestNodeType.Standalone)
+                    await LedgerAcceptAsync();
             }
             catch (Exception ex)
             {
                 Console.WriteLine($"[TestAccountBuilder] TrustSet {code} failed: {ex.Message}");
+            }
+        }
+    }
+
+    private async Task SendTokensAsync(string[] tokenCodes)
+    {
+        Console.WriteLine($"[TestAccountBuilder] Send tokens to primary account...");
+
+        foreach (var code in tokenCodes)
+        {
+            try
+            {
+                if (await TrustlineExistsAsync(code, IssuerAccount.ClassicAddress) == false)
+                {
+                    Console.WriteLine($"[TestAccountBuilder] TrustSet {code}: not found, skipping");
+                    continue;
+                }
+
+                var payment = new Payment()
+                {
+                    Account = IssuerAccount.ClassicAddress,
+                    Amount = new Currency
+                    {
+                        CurrencyCode = code,
+                        Issuer = IssuerAccount.ClassicAddress,
+                        Value = "100"
+                    },
+                    Destination = _primaryAccount.ClassicAddress
+                };
+
+                var autofilled = await _client.Autofill(payment);
+                var response = await _client.SubmitAndWait(autofilled, IssuerAccount, true);
+                Console.WriteLine($"[TestAccountBuilder] Payment {code}: {response.Meta?.TransactionResult}");
+
+                if (_nodeType == TestNodeType.Standalone)
+                    await LedgerAcceptAsync();
+            }
+            catch (Exception ex)
+            {
+                Console.WriteLine($"[TestAccountBuilder] Payment {code} failed: {ex.Message}");
             }
         }
     }
@@ -541,7 +607,8 @@ public class TestAccountBuilder
                 {
                     Account = _primaryAccount.ClassicAddress,
                     NFTokenTaxon = (uint)i,
-                    Flags = NFTokenMintFlags.tfTransferable | NFTokenMintFlags.tfBurnable
+                    Flags = NFTokenMintFlags.tfTransferable | NFTokenMintFlags.tfBurnable | NFTokenMintFlags.tfMutable,
+                    URI = ConvertStringToHex("ipfs://bafkreigbnsf4lgajtfe76tziimcux22oknqjjpkvqqfb2msznpdctwi2wy")
                 };
 
                 var autofilled = await _client.Autofill(nftMint);
@@ -555,6 +622,11 @@ public class TestAccountBuilder
                 Console.WriteLine($"[TestAccountBuilder] NFTokenMint failed: {ex.Message}");
             }
         }
+    }
+    internal static string ConvertStringToHex(string input)
+    {
+        var bytes = Encoding.UTF8.GetBytes(input);
+        return Hex.ToHexString(bytes).ToUpper();
     }
 
     private async Task CreateNFTOffersAsync()
@@ -631,7 +703,7 @@ public class TestAccountBuilder
 
     private async Task CreateDEXOffersForIssuerAsync(int count)
     {
-        Console.WriteLine($"[TestAccountBuilder] Creating {count} DEX offers from primary account...");
+        Console.WriteLine($"[TestAccountBuilder] Creating {count} DEX offers from issuer account...");
 
         for (int i = 0; i < count && i < TokenCodes.Length; i++)
         {
@@ -647,7 +719,7 @@ public class TestAccountBuilder
                     {
                         CurrencyCode = code,
                         Issuer = IssuerAccount.ClassicAddress,
-                        Value = "100"
+                        Value = "10"
                     }
                 };
 

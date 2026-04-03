@@ -1,7 +1,10 @@
-﻿using System.Runtime.Serialization;
-using System.Collections.Generic;
-using Newtonsoft.Json;
+﻿using Newtonsoft.Json;
 using Newtonsoft.Json.Converters;
+
+using System.Collections.Generic;
+using System.Runtime.Serialization;
+
+using Xrpl.Client.Json.Converters;
 using Xrpl.Models.Transactions;
 
 //https://github.com/XRPLF/xrpl.js/blob/main/packages/xrpl/src/models/methods/norippleCheck.ts
@@ -40,8 +43,8 @@ namespace Xrpl.Models.Methods
         /// If the request specified transactions as true, this is an array of JSON  objects, each of which is the JSON form of a transaction that should fix  one of the described problems.<br/>
         /// The length of this array is the same as  the problems array, and each entry is intended to fix the problem  described at the same index into that array.
         /// </summary>
-        [JsonProperty("transactions")]
-        public List<TransactionRequest> Transactions { get; set; }
+        [JsonProperty("transactions", ItemConverterType = typeof(TransactionRequestConverter))] 
+        public List<ITransactionRequest> Transactions { get; set; }
 
         [JsonProperty("validated")]
         public bool Validated { get; set; }

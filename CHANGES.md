@@ -1,5 +1,14 @@
 # Changes
 
+### 10.1.0.1 03/04/2026
+* Convert XrplErrorClassifier methods to extension methods for fluent error classification (`exception.Classify()`)
+* Add try-catch around response deserialization in RequestManager.Resolve — reject promise and rethrow on failure
+* Integrate XrplErrorClassifier into Connection.IOnMessageFastPath error handler with user-friendly error messages
+* Change Submit/SubmitAndWait `autofill` default from `false` to `true`
+* Add `AllowTrustLineLocking` flag to AccountInfoAccountFlags
+* Fix NoRippleCheck `Transactions` deserialization — use `List<ITransactionRequest>` with polymorphic `TransactionRequestConverter`
+* Fix CurrencyConverter to handle `JsonToken.Integer` for XRP amounts
+
 ### 10.1.0.0 02/04/2026
 * Add optional CancellationToken support for all client requests (IXrplClient, Connection, RequestManager)
 * Thread CancellationToken through all Sugar methods (Autofill, Submit, Balances, GetOrderBook, GetFeeXrp, GetLedgerIndex)

@@ -67,10 +67,19 @@ namespace Xrpl.Client
             if (timeoutsAwaitingResponse.TryRemove(id, out var timer))
                 timer.Stop();
 
-            var deserialized = JsonConvert.DeserializeObject($"{response.Result}", taskInfo.Type, serializerSettings);
-            var setResult = taskInfo.TaskCompletionResult.GetType().GetMethod("TrySetResult");
-            setResult.Invoke(taskInfo.TaskCompletionResult, new[] { deserialized });
-            this.DeletePromise(id, taskInfo);
+            try
+            {
+                var deserialized = JsonConvert.DeserializeObject($"{response.Result}", taskInfo.Type, serializerSettings);
+                var setResult = taskInfo.TaskCompletionResult.GetType().GetMethod("TrySetResult");
+                setResult.Invoke(taskInfo.TaskCompletionResult, new[] { deserialized });
+                this.DeletePromise(id, taskInfo);
+            }
+            catch (Exception ex)
+            {
+                var error = new XrplException($"Failed to deserialize response for request {id}: {ex.Message}", ex);
+                this.Reject(id, error);
+                throw;  // re-throw so IOnMessageFastPath also logs via OnError
+            }
         }
 
         /// <summary>

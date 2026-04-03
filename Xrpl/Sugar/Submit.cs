@@ -43,7 +43,7 @@ public static class SubmitSugar
     public static async Task<Submit> Submit(
         this IXrplClient client,
         Dictionary<string, dynamic> transaction,
-        bool autofill = false,
+        bool autofill = true,
         bool failHard = false,
         XrplWallet wallet = null,
         CancellationToken cancellationToken = default
@@ -68,7 +68,7 @@ public static class SubmitSugar
         this IXrplClient client,
         ITransactionRequest transaction,
         XrplWallet wallet = null,
-        bool autofill = false,
+        bool autofill = true,
         bool failHard = false,
         CancellationToken cancellationToken = default) =>
         SubmitAndWait(client, transaction.ToDictionary(), wallet, autofill, failHard, cancellationToken);
@@ -87,7 +87,7 @@ public static class SubmitSugar
         this IXrplClient client,
         Dictionary<string, dynamic> transaction,
         XrplWallet wallet = null,
-        bool autofill = false,
+        bool autofill = true,
         bool failHard = false,
         CancellationToken cancellationToken = default)
     {

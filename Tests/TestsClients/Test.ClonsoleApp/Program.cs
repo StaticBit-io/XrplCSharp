@@ -21,6 +21,8 @@ namespace MyApp;
 
 internal class Program
 {
+    private const string tx =
+        "{\"Amount\":\"1000000000000000\",\"Destination\":\"r4f4xLpXJtCh9PwdzsQ6KYwLevVnBpJV6f\",\"Flags\":131072,\"SendMax\":{\"currency\":\"USD\",\"value\":\"190\",\"issuer\":\"rQUSmV11JUe71qEJNsTQcw4rqzYDyEHZEG\"},\"DeliverMin\":\"1\",\"Account\":\"r4f4xLpXJtCh9PwdzsQ6KYwLevVnBpJV6f\",\"TransactionType\":\"Payment\"}";
     private static IXrplClient client;
 
     private enum TestDataType
@@ -42,11 +44,65 @@ internal class Program
     private static async Task Main(string[] args)
     {
         //TestWalletFromText();
-        await InitTestData(TestDataType.devNet);
+        await InitTestData(TestDataType.standalone);
 
         try
         {
-            //await InitForDataForTest();
+            var payment = JsonConvert.DeserializeObject<Payment>(tx);
+
+            //var offers = await client.AccountOffers(
+            //    new AccountOffersRequest(TestAccountBuilder.IssuerAccount.ClassicAddress)
+            //    {
+            //    });
+            //foreach (var offersOffer in offers.Offers.Where(o => o.TakerPays.CurrencyCode == payment.SendMax.CurrencyCode))
+            //{
+            //    var delOffer = await client.Submit(
+            //        new OfferCancel()
+            //        {
+            //            Account = TestAccountBuilder.IssuerAccount.ClassicAddress,
+            //            OfferSequence = offersOffer.Sequence
+            //        },
+            //        TestAccountBuilder.IssuerAccount);
+            //    Console.WriteLine($"Dal offer: {offersOffer.Sequence}: {delOffer.EngineResult}");
+            //}
+
+            //foreach (var i in Enumerable.Range(0,5))
+            //{
+            //    var create = await client.Submit(new OfferCreate()
+            //    {
+            //        Account = TestAccountBuilder.IssuerAccount.ClassicAddress,
+            //        TakerGets = new Currency() { ValueAsXrp = 10 },
+            //        TakerPays = new Currency() { CurrencyCode = payment.SendMax.CurrencyCode, Issuer = payment.SendMax.Issuer, ValueAsNumber = 10 },
+            //    }, TestAccountBuilder.IssuerAccount);
+            //}
+
+            var offer = new OfferCreate()
+            {
+                Account = payment.Account,
+                TakerGets = payment.SendMax,
+                TakerPays = payment.DeliverMin,
+                Flags = OfferCreateFlags.tfImmediateOrCancel | OfferCreateFlags.tfSell,
+            };
+            var simulate = await client.Simulate(new SimulateRequest() { Transaction = payment });
+            var simulate2 = await client.Simulate(new SimulateRequest() { Transaction = offer });
+            var changes = BalanceChanges.GetBalanceChanges(simulate.Meta);
+            var changes2 = BalanceChanges.GetBalanceChanges(simulate2.Meta);
+            var jsonSimulate = JsonConvert.SerializeObject(
+                simulate2,
+                new JsonSerializerSettings
+                {
+                    ObjectCreationHandling = ObjectCreationHandling.Replace,
+                });
+
+            //var res = await client.SubmitAndWait(offer, walletPrimary);
+            //var changes3 = BalanceChanges.GetBalanceChanges(res.Meta);
+            //var jsonChanges3 = JsonConvert.SerializeObject(
+            //    changes3,
+            //    new JsonSerializerSettings
+            //    {
+            //        ObjectCreationHandling = ObjectCreationHandling.Replace,
+            //    });
+            await InitForDataForTest();
 
             //await SetSigners(walletMultiSign, walletMultiSigner_1, walletMultiSigner_2);
 
@@ -65,11 +121,12 @@ internal class Program
         }
         catch (Xrpl.Client.Exceptions.RippledException e)
         {
-            var info = XrplErrorClassifier.Classify(e);
+            var info = e.Classify();
             throw e;
         }
         catch (Xrpl.Client.Exceptions.XrplException e)
         {
+            var info = e.Classify();
             throw e;
         }
         catch (Exception e)
@@ -89,20 +146,36 @@ internal class Program
     {
         await new TestAccountBuilder(client, TestNodeType.Standalone)
             .AddPrimaryAccount(walletPrimary)       // ваш кошелёк - владелец всех объектов
-            .AddTrustlines("USD", "EUR", "BTC")
+            .AddTrustlines()
+            .AddTokensAsync()
+            //.AddAmmPools(3)
             .AddNFTs(3)
+            //.AddNFTOffers()
             .AddOffers(5)
+            //.AddMPTokens()
             .AddIssuerOffers(5)
             .AddTickets(5)
             .AddChecks(2)
             .AddEscrows()
             .AddSignerList()
             .BuildAsync();
+
+        var noRippleCheck = await client.NoRippleCheck(
+            new NoRippleCheckRequest(TestAccountBuilder.IssuerAccount.ClassicAddress)
+            {
+                Role = RoleType.Gateway,
+                Transactions = true,
+                Limit = 100
+            });
+        foreach (var request in noRippleCheck.Transactions)
+        {
+            Console.WriteLine(request.ToJson());
+            var submit = await client.Submit(request, TestAccountBuilder.IssuerAccount);
+            Console.WriteLine(submit.EngineResult);
+        }
+
         // Теперь можно использовать готовые аккаунты для тестов:
         Console.WriteLine($"Issuer: {TestAccountBuilder.IssuerAccount.ClassicAddress}");
-        // Пример: получить NFT созданные builder-ом
-        var nfts = await client.AccountNFTs(new AccountNFTsRequest(
-            walletPrimary.ClassicAddress));
     }
 
     private static async Task TestReconnection()

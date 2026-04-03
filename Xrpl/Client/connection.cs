@@ -2631,12 +2631,13 @@ public class Connection
             }
             catch (Exception error)
             {
+                var errInfo = XrplErrorClassifier.Classify(error);
                 // Fire-and-forget for error callback - don't block
                 _ = Task.Run(async () =>
                 {
                     if (OnError is not null)
                     {
-                        await OnError.Invoke(error: "error", errorMessage: "badMessage", error.Message, message);
+                        await OnError.Invoke(error: "error", errorMessage: "badMessage", errInfo.UserMessage, message);
                     }
                 });
                 return;

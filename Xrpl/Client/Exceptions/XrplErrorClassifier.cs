@@ -10,14 +10,14 @@ namespace Xrpl.Client.Exceptions;
 
 public static class XrplErrorClassifier
 {
-    public static XrplErrorInfo Classify(Exception exception)
+    public static XrplErrorInfo Classify(this Exception exception)
     {
         if (exception == null)
             throw new ArgumentNullException(nameof(exception));
 
         return exception switch
         {
-            RippledException rippled => Classify(rippled),
+            RippledException rippled => rippled.Classify(),
             _ => new XrplErrorInfo
             {
                 RawError = exception.GetType().Name,
@@ -32,14 +32,14 @@ public static class XrplErrorClassifier
         };
     }
 
-    public static XrplErrorInfo Classify(RippledException exception)
+    public static XrplErrorInfo Classify(this RippledException exception)
     {
         if (exception == null)
             throw new ArgumentNullException(nameof(exception));
-        return Classify(exception.Response);
+        return exception.Response.Classify();
     }
 
-    public static XrplErrorInfo Classify(ErrorResponse response)
+    public static XrplErrorInfo Classify(this ErrorResponse response)
     {
         if (response == null) throw new ArgumentNullException(nameof(response));
 
