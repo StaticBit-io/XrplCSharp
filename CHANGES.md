@@ -1,5 +1,10 @@
 # Changes
 
+### 10.1.2.0 05/04/2026
+* Fix `WaitForFinalTransactionOutcome` — `txnNotFound` was never recognized due to reading empty `Exception.Data` instead of `RippledException.Response.Error`, causing false `ValidationException` on successful submissions
+* Replace generic `catch (Exception)` in `WaitForFinalTransactionOutcome` with split catch blocks: `RippledException` with `when` filter for `txnNotFound`, re-throw for other rippled errors, `XrplException` wrapper for unexpected errors
+* Add null-safety for `Response` in `XrplErrorClassifier.Classify(RippledException)`
+
 ### 10.1.1.0 05/04/2026
 * Add new ripple state flags support
 
