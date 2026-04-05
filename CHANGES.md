@@ -1,5 +1,8 @@
 # Changes
 
+### 10.1.1.0 05/04/2026
+* Add new ripple state flags support
+
 ### 10.1.0.1 03/04/2026
 * Convert XrplErrorClassifier methods to extension methods for fluent error classification (`exception.Classify()`)
 * Add try-catch around response deserialization in RequestManager.Resolve — reject promise and rethrow on failure
