@@ -36,6 +36,20 @@ public static class XrplErrorClassifier
     {
         if (exception == null)
             throw new ArgumentNullException(nameof(exception));
+
+        if (exception.Response == null)
+            return new XrplErrorInfo
+            {
+                RawError = string.Empty,
+                RawErrorMessage = exception.Message,
+                Category = XrplErrorCategory.Unknown,
+                Subject = XrplErrorSubject.Unknown,
+                Title = "internal error",
+                UserMessage = exception.Message,
+                IsRetryable = false,
+                IsUserFixable = false
+            };
+
         return exception.Response.Classify();
     }
 

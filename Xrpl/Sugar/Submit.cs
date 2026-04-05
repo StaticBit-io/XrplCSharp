@@ -398,7 +398,7 @@ public static class SubmitSugar
     /// </summary>
     /// <param name="client"></param>
     /// <param name="txHash"></param>
-    /// <param name="lastLedger"></param>
+    /// <param name="lastLedgerSequence"></param>
     /// <param name="submissionResult"></param>
     /// <returns></returns>
     /// <exception cref="ValidationException"></exception>
@@ -437,23 +437,22 @@ public static class SubmitSugar
                         ApiVersion = 2,
                     }, cancellationToken);
             }
-            catch (Exception error)
+            catch (RippledException ex) when (ex.Response?.Error == XrplErrorCodes.TxnNotFound)
             {
-                var message = error?.Data["Error"] as string;
-
-                // До наступления LastLedgerSequence txnNotFound — это норм, просто продолжаем ждать
-                if (message == "txnNotFound")
-                {
-                    continue;
-                }
-
-                throw new ValidationException(
-                    $"{message ?? "Unknown error"}\n" +
+                continue;
+            }
+            catch (RippledException ex)
+            {
+                throw;
+            }
+            catch (Exception ex)
+            {
+                throw new XrplException(
+                    $"Unexpected error while waiting for transaction {txHash}.\n" +
                     $"Preliminary result: {submissionResult}.\n" +
-                    $"Full error details: {error.Message}", error);
+                    $"Details: {ex.Message}", ex);
             }
 
-            Console.WriteLine();
             // Как только транзакция валидирована — это финальный результат (успех или ошибка)
             if (txResponse.Validated == true)
             {
