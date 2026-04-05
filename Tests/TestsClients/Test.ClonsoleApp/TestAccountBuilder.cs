@@ -71,7 +71,7 @@ public class TestAccountBuilder
 
     public static readonly string[] TokenCodes = new[]
     {
-        "USD", "EUR", "GBP", "JPY", "CNY", "BTC", "ETH", "XAU", "TST", "ABC"
+        "USD", "EUR", "GBP", "JPY", "CNY", "TSTS".CurrencyToHex()
     };
 
     #endregion
@@ -454,7 +454,7 @@ public class TestAccountBuilder
             {
                 if (await TrustlineExistsAsync(code, IssuerAccount.ClassicAddress))
                 {
-                    Console.WriteLine($"[TestAccountBuilder] TrustSet {code}: already exists, skipping");
+                    Console.WriteLine($"[TestAccountBuilder] TrustSet {code.CurrencyReadableName()}: already exists, skipping");
                     continue;
                 }
 
@@ -471,14 +471,14 @@ public class TestAccountBuilder
 
                 var autofilled = await _client.Autofill(trustSet);
                 var response = await _client.SubmitAndWait(autofilled, _primaryAccount, true);
-                Console.WriteLine($"[TestAccountBuilder] TrustSet {code}: {response.Meta?.TransactionResult}");
+                Console.WriteLine($"[TestAccountBuilder] TrustSet {code.CurrencyReadableName()}: {response.Meta?.TransactionResult}");
 
                 if (_nodeType == TestNodeType.Standalone)
                     await LedgerAcceptAsync();
             }
             catch (Exception ex)
             {
-                Console.WriteLine($"[TestAccountBuilder] TrustSet {code} failed: {ex.Message}");
+                Console.WriteLine($"[TestAccountBuilder] TrustSet {code.CurrencyReadableName()} failed: {ex.Message}");
             }
         }
     }
@@ -493,7 +493,7 @@ public class TestAccountBuilder
             {
                 if (await TrustlineExistsAsync(code, IssuerAccount.ClassicAddress) == false)
                 {
-                    Console.WriteLine($"[TestAccountBuilder] TrustSet {code}: not found, skipping");
+                    Console.WriteLine($"[TestAccountBuilder] TrustSet {code.CurrencyReadableName()}: not found, skipping");
                     continue;
                 }
 
@@ -511,14 +511,14 @@ public class TestAccountBuilder
 
                 var autofilled = await _client.Autofill(payment);
                 var response = await _client.SubmitAndWait(autofilled, IssuerAccount, true);
-                Console.WriteLine($"[TestAccountBuilder] Payment {code}: {response.Meta?.TransactionResult}");
+                Console.WriteLine($"[TestAccountBuilder] Payment {code.CurrencyReadableName()}: {response.Meta?.TransactionResult}");
 
                 if (_nodeType == TestNodeType.Standalone)
                     await LedgerAcceptAsync();
             }
             catch (Exception ex)
             {
-                Console.WriteLine($"[TestAccountBuilder] Payment {code} failed: {ex.Message}");
+                Console.WriteLine($"[TestAccountBuilder] Payment {code.CurrencyReadableName()} failed: {ex.Message}");
             }
         }
     }
@@ -535,7 +535,7 @@ public class TestAccountBuilder
 
                 if (await AmmExistsAsync(code, IssuerAccount.ClassicAddress))
                 {
-                    Console.WriteLine($"[TestAccountBuilder] AMMCreate XRP/{code}: already exists, skipping");
+                    Console.WriteLine($"[TestAccountBuilder] AMMCreate XRP/{code.CurrencyReadableName()}: already exists, skipping");
                     continue;
                 }
 
@@ -584,7 +584,7 @@ public class TestAccountBuilder
 
                 var autofilledAmm = await _client.Autofill(ammCreate);
                 var response = await _client.SubmitAndWait(autofilledAmm, _primaryAccount, true);
-                Console.WriteLine($"[TestAccountBuilder] AMMCreate XRP/{code}: {response.Meta?.TransactionResult}");
+                Console.WriteLine($"[TestAccountBuilder] AMMCreate XRP/{code.CurrencyReadableName()}: {response.Meta?.TransactionResult}");
 
                 if (_nodeType == TestNodeType.Standalone) await LedgerAcceptAsync();
             }
@@ -689,7 +689,7 @@ public class TestAccountBuilder
 
                 var autofilled = await _client.Autofill(offerCreate);
                 var response = await _client.SubmitAndWait(autofilled, _primaryAccount, true);
-                Console.WriteLine($"[TestAccountBuilder] OfferCreate buy {code}: {response.Meta?.TransactionResult}");
+                Console.WriteLine($"[TestAccountBuilder] OfferCreate buy {code.CurrencyReadableName()}: {response.Meta?.TransactionResult}");
 
                 if (_nodeType == TestNodeType.Standalone) await LedgerAcceptAsync();
             }
@@ -725,7 +725,7 @@ public class TestAccountBuilder
 
                 var autofilled = await _client.Autofill(offerCreate);
                 var response = await _client.SubmitAndWait(autofilled, IssuerAccount, true);
-                Console.WriteLine($"[TestAccountBuilder] OfferCreate buy {code}: {response.Meta?.TransactionResult}");
+                Console.WriteLine($"[TestAccountBuilder] OfferCreate buy {code.CurrencyReadableName()}: {response.Meta?.TransactionResult}");
 
                 if (_nodeType == TestNodeType.Standalone) await LedgerAcceptAsync();
             }

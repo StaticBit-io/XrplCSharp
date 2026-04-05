@@ -6,6 +6,7 @@ using Newtonsoft.Json.Linq;
 using Newtonsoft.Json;
 using System.Collections.Generic;
 using Xrpl.Client;
+using Xrpl.Client.Exceptions;
 using Xrpl.Models.Common;
 using Xrpl.Models.Transactions;
 using Xrpl.Utils.Hashes;
@@ -350,7 +351,7 @@ namespace XrplTests.Xrpl.ClientLib.Integration
             var response = await client.SubmitAndWait(values, master, autofill: true);
             if (response.Meta.TransactionResult != "tesSUCCESS")
             {
-                throw new Exception($"Response not successful, { response.Meta.TransactionResult}");
+                throw new XrplException($"Response not successful, {response.Meta.TransactionResult}");
             }
             await LedgerAccept(client);
         }

@@ -190,7 +190,17 @@ public class TrustLine
     [JsonProperty(propertyName: "freeze_peer")]
     public bool? FreezePeer { get; set; }
 
-    //todo not found fields - authorized?: boolean, peer_authorized?: boolean
+    /// <summary>
+    /// If true, the perspective account has authorized this trust line. The default is false.
+    /// </summary>
+    [JsonProperty(propertyName: "authorized")]
+    public bool? Authorized { get; set; }
+
+    /// <summary>
+    /// If true, the counterparty has authorized this trust line. The default is false.
+    /// </summary>
+    [JsonProperty(propertyName: "peer_authorized")]
+    public bool? PeerAuthorized { get; set; }
 }
 
 /// <summary>
@@ -241,4 +251,10 @@ public class AccountLinesRequest : BaseLedgerRequest
     /// </summary>
     [JsonProperty(propertyName: "marker")]
     public object Marker { get; set; }
+
+    /// <summary>
+    /// If true, don't return trust lines where this account's side is in the default state. The default is false.
+    /// </summary>
+    [JsonProperty(propertyName: "ignore_default")]
+    public bool IgnoreDefault { get; set; }
 }
