@@ -1,6 +1,7 @@
 ﻿using Newtonsoft.Json;
 
 using Xrpl.Client;
+using Xrpl.Client.Exceptions;
 using Xrpl.Models.Common;
 using Xrpl.Models.Methods;
 using Xrpl.Models.Transactions;
@@ -41,7 +42,7 @@ public static class StandAloneUtils
         Submit response = await client.Submit(values, master);
         if (response.EngineResult != "tesSUCCESS")
         {
-            throw new Exception("Response not successful, ${ response.result.engine_result}");
+            throw new XrplException($"Response not successful, {response.EngineResult}");
         }
         await LedgerAccept(client);
     }

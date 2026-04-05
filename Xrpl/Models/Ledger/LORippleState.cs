@@ -33,7 +33,13 @@ namespace Xrpl.Models.Ledger
         /// <summary> The low account has frozen the trust line, preventing the high account from transferring the asset. </summary>
         lsfLowFreeze = 4194304,// True, low side has set freeze flag
         /// <summary> The high account has frozen the trust line, preventing the low account from transferring the asset. </summary>
-        lsfHighFreeze = 8388608// True, high side has set freeze flag
+        lsfHighFreeze = 8388608,// True, high side has set freeze flag
+        /// <summary> This trust line holds one of the assets in an Automated Market Maker's pool; one of this trust line's accounts is the AMM, and the other is the issuer of the token. </summary>
+        lsfAMMNode = 16777216,
+        /// <summary> The low account has deep-frozen the trust line, preventing the high account from sending and receiving the asset. </summary>
+        lsfLowDeepFreeze = 33554432,
+        /// <summary> The high account has deep-frozen the trust line, preventing the low account from sending and receiving the asset.</summary>
+        lsfHighDeepFreeze = 67108864
     }
     /// <summary>
     /// The RippleState object type connects two accounts in a single currency.
