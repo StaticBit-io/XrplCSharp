@@ -256,5 +256,5 @@ public class AccountLinesRequest : BaseLedgerRequest
     /// If true, don't return trust lines where this account's side is in the default state. The default is false.
     /// </summary>
     [JsonProperty(propertyName: "ignore_default")]
-    public bool IgnoreDefault { get; set; }
+    public bool? IgnoreDefault { get; set; }
 }

@@ -34,7 +34,8 @@ internal class Program
     static XrplWallet walletRegularKey = XrplWallet.FromNormalizedText("regular key test account");
     static XrplWallet walletRegularKey_signer = XrplWallet.FromNormalizedText("regular key test account signer");
 
-    private static TestNodeType nodeType = TestNodeType.Standalone;
+    private static TestNodeType nodeType = TestNodeType.TestNet;
+
     private static async Task Main(string[] args)
     {
         //TestWalletFromText();
@@ -149,14 +150,15 @@ internal class Program
             .AddPrimaryAccount(walletPrimary)       // ваш кошелёк - владелец всех объектов
             .AddTrustlines()
             .AddTokensAsync()
-            //.AddAmmPools(3)
+            .AddAmmPools(3)
             .AddNFTs(3)
-            //.AddNFTOffers()
+            .AddNFTOffers()
             .AddOffers(5)
             //.AddMPTokens()
             .AddIssuerOffers(5)
             .AddTickets(5)
             .AddChecks(2)
+            .AddIncomeChecks()
             .AddEscrows()
             .AddSignerList()
             .BuildAsync();

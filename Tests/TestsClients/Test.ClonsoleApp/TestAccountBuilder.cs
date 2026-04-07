@@ -206,6 +206,11 @@ public class TestAccountBuilder
         _buildActions.Add(() => CreateChecksAsync(count));
         return this;
     }
+    public TestAccountBuilder AddIncomeChecks(int count = 3)
+    {
+        _buildActions.Add(() => CreateIncomeChecksAsync(count));
+        return this;
+    }
 
     /// <summary>
     /// Sets up SignerList on primary account with Signer1-3.
@@ -222,6 +227,11 @@ public class TestAccountBuilder
     public TestAccountBuilder AddEscrows()
     {
         _buildActions.Add(() => CreateEscrowsAsync());
+        return this;
+    }
+    public TestAccountBuilder AddIncomeEscrows()
+    {
+        _buildActions.Add(() => CreateIncomeEscrowsAsync());
         return this;
     }
 
@@ -572,7 +582,7 @@ public class TestAccountBuilder
                 var ammCreate = new AMMCreate
                 {
                     Account = _primaryAccount.ClassicAddress,
-                    Amount = new Currency { ValueAsXrp = 100 },
+                    Amount = new Currency { ValueAsXrp = 10 },
                     Amount2 = new Currency
                     {
                         CurrencyCode = code,
@@ -827,6 +837,34 @@ public class TestAccountBuilder
         }
     }
 
+    private async Task CreateIncomeChecksAsync(int count)
+    {
+        Console.WriteLine($"[TestAccountBuilder] Creating {count} checks to primary account from IssuerAccount...");
+
+        for (int i = 0; i < count; i++)
+        {
+            try
+            {
+                var checkCreate = new CheckCreate
+                {
+                    Account = IssuerAccount.ClassicAddress,
+                    Destination = _primaryAccount.ClassicAddress,
+                    SendMax = new Currency { ValueAsXrp = 100 }
+                };
+
+                var autofilled = await _client.Autofill(checkCreate);
+                var response = await _client.SubmitAndWait(autofilled, IssuerAccount, true);
+                Console.WriteLine($"[TestAccountBuilder] CheckCreate #{i}: {response.Meta?.TransactionResult}");
+
+                if (_nodeType == TestNodeType.Standalone) await LedgerAcceptAsync();
+            }
+            catch (Exception ex)
+            {
+                Console.WriteLine($"[TestAccountBuilder] Check creation failed: {ex.Message}");
+            }
+        }
+    }
+
     private async Task CreateSignerListAsync()
     {
         Console.WriteLine("[TestAccountBuilder] Creating SignerList on primary account...");
@@ -881,6 +919,34 @@ public class TestAccountBuilder
 
             var autofilled = await _client.Autofill(escrowCreate);
             var response = await _client.SubmitAndWait(autofilled, _primaryAccount, true);
+            Console.WriteLine($"[TestAccountBuilder] EscrowCreate: {response.Meta?.TransactionResult}");
+
+            if (_nodeType == TestNodeType.Standalone) await LedgerAcceptAsync();
+        }
+        catch (Exception ex)
+        {
+            Console.WriteLine($"[TestAccountBuilder] Escrow creation failed: {ex.Message}");
+        }
+    }
+
+    private async Task CreateIncomeEscrowsAsync()
+    {
+        Console.WriteLine("[TestAccountBuilder] Creating escrow to primary account from IssuerAccount...");
+
+        try
+        {
+            var finishAfter = DateTime.UtcNow.AddMinutes(5);
+
+            var escrowCreate = new EscrowCreate
+            {
+                Account = IssuerAccount.ClassicAddress,
+                Destination = _primaryAccount.ClassicAddress,
+                Amount = new Currency { ValueAsXrp = 50 },
+                FinishAfter = finishAfter
+            };
+
+            var autofilled = await _client.Autofill(escrowCreate);
+            var response = await _client.SubmitAndWait(autofilled, IssuerAccount, true);
             Console.WriteLine($"[TestAccountBuilder] EscrowCreate: {response.Meta?.TransactionResult}");
 
             if (_nodeType == TestNodeType.Standalone) await LedgerAcceptAsync();
