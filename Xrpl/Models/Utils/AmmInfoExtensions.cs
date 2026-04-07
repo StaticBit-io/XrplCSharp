@@ -197,7 +197,7 @@ namespace Xrpl.Models.Utils
         /// <param name="l">Number of LP tokens to burn.</param>
         /// <returns>The total Amount2 received.</returns>
         public static Currency RedeemSingleToAmount2(this AMMInfo p, decimal l)
-            => RedeemSingleAsset(p, l, p.Amount, p.Amount2, swapFromFirst: true);
+            => RedeemSingleAsset(p, l, p.Amount, p.Amount2);
 
         /// <summary>
         /// Single-sided redemption into Amount:
@@ -207,7 +207,7 @@ namespace Xrpl.Models.Utils
         /// <param name="l">Number of LP tokens to burn.</param>
         /// <returns>The total Amount received.</returns>
         public static Currency RedeemSingleToAmount(this AMMInfo p, decimal l)
-            => RedeemSingleAsset(p, l, p.Amount2, p.Amount, swapFromFirst: false);
+            => RedeemSingleAsset(p, l, p.Amount2, p.Amount);
 
         /// <summary>
         /// Calculates how many LP tokens must be burned to receive exactly
@@ -411,8 +411,7 @@ namespace Xrpl.Models.Utils
             AMMInfo p,
             decimal l,
             Currency swapAsset,
-            Currency targetAsset,
-            bool swapFromFirst)
+            Currency targetAsset)
         {
             var result = new Currency
             {
