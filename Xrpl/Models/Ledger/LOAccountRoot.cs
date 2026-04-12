@@ -95,6 +95,11 @@ namespace Xrpl.Models.Ledger
             LedgerEntryType = LedgerEntryType.AccountRoot;
         }
         /// <summary>
+        /// Identifier of the associated AMM (Automated Market Maker) instance.
+        /// </summary>
+        [JsonProperty("AMMID")]
+        public string? AmmId { get; set; }
+        /// <summary>
         /// The identifying (classic) address of this account.
         /// </summary>
         public string Account { get; set; }
