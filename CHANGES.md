@@ -1,4 +1,10 @@
 # Changes
+### 10.1.3.0 11/04/2026
+* Add `deep_freeze` and `deep_freeze_peer` fields to `TrustLine` model (XLS-77 Deep Freeze support)
+* Add `Limit` field to `AccountLines` response
+* Change `AccountLinesRequest.IgnoreDefault` type from `bool` to `bool?`
+* Add `PseudoAccount` field to `AccountInfo` response
+* Add `AMMID` field to `LOAccountRoot`
 
 ### 10.1.2.0 05/04/2026
 * Fix `WaitForFinalTransactionOutcome` — `txnNotFound` was never recognized due to reading empty `Exception.Data` instead of `RippledException.Response.Error`, causing false `ValidationException` on successful submissions
