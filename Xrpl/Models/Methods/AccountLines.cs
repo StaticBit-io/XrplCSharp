@@ -53,7 +53,10 @@ public class AccountLines //todo rename to AccountLinesResponse
     /// Omitted when there are  No additional pages after this one.
     /// </summary>
     [JsonProperty(propertyName: "marker")]
-    public object Marker { get; set; }
+    public object Marker { get; set; } 
+
+    [JsonProperty(propertyName: "limit")]
+    public int? Limit { get; set; }
 }
 
 /// <summary>
@@ -189,6 +192,20 @@ public class TrustLine
     /// </summary>
     [JsonProperty(propertyName: "freeze_peer")]
     public bool? FreezePeer { get; set; }
+
+    /// <summary>
+    /// If true, this account has deep frozen this trust line.<br/>
+    /// The default is false.
+    /// </summary>
+    [JsonProperty(propertyName: "deep_freeze")]
+
+    public bool? DeepFreeze { get; set; }
+    /// <summary>
+    /// If true, the peer account has deep frozen this trust line.<br/>
+    /// The default is false.
+    /// </summary>
+    [JsonProperty(propertyName: "deep_freeze_peer")]
+    public bool? DeepFreezePeer { get; set; }
 
     /// <summary>
     /// If true, the perspective account has authorized this trust line. The default is false.

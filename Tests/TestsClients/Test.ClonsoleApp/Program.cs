@@ -35,6 +35,29 @@ internal class Program
     static XrplWallet walletRegularKey_signer = XrplWallet.FromNormalizedText("regular key test account signer");
 
     private static TestNodeType nodeType = TestNodeType.TestNet;
+    public static bool IsIssuerLine(decimal balance, double myLimit, double peerLimit)
+    {
+        if (balance > 0) return false;
+        if (balance < 0) return true;
+
+        if (myLimit == 0 && peerLimit > 0) return true;
+        if (myLimit > 0 && peerLimit == 0) return false;
+
+        return false;
+    }
+    private static bool IsIssuerLine(decimal balance, decimal myLimit, decimal peerLimit)
+    {
+        return IsIssuerLine(balance, (double)myLimit, (double)peerLimit);
+    }
+
+    /// <summary>
+    /// Convenience extension for account_lines TrustLine objects.
+    /// Values are already relative to the queried account.
+    /// </summary>
+    public static bool IsIssuerLine(TrustLine line)
+    {
+        return IsIssuerLine(line.BalanceAsNumber, line.LimitAsNumber, line.LimitPeerAsNumber);
+    }
 
     private static async Task Main(string[] args)
     {
@@ -43,6 +66,8 @@ internal class Program
 
         try
         {
+            //await CheckLines();
+
             //await TestPayment();
             await InitForDataForTest();
 
@@ -84,6 +109,27 @@ internal class Program
         //await SubmitTestTx();
         //await WebsocketTest();
         //await WebsocketChangeServerTest();
+    }
+
+    private static async Task CheckLines()
+    {
+        var lines = new List<TrustLine>();
+        object marker = null;
+        do
+        {
+            var all = await client.AccountLines(
+                new AccountLinesRequest(walletPrimary.ClassicAddress)
+                {
+                    Marker = marker,
+                    Limit = 200,
+                    //IgnoreDefault = true
+                });
+            lines.AddRange(all.TrustLines);
+            marker = all.Marker;
+        }
+        while(marker != null);
+        var lines2 = lines.Where(IsIssuerLine).ToList();
+        var lines3 = lines.Where(l=> !IsIssuerLine(l)).ToList();
     }
 
     private static async Task TestPayment()
@@ -148,19 +194,20 @@ internal class Program
     {
         await new TestAccountBuilder(client, nodeType)
             .AddPrimaryAccount(walletPrimary)       // ваш кошелёк - владелец всех объектов
-            .AddTrustlines()
-            .AddTokensAsync()
-            .AddAmmPools(3)
-            .AddNFTs(3)
-            .AddNFTOffers()
-            .AddOffers(5)
-            //.AddMPTokens()
-            .AddIssuerOffers(5)
-            .AddTickets(5)
-            .AddChecks(2)
-            .AddIncomeChecks()
-            .AddEscrows()
-            .AddSignerList()
+            //.AddTrustlines()
+            //.AddTokensAsync()
+            //.AddAmmPools(3)
+            //.AddNFTs(2)
+            //.AddNFTOffers()
+            //.AddOffers(7)
+            ////.AddMPTokens()
+            //.AddIssuerOffers()
+            //.AddTickets(5)
+            //.AddChecks(2)
+            //.AddIncomeChecks(2)
+            //.AddEscrows()
+            //.AddSignerList()
+            .AddDeepFreezeTest()
             .BuildAsync();
 
         var noRippleCheck = await client.NoRippleCheck(
@@ -179,6 +226,7 @@ internal class Program
 
         // Теперь можно использовать готовые аккаунты для тестов:
         Console.WriteLine($"Issuer: {TestAccountBuilder.IssuerAccount.ClassicAddress}");
+        Console.WriteLine($"Issuer2: {TestAccountBuilder.Issuer2Account.ClassicAddress}");
     }
 
     private static async Task TestReconnection()

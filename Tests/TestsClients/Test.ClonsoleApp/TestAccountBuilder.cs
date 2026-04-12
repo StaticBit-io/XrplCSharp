@@ -1,5 +1,6 @@
 using Newtonsoft.Json;
 
+using Org.BouncyCastle.Ocsp;
 using Org.BouncyCastle.Utilities.Encoders;
 
 using System;
@@ -50,6 +51,9 @@ public class TestAccountBuilder
     /// <summary>Issuer account - issues tokens/MPT, acts as counterparty for checks/escrows.</summary>
     public static readonly XrplWallet IssuerAccount = XrplWallet.FromNormalizedText("test builder issuer account");
 
+    /// <summary>Second issuer account - used for deep freeze tests.</summary>
+    public static readonly XrplWallet Issuer2Account = XrplWallet.FromNormalizedText("test builder issuer deep and deep-freezed account");
+
     /// <summary>Signer 1 for multi-sign.</summary>
     public static readonly XrplWallet Signer1Account = XrplWallet.FromNormalizedText("test builder signer 1 account");
 
@@ -62,7 +66,7 @@ public class TestAccountBuilder
     /// <summary>Helper wallets for batch funding (excludes primary - funded separately).</summary>
     public static readonly XrplWallet[] HelperWallets = new[]
     {
-        IssuerAccount, Signer1Account, Signer2Account, Signer3Account
+        IssuerAccount, Issuer2Account, Signer1Account, Signer2Account, Signer3Account
     };
 
     #endregion
@@ -171,7 +175,7 @@ public class TestAccountBuilder
         _buildActions.Add(() => CreateDEXOffersAsync(count));
         return this;
     }
-    
+
     public TestAccountBuilder AddIssuerOffers(int count = 5)
     {
         _buildActions.Add(() => CreateDEXOffersForIssuerAsync(count));
@@ -235,6 +239,17 @@ public class TestAccountBuilder
         return this;
     }
 
+    /// <summary>
+    /// Creates a deep freeze test scenario with Issuer2Account:
+    /// trustline from primary, token payment, then deep freeze.
+    /// </summary>
+    /// <param name="currencyCode">Currency code for the deep-frozen token.</param>
+    public TestAccountBuilder AddDeepFreezeTest(string currencyCode = "DFZ")
+    {
+        _buildActions.Add(() => CreateDeepFreezeTestAsync(currencyCode));
+        return this;
+    }
+
     #endregion
 
     #region Build Method
@@ -253,6 +268,7 @@ public class TestAccountBuilder
 
         await FundAllAccountsAsync();
         await EnableDefaultRippleAsync();
+        await EnableIssuer2FlagsAsync();
 
         Console.WriteLine($"[TestAccountBuilder] Executing {_buildActions.Count} build actions...");
 
@@ -360,8 +376,8 @@ public class TestAccountBuilder
             };
 
             var autofilled = await _client.Autofill(accountSet);
-            var response = await _client.SubmitAndWait(autofilled, IssuerAccount, true);
-            Console.WriteLine($"[TestAccountBuilder] DefaultRipple: {response.Meta?.TransactionResult}");
+            var response = await _client.Submit(autofilled, IssuerAccount, true);
+            Console.WriteLine($"[TestAccountBuilder] DefaultRipple");
 
             if (_nodeType == TestNodeType.Standalone)
                 await LedgerAcceptAsync();
@@ -369,6 +385,59 @@ public class TestAccountBuilder
         catch (Exception ex)
         {
             Console.WriteLine($"[TestAccountBuilder] DefaultRipple failed: {ex.Message}");
+        }
+    }
+
+    private async Task EnableIssuer2FlagsAsync()
+    {
+        bool needDefaultRipple = true;
+        bool needTrustLineLocking = true;
+
+        try
+        {
+            AccountInfoRequest infoRequest = new AccountInfoRequest(Issuer2Account.ClassicAddress);
+            AccountInfo info = await _client.AccountInfo(infoRequest);
+            needDefaultRipple = !info.AccountFlags.DefaultRipple;
+            needTrustLineLocking = !info.AccountFlags.AllowTrustLineLocking;
+        }
+        catch { }
+
+        if (needDefaultRipple)
+        {
+            try
+            {
+                AccountSet accountSet = new AccountSet
+                {
+                    Account = Issuer2Account.ClassicAddress,
+                    SetFlag = AccountSetAsfFlags.asfDefaultRipple
+                };
+                var autofilled = await _client.Autofill(accountSet);
+                await _client.SubmitAndWait(autofilled, Issuer2Account);
+                Console.WriteLine("[TestAccountBuilder] Issuer2: DefaultRipple enabled");
+            }
+            catch (Exception ex)
+            {
+                Console.WriteLine($"[TestAccountBuilder] Issuer2 DefaultRipple failed: {ex.Message}");
+            }
+        }
+
+        if (needTrustLineLocking)
+        {
+            try
+            {
+                AccountSet accountSet = new AccountSet
+                {
+                    Account = Issuer2Account.ClassicAddress,
+                    SetFlag = AccountSetAsfFlags.asfAllowTrustLineLocking
+                };
+                var autofilled = await _client.Autofill(accountSet);
+                await _client.SubmitAndWait(autofilled, Issuer2Account);
+                Console.WriteLine("[TestAccountBuilder] Issuer2: AllowTrustLineLocking enabled");
+            }
+            catch (Exception ex)
+            {
+                Console.WriteLine($"[TestAccountBuilder] Issuer2 AllowTrustLineLocking failed: {ex.Message}");
+            }
         }
     }
 
@@ -380,7 +449,7 @@ public class TestAccountBuilder
     {
         try
         {
-            var request = new AccountLinesRequest(_primaryAccount.ClassicAddress) { Peer = issuer, Limit = 500};
+            var request = new AccountLinesRequest(_primaryAccount.ClassicAddress) { Peer = issuer, Limit = 500 };
             var response = await _client.AccountLines(request);
             return response.TrustLines?.Any(l => l.Currency == currencyCode) == true;
         }
@@ -457,9 +526,11 @@ public class TestAccountBuilder
     private async Task CreateTrustlinesAsync(string[] tokenCodes)
     {
         Console.WriteLine($"[TestAccountBuilder] Creating trustlines on primary account...");
-
+        uint? seq = null;
+        var counter = 0;
         foreach (var code in tokenCodes)
         {
+            counter++;
             try
             {
                 if (await TrustlineExistsAsync(code, IssuerAccount.ClassicAddress))
@@ -476,12 +547,13 @@ public class TestAccountBuilder
                         CurrencyCode = code,
                         Issuer = IssuerAccount.ClassicAddress,
                         Value = "10000000"
-                    }
+                    },
+                    Sequence = seq
                 };
 
                 var autofilled = await _client.Autofill(trustSet);
-                var response = await _client.SubmitAndWait(autofilled, _primaryAccount, true);
-                Console.WriteLine($"[TestAccountBuilder] TrustSet {code.CurrencyReadableName()}: {response.Meta?.TransactionResult}");
+                seq = await SendAsync(tokenCodes.Length, counter, tokenCodes.Length, autofilled, _primaryAccount);
+                Console.WriteLine($"[TestAccountBuilder] TrustSet {code.CurrencyReadableName()}");
 
                 if (_nodeType == TestNodeType.Standalone)
                     await LedgerAcceptAsync();
@@ -496,9 +568,11 @@ public class TestAccountBuilder
     private async Task SendTokensAsync(string[] tokenCodes)
     {
         Console.WriteLine($"[TestAccountBuilder] Send tokens to primary account...");
-
+        uint? seq = null;
+        var counter = 0;
         foreach (var code in tokenCodes)
         {
+            counter++;
             try
             {
                 if (await TrustlineExistsAsync(code, IssuerAccount.ClassicAddress) == false)
@@ -516,12 +590,13 @@ public class TestAccountBuilder
                         Issuer = IssuerAccount.ClassicAddress,
                         Value = "100"
                     },
-                    Destination = _primaryAccount.ClassicAddress
+                    Destination = _primaryAccount.ClassicAddress,
+                    Sequence = seq
                 };
 
                 var autofilled = await _client.Autofill(payment);
-                var response = await _client.SubmitAndWait(autofilled, IssuerAccount, true);
-                Console.WriteLine($"[TestAccountBuilder] Payment {code.CurrencyReadableName()}: {response.Meta?.TransactionResult}");
+                seq = await SendAsync(tokenCodes.Length, counter, tokenCodes.Length, autofilled, IssuerAccount);
+                Console.WriteLine($"[TestAccountBuilder] Payment {code.CurrencyReadableName()}");
 
                 if (_nodeType == TestNodeType.Standalone)
                     await LedgerAcceptAsync();
@@ -536,7 +611,7 @@ public class TestAccountBuilder
     private async Task CreateAmmPoolsAsync(int count)
     {
         Console.WriteLine($"[TestAccountBuilder] Creating AMM pools from primary account...");
-
+        uint? seq = null;
         for (int i = 0; i < count && i < TokenCodes.Length; i++)
         {
             try
@@ -559,10 +634,11 @@ public class TestAccountBuilder
                             CurrencyCode = code,
                             Issuer = IssuerAccount.ClassicAddress,
                             Value = "10000000"
-                        }
+                        },
+                        Sequence = seq
                     };
                     var autofilledTrust = await _client.Autofill(trustSet);
-                    await _client.SubmitAndWait(autofilledTrust, _primaryAccount, true);
+                    seq = await SendAsync(1000, i, 1000, autofilledTrust,_primaryAccount);
                 }
 
                 var payment = new Payment
@@ -574,10 +650,11 @@ public class TestAccountBuilder
                         CurrencyCode = code,
                         Issuer = IssuerAccount.ClassicAddress,
                         Value = "10000"
-                    }
+                    },
+                    Sequence = seq
                 };
                 var autofilledPayment = await _client.Autofill(payment);
-                await _client.SubmitAndWait(autofilledPayment, IssuerAccount, true);
+                seq = await SendAsync(1000, i, 1000, autofilledPayment, IssuerAccount);
 
                 var ammCreate = new AMMCreate
                 {
@@ -589,12 +666,13 @@ public class TestAccountBuilder
                         Issuer = IssuerAccount.ClassicAddress,
                         Value = "1000"
                     },
-                    TradingFee = 500
+                    TradingFee = 500,
+                    Sequence = seq
                 };
 
                 var autofilledAmm = await _client.Autofill(ammCreate);
-                var response = await _client.SubmitAndWait(autofilledAmm, _primaryAccount, true);
-                Console.WriteLine($"[TestAccountBuilder] AMMCreate XRP/{code.CurrencyReadableName()}: {response.Meta?.TransactionResult}");
+                seq = await SendAsync(count, i, TokenCodes.Length, autofilledAmm, _primaryAccount);
+                Console.WriteLine($"[TestAccountBuilder] AMMCreate XRP/{code.CurrencyReadableName()}");
 
                 if (_nodeType == TestNodeType.Standalone) await LedgerAcceptAsync();
             }
@@ -608,7 +686,7 @@ public class TestAccountBuilder
     private async Task CreateNFTsAsync(int count)
     {
         Console.WriteLine($"[TestAccountBuilder] Minting {count} NFTs on primary account...");
-
+        uint? seq = null;
         for (int i = 0; i < count; i++)
         {
             try
@@ -618,12 +696,13 @@ public class TestAccountBuilder
                     Account = _primaryAccount.ClassicAddress,
                     NFTokenTaxon = (uint)i,
                     Flags = NFTokenMintFlags.tfTransferable | NFTokenMintFlags.tfBurnable | NFTokenMintFlags.tfMutable,
-                    URI = ConvertStringToHex("ipfs://bafkreigbnsf4lgajtfe76tziimcux22oknqjjpkvqqfb2msznpdctwi2wy")
+                    URI = ConvertStringToHex("ipfs://bafkreigbnsf4lgajtfe76tziimcux22oknqjjpkvqqfb2msznpdctwi2wy"),
+                    Sequence = seq,
                 };
 
                 var autofilled = await _client.Autofill(nftMint);
-                var response = await _client.SubmitAndWait(autofilled, _primaryAccount, true);
-                Console.WriteLine($"[TestAccountBuilder] NFTokenMint #{i}: {response.Meta?.TransactionResult}");
+                seq = await SendAsync(count, i, count, autofilled, _primaryAccount);
+                Console.WriteLine($"[TestAccountBuilder] NFTokenMint #{i}");
 
                 if (_nodeType == TestNodeType.Standalone) await LedgerAcceptAsync();
             }
@@ -652,19 +731,23 @@ public class TestAccountBuilder
                 return;
             }
 
+            uint? seq = null;
+            var counter = 0;
             foreach (var nft in nftsResponse.NFTs)
             {
+                counter++;
                 var sellOffer = new NFTokenCreateOffer
                 {
                     Account = _primaryAccount.ClassicAddress,
                     NFTokenID = nft.NFTokenID,
                     Amount = new Currency { ValueAsXrp = 10 },
-                    Flags = NFTokenCreateOfferFlags.tfSellNFToken
+                    Flags = NFTokenCreateOfferFlags.tfSellNFToken,
+                    Sequence = seq
                 };
 
                 var autofilled = await _client.Autofill(sellOffer);
-                var response = await _client.SubmitAndWait(autofilled, _primaryAccount, true);
-                Console.WriteLine($"[TestAccountBuilder] NFT SellOffer: {response.Meta?.TransactionResult}");
+                seq = await SendAsync(nftsResponse.NFTs.Count, counter, nftsResponse.NFTs.Count, autofilled, _primaryAccount);
+                Console.WriteLine($"[TestAccountBuilder] NFT SellOffer #{counter}");
 
                 if (_nodeType == TestNodeType.Standalone) await LedgerAcceptAsync();
             }
@@ -678,7 +761,7 @@ public class TestAccountBuilder
     private async Task CreateDEXOffersAsync(int count)
     {
         Console.WriteLine($"[TestAccountBuilder] Creating {count} DEX offers from primary account...");
-
+        uint? seq = null;
         for (int i = 0; i < count && i < TokenCodes.Length; i++)
         {
             try
@@ -694,12 +777,13 @@ public class TestAccountBuilder
                         CurrencyCode = code,
                         Issuer = IssuerAccount.ClassicAddress,
                         Value = "100"
-                    }
+                    },
+                    Sequence = seq
                 };
 
                 var autofilled = await _client.Autofill(offerCreate);
-                var response = await _client.SubmitAndWait(autofilled, _primaryAccount, true);
-                Console.WriteLine($"[TestAccountBuilder] OfferCreate buy {code.CurrencyReadableName()}: {response.Meta?.TransactionResult}");
+                seq = await SendAsync(count, i, TokenCodes.Length, autofilled, _primaryAccount);
+                Console.WriteLine($"[TestAccountBuilder] OfferCreate buy {code.CurrencyReadableName()}");
 
                 if (_nodeType == TestNodeType.Standalone) await LedgerAcceptAsync();
             }
@@ -710,11 +794,24 @@ public class TestAccountBuilder
         }
     }
 
+    private async Task<uint?> SendAsync(int count, int i, int maxCount, ITransactionRequest autofilled, XrplWallet wallet)
+    {
+        if (i >= count - 1 || i >= maxCount - 1)
+        {
+            _ = await _client.SubmitAndWait(autofilled, wallet, true);
+            return null;
+        }
+        else
+        {
+            var response = await _client.Submit(autofilled, wallet, true);
+            return response.AccountSequenceNext;
+        }
+    }
 
     private async Task CreateDEXOffersForIssuerAsync(int count)
     {
         Console.WriteLine($"[TestAccountBuilder] Creating {count} DEX offers from issuer account...");
-
+        uint? seq = null;
         for (int i = 0; i < count && i < TokenCodes.Length; i++)
         {
             try
@@ -730,12 +827,13 @@ public class TestAccountBuilder
                         CurrencyCode = code,
                         Issuer = IssuerAccount.ClassicAddress,
                         Value = "10"
-                    }
+                    },
+                    Sequence = seq
                 };
 
                 var autofilled = await _client.Autofill(offerCreate);
-                var response = await _client.SubmitAndWait(autofilled, IssuerAccount, true);
-                Console.WriteLine($"[TestAccountBuilder] OfferCreate buy {code.CurrencyReadableName()}: {response.Meta?.TransactionResult}");
+                seq = await SendAsync(count, i, TokenCodes.Length, autofilled, IssuerAccount);
+                Console.WriteLine($"[TestAccountBuilder] OfferCreate buy {code.CurrencyReadableName()}");
 
                 if (_nodeType == TestNodeType.Standalone) await LedgerAcceptAsync();
             }
@@ -766,8 +864,8 @@ public class TestAccountBuilder
             };
 
             var autofilled = await _client.Autofill(mptCreate);
-            var response = await _client.SubmitAndWait(autofilled, IssuerAccount, true);
-            Console.WriteLine($"[TestAccountBuilder] MPTokenIssuanceCreate: {response.Meta?.TransactionResult}");
+            var response = await _client.Submit(autofilled, IssuerAccount, true);
+            Console.WriteLine($"[TestAccountBuilder] MPTokenIssuanceCreate:");
 
             if (_nodeType == TestNodeType.Standalone) await LedgerAcceptAsync();
         }
@@ -798,8 +896,8 @@ public class TestAccountBuilder
             };
 
             var autofilled = await _client.Autofill(ticketCreate);
-            var response = await _client.SubmitAndWait(autofilled, _primaryAccount, true);
-            Console.WriteLine($"[TestAccountBuilder] TicketCreate ({toCreate}): {response.Meta?.TransactionResult}");
+            var response = await _client.Submit(autofilled, _primaryAccount, true);
+            Console.WriteLine($"[TestAccountBuilder] TicketCreate ({toCreate})");
 
             if (_nodeType == TestNodeType.Standalone) await LedgerAcceptAsync();
         }
@@ -812,7 +910,7 @@ public class TestAccountBuilder
     private async Task CreateChecksAsync(int count)
     {
         Console.WriteLine($"[TestAccountBuilder] Creating {count} checks from primary account to IssuerAccount...");
-
+        uint? seq = null;
         for (int i = 0; i < count; i++)
         {
             try
@@ -821,12 +919,13 @@ public class TestAccountBuilder
                 {
                     Account = _primaryAccount.ClassicAddress,
                     Destination = IssuerAccount.ClassicAddress,
-                    SendMax = new Currency { ValueAsXrp = 100 }
+                    SendMax = new Currency { ValueAsXrp = 100 },
+                    Sequence = seq
                 };
 
                 var autofilled = await _client.Autofill(checkCreate);
-                var response = await _client.SubmitAndWait(autofilled, _primaryAccount, true);
-                Console.WriteLine($"[TestAccountBuilder] CheckCreate #{i}: {response.Meta?.TransactionResult}");
+                seq = await SendAsync(count, i, count, autofilled, _primaryAccount);
+                Console.WriteLine($"[TestAccountBuilder] CheckCreate #{i}");
 
                 if (_nodeType == TestNodeType.Standalone) await LedgerAcceptAsync();
             }
@@ -840,6 +939,7 @@ public class TestAccountBuilder
     private async Task CreateIncomeChecksAsync(int count)
     {
         Console.WriteLine($"[TestAccountBuilder] Creating {count} checks to primary account from IssuerAccount...");
+        uint? seq = null;
 
         for (int i = 0; i < count; i++)
         {
@@ -849,12 +949,13 @@ public class TestAccountBuilder
                 {
                     Account = IssuerAccount.ClassicAddress,
                     Destination = _primaryAccount.ClassicAddress,
-                    SendMax = new Currency { ValueAsXrp = 100 }
+                    SendMax = new Currency { ValueAsXrp = 100 },
+                    Sequence = seq
                 };
 
                 var autofilled = await _client.Autofill(checkCreate);
-                var response = await _client.SubmitAndWait(autofilled, IssuerAccount, true);
-                Console.WriteLine($"[TestAccountBuilder] CheckCreate #{i}: {response.Meta?.TransactionResult}");
+                seq = await SendAsync(count, i, count, autofilled, IssuerAccount);
+                Console.WriteLine($"[TestAccountBuilder] CheckCreate #{i}");
 
                 if (_nodeType == TestNodeType.Standalone) await LedgerAcceptAsync();
             }
@@ -890,8 +991,8 @@ public class TestAccountBuilder
             };
 
             var autofilled = await _client.Autofill(signerListSet);
-            var response = await _client.SubmitAndWait(autofilled, _primaryAccount, true);
-            Console.WriteLine($"[TestAccountBuilder] SignerListSet: {response.Meta?.TransactionResult}");
+            var response = await _client.Submit(autofilled, _primaryAccount, true);
+            Console.WriteLine($"[TestAccountBuilder] SignerListSet");
 
             if (_nodeType == TestNodeType.Standalone) await LedgerAcceptAsync();
         }
@@ -918,8 +1019,8 @@ public class TestAccountBuilder
             };
 
             var autofilled = await _client.Autofill(escrowCreate);
-            var response = await _client.SubmitAndWait(autofilled, _primaryAccount, true);
-            Console.WriteLine($"[TestAccountBuilder] EscrowCreate: {response.Meta?.TransactionResult}");
+            var response = await _client.Submit(autofilled, _primaryAccount, true);
+            Console.WriteLine($"[TestAccountBuilder] EscrowCreate");
 
             if (_nodeType == TestNodeType.Standalone) await LedgerAcceptAsync();
         }
@@ -946,8 +1047,8 @@ public class TestAccountBuilder
             };
 
             var autofilled = await _client.Autofill(escrowCreate);
-            var response = await _client.SubmitAndWait(autofilled, IssuerAccount, true);
-            Console.WriteLine($"[TestAccountBuilder] EscrowCreate: {response.Meta?.TransactionResult}");
+            var response = await _client.Submit(autofilled, IssuerAccount, true);
+            Console.WriteLine($"[TestAccountBuilder] EscrowCreate");
 
             if (_nodeType == TestNodeType.Standalone) await LedgerAcceptAsync();
         }
@@ -955,6 +1056,79 @@ public class TestAccountBuilder
         {
             Console.WriteLine($"[TestAccountBuilder] Escrow creation failed: {ex.Message}");
         }
+    }
+
+    private async Task CreateDeepFreezeTestAsync(string currencyCode)
+    {
+        Console.WriteLine("[TestAccountBuilder] Deep Freeze test scenario with Issuer2...");
+
+        if (!await TrustlineExistsAsync(currencyCode, Issuer2Account.ClassicAddress))
+        {
+            TrustSet trustSet = new TrustSet
+            {
+                Account = _primaryAccount.ClassicAddress,
+                LimitAmount = new Currency
+                {
+                    CurrencyCode = currencyCode,
+                    Issuer = Issuer2Account.ClassicAddress,
+                    Value = "10000000"
+                }
+            };
+            var autofilled = await _client.Autofill(trustSet);
+            await _client.SubmitAndWait(autofilled, _primaryAccount);
+            Console.WriteLine($"[TestAccountBuilder] TrustSet {currencyCode} -> Issuer2");
+        }
+        else
+        {
+            Console.WriteLine($"[TestAccountBuilder] TrustSet {currencyCode} -> Issuer2: already exists, skipping");
+        }
+
+
+
+        Payment payment = new Payment
+        {
+            Account = Issuer2Account.ClassicAddress,
+            Destination = _primaryAccount.ClassicAddress,
+            Amount = new Currency
+            {
+                CurrencyCode = currencyCode,
+                Issuer = Issuer2Account.ClassicAddress,
+                Value = "500"
+            }
+        };
+        var autofilledPayment = await _client.Autofill(payment);
+        await _client.SubmitAndWait(autofilledPayment, Issuer2Account);
+        Console.WriteLine($"[TestAccountBuilder] Payment {currencyCode} Issuer2 -> Primary");
+
+        TrustSet freeze = new TrustSet
+        {
+            Account = Issuer2Account.ClassicAddress,
+            LimitAmount = new Currency
+            {
+                CurrencyCode = currencyCode,
+                Issuer = _primaryAccount.ClassicAddress,
+                Value = "0"
+            },
+            Flags = TrustSetFlags.tfSetFreeze | TrustSetFlags.tfSetDeepFreeze
+        };
+        var autofilledFreeze = await _client.Autofill(freeze);
+        await _client.SubmitAndWait(autofilledFreeze, Issuer2Account);
+        Console.WriteLine($"[TestAccountBuilder] Freeze and DeepFreeze {currencyCode} for Primary");
+
+        //TrustSet deepFreeze = new TrustSet
+        //{
+        //    Account = Issuer2Account.ClassicAddress,
+        //    LimitAmount = new Currency
+        //    {
+        //        CurrencyCode = currencyCode,
+        //        Issuer = _primaryAccount.ClassicAddress,
+        //        Value = "0"
+        //    },
+        //    Flags = 
+        //};
+        //var autofilledDeepFreeze = await _client.Autofill(deepFreeze);
+        //await _client.SubmitAndWait(autofilledDeepFreeze, Issuer2Account);
+        //Console.WriteLine($"[TestAccountBuilder] DeepFreeze {currencyCode} for Primary");
     }
 
     #endregion
@@ -969,6 +1143,7 @@ public class TestAccountBuilder
         Console.WriteLine("=== Test Wallets ===");
         Console.WriteLine($"PrimaryAccount: {_primaryAccount?.ClassicAddress ?? "(not set)"}");
         Console.WriteLine($"IssuerAccount:  {IssuerAccount.ClassicAddress}");
+        Console.WriteLine($"Issuer2Account: {Issuer2Account.ClassicAddress}");
         Console.WriteLine($"Signer1Account: {Signer1Account.ClassicAddress}");
         Console.WriteLine($"Signer2Account: {Signer2Account.ClassicAddress}");
         Console.WriteLine($"Signer3Account: {Signer3Account.ClassicAddress}");
@@ -982,6 +1157,7 @@ public class TestAccountBuilder
     {
         Console.WriteLine("=== Helper Wallets ===");
         Console.WriteLine($"IssuerAccount:  {IssuerAccount.ClassicAddress}");
+        Console.WriteLine($"Issuer2Account: {Issuer2Account.ClassicAddress}");
         Console.WriteLine($"Signer1Account: {Signer1Account.ClassicAddress}");
         Console.WriteLine($"Signer2Account: {Signer2Account.ClassicAddress}");
         Console.WriteLine($"Signer3Account: {Signer3Account.ClassicAddress}");
