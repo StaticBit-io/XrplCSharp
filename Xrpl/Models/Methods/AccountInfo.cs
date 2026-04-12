@@ -49,12 +49,25 @@ namespace Xrpl.Models.Methods
         /// </summary>
         [JsonProperty("queue_data")]
         public AccountQueueData? QueueData { get; set; }
+
+        /// <summary>
+        /// Set or get the pseudo account type of this account. This field is only present if the account is a pseudo account, and is null otherwise.<br/>
+        /// </summary>
+        [JsonProperty("pseudo_account")]
+        public PseudoAccountInfo? PseudoAccount { get; set; }
         /// <summary>
         /// True if this data is from a validated ledger version;<br/>
         /// if omitted or set to false, this data is not final.
         /// </summary>
         [JsonProperty("validated")]
         public bool Validated { get; set; }
+    }
+
+
+    public class PseudoAccountInfo
+    {
+        [JsonProperty("type")]
+        public string Type { get; set; }
     }
 
     //https://github.com/XRPLF/xrpl.js/blob/b20c05c3680d80344006d20c44b4ae1c3b0ffcac/packages/xrpl/src/models/methods/accountInfo.ts#L42
