@@ -131,7 +131,7 @@ public class Currency
         set => Value = value.ToString(
             CurrencyCode == "XRP"
                 ? "G0"
-                : "G15",
+                : "G16",
             CultureInfo.InvariantCulture);
     }
 

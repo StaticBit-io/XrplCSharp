@@ -7,6 +7,7 @@ using System.Diagnostics;
 using Xrpl.Client;
 using Xrpl.Client.Exceptions;
 using Xrpl.Models;
+using Xrpl.Models.Common;
 using Xrpl.Models.Ledger;
 using Xrpl.Models.Methods;
 using Xrpl.Models.Subscriptions;
@@ -73,7 +74,7 @@ internal class Program
 
             //await SetSigners(walletMultiSign, walletMultiSigner_1, walletMultiSigner_2);
 
-            var features = await client.ServerFeatures();
+             var features = await client.ServerFeatures();
             var canBe = features.GetActivated();
             var mpts = features.GetByNameContains("mpt");
             foreach (var mpt in canBe)
@@ -127,9 +128,10 @@ internal class Program
             lines.AddRange(all.TrustLines);
             marker = all.Marker;
         }
-        while(marker != null);
+        while (marker != null);
         var lines2 = lines.Where(IsIssuerLine).ToList();
-        var lines3 = lines.Where(l=> !IsIssuerLine(l)).ToList();
+        var lines3 = lines.Where(l => !IsIssuerLine(l)).ToList();
+        var lines4 = lines.Where(l => l.IsLpToken()).ToList();
     }
 
     private static async Task TestPayment()
@@ -194,20 +196,22 @@ internal class Program
     {
         await new TestAccountBuilder(client, nodeType)
             .AddPrimaryAccount(walletPrimary)       // ваш кошелёк - владелец всех объектов
-            //.AddTrustlines()
-            //.AddTokensAsync()
-            //.AddAmmPools(3)
-            //.AddNFTs(2)
-            //.AddNFTOffers()
-            //.AddOffers(7)
-            ////.AddMPTokens()
-            //.AddIssuerOffers()
-            //.AddTickets(5)
-            //.AddChecks(2)
-            //.AddIncomeChecks(2)
-            //.AddEscrows()
-            //.AddSignerList()
-            .AddDeepFreezeTest()
+            .AddTrustlines()
+            .AddTokensAsync()
+            .AddAmmPools(3)
+            .AddNFTs(2)
+            .AddNFTOffers()
+            .AddOffers(7)
+            //.AddMPTokens()
+            .AddIssuerOffers()
+            .AddTickets(5)
+            .AddChecks(2)
+            .AddIncomeChecks(2)
+            .AddEscrows()
+            .AddIncomeEscrows()
+            .AddSignerList()
+            .AddDeepFreezeToken()
+            .AddRequireAuthTest("ATH", auth: false)
             .BuildAsync();
 
         var noRippleCheck = await client.NoRippleCheck(
@@ -227,6 +231,7 @@ internal class Program
         // Теперь можно использовать готовые аккаунты для тестов:
         Console.WriteLine($"Issuer: {TestAccountBuilder.IssuerAccount.ClassicAddress}");
         Console.WriteLine($"Issuer2: {TestAccountBuilder.Issuer2Account.ClassicAddress}");
+        Console.WriteLine($"Issuer3: {TestAccountBuilder.Issuer3Account.ClassicAddress}");
     }
 
     private static async Task TestReconnection()

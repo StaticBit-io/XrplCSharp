@@ -54,6 +54,9 @@ public class TestAccountBuilder
     /// <summary>Second issuer account - used for deep freeze tests.</summary>
     public static readonly XrplWallet Issuer2Account = XrplWallet.FromNormalizedText("test builder issuer deep and deep-freezed account");
 
+    /// <summary>Third issuer account - used for require auth tests.</summary>
+    public static readonly XrplWallet Issuer3Account = XrplWallet.FromNormalizedText("test builder issuer require auth account");
+
     /// <summary>Signer 1 for multi-sign.</summary>
     public static readonly XrplWallet Signer1Account = XrplWallet.FromNormalizedText("test builder signer 1 account");
 
@@ -66,7 +69,7 @@ public class TestAccountBuilder
     /// <summary>Helper wallets for batch funding (excludes primary - funded separately).</summary>
     public static readonly XrplWallet[] HelperWallets = new[]
     {
-        IssuerAccount, Issuer2Account, Signer1Account, Signer2Account, Signer3Account
+        IssuerAccount, Issuer2Account, Issuer3Account, Signer1Account, Signer2Account, Signer3Account
     };
 
     #endregion
@@ -244,9 +247,23 @@ public class TestAccountBuilder
     /// trustline from primary, token payment, then deep freeze.
     /// </summary>
     /// <param name="currencyCode">Currency code for the deep-frozen token.</param>
-    public TestAccountBuilder AddDeepFreezeTest(string currencyCode = "DFZ")
+    public TestAccountBuilder AddDeepFreezeToken(string currencyCode = "DFZ")
     {
-        _buildActions.Add(() => CreateDeepFreezeTestAsync(currencyCode));
+        _buildActions.Add(() => CreateDeepFreezeTokenAsync(currencyCode));
+        return this;
+    }
+
+    /// <summary>
+    /// Creates a require-auth test scenario with Issuer3Account:
+    /// trustline from primary to Issuer3 (which has asfRequireAuth).
+    /// If <paramref name="auth"/> is true, Issuer3 authorizes the trustline and sends tokens.
+    /// If false, the trustline remains unauthorized (payments will fail with tecNO_AUTH).
+    /// </summary>
+    /// <param name="currencyCode">Currency code for the authorized token.</param>
+    /// <param name="auth">Whether to authorize the trustline and send tokens.</param>
+    public TestAccountBuilder AddRequireAuthTest(string currencyCode = "ATH", bool auth = false)
+    {
+        _buildActions.Add(() => CreateRequireAuthTestAsync(currencyCode, auth));
         return this;
     }
 
@@ -269,6 +286,7 @@ public class TestAccountBuilder
         await FundAllAccountsAsync();
         await EnableDefaultRippleAsync();
         await EnableIssuer2FlagsAsync();
+        await EnableIssuer3FlagsAsync();
 
         Console.WriteLine($"[TestAccountBuilder] Executing {_buildActions.Count} build actions...");
 
@@ -437,6 +455,80 @@ public class TestAccountBuilder
             catch (Exception ex)
             {
                 Console.WriteLine($"[TestAccountBuilder] Issuer2 AllowTrustLineLocking failed: {ex.Message}");
+            }
+        }
+    }
+
+    private async Task EnableIssuer3FlagsAsync()
+    {
+        bool needDefaultRipple = true;
+        bool needRequireAuth = true;
+        bool needTrustLineLocking = true;
+
+        try
+        {
+            AccountInfoRequest infoRequest = new AccountInfoRequest(Issuer3Account.ClassicAddress);
+            AccountInfo info = await _client.AccountInfo(infoRequest);
+            needDefaultRipple = !info.AccountFlags.DefaultRipple;
+            needRequireAuth = !info.AccountFlags.RequireAuthorization;
+            needTrustLineLocking = !info.AccountFlags.AllowTrustLineLocking;
+        }
+        catch { }
+
+        if (needDefaultRipple)
+        {
+            try
+            {
+                AccountSet accountSet = new AccountSet
+                {
+                    Account = Issuer3Account.ClassicAddress,
+                    SetFlag = AccountSetAsfFlags.asfDefaultRipple
+                };
+                var autofilled = await _client.Autofill(accountSet);
+                await _client.SubmitAndWait(autofilled, Issuer3Account);
+                Console.WriteLine("[TestAccountBuilder] Issuer3: DefaultRipple enabled");
+            }
+            catch (Exception ex)
+            {
+                Console.WriteLine($"[TestAccountBuilder] Issuer3 DefaultRipple failed: {ex.Message}");
+            }
+        }
+
+        if (needRequireAuth)
+        {
+            try
+            {
+                AccountSet accountSet = new AccountSet
+                {
+                    Account = Issuer3Account.ClassicAddress,
+                    SetFlag = AccountSetAsfFlags.asfRequireAuth
+                };
+                var autofilled = await _client.Autofill(accountSet);
+                await _client.SubmitAndWait(autofilled, Issuer3Account);
+                Console.WriteLine("[TestAccountBuilder] Issuer3: RequireAuth enabled");
+            }
+            catch (Exception ex)
+            {
+                Console.WriteLine($"[TestAccountBuilder] Issuer3 RequireAuth failed: {ex.Message}");
+            }
+        }
+
+        if (needTrustLineLocking)
+        {
+            try
+            {
+                AccountSet accountSet = new AccountSet
+                {
+                    Account = Issuer3Account.ClassicAddress,
+                    SetFlag = AccountSetAsfFlags.asfAllowTrustLineLocking
+                };
+                var autofilled = await _client.Autofill(accountSet);
+                await _client.SubmitAndWait(autofilled, Issuer3Account);
+                Console.WriteLine("[TestAccountBuilder] Issuer3: AllowTrustLineLocking enabled");
+            }
+            catch (Exception ex)
+            {
+                Console.WriteLine($"[TestAccountBuilder] Issuer3 AllowTrustLineLocking failed: {ex.Message}");
             }
         }
     }
@@ -1042,7 +1134,7 @@ public class TestAccountBuilder
             {
                 Account = IssuerAccount.ClassicAddress,
                 Destination = _primaryAccount.ClassicAddress,
-                Amount = new Currency { ValueAsXrp = 50 },
+                Amount = new Currency { ValueAsNumber = 150, CurrencyCode = "ESC", Issuer = IssuerAccount.ClassicAddress },
                 FinishAfter = finishAfter
             };
 
@@ -1058,7 +1150,7 @@ public class TestAccountBuilder
         }
     }
 
-    private async Task CreateDeepFreezeTestAsync(string currencyCode)
+    private async Task CreateDeepFreezeTokenAsync(string currencyCode)
     {
         Console.WriteLine("[TestAccountBuilder] Deep Freeze test scenario with Issuer2...");
 
@@ -1131,6 +1223,68 @@ public class TestAccountBuilder
         //Console.WriteLine($"[TestAccountBuilder] DeepFreeze {currencyCode} for Primary");
     }
 
+    private async Task CreateRequireAuthTestAsync(string currencyCode, bool auth)
+    {
+        Console.WriteLine($"[TestAccountBuilder] RequireAuth test (auth={auth}) with Issuer3...");
+
+        if (!await TrustlineExistsAsync(currencyCode, Issuer3Account.ClassicAddress))
+        {
+            TrustSet trustSet = new TrustSet
+            {
+                Account = _primaryAccount.ClassicAddress,
+                LimitAmount = new Currency
+                {
+                    CurrencyCode = currencyCode,
+                    Issuer = Issuer3Account.ClassicAddress,
+                    Value = "10000000"
+                }
+            };
+            var autofilled = await _client.Autofill(trustSet);
+            await _client.SubmitAndWait(autofilled, _primaryAccount);
+            Console.WriteLine($"[TestAccountBuilder] TrustSet {currencyCode} -> Issuer3");
+        }
+        else
+        {
+            Console.WriteLine($"[TestAccountBuilder] TrustSet {currencyCode} -> Issuer3: already exists, skipping");
+        }
+
+        if (!auth)
+        {
+            Console.WriteLine($"[TestAccountBuilder] auth=false, skipping authorization and token payment");
+            return;
+        }
+
+        TrustSet authorize = new TrustSet
+        {
+            Account = Issuer3Account.ClassicAddress,
+            LimitAmount = new Currency
+            {
+                CurrencyCode = currencyCode,
+                Issuer = _primaryAccount.ClassicAddress,
+                Value = "0"
+            },
+            Flags = TrustSetFlags.tfSetfAuth
+        };
+        var autofilledAuth = await _client.Autofill(authorize);
+        await _client.SubmitAndWait(autofilledAuth, Issuer3Account);
+        Console.WriteLine($"[TestAccountBuilder] Authorize {currencyCode} trustline for Primary");
+
+        Payment payment = new Payment
+        {
+            Account = Issuer3Account.ClassicAddress,
+            Destination = _primaryAccount.ClassicAddress,
+            Amount = new Currency
+            {
+                CurrencyCode = currencyCode,
+                Issuer = Issuer3Account.ClassicAddress,
+                Value = "500"
+            }
+        };
+        var autofilledPayment = await _client.Autofill(payment);
+        await _client.SubmitAndWait(autofilledPayment, Issuer3Account);
+        Console.WriteLine($"[TestAccountBuilder] Payment {currencyCode} Issuer3 -> Primary");
+    }
+
     #endregion
 
     #region Utility Methods
@@ -1144,6 +1298,7 @@ public class TestAccountBuilder
         Console.WriteLine($"PrimaryAccount: {_primaryAccount?.ClassicAddress ?? "(not set)"}");
         Console.WriteLine($"IssuerAccount:  {IssuerAccount.ClassicAddress}");
         Console.WriteLine($"Issuer2Account: {Issuer2Account.ClassicAddress}");
+        Console.WriteLine($"Issuer3Account: {Issuer3Account.ClassicAddress}");
         Console.WriteLine($"Signer1Account: {Signer1Account.ClassicAddress}");
         Console.WriteLine($"Signer2Account: {Signer2Account.ClassicAddress}");
         Console.WriteLine($"Signer3Account: {Signer3Account.ClassicAddress}");
@@ -1158,6 +1313,7 @@ public class TestAccountBuilder
         Console.WriteLine("=== Helper Wallets ===");
         Console.WriteLine($"IssuerAccount:  {IssuerAccount.ClassicAddress}");
         Console.WriteLine($"Issuer2Account: {Issuer2Account.ClassicAddress}");
+        Console.WriteLine($"Issuer3Account: {Issuer3Account.ClassicAddress}");
         Console.WriteLine($"Signer1Account: {Signer1Account.ClassicAddress}");
         Console.WriteLine($"Signer2Account: {Signer2Account.ClassicAddress}");
         Console.WriteLine($"Signer3Account: {Signer3Account.ClassicAddress}");
