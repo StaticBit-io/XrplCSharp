@@ -1,4 +1,9 @@
 # Changes
+### 10.1.5.0 14/04/2026
+* Fix binary codec field codes for AMM Amount fields — `LPTokenOut` (20→25), `LPTokenIn` (21→26), `EPrice` (22→27), `Price` (23→28), `LPTokenBalance` (24→31)
+* Add missing binary codec Amount field definitions: `BaseFeeDrops` (22), `ReserveBaseDrops` (23), `ReserveIncrementDrops` (24), `SignatureReward` (29), `MinAccountCreateAmount` (30)
+* Add AMM lifecycle integration tests (16 tests): AMMCreate, AMMDeposit (SingleAsset, TwoAssets, LPToken), AMMWithdraw (LPToken, WithdrawAll, FullLP precision regression, SingleAsset, Simulate+Submit, TypedModel), AMMDelete (EmptyPool, NonEmptyPool, AfterPartialWithdraw), AMMVote
+
 ### 10.1.4.0 14/04/2026
 * Fix `Currency.ValueAsNumber` setter precision — change format from `"G15"` to `"G16"` to preserve all 16 significant digits of XRPL token mantissa, preventing `tecAMM_INVALID_TOKENS` on full LP token withdrawal due to rounding up
 * Add unit tests for `Currency` class — round-trip precision, `ValueAsXrp`, implicit operators, `CurrencyExtensions`, equality operators (39 tests)

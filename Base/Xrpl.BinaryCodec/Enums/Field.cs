@@ -237,11 +237,16 @@ namespace Xrpl.BinaryCodec.Enums
         public static readonly AmountField DeliveredAmount = new AmountField(nameof(DeliveredAmount), 18);
         public static readonly AmountField NFTokenBrokerFee = new AmountField(nameof(NFTokenBrokerFee), 19);
         //public static readonly AmountField HookCallbackFee = new AmountField(nameof(HookCallbackFee), 20);
-        public static readonly AmountField LPTokenOut = new AmountField(nameof(LPTokenOut), 20);
-        public static readonly AmountField LPTokenIn = new AmountField(nameof(LPTokenIn), 21);
-        public static readonly AmountField EPrice = new AmountField(nameof(EPrice), 22);
-        public static readonly AmountField Price = new AmountField(nameof(Price), 23);
-        public static readonly AmountField LPTokenBalance = new AmountField(nameof(LPTokenBalance), 24);
+        public static readonly AmountField BaseFeeDrops = new AmountField(nameof(BaseFeeDrops), 22);
+        public static readonly AmountField ReserveBaseDrops = new AmountField(nameof(ReserveBaseDrops), 23);
+        public static readonly AmountField ReserveIncrementDrops = new AmountField(nameof(ReserveIncrementDrops), 24);
+        public static readonly AmountField LPTokenOut = new AmountField(nameof(LPTokenOut), 25);
+        public static readonly AmountField LPTokenIn = new AmountField(nameof(LPTokenIn), 26);
+        public static readonly AmountField EPrice = new AmountField(nameof(EPrice), 27);
+        public static readonly AmountField Price = new AmountField(nameof(Price), 28);
+        public static readonly AmountField SignatureReward = new AmountField(nameof(SignatureReward), 29);
+        public static readonly AmountField MinAccountCreateAmount = new AmountField(nameof(MinAccountCreateAmount), 30);
+        public static readonly AmountField LPTokenBalance = new AmountField(nameof(LPTokenBalance), 31);
 
         public static readonly BlobField PublicKey = new BlobField(nameof(PublicKey), 1);
         public static readonly BlobField MessageKey = new BlobField(nameof(MessageKey), 2);
