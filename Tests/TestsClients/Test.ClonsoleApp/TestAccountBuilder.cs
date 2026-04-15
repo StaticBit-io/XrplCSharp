@@ -20,6 +20,8 @@ using Xrpl.Sugar;
 using Xrpl.Utils.Hashes;
 using Xrpl.Wallet;
 
+using Common = Xrpl.Models.Common.Common;
+
 namespace MyApp;
 
 /// <summary>
@@ -149,6 +151,11 @@ public class TestAccountBuilder
         _buildActions.Add(() => CreateAmmPoolsAsync(count));
         return this;
     }
+    public TestAccountBuilder AddIssuerAmmPools(int count = 5)
+    {
+        _buildActions.Add(() => CreateIssuerAmmPoolsAsync(count));
+        return this;
+    }
 
     /// <summary>
     /// Mints NFTs owned by primary account.
@@ -163,9 +170,10 @@ public class TestAccountBuilder
     /// <summary>
     /// Creates NFT sell offers from primary account.
     /// </summary>
-    public TestAccountBuilder AddNFTOffers()
+    /// <param name="i"></param>
+    public TestAccountBuilder AddNFTOffers(int i = 5)
     {
-        _buildActions.Add(() => CreateNFTOffersAsync());
+        _buildActions.Add(() => CreateNFTOffersAsync(i));
         return this;
     }
 
@@ -703,7 +711,6 @@ public class TestAccountBuilder
     private async Task CreateAmmPoolsAsync(int count)
     {
         Console.WriteLine($"[TestAccountBuilder] Creating AMM pools from primary account...");
-        uint? seq = null;
         for (int i = 0; i < count && i < TokenCodes.Length; i++)
         {
             try
@@ -727,10 +734,8 @@ public class TestAccountBuilder
                             Issuer = IssuerAccount.ClassicAddress,
                             Value = "10000000"
                         },
-                        Sequence = seq
                     };
-                    var autofilledTrust = await _client.Autofill(trustSet);
-                    seq = await SendAsync(1000, i, 1000, autofilledTrust,_primaryAccount);
+                    await _client.SubmitAndWait(trustSet, _primaryAccount, true);
                 }
 
                 var payment = new Payment
@@ -743,11 +748,8 @@ public class TestAccountBuilder
                         Issuer = IssuerAccount.ClassicAddress,
                         Value = "10000"
                     },
-                    Sequence = seq
                 };
-                var autofilledPayment = await _client.Autofill(payment);
-                seq = await SendAsync(1000, i, 1000, autofilledPayment, IssuerAccount);
-
+                await _client.SubmitAndWait(payment, IssuerAccount, true);
                 var ammCreate = new AMMCreate
                 {
                     Account = _primaryAccount.ClassicAddress,
@@ -759,11 +761,64 @@ public class TestAccountBuilder
                         Value = "1000"
                     },
                     TradingFee = 500,
-                    Sequence = seq
                 };
 
-                var autofilledAmm = await _client.Autofill(ammCreate);
-                seq = await SendAsync(count, i, TokenCodes.Length, autofilledAmm, _primaryAccount);
+                await _client.SubmitAndWait(ammCreate, _primaryAccount, true);
+                Console.WriteLine($"[TestAccountBuilder] AMMCreate XRP/{code.CurrencyReadableName()}");
+
+                if (_nodeType == TestNodeType.Standalone) await LedgerAcceptAsync();
+            }
+            catch (Exception ex)
+            {
+                Console.WriteLine($"[TestAccountBuilder] AMMCreate failed: {ex.Message}");
+            }
+        }
+    }
+    private async Task CreateIssuerAmmPoolsAsync(int count)
+    {
+        Console.WriteLine($"[TestAccountBuilder] Creating AMM pools from issuer account...");
+        for (int i = 0; i < count && i < TokenCodes.Length; i++)
+        {
+            try
+            {
+                var code = TokenCodes[i];
+
+                if (await AmmExistsAsync(code, IssuerAccount.ClassicAddress))
+                {
+                    var ammDeposit = new AMMDeposit()
+                    {
+                        Account = IssuerAccount.ClassicAddress,
+                        Asset = new Common.IssuedCurrency(){Currency = "XRP"},
+                        Asset2 = new Common.IssuedCurrency() { Currency = code, Issuer = IssuerAccount.ClassicAddress },
+                        Amount = new Currency { ValueAsXrp = 10 },
+                        Amount2 = new Currency
+                        {
+                            CurrencyCode = code,
+                            Issuer = IssuerAccount.ClassicAddress,
+                            Value = "1000"
+                        },
+                        Flags = AMMDepositFlags.tfTwoAsset
+                    };
+
+                    await _client.SubmitAndWait(ammDeposit, IssuerAccount, true);
+                    Console.WriteLine($"[TestAccountBuilder] AMMDeposit XRP/{code.CurrencyReadableName()}");
+                    continue;
+                }
+
+                var ammCreate = new AMMCreate
+                {
+                    Account = IssuerAccount.ClassicAddress,
+                    Amount = new Currency { ValueAsXrp = 10 },
+                    Amount2 = new Currency
+                    {
+                        CurrencyCode = code,
+                        Issuer = IssuerAccount.ClassicAddress,
+                        Value = "1000"
+                    },
+                    TradingFee = 500,
+                };
+
+                await _client.SubmitAndWait(ammCreate, IssuerAccount, true);
                 Console.WriteLine($"[TestAccountBuilder] AMMCreate XRP/{code.CurrencyReadableName()}");
 
                 if (_nodeType == TestNodeType.Standalone) await LedgerAcceptAsync();
@@ -810,7 +865,7 @@ public class TestAccountBuilder
         return Hex.ToHexString(bytes).ToUpper();
     }
 
-    private async Task CreateNFTOffersAsync()
+    private async Task CreateNFTOffersAsync(int i)
     {
         Console.WriteLine("[TestAccountBuilder] Creating NFT offers from primary account...");
 
@@ -827,7 +882,13 @@ public class TestAccountBuilder
             var counter = 0;
             foreach (var nft in nftsResponse.NFTs)
             {
+                if (counter == i)
+                {
+                    break;
+                }
+
                 counter++;
+
                 var sellOffer = new NFTokenCreateOffer
                 {
                     Account = _primaryAccount.ClassicAddress,

@@ -190,6 +190,62 @@ public class TestIAMMLifecycle
             $"{context} failed: {result}");
     }
 
+    private async Task<XrplWallet> SetupSecondHolder(string tokenAmount = "5000")
+    {
+        XrplWallet wallet = XrplWallet.Generate();
+        await IntegrationTestConfig.TryFundWalletAsync(client, wallet, nodeType);
+
+        TrustSet trustSet = new TrustSet
+        {
+            Account = wallet.ClassicAddress,
+            LimitAmount = new Currency
+            {
+                CurrencyCode = CurrencyCode,
+                Issuer = walletIssuer.ClassicAddress,
+                Value = "1000000000"
+            }
+        };
+        ITransactionRequest autoTrust = await client.Autofill(trustSet);
+        await client.SubmitAndWait(autoTrust, wallet, true);
+
+        Payment pay = new Payment
+        {
+            Account = walletIssuer.ClassicAddress,
+            Destination = wallet.ClassicAddress,
+            Amount = new Currency
+            {
+                CurrencyCode = CurrencyCode,
+                Issuer = walletIssuer.ClassicAddress,
+                Value = tokenAmount
+            }
+        };
+        ITransactionRequest autoPay = await client.Autofill(pay);
+        await client.SubmitAndWait(autoPay, walletIssuer, true);
+
+        return wallet;
+    }
+
+    private async Task DepositSecondHolder(XrplWallet secondHolder, decimal lpFraction)
+    {
+        AMMInfoResponse info = await GetAmmInfo();
+        decimal depositLp = info.Amm.LPTokenBalance.ValueAsNumber * lpFraction;
+        Dictionary<string, dynamic> depositTx = new Dictionary<string, dynamic>
+        {
+            { "TransactionType", "AMMDeposit" },
+            { "Account", secondHolder.ClassicAddress },
+            { "Flags", (uint)AMMDepositFlags.tfLPToken },
+            { "Asset", TokenAssetDict },
+            { "Asset2", XrpAssetDict },
+            { "LPTokenOut", LPTokenDict(
+                info.Amm.LPTokenBalance.CurrencyCode,
+                info.Amm.LPTokenBalance.Issuer,
+                depositLp.ToString("G16", CultureInfo.InvariantCulture)) }
+        };
+        TransactionSummary depositRes = await client.SubmitAndWait(depositTx, secondHolder, autofill: true);
+        AssertSuccess(depositRes, "Second holder deposit");
+        Console.WriteLine($"Second holder deposited {lpFraction:P0} of pool LP");
+    }
+
     #endregion
 
     #region AMMCreate Tests
@@ -497,6 +553,113 @@ public class TestIAMMLifecycle
     }
 
     /// <summary>
+    /// Sole LP holder tries tfOneAssetWithdrawAll — protocol rejects with tecAMM_BALANCE
+    /// because single-sided full withdrawal would leave pool assets with zero outstanding LP tokens.
+    /// </summary>
+    [TestMethod]
+    public async Task TestAMMWithdraw_OneAssetWithdrawAll_SoleHolder_Fails()
+    {
+        await CreatePool("1000", 10m);
+
+        AMMInfoResponse infoBefore = await GetAmmInfo();
+        Console.WriteLine($"LP before: {infoBefore.Amm.LPTokenBalance.Value}");
+
+        AMMWithdraw withdraw = new AMMWithdraw
+        {
+            Account = walletHolder.ClassicAddress,
+            Asset = TokenAsset,
+            Asset2 = XrpAsset,
+            Amount = new Currency { ValueAsXrp = 0 },
+            Flags = AMMWithdrawFlags.tfOneAssetWithdrawAll
+        };
+
+        ITransactionRequest autofilled = await client.Autofill(withdraw);
+
+        try
+        {
+            await client.SubmitAndWait(autofilled, walletHolder, true);
+            Assert.Fail("Expected tecAMM_BALANCE for sole LP holder single-sided withdrawal");
+        }
+        catch (Exception ex) when (ex.Classify().RawErrorMessage!.Contains("tecAMM_BALANCE"))
+        {
+            Console.WriteLine($"Correctly rejected: {ex.Message}");
+        }
+
+        AMMInfoResponse infoAfter = await GetAmmInfo();
+        Assert.IsNotNull(infoAfter.Amm, "Pool should still exist after failed withdrawal");
+        Assert.AreEqual(
+            infoBefore.Amm.LPTokenBalance.Value,
+            infoAfter.Amm.LPTokenBalance.Value,
+            "LP balance should be unchanged after tecAMM_BALANCE");
+    }
+
+    /// <summary>
+    /// Two LP holders — first holder withdraws all LP into XRP via tfOneAssetWithdrawAll.
+    /// Pool remains with second holder's liquidity.
+    /// </summary>
+    [TestMethod]
+    public async Task TestAMMWithdraw_OneAssetWithdrawAll_Xrp()
+    {
+        XrplWallet walletSecondHolder = await SetupSecondHolder();
+        await CreatePool("1000", 10m);
+        await DepositSecondHolder(walletSecondHolder, 0.5m);
+
+        AMMWithdraw withdraw = new AMMWithdraw
+        {
+            Account = walletHolder.ClassicAddress,
+            Asset = TokenAsset,
+            Asset2 = XrpAsset,
+            Amount = new Currency { ValueAsXrp = 0 },
+            Flags = AMMWithdrawFlags.tfOneAssetWithdrawAll
+        };
+
+        ITransactionRequest autofilled = await client.Autofill(withdraw);
+        TransactionSummary res = await client.SubmitAndWait(autofilled, walletHolder, true);
+        string result = res.Meta?.TransactionResult;
+        Console.WriteLine($"OneAssetWithdrawAll XRP result: {result}");
+        AssertSuccess(res, "AMMWithdraw OneAssetWithdrawAll XRP");
+
+        AMMInfoResponse infoAfter = await GetAmmInfo();
+        Assert.IsNotNull(infoAfter.Amm, "Pool should still exist — second holder has LP");
+        Console.WriteLine($"Pool LP after withdrawal: {infoAfter.Amm.LPTokenBalance.Value}");
+    }
+
+    /// <summary>
+    /// Two LP holders — first holder withdraws all LP into issued token via tfOneAssetWithdrawAll.
+    /// </summary>
+    [TestMethod]
+    public async Task TestAMMWithdraw_OneAssetWithdrawAll_Token()
+    {
+        XrplWallet walletSecondHolder = await SetupSecondHolder();
+        await CreatePool("1000", 10m);
+        await DepositSecondHolder(walletSecondHolder, 0.5m);
+
+        AMMWithdraw withdraw = new AMMWithdraw
+        {
+            Account = walletHolder.ClassicAddress,
+            Asset = TokenAsset,
+            Asset2 = XrpAsset,
+            Amount = new Currency
+            {
+                CurrencyCode = CurrencyCode,
+                Issuer = walletIssuer.ClassicAddress,
+                Value = "0"
+            },
+            Flags = AMMWithdrawFlags.tfOneAssetWithdrawAll
+        };
+
+        ITransactionRequest autofilled = await client.Autofill(withdraw);
+        TransactionSummary res = await client.SubmitAndWait(autofilled, walletHolder, true);
+        string result = res.Meta?.TransactionResult;
+        Console.WriteLine($"OneAssetWithdrawAll Token result: {result}");
+        AssertSuccess(res, "AMMWithdraw OneAssetWithdrawAll Token");
+
+        AMMInfoResponse infoAfter = await GetAmmInfo();
+        Assert.IsNotNull(infoAfter.Amm, "Pool should still exist — second holder has LP");
+        Console.WriteLine($"Pool LP after withdrawal: {infoAfter.Amm.LPTokenBalance.Value}");
+    }
+
+    /// <summary>
     /// Simulates AMMWithdraw via the Simulate API (tx_json path), verifies success,
     /// then submits via Dictionary API (binary path).
     /// Simulate uses typed model (which works since it sends JSON, not binary).
@@ -669,57 +832,9 @@ public class TestIAMMLifecycle
     [TestMethod]
     public async Task TestAMMDelete_AfterPartialWithdraw()
     {
-        XrplWallet walletSecondHolder = XrplWallet.Generate();
-        await IntegrationTestConfig.TryFundWalletAsync(client, walletSecondHolder, nodeType);
-
-        TrustSet trustSet = new TrustSet
-        {
-            Account = walletSecondHolder.ClassicAddress,
-            LimitAmount = new Currency
-            {
-                CurrencyCode = CurrencyCode,
-                Issuer = walletIssuer.ClassicAddress,
-                Value = "1000000000"
-            }
-        };
-        ITransactionRequest autoTrust = await client.Autofill(trustSet);
-        await client.SubmitAndWait(autoTrust, walletSecondHolder, true);
-
-        Payment pay = new Payment
-        {
-            Account = walletIssuer.ClassicAddress,
-            Destination = walletSecondHolder.ClassicAddress,
-            Amount = new Currency
-            {
-                CurrencyCode = CurrencyCode,
-                Issuer = walletIssuer.ClassicAddress,
-                Value = "5000"
-            }
-        };
-        ITransactionRequest autoPay = await client.Autofill(pay);
-        await client.SubmitAndWait(autoPay, walletIssuer, true);
-
+        XrplWallet walletSecondHolder = await SetupSecondHolder();
         await CreatePool("1000", 10m);
-
-        AMMInfoResponse info = await GetAmmInfo();
-        decimal lpTotal = info.Amm.LPTokenBalance.ValueAsNumber;
-        decimal depositLp = lpTotal * 0.2m;
-
-        Dictionary<string, dynamic> depositTx = new Dictionary<string, dynamic>
-        {
-            { "TransactionType", "AMMDeposit" },
-            { "Account", walletSecondHolder.ClassicAddress },
-            { "Flags", (uint)AMMDepositFlags.tfLPToken },
-            { "Asset", TokenAssetDict },
-            { "Asset2", XrpAssetDict },
-            { "LPTokenOut", LPTokenDict(
-                info.Amm.LPTokenBalance.CurrencyCode,
-                info.Amm.LPTokenBalance.Issuer,
-                depositLp.ToString("G16", CultureInfo.InvariantCulture)) }
-        };
-
-        TransactionSummary depositRes = await client.SubmitAndWait(depositTx, walletSecondHolder, autofill: true);
-        AssertSuccess(depositRes, "Second holder deposit");
+        await DepositSecondHolder(walletSecondHolder, 0.2m);
 
         AMMWithdraw withdrawAll = new AMMWithdraw
         {
