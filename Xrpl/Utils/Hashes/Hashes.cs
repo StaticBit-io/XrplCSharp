@@ -53,7 +53,7 @@ namespace Xrpl.Utils.Hashes
         public static string CurrencyToHex(this string currency)
         {
             var cur_code = currency.Trim();
-            if (cur_code.Length <= 3)
+            if (cur_code.Length == 3)
                 return cur_code;
 
             if (cur_code.IsHexCurrencyCode())
