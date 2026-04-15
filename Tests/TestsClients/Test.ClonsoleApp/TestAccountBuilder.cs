@@ -10,6 +10,7 @@ using System.Text;
 using System.Threading.Tasks;
 
 using Xrpl.Client;
+using Xrpl.Client.Exceptions;
 using Xrpl.Models;
 using Xrpl.Models.Common;
 using Xrpl.Models.Ledger;
@@ -545,16 +546,25 @@ public class TestAccountBuilder
 
     #region Existence Checks
 
-    private async Task<bool> TrustlineExistsAsync(string currencyCode, string issuer)
+    private async Task<bool> TrustlineExistsAsync(string currencyCode, string issuer, string account)
     {
         try
         {
-            var request = new AccountLinesRequest(_primaryAccount.ClassicAddress) { Peer = issuer, Limit = 500 };
-            var response = await _client.AccountLines(request);
-            return response.TrustLines?.Any(l => l.Currency == currencyCode) == true;
+            var line = await _client.LedgerEntry(
+                new LedgerEntryRequest()
+                {
+                    RippleState = new RippleStateQuery()
+                    {
+                        Addresses = [issuer,account],
+                        Currency = currencyCode
+                    }
+                });
+            return true;
         }
-        catch
+        catch(Exception e)
         {
+            var info = e.Classify();
+            Console.WriteLine($"[TrustlineExistsAsync] failed: {info.UserMessage}");
             return false;
         }
     }
@@ -633,7 +643,7 @@ public class TestAccountBuilder
             counter++;
             try
             {
-                if (await TrustlineExistsAsync(code, IssuerAccount.ClassicAddress))
+                if (await TrustlineExistsAsync(code, IssuerAccount.ClassicAddress, _primaryAccount.ClassicAddress))
                 {
                     Console.WriteLine($"[TestAccountBuilder] TrustSet {code.CurrencyReadableName()}: already exists, skipping");
                     continue;
@@ -675,7 +685,7 @@ public class TestAccountBuilder
             counter++;
             try
             {
-                if (await TrustlineExistsAsync(code, IssuerAccount.ClassicAddress) == false)
+                if (await TrustlineExistsAsync(code, IssuerAccount.ClassicAddress, _primaryAccount.ClassicAddress) == false)
                 {
                     Console.WriteLine($"[TestAccountBuilder] TrustSet {code.CurrencyReadableName()}: not found, skipping");
                     continue;
@@ -713,17 +723,57 @@ public class TestAccountBuilder
         Console.WriteLine($"[TestAccountBuilder] Creating AMM pools from primary account...");
         for (int i = 0; i < count && i < TokenCodes.Length; i++)
         {
+            var code = TokenCodes[i];
+
             try
             {
-                var code = TokenCodes[i];
 
                 if (await AmmExistsAsync(code, IssuerAccount.ClassicAddress))
                 {
-                    Console.WriteLine($"[TestAccountBuilder] AMMCreate XRP/{code.CurrencyReadableName()}: already exists, skipping");
+                    try
+                    {
+                        var ammDeposit = new AMMDeposit()
+                        {
+                            Account = _primaryAccount.ClassicAddress,
+                            Asset = new Common.IssuedCurrency()
+                            {
+                                Currency = "XRP"
+                            },
+                            Asset2 = new Common.IssuedCurrency()
+                            {
+                                Currency = code,
+                                Issuer = IssuerAccount.ClassicAddress
+                            },
+                            Amount = new Currency
+                            {
+                                ValueAsXrp = 10
+                            },
+                            Amount2 = new Currency
+                            {
+                                CurrencyCode = code,
+                                Issuer = IssuerAccount.ClassicAddress,
+                                Value = "10"
+                            },
+                            Flags = AMMDepositFlags.tfTwoAsset
+                        };
+
+                        await _client.SubmitAndWait(ammDeposit, _primaryAccount, true);
+
+                        Console.WriteLine($"[TestAccountBuilder] AMMDeposit XRP/{code.CurrencyReadableName()}");
+                    }
+                    catch (Exception e)
+                    {
+                        var info = e.Classify();
+                        Console.WriteLine($"[TestAccountBuilder] AMMDeposit XRP/{code.CurrencyReadableName()} failed: {info.UserMessage}");
+                    }
+                    finally
+                    {
+                    }
                     continue;
+
                 }
 
-                if (!await TrustlineExistsAsync(code, IssuerAccount.ClassicAddress))
+                if (!await TrustlineExistsAsync(code, IssuerAccount.ClassicAddress, _primaryAccount.ClassicAddress))
                 {
                     var trustSet = new TrustSet
                     {
@@ -758,7 +808,7 @@ public class TestAccountBuilder
                     {
                         CurrencyCode = code,
                         Issuer = IssuerAccount.ClassicAddress,
-                        Value = "1000"
+                        Value = "10"
                     },
                     TradingFee = 500,
                 };
@@ -770,7 +820,8 @@ public class TestAccountBuilder
             }
             catch (Exception ex)
             {
-                Console.WriteLine($"[TestAccountBuilder] AMMCreate failed: {ex.Message}");
+                var info = ex.Classify();
+                Console.WriteLine($"[TestAccountBuilder] AMMDeposit XRP/{code.CurrencyReadableName()} failed: {info.UserMessage}");
             }
         }
     }
@@ -795,7 +846,7 @@ public class TestAccountBuilder
                         {
                             CurrencyCode = code,
                             Issuer = IssuerAccount.ClassicAddress,
-                            Value = "1000"
+                            Value = "10"
                         },
                         Flags = AMMDepositFlags.tfTwoAsset
                     };
@@ -813,7 +864,7 @@ public class TestAccountBuilder
                     {
                         CurrencyCode = code,
                         Issuer = IssuerAccount.ClassicAddress,
-                        Value = "1000"
+                        Value = "10"
                     },
                     TradingFee = 500,
                 };
@@ -957,6 +1008,7 @@ public class TestAccountBuilder
         else
         {
             var response = await _client.Submit(autofilled, wallet, true);
+            Console.WriteLine(response.EngineResult);
             return response.AccountSequenceNext;
         }
     }
@@ -1215,7 +1267,7 @@ public class TestAccountBuilder
     {
         Console.WriteLine("[TestAccountBuilder] Deep Freeze test scenario with Issuer2...");
 
-        if (!await TrustlineExistsAsync(currencyCode, Issuer2Account.ClassicAddress))
+        if (!await TrustlineExistsAsync(currencyCode, Issuer2Account.ClassicAddress, _primaryAccount.ClassicAddress))
         {
             TrustSet trustSet = new TrustSet
             {
@@ -1288,7 +1340,7 @@ public class TestAccountBuilder
     {
         Console.WriteLine($"[TestAccountBuilder] RequireAuth test (auth={auth}) with Issuer3...");
 
-        if (!await TrustlineExistsAsync(currencyCode, Issuer3Account.ClassicAddress))
+        if (!await TrustlineExistsAsync(currencyCode, Issuer3Account.ClassicAddress, _primaryAccount.ClassicAddress))
         {
             TrustSet trustSet = new TrustSet
             {
