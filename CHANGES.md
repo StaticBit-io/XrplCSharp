@@ -1,4 +1,7 @@
 # Changes
+### 10.1.6.0 15/04/2026
+* Fix for Currency to HEX for currency with 1 or 2 symbol in name
+
 ### 10.1.5.0 14/04/2026
 * Fix binary codec field codes for AMM Amount fields — `LPTokenOut` (20→25), `LPTokenIn` (21→26), `EPrice` (22→27), `Price` (23→28), `LPTokenBalance` (24→31)
 * Add missing binary codec Amount field definitions: `BaseFeeDrops` (22), `ReserveBaseDrops` (23), `ReserveIncrementDrops` (24), `SignatureReward` (29), `MinAccountCreateAmount` (30)
