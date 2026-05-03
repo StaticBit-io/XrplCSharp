@@ -391,6 +391,7 @@ internal sealed class FeeTestClient : IXrplClient
     public Task<TransactionResponse> Tx(TxRequest request, CancellationToken cancellationToken = default) => throw new NotSupportedException();
     public Task<TransactionSummary> TxV2(TxRequest request, CancellationToken cancellationToken = default) => throw new NotSupportedException();
     public Task<BookOffers> BookOffers(BookOffersRequest request, CancellationToken cancellationToken = default) => throw new NotSupportedException();
+    public Task<DepositAuthorized> DepositAuthorized(DepositAuthorizedRequest request, CancellationToken cancellationToken = default) => throw new NotSupportedException();
     public Task<NFTBuyOffers> NFTBuyOffers(NFTBuyOffersRequest request, CancellationToken cancellationToken = default) => throw new NotSupportedException();
     public Task<NFTSellOffers> NFTSellOffers(NFTSellOffersRequest request, CancellationToken cancellationToken = default) => throw new NotSupportedException();
     public Task<AccountNFTs> AccountNFTs(AccountNFTsRequest request, CancellationToken cancellationToken = default) => throw new NotSupportedException();
@@ -400,6 +401,10 @@ internal sealed class FeeTestClient : IXrplClient
     public Task<Dictionary<string, dynamic>> Request(Dictionary<string, dynamic> request, CancellationToken cancellationToken = default) => throw new NotSupportedException();
     public Task<T> GRequest<T, R>(R request, CancellationToken cancellationToken = default) where R : BaseRequest => throw new NotSupportedException();
     public Task<SimulateResponse> Simulate(SimulateRequest request, CancellationToken cancellationToken = default) => throw new NotSupportedException();
+    public Task<PathFindResponse> PathFind(PathFindCreateRequest request, CancellationToken cancellationToken = default) => throw new NotSupportedException();
+    public Task<PathFindResponse> PathFindClose(PathFindCloseRequest request, CancellationToken cancellationToken = default) => throw new NotSupportedException();
+    public Task<PathFindResponse> PathFindStatus(PathFindStatusRequest request, CancellationToken cancellationToken = default) => throw new NotSupportedException();
+    public Task<RipplePathFindResponse> RipplePathFind(RipplePathFindRequest request, CancellationToken cancellationToken = default) => throw new NotSupportedException();
     public void Dispose() { }
 
     #endregion

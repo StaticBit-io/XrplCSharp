@@ -34,12 +34,18 @@ namespace Xrpl.Models.Methods
         /// </summary>
         [JsonProperty("issuer")]
         public string Issuer { get; set; }
-    }
 
-    //todo not found request classes
-    //https://github.com/XRPLF/xrpl.js/blob/b20c05c3680d80344006d20c44b4ae1c3b0ffcac/packages/xrpl/src/models/methods/pathFind.ts#L5
-    //BasePathFindRequest extends BaseRequest,
-    //PathFindCloseRequest extends BasePathFindRequest ,
-    //PathFindStatusRequest extends BasePathFindRequest
-    //enum type PathFindRequest 
+        /// <summary>
+        /// (Optional) An integer bitfield indicating which fields are present in this path step.<br/>
+        /// 0x01 = account, 0x10 = currency, 0x20 = issuer.
+        /// </summary>
+        [JsonProperty("type")]
+        public int? Type { get; set; }
+
+        /// <summary>
+        /// (Optional) Hex representation of the type field.
+        /// </summary>
+        [JsonProperty("type_hex")]
+        public string TypeHex { get; set; }
+    }
 }

@@ -2621,13 +2621,13 @@ public class Connection
         {
             // This is a response (including ping/pong) - process immediately with full parsing
             // CRITICAL: Minimize async operations here to prevent blocking subsequent messages
-           BaseResponse data;
+            BaseResponse data;
+            bool handled;
             try
             {    
                 // FIRST: Handle response immediately to unblock any waiting requests (like ping)
                 // This is the most time-critical operation
-
-                data = requestManager.HandleResponse(message);
+                (data, handled) = requestManager.HandleResponse(message);
             }
             catch (Exception error)
             {
@@ -2640,6 +2640,14 @@ public class Connection
                         await OnError.Invoke(error: "error", errorMessage: "badMessage", errInfo.UserMessage, message);
                     }
                 });
+                return;
+            }
+
+            if (!handled)
+            {
+                // Message has "id" but no matching pending request — this is an async
+                // follow-up (e.g. path_find updates). Route to stream processing.
+                EnqueueStreamMessage(message);
                 return;
             }
 
@@ -2660,28 +2668,6 @@ public class Connection
                     {
                         await OnServerWarning.Invoke(capturedData.Warnings, capturedMessage);
                     }
-
-                    //// Handle error responses
-                    //if (capturedData.Type == null && capturedData.Error != null)
-                    //{
-                    //    if (capturedData.Error == "slowDown" || capturedData.Error == "tooBusy")
-                    //    {
-                    //        var rateLimitMessage = capturedData.Error == "slowDown"
-                    //            ? "Rate limit warning: Server requests to slow down. Reduce request frequency to avoid connection issues."
-                    //            : "Rate limit warning: Server is too busy. Consider implementing exponential backoff or reducing load.";
-
-                    //        if (OnError is not null)
-                    //        {
-                    //            await OnError.Invoke(error: "rate_limit", capturedData.Error, rateLimitMessage, capturedData);
-                    //        }
-                    //        return;
-                    //    }
-
-                    //    if (OnError is not null)
-                    //    {
-                    //        await OnError.Invoke(error: "error", capturedData.Error, message: "data.ErrorMessage", capturedData);
-                    //    }
-                    //}
                 });
             }
         }
@@ -2689,32 +2675,34 @@ public class Connection
         {
             // This is a stream message (no "id") - process asynchronously
             // to avoid blocking the receive loop and causing ping timeouts
-            
-            if (OperatingSystem.IsBrowser())
+            EnqueueStreamMessage(message);
+        }
+    }
+
+    /// <summary>
+    /// Routes a message to stream processing (Channel or fire-and-forget).<br/>
+    /// Used for both regular stream messages (no "id") and async follow-ups
+    /// that have "id" but no matching pending request (e.g. path_find updates).
+    /// </summary>
+    private void EnqueueStreamMessage(string message)
+    {
+        if (OperatingSystem.IsBrowser())
+        {
+            _ = ProcessStreamMessageFireAndForgetAsync(message);
+        }
+        else
+        {
+            var channel = _streamMessageChannel;
+            if (channel != null)
             {
-                // WebAssembly is single-threaded - Channel/Task.Run don't work as expected
-                // Use fire-and-forget with ConfigureAwait(false) to allow continuation scheduling
-                // This queues the work to run after the current synchronous block completes
-                _ = ProcessStreamMessageFireAndForgetAsync(message);
+                if (!channel.Writer.TryWrite(message))
+                {
+                    Debug.WriteLine($"{DateTime.Now}Warning: Stream message channel full, message dropped");
+                }
             }
             else
             {
-                // Desktop/MAUI - use Channel for true background processing
-                var channel = _streamMessageChannel;
-                if (channel != null)
-                {
-                    if (!channel.Writer.TryWrite(message))
-                    {
-                        // Channel is full or completed - oldest messages are dropped automatically
-                        // with BoundedChannelFullMode.DropOldest
-                        Debug.WriteLine($"{DateTime.Now}Warning: Stream message channel full, message dropped");
-                    }
-                }
-                else
-                {
-                    // Channel not available - fall back to fire-and-forget
-                    _ = ProcessStreamMessageFireAndForgetAsync(message);
-                }
+                _ = ProcessStreamMessageFireAndForgetAsync(message);
             }
         }
     }

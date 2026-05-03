@@ -320,9 +320,54 @@ namespace Xrpl.Client
         /// <returns></returns>
         Task<object> Random(CancellationToken cancellationToken = default);
 
-        //Task<DepositAuthorized> DepositAuthorized(DepositAuthorizedRequest request);
-        //Task<PathFind> PathFind(PathFindRequest request);
-        //Task<RipplePathFind> RipplePathFind(RipplePathFindRequest request);
+        /// <summary>
+        /// The <c>deposit_authorized</c> command indicates whether one account is authorized to send payments
+        /// directly to another. https://xrpl.org/deposit_authorized.html
+        /// </summary>
+        /// <param name="request">A <see cref="DepositAuthorizedRequest"/>.</param>
+        /// <param name="cancellationToken">Cancellation token.</param>
+        /// <returns>A <see cref="DepositAuthorized"/> response.</returns>
+        Task<DepositAuthorized> DepositAuthorized(DepositAuthorizedRequest request, CancellationToken cancellationToken = default);
+
+        /// <summary>
+        /// The <c>path_find</c> create sub-command creates an ongoing request to find possible paths
+        /// along which a payment transaction could be made.<br/>
+        /// WebSocket API only.<br/>
+        /// After the initial response, the server sends asynchronous follow-ups via the <see cref="OnPathFind"/> event.
+        /// </summary>
+        /// <param name="request">A <see cref="PathFindCreateRequest"/>.</param>
+        /// <param name="cancellationToken">Cancellation token.</param>
+        /// <returns>A <see cref="PathFindResponse"/> with initial path alternatives.</returns>
+        Task<PathFindResponse> PathFind(PathFindCreateRequest request, CancellationToken cancellationToken = default);
+
+        /// <summary>
+        /// The <c>path_find</c> close sub-command instructs the server to stop sending information
+        /// about the current open pathfinding request.
+        /// </summary>
+        /// <param name="request">A <see cref="PathFindCloseRequest"/>.</param>
+        /// <param name="cancellationToken">Cancellation token.</param>
+        /// <returns>A <see cref="PathFindResponse"/>.</returns>
+        Task<PathFindResponse> PathFindClose(PathFindCloseRequest request, CancellationToken cancellationToken = default);
+
+        /// <summary>
+        /// The <c>path_find</c> status sub-command requests an immediate update about the client's
+        /// currently-open pathfinding request.
+        /// </summary>
+        /// <param name="request">A <see cref="PathFindStatusRequest"/>.</param>
+        /// <param name="cancellationToken">Cancellation token.</param>
+        /// <returns>A <see cref="PathFindResponse"/>.</returns>
+        Task<PathFindResponse> PathFindStatus(PathFindStatusRequest request, CancellationToken cancellationToken = default);
+
+        /// <summary>
+        /// The <c>ripple_path_find</c> method is a simplified version of the path_find method
+        /// that provides a single response with a payment path you can use right away.<br/>
+        /// Available in both WebSocket and JSON-RPC APIs.
+        /// </summary>
+        /// <param name="request">A <see cref="RipplePathFindRequest"/>.</param>
+        /// <param name="cancellationToken">Cancellation token.</param>
+        /// <returns>A <see cref="RipplePathFindResponse"/>.</returns>
+        Task<RipplePathFindResponse> RipplePathFind(RipplePathFindRequest request, CancellationToken cancellationToken = default);
+
         // Task<ServerState> ServerState(ServerStateRequest request);
         //Task<SubmitMultisign> SubmitMultisign(SubmitMultisignRequest request);
         //Task<TransactionEntry> TransactionEntry(TransactionEntryRequest request);
@@ -618,10 +663,11 @@ namespace Xrpl.Client
             return this.GRequest<BookOffers, BookOffersRequest>(request, cancellationToken);
         }
 
-        //public Task<DepositAuthorized> DepositAuthorized(DepositAuthorizedRequest request)
-        //{
-        //    return this.GRequest<DepositAuthorized, DepositAuthorizedRequest>(request);
-        //}
+        /// <inheritdoc />
+        public Task<DepositAuthorized> DepositAuthorized(DepositAuthorizedRequest request, CancellationToken cancellationToken = default)
+        {
+            return this.GRequest<DepositAuthorized, DepositAuthorizedRequest>(request, cancellationToken);
+        }
 
         /// <inheritdoc />
         public Task<LOLedger> Ledger(LedgerRequest request, CancellationToken cancellationToken = default)
@@ -683,10 +729,23 @@ namespace Xrpl.Client
             return this.GRequest<NoRippleCheck, NoRippleCheckRequest>(request, cancellationToken);
         }
 
-        //public Task<PathFind> PathFind(PathFindRequest request)
-        //{
-        //    return this.GRequest<object, PingRequest>(request);
-        //}
+        /// <inheritdoc />
+        public Task<PathFindResponse> PathFind(PathFindCreateRequest request, CancellationToken cancellationToken = default)
+        {
+            return this.GRequest<PathFindResponse, PathFindCreateRequest>(request, cancellationToken);
+        }
+
+        /// <inheritdoc />
+        public Task<PathFindResponse> PathFindClose(PathFindCloseRequest request, CancellationToken cancellationToken = default)
+        {
+            return this.GRequest<PathFindResponse, PathFindCloseRequest>(request, cancellationToken);
+        }
+
+        /// <inheritdoc />
+        public Task<PathFindResponse> PathFindStatus(PathFindStatusRequest request, CancellationToken cancellationToken = default)
+        {
+            return this.GRequest<PathFindResponse, PathFindStatusRequest>(request, cancellationToken);
+        }
 
         /// <inheritdoc />
         public Task<object> Ping(CancellationToken cancellationToken = default)
@@ -702,10 +761,11 @@ namespace Xrpl.Client
             return this.GRequest<object, RandomRequest>(request, cancellationToken);
         }
 
-        //public Task<RipplePathFind> RipplePathFind(RipplePathFindRequest request)
-        //{
-        //    return this.GRequest<object, PingRequest>(request);
-        //}
+        /// <inheritdoc />
+        public Task<RipplePathFindResponse> RipplePathFind(RipplePathFindRequest request, CancellationToken cancellationToken = default)
+        {
+            return this.GRequest<RipplePathFindResponse, RipplePathFindRequest>(request, cancellationToken);
+        }
 
         /// <inheritdoc />
         public Task<ServerInfo> ServerInfo(ServerInfoRequest request, CancellationToken cancellationToken = default)

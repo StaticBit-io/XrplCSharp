@@ -325,23 +325,29 @@ namespace Xrpl.Client
             };
         }
 
-        public BaseResponse HandleResponse(string message)
+        /// <summary>
+        /// Handles an incoming response message. Returns a tuple of (response, handled).<br/>
+        /// handled=true means the message was matched to a pending request (resolved or rejected).<br/>
+        /// handled=false means the id was not found among pending requests — the caller
+        /// should treat the message as a stream/follow-up (e.g. path_find async updates).
+        /// </summary>
+        public (BaseResponse Response, bool Handled) HandleResponse(string message)
         {
             var response = JsonConvert.DeserializeObject<ErrorResponse>(message);
 
             if (response.Id == null)
             {
-                return response;
+                return (response, false);
             }
 
             if(!Guid.TryParse($"{response.Id}", out var id))
             {
-                throw new XrplException("invalid id type");
+                return (response, false);
             }
 
             if (!promisesAwaitingResponse.ContainsKey(id))
             {
-                return response;
+                return (response, false);
             }
 
             if (response.Status == null)
@@ -353,12 +359,12 @@ namespace Xrpl.Client
                         : $"{response.Error} - {response.ErrorMessage}";
                     XrplException error = new XrplException(errMessage);
                     this.Reject(id, error);
-                    return response;
+                    return (response, true);
                 }
 
                 ResponseFormatException responseError = new ResponseFormatException("Response has no status");
                 this.Reject(id, responseError);
-                return response;
+                return (response, true);
             }
 
             if (response.Status == "error" )
@@ -378,18 +384,18 @@ namespace Xrpl.Client
                     : $"{response.Error} - {response.ErrorMessage}";
                 var error = new RippledException(errMessage, errorResponse);
                 this.Reject(id, error);
-                return response;
+                return (response, true);
             }
 
             if (response.Status != "success")
             {
                 XrplException error = new XrplException($"unrecognized response.status: ${response.Status ?? ""}");
                 this.Reject(id, error);
-                return response;
+                return (response, true);
             }
 
             this.Resolve(id, response);
-            return response;
+            return (response, true);
         }
 
         /// <summary>

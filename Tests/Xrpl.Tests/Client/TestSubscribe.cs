@@ -112,16 +112,44 @@ namespace Xrpl.Tests.ClientLib
         }
 
         [TestMethod]
-        public void TestEmitsPathFind()
+        public async Task TestEmitsPathFind()
         {
+            List<PathFindStream> received = new List<PathFindStream>();
+            var tcs = new TaskCompletionSource<bool>();
+
             runner.client.connection.OnPathFind += r =>
             {
-                Assert.AreEqual(ResponseStreamType.path_find, r.Type);
+                received.Add(r);
+                if (received.Count >= 2)
+                    tcs.TrySetResult(true);
                 return Task.CompletedTask;
             };
 
-            string jsonString = "{\"alternatives\":[{\"paths_computed\":[[{\"currency\":\"USD\",\"issuer\":\"rvYAfWj5gh67oV6fW32ZzP3Aw4Eubs59B\",\"type\":48}],[{\"currency\":\"USD\",\"issuer\":\"rhub8VRN55s94qWKDv6jmDy1pUykJzF3wq\",\"type\":48},{\"currency\":\"USD\",\"issuer\":\"rvYAfWj5gh67oV6fW32ZzP3Aw4Eubs59B\",\"type\":48}],[{\"currency\":\"USD\",\"issuer\":\"rhub8VRN55s94qWKDv6jmDy1pUykJzF3wq\",\"type\":48},{\"account\":\"rhub8VRN55s94qWKDv6jmDy1pUykJzF3wq\",\"type\":1},{\"account\":\"rpix35SSFEukMTm64NB4k4BPBS7fXJrLJM\",\"type\":1}],[{\"currency\":\"CNY\",\"issuer\":\"rKiCet8SdvWxPXnAgYarFUXMh1zCPz432Y\",\"type\":48},{\"currency\":\"USD\",\"issuer\":\"rvYAfWj5gh67oV6fW32ZzP3Aw4Eubs59B\",\"type\":48}]],\"source_amount\":\"786\"}],\"destination_account\":\"rf1BiGeXwwQoi8Z2ueFYTEXSwuJYfV2Jpn\",\"destination_amount\":{\"currency\":\"USD\",\"issuer\":\"rvYAfWj5gh67oV6fW32ZzP3Aw4Eubs59B\",\"value\":\"0.001\"},\"full_reply\":true,\"id\":8,\"source_account\":\"rf1BiGeXwwQoi8Z2ueFYTEXSwuJYfV2Jpn\",\"type\":\"path_find\"}";
-            runner.client.connection.OnMessage(jsonString);
+            string msg1 = "{\"alternatives\":[{\"paths_computed\":[[{\"currency\":\"USD\",\"issuer\":\"rvYAfWj5gh67oV6fW32ZzP3Aw4Eubs59B\",\"type\":48}],[{\"currency\":\"USD\",\"issuer\":\"rhub8VRN55s94qWKDv6jmDy1pUykJzF3wq\",\"type\":48},{\"currency\":\"USD\",\"issuer\":\"rvYAfWj5gh67oV6fW32ZzP3Aw4Eubs59B\",\"type\":48}],[{\"currency\":\"USD\",\"issuer\":\"rhub8VRN55s94qWKDv6jmDy1pUykJzF3wq\",\"type\":48},{\"account\":\"rhub8VRN55s94qWKDv6jmDy1pUykJzF3wq\",\"type\":1},{\"account\":\"rpix35SSFEukMTm64NB4k4BPBS7fXJrLJM\",\"type\":1}],[{\"currency\":\"CNY\",\"issuer\":\"rKiCet8SdvWxPXnAgYarFUXMh1zCPz432Y\",\"type\":48},{\"currency\":\"USD\",\"issuer\":\"rvYAfWj5gh67oV6fW32ZzP3Aw4Eubs59B\",\"type\":48}]],\"source_amount\":\"786\"}],\"destination_account\":\"rf1BiGeXwwQoi8Z2ueFYTEXSwuJYfV2Jpn\",\"destination_amount\":{\"currency\":\"USD\",\"issuer\":\"rvYAfWj5gh67oV6fW32ZzP3Aw4Eubs59B\",\"value\":\"0.001\"},\"full_reply\":false,\"id\":8,\"source_account\":\"rf1BiGeXwwQoi8Z2ueFYTEXSwuJYfV2Jpn\",\"type\":\"path_find\"}";
+
+            string msg2 = "{\"alternatives\":[{\"paths_computed\":[[{\"currency\":\"USD\",\"issuer\":\"rvYAfWj5gh67oV6fW32ZzP3Aw4Eubs59B\",\"type\":48}]],\"source_amount\":\"400\"}],\"destination_account\":\"rf1BiGeXwwQoi8Z2ueFYTEXSwuJYfV2Jpn\",\"destination_amount\":{\"currency\":\"USD\",\"issuer\":\"rvYAfWj5gh67oV6fW32ZzP3Aw4Eubs59B\",\"value\":\"0.001\"},\"full_reply\":true,\"id\":8,\"source_account\":\"rf1BiGeXwwQoi8Z2ueFYTEXSwuJYfV2Jpn\",\"type\":\"path_find\"}";
+
+            await runner.client.connection.OnMessage(msg1);
+            await runner.client.connection.OnMessage(msg2);
+
+            var completed = await Task.WhenAny(tcs.Task, Task.Delay(5000));
+            Assert.AreEqual(tcs.Task, completed, "OnPathFind was not invoked at least 2 times within timeout");
+
+            Assert.AreEqual(2, received.Count);
+
+            PathFindStream first = received[0];
+            Assert.AreEqual(ResponseStreamType.path_find, first.Type);
+            Assert.AreEqual("rf1BiGeXwwQoi8Z2ueFYTEXSwuJYfV2Jpn", first.SourceAccount);
+            Assert.AreEqual("rf1BiGeXwwQoi8Z2ueFYTEXSwuJYfV2Jpn", first.DestinationAccount);
+            Assert.IsFalse(first.FullReply);
+            Assert.AreEqual(1, first.Alternatives.Count);
+            Assert.AreEqual("786", first.Alternatives[0].SourceAmount.Value);
+
+            PathFindStream second = received[1];
+            Assert.AreEqual(ResponseStreamType.path_find, second.Type);
+            Assert.IsTrue(second.FullReply);
+            Assert.AreEqual(1, second.Alternatives.Count);
+            Assert.AreEqual("400", second.Alternatives[0].SourceAmount.Value);
         }
 
         [TestMethod]
