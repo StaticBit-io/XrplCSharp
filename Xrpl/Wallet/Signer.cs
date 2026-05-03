@@ -225,12 +225,14 @@ namespace Xrpl.Wallet
 
         public static Dictionary<string, dynamic> GetDecodedTransaction(Dictionary<string, dynamic>  txOrBlob)
         {
-            return XrplBinaryCodec.Decode(XrplBinaryCodec.Encode(txOrBlob)).ToObject<Dictionary<string, dynamic>>();
+            return Newtonsoft.Json.JsonConvert.DeserializeObject<Dictionary<string, dynamic>>(
+                XrplBinaryCodec.Decode(XrplBinaryCodec.Encode(txOrBlob)).ToJsonString());
         }
 
         public static Dictionary<string, dynamic> GetDecodedTransaction(string txOrBlob)
         {
-            return XrplBinaryCodec.Decode(txOrBlob).ToObject<Dictionary<string, dynamic>>();
+            return Newtonsoft.Json.JsonConvert.DeserializeObject<Dictionary<string, dynamic>>(
+                XrplBinaryCodec.Decode(txOrBlob).ToJsonString());
         }
     }
 }

@@ -1,6 +1,6 @@
-﻿using Newtonsoft.Json.Linq;
-using System;
+﻿using System;
 using System.Globalization;
+using System.Text.Json.Nodes;
 using Xrpl.BinaryCodec.Binary;
 using Xrpl.BinaryCodec.Util;
 
@@ -40,10 +40,10 @@ namespace Xrpl.BinaryCodec.Types
             MptIssuanceId.ToBytes(sink);
         }
 
-        public override JToken ToJson()
+        public override JsonNode ToJson()
         {
             var sign = IsPositive ? "" : "-";
-            return new JObject
+            return new JsonObject
             {
                 ["mpt_issuance_id"] = MptIssuanceId.ToString(),
                 ["value"] = $"{sign}{MptValue}",

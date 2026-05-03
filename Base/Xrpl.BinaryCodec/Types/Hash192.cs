@@ -1,5 +1,5 @@
 ﻿using System;
-using Newtonsoft.Json.Linq;
+using System.Text.Json.Nodes;
 using Xrpl.BinaryCodec.Binary;
 using Xrpl.BinaryCodec.Util;
 
@@ -23,7 +23,7 @@ namespace Xrpl.BinaryCodec.Types
 
         /// <summary>Create instance from json object</summary>
         /// <param name="token">json object</param>
-        public static Hash192 FromJson(JToken token) => FromHex((string)token);
+        public static Hash192 FromJson(JsonNode token) => FromHex(token.GetValue<string>());
 
         /// <summary>Create instance from hex string</summary>
         /// <param name="token">string hex token</param>

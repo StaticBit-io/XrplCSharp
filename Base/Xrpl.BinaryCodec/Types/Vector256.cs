@@ -1,6 +1,6 @@
 ﻿using System.Collections.Generic;
 using System.Linq;
-using Newtonsoft.Json.Linq;
+using System.Text.Json.Nodes;
 using Xrpl.BinaryCodec.Binary;
 
 //https://github.com/XRPLF/xrpl.js/blob/8a9a9bcc28ace65cde46eed5010eb8927374a736/packages/ripple-binary-codec/src/types/vector-256.ts
@@ -30,10 +30,10 @@ namespace Xrpl.BinaryCodec.Types
         }
 
         /// <inheritdoc />
-        public JToken ToJson()
+        public JsonNode ToJson()
         {
-            var arr = new JArray();
-            foreach (var hash in this)
+            JsonArray arr = new JsonArray();
+            foreach (Hash256 hash in this)
             {
                 arr.Add(hash.ToJson());
             }
@@ -42,7 +42,7 @@ namespace Xrpl.BinaryCodec.Types
         /// <summary> Deserialize Vector256 </summary>
         /// <param name="token">json token</param>
         /// <returns>Vector256 value</returns>
-        public static Vector256 FromJson(JToken token) => new Vector256(token.Select(Hash256.FromJson));
+        public static Vector256 FromJson(JsonNode token) => new Vector256(token.AsArray().Select(n => Hash256.FromJson(n)));
         /// <summary>
         /// Construct a Vector256 from a BinaryParser
         /// </summary>

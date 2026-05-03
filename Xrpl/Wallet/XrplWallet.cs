@@ -950,9 +950,10 @@ namespace Xrpl.Wallet
         /// <returns>Returns true if a signedTransaction is valid.</returns>
         public bool VerifyTransaction(string signedTransaction)
         {
-            JToken tx = XrplBinaryCodec.Decode(signedTransaction);
-            string messageHex = XrplBinaryCodec.EncodeForSigning(tx.ToObject<Dictionary<string, dynamic>>());
-            string signature = (string)tx["TxnSignature"];
+            System.Text.Json.Nodes.JsonNode txNode = XrplBinaryCodec.Decode(signedTransaction);
+            Dictionary<string, dynamic> txDict = Newtonsoft.Json.JsonConvert.DeserializeObject<Dictionary<string, dynamic>>(txNode.ToJsonString());
+            string messageHex = XrplBinaryCodec.EncodeForSigning(txDict);
+            string signature = txNode["TxnSignature"]?.GetValue<string>();
             return XrplKeypairs.Verify(messageHex.FromHex(), signature, this.PublicKey);
         }
 
@@ -1143,9 +1144,8 @@ namespace Xrpl.Wallet
         /// <summary>Декодирует hex blob в JObject.</summary>
         private static JObject DecodeToObject(string blobHex)
         {
-            var dec = XrplBinaryCodec.Decode(blobHex);
-            if (dec is JObject jo) return jo;
-            return JObject.FromObject(dec!);
+            System.Text.Json.Nodes.JsonNode dec = XrplBinaryCodec.Decode(blobHex);
+            return JObject.Parse(dec.ToJsonString());
         }
     }
 }

@@ -49,7 +49,7 @@ namespace Xrpl.Utils
     
         public static JToken Decode(string hex)
         {
-            return XrplBinaryCodec.Decode(hex);
+            return JToken.Parse(XrplBinaryCodec.Decode(hex).ToJsonString());
         }
     
         public static bool IsValidAddress(string address)

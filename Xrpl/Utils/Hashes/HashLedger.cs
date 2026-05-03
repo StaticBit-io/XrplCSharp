@@ -1,4 +1,5 @@
-﻿using Newtonsoft.Json.Linq;
+﻿using Newtonsoft.Json;
+using Newtonsoft.Json.Linq;
 
 using System.Collections.Generic;
 
@@ -24,7 +25,7 @@ namespace Xrpl.Utils.Hashes
         public static string HashSignedTx(string tx)
         {
             string txBlob = tx;
-            Dictionary<string, dynamic> txObject = XrplBinaryCodec.Decode(tx).ToObject<Dictionary<string, dynamic>>();
+            Dictionary<string, dynamic> txObject = JsonConvert.DeserializeObject<Dictionary<string, dynamic>>(XrplBinaryCodec.Decode(tx).ToJsonString());
             if (!txObject.ContainsKey("TxnSignature") && !txObject.ContainsKey("Signers"))
             {
                 new ValidationException("The transaction must be signed to hash it.");

@@ -1,11 +1,11 @@
-﻿using Newtonsoft.Json.Linq;
-
-using System;
+﻿using System;
 using System.Collections.Generic;
 using System.Diagnostics;
 using System.Linq;
+using System.Text.Json.Nodes;
 
 using Newtonsoft.Json;
+using Newtonsoft.Json.Linq;
 
 using Xrpl.BinaryCodec.Binary;
 using Xrpl.BinaryCodec.Hashing;
@@ -22,35 +22,46 @@ namespace Xrpl.BinaryCodec
         static uint PAYMENT_CHANNEL_CLAIM_PREFIX = 0x434C4D00u;
 
         /// <summary>
-        /// 
+        /// Decode a hex string into a JsonNode representing the transaction/object.
         /// </summary>
         /// <param name="binary"></param>
-        /// <returns>JToken</returns>
-        public static JToken Decode(string binary)
+        /// <returns>JsonNode</returns>
+        public static JsonNode Decode(string binary)
         {
             var stobject = StObject.FromHex(binary);
             return stobject.ToJson();
         }
 
         /// <summary>
-        /// 
+        /// Encode a JsonNode into binary hex string.
         /// </summary>
         /// <param name="token"></param>
         /// <returns>string</returns>
-        public static string Encode(JToken token)
+        public static string Encode(JsonNode token)
         {
             return SerializeJson(token);
         }
 
         /// <summary>
-        /// 
+        /// Encode a JToken into binary hex string.
+        /// </summary>
+        /// <param name="token"></param>
+        /// <returns>string</returns>
+        [System.Obsolete("Use Encode(JsonNode) instead. This bridge will be removed in a future version.")]
+        public static string Encode(JToken token)
+        {
+            return Encode(JsonNode.Parse(token.ToString()));
+        }
+
+        /// <summary>
+        /// Encode an object into binary hex string.
         /// </summary>
         /// <param name="json"></param>
         /// <returns>string</returns>
         public static string Encode(object json)
         {
-            JToken token = JToken.FromObject(json,new JsonSerializer(){NullValueHandling = NullValueHandling.Ignore});
-            return Encode(token);
+            JToken token = JToken.FromObject(json, new JsonSerializer() { NullValueHandling = NullValueHandling.Ignore });
+            return Encode(JsonNode.Parse(token.ToString()));
         }
 
         /// <summary>
@@ -61,7 +72,8 @@ namespace Xrpl.BinaryCodec
         public static string EncodeForSigning(object json)
         {
             JToken token = JToken.FromObject(json);
-            return SerializeJson(token, HashPrefix.TransactionSig.Bytes(), null, true);
+            JsonNode node = JsonNode.Parse(token.ToString());
+            return SerializeJson(node, HashPrefix.TransactionSig.Bytes(), null, true);
         }
 
         /// <summary>
@@ -71,11 +83,12 @@ namespace Xrpl.BinaryCodec
         /// <returns>string</returns> The binary-encoded claim, ready to be signed.
         public static string EncodeForSigningClaim(object obj)
         {
-            JToken json = JToken.FromObject(obj);
+            JToken jtoken = JToken.FromObject(obj);
+            JsonNode json = JsonNode.Parse(jtoken.ToString());
 
             byte[] prefix = Bits.GetBytes(PAYMENT_CHANNEL_CLAIM_PREFIX);
-            byte[] channel = Hash256.FromHex((string)json["channel"]).Buffer;
-            byte[] amount = Uint64.FromValue(int.Parse((string)json["amount"])).ToBytes();
+            byte[] channel = Hash256.FromHex(json["channel"].GetValue<string>()).Buffer;
+            byte[] amount = Uint64.FromValue(int.Parse(json["amount"].GetValue<string>())).ToBytes();
             byte[] rv = new byte[prefix.Length + channel.Length + amount.Length];
             System.Buffer.BlockCopy(prefix, 0, rv, 0, prefix.Length);
             System.Buffer.BlockCopy(channel, 0, rv, prefix.Length, channel.Length);
@@ -92,7 +105,8 @@ namespace Xrpl.BinaryCodec
         public static string EncodeForMultiSigning(object json, string signingAccount)
         {
             string accountID = new AccountId(signingAccount).ToHex();
-            JToken token = JToken.FromObject(json);
+            JToken jtoken = JToken.FromObject(json);
+            JsonNode token = JsonNode.Parse(jtoken.ToString());
             return SerializeJson(token, HashPrefix.TransactionMultiSig.Bytes(), accountID.FromHex(), true);
         }
 
@@ -141,7 +155,7 @@ namespace Xrpl.BinaryCodec
         /// </summary>
         /// <param name="json"></param>
         /// <returns>string</returns>
-        public static string SerializeJson(JToken json, byte[]? prefix = null, byte[]? suffix = null, bool signingOnly = false)
+        public static string SerializeJson(JsonNode json, byte[]? prefix = null, byte[]? suffix = null, bool signingOnly = false)
         {
             var list = new BytesList();
             if (prefix != null)

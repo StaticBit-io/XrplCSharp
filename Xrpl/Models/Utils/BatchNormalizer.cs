@@ -158,7 +158,7 @@ public static class BatchNormalizer
     /// </summary>
     public static string ComputeInnerTxId(this JObject normalizedInnerTx)
     {
-        var st = Xrpl.BinaryCodec.Types.StObject.FromJson(normalizedInnerTx);
+        var st = Xrpl.BinaryCodec.Types.StObject.FromJson(System.Text.Json.Nodes.JsonNode.Parse(normalizedInnerTx.ToString()));
         var bytes = st.ToBytes();
 
         var prefix = Xrpl.BinaryCodec.Util.Bits.GetBytes((uint)Xrpl.BinaryCodec.Hashing.HashPrefix.TransactionId);

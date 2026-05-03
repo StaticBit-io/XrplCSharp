@@ -1,4 +1,4 @@
-﻿using Newtonsoft.Json.Linq;
+﻿using System.Text.Json.Nodes;
 using Xrpl.BinaryCodec.Binary;
 
 //https://github.com/XRPLF/xrpl.js/blob/8a9a9bcc28ace65cde46eed5010eb8927374a736/packages/ripple-binary-codec/src/types/uint-8.ts
@@ -24,7 +24,7 @@ namespace Xrpl.BinaryCodec.Types
         /// <summary> Deserialize Uint8 </summary>
         /// <param name="token">json token</param>
         /// <returns>Uint8 value</returns>
-        public static Uint8 FromJson(JToken token) => (byte) token;
+        public static Uint8 FromJson(JsonNode token) => token.GetValue<byte>();
 
         /// <summary>
         /// create instance of this value

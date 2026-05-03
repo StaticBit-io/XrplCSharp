@@ -1,4 +1,4 @@
-﻿using Newtonsoft.Json.Linq;
+﻿using System.Text.Json.Nodes;
 using System;
 using System.Linq;
 using Xrpl.BinaryCodec.Binary;
@@ -35,7 +35,7 @@ namespace Xrpl.BinaryCodec.Types
             sink.Put(Buffer);
         }
         /// <summary> hash to json string </summary>
-        public JToken ToJson() => ToString();
+        public JsonNode ToJson() => JsonValue.Create(ToString());
 
         /// <summary>
         /// check hash to equal

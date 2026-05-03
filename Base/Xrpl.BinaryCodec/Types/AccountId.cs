@@ -1,4 +1,4 @@
-﻿using Newtonsoft.Json.Linq;
+﻿using System.Text.Json.Nodes;
 
 using System;
 using System.Text.RegularExpressions;
@@ -64,15 +64,15 @@ namespace Xrpl.BinaryCodec.Types
         }
         /// <summary> create instance from json object </summary>
         /// <param name="json">json object</param>
-        public static implicit operator AccountId(JToken json)
+        public static implicit operator AccountId(JsonNode json)
         {
             return json == null ? null : FromJson(json);
         }
         /// <summary> create json object from this element </summary>
         /// <param name="v">AccountId object</param>
-        public static implicit operator JToken(AccountId v)
+        public static implicit operator JsonNode(AccountId v)
         {
-            return v.ToString();
+            return JsonValue.Create(v.ToString());
         }
         /// <summary> this object to string data </summary>
         /// <returns></returns>
@@ -82,9 +82,9 @@ namespace Xrpl.BinaryCodec.Types
         }
         /// <summary> create instance from json object </summary>
         /// <param name="json">json object</param>
-        public new static AccountId FromJson(JToken json)
+        public new static AccountId FromJson(JsonNode json)
         {
-            return json?.ToString();
+            return json?.GetValue<string>();
         }
 
         public static readonly AccountId Zero = 0;

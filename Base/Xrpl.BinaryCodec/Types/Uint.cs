@@ -1,6 +1,6 @@
 ﻿using System;
 using System.Globalization;
-using Newtonsoft.Json.Linq;
+using System.Text.Json.Nodes;
 using Xrpl.BinaryCodec.Binary;
 
 //https://github.com/XRPLF/xrpl.js/blob/8a9a9bcc28ace65cde46eed5010eb8927374a736/packages/ripple-binary-codec/src/types/uint.ts
@@ -30,7 +30,7 @@ namespace Xrpl.BinaryCodec.Types
         public void ToBytes(IBytesSink sink) => sink.Put(ToBytes());
 
         /// <inheritdoc />
-        public virtual JToken ToJson() => Convert.ToUInt32(Value);
+        public virtual JsonNode ToJson() => JsonValue.Create(Convert.ToUInt32(Value));
 
         /// <inheritdoc />
         public override string ToString() => Value.ToString(CultureInfo.InvariantCulture);

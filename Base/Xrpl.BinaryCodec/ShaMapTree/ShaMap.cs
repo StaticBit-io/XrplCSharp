@@ -1,5 +1,4 @@
-﻿using System.Linq;
-using Newtonsoft.Json.Linq;
+﻿using System.Text.Json.Nodes;
 using Xrpl.BinaryCodec.Enums;
 using Xrpl.BinaryCodec.Types;
 
@@ -71,16 +70,15 @@ namespace Xrpl.BinaryCodec.ShaMapTree
             return (AccountState) base.Copy();
         }
 
-        public static AccountState FromJson(JToken jToken, bool normalise=false)
+        public static AccountState FromJson(JsonNode jToken, bool normalise=false)
         {
             var map = new AccountState();
-            var items = from JObject entry in jToken
-                where normalise == false ||
-                      LedgerEntryType.FromJson(entry["LedgerEntryType"]) !=
-                      LedgerEntryType.LedgerHashes
-                select new LedgerEntry(entry);
-            foreach (var ledgerEntry in items)
+            foreach (JsonNode item in jToken.AsArray())
             {
+                JsonObject entry = item.AsObject();
+                if (normalise && LedgerEntryType.FromJson(entry["LedgerEntryType"]) == LedgerEntryType.LedgerHashes)
+                    continue;
+                var ledgerEntry = new LedgerEntry(entry);
                 map.AddItem(ledgerEntry.Index(), ledgerEntry);
             }
             return map;

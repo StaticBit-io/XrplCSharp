@@ -1,6 +1,6 @@
 ﻿using System.Diagnostics;
 
-using Newtonsoft.Json.Linq;
+using System.Text.Json.Nodes;
 using Xrpl.BinaryCodec.Binary;
 using Xrpl.BinaryCodec.Util;
 
@@ -33,7 +33,7 @@ namespace Xrpl.BinaryCodec.Types
         {
             return new Blob(value);
         }
-        public static implicit operator Blob(JToken token)
+        public static implicit operator Blob(JsonNode token)
         {
             return FromJson(token);
         }
@@ -45,9 +45,9 @@ namespace Xrpl.BinaryCodec.Types
         /// </summary>
         /// <param name="token">json token</param>
         /// <returns>A Blob object</returns>
-        public static Blob FromJson(JToken token)
+        public static Blob FromJson(JsonNode token)
         {
-            var str = token.ToString();
+            var str = token.GetValue<string>();
             if (IsValidHexString(str))
             {
                 return FromHex(str);
@@ -84,7 +84,7 @@ namespace Xrpl.BinaryCodec.Types
         }
 
         /// <inheritdoc />
-        public JToken ToJson() => ToString();
+        public JsonNode ToJson() => JsonValue.Create(ToString());
 
         /// <inheritdoc />
         public override string ToString()

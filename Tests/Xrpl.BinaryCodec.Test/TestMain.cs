@@ -1,6 +1,7 @@
 ﻿using System.Collections.Generic;
 using System.Diagnostics;
 using System.Linq;
+using System.Text.Json.Nodes;
 using Microsoft.VisualStudio.TestTools.UnitTesting;
 using Newtonsoft.Json;
 using Newtonsoft.Json.Linq;
@@ -124,14 +125,18 @@ namespace Xrpl.BinaryCodec.Tests
         public void CheckBinaryAndJson(TestData test)
         {
             Assert.AreEqual(XrplBinaryCodec.Encode(test.json), test.binary);
-            Dictionary<string, dynamic> result = XrplBinaryCodec.Decode(test.binary).ToObject<Dictionary<string, dynamic>>();
-            ExtensionHelpers.StrictDictEqual(result, test.json.ToObject<Dictionary<string, dynamic>>());
+            JsonNode decoded = XrplBinaryCodec.Decode(test.binary);
+            JsonNode original = JsonNode.Parse(test.json.ToString());
+            Assert.IsTrue(JsonNode.DeepEquals(decoded, original),
+                $"Decoded JSON doesn't match original for binary: {test.binary}");
         }
 
         public void CheckXaddressJsons(TestXData test)
         {
             Assert.AreEqual(XrplBinaryCodec.Encode(test.xjson), XrplBinaryCodec.Encode(test.rjson));
-            Assert.AreEqual(test.rjson, XrplBinaryCodec.Decode(XrplBinaryCodec.Encode(test.xjson)));
+            JsonNode decoded = XrplBinaryCodec.Decode(XrplBinaryCodec.Encode(test.xjson));
+            JsonNode rjsonNode = JsonNode.Parse(test.rjson.ToString());
+            Assert.IsTrue(JsonNode.DeepEquals(rjsonNode, decoded));
         }
 
         public void MakeSuite(string name, TestData[] entries)

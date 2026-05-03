@@ -399,7 +399,7 @@ namespace XrplTests.Xrpl.Models
             Console.WriteLine("Input JSON:");
             Console.WriteLine(oracleSet.ToString(Newtonsoft.Json.Formatting.Indented));
 
-            var stObject = global::Xrpl.BinaryCodec.Types.StObject.FromJson(oracleSet);
+            var stObject = global::Xrpl.BinaryCodec.Types.StObject.FromJson(System.Text.Json.Nodes.JsonNode.Parse(oracleSet.ToString()));
             var hex = stObject.ToHex();
             Console.WriteLine($"\nSerialized hex length: {hex.Length}");
             Console.WriteLine($"Serialized hex: {hex}");
