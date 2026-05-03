@@ -1,4 +1,4 @@
-﻿
+
 
 // https://github.com/XRPLF/xrpl.js/blob/main/packages/xrpl/test/models/accountDelete.ts
 
@@ -17,7 +17,7 @@ namespace XrplTests.Xrpl.Models
         [TestMethod]
         public async Task TestVerify_Valid_AccountDelete()
         {
-            var tx = new Dictionary<string, dynamic>
+            var tx = new Dictionary<string, object>
             {
                 { "TransactionType", "AccountDelete" },
                 {"Account", "rWYkbWkCeg8dP6rXALnjgZSjjLyih5NXm"},
@@ -32,7 +32,7 @@ namespace XrplTests.Xrpl.Models
         [TestMethod]
         public async Task TestVerify_InValid_missing_Destination()
         {
-            var tx = new Dictionary<string, dynamic>
+            var tx = new Dictionary<string, object>
             {
                 { "TransactionType", "AccountDelete" },
                 {"Account", "rWYkbWkCeg8dP6rXALnjgZSjjLyih5NXm"},
@@ -46,7 +46,7 @@ namespace XrplTests.Xrpl.Models
         [TestMethod]
         public async Task TestVerify_Invalid_Destination()
         {
-            var tx = new Dictionary<string, dynamic>
+            var tx = new Dictionary<string, object>
             {
                 { "TransactionType", "AccountDelete" },
                 {"Account", "rWYkbWkCeg8dP6rXALnjgZSjjLyih5NXm"},
@@ -61,7 +61,7 @@ namespace XrplTests.Xrpl.Models
         [TestMethod]
         public async Task TestVerify_Invalid_DestinationTag()
         {
-            var tx = new Dictionary<string, dynamic>
+            var tx = new Dictionary<string, object>
             {
                 { "TransactionType", "AccountDelete" },
                 {"Account", "rWYkbWkCeg8dP6rXALnjgZSjjLyih5NXm"},
@@ -78,7 +78,7 @@ namespace XrplTests.Xrpl.Models
         [TestMethod]
         public async Task TestVerify_Valid_AccountDelete_WithCredentialIDs()
         {
-            var tx = new Dictionary<string, dynamic>
+            var tx = new Dictionary<string, object>
             {
                 { "TransactionType", "AccountDelete" },
                 { "Account", "rWYkbWkCeg8dP6rXALnjgZSjjLyih5NXm" },
@@ -100,7 +100,7 @@ namespace XrplTests.Xrpl.Models
                 ids.Add($"A1B2C3D4E5F6789012345678901234567890ABCDEF1234567890ABCDEF1234{i:X2}");
             }
 
-            var tx = new Dictionary<string, dynamic>
+            var tx = new Dictionary<string, object>
             {
                 { "TransactionType", "AccountDelete" },
                 { "Account", "rWYkbWkCeg8dP6rXALnjgZSjjLyih5NXm" },
@@ -117,7 +117,7 @@ namespace XrplTests.Xrpl.Models
         [TestMethod]
         public async Task TestVerify_Invalid_AccountDelete_CredentialIDsNonHex()
         {
-            var tx = new Dictionary<string, dynamic>
+            var tx = new Dictionary<string, object>
             {
                 { "TransactionType", "AccountDelete" },
                 { "Account", "rWYkbWkCeg8dP6rXALnjgZSjjLyih5NXm" },

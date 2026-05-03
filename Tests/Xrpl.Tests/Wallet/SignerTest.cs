@@ -1,4 +1,4 @@
-﻿using System;
+using System;
 using System.Collections.Generic;
 using System.Diagnostics;
 using System.Linq;
@@ -15,19 +15,19 @@ namespace Xrpl.Tests.Wallet.Tests
     [TestClass]
     public class TestUSigner
     {
-        //static Dictionary<string, dynamic> multisignTxToCombine1 = new Dictionary<string, dynamic>
+        //static Dictionary<string, object> multisignTxToCombine1 = new Dictionary<string, object>
         //{
         //    { "Account", "rEuLyBCvcw4CFmzv8RepSiAoNgF8tTGJQC" },
         //    { "Fee", "30000" },
         //    { "Flags", 262144 },
-        //    { "LimitAmount", new Dictionary<string, dynamic> {
+        //    { "LimitAmount", new Dictionary<string, object> {
         //        { "currency", "USD" },
         //        { "issuer", "rHb9CJAWyB4rj91VRWn96DkukG4bwdtyTh" },
         //        { "value", "100" }
         //    } },
         //    { "Sequence", 2 },
-        //    { "Signers", new Dictionary<string, dynamic> {
-        //        { "Signer", new Dictionary<string, dynamic> {
+        //    { "Signers", new Dictionary<string, object> {
+        //        { "Signer", new Dictionary<string, object> {
         //            { "Account", "rsA2LpzuawewSBQXkiju3YQTMzW13pAAdW" },
         //            { "SigningPubKey", "02B3EC4E5DD96029A647CFA20DA07FE1F85296505552CCAC114087E66B46BD77DF" },
         //            { "TxnSignature", "30450221009C195DBBF7967E223D8626CA19CF02073667F2B22E206727BFE848FF42BEAC8A022048C323B0BED19A988BDBEFA974B6DE8AA9DCAE250AA82BBD1221787032A864E5" },
@@ -37,19 +37,19 @@ namespace Xrpl.Tests.Wallet.Tests
         //    { "TransactionType", "TrustSet" },
         //};
 
-        //static Dictionary<string, dynamic> multisignTxToCombine2 = new Dictionary<string, dynamic>
+        //static Dictionary<string, object> multisignTxToCombine2 = new Dictionary<string, object>
         //{
         //    { "Account", "rEuLyBCvcw4CFmzv8RepSiAoNgF8tTGJQC" },
         //    { "Fee", "30000" },
         //    { "Flags", 262144 },
-        //    { "LimitAmount", new Dictionary<string, dynamic> {
+        //    { "LimitAmount", new Dictionary<string, object> {
         //        { "currency", "USD" },
         //        { "issuer", "rHb9CJAWyB4rj91VRWn96DkukG4bwdtyTh" },
         //        { "value", "100" }
         //    } },
         //    { "Sequence", 2 },
-        //    { "Signers", new Dictionary<string, dynamic> {
-        //        { "Signer", new Dictionary<string, dynamic> {
+        //    { "Signers", new Dictionary<string, object> {
+        //        { "Signer", new Dictionary<string, object> {
         //            { "Account", "rJvuSQhQR37czfxRou4vNWaM97uEhT4ShE" },
         //            { "SigningPubKey", "02B78EEA571B2633180834CC6E7B4ED84FBF6811D12ECB59410E0C92D13B7726F5" },
         //            { "TxnSignature", "304502210098009CEFA61EE9843BB7FC29B78CFFAACF28352A4A7CF3AAE79EF12D79BA50910220684F116266E5E4519A7A33F7421631EB8494082BE51A8B03FECCB3E59F77154A" },
@@ -59,24 +59,24 @@ namespace Xrpl.Tests.Wallet.Tests
         //    { "TransactionType", "TrustSet" },
         //};
 
-        //static Dictionary<string, dynamic> multisignJson = new Dictionary<string, dynamic>
+        //static Dictionary<string, object> multisignJson = new Dictionary<string, object>
         //{
         //    { "Account", "rEuLyBCvcw4CFmzv8RepSiAoNgF8tTGJQC" },
         //    { "Fee", "30000" },
         //    { "Flags", 262144 },
-        //    { "LimitAmount", new Dictionary<string, dynamic> {
+        //    { "LimitAmount", new Dictionary<string, object> {
         //        { "currency", "USD" },
         //        { "issuer", "rHb9CJAWyB4rj91VRWn96DkukG4bwdtyTh" },
         //        { "value", "100" }
         //    } },
         //    { "Sequence", 2 },
-        //    { "Signers", new Dictionary<string, dynamic> {
-        //        { "Signer", new Dictionary<string, dynamic> {
+        //    { "Signers", new Dictionary<string, object> {
+        //        { "Signer", new Dictionary<string, object> {
         //            { "Account", "rsA2LpzuawewSBQXkiju3YQTMzW13pAAdW" },
         //            { "SigningPubKey", "02B3EC4E5DD96029A647CFA20DA07FE1F85296505552CCAC114087E66B46BD77DF" },
         //            { "TxnSignature", "30450221009C195DBBF7967E223D8626CA19CF02073667F2B22E206727BFE848FF42BEAC8A022048C323B0BED19A988BDBEFA974B6DE8AA9DCAE250AA82BBD1221787032A864E5" },
         //        } },
-        //        { "Signer", new Dictionary<string, dynamic> {
+        //        { "Signer", new Dictionary<string, object> {
         //            { "Account", "rJvuSQhQR37czfxRou4vNWaM97uEhT4ShE" },
         //            { "SigningPubKey", "02B78EEA571B2633180834CC6E7B4ED84FBF6811D12ECB59410E0C92D13B7726F5" },
         //            { "TxnSignature", "304502210098009CEFA61EE9843BB7FC29B78CFFAACF28352A4A7CF3AAE79EF12D79BA50910220684F116266E5E4519A7A33F7421631EB8494082BE51A8B03FECCB3E59F77154A" },
@@ -92,7 +92,7 @@ namespace Xrpl.Tests.Wallet.Tests
         static string address = "rhvh5SrgBL5V8oeV9EpDuVszeJSSCEkbPc";
         XrplWallet verifyWallet = new XrplWallet(publicKey, privateKey, address);
 
-        static Dictionary<string, dynamic> tx = new Dictionary<string, dynamic>
+        static Dictionary<string, object> tx = new Dictionary<string, object>
         {
             { "TransactionType", "Payment" },
             { "Account", address },
@@ -106,7 +106,7 @@ namespace Xrpl.Tests.Wallet.Tests
         //[TestMethod]
         //public void TestVerifyMultisignTransactions()
         //{
-        //    Dictionary<string, dynamic>[] transactions = { multisignTxToCombine1, multisignTxToCombine2 };
+        //    Dictionary<string, object>[] transactions = { multisignTxToCombine1, multisignTxToCombine2 };
         //    Assert.AreEqual(
         //        Signer.Multisign(transactions),
         //        expectedMultisign
@@ -118,7 +118,7 @@ namespace Xrpl.Tests.Wallet.Tests
         //{
         //    multisignTxToCombine1["Account"] = "XVJfK5FpouB7gtk3kaZHqbgV4Bswir4ccz3rsJw9oMf71tc";
         //    multisignTxToCombine2["Account"] = "XVJfK5FpouB7gtk3kaZHqbgV4Bswir4ccz3rsJw9oMf71tc";
-        //    Dictionary<string, dynamic>[] transactions = { multisignTxToCombine1, multisignTxToCombine2 };
+        //    Dictionary<string, object>[] transactions = { multisignTxToCombine1, multisignTxToCombine2 };
         //    Assert.AreEqual(
         //        Signer.Multisign(transactions),
         //        expectedMultisign
@@ -128,14 +128,14 @@ namespace Xrpl.Tests.Wallet.Tests
         //[TestMethod]
         //public void TestInvalidMultisignTransactions()
         //{
-        //    Dictionary<string, dynamic>[] transactions = { };
+        //    Dictionary<string, object>[] transactions = { };
         //    // THROW
         //}
 
         //[TestMethod]
         //public void VerifyMultisignTxBlobs()
         //{
-        //    Dictionary<string, dynamic>[] transactions = { multisignTxToCombine1, multisignTxToCombine2 };
+        //    Dictionary<string, object>[] transactions = { multisignTxToCombine1, multisignTxToCombine2 };
         //    string[] encodedTransactions = transactions.Map((t) => BinaryCodec.Encode(t));
         //    Assert.AreEqual(
         //        Signer.Multisign(transactions),
@@ -174,14 +174,14 @@ namespace Xrpl.Tests.Wallet.Tests
         public void TestVerifySignatureJson()
         {
             SignatureResult signedTx = verifyWallet.Sign(tx);
-            Assert.IsTrue(Signer.VerifySignature(Newtonsoft.Json.JsonConvert.DeserializeObject<Dictionary<string, dynamic>>(XrplBinaryCodec.Decode(signedTx.TxBlob).ToJsonString())));
+            Assert.IsTrue(Signer.VerifySignature(Newtonsoft.Json.JsonConvert.DeserializeObject<Dictionary<string, object>>(XrplBinaryCodec.Decode(signedTx.TxBlob).ToJsonString())));
         }
 
         [TestMethod]
         public void TestVerifyInvalidSigningKey()
         {
             SignatureResult signedTx = verifyWallet.Sign(tx);
-            Dictionary<string, dynamic> decodedTx = Newtonsoft.Json.JsonConvert.DeserializeObject<Dictionary<string, dynamic>>(XrplBinaryCodec.Decode(signedTx.TxBlob).ToJsonString());
+            Dictionary<string, object> decodedTx = Newtonsoft.Json.JsonConvert.DeserializeObject<Dictionary<string, object>>(XrplBinaryCodec.Decode(signedTx.TxBlob).ToJsonString());
             decodedTx["SigningPubKey"] = "0330E7FC9D56BB25D6893BA3F317AE5BCF33B3291BD63DB32654A313222F7FD020";
             Assert.IsFalse(Signer.VerifySignature(decodedTx));
         }
@@ -210,7 +210,7 @@ namespace Xrpl.Tests.Wallet.Tests
         public void TestUMultisign_EmptyDictArray_ThrowsValidationException()
         {
             bool thrown = false;
-            try { Signer.Multisign(Array.Empty<Dictionary<string, dynamic>>()); }
+            try { Signer.Multisign(Array.Empty<Dictionary<string, object>>()); }
             catch (ValidationException) { thrown = true; }
             Assert.IsTrue(thrown, "Expected ValidationException for empty dict array");
         }
@@ -219,7 +219,7 @@ namespace Xrpl.Tests.Wallet.Tests
         public void TestUMultisign_NullDictArray_ThrowsValidationException()
         {
             bool thrown = false;
-            try { Signer.Multisign((Dictionary<string, dynamic>[])null); }
+            try { Signer.Multisign((Dictionary<string, object>[])null); }
             catch (ValidationException) { thrown = true; }
             Assert.IsTrue(thrown, "Expected ValidationException for null dict array");
         }
@@ -231,16 +231,16 @@ namespace Xrpl.Tests.Wallet.Tests
         [TestMethod]
         public void TestUCompareSigners_SameAccount_ReturnsZero()
         {
-            var signer1 = new Dictionary<string, dynamic>
+            var signer1 = new Dictionary<string, object>
             {
-                ["Signer"] = new Dictionary<string, dynamic>
+                ["Signer"] = new Dictionary<string, object>
                 {
                     ["Account"] = "rHb9CJAWyB4rj91VRWn96DkukG4bwdtyTh"
                 }
             };
-            var signer2 = new Dictionary<string, dynamic>
+            var signer2 = new Dictionary<string, object>
             {
-                ["Signer"] = new Dictionary<string, dynamic>
+                ["Signer"] = new Dictionary<string, object>
                 {
                     ["Account"] = "rHb9CJAWyB4rj91VRWn96DkukG4bwdtyTh"
                 }
@@ -251,16 +251,16 @@ namespace Xrpl.Tests.Wallet.Tests
         [TestMethod]
         public void TestUCompareSigners_DifferentAccounts_ReturnsNonZero()
         {
-            var signer1 = new Dictionary<string, dynamic>
+            var signer1 = new Dictionary<string, object>
             {
-                ["Signer"] = new Dictionary<string, dynamic>
+                ["Signer"] = new Dictionary<string, object>
                 {
                     ["Account"] = "rHb9CJAWyB4rj91VRWn96DkukG4bwdtyTh"
                 }
             };
-            var signer2 = new Dictionary<string, dynamic>
+            var signer2 = new Dictionary<string, object>
             {
-                ["Signer"] = new Dictionary<string, dynamic>
+                ["Signer"] = new Dictionary<string, object>
                 {
                     ["Account"] = "rPT1Sjq2YGrBMTttX4GZHjKu9dyfzbpAYe"
                 }
@@ -279,12 +279,12 @@ namespace Xrpl.Tests.Wallet.Tests
                 "rsA2LpzuawewSBQXkiju3YQTMzW13pAAdW"
             };
 
-            var signers = accounts.Select(acc => new Dictionary<string, dynamic>
+            var signers = accounts.Select(acc => new Dictionary<string, object>
             {
-                ["Signer"] = new Dictionary<string, dynamic> { ["Account"] = acc }
+                ["Signer"] = new Dictionary<string, object> { ["Account"] = acc }
             }).ToArray();
 
-            var sorted = signers.OrderBy(s => s, Comparer<Dictionary<string, dynamic>>.Create(Signer.CompareSigners)).ToArray();
+            var sorted = signers.OrderBy(s => s, Comparer<Dictionary<string, object>>.Create(Signer.CompareSigners)).ToArray();
 
             for (int i = 0; i < sorted.Length - 1; i++)
             {

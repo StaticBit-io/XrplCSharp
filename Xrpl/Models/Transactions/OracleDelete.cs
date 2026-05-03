@@ -51,7 +51,7 @@ namespace Xrpl.Models.Transactions
         /// </summary>
         /// <param name="tx">An OracleDelete Transaction.</param>
         /// <exception cref="ValidationException">When the OracleDelete is malformed.</exception>
-        public static async Task ValidateOracleDelete(Dictionary<string, dynamic> tx)
+        public static async Task ValidateOracleDelete(Dictionary<string, object> tx)
         {
             await Common.ValidateBaseTransaction(tx);
 

@@ -1,4 +1,4 @@
-﻿using NBitcoin;
+using NBitcoin;
 
 using Newtonsoft.Json;
 using Newtonsoft.Json.Linq;
@@ -35,7 +35,7 @@ namespace Xrpl.Wallet
             Hash = hash;
         }
 
-        public Dictionary<string, dynamic> GetTxDictionary()
+        public Dictionary<string, object> GetTxDictionary()
         {
             if (TxBlob == null)
             {
@@ -44,7 +44,7 @@ namespace Xrpl.Wallet
 
             var dic = XrplBinaryCodec.Decode(TxBlob);
             dic["hash"] = Hash; // add hash to the dictionary for convenience
-            return JsonConvert.DeserializeObject<Dictionary<string, dynamic>>(dic.ToString());
+            return JsonConvert.DeserializeObject<Dictionary<string, object>>(dic.ToString());
         }
 
         public ITransactionRequest GetTx()
@@ -574,7 +574,7 @@ namespace Xrpl.Wallet
         /// <param name="multisign">Specify true/false to use multisign or actual address (classic/x-address) to make multisign tx request.</param>
         /// <param name="signingFor"></param>
         /// <returns>A Wallet derived from the seed.</returns>
-        public SignatureResult Sign(Dictionary<string, dynamic> transaction, bool multisign = false, string? signingFor = null)
+        public SignatureResult Sign(Dictionary<string, object> transaction, bool multisign = false, string? signingFor = null)
         {
             // 1) специальный кейс Batch inner-part
             if (transaction[nameof(ITransactionCommon.TransactionType)] == "Batch")
@@ -601,7 +601,7 @@ namespace Xrpl.Wallet
             }
             else
             {
-                Dictionary<string, dynamic> tx = transaction;
+                Dictionary<string, object> tx = transaction;
 
                 if (tx.ContainsKey("TxnSignature") || tx.ContainsKey("Signers"))
                 {
@@ -611,7 +611,7 @@ namespace Xrpl.Wallet
                 JObject txToSignAndEncode = JToken.FromObject(transaction).ToObject<JObject>();
                 txToSignAndEncode["SigningPubKey"] = multisignAddress != "" ? "" : this.PublicKey;
 
-                string signature = ComputeSignature(txToSignAndEncode.ToObject<Dictionary<string, dynamic>>(), this.PrivateKey);
+                string signature = ComputeSignature(txToSignAndEncode.ToObject<Dictionary<string, object>>(), this.PrivateKey);
                 txToSignAndEncode.Add("TxnSignature", signature);
 
                 string serialized = XrplBinaryCodec.Encode(txToSignAndEncode);
@@ -627,7 +627,7 @@ namespace Xrpl.Wallet
         }
 
 
-        private SignatureResult SignMulti(Dictionary<string, dynamic> transaction, string signerAccount)
+        private SignatureResult SignMulti(Dictionary<string, object> transaction, string signerAccount)
         {
             // txBase — то, что в итоге отправим (накапливает Signers)
             var txBase = JObject.FromObject(transaction);
@@ -676,11 +676,11 @@ namespace Xrpl.Wallet
         public SignatureResult SignAsBatchPart(IBatch transaction, bool multisign, string? signingFor)
         {
             var json = transaction.ToJson();
-            var tx = JsonConvert.DeserializeObject<Dictionary<string, dynamic>>(json)
+            var tx = JsonConvert.DeserializeObject<Dictionary<string, object>>(json)
                          ?? throw new ValidationException("Failed to deserialize tx json");
             return SignAsBatchPart(tx, multisign, signingFor);
         }
-        public SignatureResult SignAsBatchPart(Dictionary<string, dynamic> transaction, bool multisign, string? signingFor)
+        public SignatureResult SignAsBatchPart(Dictionary<string, object> transaction, bool multisign, string? signingFor)
         {
             VerifyBatchSubmitter(transaction, signingFor, false);
 
@@ -852,7 +852,7 @@ namespace Xrpl.Wallet
             return new SignatureResult(signedHex, txHash);
         }
 
-        private void VerifyBatchSubmitter(Dictionary<string, dynamic> transaction, string? signingFor, bool allowRoot)
+        private void VerifyBatchSubmitter(Dictionary<string, object> transaction, string? signingFor, bool allowRoot)
         {
             var status = transaction.GetBatchSignStatus();
             var me = NormalizeClassic(signingFor);
@@ -939,7 +939,7 @@ namespace Xrpl.Wallet
         /// <returns>A Wallet derived from the seed.</returns>
         public SignatureResult Sign(ITransactionRequest tx, bool multisign = false, string? signingFor = null)
         {
-            Dictionary<string, dynamic> txJson = JsonConvert.DeserializeObject<Dictionary<string, dynamic>>(tx.ToJson());
+            Dictionary<string, object> txJson = JsonConvert.DeserializeObject<Dictionary<string, object>>(tx.ToJson());
             return Sign(txJson, multisign, signingFor);
         }
 
@@ -951,7 +951,7 @@ namespace Xrpl.Wallet
         public bool VerifyTransaction(string signedTransaction)
         {
             System.Text.Json.Nodes.JsonNode txNode = XrplBinaryCodec.Decode(signedTransaction);
-            Dictionary<string, dynamic> txDict = Newtonsoft.Json.JsonConvert.DeserializeObject<Dictionary<string, dynamic>>(txNode.ToJsonString());
+            Dictionary<string, object> txDict = Newtonsoft.Json.JsonConvert.DeserializeObject<Dictionary<string, object>>(txNode.ToJsonString());
             string messageHex = XrplBinaryCodec.EncodeForSigning(txDict);
             string signature = txNode["TxnSignature"]?.GetValue<string>();
             return XrplKeypairs.Verify(messageHex.FromHex(), signature, this.PublicKey);
@@ -962,7 +962,7 @@ namespace Xrpl.Wallet
             return XrplAddressCodec.ClassicAddressToXAddress(this.ClassicAddress, tag, isTestnet);
         }
 
-        public string ComputeSignature(Dictionary<string, dynamic> transaction, string privateKey, string? signAs = null)
+        public string ComputeSignature(Dictionary<string, object> transaction, string privateKey, string? signAs = null)
         {
             string encoded = XrplBinaryCodec.EncodeForSigning(transaction);
             return XrplKeypairs.Sign(AddressCodec.Utils.FromHexToBytes(encoded), privateKey);

@@ -1,4 +1,4 @@
-﻿#nullable enable
+#nullable enable
 using System.Collections.Generic;
 using System.Threading.Tasks;
 
@@ -83,7 +83,7 @@ namespace Xrpl.Models.Transactions
         /// <param name="tx">An AMMCreate Transaction.</param>
         /// <returns></returns>
         /// <exception cref="ValidationException"> When the AMMCreate is Malformed.</exception>
-        public static async Task ValidateAMMCreate(Dictionary<string, dynamic> tx)
+        public static async Task ValidateAMMCreate(Dictionary<string, object> tx)
         {
             await Common.ValidateBaseTransaction(tx);
 

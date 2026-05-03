@@ -83,7 +83,7 @@ namespace Xrpl.Models.Transactions
         /// <exception cref="ValidationException">When the DIDSet is malformed.</exception>
         private const int MaxDIDFieldLength = 512;
 
-        public static async Task ValidateDIDSet(Dictionary<string, dynamic> tx)
+        public static async Task ValidateDIDSet(Dictionary<string, object> tx)
         {
             await Common.ValidateBaseTransaction(tx);
 

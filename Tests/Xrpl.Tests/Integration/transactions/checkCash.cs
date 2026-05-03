@@ -1,4 +1,4 @@
-﻿using System.Collections.Generic;
+using System.Collections.Generic;
 using System.Threading.Tasks;
 using Microsoft.VisualStudio.TestTools.UnitTesting;
 using Newtonsoft.Json;
@@ -41,7 +41,7 @@ namespace XrplTests.Xrpl.ClientLib.Integration
                 Destination = wallet2.ClassicAddress,
                 SendMax = new Currency { ValueAsXrp = 50 }
             };
-            Dictionary<string, dynamic> setupJson = JsonConvert.DeserializeObject<Dictionary<string, dynamic>>(setupTx.ToJson());
+            Dictionary<string, object> setupJson = JsonConvert.DeserializeObject<Dictionary<string, object>>(setupTx.ToJson());
             await Utils.TestTransaction(runner.client, setupJson, runner.wallet);
 
             // get check ID
@@ -56,7 +56,7 @@ namespace XrplTests.Xrpl.ClientLib.Integration
                CheckID = checkId,
                Amount = new Currency { ValueAsXrp = 50 }
             };
-            Dictionary<string, dynamic> txJson = JsonConvert.DeserializeObject<Dictionary<string, dynamic>>(tx.ToJson());
+            Dictionary<string, object> txJson = JsonConvert.DeserializeObject<Dictionary<string, object>>(tx.ToJson());
             await Utils.TestTransaction(runner.client, txJson, wallet2);
 
             // get check ID

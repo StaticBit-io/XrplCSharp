@@ -1,4 +1,4 @@
-﻿using System.Collections.Generic;
+using System.Collections.Generic;
 using System.Diagnostics;
 using System.Linq;
 using System.Text.Json.Nodes;
@@ -18,7 +18,7 @@ namespace Xrpl.BinaryCodec.Tests
     //[TestClass]
     //public class TestUBinarySimple
     //{
-    //static Dictionary<string, dynamic> TX_JSON = new Dictionary<string, dynamic>
+    //static Dictionary<string, object> TX_JSON = new Dictionary<string, object>
     //    {
     //        { "Account", "r9LqNeG6qHxjeUocjvVki2XR35weJ9mZgQ" },
     //        { "Destination", "rHb9CJAWyB4rj91VRWn96DkukG4bwdtyTh" },
@@ -33,7 +33,7 @@ namespace Xrpl.BinaryCodec.Tests
     //    {
     //        string encoded = XrplBinaryCodec.Encode(TX_JSON);
     //        JToken decoded = XrplBinaryCodec.Decode(encoded);
-    //        Dictionary<string, dynamic> result = decoded.ToObject<Dictionary<string, dynamic>>();
+    //        Dictionary<string, object> result = decoded.ToObject<Dictionary<string, object>>();
     //        Assert.IsTrue(TX_JSON.ContentEquals(result));
     //    }
 
@@ -201,7 +201,7 @@ namespace Xrpl.BinaryCodec.Tests
     {
         int MaxDiff = 1000;
 
-        static Dictionary<string, dynamic> TX_JSON = new Dictionary<string, dynamic>
+        static Dictionary<string, object> TX_JSON = new Dictionary<string, object>
         {
             { "Account", "r9LqNeG6qHxjeUocjvVki2XR35weJ9mZgQ" },
             { "Amount", "1000" },
@@ -215,7 +215,7 @@ namespace Xrpl.BinaryCodec.Tests
             { "SigningPubKey", "ED5F5AC8B98974A3CA843326D9B88CEBD0560177B973EE0B149F782CFAA06DC66A" },
         };
 
-        static Dictionary<string, dynamic> MULTISIG_JSON = new Dictionary<string, dynamic>
+        static Dictionary<string, object> MULTISIG_JSON = new Dictionary<string, object>
         {
             { "Account", "r9LqNeG6qHxjeUocjvVki2XR35weJ9mZgQ" },
             { "Amount", "1000" },
@@ -242,7 +242,7 @@ namespace Xrpl.BinaryCodec.Tests
         {
             var channel = "43904CBFCDCEC530B4037871F86EE90BF799DF8D2E0EA564BC8A3F332E4F5FB1";
             var amount = "1000";
-            Dictionary<string, dynamic> TX_JSON = new Dictionary<string, dynamic>
+            Dictionary<string, object> TX_JSON = new Dictionary<string, object>
             {
                 { "amount", amount },
                 { "channel", channel },

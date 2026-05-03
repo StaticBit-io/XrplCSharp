@@ -46,7 +46,7 @@ namespace Xrpl.Wallet
         /// <param name="txs">An array of signed Transactions (in object form) to combine into a single signed Transaction.</param>
         /// <returns>A single signed Transaction which has all Signers from transactions within it.</returns>
         /// <throws>ValidationException if there were no transactions given to sign, the SigningPubKey field is not the empty string, or any transaction is missing a Signers field.</throws>
-        public static string Multisign(Dictionary<string, dynamic>[] txs)
+        public static string Multisign(Dictionary<string, object>[] txs)
         {
             if (txs == null || txs.Length == 0)
             {
@@ -64,7 +64,7 @@ namespace Xrpl.Wallet
             return XrplBinaryCodec.Encode(GetTransactionWithAllSigners(decodedTransactions));
         }
 
-        private static void ValidateMultisignTransaction(Dictionary<string, dynamic> tx)
+        private static void ValidateMultisignTransaction(Dictionary<string, object> tx)
         {
             if (!tx.ContainsKey("Signers") || tx["Signers"] == null)
             {
@@ -100,7 +100,7 @@ namespace Xrpl.Wallet
         /// <returns>A signature that can be used to redeem a specific amount of XRP from a payment channel.</returns>
         public static string AuthorizeChannel(XrplWallet wallet, string channelID, string amount)
         {
-            Dictionary<string, dynamic> json = new Dictionary<string, dynamic>();
+            Dictionary<string, object> json = new Dictionary<string, object>();
             json.Add("channel", channelID);
             json.Add("amount", amount);
             string signatureData = XrplBinaryCodec.EncodeForSigningClaim(json);
@@ -112,13 +112,13 @@ namespace Xrpl.Wallet
         /// </summary>
         /// <param name="tx">A transaction object to verify the signature of. (Can be in object or encoded string format).</param>
         /// <returns>Returns true if tx has a valid signature, and returns false otherwise.</returns>
-        public static bool VerifySignature(Dictionary<string, dynamic> tx)
+        public static bool VerifySignature(Dictionary<string, object> tx)
         {
-            Dictionary<string, dynamic> decodedTx = GetDecodedTransaction(tx);
+            Dictionary<string, object> decodedTx = GetDecodedTransaction(tx);
             return XrplKeypairs.Verify(
               XrplBinaryCodec.EncodeForSigning(decodedTx).FromHex(),
-              decodedTx["TxnSignature"],
-              decodedTx["SigningPubKey"]
+              (string)decodedTx["TxnSignature"],
+              (string)decodedTx["SigningPubKey"]
             );
         }
 
@@ -129,11 +129,11 @@ namespace Xrpl.Wallet
         /// <returns>Returns true if tx has a valid signature, and returns false otherwise.</returns>
         public static bool VerifySignature(string tx)
         {
-            Dictionary<string, dynamic> decodedTx = GetDecodedTransaction(tx);
+            Dictionary<string, object> decodedTx = GetDecodedTransaction(tx);
             return XrplKeypairs.Verify(
               XrplBinaryCodec.EncodeForSigning(decodedTx).FromHex(),
-              decodedTx["TxnSignature"],
-              decodedTx["SigningPubKey"]
+              (string)decodedTx["TxnSignature"],
+              (string)decodedTx["SigningPubKey"]
             );
         }
 
@@ -142,14 +142,14 @@ namespace Xrpl.Wallet
         /// </summary>
         /// <param name="transactions">An array of Transactions which are expected to be equal other than 'Signers'.</param>
         /// <throws>ValidationException if the transactions are not equal in any field other than 'Signers'.</throws>
-        public static void ValidateTransactionEquivalence(Dictionary<string, dynamic>[] transactions)
+        public static void ValidateTransactionEquivalence(Dictionary<string, object>[] transactions)
         {
             if (transactions.Length < 2)
                 return;
 
-            string GetCanonicalEncoding(Dictionary<string, dynamic> tx)
+            string GetCanonicalEncoding(Dictionary<string, object> tx)
             {
-                var clone = new Dictionary<string, dynamic>(tx);
+                var clone = new Dictionary<string, object>(tx);
                 clone.Remove("Signers");
                 return XrplBinaryCodec.Encode(clone);
             }
@@ -171,7 +171,7 @@ namespace Xrpl.Wallet
         /// </summary>
         /// <param name="transactions">An array of Transactions with Signers fields.</param>
         /// <returns>A single transaction with all Signers combined, deduped, and sorted.</returns>
-        public static Dictionary<string, dynamic> GetTransactionWithAllSigners(Dictionary<string, dynamic>[] transactions)
+        public static Dictionary<string, object> GetTransactionWithAllSigners(Dictionary<string, object>[] transactions)
         {
             var allSigners = new JArray();
 
@@ -201,7 +201,7 @@ namespace Xrpl.Wallet
             var sortedSigners = SignerUtilities.DedupeAndSortSigners(allSigners);
             var signersAsList = SignerUtilities.ConvertJTokenToClrType(sortedSigners);
 
-            var finalTx = new Dictionary<string, dynamic>(transactions[0]);
+            var finalTx = new Dictionary<string, object>(transactions[0]);
             finalTx["Signers"] = signersAsList;
 
             return finalTx;
@@ -216,22 +216,22 @@ namespace Xrpl.Wallet
         /// <param name="left">A Signer to compare with.</param>
         /// <param name="right">A Signer to compare with.</param>
         /// <returns>Returns 1 if left > right, 0 if left = right, -1 if left &lt; right.</returns>
-        public static int CompareSigners(Dictionary<string, dynamic> left, Dictionary<string, dynamic> right)
+        public static int CompareSigners(Dictionary<string, object> left, Dictionary<string, object> right)
         {
-            var leftBytes = SignerUtilities.GetAccountIdBytes(left["Signer"]["Account"].ToString());
-            var rightBytes = SignerUtilities.GetAccountIdBytes(right["Signer"]["Account"].ToString());
+            var leftBytes = SignerUtilities.GetAccountIdBytes(((Dictionary<string, object>)left["Signer"])["Account"].ToString());
+            var rightBytes = SignerUtilities.GetAccountIdBytes(((Dictionary<string, object>)right["Signer"])["Account"].ToString());
             return SignerUtilities.ByteArrayComparer.Instance.Compare(leftBytes, rightBytes);
         }
 
-        public static Dictionary<string, dynamic> GetDecodedTransaction(Dictionary<string, dynamic>  txOrBlob)
+        public static Dictionary<string, object> GetDecodedTransaction(Dictionary<string, object>  txOrBlob)
         {
-            return Newtonsoft.Json.JsonConvert.DeserializeObject<Dictionary<string, dynamic>>(
+            return Newtonsoft.Json.JsonConvert.DeserializeObject<Dictionary<string, object>>(
                 XrplBinaryCodec.Decode(XrplBinaryCodec.Encode(txOrBlob)).ToJsonString());
         }
 
-        public static Dictionary<string, dynamic> GetDecodedTransaction(string txOrBlob)
+        public static Dictionary<string, object> GetDecodedTransaction(string txOrBlob)
         {
-            return Newtonsoft.Json.JsonConvert.DeserializeObject<Dictionary<string, dynamic>>(
+            return Newtonsoft.Json.JsonConvert.DeserializeObject<Dictionary<string, object>>(
                 XrplBinaryCodec.Decode(txOrBlob).ToJsonString());
         }
     }

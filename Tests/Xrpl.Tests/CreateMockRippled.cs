@@ -1,4 +1,4 @@
-﻿using System;
+using System;
 using System.Collections.Generic;
 using System.Diagnostics;
 using System.IO;
@@ -67,7 +67,7 @@ namespace Xrpl.Tests
     {
         public int _port;
         private TcpListener _listener;
-        private Dictionary<string, dynamic> _responses = new Dictionary<string, dynamic>();
+        private Dictionary<string, object> _responses = new Dictionary<string, object>();
         public bool suppressOutput = false;
         private Thread tcpListenerThread;
 
@@ -76,7 +76,7 @@ namespace Xrpl.Tests
             this._port = port;
         }
 
-        string CreateResponse(Dictionary<string, dynamic> request, Dictionary<string, dynamic> response)
+        string CreateResponse(Dictionary<string, object> request, Dictionary<string, object> response)
         {
             var cloneResp = response;
             if (response["type"] == null && response["error"] == null)
@@ -87,7 +87,7 @@ namespace Xrpl.Tests
             return JsonConvert.SerializeObject(cloneResp);
         }
 
-        public void AddResponse(string command, Dictionary<string, dynamic> response)
+        public void AddResponse(string command, Dictionary<string, object> response)
         {
             if (response["type"] == null && response["error"] == null)
             {
@@ -96,25 +96,25 @@ namespace Xrpl.Tests
             _responses[command] = response;
         }
 
-        Dictionary<string, dynamic> GetResponse(Dictionary<string, dynamic> request)
+        Dictionary<string, object> GetResponse(Dictionary<string, object> request)
         {
-            string command = request["command"];
+            string command = (string)request["command"];
             if (command == null)
             {
                 throw new AddressCodecException($"No handler for {command}");
             }
-            Dictionary<string, dynamic> functionOrObject = this._responses[command];
+            Dictionary<string, object> functionOrObject = (Dictionary<string, object>)this._responses[command];
             //if (functionOrObject is Func)
             //{
-            //    return functionOrObject(request) as Dictionary<string, dynamic>;
+            //    return functionOrObject(request) as Dictionary<string, object>;
             //}
             return functionOrObject;
         }
 
-        void TestCommand(MockClient client, Dictionary<string, dynamic> request)
+        void TestCommand(MockClient client, Dictionary<string, object> request)
         {
-            JToken jdata = request["data"];
-            Dictionary<string, dynamic> data = jdata.ToObject<Dictionary<string, dynamic>>();
+            JToken jdata = (JToken)request["data"];
+            Dictionary<string, object> data = jdata.ToObject<Dictionary<string, object>>();
 
             data.TryGetValue("disconnectIn", out var disconnectIn);
             data.TryGetValue("openOnOtherPort", out var openOnOtherPort);
@@ -125,9 +125,9 @@ namespace Xrpl.Tests
 
             if (disconnectIn != null)
             {
-                Dictionary<string, dynamic> response = new Dictionary<string, dynamic>
+                Dictionary<string, object> response = new Dictionary<string, object>
                 {
-                    { "result", new Dictionary<string, dynamic>() {} },
+                    { "result", new Dictionary<string, object>() {} },
                     { "status", "Success" },
                     { "type", "response" },
                 };
@@ -136,9 +136,9 @@ namespace Xrpl.Tests
             }
             if (openOnOtherPort != null)
             {
-                Dictionary<string, dynamic> response = new Dictionary<string, dynamic>
+                Dictionary<string, object> response = new Dictionary<string, object>
                 {
-                    { "result", new Dictionary<string, dynamic>() {
+                    { "result", new Dictionary<string, object>() {
                         { "port", 9999 }
                     } },
                     { "status", "Success" },
@@ -149,9 +149,9 @@ namespace Xrpl.Tests
             }
             if (closeServerAndReopen != null)
             {
-                Dictionary<string, dynamic> response = new Dictionary<string, dynamic>
+                Dictionary<string, object> response = new Dictionary<string, object>
                 {
-                    { "result", new Dictionary<string, dynamic>() {} },
+                    { "result", new Dictionary<string, object>() {} },
                     { "status", "Success" },
                     { "type", "response" },
                 };
@@ -160,9 +160,9 @@ namespace Xrpl.Tests
             }
             if (unrecognizedResponse != null)
             {
-                Dictionary<string, dynamic> response = new Dictionary<string, dynamic>
+                Dictionary<string, object> response = new Dictionary<string, object>
                 {
-                    { "result", new Dictionary<string, dynamic>() {} },
+                    { "result", new Dictionary<string, object>() {} },
                     { "status", "Success" },
                     { "type", "response" },
                 };
@@ -178,9 +178,9 @@ namespace Xrpl.Tests
             }
             if (delayedResponseIn != null)
             {
-                Dictionary<string, dynamic> response = new Dictionary<string, dynamic>
+                Dictionary<string, object> response = new Dictionary<string, object>
                 {
-                    { "result", new Dictionary<string, dynamic>() {} },
+                    { "result", new Dictionary<string, object>() {} },
                     { "status", "Success" },
                     { "type", "response" },
                 };
@@ -201,9 +201,9 @@ namespace Xrpl.Tests
             }
         }
 
-        void Ping(MockClient client, Dictionary<string, dynamic> request)
+        void Ping(MockClient client, Dictionary<string, object> request)
         {
-            Dictionary<string, dynamic> response = new Dictionary<string, dynamic>
+            Dictionary<string, object> response = new Dictionary<string, object>
             {
                 { "result", null },
                 { "status", "Success" },
@@ -226,10 +226,10 @@ namespace Xrpl.Tests
             server.OnMessageReceived += (object sender, OnMessageReceivedHandler e) =>
             {
                 string jsonStr = e.GetMessage();
-                Dictionary<string, dynamic> request = null;
+                Dictionary<string, object> request = null;
                 try
                 {
-                    request = JsonConvert.DeserializeObject<Dictionary<string, dynamic>>(jsonStr);
+                    request = JsonConvert.DeserializeObject<Dictionary<string, object>>(jsonStr);
                     var _command = request.TryGetValue("command", out var command);
                     if (request["id"] == null)
                     {
@@ -247,7 +247,7 @@ namespace Xrpl.Tests
                     {
                         this.TestCommand(e.GetClient(), request);
                     }
-                    else if (this._responses.ContainsKey(command))
+                    else if (this._responses.ContainsKey((string)command))
                     {
                         this.Send(e.GetClient(), this.CreateResponse(request, this.GetResponse(request)));
                     }
@@ -264,7 +264,7 @@ namespace Xrpl.Tests
                     }
                     if (request != null)
                     {
-                        Dictionary<string, dynamic> errorResponse = new Dictionary<string, dynamic>
+                        Dictionary<string, object> errorResponse = new Dictionary<string, object>
                         {
                             { "type", "response" },
                             { "status", "error" },

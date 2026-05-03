@@ -27,7 +27,7 @@ using Submit = Xrpl.Models.Transactions.Submit;
 namespace Xrpl.Client
 {
 
-    public delegate Task OnError(string error, string errorMessage, string message, dynamic data);
+    public delegate Task OnError(string error, string errorMessage, string message, object data);
     public delegate Task OnWarning(string warning, string message);
     public delegate Task OnServerWarning(List<RippleResponseWarning> warning, string message);
     public delegate Task OnConnected();
@@ -231,7 +231,7 @@ namespace Xrpl.Client
         /// <param name="autoFill">use autofill for tx</param>
         /// <param name="failHard">yse fail hard</param>
         /// <returns>An <see cref="Models.Transactions.Submit"/> response.</returns>
-        Task<Submit> Submit(Dictionary<string, dynamic> tx, XrplWallet wallet, bool autoFill = true, bool failHard = false, CancellationToken cancellationToken = default);
+        Task<Submit> Submit(Dictionary<string, object> tx, XrplWallet wallet, bool autoFill = true, bool failHard = false, CancellationToken cancellationToken = default);
         /// <summary>
         /// Submits a transaction to the XRP Ledger for processing.
         /// </summary>
@@ -373,7 +373,7 @@ namespace Xrpl.Client
         //Task<TransactionEntry> TransactionEntry(TransactionEntryRequest request);
         Task<object> AnyRequest(BaseRequest request, CancellationToken cancellationToken = default);
 
-        Task<Dictionary<string, dynamic>> Request(Dictionary<string, dynamic> request, CancellationToken cancellationToken = default);
+        Task<Dictionary<string, object>> Request(Dictionary<string, object> request, CancellationToken cancellationToken = default);
         Task<T> GRequest<T, R>(R request, CancellationToken cancellationToken = default) where R : BaseRequest;
 
 
@@ -387,7 +387,7 @@ namespace Xrpl.Client
         /// <param name="tx">A {@link Transaction} in JSON format</param>
         /// <param name="signersCount">The expected number of signers for this transaction. Only used for multisigned transactions.</param>
         /// <returns>The autofilled transaction.</returns>
-        Task<Dictionary<string, dynamic>> Autofill(Dictionary<string, dynamic> tx, int? signersCount = null, CancellationToken cancellationToken = default);
+        Task<Dictionary<string, object>> Autofill(Dictionary<string, object> tx, int? signersCount = null, CancellationToken cancellationToken = default);
         /// <summary>
         /// Autofills fields in a transaction. This will set `Sequence`, `Fee`,
         /// `lastLedgerSequence` according to the current state of the server this Client
@@ -541,7 +541,7 @@ namespace Xrpl.Client
         }
 
         // SUGARS
-        public Task<Dictionary<string, dynamic>> Autofill(Dictionary<string, dynamic> tx, int? signersCount = null, CancellationToken cancellationToken = default)
+        public Task<Dictionary<string, object>> Autofill(Dictionary<string, object> tx, int? signersCount = null, CancellationToken cancellationToken = default)
         {
             return AutofillSugar.Autofill(this, tx, signersCount, cancellationToken);
         }
@@ -563,7 +563,7 @@ namespace Xrpl.Client
         }
 
         /// <inheritdoc />
-        public Task<Submit> Submit(Dictionary<string, dynamic> tx, XrplWallet wallet, bool autoFill = true, bool failHard = false, CancellationToken cancellationToken = default)
+        public Task<Submit> Submit(Dictionary<string, object> tx, XrplWallet wallet, bool autoFill = true, bool failHard = false, CancellationToken cancellationToken = default)
         {
             if (this.networkID is { } network)
             {
@@ -582,7 +582,7 @@ namespace Xrpl.Client
 
             var json = tx.ToJson();
             //var json = JsonConvert.SerializeObject(tx);
-            Dictionary<string, dynamic> txJson = JsonConvert.DeserializeObject<Dictionary<string, dynamic>>(json);
+            Dictionary<string, object> txJson = JsonConvert.DeserializeObject<Dictionary<string, object>>(json);
             return this.Submit(txJson, autoFill, failHard, wallet, cancellationToken);
         }
 
@@ -838,7 +838,7 @@ namespace Xrpl.Client
         }
 
         /// <inheritdoc />
-        public async Task<Dictionary<string, dynamic>> Request(Dictionary<string, dynamic> request, CancellationToken cancellationToken = default)
+        public async Task<Dictionary<string, object>> Request(Dictionary<string, object> request, CancellationToken cancellationToken = default)
         {
             //string account = request["Account"] ? EnsureClassicAddress((string)request["account"]) : null;
             //request["Account"] = account;
@@ -857,16 +857,13 @@ namespace Xrpl.Client
         /// <inheritdoc />
         public async Task<T> GRequest<T, R>(R request, CancellationToken cancellationToken = default) where R : BaseRequest
         {
-            //string account = request["Account"] ? EnsureClassicAddress((string)request["account"]) : null;
-            //request["Account"] = account
-            //
             request.ApiVersion ??= ApiVersion;
-            var response = await this.connection.GRequest<T, R>(request, cancellationToken: cancellationToken);
-
+            object response = await this.connection.GRequest<T, R>(request, cancellationToken: cancellationToken);
+            
             // mutates `response` to add warnings
             //handlePartialPayment(req.command, response)
-
-            return response;
+            
+            return (T)response;
         }
 
         public string EnsureClassicAddress(string address)

@@ -72,7 +72,7 @@ public static class BatchNormalizer
     /// </summary>
     public static async Task NormalizeBatchTransaction(
         this IXrplClient client,
-        Dictionary<string, dynamic> tx,
+        Dictionary<string, object> tx,
         CancellationToken cancellationToken = default)
     {
         if (!tx.TryGetValue("RawTransactions", out var rawTransactions) || rawTransactions == null)
@@ -88,7 +88,7 @@ public static class BatchNormalizer
             if (nextSeqByAccount.TryGetValue(account, out var seq))
                 return seq;
 
-            var probe = new Dictionary<string, dynamic> { ["Account"] = account };
+            var probe = new Dictionary<string, object> { ["Account"] = account };
             var ai = await client.AccountInfo(new AccountInfoRequest(account)
             {
                 LedgerIndex = new LedgerIndex(LedgerIndexType.Current)
@@ -123,7 +123,7 @@ public static class BatchNormalizer
                 throw new ValidationException("Each item in RawTransactions must contain 'RawTransaction'.");
 
             var normalized = NormalizeInnerTransaction(rawTxObj);
-            var rawTx = normalized.ToObject<Dictionary<string, dynamic>>()!;
+            var rawTx = normalized.ToObject<Dictionary<string, object>>()!;
             wrapper["RawTransaction"] = rawTx;
 
             var account = rawTx.TryGetValue("Account", out object accObj)
@@ -138,15 +138,15 @@ public static class BatchNormalizer
         }
     }
 
-    public static List<Dictionary<string, dynamic>> ToRawList(object rawTransactions)
+    public static List<Dictionary<string, object>> ToRawList(object rawTransactions)
     {
         return rawTransactions switch
         {
-            JArray ja => ja.ToObject<List<Dictionary<string, dynamic>>>()
-                         ?? new List<Dictionary<string, dynamic>>(),
+            JArray ja => ja.ToObject<List<Dictionary<string, object>>>()
+                         ?? new List<Dictionary<string, object>>(),
             IEnumerable ie when ie is not string => ie.Cast<object>()
-                .Select(o => o as Dictionary<string, dynamic>
-                          ?? JObject.FromObject(o!).ToObject<Dictionary<string, dynamic>>()!)
+                .Select(o => o as Dictionary<string, object>
+                          ?? JObject.FromObject(o!).ToObject<Dictionary<string, object>>()!)
                 .ToList(),
             _ => throw new ValidationException("RawTransactions must be array/collection.")
         };

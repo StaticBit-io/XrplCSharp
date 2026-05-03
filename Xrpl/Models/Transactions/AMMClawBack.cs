@@ -104,7 +104,7 @@ namespace Xrpl.Models.Transactions
         /// </summary>
         /// <param name="tx">An AMMClawBack Transaction.</param>
         /// <exception cref="ValidationException">When the AMMClawBack is malformed.</exception>
-        public static async Task ValidateAMMClawBack(Dictionary<string, dynamic> tx)
+        public static async Task ValidateAMMClawBack(Dictionary<string, object> tx)
         {
             await Common.ValidateBaseTransaction(tx);
 

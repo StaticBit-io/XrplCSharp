@@ -1,4 +1,4 @@
-﻿
+
 
 // https://github.com/XRPLF/xrpl.js/blob/main/packages/xrpl/test/models/NFTokenCancelOffer.ts
 
@@ -24,10 +24,10 @@ namespace XrplTests.Xrpl.Models
         [TestMethod]
         public async Task TestVerify_Valid_NFTokenCancelOffer()
         {
-            var offer = new Dictionary<string, dynamic>
+            var offer = new Dictionary<string, object>
             {
                 { "TransactionType", "NFTokenCancelOffer" },
-                { "NFTokenOffers", new List<dynamic>(){ BUY_OFFER } },
+                { "NFTokenOffers", new List<object>(){ BUY_OFFER } },
                 {"Account", "rWYkbWkCeg8dP6rXALnjgZSjjLyih5NXm"},
                 {"Fee", "5000000"},
                 {"Sequence", 2470665u},
@@ -38,7 +38,7 @@ namespace XrplTests.Xrpl.Models
         [TestMethod]
         public async Task TestVerify_Invalid_missing_NFTokenOffers()
         {
-            var offer = new Dictionary<string, dynamic>
+            var offer = new Dictionary<string, object>
             {
                 { "TransactionType", "NFTokenCancelOffer" },
                 {"Account", "rWYkbWkCeg8dP6rXALnjgZSjjLyih5NXm"},
@@ -51,11 +51,11 @@ namespace XrplTests.Xrpl.Models
         [TestMethod]
         public async Task TestVerify_Invalid_empty_NFTokenOffers()
         {
-            var offer = new Dictionary<string, dynamic>
+            var offer = new Dictionary<string, object>
             {
                 { "TransactionType", "NFTokenCancelOffer" },
                 {"Account", "rWYkbWkCeg8dP6rXALnjgZSjjLyih5NXm"},
-                { "NFTokenOffers", new List<dynamic>()},
+                { "NFTokenOffers", new List<object>()},
                 {"Fee", "5000000"},
                 {"Sequence", 2470665u},
                 {"Flags", 2147483648u},

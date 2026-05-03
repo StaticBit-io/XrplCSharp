@@ -1,4 +1,4 @@
-﻿using Newtonsoft.Json;
+using Newtonsoft.Json;
 
 using System;
 using System.Collections.Generic;
@@ -111,7 +111,7 @@ public sealed class BatchResponse : TransactionResponse, IBatch
 
 public partial class Validation
 {
-    public static async Task ValidateBatch(Dictionary<string, dynamic> tx)
+    public static async Task ValidateBatch(Dictionary<string, object> tx)
     {
         if (tx == null)
             throw new ArgumentException("Batch: tx is null.");
@@ -124,10 +124,10 @@ public partial class Validation
             throw new ArgumentException("Batch: TransactionType must be 'Batch'.");
         }
 
-        if (!tx.TryGetValue("RawTransactions", out var rawTxsObj) || rawTxsObj is not IEnumerable<dynamic> rawTxsEnumerable)
+        if (!tx.TryGetValue("RawTransactions", out var rawTxsObj) || rawTxsObj is not IEnumerable<object> rawTxsEnumerable)
             throw new ArgumentException("Batch: RawTransactions is required and must be non-empty.");
 
-        var rawTxs = rawTxsEnumerable.Cast<dynamic>().ToList();
+        List<object> rawTxs = rawTxsEnumerable.Cast<object>().ToList();
         if (rawTxs.Count == 0)
             throw new ArgumentException("Batch: RawTransactions is required and must be non-empty.");
         if (rawTxs.Count > 8)
@@ -136,7 +136,7 @@ public partial class Validation
         for (var i = 0; i < rawTxs.Count; i++)
         {
             var wrapper = rawTxs[i];
-            if (wrapper is not IDictionary<string, dynamic> { } wrapperDict)
+            if (wrapper is not IDictionary<string, object> { } wrapperDict)
             {
                 throw new ArgumentException($"Batch: RawTransactions[{i}] is null.");
             }
@@ -147,7 +147,7 @@ public partial class Validation
                 throw new ArgumentException($"Batch: RawTransactions[{i}].RawTransaction is null.");
             }
 
-            if (innerTxObj is not IDictionary<string, dynamic> { } innerTx)
+            if (innerTxObj is not IDictionary<string, object> { } innerTx)
             {
                 throw new ArgumentException($"Batch: RawTransactions[{i}].RawTransaction is not a valid object.");
             }
@@ -187,13 +187,13 @@ public partial class Validation
             }
         }
 
-        if (tx.TryGetValue("BatchSigners", out var batchSignersObj) && batchSignersObj is IEnumerable<dynamic> batchSignersEnumerable)
+        if (tx.TryGetValue("BatchSigners", out var batchSignersObj) && batchSignersObj is IEnumerable<object> batchSignersEnumerable)
         {
-            var batchSigners = batchSignersEnumerable.Cast<dynamic>().ToList();
+            List<object> batchSigners = batchSignersEnumerable.Cast<object>().ToList();
             for (var i = 0; i < batchSigners.Count; i++)
             {
                 var wrapper = batchSigners[i];
-                if (wrapper is not IDictionary<string, dynamic> { } wrapperDict)
+                if (wrapper is not IDictionary<string, object> { } wrapperDict)
                     throw new ArgumentException($"Batch: BatchSigners[{i}] is null.");
 
                 if (!wrapperDict.TryGetValue("BatchSigner", out var sObj) ||
@@ -202,7 +202,7 @@ public partial class Validation
                     throw new ArgumentException($"Batch: BatchSigners[{i}].BatchSigner is null.");
                 }
 
-                if (sObj is not IDictionary<string, dynamic> { } sDict ||
+                if (sObj is not IDictionary<string, object> { } sDict ||
                     !sDict.TryGetValue("Account", out var accountObj) ||
                     string.IsNullOrWhiteSpace($"{accountObj}"))
                 {

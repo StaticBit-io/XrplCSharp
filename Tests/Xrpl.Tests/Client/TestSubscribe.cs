@@ -1,4 +1,4 @@
-﻿using System;
+using System;
 using System.Collections.Generic;
 using System.Diagnostics;
 using System.Net.WebSockets;
@@ -42,9 +42,9 @@ namespace Xrpl.Tests.ClientLib
         {
 
             string jsonString = "{\"id\":0,\"status\":\"success\",\"type\":\"response\",\"result\":{\"fee_base\":10,\"fee_ref\":10,\"hostid\":\"NAP\",\"ledger_hash\":\"60EBABF55F6AB58864242CADA0B24FBEA027F2426917F39CA56576B335C0065A\",\"ledger_index\":8819951,\"ledger_time\":463782770,\"load_base\":256,\"load_factor\":256,\"pubkey_node\":\"n9Lt7DgQmxjHF5mYJsV2U9anALHmPem8PWQHWGpw4XMz79HA5aJY\",\"random\":\"EECFEE93BBB608914F190EC177B11DE52FC1D75D2C97DACBD26D2DFC6050E874\",\"reserve_base\":20000000,\"reserve_inc\":5000000,\"server_status\":\"full\",\"validated_ledgers\":\"32570-8819951\"}}";
-            Dictionary<string, dynamic> jsonData = JsonConvert.DeserializeObject<Dictionary<string, dynamic>>(jsonString);
+            Dictionary<string, object> jsonData = JsonConvert.DeserializeObject<Dictionary<string, object>>(jsonString);
             runner.mockedRippled.AddResponse("subscribe", jsonData);
-            Dictionary<string, dynamic> tx = new Dictionary<string, dynamic>
+            Dictionary<string, object> tx = new Dictionary<string, object>
             {
                 { "command", "subscribe" },
             };
@@ -56,9 +56,9 @@ namespace Xrpl.Tests.ClientLib
         {
 
             string jsonString = "{\"id\":0,\"status\":\"success\",\"type\":\"response\",\"result\":{}}";
-            Dictionary<string, dynamic> jsonData = JsonConvert.DeserializeObject<Dictionary<string, dynamic>>(jsonString);
+            Dictionary<string, object> jsonData = JsonConvert.DeserializeObject<Dictionary<string, object>>(jsonString);
             runner.mockedRippled.AddResponse("unsubscribe", jsonData);
-            Dictionary<string, dynamic> tx = new Dictionary<string, dynamic>
+            Dictionary<string, object> tx = new Dictionary<string, object>
             {
                 { "command", "unsubscribe" },
             };
@@ -208,7 +208,7 @@ namespace Xrpl.Tests.ClientLib
             client.connection.OnLedgerClosed += (message) =>
             {
                 Console.WriteLine($"MESSAGE RECEIVED: {message}");
-                //Dictionary<string, dynamic> json = JsonConvert.DeserializeObject<Dictionary<string, dynamic>>(message);
+                //Dictionary<string, object> json = JsonConvert.DeserializeObject<Dictionary<string, object>>(message);
                 //if (message["type"] == "ledgerClosed")
                 //{
                 //    isTested = true;

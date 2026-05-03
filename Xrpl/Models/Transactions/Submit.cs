@@ -62,7 +62,7 @@ public class Submit //todo rename to SubmitResponse extends BaseResponse
     /// The complete transaction in JSON format.
     /// </summary>
     [JsonProperty("tx_json")]
-    public dynamic TxJson { get; set; }
+    public object TxJson { get; set; }
 
     //[JsonIgnore]
     /// <summary>

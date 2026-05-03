@@ -1,4 +1,4 @@
-﻿using System.Collections.Generic;
+using System.Collections.Generic;
 using System.Threading.Tasks;
 using Newtonsoft.Json;
 using static Xrpl.Models.Common.Common;
@@ -188,7 +188,7 @@ namespace Xrpl.Models.Transactions
         /// <param name="tx">An AMMDeposit Transaction.</param>
         /// <returns></returns>
         /// <exception cref="ValidationException"> When the AMMDeposit is Malformed.</exception>
-        public static async Task ValidateAMMDeposit(Dictionary<string, dynamic> tx)
+        public static async Task ValidateAMMDeposit(Dictionary<string, object> tx)
         {
             await Common.ValidateBaseTransaction(tx);
 

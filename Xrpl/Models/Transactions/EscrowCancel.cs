@@ -1,4 +1,4 @@
-﻿
+
 // https://github.com/XRPLF/xrpl.js/blob/main/packages/xrpl/src/models/transactions/escrowCancel.ts
 
 using System.Collections.Generic;
@@ -55,7 +55,7 @@ namespace Xrpl.Models.Transactions
         /// </summary>
         /// <param name="tx"> A EscrowCancel Transaction.</param>
         /// <exception cref="ValidationException">When the EscrowCancel is malformed.</exception>
-        public static async Task ValidateEscrowCancel(Dictionary<string, dynamic> tx)
+        public static async Task ValidateEscrowCancel(Dictionary<string, object> tx)
         {
             await Common.ValidateBaseTransaction(tx);
             if (!tx.TryGetValue("Owner", out var Owner) || Owner is null)

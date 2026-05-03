@@ -1,4 +1,4 @@
-﻿using System;
+using System;
 using System.Collections.Generic;
 using System.Threading.Tasks;
 
@@ -138,7 +138,7 @@ namespace Xrpl.Models.Transactions
         /// </summary>
         /// <param name="tx"> An NFTokenMint Transaction.</param>
         /// <exception cref="ValidationException">When the NFTokenMint is Malformed.</exception>
-        public static async Task ValidateNFTokenMint(Dictionary<string, dynamic> tx)
+        public static async Task ValidateNFTokenMint(Dictionary<string, object> tx)
         {
             await Common.ValidateBaseTransaction(tx);
 

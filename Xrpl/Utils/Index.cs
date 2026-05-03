@@ -1,6 +1,7 @@
 ﻿using Newtonsoft.Json.Linq;
 
 using System;
+using System.Collections.Generic;
 
 using Xrpl.AddressCodec;
 using Xrpl.BinaryCodec;
@@ -59,7 +60,7 @@ namespace Xrpl.Utils
     
         public static bool HasNextPage(this BaseResponse response)
         {
-            return response.Result.ContainsKey("marker");
+            return response.Result is Dictionary<string, object> dict && dict.ContainsKey("marker");
         }
     }
 }

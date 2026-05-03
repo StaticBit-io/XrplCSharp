@@ -108,7 +108,7 @@ namespace Xrpl.Models.Transactions
         /// </summary>
         /// <param name="tx">A PermissionedDomainSet transaction.</param>
         /// <exception cref="ValidationException">When the PermissionedDomainSet is malformed.</exception>
-        public static async Task ValidatePermissionedDomainSet(Dictionary<string, dynamic> tx)
+        public static async Task ValidatePermissionedDomainSet(Dictionary<string, object> tx)
         {
             await Common.ValidateBaseTransaction(tx);
 
@@ -133,14 +133,14 @@ namespace Xrpl.Models.Transactions
             var seen = new HashSet<string>();
             foreach (var item in credentialsList)
             {
-                Dictionary<string, dynamic> wrapper = null;
-                if (item is Dictionary<string, dynamic> dict)
+                Dictionary<string, object> wrapper = null;
+                if (item is Dictionary<string, object> dict)
                 {
                     wrapper = dict;
                 }
                 else if (item is IDictionary<string, object> idict)
                 {
-                    wrapper = idict.ToDictionary(k => k.Key, k => (dynamic)k.Value);
+                    wrapper = idict.ToDictionary(k => k.Key, k => (object)k.Value);
                 }
 
                 if (wrapper == null || !wrapper.TryGetValue("Credential", out var credentialObj))
@@ -148,14 +148,14 @@ namespace Xrpl.Models.Transactions
                     throw new ValidationException("PermissionedDomainSet: Each AcceptedCredentials entry must have a Credential object");
                 }
 
-                Dictionary<string, dynamic> credential = null;
-                if (credentialObj is Dictionary<string, dynamic> credDict)
+                Dictionary<string, object> credential = null;
+                if (credentialObj is Dictionary<string, object> credDict)
                 {
                     credential = credDict;
                 }
                 else if (credentialObj is IDictionary<string, object> credIdict)
                 {
-                    credential = credIdict.ToDictionary(k => k.Key, k => (dynamic)k.Value);
+                    credential = credIdict.ToDictionary(k => k.Key, k => (object)k.Value);
                 }
 
                 if (credential == null)

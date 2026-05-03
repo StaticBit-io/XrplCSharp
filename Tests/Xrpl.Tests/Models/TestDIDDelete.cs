@@ -14,7 +14,7 @@ namespace XrplTests.Xrpl.Models
         [TestMethod]
         public async Task TestVerify_Valid_DIDDelete()
         {
-            var tx = new Dictionary<string, dynamic>
+            var tx = new Dictionary<string, object>
             {
                 { "Account", "r3rhWeE31Jt5sWmi4QiGLMZnY3ENgqw96W" },
                 { "TransactionType", "DIDDelete" },

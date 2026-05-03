@@ -1,4 +1,4 @@
-﻿using System.Collections.Generic;
+using System.Collections.Generic;
 using System.Diagnostics;
 using System.Threading.Tasks;
 using Microsoft.VisualStudio.TestTools.UnitTesting;
@@ -47,7 +47,7 @@ namespace XrplTests.Xrpl.ClientLib.Integration
                 Account = runner.wallet.ClassicAddress,
                 Destination = wallet2.ClassicAddress,
             };
-            Dictionary<string, dynamic> txJson = JsonConvert.DeserializeObject<Dictionary<string, dynamic>>(tx.ToJson());
+            Dictionary<string, object> txJson = JsonConvert.DeserializeObject<Dictionary<string, object>>(tx.ToJson());
             await Utils.TestTransaction(runner.client, txJson, runner.wallet);
         }
     }

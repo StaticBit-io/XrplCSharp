@@ -1,4 +1,4 @@
-﻿using Microsoft.VisualStudio.TestTools.UnitTesting;
+using Microsoft.VisualStudio.TestTools.UnitTesting;
 
 using System;
 using System.Collections.Generic;
@@ -19,7 +19,7 @@ namespace XrplTests.Xrpl.Models
         [TestMethod]
         public async Task TestVerify_Valid_CheckCash()
         {
-            var tx = new Dictionary<string, dynamic>
+            var tx = new Dictionary<string, object>
             {
                 { "TransactionType", "CheckCash" },
                 {"Account", "rfkE1aSy9G8Upk4JssnwBxhEv5p4mn2KTy"},
@@ -33,7 +33,7 @@ namespace XrplTests.Xrpl.Models
         [TestMethod]
         public async Task TestVerify_InValid_CheckID()
         {
-            var tx = new Dictionary<string, dynamic>
+            var tx = new Dictionary<string, object>
             {
                 { "TransactionType", "CheckCash" },
                 {"Account", "rfkE1aSy9G8Upk4JssnwBxhEv5p4mn2KTy"},
@@ -46,7 +46,7 @@ namespace XrplTests.Xrpl.Models
         [TestMethod]
         public async Task TestVerify_InValid_Amount()
         {
-            var tx = new Dictionary<string, dynamic>
+            var tx = new Dictionary<string, object>
             {
                 { "TransactionType", "CheckCash" },
                 {"Account", "rfkE1aSy9G8Upk4JssnwBxhEv5p4mn2KTy"},
@@ -59,7 +59,7 @@ namespace XrplTests.Xrpl.Models
         [TestMethod]
         public async Task TestVerify_InValid_having_both_Amount_and_DeliverMin()
         {
-            var tx = new Dictionary<string, dynamic>
+            var tx = new Dictionary<string, object>
             {
                 { "TransactionType", "CheckCash" },
                 {"Account", "rfkE1aSy9G8Upk4JssnwBxhEv5p4mn2KTy"},
@@ -73,7 +73,7 @@ namespace XrplTests.Xrpl.Models
         [TestMethod]
         public async Task TestVerify_InValid_DeliverMin()
         {
-            var tx = new Dictionary<string, dynamic>
+            var tx = new Dictionary<string, object>
             {
                 { "TransactionType", "CheckCash" },
                 {"Account", "rfkE1aSy9G8Upk4JssnwBxhEv5p4mn2KTy"},

@@ -1,4 +1,4 @@
-﻿
+
 
 // https://github.com/XRPLF/xrpl.js/blob/main/packages/xrpl/src/models/utils/index.ts
 
@@ -16,7 +16,7 @@ namespace Xrpl.Models.Utils //todo ?
         /// <param name="obj">Object to verify fields.</param>
         /// <param name="fields">Fields to verify</param>
         /// <returns>True if keys in object are all in fields.</returns>
-        public static bool OnlyHasFields(this Dictionary<string, dynamic> obj, string[] fields) => obj.Keys.All(key => fields.Contains(key));
+        public static bool OnlyHasFields(this Dictionary<string, object> obj, string[] fields) => obj.Keys.All(key => fields.Contains(key));
         /// <summary>
         /// Perform bitwise AND (&) to check if a flag is enabled within Flags (as a number).
         /// </summary>

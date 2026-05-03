@@ -1,4 +1,4 @@
-﻿// https://github.com/XRPLF/xrpl.js/blob/main/packages/xrpl/test/models/trustSet.ts
+// https://github.com/XRPLF/xrpl.js/blob/main/packages/xrpl/test/models/trustSet.ts
 
 using System;
 using System.Collections.Generic;
@@ -19,16 +19,16 @@ namespace XrplTests.Xrpl.Models
     public class TestUTrustSet
     {
 
-        public static Dictionary<string, dynamic> trustSet;
+        public static Dictionary<string, object> trustSet;
 
         [ClassInitialize]
         public static void MyClassInitialize(TestContext testContext)
         {
-            trustSet = new Dictionary<string, dynamic>
+            trustSet = new Dictionary<string, object>
             {
                 { "TransactionType", "TrustSet" },
                 {"Account", "rUn84CUYbNjRoTQ6mSW7BVJPSVJNLb1QLo"},
-                {"LimitAmount",new Dictionary<string,dynamic>()
+                {"LimitAmount",new Dictionary<string,object>()
                 {
                     {"currency","XRP"},
                     {"issuer","rcXY84C4g14iFp6taFXjjQGVeHqSCh9RX"},
@@ -55,7 +55,7 @@ namespace XrplTests.Xrpl.Models
             trustSet.Add("LimitAmount", 1234);
             await Helper.ThrowsExceptionAsync<ValidationException>(() => Validation.ValidateTrustSet(trustSet), "TrustSet: invalid LimitAmount");
             await Helper.ThrowsExceptionAsync<ValidationException>(() => Validation.Validate(trustSet), "TrustSet: invalid LimitAmount");
-            trustSet["LimitAmount"] = new Dictionary<string, dynamic>()
+            trustSet["LimitAmount"] = new Dictionary<string, object>()
             {
                 { "currency", "XRP" },
                 { "issuer", "rcXY84C4g14iFp6taFXjjQGVeHqSCh9RX" },

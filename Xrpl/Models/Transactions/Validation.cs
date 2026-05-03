@@ -1,4 +1,4 @@
-﻿using System.Collections.Generic;
+using System.Collections.Generic;
 using System.Threading.Tasks;
 
 using Xrpl.Client.Exceptions;
@@ -13,7 +13,7 @@ namespace Xrpl.Models.Transactions
         /// </summary>
         /// <param name="tx"> A TrustSet Transaction.</param>
         /// <exception cref="ValidationException">When the TrustSet is malformed.</exception>
-        public static async Task Validate(Dictionary<string, dynamic> tx)
+        public static async Task Validate(Dictionary<string, object> tx)
         {
             tx.TryGetValue("TransactionType", out var type);
 

@@ -1,4 +1,4 @@
-﻿// https://github.com/XRPLF/xrpl.js/blob/main/packages/xrpl/src/models/transactions/accountDelete.ts
+// https://github.com/XRPLF/xrpl.js/blob/main/packages/xrpl/src/models/transactions/accountDelete.ts
 
 using System.Collections.Generic;
 using System.Threading.Tasks;
@@ -77,7 +77,7 @@ namespace Xrpl.Models.Transactions
         /// </summary>
         /// <param name="tx"> A AccountDelete Transaction.</param>
         /// <exception cref="ValidationException">When the AccountDelete is malformed.</exception>
-        public static async Task ValidateAccountDelete(Dictionary<string, dynamic> tx)
+        public static async Task ValidateAccountDelete(Dictionary<string, object> tx)
         {
             await Common.ValidateBaseTransaction(tx);
             if (!tx.TryGetValue("Destination", out var Destination) || Destination is null)

@@ -1,4 +1,4 @@
-﻿using System.Collections.Generic;
+using System.Collections.Generic;
 using System.Threading.Tasks;
 
 using Newtonsoft.Json;
@@ -79,7 +79,7 @@ namespace Xrpl.Models.Transactions
         /// </summary>
         /// <param name="tx"> A CheckCash Transaction.</param>
         /// <exception cref="ValidationException">When the CheckCash is malformed.</exception>
-        public static async Task ValidateCheckCash(Dictionary<string, dynamic> tx)
+        public static async Task ValidateCheckCash(Dictionary<string, object> tx)
         {
             await Common.ValidateBaseTransaction(tx);
             tx.TryGetValue("Amount", out var Amount);

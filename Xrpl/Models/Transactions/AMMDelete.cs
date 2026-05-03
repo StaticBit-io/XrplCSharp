@@ -1,4 +1,4 @@
-﻿using System.Collections.Generic;
+using System.Collections.Generic;
 using System.Threading.Tasks;
 
 using Newtonsoft.Json;
@@ -79,7 +79,7 @@ namespace Xrpl.Models.Transactions
         /// <param name="tx">An AMMDelete Transaction.</param>
         /// <returns></returns>
         /// <exception cref="ValidationException"> When the AMMDelete is Malformed.</exception>
-        public static async Task ValidateAMMDelete(Dictionary<string, dynamic> tx)
+        public static async Task ValidateAMMDelete(Dictionary<string, object> tx)
         {
             await Common.ValidateBaseTransaction(tx);
 

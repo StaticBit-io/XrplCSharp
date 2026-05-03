@@ -1,4 +1,4 @@
-﻿using System.Collections.Generic;
+using System.Collections.Generic;
 using System.Threading.Tasks;
 using Microsoft.VisualStudio.TestTools.UnitTesting;
 using Newtonsoft.Json;
@@ -47,7 +47,7 @@ namespace XrplTests.Xrpl.ClientLib.Integration
                 Account = runner.wallet.ClassicAddress,
                 LimitAmount = limitAmount
             };
-            Dictionary<string, dynamic> txJson = JsonConvert.DeserializeObject<Dictionary<string, dynamic>>(tx.ToJson());
+            Dictionary<string, object> txJson = JsonConvert.DeserializeObject<Dictionary<string, object>>(tx.ToJson());
             await Utils.TestTransaction(runner.client, txJson, runner.wallet);
         }
 
@@ -68,7 +68,7 @@ namespace XrplTests.Xrpl.ClientLib.Integration
         //        QualityIn = PercentToQuality("99%"),
         //        QualityOut = PercentToQuality("99%"),
         //    };
-        //    Dictionary<string, dynamic> txJson = JsonConvert.DeserializeObject<Dictionary<string, dynamic>>(tx.ToJson());
+        //    Dictionary<string, object> txJson = JsonConvert.DeserializeObject<Dictionary<string, object>>(tx.ToJson());
         //    await Utils.TestTransaction(runner.client, txJson, runner.wallet);
         //}
 
@@ -89,7 +89,7 @@ namespace XrplTests.Xrpl.ClientLib.Integration
         //        QualityIn = PercentToQuality("101%"),
         //        QualityOut = PercentToQuality("101%"),
         //    };
-        //    Dictionary<string, dynamic> txJson = JsonConvert.DeserializeObject<Dictionary<string, dynamic>>(tx.ToJson());
+        //    Dictionary<string, object> txJson = JsonConvert.DeserializeObject<Dictionary<string, object>>(tx.ToJson());
         //    await Utils.TestTransaction(runner.client, txJson, runner.wallet);
         //}
     }

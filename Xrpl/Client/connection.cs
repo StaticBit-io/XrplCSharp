@@ -135,7 +135,7 @@ public class Connection
 
         public string certificate { get; set; }
 
-        public Dictionary<string, dynamic> headers { get; set; }
+        public Dictionary<string, object> headers { get; set; }
 
         /// <summary>
         /// Timeout for individual API requests after connection is established.
@@ -1494,8 +1494,8 @@ public class Connection
         }
     }
 
-    public async Task<Dictionary<string, dynamic>> Request(
-        Dictionary<string, dynamic> request,
+    public async Task<Dictionary<string, object>> Request(
+        Dictionary<string, object> request,
         TimeSpan? timeout = null,
         RequestFailurePolicy? policyOverride = null,
         CancellationToken cancellationToken = default)
@@ -1515,7 +1515,7 @@ public class Connection
         return await _request.Promise;
     }
 
-    public async Task<dynamic> GRequest<T, R>(
+    public async Task<object> GRequest<T, R>(
         R request,
         TimeSpan? timeout = null,
         RequestFailurePolicy? policyOverride = null,
@@ -2096,7 +2096,7 @@ public class Connection
                 }
 
                 await Request(
-                    request: new Dictionary<string, dynamic>
+                    request: new Dictionary<string, object>
                     {
                         { "command", "ping" },
                     },

@@ -1,4 +1,4 @@
-﻿// https://github.com/XRPLF/xrpl.js/blob/amm-beta/packages/xrpl/test/models/AMMVote.ts
+// https://github.com/XRPLF/xrpl.js/blob/amm-beta/packages/xrpl/test/models/AMMVote.ts
 
 using Microsoft.VisualStudio.TestTools.UnitTesting;
 
@@ -13,17 +13,17 @@ namespace XrplTests.Xrpl.Models
     [TestClass]
     public class TestUAMMVote
     {
-        public static Dictionary<string, dynamic> vote;
+        public static Dictionary<string, object> vote;
 
         [ClassInitialize]
         public static void MyClassInitialize(TestContext testContext)
         {
-            vote = new Dictionary<string, dynamic>
+            vote = new Dictionary<string, object>
             {
                 {"TransactionType", "AMMVote"},
                 {"Account", "rWYkbWkCeg8dP6rXALnjgZSjjLyih5NXm"},
-                {"Asset", new Dictionary<string,dynamic>(){{"currency","XRP"}}},
-                {"Asset2", new Dictionary<string,dynamic>(){{"currency","ETH"},{"issuer", "rP9jPyP5kyvFRb6ZiRghAGw5u8SGAmU4bd" } }},
+                {"Asset", new Dictionary<string,object>(){{"currency","XRP"}}},
+                {"Asset2", new Dictionary<string,object>(){{"currency","ETH"},{"issuer", "rP9jPyP5kyvFRb6ZiRghAGw5u8SGAmU4bd" } }},
                 {"TradingFee", 25u},
                 {"Sequence", 1337u},
             };
@@ -38,20 +38,20 @@ namespace XrplTests.Xrpl.Models
             //throws w/ missing field Asset
             vote.Remove("Asset");
             await Helper.ThrowsExceptionAsync<ValidationException>(() => Validation.Validate(vote), "AMMVote: missing field Asset");
-            vote["Asset"] = new Dictionary<string, dynamic>() { { "currency", "XRP" } };
+            vote["Asset"] = new Dictionary<string, object>() { { "currency", "XRP" } };
             //throws w/ Asset must be an Issue
             vote["Asset"] = 1234;
             await Helper.ThrowsExceptionAsync<ValidationException>(() => Validation.Validate(vote), "AMMVote: Asset must be an Issue");
-            vote["Asset"] = new Dictionary<string, dynamic>() { { "currency", "XRP" } };
+            vote["Asset"] = new Dictionary<string, object>() { { "currency", "XRP" } };
 
             //throws w/ missing field Asset
             vote.Remove("Asset2");
             await Helper.ThrowsExceptionAsync<ValidationException>(() => Validation.Validate(vote), "AMMVote: missing field Asset2");
-            vote["Asset2"] = new Dictionary<string, dynamic>() { { "currency", "XRP" } };
+            vote["Asset2"] = new Dictionary<string, object>() { { "currency", "XRP" } };
             //throws w/ Asset must be an Issue
             vote["Asset2"] = 1234;
             await Helper.ThrowsExceptionAsync<ValidationException>(() => Validation.Validate(vote), "AMMVote: Asset2 must be an Issue");
-            vote["Asset2"] = new Dictionary<string, dynamic>() { { "currency", "ETH" }, { "issuer", "rP9jPyP5kyvFRb6ZiRghAGw5u8SGAmU4bd" } };
+            vote["Asset2"] = new Dictionary<string, object>() { { "currency", "ETH" }, { "issuer", "rP9jPyP5kyvFRb6ZiRghAGw5u8SGAmU4bd" } };
 
             //throws w/ missing TradingFee
             vote.Remove("TradingFee");

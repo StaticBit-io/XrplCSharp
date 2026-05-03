@@ -1,4 +1,4 @@
-﻿using System.Collections.Generic;
+using System.Collections.Generic;
 using System.Text.RegularExpressions;
 using Xrpl.Client.Exceptions;
 using System.Threading.Tasks;
@@ -60,7 +60,7 @@ namespace Xrpl.Models.Transactions
         /// </summary>
         /// <param name="tx"> A SignerListSet Transaction.</param>
         /// <exception cref="ValidationException">When the SignerListSet is malformed.</exception>
-        public static async Task ValidateSignerListSet(Dictionary<string, dynamic> tx)
+        public static async Task ValidateSignerListSet(Dictionary<string, object> tx)
         {
             await Common.ValidateBaseTransaction(tx);
             if (!tx.TryGetValue("SignerQuorum", out var SignerQuorum) || SignerQuorum is null)
@@ -71,7 +71,7 @@ namespace Xrpl.Models.Transactions
 
             if (!tx.TryGetValue("SignerEntries", out var SignerEntries) || SignerEntries is null)
                 throw new ValidationException("SignerListSet: missing field SignerEntries");
-            if (SignerEntries is not List<dynamic> entries)
+            if (SignerEntries is not List<object> entries)
                 throw new ValidationException("SignerListSet: invalid SignerEntries");
 
             if(entries.Count==0)
@@ -81,16 +81,16 @@ namespace Xrpl.Models.Transactions
                 throw new ValidationException($"SignerListSet: maximum of {MAX_SIGNERS} members allowed in SignerEntries");
 
 
-            foreach (dynamic entry_val in entries)
+            foreach (object entry_val in entries)
             {
-                if (entry_val.TryGetValue("SignerEntry", out dynamic entry))
+                if (entry_val is IDictionary<string, object> entryValDict &&
+                    entryValDict.TryGetValue("SignerEntry", out object entry))
                 {
-                    if (entry.TryGetValue("WalletLocator", out dynamic val))
+                    if (entry is IDictionary<string, object> entryDict &&
+                        entryDict.TryGetValue("WalletLocator", out object val))
                     {
-                        
                         if (val.ToString() is string { } WalletLocator && !Regex.IsMatch(WalletLocator, @"^[0-9A-Fa-f]{64}$"))
                             throw new ValidationException($"SignerListSet: WalletLocator in SignerEntry must be a 256-bit (32-byte) hexadecimal value");
-
                     }
                 }
             }

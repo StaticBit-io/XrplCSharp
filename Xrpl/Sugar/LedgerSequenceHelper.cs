@@ -1,4 +1,4 @@
-﻿using Newtonsoft.Json.Linq;
+using Newtonsoft.Json.Linq;
 
 using System;
 using System.Collections.Generic;
@@ -14,11 +14,11 @@ public static class LedgerSequenceHelper
 {
     public static uint? GetLastLedgerSequence(object transaction)
     {
-        // 1) Dictionary<string, dynamic>
+        // 1) Dictionary<string, object>
         if (transaction is IDictionary<string, object> dictObj)
             return TryGetUint(dictObj, "LastLedgerSequence");
 
-        if (transaction is Dictionary<string, dynamic> dictDyn)
+        if (transaction is Dictionary<string, object> dictDyn)
             return TryGetUint(dictDyn, "LastLedgerSequence");
 
         // 2) твой тип

@@ -157,7 +157,7 @@ namespace Xrpl.Models.Transactions
         /// </summary>
         /// <param name="tx">A CredentialCreate transaction.</param>
         /// <exception cref="ValidationException">When the CredentialCreate is malformed.</exception>
-        public static async Task ValidateCredentialCreate(Dictionary<string, dynamic> tx)
+        public static async Task ValidateCredentialCreate(Dictionary<string, object> tx)
         {
             await Common.ValidateBaseTransaction(tx);
 

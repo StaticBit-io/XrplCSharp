@@ -375,7 +375,7 @@ public class TestAccountBuilder
 
         try
         {
-            await _client.Request(new Dictionary<string, dynamic> { { "command", "ledger_accept" } });
+            await _client.Request(new Dictionary<string, object> { { "command", "ledger_accept" } });
         }
         catch { }
     }

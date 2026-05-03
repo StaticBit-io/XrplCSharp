@@ -1,4 +1,4 @@
-﻿#nullable enable
+#nullable enable
 using System;
 using System.Collections.Generic;
 using System.Threading.Tasks;
@@ -103,7 +103,7 @@ namespace Xrpl.Models.Transactions
         /// </summary>
         /// <param name="tx">An MPTokenIssuanceSet Transaction.</param>
         /// <exception cref="ValidationException">When the MPTokenIssuanceSet is Malformed.</exception>
-        public static async Task ValidateMPTokenIssuanceSet(Dictionary<string, dynamic> tx)
+        public static async Task ValidateMPTokenIssuanceSet(Dictionary<string, object> tx)
         {
             await Common.ValidateBaseTransaction(tx);
 

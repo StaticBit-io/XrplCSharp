@@ -1,4 +1,4 @@
-﻿
+
 
 // https://github.com/XRPLF/xrpl.js/blob/main/packages/xrpl/src/models/transactions/setRegularKey.ts
 
@@ -49,7 +49,7 @@ namespace Xrpl.Models.Transactions
         /// </summary>
         /// <param name="tx"> A SetRegularKey Transaction.</param>
         /// <exception cref="ValidationException">When the SetRegularKey is malformed.</exception>
-        public static async Task ValidateSetRegularKey(Dictionary<string, dynamic> tx)
+        public static async Task ValidateSetRegularKey(Dictionary<string, object> tx)
         {
             await Common.ValidateBaseTransaction(tx);
 

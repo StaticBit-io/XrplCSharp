@@ -57,7 +57,7 @@ namespace Xrpl.Models.Transactions
         /// </summary>
         /// <param name="tx">A PermissionedDomainDelete transaction.</param>
         /// <exception cref="ValidationException">When the PermissionedDomainDelete is malformed.</exception>
-        public static async Task ValidatePermissionedDomainDelete(Dictionary<string, dynamic> tx)
+        public static async Task ValidatePermissionedDomainDelete(Dictionary<string, object> tx)
         {
             await Common.ValidateBaseTransaction(tx);
 

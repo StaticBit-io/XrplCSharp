@@ -1,4 +1,4 @@
-﻿using System;
+using System;
 using System.Collections.Generic;
 using System.Linq;
 
@@ -101,14 +101,14 @@ public static class SignerUtilities
         switch (token.Type)
         {
             case JTokenType.Object:
-                var dict = new Dictionary<string, dynamic>();
+                var dict = new Dictionary<string, object>();
                 foreach (var prop in ((JObject)token).Properties())
                 {
                     dict[prop.Name] = ConvertJTokenToClrType(prop.Value);
                 }
                 return dict;
             case JTokenType.Array:
-                var list = new List<dynamic>();
+                var list = new List<object>();
                 foreach (var item in (JArray)token)
                 {
                     list.Add(ConvertJTokenToClrType(item));

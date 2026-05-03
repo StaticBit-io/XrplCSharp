@@ -1,4 +1,4 @@
-﻿using System.Collections.Generic;
+using System.Collections.Generic;
 using System.Threading.Tasks;
 
 using Newtonsoft.Json;
@@ -70,7 +70,7 @@ namespace Xrpl.Models.Transactions
         /// <param name="tx">An AMMVote Transaction.</param>
         /// <returns></returns>
         /// <exception cref="ValidationException"> When the AMMVote is Malformed.</exception>
-        public static async Task ValidateAMMVote(Dictionary<string, dynamic> tx)
+        public static async Task ValidateAMMVote(Dictionary<string, object> tx)
         {
             await Common.ValidateBaseTransaction(tx);
             tx.TryGetValue("Asset", out var Asset);

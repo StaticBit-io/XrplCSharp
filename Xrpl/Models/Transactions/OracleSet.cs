@@ -146,7 +146,7 @@ namespace Xrpl.Models.Transactions
         /// </summary>
         /// <param name="tx">An OracleSet Transaction.</param>
         /// <exception cref="ValidationException">When the OracleSet is malformed.</exception>
-        public static async Task ValidateOracleSet(Dictionary<string, dynamic> tx)
+        public static async Task ValidateOracleSet(Dictionary<string, object> tx)
         {
             await Common.ValidateBaseTransaction(tx);
 
@@ -170,13 +170,13 @@ namespace Xrpl.Models.Transactions
 
             foreach (var priceDataWrapper in priceDataList)
             {
-                if (priceDataWrapper is not Dictionary<string, dynamic> wrapper)
+                if (priceDataWrapper is not Dictionary<string, object> wrapper)
                     throw new ValidationException("OracleSet: PriceDataSeries must be an array of objects");
 
                 if (!wrapper.TryGetValue("PriceData", out var priceData) || priceData is null)
                     throw new ValidationException("OracleSet: PriceDataSeries must have a PriceData object");
 
-                if (priceData is not Dictionary<string, dynamic> priceDataDict)
+                if (priceData is not Dictionary<string, object> priceDataDict)
                     throw new ValidationException("OracleSet: PriceData must be an object");
 
                 if (!priceDataDict.TryGetValue("BaseAsset", out var baseAsset) || baseAsset is not string)

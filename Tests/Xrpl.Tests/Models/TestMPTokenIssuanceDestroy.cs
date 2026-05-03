@@ -1,4 +1,4 @@
-﻿using Microsoft.VisualStudio.TestTools.UnitTesting;
+using Microsoft.VisualStudio.TestTools.UnitTesting;
 
 using System.Collections.Generic;
 using System.Threading.Tasks;
@@ -11,12 +11,12 @@ namespace XrplTests.Xrpl.Models
     [TestClass]
     public class TestUMPTokenIssuanceDestroy
     {
-        public static Dictionary<string, dynamic> mpTokenIssuanceDestroy;
+        public static Dictionary<string, object> mpTokenIssuanceDestroy;
 
         [ClassInitialize]
         public static void MyClassInitialize(TestContext testContext)
         {
-            mpTokenIssuanceDestroy = new Dictionary<string, dynamic>
+            mpTokenIssuanceDestroy = new Dictionary<string, object>
             {
                 {"TransactionType", "MPTokenIssuanceDestroy"},
                 {"Account", "rWYkbWkCeg8dP6rXALnjgZSjjLyih5NXm"},

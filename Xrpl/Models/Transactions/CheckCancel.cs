@@ -1,4 +1,4 @@
-﻿
+
 
 // https://github.com/XRPLF/xrpl.js/blob/main/packages/xrpl/src/models/transactions/checkCancel.ts
 
@@ -48,7 +48,7 @@ namespace Xrpl.Models.Transactions
         /// </summary>
         /// <param name="tx"> A CheckCancel Transaction.</param>
         /// <exception cref="ValidationException">When the CheckCancel is malformed.</exception>
-        public static async Task ValidateCheckCancel(Dictionary<string, dynamic> tx)
+        public static async Task ValidateCheckCancel(Dictionary<string, object> tx)
         {
             await Common.ValidateBaseTransaction(tx);
             if (tx.TryGetValue("CheckID", out var CheckID) && CheckID is not string {})

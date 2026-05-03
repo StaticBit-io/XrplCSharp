@@ -31,5 +31,5 @@ public class ErrorResponse : BaseResponse
     /// </summary>
     [JsonProperty("request")]
 
-    public dynamic Request { get; set; }
+    public object Request { get; set; }
 }

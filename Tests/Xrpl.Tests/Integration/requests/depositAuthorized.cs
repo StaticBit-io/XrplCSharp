@@ -1,4 +1,4 @@
-﻿
+
 
 // https://github.com/XRPLF/xrpl.js/blob/main/packages/xrpl/test/integration/requests/depositAuthorized.ts
 
@@ -70,7 +70,7 @@ namespace XrplTests.Xrpl.ClientLib.Integration
                 Subject = walletSubject.ClassicAddress,
                 CredentialType = credTypeHex,
             };
-            Dictionary<string, dynamic> createJson = JsonConvert.DeserializeObject<Dictionary<string, dynamic>>(createTx.ToJson());
+            Dictionary<string, object> createJson = JsonConvert.DeserializeObject<Dictionary<string, object>>(createTx.ToJson());
             await Utils.TestTransaction(runner.client, createJson, runner.wallet);
 
             CredentialAccept acceptTx = new CredentialAccept
@@ -79,7 +79,7 @@ namespace XrplTests.Xrpl.ClientLib.Integration
                 Issuer = runner.wallet.ClassicAddress,
                 CredentialType = credTypeHex,
             };
-            Dictionary<string, dynamic> acceptJson = JsonConvert.DeserializeObject<Dictionary<string, dynamic>>(acceptTx.ToJson());
+            Dictionary<string, object> acceptJson = JsonConvert.DeserializeObject<Dictionary<string, object>>(acceptTx.ToJson());
             await Utils.TestTransaction(runner.client, acceptJson, walletSubject);
 
             string credentialId = Hashes.HashCredential(

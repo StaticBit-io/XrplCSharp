@@ -112,7 +112,7 @@ namespace Xrpl.Models.Transactions
         /// </summary>
         /// <param name="tx">A CredentialDelete transaction.</param>
         /// <exception cref="ValidationException">When the CredentialDelete is malformed.</exception>
-        public static async Task ValidateCredentialDelete(Dictionary<string, dynamic> tx)
+        public static async Task ValidateCredentialDelete(Dictionary<string, object> tx)
         {
             await Common.ValidateBaseTransaction(tx);
 

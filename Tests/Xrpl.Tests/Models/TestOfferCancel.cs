@@ -1,4 +1,4 @@
-﻿
+
 
 // https://github.com/XRPLF/xrpl.js/blob/main/packages/xrpl/test/models/offerCreate.ts
 
@@ -14,12 +14,12 @@ namespace XrplTests.Xrpl.Models
     [TestClass]
     public class TestUOfferCancel
     {
-        public static Dictionary<string, dynamic> offer;
+        public static Dictionary<string, object> offer;
 
         [ClassInitialize]
         public static void MyClassInitialize(TestContext testContext)
         {
-            offer = new Dictionary<string, dynamic>
+            offer = new Dictionary<string, object>
             {
                 {"TransactionType", "OfferCancel"},
                 {"Account", "rnKiczmiQkZFiDES8THYyLA2pQohC5C6EF"},

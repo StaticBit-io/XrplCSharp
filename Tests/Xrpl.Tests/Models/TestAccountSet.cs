@@ -1,4 +1,4 @@
-﻿
+
 
 // https://github.com/XRPLF/xrpl.js/blob/main/packages/xrpl/test/models/accountSet.ts
 
@@ -15,12 +15,12 @@ namespace XrplTests.Xrpl.Models
     [TestClass]
     public class TestUAccountSet
     {
-        public static Dictionary<string, dynamic> accountSet;
+        public static Dictionary<string, object> accountSet;
 
         [ClassInitialize]
         public static void MyClassInitialize(TestContext testContext)
         {
-            accountSet = new Dictionary<string, dynamic>
+            accountSet = new Dictionary<string, object>
             {
                 {"TransactionType", "AccountSet"},
                 {"Account", "rf1BiGeXwwQoi8Z2ueFYTEXSwuJYfV2Jpn"},

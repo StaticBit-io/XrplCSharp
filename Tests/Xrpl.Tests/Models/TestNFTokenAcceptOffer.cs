@@ -1,4 +1,4 @@
-﻿
+
 
 // https://github.com/XRPLF/xrpl.js/blob/main/packages/xrpl/test/models/NFTokenAcceptOffer.ts
 
@@ -29,7 +29,7 @@ namespace XrplTests.Xrpl.Models
         [TestMethod]
         public async Task TestVerify_Valid_NFTokenAcceptOffer_With_NFTokenBuyOffer()
         {
-            var offer = new Dictionary<string, dynamic>
+            var offer = new Dictionary<string, object>
             {
                 { "TransactionType", "NFTokenAcceptOffer" },
                 { "NFTokenBuyOffer", NFTOKEN_BUY_OFFER },
@@ -43,7 +43,7 @@ namespace XrplTests.Xrpl.Models
         [TestMethod]
         public async Task TestVerify_Valid_NFTokenAcceptOffer_With_NFTokenSellOffer()
         {
-            var offer = new Dictionary<string, dynamic>
+            var offer = new Dictionary<string, object>
             {
                 { "TransactionType", "NFTokenAcceptOffer" },
                 { "NFTokenBuyOffer", NFTOKEN_SELL_OFFER },
@@ -57,7 +57,7 @@ namespace XrplTests.Xrpl.Models
         [TestMethod]
         public async Task TestVerify_Invalid_missing_NFTokenSellOffer_and_NFTokenBuyOffer()
         {
-            var offer = new Dictionary<string, dynamic>
+            var offer = new Dictionary<string, object>
             {
                 { "TransactionType", "NFTokenAcceptOffer" },
                 {"Account", "rWYkbWkCeg8dP6rXALnjgZSjjLyih5NXm"},
@@ -70,7 +70,7 @@ namespace XrplTests.Xrpl.Models
         [TestMethod]
         public async Task TestVerify_Invalid_missing_NFTokenSellOffer_and_present_NFTokenBrokerFee()
         {
-            var offer = new Dictionary<string, dynamic>
+            var offer = new Dictionary<string, object>
             {
                 { "TransactionType", "NFTokenAcceptOffer" },
                 {"Account", "rWYkbWkCeg8dP6rXALnjgZSjjLyih5NXm"},
@@ -85,7 +85,7 @@ namespace XrplTests.Xrpl.Models
         [TestMethod]
         public async Task TestVerify_Invalid_missing_NFTokenBuyOffer_and_present_NFTokenBrokerFee()
         {
-            var offer = new Dictionary<string, dynamic>
+            var offer = new Dictionary<string, object>
             {
                 { "TransactionType", "NFTokenAcceptOffer" },
                 {"Account", "rWYkbWkCeg8dP6rXALnjgZSjjLyih5NXm"},
@@ -101,7 +101,7 @@ namespace XrplTests.Xrpl.Models
         [TestMethod]
         public async Task TestVerify_Valid_NFTokenAcceptOffer_with_both_offers_and_no_NFTokenBrokerFee()
         {
-            var offer = new Dictionary<string, dynamic>
+            var offer = new Dictionary<string, object>
             {
                 { "TransactionType", "NFTokenAcceptOffer" },
                 {"Account", "rWYkbWkCeg8dP6rXALnjgZSjjLyih5NXm"},
@@ -116,7 +116,7 @@ namespace XrplTests.Xrpl.Models
         [TestMethod]
         public async Task TestVerify_Valid_NFTokenAcceptOffer_with_NFTokenBrokerFee()
         {
-            var offer = new Dictionary<string, dynamic>
+            var offer = new Dictionary<string, object>
             {
                 { "TransactionType", "NFTokenAcceptOffer" },
                 {"Account", "rWYkbWkCeg8dP6rXALnjgZSjjLyih5NXm"},
@@ -133,7 +133,7 @@ namespace XrplTests.Xrpl.Models
         [TestMethod]
         public async Task TestVerify_Invalid_NFTokenBrokerFee_Is_0()
         {
-            var offer = new Dictionary<string, dynamic>
+            var offer = new Dictionary<string, object>
             {
                 { "TransactionType", "NFTokenAcceptOffer" },
                 {"Account", "rWYkbWkCeg8dP6rXALnjgZSjjLyih5NXm"},
@@ -149,7 +149,7 @@ namespace XrplTests.Xrpl.Models
         [TestMethod]
         public async Task TestVerify_Invalid_NFTokenBrokerFee_less_0()
         {
-            var offer = new Dictionary<string, dynamic>
+            var offer = new Dictionary<string, object>
             {
                 { "TransactionType", "NFTokenAcceptOffer" },
                 {"Account", "rWYkbWkCeg8dP6rXALnjgZSjjLyih5NXm"},
@@ -166,7 +166,7 @@ namespace XrplTests.Xrpl.Models
         [TestMethod]
         public async Task TestVerify_Invalid_NFTokenBrokerFee()
         {
-            var offer = new Dictionary<string, dynamic>
+            var offer = new Dictionary<string, object>
             {
                 { "TransactionType", "NFTokenAcceptOffer" },
                 {"Account", "rWYkbWkCeg8dP6rXALnjgZSjjLyih5NXm"},

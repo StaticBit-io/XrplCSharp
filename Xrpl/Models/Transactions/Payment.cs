@@ -242,7 +242,7 @@ namespace Xrpl.Models.Transactions
         /// </summary>
         /// <param name="tx"> A Payment Transaction.</param>
         /// <exception cref="ValidationException">When the Payment is malformed.</exception>
-        public static async Task ValidatePayment(Dictionary<string, dynamic> tx)
+        public static async Task ValidatePayment(Dictionary<string, object> tx)
         {
             await Common.ValidateBaseTransaction(tx);
 
@@ -263,7 +263,7 @@ namespace Xrpl.Models.Transactions
 
             if (tx.TryGetValue("InvoiceID", out var InvoiceID) && InvoiceID is not string { })
                 throw new ValidationException("PaymentTransaction: InvoiceID must be a string");
-            if (tx.TryGetValue("Paths", out var Paths) && !IsPaths(Paths as List<List<Dictionary<string, dynamic>>>))
+            if (tx.TryGetValue("Paths", out var Paths) && !IsPaths(Paths as List<List<Dictionary<string, object>>>))
                 throw new ValidationException("PaymentTransaction: invalid Paths");
             if (tx.TryGetValue("SendMax", out var SendMax) && !Common.IsAmount(SendMax))
                 throw new ValidationException("PaymentTransaction: invalid SendMax");
@@ -284,7 +284,7 @@ namespace Xrpl.Models.Transactions
             await CheckPartialPayment(tx);
         }
 
-        public static Task CheckPartialPayment(Dictionary<string, dynamic> tx)
+        public static Task CheckPartialPayment(Dictionary<string, object> tx)
         {
             if (!tx.TryGetValue("DeliverMin", out var DeliverMin)) 
                 return Task.CompletedTask;
@@ -295,12 +295,11 @@ namespace Xrpl.Models.Transactions
                     throw new ValidationException("PaymentTransaction: tfPartialPayment flag required with DeliverMin");
             }
 
-            //todo check func
-            var isTfPartialPayment = flags is uint { } flag
-                ? Index.IsFlagEnabled(flag, (uint)PaymentFlags.tfPartialPayment)
-                : flags is PaymentFlags f 
-                    ? flags == PaymentFlags.tfPartialPayment 
-                    : CheckFlag<PaymentFlags>(flags, "tfPartialPayment");
+            bool isTfPartialPayment = flags is uint uFlag
+                ? Index.IsFlagEnabled(uFlag, (uint)PaymentFlags.tfPartialPayment)
+                : flags is PaymentFlags pf 
+                    ? pf == PaymentFlags.tfPartialPayment 
+                    : flags is Dictionary<string, object> flagDict && CheckFlag<PaymentFlags>(flagDict, "tfPartialPayment");
             if (!isTfPartialPayment)
                 throw new ValidationException("PaymentTransaction: tfPartialPayment flag required with DeliverMin");
             if (!Common.IsAmount(DeliverMin))
@@ -308,9 +307,9 @@ namespace Xrpl.Models.Transactions
 
             return Task.CompletedTask;
         }
-        static bool CheckFlag<T>(Dictionary<string,dynamic> flag, string type) where T:Enum
+        static bool CheckFlag<T>(Dictionary<string, object> flag, string type) where T : Enum
         {
-            if (flag.TryGetValue(type, out var f) && f is bool == true)
+            if (flag.TryGetValue(type, out object f) && f is true)
             {
                 return true;
             }
@@ -318,7 +317,7 @@ namespace Xrpl.Models.Transactions
             return false;
 
         }
-        public static bool IsPathStep(Dictionary<string, dynamic> pathStep)
+        public static bool IsPathStep(Dictionary<string, object> pathStep)
         {
             if (pathStep.TryGetValue("account", out var acc) && acc is not string { })
                 return false;
@@ -333,7 +332,7 @@ namespace Xrpl.Models.Transactions
                 return true;
             return false;
         }
-        public static bool IsPaths(List<Dictionary<string, dynamic>> paths)
+        public static bool IsPaths(List<Dictionary<string, object>> paths)
         {
             foreach (var path in paths)
             {
@@ -344,7 +343,7 @@ namespace Xrpl.Models.Transactions
             return true;
 
         }
-        public static bool IsPaths(List<List<Dictionary<string, dynamic>>> paths)
+        public static bool IsPaths(List<List<Dictionary<string, object>>> paths)
         {
             if (paths is null || paths.Count == 0)
                 return false;

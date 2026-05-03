@@ -154,19 +154,19 @@ public class TestIAMMLifecycle
         Currency = "XRP"
     };
 
-    private Dictionary<string, dynamic> TokenAssetDict => new Dictionary<string, dynamic>
+    private Dictionary<string, object> TokenAssetDict => new Dictionary<string, object>
     {
         { "currency", CurrencyCode },
         { "issuer", walletIssuer.ClassicAddress }
     };
 
-    private Dictionary<string, dynamic> XrpAssetDict => new Dictionary<string, dynamic>
+    private Dictionary<string, object> XrpAssetDict => new Dictionary<string, object>
     {
         { "currency", "XRP" }
     };
 
-    private static Dictionary<string, dynamic> LPTokenDict(string currency, string issuer, string value) =>
-        new Dictionary<string, dynamic>
+    private static Dictionary<string, object> LPTokenDict(string currency, string issuer, string value) =>
+        new Dictionary<string, object>
         {
             { "currency", currency },
             { "issuer", issuer },
@@ -229,7 +229,7 @@ public class TestIAMMLifecycle
     {
         AMMInfoResponse info = await GetAmmInfo();
         decimal depositLp = info.Amm.LPTokenBalance.ValueAsNumber * lpFraction;
-        Dictionary<string, dynamic> depositTx = new Dictionary<string, dynamic>
+        Dictionary<string, object> depositTx = new Dictionary<string, object>
         {
             { "TransactionType", "AMMDeposit" },
             { "Account", secondHolder.ClassicAddress },
@@ -357,7 +357,7 @@ public class TestIAMMLifecycle
         decimal lpBefore = infoBefore.Amm.LPTokenBalance.ValueAsNumber;
         decimal targetLp = lpBefore * 0.1m;
 
-        Dictionary<string, dynamic> tx = new Dictionary<string, dynamic>
+        Dictionary<string, object> tx = new Dictionary<string, object>
         {
             { "TransactionType", "AMMDeposit" },
             { "Account", walletHolder.ClassicAddress },
@@ -396,7 +396,7 @@ public class TestIAMMLifecycle
         decimal totalLp = info.Amm.LPTokenBalance.ValueAsNumber;
         decimal withdrawLp = totalLp * 0.5m;
 
-        Dictionary<string, dynamic> tx = new Dictionary<string, dynamic>
+        Dictionary<string, object> tx = new Dictionary<string, object>
         {
             { "TransactionType", "AMMWithdraw" },
             { "Account", walletHolder.ClassicAddress },
@@ -457,7 +457,7 @@ public class TestIAMMLifecycle
         Console.WriteLine($"Exact LP value from amm_info: {exactLpValue}");
         Console.WriteLine($"LP currency: {lpCurrency}, issuer: {lpIssuer}");
 
-        Dictionary<string, dynamic> tx = new Dictionary<string, dynamic>
+        Dictionary<string, object> tx = new Dictionary<string, object>
         {
             { "TransactionType", "AMMWithdraw" },
             { "Account", walletHolder.ClassicAddress },
@@ -507,7 +507,7 @@ public class TestIAMMLifecycle
         Assert.IsTrue(roundTripped <= lpDecimal,
             $"Round-tripped value ({roundTripped}) must not exceed original ({lpDecimal})");
 
-        Dictionary<string, dynamic> tx = new Dictionary<string, dynamic>
+        Dictionary<string, object> tx = new Dictionary<string, object>
         {
             { "TransactionType", "AMMWithdraw" },
             { "Account", walletHolder.ClassicAddress },
@@ -702,7 +702,7 @@ public class TestIAMMLifecycle
             simResult.EngineResult == "tesSUCCESS" || simResult.EngineResult == "terQUEUED",
             $"Simulate should succeed, got: {simResult.EngineResult}");
 
-        Dictionary<string, dynamic> tx = new Dictionary<string, dynamic>
+        Dictionary<string, object> tx = new Dictionary<string, object>
         {
             { "TransactionType", "AMMWithdraw" },
             { "Account", walletHolder.ClassicAddress },

@@ -1,4 +1,4 @@
-﻿using Newtonsoft.Json;
+using Newtonsoft.Json;
 
 using System;
 using System.Collections.Generic;
@@ -162,7 +162,7 @@ namespace Xrpl.Models.Transactions
         /// </summary>
         /// <param name="tx"> A OfferCreate Transaction.</param>
         /// <exception cref="ValidationException">When the OfferCreate is malformed.</exception>
-        public static async Task ValidateOfferCreate(Dictionary<string, dynamic> tx)
+        public static async Task ValidateOfferCreate(Dictionary<string, object> tx)
         {
             await Common.ValidateBaseTransaction(tx);
 

@@ -77,12 +77,12 @@ namespace Xrpl.Models.Subscriptions
         /// </summary>
         //[JsonProperty("transaction")]
         [JsonProperty("tx_json")]
-        public dynamic TransactionJson { get; set; }
+        public object TransactionJson { get; set; }
         /// <summary>
         /// The definition of the proposed transaction in JSON format<br/>
         /// </summary>
         [JsonProperty("transaction")]
-        public dynamic Proposed { get; set; }
+        public object Proposed { get; set; }
 
         [JsonIgnore]
         public TransactionResponse Transaction => JsonConvert.DeserializeObject<TransactionResponse>((TransactionJson ?? Proposed).ToString());

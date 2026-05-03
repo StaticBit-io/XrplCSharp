@@ -1,4 +1,4 @@
-﻿using Microsoft.VisualStudio.TestPlatform.CommunicationUtilities;
+using Microsoft.VisualStudio.TestPlatform.CommunicationUtilities;
 using Microsoft.VisualStudio.TestTools.UnitTesting;
 
 using NBitcoin.Protocol;
@@ -37,7 +37,7 @@ namespace Xrpl.Tests.ClientLib
         public void TestSome()
         {
             var message = "{\"fee_base\":10,\"fee_ref\":10,\"ledger_hash\":\"4118BC9FD82A6245BDD32092CE93A86676978D3EBD6F9A47C3ABCEFE80E2B3F5\",\"ledger_index\":75551992,\"ledger_time\":720984480,\"reserve_base\":10000000,\"reserve_inc\":2000000,\"txn_count\":54,\"type\":\"ledgerClosed\",\"validated_ledgers\":\"32570-75551992\"}";
-            var response = JsonConvert.DeserializeObject<Dictionary<string, dynamic>>(message);
+            var response = JsonConvert.DeserializeObject<Dictionary<string, object>>(message);
             var message1 = JsonConvert.SerializeObject(response);
             var response1 = JsonConvert.DeserializeObject<LedgerStream>(message1);
         }

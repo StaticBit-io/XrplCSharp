@@ -1,4 +1,4 @@
-﻿#nullable enable
+#nullable enable
 using Newtonsoft.Json;
 
 using System;
@@ -222,7 +222,7 @@ namespace Xrpl.Models.Transactions
         /// </summary>
         /// <param name="tx">An MPTokenIssuanceCreate Transaction.</param>
         /// <exception cref="ValidationException">When the MPTokenIssuanceCreate is Malformed.</exception>
-        public static async Task ValidateMPTokenIssuanceCreate(Dictionary<string, dynamic> tx)
+        public static async Task ValidateMPTokenIssuanceCreate(Dictionary<string, object> tx)
         {
             await Common.ValidateBaseTransaction(tx);
 

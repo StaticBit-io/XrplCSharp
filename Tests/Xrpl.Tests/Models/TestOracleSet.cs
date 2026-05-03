@@ -30,7 +30,7 @@ namespace XrplTests.Xrpl.Models
         [TestMethod]
         public async Task TestVerify_Valid_OracleSet()
         {
-            var tx = new Dictionary<string, dynamic>
+            var tx = new Dictionary<string, object>
             {
                 { "Account", "r3rhWeE31Jt5sWmi4QiGLMZnY3ENgqw96W" },
                 { "TransactionType", "OracleSet" },
@@ -42,9 +42,9 @@ namespace XrplTests.Xrpl.Models
                 { "AssetClass", "currency" },
                 { "PriceDataSeries", new List<object>
                     {
-                        new Dictionary<string, dynamic>
+                        new Dictionary<string, object>
                         {
-                            { "PriceData", new Dictionary<string, dynamic>
+                            { "PriceData", new Dictionary<string, object>
                                 {
                                     { "BaseAsset", "XRP" },
                                     { "QuoteAsset", "USD" },
@@ -66,7 +66,7 @@ namespace XrplTests.Xrpl.Models
         [TestMethod]
         public async Task TestVerify_Valid_OracleSet_MultiplePriceData()
         {
-            var tx = new Dictionary<string, dynamic>
+            var tx = new Dictionary<string, object>
             {
                 { "Account", "r3rhWeE31Jt5sWmi4QiGLMZnY3ENgqw96W" },
                 { "TransactionType", "OracleSet" },
@@ -78,9 +78,9 @@ namespace XrplTests.Xrpl.Models
                 { "AssetClass", "currency" },
                 { "PriceDataSeries", new List<object>
                     {
-                        new Dictionary<string, dynamic>
+                        new Dictionary<string, object>
                         {
-                            { "PriceData", new Dictionary<string, dynamic>
+                            { "PriceData", new Dictionary<string, object>
                                 {
                                     { "BaseAsset", "XRP" },
                                     { "QuoteAsset", "USD" },
@@ -89,9 +89,9 @@ namespace XrplTests.Xrpl.Models
                                 }
                             }
                         },
-                        new Dictionary<string, dynamic>
+                        new Dictionary<string, object>
                         {
-                            { "PriceData", new Dictionary<string, dynamic>
+                            { "PriceData", new Dictionary<string, object>
                                 {
                                     { "BaseAsset", "BTC" },
                                     { "QuoteAsset", "USD" },
@@ -112,7 +112,7 @@ namespace XrplTests.Xrpl.Models
         [TestMethod]
         public async Task TestVerify_Invalid_MissingOracleDocumentID()
         {
-            var tx = new Dictionary<string, dynamic>
+            var tx = new Dictionary<string, object>
             {
                 { "Account", "r3rhWeE31Jt5sWmi4QiGLMZnY3ENgqw96W" },
                 { "TransactionType", "OracleSet" },
@@ -123,9 +123,9 @@ namespace XrplTests.Xrpl.Models
                 { "AssetClass", "currency" },
                 { "PriceDataSeries", new List<object>
                     {
-                        new Dictionary<string, dynamic>
+                        new Dictionary<string, object>
                         {
-                            { "PriceData", new Dictionary<string, dynamic>
+                            { "PriceData", new Dictionary<string, object>
                                 {
                                     { "BaseAsset", "XRP" },
                                     { "QuoteAsset", "USD" }
@@ -146,7 +146,7 @@ namespace XrplTests.Xrpl.Models
         [TestMethod]
         public async Task TestVerify_Invalid_MissingLastUpdateTime()
         {
-            var tx = new Dictionary<string, dynamic>
+            var tx = new Dictionary<string, object>
             {
                 { "Account", "r3rhWeE31Jt5sWmi4QiGLMZnY3ENgqw96W" },
                 { "TransactionType", "OracleSet" },
@@ -157,9 +157,9 @@ namespace XrplTests.Xrpl.Models
                 { "AssetClass", "currency" },
                 { "PriceDataSeries", new List<object>
                     {
-                        new Dictionary<string, dynamic>
+                        new Dictionary<string, object>
                         {
-                            { "PriceData", new Dictionary<string, dynamic>
+                            { "PriceData", new Dictionary<string, object>
                                 {
                                     { "BaseAsset", "XRP" },
                                     { "QuoteAsset", "USD" }
@@ -180,7 +180,7 @@ namespace XrplTests.Xrpl.Models
         [TestMethod]
         public async Task TestVerify_Invalid_MissingPriceDataSeries()
         {
-            var tx = new Dictionary<string, dynamic>
+            var tx = new Dictionary<string, object>
             {
                 { "Account", "r3rhWeE31Jt5sWmi4QiGLMZnY3ENgqw96W" },
                 { "TransactionType", "OracleSet" },
@@ -202,7 +202,7 @@ namespace XrplTests.Xrpl.Models
         [TestMethod]
         public async Task TestVerify_Invalid_EmptyPriceDataSeries()
         {
-            var tx = new Dictionary<string, dynamic>
+            var tx = new Dictionary<string, object>
             {
                 { "Account", "r3rhWeE31Jt5sWmi4QiGLMZnY3ENgqw96W" },
                 { "TransactionType", "OracleSet" },
@@ -228,9 +228,9 @@ namespace XrplTests.Xrpl.Models
             var priceDataList = new List<object>();
             for (int i = 0; i < 11; i++)
             {
-                priceDataList.Add(new Dictionary<string, dynamic>
+                priceDataList.Add(new Dictionary<string, object>
                 {
-                    { "PriceData", new Dictionary<string, dynamic>
+                    { "PriceData", new Dictionary<string, object>
                         {
                             { "BaseAsset", $"AS{i}" },
                             { "QuoteAsset", "USD" }
@@ -239,7 +239,7 @@ namespace XrplTests.Xrpl.Models
                 });
             }
 
-            var tx = new Dictionary<string, dynamic>
+            var tx = new Dictionary<string, object>
             {
                 { "Account", "r3rhWeE31Jt5sWmi4QiGLMZnY3ENgqw96W" },
                 { "TransactionType", "OracleSet" },
@@ -262,7 +262,7 @@ namespace XrplTests.Xrpl.Models
         [TestMethod]
         public async Task TestVerify_Invalid_ScaleExceedsMax()
         {
-            var tx = new Dictionary<string, dynamic>
+            var tx = new Dictionary<string, object>
             {
                 { "Account", "r3rhWeE31Jt5sWmi4QiGLMZnY3ENgqw96W" },
                 { "TransactionType", "OracleSet" },
@@ -274,9 +274,9 @@ namespace XrplTests.Xrpl.Models
                 { "AssetClass", "currency" },
                 { "PriceDataSeries", new List<object>
                     {
-                        new Dictionary<string, dynamic>
+                        new Dictionary<string, object>
                         {
-                            { "PriceData", new Dictionary<string, dynamic>
+                            { "PriceData", new Dictionary<string, object>
                                 {
                                     { "BaseAsset", "XRP" },
                                     { "QuoteAsset", "USD" },
@@ -299,7 +299,7 @@ namespace XrplTests.Xrpl.Models
         [TestMethod]
         public async Task TestVerify_Invalid_MissingBaseAsset()
         {
-            var tx = new Dictionary<string, dynamic>
+            var tx = new Dictionary<string, object>
             {
                 { "Account", "r3rhWeE31Jt5sWmi4QiGLMZnY3ENgqw96W" },
                 { "TransactionType", "OracleSet" },
@@ -311,9 +311,9 @@ namespace XrplTests.Xrpl.Models
                 { "AssetClass", "currency" },
                 { "PriceDataSeries", new List<object>
                     {
-                        new Dictionary<string, dynamic>
+                        new Dictionary<string, object>
                         {
-                            { "PriceData", new Dictionary<string, dynamic>
+                            { "PriceData", new Dictionary<string, object>
                                 {
                                     { "QuoteAsset", "USD" }
                                 }
@@ -333,7 +333,7 @@ namespace XrplTests.Xrpl.Models
         [TestMethod]
         public async Task TestVerify_Invalid_MissingQuoteAsset()
         {
-            var tx = new Dictionary<string, dynamic>
+            var tx = new Dictionary<string, object>
             {
                 { "Account", "r3rhWeE31Jt5sWmi4QiGLMZnY3ENgqw96W" },
                 { "TransactionType", "OracleSet" },
@@ -345,9 +345,9 @@ namespace XrplTests.Xrpl.Models
                 { "AssetClass", "currency" },
                 { "PriceDataSeries", new List<object>
                     {
-                        new Dictionary<string, dynamic>
+                        new Dictionary<string, object>
                         {
-                            { "PriceData", new Dictionary<string, dynamic>
+                            { "PriceData", new Dictionary<string, object>
                                 {
                                     { "BaseAsset", "XRP" }
                                 }

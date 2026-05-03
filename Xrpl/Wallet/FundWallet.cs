@@ -1,4 +1,4 @@
-﻿using System;
+using System;
 using System.Collections.Generic;
 using System.Linq;
 using System.Net.Http;
@@ -126,18 +126,18 @@ namespace Xrpl.Wallet
 
             // Create the POST request body
 
-            Dictionary<string, dynamic> json = new Dictionary<string, dynamic>
+            Dictionary<string, object> json = new Dictionary<string, object>
             {
                 { "destination", walletToFund.ClassicAddress },
             };
             string jsonData = JsonConvert.SerializeObject(json);
             byte[] postBody = Encoding.UTF8.GetBytes(jsonData);
-            Dictionary<string, dynamic> httpOptions = GetHTTPOptions(client, postBody, faucetHost);
+            Dictionary<string, object> httpOptions = GetHTTPOptions(client, postBody, faucetHost);
             return await ReturnPromise(httpOptions, client, startingBalance, walletToFund, jsonData);
         }
 
         private static async Task<Funded> ReturnPromise(
-              Dictionary<string, dynamic> options,
+              Dictionary<string, object> options,
               IXrplClient client,
               double startingBalance,
               XrplWallet walletToFund,
@@ -145,10 +145,10 @@ namespace Xrpl.Wallet
         )
         {
             HttpClient httpsClient = new HttpClient();
-            httpsClient.BaseAddress = new Uri($"https://{options["hostname"]}");
+            httpsClient.BaseAddress = new Uri($"https://{(string)options["hostname"]}");
             httpsClient.DefaultRequestHeaders.Accept.Add(new MediaTypeWithQualityHeaderValue("application/json"));
             StringContent contentData = new StringContent(postBody, Encoding.UTF8, "application/json");
-            var response = await httpsClient.PostAsync(options["path"], contentData);
+            var response = await httpsClient.PostAsync((string)options["path"], contentData);
             var row = await response.Content.ReadAsStringAsync();
             if (!response.IsSuccessStatusCode)
             {
@@ -166,19 +166,19 @@ namespace Xrpl.Wallet
             );
         }
 
-        private static Dictionary<string, dynamic> GetHTTPOptions(
+        private static Dictionary<string, object> GetHTTPOptions(
               IXrplClient client,
               byte[] postBody,
               string hostname
         )
         {
-            Dictionary<string, dynamic> options = new Dictionary<string, dynamic>
+            Dictionary<string, object> options = new Dictionary<string, object>
             {
                 { "hostname", hostname ?? GetFaucetHost(client) },
                 { "port", 443 },
                 { "path", "/accounts" },
                 { "method", "POST" },
-                { "headers", new Dictionary<string, dynamic> {
+                { "headers", new Dictionary<string, object> {
                     { "Content-Type", "application/json" },
                     { "Content-Length", postBody.Length }
                 } }
@@ -207,7 +207,7 @@ namespace Xrpl.Wallet
             }
             else
             {
-                Dictionary<string, dynamic> errorResponse = new Dictionary<string, dynamic>
+                Dictionary<string, object> errorResponse = new Dictionary<string, object>
                 {
                     { "statusCode", response.StatusCode },
                     { "contentType", response.Content.Headers.GetValues("Content-Type").First() },

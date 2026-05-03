@@ -1,4 +1,4 @@
-﻿using System;
+using System;
 using System.Collections.Generic;
 using System.Diagnostics;
 using System.Threading;
@@ -21,13 +21,13 @@ namespace Xrpl.Tests
         {
             int port = TestUtils.GetFreePort();
             mockedRippled = new CreateMockRippled(port);
-            mockedRippled.AddResponse("server_info", new Dictionary<string, dynamic>
+            mockedRippled.AddResponse("server_info", new Dictionary<string, object>
             {
                 { "type", "response" },
                 { "status", "success" },
-                { "result", new Dictionary<string, dynamic>
+                { "result", new Dictionary<string, object>
                     {
-                        { "info", new Dictionary<string, dynamic>
+                        { "info", new Dictionary<string, object>
                             {
                                 { "build_version", "test-mock" },
                                 { "complete_ledgers", "1-1" },

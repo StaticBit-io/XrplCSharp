@@ -1,4 +1,4 @@
-﻿
+
 
 // https://github.com/XRPLF/xrpl.js/blob/main/packages/xrpl/test/models/paymentChannelCreate.ts
 
@@ -14,12 +14,12 @@ namespace XrplTests.Xrpl.Models
     [TestClass]
     public class TestUPaymentChannelCreate
     {
-        public static Dictionary<string, dynamic> channel;
+        public static Dictionary<string, object> channel;
 
         [ClassInitialize]
         public static void MyClassInitialize(TestContext testContext)
         {
-            channel = new Dictionary<string, dynamic>
+            channel = new Dictionary<string, object>
             {
                 {"TransactionType", "PaymentChannelCreate"},
                 {"Account", "rf1BiGeXwwQoi8Z2ueFYTEXSwuJYfV2Jpn"},

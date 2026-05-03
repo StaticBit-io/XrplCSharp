@@ -32,14 +32,14 @@ namespace Xrpl.Client
         {
             public Guid Id { get; set; }
             public string Message { get; set; }
-            public Task<Dictionary<string, dynamic>> Promise { get; set; }
+            public Task<Dictionary<string, object>> Promise { get; set; }
         }
 
         public class XrplGRequest
         {
             public Guid Id { get; set; }
             public string Message { get; set; }
-            public Task<dynamic> Promise { get; set; }
+            public Task<object> Promise { get; set; }
         }
 
         private Guid nextId = Guid.NewGuid();
@@ -112,7 +112,7 @@ namespace Xrpl.Client
         /// When a Task faults but is never awaited, .NET raises UnobservedTaskException event.
         /// By adding a ContinueWith that reads the exception, we mark it as "observed".
         /// </summary>
-        private void ObserveTaskException(dynamic taskCompletionSource)
+        private void ObserveTaskException(object taskCompletionSource)
         {
             try
             {
@@ -190,7 +190,7 @@ namespace Xrpl.Client
                 throw new XrplException($"Response with id '${newId}' is already pending");
             }
 
-            TaskCompletionSource<dynamic> task = new TaskCompletionSource<dynamic>();
+            TaskCompletionSource<object> task = new TaskCompletionSource<object>();
             TaskInfo taskInfo = new TaskInfo();
             taskInfo.TaskId = newId;
             taskInfo.TaskCompletionResult = task;
@@ -244,7 +244,7 @@ namespace Xrpl.Client
 
         /// <summary>
         /// </summary>
-        public XrplRequest CreateRequest(Dictionary<string, dynamic> request, TimeSpan timeout, CancellationToken cancellationToken = default)
+        public XrplRequest CreateRequest(Dictionary<string, object> request, TimeSpan timeout, CancellationToken cancellationToken = default)
         {
             if (timeout != System.Threading.Timeout.InfiniteTimeSpan && timeout <= TimeSpan.Zero)
             {
@@ -273,12 +273,12 @@ namespace Xrpl.Client
                 throw new XrplException($"Response with id '${newId}' is already pending");
             }
 
-            TaskCompletionSource<Dictionary<string, dynamic>> task = new TaskCompletionSource<Dictionary<string, dynamic>>();
+            TaskCompletionSource<Dictionary<string, object>> task = new TaskCompletionSource<Dictionary<string, object>>();
             TaskInfo taskInfo = new TaskInfo();
             taskInfo.TaskId = newId;
             taskInfo.TaskCompletionResult = task;
             taskInfo.RemoveUponCompletion = true;
-            taskInfo.Type = typeof(Dictionary<string, dynamic>);
+            taskInfo.Type = typeof(Dictionary<string, object>);
 
             promisesAwaitingResponse.TryAdd(newId, taskInfo);
 

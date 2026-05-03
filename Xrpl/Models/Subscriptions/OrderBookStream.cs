@@ -39,7 +39,7 @@ namespace Xrpl.Models.Subscriptions
         /// The definition of the transaction in JSON format
         /// </summary>
         [JsonProperty("transaction")]
-        public dynamic TransactionJson { get; set; }
+        public object TransactionJson { get; set; }
 
         [JsonIgnore]
         public ITransactionResponse Transaction => JsonConvert.DeserializeObject<TransactionResponse>(TransactionJson.ToString());

@@ -1,4 +1,4 @@
-﻿using System;
+using System;
 using System.Collections.Generic;
 using Microsoft.VisualStudio.TestTools.UnitTesting;
 using Newtonsoft.Json.Linq;
@@ -307,7 +307,7 @@ namespace Xrpl.Tests.Wallet.Tests
                 ["key1"] = "value1",
                 ["key2"] = 42
             };
-            var result = SignerUtilities.ConvertJTokenToClrType(token) as Dictionary<string, dynamic>;
+            var result = SignerUtilities.ConvertJTokenToClrType(token) as Dictionary<string, object>;
             Assert.IsNotNull(result);
             Assert.AreEqual("value1", result["key1"]);
             Assert.AreEqual(42L, result["key2"]);
@@ -317,7 +317,7 @@ namespace Xrpl.Tests.Wallet.Tests
         public void TestUConvertJTokenToClrType_Array()
         {
             var token = new JArray { "a", "b", "c" };
-            var result = SignerUtilities.ConvertJTokenToClrType(token) as List<dynamic>;
+            var result = SignerUtilities.ConvertJTokenToClrType(token) as List<object>;
             Assert.IsNotNull(result);
             Assert.AreEqual(3, result.Count);
             Assert.AreEqual("a", result[0]);
@@ -333,9 +333,9 @@ namespace Xrpl.Tests.Wallet.Tests
                     ["inner"] = "value"
                 }
             };
-            var result = SignerUtilities.ConvertJTokenToClrType(token) as Dictionary<string, dynamic>;
+            var result = SignerUtilities.ConvertJTokenToClrType(token) as Dictionary<string, object>;
             Assert.IsNotNull(result);
-            var outer = result["outer"] as Dictionary<string, dynamic>;
+            var outer = result["outer"] as Dictionary<string, object>;
             Assert.IsNotNull(outer);
             Assert.AreEqual("value", outer["inner"]);
         }

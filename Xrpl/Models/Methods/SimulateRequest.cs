@@ -74,7 +74,7 @@ public class SimulateResponse
     /// </summary>
     [JsonProperty("tx_json")]
     [JsonConverter(typeof(TransactionRequestConverter))]
-    public dynamic TxJson { get; set; }
+    public object TxJson { get; set; }
 
     /// <summary>
     /// The default value is false, which returns data and metadata in JSON format.<br/>

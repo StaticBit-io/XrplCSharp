@@ -1,4 +1,4 @@
-﻿////See https://aka.ms/new-console-template for more information
+////See https://aka.ms/new-console-template for more information
 
 using Newtonsoft.Json;
 
@@ -550,7 +550,7 @@ internal class Program
         };
 
         // sign and submit the transaction
-        Dictionary<string, dynamic> txJson = JsonConvert.DeserializeObject<Dictionary<string, dynamic>>(tx.ToJson());
+        Dictionary<string, object> txJson = JsonConvert.DeserializeObject<Dictionary<string, object>>(tx.ToJson());
         var txResult = await client.SubmitAndWait(txJson, wallet, autofill: true, failHard: false);
         Console.WriteLine(txResult.Meta.TransactionResult);
 
@@ -670,7 +670,7 @@ internal class Program
                 ValueAsXrp = 0.00002m,
             },
         };
-        Dictionary<string, dynamic> txJson = JsonConvert.DeserializeObject<Dictionary<string, dynamic>>(tx.ToJson());
+        Dictionary<string, object> txJson = JsonConvert.DeserializeObject<Dictionary<string, object>>(tx.ToJson());
         var response = await client.Submit(txJson, wallet);
         Console.WriteLine(response.EngineResult);
     }
@@ -742,7 +742,7 @@ internal class Program
         return Task.CompletedTask;
     }
 
-    private static Task OnError(string errorCode, string errorMessage, string error, dynamic data)
+    private static Task OnError(string errorCode, string errorMessage, string error, object data)
     {
         Console.WriteLine(errorCode);
         Console.WriteLine(errorMessage);

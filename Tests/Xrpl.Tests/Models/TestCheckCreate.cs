@@ -1,4 +1,4 @@
-﻿
+
 
 // https://github.com/XRPLF/xrpl.js/blob/main/packages/xrpl/test/models/checkCreate.ts
 
@@ -17,7 +17,7 @@ namespace XrplTests.Xrpl.Models
         [TestMethod]
         public async Task TestVerify_Valid_CheckCreate()
         {
-            var tx = new Dictionary<string, dynamic>
+            var tx = new Dictionary<string, object>
             {
                 { "TransactionType", "CheckCreate" },
                 {"Account", "rUn84CUYbNjRoTQ6mSW7BVJPSVJNLb1QLo"},
@@ -34,7 +34,7 @@ namespace XrplTests.Xrpl.Models
         [TestMethod]
         public async Task TestVerify_InValid_Destination()
         {
-            var tx = new Dictionary<string, dynamic>
+            var tx = new Dictionary<string, object>
             {
                 { "TransactionType", "CheckCreate" },
                 {"Account", "rUn84CUYbNjRoTQ6mSW7BVJPSVJNLb1QLo"},
@@ -51,7 +51,7 @@ namespace XrplTests.Xrpl.Models
         [TestMethod]
         public async Task TestVerify_InValid_SendMax()
         {
-            var tx = new Dictionary<string, dynamic>
+            var tx = new Dictionary<string, object>
             {
                 { "TransactionType", "CheckCreate" },
                 {"Account", "rUn84CUYbNjRoTQ6mSW7BVJPSVJNLb1QLo"},
@@ -68,7 +68,7 @@ namespace XrplTests.Xrpl.Models
         [TestMethod]
         public async Task TestVerify_InValid_DestinationTag()
         {
-            var tx = new Dictionary<string, dynamic>
+            var tx = new Dictionary<string, object>
             {
                 { "TransactionType", "CheckCreate" },
                 {"Account", "rUn84CUYbNjRoTQ6mSW7BVJPSVJNLb1QLo"},
@@ -85,7 +85,7 @@ namespace XrplTests.Xrpl.Models
         [TestMethod]
         public async Task TestVerify_InValid_Expiration()
         {
-            var tx = new Dictionary<string, dynamic>
+            var tx = new Dictionary<string, object>
             {
                 { "TransactionType", "CheckCreate" },
                 {"Account", "rUn84CUYbNjRoTQ6mSW7BVJPSVJNLb1QLo"},
@@ -102,7 +102,7 @@ namespace XrplTests.Xrpl.Models
         [TestMethod]
         public async Task TestVerify_InValid_InvoiceID()
         {
-            var tx = new Dictionary<string, dynamic>
+            var tx = new Dictionary<string, object>
             {
                 { "TransactionType", "CheckCreate" },
                 {"Account", "rUn84CUYbNjRoTQ6mSW7BVJPSVJNLb1QLo"},

@@ -1,4 +1,4 @@
-﻿using Microsoft.VisualStudio.TestTools.UnitTesting;
+using Microsoft.VisualStudio.TestTools.UnitTesting;
 
 using System.Collections.Generic;
 using System.Threading.Tasks;
@@ -24,7 +24,7 @@ namespace XrplTests.Xrpl.Models
         [TestMethod]
         public async Task TestVerify_Valid_NFTokenMint()
         {
-            var offer = new Dictionary<string, dynamic>
+            var offer = new Dictionary<string, object>
             {
                 { "TransactionType", "NFTokenMint" },
                 {"Account", "rWYkbWkCeg8dP6rXALnjgZSjjLyih5NXm"},
@@ -41,7 +41,7 @@ namespace XrplTests.Xrpl.Models
         [TestMethod]
         public async Task TestVerify_InValid_missing_NFTokenTaxon()
         {
-            var offer = new Dictionary<string, dynamic>
+            var offer = new Dictionary<string, object>
             {
                 { "TransactionType", "NFTokenMint" },
                 {"Account", "rWYkbWkCeg8dP6rXALnjgZSjjLyih5NXm"},
@@ -57,7 +57,7 @@ namespace XrplTests.Xrpl.Models
         [TestMethod]
         public async Task TestVerify_Invalid_Account_is_Issuer()
         {
-            var offer = new Dictionary<string, dynamic>
+            var offer = new Dictionary<string, object>
             {
                 { "TransactionType", "NFTokenMint" },
                 {"Account", "rWYkbWkCeg8dP6rXALnjgZSjjLyih5NXm"},
@@ -74,7 +74,7 @@ namespace XrplTests.Xrpl.Models
         [TestMethod]
         public async Task TestVerify_Invalid_URI_not_in_hex_format()
         {
-            var offer = new Dictionary<string, dynamic>
+            var offer = new Dictionary<string, object>
             {
                 { "TransactionType", "NFTokenMint" },
                 {"Account", "rWYkbWkCeg8dP6rXALnjgZSjjLyih5NXm"},

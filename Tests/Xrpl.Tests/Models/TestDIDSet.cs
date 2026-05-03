@@ -14,7 +14,7 @@ namespace XrplTests.Xrpl.Models
         [TestMethod]
         public async Task TestVerify_Valid_WithData()
         {
-            var tx = new Dictionary<string, dynamic>
+            var tx = new Dictionary<string, object>
             {
                 { "Account", "r3rhWeE31Jt5sWmi4QiGLMZnY3ENgqw96W" },
                 { "TransactionType", "DIDSet" },
@@ -29,7 +29,7 @@ namespace XrplTests.Xrpl.Models
         [TestMethod]
         public async Task TestVerify_Valid_WithDIDDocument()
         {
-            var tx = new Dictionary<string, dynamic>
+            var tx = new Dictionary<string, object>
             {
                 { "Account", "r3rhWeE31Jt5sWmi4QiGLMZnY3ENgqw96W" },
                 { "TransactionType", "DIDSet" },
@@ -44,7 +44,7 @@ namespace XrplTests.Xrpl.Models
         [TestMethod]
         public async Task TestVerify_Valid_WithURI()
         {
-            var tx = new Dictionary<string, dynamic>
+            var tx = new Dictionary<string, object>
             {
                 { "Account", "r3rhWeE31Jt5sWmi4QiGLMZnY3ENgqw96W" },
                 { "TransactionType", "DIDSet" },
@@ -59,7 +59,7 @@ namespace XrplTests.Xrpl.Models
         [TestMethod]
         public async Task TestVerify_Valid_WithAllFields()
         {
-            var tx = new Dictionary<string, dynamic>
+            var tx = new Dictionary<string, object>
             {
                 { "Account", "r3rhWeE31Jt5sWmi4QiGLMZnY3ENgqw96W" },
                 { "TransactionType", "DIDSet" },
@@ -76,7 +76,7 @@ namespace XrplTests.Xrpl.Models
         [TestMethod]
         public async Task TestVerify_Invalid_MissingAllOptionalFields()
         {
-            var tx = new Dictionary<string, dynamic>
+            var tx = new Dictionary<string, object>
             {
                 { "Account", "r3rhWeE31Jt5sWmi4QiGLMZnY3ENgqw96W" },
                 { "TransactionType", "DIDSet" },
@@ -91,7 +91,7 @@ namespace XrplTests.Xrpl.Models
         [TestMethod]
         public async Task TestVerify_Invalid_EmptyData()
         {
-            var tx = new Dictionary<string, dynamic>
+            var tx = new Dictionary<string, object>
             {
                 { "Account", "r3rhWeE31Jt5sWmi4QiGLMZnY3ENgqw96W" },
                 { "TransactionType", "DIDSet" },
@@ -107,7 +107,7 @@ namespace XrplTests.Xrpl.Models
         [TestMethod]
         public async Task TestVerify_Invalid_NullData()
         {
-            var tx = new Dictionary<string, dynamic>
+            var tx = new Dictionary<string, object>
             {
                 { "Account", "r3rhWeE31Jt5sWmi4QiGLMZnY3ENgqw96W" },
                 { "TransactionType", "DIDSet" },
@@ -123,7 +123,7 @@ namespace XrplTests.Xrpl.Models
         [TestMethod]
         public async Task TestVerify_Invalid_DataTooLong()
         {
-            var tx = new Dictionary<string, dynamic>
+            var tx = new Dictionary<string, object>
             {
                 { "Account", "r3rhWeE31Jt5sWmi4QiGLMZnY3ENgqw96W" },
                 { "TransactionType", "DIDSet" },
@@ -139,7 +139,7 @@ namespace XrplTests.Xrpl.Models
         [TestMethod]
         public async Task TestVerify_Invalid_DIDDocumentTooLong()
         {
-            var tx = new Dictionary<string, dynamic>
+            var tx = new Dictionary<string, object>
             {
                 { "Account", "r3rhWeE31Jt5sWmi4QiGLMZnY3ENgqw96W" },
                 { "TransactionType", "DIDSet" },
@@ -155,7 +155,7 @@ namespace XrplTests.Xrpl.Models
         [TestMethod]
         public async Task TestVerify_Invalid_URITooLong()
         {
-            var tx = new Dictionary<string, dynamic>
+            var tx = new Dictionary<string, object>
             {
                 { "Account", "r3rhWeE31Jt5sWmi4QiGLMZnY3ENgqw96W" },
                 { "TransactionType", "DIDSet" },
@@ -171,7 +171,7 @@ namespace XrplTests.Xrpl.Models
         [TestMethod]
         public async Task TestVerify_Valid_MaxLengthData()
         {
-            var tx = new Dictionary<string, dynamic>
+            var tx = new Dictionary<string, object>
             {
                 { "Account", "r3rhWeE31Jt5sWmi4QiGLMZnY3ENgqw96W" },
                 { "TransactionType", "DIDSet" },

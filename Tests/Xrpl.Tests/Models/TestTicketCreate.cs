@@ -1,4 +1,4 @@
-﻿
+
 
 // https://github.com/XRPLF/xrpl.js/blob/main/packages/xrpl/test/models/ticketCreate.ts
 
@@ -14,12 +14,12 @@ namespace XrplTests.Xrpl.Models
     [TestClass]
     public class TestUTicketCreate
     {
-        public static Dictionary<string, dynamic> ticketCreate;
+        public static Dictionary<string, object> ticketCreate;
 
         [ClassInitialize]
         public static void MyClassInitialize(TestContext testContext)
         {
-            ticketCreate = new Dictionary<string, dynamic>
+            ticketCreate = new Dictionary<string, object>
             {
                 {"TransactionType", "TicketCreate"},
                 {"Account", "rUn84CUYbNjRoTQ6mSW7BVJPSVJNLb1QLo"},

@@ -1,4 +1,4 @@
-﻿
+
 
 // https://github.com/XRPLF/xrpl.js/blob/main/packages/xrpl/test/models/depositPreauth.ts
 
@@ -15,7 +15,7 @@ namespace XrplTests.Xrpl.Models
     [TestClass]
     public class TestUDepositPreauth
     {
-        public static Dictionary<string, dynamic> depositPreauth;
+        public static Dictionary<string, object> depositPreauth;
 
         private const string MissingError =
             "DepositPreauth: must provide one of Authorize, Unauthorize, AuthorizeCredentials or UnauthorizeCredentials";
@@ -26,21 +26,21 @@ namespace XrplTests.Xrpl.Models
         [ClassInitialize]
         public static void MyClassInitialize(TestContext testContext)
         {
-            depositPreauth = new Dictionary<string, dynamic>
+            depositPreauth = new Dictionary<string, object>
             {
                 {"TransactionType", "DepositPreauth"},
                 {"Account", "rUn84CUYbNjRoTQ6mSW7BVJPSVJNLb1QLo"},
             };
         }
 
-        private static List<Dictionary<string, dynamic>> CreateValidCredentials(int count = 1)
+        private static List<Dictionary<string, object>> CreateValidCredentials(int count = 1)
         {
-            List<Dictionary<string, dynamic>> credentials = new List<Dictionary<string, dynamic>>();
+            List<Dictionary<string, object>> credentials = new List<Dictionary<string, object>>();
             for (int i = 0; i < count; i++)
             {
-                credentials.Add(new Dictionary<string, dynamic>
+                credentials.Add(new Dictionary<string, object>
                 {
-                    { "Credential", new Dictionary<string, dynamic>
+                    { "Credential", new Dictionary<string, object>
                         {
                             { "Issuer", "ra5nK24KXen9AHvsdFTKHSANinZseWnPcX" },
                             { "CredentialType", $"6D795F63726564656E7469616C{i:D2}" }
@@ -99,7 +99,7 @@ namespace XrplTests.Xrpl.Models
         [TestMethod]
         public async Task TestVerifyValid_AuthorizeCredentials()
         {
-            Dictionary<string, dynamic> tx = new Dictionary<string, dynamic>
+            Dictionary<string, object> tx = new Dictionary<string, object>
             {
                 { "TransactionType", "DepositPreauth" },
                 { "Account", "rUn84CUYbNjRoTQ6mSW7BVJPSVJNLb1QLo" },
@@ -112,7 +112,7 @@ namespace XrplTests.Xrpl.Models
         [TestMethod]
         public async Task TestVerifyValid_UnauthorizeCredentials()
         {
-            Dictionary<string, dynamic> tx = new Dictionary<string, dynamic>
+            Dictionary<string, object> tx = new Dictionary<string, object>
             {
                 { "TransactionType", "DepositPreauth" },
                 { "Account", "rUn84CUYbNjRoTQ6mSW7BVJPSVJNLb1QLo" },
@@ -125,7 +125,7 @@ namespace XrplTests.Xrpl.Models
         [TestMethod]
         public async Task TestVerify_Invalid_TooManyCredentials()
         {
-            Dictionary<string, dynamic> tx = new Dictionary<string, dynamic>
+            Dictionary<string, object> tx = new Dictionary<string, object>
             {
                 { "TransactionType", "DepositPreauth" },
                 { "Account", "rUn84CUYbNjRoTQ6mSW7BVJPSVJNLb1QLo" },
@@ -139,20 +139,20 @@ namespace XrplTests.Xrpl.Models
         [TestMethod]
         public async Task TestVerify_Invalid_DuplicateAuthorizeCredentials()
         {
-            List<Dictionary<string, dynamic>> credentials = new List<Dictionary<string, dynamic>>
+            List<Dictionary<string, object>> credentials = new List<Dictionary<string, object>>
             {
-                new Dictionary<string, dynamic>
+                new Dictionary<string, object>
                 {
-                    { "Credential", new Dictionary<string, dynamic>
+                    { "Credential", new Dictionary<string, object>
                         {
                             { "Issuer", "ra5nK24KXen9AHvsdFTKHSANinZseWnPcX" },
                             { "CredentialType", "6D795F63726564656E7469616C" }
                         }
                     }
                 },
-                new Dictionary<string, dynamic>
+                new Dictionary<string, object>
                 {
-                    { "Credential", new Dictionary<string, dynamic>
+                    { "Credential", new Dictionary<string, object>
                         {
                             { "Issuer", "ra5nK24KXen9AHvsdFTKHSANinZseWnPcX" },
                             { "CredentialType", "6D795F63726564656E7469616C" }
@@ -161,7 +161,7 @@ namespace XrplTests.Xrpl.Models
                 }
             };
 
-            Dictionary<string, dynamic> tx = new Dictionary<string, dynamic>
+            Dictionary<string, object> tx = new Dictionary<string, object>
             {
                 { "TransactionType", "DepositPreauth" },
                 { "Account", "rUn84CUYbNjRoTQ6mSW7BVJPSVJNLb1QLo" },
@@ -175,7 +175,7 @@ namespace XrplTests.Xrpl.Models
         [TestMethod]
         public async Task TestVerify_Invalid_BothAuthorizeAndAuthorizeCredentials()
         {
-            Dictionary<string, dynamic> tx = new Dictionary<string, dynamic>
+            Dictionary<string, object> tx = new Dictionary<string, object>
             {
                 { "TransactionType", "DepositPreauth" },
                 { "Account", "rUn84CUYbNjRoTQ6mSW7BVJPSVJNLb1QLo" },
@@ -190,7 +190,7 @@ namespace XrplTests.Xrpl.Models
         [TestMethod]
         public async Task TestVerify_Invalid_BothAuthorizeAndUnauthorizeCredentials()
         {
-            Dictionary<string, dynamic> tx = new Dictionary<string, dynamic>
+            Dictionary<string, object> tx = new Dictionary<string, object>
             {
                 { "TransactionType", "DepositPreauth" },
                 { "Account", "rUn84CUYbNjRoTQ6mSW7BVJPSVJNLb1QLo" },
@@ -205,11 +205,11 @@ namespace XrplTests.Xrpl.Models
         [TestMethod]
         public async Task TestVerify_Invalid_EmptyCredentialsList()
         {
-            Dictionary<string, dynamic> tx = new Dictionary<string, dynamic>
+            Dictionary<string, object> tx = new Dictionary<string, object>
             {
                 { "TransactionType", "DepositPreauth" },
                 { "Account", "rUn84CUYbNjRoTQ6mSW7BVJPSVJNLb1QLo" },
-                { "AuthorizeCredentials", new List<Dictionary<string, dynamic>>() }
+                { "AuthorizeCredentials", new List<Dictionary<string, object>>() }
             };
             await Helper.ThrowsExceptionAsync<ValidationException>(
                 () => Validation.ValidateDepositPreauth(tx),

@@ -1,4 +1,4 @@
-﻿
+
 
 // https://github.com/XRPLF/xrpl.js/blob/main/packages/xrpl/test/models/escrowCancel.ts
 
@@ -14,12 +14,12 @@ namespace XrplTests.Xrpl.Models
     [TestClass]
     public class TestUEscrowCancel
     {
-        public static Dictionary<string, dynamic> depositPreauth;
+        public static Dictionary<string, object> depositPreauth;
 
         [ClassInitialize]
         public static void MyClassInitialize(TestContext testContext)
         {
-            depositPreauth = new Dictionary<string, dynamic>
+            depositPreauth = new Dictionary<string, object>
             {
                 {"TransactionType", "EscrowCancel"},
                 {"Account", "rf1BiGeXwwQoi8Z2ueFYTEXSwuJYfV2Jpn"},

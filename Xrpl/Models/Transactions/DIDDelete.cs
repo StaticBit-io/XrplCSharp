@@ -38,7 +38,7 @@ namespace Xrpl.Models.Transactions
         /// </summary>
         /// <param name="tx">A DIDDelete Transaction.</param>
         /// <exception cref="ValidationException">When the DIDDelete is malformed.</exception>
-        public static async Task ValidateDIDDelete(Dictionary<string, dynamic> tx)
+        public static async Task ValidateDIDDelete(Dictionary<string, object> tx)
         {
             await Common.ValidateBaseTransaction(tx);
         }

@@ -1,4 +1,4 @@
-﻿
+
 
 // https://github.com/XRPLF/xrpl.js/blob/main/packages/xrpl/test/models/escrowCreate.ts
 
@@ -14,12 +14,12 @@ namespace XrplTests.Xrpl.Models
     [TestClass]
     public class TestUEscrowCreate
     {
-        public static Dictionary<string, dynamic> escrowCreate;
+        public static Dictionary<string, object> escrowCreate;
 
         [ClassInitialize]
         public static void MyClassInitialize(TestContext testContext)
         {
-            escrowCreate = new Dictionary<string, dynamic>
+            escrowCreate = new Dictionary<string, object>
             {
                 {"TransactionType", "EscrowCreate"},
                 {"Account", "rf1BiGeXwwQoi8Z2ueFYTEXSwuJYfV2Jpn"},
@@ -66,7 +66,7 @@ namespace XrplTests.Xrpl.Models
             escrowCreate["Amount"] = "10000";
 
             // Valid Amount as object (MPT/IOU - TokenEscrow amendment)
-            escrowCreate["Amount"] = new Dictionary<string, dynamic>
+            escrowCreate["Amount"] = new Dictionary<string, object>
             {
                 {"mpt_issuance_id", "00000001A407AF5856CEDA4CE40E27FC80A38EC23A1DEFCD"},
                 {"value", "1000"}

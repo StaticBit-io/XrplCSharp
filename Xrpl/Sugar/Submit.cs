@@ -42,7 +42,7 @@ public static class SubmitSugar
     /// <returns>A promise that contains SubmitResponse</returns>
     public static async Task<Submit> Submit(
         this IXrplClient client,
-        Dictionary<string, dynamic> transaction,
+        Dictionary<string, object> transaction,
         bool autofill = true,
         bool failHard = false,
         XrplWallet wallet = null,
@@ -85,7 +85,7 @@ public static class SubmitSugar
     /// <returns>A promise that contains TxResponse, that will return when the transaction has been validated.</returns>
     public static async Task<TransactionSummary> SubmitAndWait(
         this IXrplClient client,
-        Dictionary<string, dynamic> transaction,
+        Dictionary<string, object> transaction,
         XrplWallet wallet = null,
         bool autofill = true,
         bool failHard = false,
@@ -194,7 +194,7 @@ public static class SubmitSugar
         CancellationToken cancellationToken = default)
     {
         var json = tx.ToJson();
-        var txJson = JsonConvert.DeserializeObject<Dictionary<string, dynamic>>(json)
+        var txJson = JsonConvert.DeserializeObject<Dictionary<string, object>>(json)
                      ?? throw new ValidationException("Failed to deserialize tx json");
         var response = await SubmitMulti(client, txJson, wallets, autofill, failHard, cancellationToken);
         return response;
@@ -211,7 +211,7 @@ public static class SubmitSugar
     /// <returns></returns>
     public static async Task<Submit> SubmitMulti(
         this IXrplClient client,
-        Dictionary<string, dynamic> tx,
+        Dictionary<string, object> tx,
         IEnumerable<XrplWallet> wallets,
         bool autofill = true,
         bool failHard = false,
@@ -247,7 +247,7 @@ public static class SubmitSugar
     /// <returns></returns>
     public static async Task<Submit> SubmitMultiBatch(
         this IXrplClient client,
-        Dictionary<string, dynamic> txJson,
+        Dictionary<string, object> txJson,
         IEnumerable<XrplWallet> wallets,
         bool autofill = true,
         bool failHard = false,
@@ -337,7 +337,7 @@ public static class SubmitSugar
             // обычная подпись плательщика комиссии (должен быть в wallets)
             if (!walletByAddr.TryGetValue(mainAcc, out var main))
                 throw new ValidationException($"Main account {mainAcc} not found in provided wallets");
-            var final = main.Sign(JsonConvert.DeserializeObject<Dictionary<string, dynamic>>(combinedJson.ToString()));
+            var final = main.Sign(JsonConvert.DeserializeObject<Dictionary<string, object>>(combinedJson.ToString()));
             var submit = await client.SubmitRequest(final.TxBlob, failHard, cancellationToken);
             //var txRes = XrplBinaryCodec.Decode(submit.TxBlob);
             return submit;
@@ -355,7 +355,7 @@ public static class SubmitSugar
             //combinedJson["SigningPubKey"] = "";
 
             var msBlobs = picked.Select(w => w.Sign(
-                JsonConvert.DeserializeObject<Dictionary<string, dynamic>>(combinedJson.ToString()),
+                JsonConvert.DeserializeObject<Dictionary<string, object>>(combinedJson.ToString()),
                 multisign: true).TxBlob).ToArray();
             var msCombined = Signer.Multisign(msBlobs);
             //var txRes = XrplBinaryCodec.Decode(msCombined);
@@ -383,7 +383,7 @@ public static class SubmitSugar
     CancellationToken cancellationToken = default)
     {
         var json = tx.ToJson();
-        var txJson = JsonConvert.DeserializeObject<Dictionary<string, dynamic>>(json)
+        var txJson = JsonConvert.DeserializeObject<Dictionary<string, object>>(json)
                     ?? throw new ValidationException("Failed to deserialize tx json");
 
         var response = await client.SubmitMultiBatch(txJson, wallets, autofill, failHard, cancellationToken);
@@ -477,9 +477,9 @@ public static class SubmitSugar
     /// <param name="failHard">If true, and the transaction fails locally, do not retry or relay the transaction to other servers.</param>
     /// <param name="wallet">A wallet to sign a transaction. It must be provided when submitting an unsigned transaction.</param>
     /// <returns>A Wallet derived from a seed.</returns>
-    public static async Task<(string txBlob, Dictionary<string, dynamic> tx)> GetSignedTx(
+    public static async Task<(string txBlob, Dictionary<string, object> tx)> GetSignedTx(
         this IXrplClient client,
-        Dictionary<string, dynamic> transaction,
+        Dictionary<string, object> transaction,
         bool autofill = false,
         bool failHard = false,
         XrplWallet? wallet = null,
@@ -512,7 +512,7 @@ public static class SubmitSugar
 
     public static bool IsSigned(object transaction)
     {
-        if (transaction is Dictionary<string, dynamic> { } tx)
+        if (transaction is Dictionary<string, object> { } tx)
         {
             return (tx.TryGetValue(key: "SigningPubKey", value: out var SigningPubKey) && SigningPubKey is not null) ||
                    (tx.TryGetValue(key: "TxnSignature", value: out var TxnSignature) && TxnSignature is not null);
@@ -542,7 +542,7 @@ public static class SubmitSugar
     /// <returns></returns>
     public static bool IsAccountDelete(object transaction)
     {
-        if (transaction is Dictionary<string, dynamic> { } tx)
+        if (transaction is Dictionary<string, object> { } tx)
         {
             return tx.TryGetValue(key: "TransactionType", value: out var TransactionType) &&
                    $"{TransactionType}" == "AccountDelete";

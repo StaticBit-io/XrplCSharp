@@ -1,4 +1,4 @@
-﻿using System.Collections.Generic;
+using System.Collections.Generic;
 using System.Threading.Tasks;
 
 using Newtonsoft.Json;
@@ -77,7 +77,7 @@ namespace Xrpl.Models.Transactions
         /// <param name="tx">An ClawBack Transaction.</param>
         /// <returns></returns>
         /// <exception cref="ValidationException">When the ClawBack is Malformed.</exception>
-        public static async Task ValidateClawBack(Dictionary<string, dynamic> tx)
+        public static async Task ValidateClawBack(Dictionary<string, object> tx)
         {
             await Common.ValidateBaseTransaction(tx);
 
@@ -95,7 +95,7 @@ namespace Xrpl.Models.Transactions
                 throw new ValidationException("ClawBack: invalid Account");
             var amountJson = JsonConvert.SerializeObject(Amount);
             var amount = JsonConvert.DeserializeObject<Currency>(amountJson);
-            if (amount.Issuer == acc)
+            if (amount.Issuer == (string)acc)
             {
                 throw new ValidationException("ClawBack: invalid holder Account");
             }

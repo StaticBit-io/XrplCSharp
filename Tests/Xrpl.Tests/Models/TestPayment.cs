@@ -1,4 +1,4 @@
-﻿
+
 
 // https://github.com/XRPLF/xrpl.js/blob/main/packages/xrpl/test/models/payment.ts
 
@@ -16,12 +16,12 @@ namespace XrplTests.Xrpl.Models
     [TestClass]
     public class TestUPayment
     {
-        public static Dictionary<string, dynamic> payment;
+        public static Dictionary<string, object> payment;
 
         [ClassInitialize]
         public static void MyClassInitialize(TestContext testContext)
         {
-            payment = new Dictionary<string, dynamic>
+            payment = new Dictionary<string, object>
             {
                 {"TransactionType", "Payment"},
                 {"Account", "rUn84CUYbNjRoTQ6mSW7BVJPSVJNLb1QLo"},
@@ -35,7 +35,7 @@ namespace XrplTests.Xrpl.Models
                 {"SigningPubKey", "02F9E33F16DF9507705EC954E3F94EB5F10D1FC4A354606DBE6297DBB1096FE654"},
                 {"TxnSignature", "3045022100E3FAE0EDEC3D6A8FF6D81BC9CF8288A61B7EEDE8071E90FF9314CB4621058D10022043545CF631706D700CEE65A1DB83EFDD185413808292D9D90F14D87D3DC2D8CB"},
                 {"InvoiceID", "6F1DFD1D0FE8A32E40E1F2C05CF1C15545BAB56B617F9C6C2D63A6B704BEF59B"},
-                {"Paths", new List<List<Dictionary<string, dynamic>>>(){new List<Dictionary<string, dynamic>>(){new Dictionary<string,dynamic>()
+                {"Paths", new List<List<Dictionary<string, object>>>(){new List<Dictionary<string, object>>(){new Dictionary<string,object>()
                 {
                     {"currency", "BTC"},
                     {"issuer", "r9vbV3EHvXWjSkeQ6CAcYVPGeq7TuiXY2X"},
@@ -54,7 +54,7 @@ namespace XrplTests.Xrpl.Models
             await Validation.Validate(payment);
 
             // Verifies memos correctly
-            //payment["Memos"] = new List<Dictionary<string,dynamic>>(){new Dictionary<string, dynamic>()
+            //payment["Memos"] = new List<Dictionary<string,object>>(){new Dictionary<string, object>()
             //{
             //    {"MemoData", "32324324"},
             //}};
@@ -62,7 +62,7 @@ namespace XrplTests.Xrpl.Models
             //payment.Remove("Memos");
 
             //// Verifies memos correctly
-            //payment["Memos"] = new List<Dictionary<string, dynamic>>(){new Dictionary<string, dynamic>()
+            //payment["Memos"] = new List<Dictionary<string, object>>(){new Dictionary<string, object>()
             //{
             //    {"MemoData", "32324324"},
             //    {"MemoType", 121221},
@@ -107,11 +107,11 @@ namespace XrplTests.Xrpl.Models
             payment["InvoiceID"] = "6F1DFD1D0FE8A32E40E1F2C05CF1C15545BAB56B617F9C6C2D63A6B704BEF59B";
 
             // throws when Paths is invalid
-            payment["Paths"] = new List<List<Dictionary<string, dynamic>>>()
+            payment["Paths"] = new List<List<Dictionary<string, object>>>()
             {
-                new List<Dictionary<string, dynamic>>()
+                new List<Dictionary<string, object>>()
                 {
-                    new Dictionary<string, dynamic>()
+                    new Dictionary<string, object>()
                     {
                         { "account", 123 },
                     }
@@ -119,11 +119,11 @@ namespace XrplTests.Xrpl.Models
             };
             await Helper.ThrowsExceptionAsync<ValidationException>(() => Validation.ValidatePayment(payment), "PaymentTransaction: invalid Paths");
             await Helper.ThrowsExceptionAsync<ValidationException>(() => Validation.Validate(payment), "PaymentTransaction: invalid Paths");
-            payment["Paths"] = new List<List<Dictionary<string, dynamic>>>()
+            payment["Paths"] = new List<List<Dictionary<string, object>>>()
             {
-                new List<Dictionary<string, dynamic>>()
+                new List<Dictionary<string, object>>()
                 {
-                    new Dictionary<string, dynamic>()
+                    new Dictionary<string, object>()
                     {
                         { "currency", "BTC" },
                         { "issuer", "r9vbV3EHvXWjSkeQ6CAcYVPGeq7TuiXY2X" },
@@ -147,7 +147,7 @@ namespace XrplTests.Xrpl.Models
 
             // verifies valid DeliverMin with tfPartialPayment flag set as a boolean
             payment["DeliverMin"] = "10000";
-            payment["Flags"] = new Dictionary<string, dynamic>()
+            payment["Flags"] = new Dictionary<string, object>()
             {
                 { "tfPartialPayment", true },
             };
@@ -158,7 +158,7 @@ namespace XrplTests.Xrpl.Models
 
             //throws when DeliverMin is invalid
             payment["DeliverMin"] = 10000;
-            payment["Flags"] = new Dictionary<string, dynamic>()
+            payment["Flags"] = new Dictionary<string, object>()
             {
                 { "tfPartialPayment", true },
             };
@@ -177,7 +177,7 @@ namespace XrplTests.Xrpl.Models
         [TestMethod]
         public async Task TestVerify_Valid_Payment_WithCredentialIDs()
         {
-            Dictionary<string, dynamic> tx = new Dictionary<string, dynamic>
+            Dictionary<string, object> tx = new Dictionary<string, object>
             {
                 { "TransactionType", "Payment" },
                 { "Account", "rUn84CUYbNjRoTQ6mSW7BVJPSVJNLb1QLo" },
@@ -198,7 +198,7 @@ namespace XrplTests.Xrpl.Models
                 ids.Add($"A1B2C3D4E5F6789012345678901234567890ABCDEF1234567890ABCDEF1234{i:X2}");
             }
 
-            Dictionary<string, dynamic> tx = new Dictionary<string, dynamic>
+            Dictionary<string, object> tx = new Dictionary<string, object>
             {
                 { "TransactionType", "Payment" },
                 { "Account", "rUn84CUYbNjRoTQ6mSW7BVJPSVJNLb1QLo" },
@@ -214,7 +214,7 @@ namespace XrplTests.Xrpl.Models
         [TestMethod]
         public async Task TestVerify_Invalid_Payment_CredentialIDsNonHex()
         {
-            Dictionary<string, dynamic> tx = new Dictionary<string, dynamic>
+            Dictionary<string, object> tx = new Dictionary<string, object>
             {
                 { "TransactionType", "Payment" },
                 { "Account", "rUn84CUYbNjRoTQ6mSW7BVJPSVJNLb1QLo" },
