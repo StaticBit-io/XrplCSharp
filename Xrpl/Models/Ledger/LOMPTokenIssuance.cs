@@ -159,5 +159,13 @@ namespace Xrpl.Models.Ledger
         /// </summary>
         [JsonProperty("Sequence")]
         public uint Sequence { get; init; }
+
+        /// <summary>
+        /// Computed 192-bit MPTokenIssuanceID (48 hex chars, uppercase).
+        /// Derived from <see cref="Sequence"/> and <see cref="Issuer"/> per XLS-33.
+        /// </summary>
+        [JsonIgnore]
+        public string MPTokenIssuanceID =>
+            ParseMPTID.GenerateMPTokenIssuanceID(Sequence, Issuer);
     }
 }
