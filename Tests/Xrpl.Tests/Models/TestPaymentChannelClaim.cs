@@ -91,6 +91,36 @@ namespace XrplTests.Xrpl.Models
             channel["PublicKey"] = "32D2471DB72B27E3310F355BB33E339BF26F8392D5A93D3BC0FC3B566612DA0F0A";
 
         }
+
+        [TestMethod]
+        public async Task TestVerify_Valid_PaymentChannelClaim_WithCredentialIDs()
+        {
+            Dictionary<string, dynamic> tx = new Dictionary<string, dynamic>
+            {
+                { "TransactionType", "PaymentChannelClaim" },
+                { "Account", "rB5Ux4Lv2nRx6eeoAAsZmtctnBQ2LiACnk" },
+                { "Channel", "C1AE6DDDEEC05CF2978C0BAD6FE302948E9533691DC749DCDD3B9E5992CA6198" },
+                { "CredentialIDs", new List<object> { "A1B2C3D4E5F6789012345678901234567890ABCDEF1234567890ABCDEF123456" } }
+            };
+            await Validation.ValidatePaymentChannelClaim(tx);
+            await Validation.Validate(tx);
+        }
+
+        [TestMethod]
+        public async Task TestVerify_Invalid_PaymentChannelClaim_DuplicateCredentialIDs()
+        {
+            string id = "A1B2C3D4E5F6789012345678901234567890ABCDEF1234567890ABCDEF123456";
+            Dictionary<string, dynamic> tx = new Dictionary<string, dynamic>
+            {
+                { "TransactionType", "PaymentChannelClaim" },
+                { "Account", "rB5Ux4Lv2nRx6eeoAAsZmtctnBQ2LiACnk" },
+                { "Channel", "C1AE6DDDEEC05CF2978C0BAD6FE302948E9533691DC749DCDD3B9E5992CA6198" },
+                { "CredentialIDs", new List<object> { id, id } }
+            };
+            await Helper.ThrowsExceptionAsync<ValidationException>(
+                () => Validation.ValidatePaymentChannelClaim(tx),
+                "PaymentChannelClaim: CredentialIDs cannot contain duplicate credential IDs");
+        }
     }
 
 }

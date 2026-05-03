@@ -134,6 +134,50 @@ namespace Xrpl.Utils.Hashes
             return (LedgerSpaceHex(LedgerSpace.Escrow) + AddressToHex(address) + sequence.ToString("X").PadLeft(BYTE_LENGTH * 2, '0')).Sha512Half();
         }
 
+        /// <summary>
+        /// Compute the ledger object index (object ID) for an XLS-70 Credential ledger entry.
+        /// Mirrors rippled's <c>keylet::credential(subject, issuer, credentialType)</c>:
+        /// <c>sha512Half(uint16(LedgerNameSpace::CREDENTIAL) || subject(20) || issuer(20) || credentialType)</c>.
+        /// </summary>
+        /// <param name="subject">Classic XRPL address of the credential subject.</param>
+        /// <param name="issuer">Classic XRPL address of the credential issuer.</param>
+        /// <param name="credentialTypeHex">Credential type as an uppercase hexadecimal string (1..64 bytes -> 2..128 hex chars).</param>
+        /// <returns>The 64-character (32-byte) hexadecimal object ID of the credential ledger entry.</returns>
+        /// <exception cref="ArgumentException">Thrown when arguments are missing or malformed.</exception>
+        public static string HashCredential(string subject, string issuer, string credentialTypeHex)
+        {
+            if (string.IsNullOrEmpty(subject))
+            {
+                throw new ArgumentException("subject is required", nameof(subject));
+            }
+
+            if (string.IsNullOrEmpty(issuer))
+            {
+                throw new ArgumentException("issuer is required", nameof(issuer));
+            }
+
+            if (string.IsNullOrEmpty(credentialTypeHex))
+            {
+                throw new ArgumentException("credentialTypeHex is required", nameof(credentialTypeHex));
+            }
+
+            string normalized = credentialTypeHex.Trim().ToUpperInvariant();
+            if (normalized.Length == 0 || normalized.Length % 2 != 0 || !Regex.IsMatch(normalized, "^[0-9A-F]+$"))
+            {
+                throw new ArgumentException("credentialTypeHex must be an even-length hexadecimal string", nameof(credentialTypeHex));
+            }
+
+            if (normalized.Length > 128)
+            {
+                throw new ArgumentException("credentialTypeHex cannot exceed 64 bytes (128 hex characters)", nameof(credentialTypeHex));
+            }
+
+            return (LedgerSpaceHex(LedgerSpace.Credential)
+                    + AddressToHex(subject)
+                    + AddressToHex(issuer)
+                    + normalized).Sha512Half();
+        }
+
     }
 }
 

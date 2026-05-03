@@ -5,6 +5,8 @@
 using System.Collections.Generic;
 using System.Threading.Tasks;
 
+using Newtonsoft.Json;
+
 using Xrpl.Client.Exceptions;
 
 namespace Xrpl.Models.Transactions
@@ -36,6 +38,10 @@ namespace Xrpl.Models.Transactions
 
         /// <inheritdoc />
         public string Fulfillment { get; set; }
+
+        /// <inheritdoc />
+        [JsonProperty("CredentialIDs", NullValueHandling = NullValueHandling.Ignore)]
+        public List<string> CredentialIDs { get; set; }
     }
 
     /// <summary>
@@ -62,6 +68,13 @@ namespace Xrpl.Models.Transactions
         /// Address of the source account that funded the escrow.
         /// </summary>
         string Owner { get; set; }
+
+        /// <summary>
+        /// (Optional) Set of Credentials (object IDs, hex 64-char each) used to authorize finishing
+        /// the escrow when the destination account requires Deposit Authorization with credential-based preauth (XLS-70).
+        /// Maximum 8 entries.
+        /// </summary>
+        List<string> CredentialIDs { get; set; }
     }
 
     /// <inheritdoc cref="IEscrowFinish" />
@@ -75,6 +88,10 @@ namespace Xrpl.Models.Transactions
         public uint OfferSequence { get; set; }
         /// <inheritdoc />
         public string Owner { get; set; }
+
+        /// <inheritdoc />
+        [JsonProperty("CredentialIDs", NullValueHandling = NullValueHandling.Ignore)]
+        public List<string> CredentialIDs { get; set; }
     }
 
     public partial class Validation
@@ -105,6 +122,11 @@ namespace Xrpl.Models.Transactions
                 throw new ValidationException("EscrowFinish: Condition must be a string");
             if (tx.TryGetValue("Fulfillment", out var Fulfillment) && Fulfillment is not string)
                 throw new ValidationException("EscrowFinish: Fulfillment must be a string");
+
+            if (tx.TryGetValue("CredentialIDs", out var credentialIds) && credentialIds is not null)
+            {
+                CredentialsValidator.ValidateCredentialsList(credentialIds, "EscrowFinish", "CredentialIDs", isStringID: true);
+            }
 
         }
     }

@@ -173,6 +173,59 @@ namespace XrplTests.Xrpl.Models
             await Helper.ThrowsExceptionAsync<ValidationException>(() => Validation.Validate(payment), "PaymentTransaction: tfPartialPayment flag required with DeliverMin");
             payment.Remove("DeliverMin");
         }
+
+        [TestMethod]
+        public async Task TestVerify_Valid_Payment_WithCredentialIDs()
+        {
+            Dictionary<string, dynamic> tx = new Dictionary<string, dynamic>
+            {
+                { "TransactionType", "Payment" },
+                { "Account", "rUn84CUYbNjRoTQ6mSW7BVJPSVJNLb1QLo" },
+                { "Amount", "1234" },
+                { "Destination", "rfkE1aSy9G8Upk4JssnwBxhEv5p4mn2KTy" },
+                { "CredentialIDs", new List<object> { "A1B2C3D4E5F6789012345678901234567890ABCDEF1234567890ABCDEF123456" } }
+            };
+            await Validation.ValidatePayment(tx);
+            await Validation.Validate(tx);
+        }
+
+        [TestMethod]
+        public async Task TestVerify_Invalid_Payment_CredentialIDsTooMany()
+        {
+            List<object> ids = new List<object>();
+            for (int i = 0; i < 9; i++)
+            {
+                ids.Add($"A1B2C3D4E5F6789012345678901234567890ABCDEF1234567890ABCDEF1234{i:X2}");
+            }
+
+            Dictionary<string, dynamic> tx = new Dictionary<string, dynamic>
+            {
+                { "TransactionType", "Payment" },
+                { "Account", "rUn84CUYbNjRoTQ6mSW7BVJPSVJNLb1QLo" },
+                { "Amount", "1234" },
+                { "Destination", "rfkE1aSy9G8Upk4JssnwBxhEv5p4mn2KTy" },
+                { "CredentialIDs", ids }
+            };
+            await Helper.ThrowsExceptionAsync<ValidationException>(
+                () => Validation.ValidatePayment(tx),
+                "PaymentTransaction: CredentialIDs cannot contain more than 8 elements");
+        }
+
+        [TestMethod]
+        public async Task TestVerify_Invalid_Payment_CredentialIDsNonHex()
+        {
+            Dictionary<string, dynamic> tx = new Dictionary<string, dynamic>
+            {
+                { "TransactionType", "Payment" },
+                { "Account", "rUn84CUYbNjRoTQ6mSW7BVJPSVJNLb1QLo" },
+                { "Amount", "1234" },
+                { "Destination", "rfkE1aSy9G8Upk4JssnwBxhEv5p4mn2KTy" },
+                { "CredentialIDs", new List<object> { new string('Z', 64) } }
+            };
+            await Helper.ThrowsExceptionAsync<ValidationException>(
+                () => Validation.ValidatePayment(tx),
+                "PaymentTransaction: CredentialIDs[0] must be a 64-character hexadecimal object ID");
+        }
     }
 
 }

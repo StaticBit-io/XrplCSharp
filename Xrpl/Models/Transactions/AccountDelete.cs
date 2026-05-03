@@ -3,6 +3,8 @@
 using System.Collections.Generic;
 using System.Threading.Tasks;
 
+using Newtonsoft.Json;
+
 using Xrpl.Client.Exceptions;
 
 namespace Xrpl.Models.Transactions
@@ -25,6 +27,13 @@ namespace Xrpl.Models.Transactions
         /// information for the recipient of the deleted account's leftover XRP.
         /// </summary>
         uint? DestinationTag { get; set; }
+
+        /// <summary>
+        /// (Optional) Set of Credentials (object IDs, hex 64-char each) used to authorize delivering
+        /// the residual XRP when the destination account requires Deposit Authorization with credential-based preauth (XLS-70).
+        /// Maximum 8 entries.
+        /// </summary>
+        List<string> CredentialIDs { get; set; }
     }
 
     /// <inheritdoc cref="IAccountDelete" />
@@ -40,6 +49,10 @@ namespace Xrpl.Models.Transactions
 
         /// <inheritdoc />
         public uint? DestinationTag { get; set; }
+
+        /// <inheritdoc />
+        [JsonProperty("CredentialIDs", NullValueHandling = NullValueHandling.Ignore)]
+        public List<string> CredentialIDs { get; set; }
     }
 
     /// <inheritdoc cref="IAccountDelete" />
@@ -50,6 +63,10 @@ namespace Xrpl.Models.Transactions
 
         /// <inheritdoc />
         public uint? DestinationTag { get; set; }
+
+        /// <inheritdoc />
+        [JsonProperty("CredentialIDs", NullValueHandling = NullValueHandling.Ignore)]
+        public List<string> CredentialIDs { get; set; }
     }
 
     public partial class Validation
@@ -70,6 +87,11 @@ namespace Xrpl.Models.Transactions
 
             if (tx.TryGetValue("DestinationTag", out var DestinationTag) && DestinationTag is not uint { })
                 throw new ValidationException("AccountDelete: invalid DestinationTag");
+
+            if (tx.TryGetValue("CredentialIDs", out var credentialIds) && credentialIds is not null)
+            {
+                CredentialsValidator.ValidateCredentialsList(credentialIds, "AccountDelete", "CredentialIDs", isStringID: true);
+            }
         }
     }
 

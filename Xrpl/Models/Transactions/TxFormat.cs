@@ -109,7 +109,8 @@ namespace Xrpl.Models.Transaction
                     [Field.InvoiceID] = Requirement.Optional,
                     [Field.DestinationTag] = Requirement.Optional,
                     [Field.DeliverMin] = Requirement.Optional,
-                    [Field.DomainID] = Requirement.Optional
+                    [Field.DomainID] = Requirement.Optional,
+                    [Field.CredentialIDs] = Requirement.Optional,
                 },
                 [BinaryCodec.Types.TransactionType.EscrowCreate] = new TxFormat
                 {
@@ -125,7 +126,8 @@ namespace Xrpl.Models.Transaction
                     [Field.Owner] = Requirement.Required,
                     [Field.OfferSequence] = Requirement.Required,
                     [Field.Condition] = Requirement.Optional,
-                    [Field.Fulfillment] = Requirement.Optional
+                    [Field.Fulfillment] = Requirement.Optional,
+                    [Field.CredentialIDs] = Requirement.Optional,
                 },
                 [BinaryCodec.Types.TransactionType.AccountSet] = new TxFormat
                 {
@@ -198,7 +200,8 @@ namespace Xrpl.Models.Transaction
                     [Field.Amount] = Requirement.Optional,
                     [Field.Balance] = Requirement.Optional,
                     [Field.Signature] = Requirement.Optional,
-                    [Field.PublicKey] = Requirement.Optional
+                    [Field.PublicKey] = Requirement.Optional,
+                    [Field.CredentialIDs] = Requirement.Optional,
                 },
                 [BinaryCodec.Types.TransactionType.CheckCreate] = new TxFormat()
                 {
@@ -226,11 +229,10 @@ namespace Xrpl.Models.Transaction
                 },
                 [BinaryCodec.Types.TransactionType.DepositPreauth] = new TxFormat()
                 {
-                    [Field.Channel] = Requirement.Required,
-                    [Field.Amount] = Requirement.Optional,
-                    [Field.Balance] = Requirement.Optional,
-                    [Field.Signature] = Requirement.Optional,
-                    [Field.PublicKey] = Requirement.Optional
+                    [Field.Authorize] = Requirement.Optional,
+                    [Field.Unauthorize] = Requirement.Optional,
+                    [Field.AuthorizeCredentials] = Requirement.Optional,
+                    [Field.UnauthorizeCredentials] = Requirement.Optional,
                 },
                 [BinaryCodec.Types.TransactionType.TrustSet] = new TxFormat
                 {
@@ -242,6 +244,7 @@ namespace Xrpl.Models.Transaction
                 {
                     [Field.Destination] = Requirement.Required,
                     [Field.DestinationTag] = Requirement.Optional,
+                    [Field.CredentialIDs] = Requirement.Optional,
                 },
 
                 [BinaryCodec.Types.TransactionType.NFTokenMint] = new TxFormat

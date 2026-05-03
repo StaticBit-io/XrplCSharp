@@ -12,7 +12,10 @@ using Xrpl.Models.Ledger;
 using Xrpl.Models.Methods;
 using Xrpl.Models.Transactions;
 using Xrpl.Sugar;
+using Xrpl.Utils.Hashes;
 using Xrpl.Wallet;
+
+using System.Collections.Generic;
 
 namespace XrplTests.Xrpl.ClientLib.Integration;
 
@@ -272,6 +275,88 @@ public class TestICredential
 
     #endregion
 
+    #region End-to-end XLS-70 Tests
+
+    /// <summary>
+    /// End-to-end XLS-70 scenario:
+    /// 1. Issuer creates and Subject accepts a credential.
+    /// 2. Recipient enables Deposit Authorization (lsfDepositAuth).
+    /// 3. Recipient submits DepositPreauth with AuthorizeCredentials referencing (Issuer, CredentialType).
+    /// 4. Subject (holder) sends Payment to Recipient with CredentialIDs proving the authorization.
+    /// 5. Verifies deposit_authorized returns true with the submitted credential.
+    /// </summary>
+    [TestMethod]
+    public async Task TestCredential_EndToEnd_DepositPreauthAndPayment()
+    {
+        XrplWallet walletRecipient = XrplWallet.Generate();
+        await IntegrationTestConfig.TryFundWalletsAsync(client, nodeType, walletRecipient);
+
+        string credTypeHex = ToHex("cred_e2e_xls70");
+
+        await TryCreateAndAcceptCredential(walletIssuer, walletSubject, credTypeHex);
+        Console.WriteLine("Step 1: Credential issued and accepted");
+
+        AccountSet enableDepositAuth = new AccountSet
+        {
+            Account = walletRecipient.ClassicAddress,
+            SetFlag = AccountSetAsfFlags.asfDepositAuth,
+        };
+        enableDepositAuth = await client.Autofill(enableDepositAuth);
+        TransactionSummary depositAuthResult = await client.SubmitAndWait(enableDepositAuth, walletRecipient, true);
+        ValidateResult(depositAuthResult);
+        Console.WriteLine("Step 2: Deposit Authorization enabled on recipient");
+
+        DepositPreauth preauth = new DepositPreauth
+        {
+            Account = walletRecipient.ClassicAddress,
+            AuthorizeCredentials = new List<AuthorizeCredentialEntry>
+            {
+                new AuthorizeCredentialEntry
+                {
+                    Credential = new AuthorizeCredentialBody
+                    {
+                        Issuer = walletIssuer.ClassicAddress,
+                        CredentialType = credTypeHex,
+                    },
+                },
+            },
+        };
+        preauth = await client.Autofill(preauth);
+        TransactionSummary preauthResult = await client.SubmitAndWait(preauth, walletRecipient, true);
+        ValidateResult(preauthResult);
+        Console.WriteLine("Step 3: DepositPreauth(AuthorizeCredentials) submitted");
+
+        string credentialId = Hashes.HashCredential(
+            walletSubject.ClassicAddress,
+            walletIssuer.ClassicAddress,
+            credTypeHex);
+
+        Payment payment = new Payment
+        {
+            Account = walletSubject.ClassicAddress,
+            Destination = walletRecipient.ClassicAddress,
+            Amount = new Currency { ValueAsXrp = 1m },
+            CredentialIDs = new List<string> { credentialId },
+        };
+        payment = await client.Autofill(payment);
+        TransactionSummary paymentResult = await client.SubmitAndWait(payment, walletSubject, true);
+        ValidateResult(paymentResult);
+        Console.WriteLine($"Step 4: Payment with CredentialIDs delivered ({credentialId})");
+
+        DepositAuthorizedRequest depAuthReq = new DepositAuthorizedRequest
+        {
+            SourceAccount = walletSubject.ClassicAddress,
+            DestinationAccount = walletRecipient.ClassicAddress,
+            Credentials = new List<string> { credentialId },
+        };
+        DepositAuthorized depAuthResp = await client.DepositAuthorized(depAuthReq);
+        Assert.IsNotNull(depAuthResp, "deposit_authorized response is null");
+        Assert.IsTrue(depAuthResp.IsDepositAuthorized, "deposit_authorized must be true with valid credentials");
+        Console.WriteLine("Step 5: deposit_authorized confirmed");
+    }
+
+    #endregion
+
     #region Negative Tests
 
     /// <summary>
@@ -366,18 +451,21 @@ public class TestICredential
 
     private async Task<bool> VerifyCredentialExists(string issuer, string subject, string credTypeHex)
     {
+        string expectedId = Hashes.HashCredential(subject, issuer, credTypeHex);
         try
         {
             var request = new AccountObjectsRequest(subject)
             {
                 LedgerIndex = new LedgerIndex(LedgerIndexType.Validated),
+                Type = LedgerEntryType.Credential,
             };
             var response = await client.AccountObjects(request);
             if (response?.AccountObjectList != null)
             {
                 foreach (var obj in response.AccountObjectList)
                 {
-                    if (obj.LedgerEntryType == LedgerEntryType.Credential)
+                    if (obj.LedgerEntryType == LedgerEntryType.Credential
+                        && string.Equals(obj.Index, expectedId, StringComparison.OrdinalIgnoreCase))
                     {
                         return true;
                     }

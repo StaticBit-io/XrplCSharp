@@ -301,7 +301,8 @@ namespace Xrpl.BinaryCodec.Enums
         public static readonly Vector256Field Hashes = new Vector256Field(nameof(Hashes), 2);
         public static readonly Vector256Field Amendments = new Vector256Field(nameof(Amendments), 3);
         public static readonly Vector256Field NFTokenOffers = new Vector256Field(nameof(NFTokenOffers), 4);
-        public static readonly Vector256Field HookNamespaces = new Vector256Field(nameof(HookNamespaces), 5);
+        public static readonly Vector256Field CredentialIDs = new Vector256Field(nameof(CredentialIDs), 5);
+        public static readonly Vector256Field HookNamespaces = new Vector256Field(nameof(HookNamespaces), 32);
 
         public static readonly PathSetField Paths = new PathSetField(nameof(Paths), 1);
 

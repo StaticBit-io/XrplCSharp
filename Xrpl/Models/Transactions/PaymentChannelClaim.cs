@@ -2,6 +2,8 @@
 using System.Collections.Generic;
 using System.Threading.Tasks;
 
+using Newtonsoft.Json;
+
 using Xrpl.Client.Exceptions;
 using Xrpl.Models.Enums;
 
@@ -65,6 +67,10 @@ namespace Xrpl.Models.Transactions
 
         /// <inheritdoc />
         public string PublicKey { get; set; }
+
+        /// <inheritdoc />
+        [JsonProperty("CredentialIDs", NullValueHandling = NullValueHandling.Ignore)]
+        public List<string> CredentialIDs { get; set; }
     }
     /// <summary>
     /// Claim XRP from a payment channel, adjust the payment channel's expiration,  or both.
@@ -120,6 +126,13 @@ namespace Xrpl.Models.Transactions
         /// Required unless the sender of the transaction is the source address of the channel.
         /// </summary>
         string Signature { get; set; }
+
+        /// <summary>
+        /// (Optional) Set of Credentials (object IDs, hex 64-char each) used to authorize the claim
+        /// when the destination account requires Deposit Authorization with credential-based preauth (XLS-70).
+        /// Maximum 8 entries.
+        /// </summary>
+        List<string> CredentialIDs { get; set; }
     }
 
     /// <inheritdoc cref="IPaymentChannelClaim" />
@@ -142,6 +155,10 @@ namespace Xrpl.Models.Transactions
         public string PublicKey { get; set; }
         /// <inheritdoc />
         public string Signature { get; set; }
+
+        /// <inheritdoc />
+        [JsonProperty("CredentialIDs", NullValueHandling = NullValueHandling.Ignore)]
+        public List<string> CredentialIDs { get; set; }
     }
 
     public partial class Validation
@@ -169,6 +186,11 @@ namespace Xrpl.Models.Transactions
                 throw new ValidationException("PaymentChannelClaim: Signature must be a string");
             if (tx.TryGetValue("PublicKey", out var PublicKey) && PublicKey is not string)
                 throw new ValidationException("PaymentChannelClaim: PublicKey must be a string");
+
+            if (tx.TryGetValue("CredentialIDs", out var credentialIds) && credentialIds is not null)
+            {
+                CredentialsValidator.ValidateCredentialsList(credentialIds, "PaymentChannelClaim", "CredentialIDs", isStringID: true);
+            }
 
         }
     }

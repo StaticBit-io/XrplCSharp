@@ -95,6 +95,10 @@ namespace Xrpl.Models.Transactions
 
         /// <inheritdoc />
         public string DomainID { get; set; }
+
+        /// <inheritdoc />
+        [JsonProperty("CredentialIDs", NullValueHandling = NullValueHandling.Ignore)]
+        public List<string> CredentialIDs { get; set; }
     }
 
     /// <summary>
@@ -172,6 +176,13 @@ namespace Xrpl.Models.Transactions
         /// Both sender and destination must be part of this domain if it interacts with the DEX.
         /// </summary>
         string DomainID { get; set; }
+
+        /// <summary>
+        /// (Optional) Set of Credentials (object IDs, hex 64-char each) to authorize a deposit
+        /// when the destination account requires Deposit Authorization with credential-based preauth (XLS-70).
+        /// Maximum 8 entries.
+        /// </summary>
+        List<string> CredentialIDs { get; set; }
     }
 
     /// <inheritdoc cref="IPayment" />
@@ -218,6 +229,10 @@ namespace Xrpl.Models.Transactions
 
         /// <inheritdoc />
         public string DomainID { get; set; }
+
+        /// <inheritdoc />
+        [JsonProperty("CredentialIDs", NullValueHandling = NullValueHandling.Ignore)]
+        public List<string> CredentialIDs { get; set; }
     }
 
     public partial class Validation
@@ -259,6 +274,11 @@ namespace Xrpl.Models.Transactions
                     throw new ValidationException("PaymentTransaction: DomainID must be a string");
                 if (domainIdStr.Length != 64 || !System.Text.RegularExpressions.Regex.IsMatch(domainIdStr, "^[0-9A-Fa-f]{64}$"))
                     throw new ValidationException("PaymentTransaction: DomainID must be a 64-character hexadecimal string (256-bit hash)");
+            }
+
+            if (tx.TryGetValue("CredentialIDs", out var credentialIds) && credentialIds is not null)
+            {
+                CredentialsValidator.ValidateCredentialsList(credentialIds, "PaymentTransaction", "CredentialIDs", isStringID: true);
             }
 
             await CheckPartialPayment(tx);

@@ -75,6 +75,61 @@ namespace XrplTests.Xrpl.Models
             await Helper.ThrowsExceptionAsync<ValidationException>(() => Validation.Validate(tx), "AccountDelete: invalid DestinationTag");
         }
 
+        [TestMethod]
+        public async Task TestVerify_Valid_AccountDelete_WithCredentialIDs()
+        {
+            var tx = new Dictionary<string, dynamic>
+            {
+                { "TransactionType", "AccountDelete" },
+                { "Account", "rWYkbWkCeg8dP6rXALnjgZSjjLyih5NXm" },
+                { "Destination", "rPT1Sjq2YGrBMTttX4GZHjKu9dyfzbpAYe" },
+                { "Fee", "5000000" },
+                { "Sequence", 2470665u },
+                { "CredentialIDs", new List<object> { "A1B2C3D4E5F6789012345678901234567890ABCDEF1234567890ABCDEF123456" } }
+            };
+            await Validation.ValidateAccountDelete(tx);
+            await Validation.Validate(tx);
+        }
+
+        [TestMethod]
+        public async Task TestVerify_Invalid_AccountDelete_CredentialIDsTooMany()
+        {
+            List<object> ids = new List<object>();
+            for (int i = 0; i < 9; i++)
+            {
+                ids.Add($"A1B2C3D4E5F6789012345678901234567890ABCDEF1234567890ABCDEF1234{i:X2}");
+            }
+
+            var tx = new Dictionary<string, dynamic>
+            {
+                { "TransactionType", "AccountDelete" },
+                { "Account", "rWYkbWkCeg8dP6rXALnjgZSjjLyih5NXm" },
+                { "Destination", "rPT1Sjq2YGrBMTttX4GZHjKu9dyfzbpAYe" },
+                { "Fee", "5000000" },
+                { "Sequence", 2470665u },
+                { "CredentialIDs", ids }
+            };
+            await Helper.ThrowsExceptionAsync<ValidationException>(
+                () => Validation.ValidateAccountDelete(tx),
+                "AccountDelete: CredentialIDs cannot contain more than 8 elements");
+        }
+
+        [TestMethod]
+        public async Task TestVerify_Invalid_AccountDelete_CredentialIDsNonHex()
+        {
+            var tx = new Dictionary<string, dynamic>
+            {
+                { "TransactionType", "AccountDelete" },
+                { "Account", "rWYkbWkCeg8dP6rXALnjgZSjjLyih5NXm" },
+                { "Destination", "rPT1Sjq2YGrBMTttX4GZHjKu9dyfzbpAYe" },
+                { "Fee", "5000000" },
+                { "Sequence", 2470665u },
+                { "CredentialIDs", new List<object> { new string('Z', 64) } }
+            };
+            await Helper.ThrowsExceptionAsync<ValidationException>(
+                () => Validation.ValidateAccountDelete(tx),
+                "AccountDelete: CredentialIDs[0] must be a 64-character hexadecimal object ID");
+        }
     }
 }
 

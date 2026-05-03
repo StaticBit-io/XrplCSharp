@@ -1,4 +1,29 @@
 # Changes
+
+### 10.2.0.0
+* Add `path_find` WebSocket command — `PathFind(create)`, `PathFindClose`, `PathFindStatus` methods with `PathFindCreateRequest`, `PathFindCloseRequest`, `PathFindStatusRequest` models and `PathFindResponse`
+* Add `ripple_path_find` command — `RipplePathFind` method with `RipplePathFindRequest`, `RipplePathFindResponse`, `SourceCurrency` models
+* Add `PathAlternative` shared model with `PathsComputed`, `PathsCanonical`, `SourceAmount`, `DestinationAmount`
+* Add `Type` and `TypeHex` bitmask fields to `Path` model for path step type identification
+* Fix `PathFindStream` — change `DestinationAmount`/`SendMax` from `decimal` to `Currency`, change `Id` from `Guid?` to `object`, replace `AlternativePath` with shared `PathAlternative`
+* Fix message routing for `path_find` async follow-ups — `RequestManager.HandleResponse` now returns `(Response, Handled)` tuple, unhandled messages with `id` are routed to stream processing
+* Add `TestEmitsPathFind` unit test with two sequential stream messages validation
+* Add integration tests for `path_find` (create/close/status/stream) and `ripple_path_find` (basic/with source currencies)
+* Add `ParseMPTID` utility for MPTokenIssuanceID (XLS-33) encoding/decoding — `GenerateMPTokenIssuanceID(sequence, issuer)` and `string.ParseMPTokenIssuanceID()` extension
+* Add `MPTokenIssuanceIdData` model mirroring `NFTokenIdData` pattern (Sequence, Issuer, computed MPTokenIssuanceID)
+* Add computed `MPTokenIssuanceID` property to `LOMPTokenIssuance` derived from `Sequence` + `Issuer`
+* XLS-70 Credentials: full parity with `xrpl.js`
+  * Add `deposit_authorized` request/response models (`DepositAuthorizedRequest`, `DepositAuthorized`) with optional XLS-70 `credentials` parameter
+  * Implement `IXrplClient.DepositAuthorized(request, ct)` method
+  * Add `CredentialIDs` (Vector256, optional) field to `Payment`, `EscrowFinish`, `AccountDelete`, `PaymentChannelClaim` models, validation and `TxFormat`
+  * Extend `DepositPreauth` transaction with `AuthorizeCredentials` / `UnauthorizeCredentials` arrays and rewrite validation to enforce mutual exclusivity of `Authorize`/`Unauthorize`/`AuthorizeCredentials`/`UnauthorizeCredentials`
+  * Fix broken `TxFormat[DepositPreauth]` (replaced PaymentChannelClaim fields with correct DepositPreauth fields including credential arrays)
+  * Add shared `CredentialsValidator.ValidateCredentialsList` helper supporting both hex object IDs and wrapped `{ Credential: { Issuer, CredentialType } }` objects (max 8, hex format, no duplicates)
+  * Fix binary codec: place `CredentialIDs` at `Vector256 nth=5` and move `HookNamespaces` to `nth=32` per rippled spec
+  * Add `LedgerSpace.Credential = 'D'` and `Hashes.HashCredential(subject, issuer, credentialType)` helper to compute Credential ledger entry object IDs (SHA512Half)
+  * Add unit tests for `CredentialsValidator`, extended `DepositPreauth` validation, and `CredentialIDs` validation across all four affected transactions
+  * Add integration tests for `deposit_authorized` (with/without credentials) and end-to-end XLS-70 scenario: `CredentialCreate` → `CredentialAccept` → `AccountSet(asfDepositAuth)` → `DepositPreauth(AuthorizeCredentials)` → `Payment(CredentialIDs)`
+
 ### 10.1.6.0 15/04/2026
 * Fix for Currency to HEX for currency with 1 or 2 symbol in name
 

@@ -71,6 +71,38 @@ namespace XrplTests.Xrpl.Models
             escrowFinish["Fulfillment"] = "A0028000";
 
         }
+
+        [TestMethod]
+        public async Task TestVerify_Valid_EscrowFinish_WithCredentialIDs()
+        {
+            Dictionary<string, dynamic> tx = new Dictionary<string, dynamic>
+            {
+                { "TransactionType", "EscrowFinish" },
+                { "Account", "rf1BiGeXwwQoi8Z2ueFYTEXSwuJYfV2Jpn" },
+                { "Owner", "rf1BiGeXwwQoi8Z2ueFYTEXSwuJYfV2Jpn" },
+                { "OfferSequence", 7u },
+                { "CredentialIDs", new List<object> { "A1B2C3D4E5F6789012345678901234567890ABCDEF1234567890ABCDEF123456" } }
+            };
+            await Validation.ValidateEscrowFinish(tx);
+            await Validation.Validate(tx);
+        }
+
+        [TestMethod]
+        public async Task TestVerify_Invalid_EscrowFinish_DuplicateCredentialIDs()
+        {
+            string id = "A1B2C3D4E5F6789012345678901234567890ABCDEF1234567890ABCDEF123456";
+            Dictionary<string, dynamic> tx = new Dictionary<string, dynamic>
+            {
+                { "TransactionType", "EscrowFinish" },
+                { "Account", "rf1BiGeXwwQoi8Z2ueFYTEXSwuJYfV2Jpn" },
+                { "Owner", "rf1BiGeXwwQoi8Z2ueFYTEXSwuJYfV2Jpn" },
+                { "OfferSequence", 7u },
+                { "CredentialIDs", new List<object> { id, id.ToLowerInvariant() } }
+            };
+            await Helper.ThrowsExceptionAsync<ValidationException>(
+                () => Validation.ValidateEscrowFinish(tx),
+                "EscrowFinish: CredentialIDs cannot contain duplicate credential IDs");
+        }
     }
 
 }
