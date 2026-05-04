@@ -1,7 +1,7 @@
 using System.Collections.Generic;
 using System.Threading.Tasks;
 
-using Newtonsoft.Json;
+using System.Text.Json.Serialization;
 
 using Xrpl.Client.Exceptions;
 
@@ -33,7 +33,7 @@ namespace Xrpl.Models.Transactions
         }
 
         /// <inheritdoc />
-        [JsonProperty("DomainID")]
+        [JsonPropertyName("DomainID")]
         public string DomainID { get; set; }
     }
 
@@ -43,7 +43,7 @@ namespace Xrpl.Models.Transactions
     public class PermissionedDomainDeleteResponse : TransactionResponse, IPermissionedDomainDelete
     {
         /// <inheritdoc />
-        [JsonProperty("DomainID")]
+        [JsonPropertyName("DomainID")]
         public string DomainID { get; set; }
     }
 

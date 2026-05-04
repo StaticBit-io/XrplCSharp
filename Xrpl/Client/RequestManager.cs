@@ -1,15 +1,15 @@
 using NBitcoin.Protocol;
 
-using Newtonsoft.Json;
-
 using System;
 using System.Collections.Concurrent;
 using System.Collections.Generic;
 using System.Diagnostics;
+using System.Text.Json;
 using System.Threading;
 using System.Threading.Tasks;
 
 using Xrpl.Client.Exceptions;
+using Xrpl.Client.Json;
 using Xrpl.Models.Subscriptions;
 
 using TimeoutException = Xrpl.Client.Exceptions.TimeoutException;
@@ -45,13 +45,10 @@ namespace Xrpl.Client
         private Guid nextId = Guid.NewGuid();
         private readonly ConcurrentDictionary<Guid, Timer> timeoutsAwaitingResponse = new ConcurrentDictionary<Guid, Timer>();
         private readonly ConcurrentDictionary<Guid, TaskInfo> promisesAwaitingResponse = new ConcurrentDictionary<Guid, TaskInfo>();
-        private readonly JsonSerializerSettings serializerSettings;
+        private readonly JsonSerializerOptions serializerOptions = XrplJsonOptions.Default;
 
         public RequestManager()
         {
-            serializerSettings = new JsonSerializerSettings();
-            serializerSettings.NullValueHandling = NullValueHandling.Ignore;
-            serializerSettings.DateTimeZoneHandling = DateTimeZoneHandling.Utc;
         }
 
         /// <summary>
@@ -69,7 +66,7 @@ namespace Xrpl.Client
 
             try
             {
-                var deserialized = JsonConvert.DeserializeObject($"{response.Result}", taskInfo.Type, serializerSettings);
+                var deserialized = JsonSerializer.Deserialize(response.Result?.ToString() ?? "{}", taskInfo.Type, serializerOptions);
                 var setResult = taskInfo.TaskCompletionResult.GetType().GetMethod("TrySetResult");
                 setResult.Invoke(taskInfo.TaskCompletionResult, new[] { deserialized });
                 this.DeletePromise(id, taskInfo);
@@ -183,7 +180,7 @@ namespace Xrpl.Client
 
             info.SetValue(request, newId, null);
 
-            string newRequest = JsonConvert.SerializeObject(request, serializerSettings);
+            string newRequest = JsonSerializer.Serialize(request, serializerOptions);
 
             if (this.promisesAwaitingResponse.ContainsKey(newId))
             {
@@ -266,7 +263,7 @@ namespace Xrpl.Client
 
             request["id"] = newId;
 
-            string newRequest = JsonConvert.SerializeObject(request, serializerSettings);
+            string newRequest = JsonSerializer.Serialize(request, serializerOptions);
 
             if (this.promisesAwaitingResponse.ContainsKey(newId))
             {
@@ -333,7 +330,7 @@ namespace Xrpl.Client
         /// </summary>
         public (BaseResponse Response, bool Handled) HandleResponse(string message)
         {
-            var response = JsonConvert.DeserializeObject<ErrorResponse>(message);
+            var response = JsonSerializer.Deserialize<ErrorResponse>(message, serializerOptions);
 
             if (response.Id == null)
             {
@@ -372,7 +369,7 @@ namespace Xrpl.Client
                 ErrorResponse errorResponse = null;
                 try
                 {
-                    errorResponse = JsonConvert.DeserializeObject<ErrorResponse>(message);
+                    errorResponse = JsonSerializer.Deserialize<ErrorResponse>(message, serializerOptions);
 
                 }
                 catch (Exception e)

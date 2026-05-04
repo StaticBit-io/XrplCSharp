@@ -2,9 +2,8 @@
 
 // https://github.com/XRPLF/xrpl.js/blob/main/packages/xrpl/src/models/transactions/NFTokenAcceptOffer.ts
 
-using Newtonsoft.Json;
-
 using System.Collections.Generic;
+using System.Text.Json.Serialization;
 using System.Threading.Tasks;
 
 using Xrpl.Client.Exceptions;

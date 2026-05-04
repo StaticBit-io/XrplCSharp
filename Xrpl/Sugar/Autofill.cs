@@ -1,18 +1,18 @@
-using Newtonsoft.Json;
-using Newtonsoft.Json.Linq;
-
 using System;
 using System.Collections;
 using System.Collections.Generic;
 using System.Globalization;
 using System.Linq;
 using System.Numerics;
+using System.Text.Json;
+using System.Text.Json.Nodes;
 using System.Threading;
 using System.Threading.Tasks;
 
 using Xrpl.AddressCodec;
 using Xrpl.Client;
 using Xrpl.Client.Exceptions;
+using Xrpl.Client.Json;
 using Xrpl.Models.Common;
 using Xrpl.Models.Ledger;
 using Xrpl.Models.Methods;
@@ -68,7 +68,8 @@ namespace Xrpl.Sugar
             //Flags.SetTransactionFlagsToNumber(tx);
             List<Task> promises = new List<Task>();
             bool hasTT = tx.TryGetValue("TransactionType", out var tt);
-            if (!tx.ContainsKey("Sequence") && tt != "Batch")
+            string txType = $"{tt}";
+            if (!tx.ContainsKey("Sequence") && txType != "Batch")
             {
                 promises.Add(client.SetNextValidSequenceNumber(tx, cancellationToken));
             }
@@ -84,7 +85,7 @@ namespace Xrpl.Sugar
             {
                 tx.Remove("LastLedgerSequence");
             }
-            if (tt == "Batch")
+            if (txType == "Batch")
             {
                 promises.Add(client.NormalizeBatchTransaction(tx, cancellationToken));
             }
@@ -259,7 +260,7 @@ namespace Xrpl.Sugar
 
             IEnumerable<object> items = rawTransactions switch
             {
-                JArray ja => ja.ToObject<List<object>>()!,
+                JsonArray ja => JsonSerializer.Deserialize<List<object>>(ja.ToJsonString(), XrplJsonOptions.Default)!,
                 IEnumerable<object> ie => ie,
                 _ => new List<object> { rawTransactions }
             };
@@ -294,15 +295,20 @@ namespace Xrpl.Sugar
         {
             dict = null!;
 
-            // Приводим к JObject максимально рано
-            JObject entry = item as JObject ?? JObject.FromObject(item);
+            // Приводим к JsonObject максимально рано
+            JsonObject entry = item as JsonObject
+                ?? JsonNode.Parse(JsonSerializer.Serialize(item, XrplJsonOptions.Default))?.AsObject();
+            if (entry == null) return false;
 
             // Достаём RawTransaction
-            var raw = entry["RawTransaction"] as JObject;
+            JsonNode rawNode = entry["RawTransaction"];
+            if (rawNode == null) return false;
+            JsonObject raw = rawNode as JsonObject
+                ?? JsonNode.Parse(rawNode.ToJsonString())?.AsObject();
             if (raw == null) return false;
 
             // В словарь
-            var tmp = raw.ToObject<Dictionary<string, object>>();
+            var tmp = JsonSerializer.Deserialize<Dictionary<string, object>>(raw.ToJsonString(), XrplJsonOptions.Default);
             if (tmp == null) return false;
 
             dict = tmp;
@@ -310,7 +316,8 @@ namespace Xrpl.Sugar
         }
         private static bool IsReserveFeeTxNeed(Dictionary<string, object> tx)
         {
-            return tx["TransactionType"] == "AccountDelete" || tx["TransactionType"] == "AMMCreate";
+            string txType = $"{tx["TransactionType"]}";
+            return txType == "AccountDelete" || txType == "AMMCreate";
         }
 
         public static decimal ScaleValueDecimal(string value, decimal multiplier)

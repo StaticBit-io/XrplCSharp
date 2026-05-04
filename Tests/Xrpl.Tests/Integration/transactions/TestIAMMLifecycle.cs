@@ -1,8 +1,7 @@
 using Microsoft.VisualStudio.TestTools.UnitTesting;
 
-using Newtonsoft.Json;
-
 using System;
+using System.Text.Json;
 using System.Collections.Generic;
 using System.Globalization;
 using System.Threading.Tasks;
@@ -467,7 +466,7 @@ public class TestIAMMLifecycle
             { "LPTokenIn", LPTokenDict(lpCurrency, lpIssuer, exactLpValue) }
         };
 
-        Console.WriteLine($"AMMWithdraw dict: {JsonConvert.SerializeObject(tx, Formatting.Indented)}");
+        Console.WriteLine($"AMMWithdraw dict: {JsonSerializer.Serialize(tx, new JsonSerializerOptions { WriteIndented = true })}");
 
         TransactionSummary res = await client.SubmitAndWait(tx, walletHolder, autofill: true);
         string result = res.Meta?.TransactionResult;

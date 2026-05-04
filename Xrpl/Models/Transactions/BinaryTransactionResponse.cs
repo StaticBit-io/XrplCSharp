@@ -1,13 +1,13 @@
-﻿using Newtonsoft.Json;
+﻿using System.Text.Json.Serialization;
 
 namespace Xrpl.Models.Transactions
 {
     public class BinaryTransactionResponse : BaseTransactionResponse
     {
-        [JsonProperty("meta")]
+        [JsonPropertyName("meta")]
         public string Meta { get; set; }
 
-        [JsonProperty("tx")]
+        [JsonPropertyName("tx")]
         public string Transaction { get; set; }
     }
 }

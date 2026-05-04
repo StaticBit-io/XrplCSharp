@@ -2,7 +2,7 @@ using System.Collections.Generic;
 using System.Linq;
 using System.Threading.Tasks;
 
-using Newtonsoft.Json;
+using System.Text.Json.Serialization;
 
 using Xrpl.Client.Exceptions;
 
@@ -42,11 +42,11 @@ namespace Xrpl.Models.Transactions
         }
 
         /// <inheritdoc />
-        [JsonProperty("DomainID")]
+        [JsonPropertyName("DomainID")]
         public string DomainID { get; set; }
 
         /// <inheritdoc />
-        [JsonProperty("AcceptedCredentials")]
+        [JsonPropertyName("AcceptedCredentials")]
         public List<AcceptedCredentialWrapper> AcceptedCredentials { get; set; }
     }
 
@@ -56,11 +56,11 @@ namespace Xrpl.Models.Transactions
     public class PermissionedDomainSetResponse : TransactionResponse, IPermissionedDomainSet
     {
         /// <inheritdoc />
-        [JsonProperty("DomainID")]
+        [JsonPropertyName("DomainID")]
         public string DomainID { get; set; }
 
         /// <inheritdoc />
-        [JsonProperty("AcceptedCredentials")]
+        [JsonPropertyName("AcceptedCredentials")]
         public List<AcceptedCredentialWrapper> AcceptedCredentials { get; set; }
     }
 
@@ -73,7 +73,7 @@ namespace Xrpl.Models.Transactions
         /// <summary>
         /// The credential object containing issuer and credential type.
         /// </summary>
-        [JsonProperty("Credential")]
+        [JsonPropertyName("Credential")]
         public AcceptedCredential Credential { get; set; }
     }
 
@@ -85,14 +85,14 @@ namespace Xrpl.Models.Transactions
         /// <summary>
         /// The issuer of the credential.
         /// </summary>
-        [JsonProperty("Issuer")]
+        [JsonPropertyName("Issuer")]
         public string Issuer { get; set; }
 
         /// <summary>
         /// The type of credential, as hexadecimal.
         /// This is an arbitrary value from 1 to 64 bytes that the issuer sets when they issue a credential.
         /// </summary>
-        [JsonProperty("CredentialType")]
+        [JsonPropertyName("CredentialType")]
         public string CredentialType { get; set; }
     }
 

@@ -1,5 +1,5 @@
 using System.Collections.Generic;
-using Newtonsoft.Json;
+using System.Text.Json.Serialization;
 using Xrpl.Client.Json.Converters;
 using Xrpl.Models.Common;
 
@@ -16,13 +16,13 @@ namespace Xrpl.Models.Methods
         /// <summary>
         /// Currency code (3-letter or 40-char hex).
         /// </summary>
-        [JsonProperty("currency")]
+        [JsonPropertyName("currency")]
         public string Currency { get; set; }
 
         /// <summary>
         /// (Optional) The issuer address for this currency.
         /// </summary>
-        [JsonProperty("issuer")]
+        [JsonPropertyName("issuer")]
         public string Issuer { get; set; }
     }
 
@@ -62,13 +62,13 @@ namespace Xrpl.Models.Methods
         /// <summary>
         /// Unique address of the account that would send funds.
         /// </summary>
-        [JsonProperty("source_account")]
+        [JsonPropertyName("source_account")]
         public string SourceAccount { get; set; }
 
         /// <summary>
         /// Unique address of the account that would receive funds.
         /// </summary>
-        [JsonProperty("destination_account")]
+        [JsonPropertyName("destination_account")]
         public string DestinationAccount { get; set; }
 
         /// <summary>
@@ -77,7 +77,7 @@ namespace Xrpl.Models.Methods
         /// to request a path to deliver as much as possible,
         /// while spending no more than the amount specified in send_max.
         /// </summary>
-        [JsonProperty("destination_amount")]
+        [JsonPropertyName("destination_amount")]
         [JsonConverter(typeof(CurrencyConverter))]
         public Currency DestinationAmount { get; set; }
 
@@ -85,7 +85,7 @@ namespace Xrpl.Models.Methods
         /// (Optional) Currency Amount — the maximum amount that would be spent.<br/>
         /// Cannot be used with source_currencies.
         /// </summary>
-        [JsonProperty("send_max")]
+        [JsonPropertyName("send_max")]
         [JsonConverter(typeof(CurrencyConverter))]
         public Currency SendMax { get; set; }
 
@@ -95,7 +95,7 @@ namespace Xrpl.Models.Methods
         /// Cannot contain more than 18 source currencies.<br/>
         /// By default, uses all source currencies available up to a maximum of 88 different currency/issuer pairs.
         /// </summary>
-        [JsonProperty("source_currencies")]
+        [JsonPropertyName("source_currencies")]
         public List<SourceCurrency> SourceCurrencies { get; set; }
     }
 
@@ -108,19 +108,19 @@ namespace Xrpl.Models.Methods
         /// Array of objects with possible paths to take.<br/>
         /// If empty, then there are no paths connecting the source and destination accounts.
         /// </summary>
-        [JsonProperty("alternatives")]
+        [JsonPropertyName("alternatives")]
         public List<PathAlternative> Alternatives { get; set; }
 
         /// <summary>
         /// Unique address of the account that would receive a payment transaction.
         /// </summary>
-        [JsonProperty("destination_account")]
+        [JsonPropertyName("destination_account")]
         public string DestinationAccount { get; set; }
 
         /// <summary>
         /// Currency Amount that the destination would receive in a transaction.
         /// </summary>
-        [JsonProperty("destination_amount")]
+        [JsonPropertyName("destination_amount")]
         [JsonConverter(typeof(CurrencyConverter))]
         public Currency DestinationAmount { get; set; }
 
@@ -128,20 +128,20 @@ namespace Xrpl.Models.Methods
         /// Array of strings representing the currencies that the destination accepts,
         /// as 3-letter codes like "USD" or as 40-character hex.
         /// </summary>
-        [JsonProperty("destination_currencies")]
+        [JsonPropertyName("destination_currencies")]
         public List<string> DestinationCurrencies { get; set; }
 
         /// <summary>
         /// If false, this is the result of an incomplete search.<br/>
         /// If true, then this is the best path found.
         /// </summary>
-        [JsonProperty("full_reply")]
+        [JsonPropertyName("full_reply")]
         public bool? FullReply { get; set; }
 
         /// <summary>
         /// Unique address of the account that would send a payment.
         /// </summary>
-        [JsonProperty("source_account")]
+        [JsonPropertyName("source_account")]
         public string SourceAccount { get; set; }
     }
 }

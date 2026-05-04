@@ -2,8 +2,11 @@ using System;
 using System.Collections.Generic;
 using System.Linq;
 using System.Text;
-using Newtonsoft.Json;
-using Newtonsoft.Json.Linq;
+using System.Text.Json;
+using System.Text.Json.Nodes;
+using System.Text.Json.Serialization;
+
+using Xrpl.Client.Json;
 
 namespace Xrpl.Models.Utils
 {
@@ -318,7 +321,9 @@ namespace Xrpl.Models.Utils
         /// <returns>Deserialized <see cref="MPTokenMetadataSchema"/>.</returns>
         public static MPTokenMetadataSchema FromJson(string json)
         {
-            var obj = JObject.Parse(json);
+            JsonObject obj = JsonNode.Parse(json)?.AsObject();
+            if (obj == null) return null;
+
             var schema = new MPTokenMetadataSchema();
 
             schema.Ticker = GetValue(obj, "t", "ticker");
@@ -329,13 +334,13 @@ namespace Xrpl.Models.Utils
             schema.AssetSubclass = GetValue(obj, "as", "asset_subclass");
             schema.IssuerName = GetValue(obj, "in", "issuer_name");
 
-            var urisToken = obj["us"] ?? obj["uris"];
-            if (urisToken is JArray urisArray)
+            JsonNode urisToken = obj["us"] ?? obj["uris"];
+            if (urisToken is JsonArray urisArray)
             {
                 schema.Uris = new List<MPTokenMetadataUri>();
-                foreach (var item in urisArray)
+                foreach (JsonNode item in urisArray)
                 {
-                    if (item is JObject uriObj)
+                    if (item is JsonObject uriObj)
                     {
                         schema.Uris.Add(new MPTokenMetadataUri
                         {
@@ -347,10 +352,11 @@ namespace Xrpl.Models.Utils
                 }
             }
 
-            var aiToken = obj["ai"] ?? obj["additional_info"];
-            if (aiToken is JObject aiObj)
+            JsonNode aiToken = obj["ai"] ?? obj["additional_info"];
+            if (aiToken is JsonObject aiObj)
             {
-                schema.AdditionalInfo = aiObj.ToObject<Dictionary<string, object>>();
+                schema.AdditionalInfo = JsonSerializer.Deserialize<Dictionary<string, object>>(
+                    aiObj.ToJsonString(), XrplJsonOptions.Default);
             }
 
             return schema;
@@ -363,8 +369,8 @@ namespace Xrpl.Models.Utils
         /// <returns>Compact JSON string of the token metadata.</returns>
         public string ToJson(bool useShortKeys = true)
         {
-            var obj = BuildJObject(useShortKeys);
-            return obj.ToString(Formatting.None);
+            JsonObject obj = BuildJsonObject(useShortKeys);
+            return obj.ToJsonString();
         }
 
         /// <summary>
@@ -378,9 +384,9 @@ namespace Xrpl.Models.Utils
             return Encoding.UTF8.GetBytes(json).Length;
         }
 
-        private JObject BuildJObject(bool useShortKeys)
+        private JsonObject BuildJsonObject(bool useShortKeys)
         {
-            var obj = new JObject();
+            var obj = new JsonObject();
 
             string tk = useShortKeys ? "t" : "ticker";
             string nk = useShortKeys ? "n" : "name";
@@ -413,10 +419,10 @@ namespace Xrpl.Models.Utils
                 string ck = useShortKeys ? "c" : "category";
                 string ttk = useShortKeys ? "t" : "title";
 
-                var arr = new JArray();
+                var arr = new JsonArray();
                 foreach (var uri in Uris)
                 {
-                    var uriObj = new JObject();
+                    var uriObj = new JsonObject();
                     if (!string.IsNullOrEmpty(uri.Uri))
                         uriObj[uk] = uri.Uri;
                     if (!string.IsNullOrEmpty(uri.Category))
@@ -430,16 +436,17 @@ namespace Xrpl.Models.Utils
 
             if (AdditionalInfo != null && AdditionalInfo.Count > 0)
             {
-                obj[aik] = JObject.FromObject(AdditionalInfo);
+                obj[aik] = JsonNode.Parse(
+                    JsonSerializer.Serialize(AdditionalInfo, XrplJsonOptions.Default));
             }
 
             return obj;
         }
 
-        private static string GetValue(JObject obj, string shortKey, string longKey)
+        private static string GetValue(JsonObject obj, string shortKey, string longKey)
         {
-            var token = obj[shortKey] ?? obj[longKey];
-            return token?.ToString();
+            JsonNode token = obj[shortKey] ?? obj[longKey];
+            return token?.GetValue<string>();
         }
     }
 }

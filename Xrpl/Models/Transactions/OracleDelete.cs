@@ -1,7 +1,7 @@
 using System.Collections.Generic;
 using System.Threading.Tasks;
 
-using Newtonsoft.Json;
+using System.Text.Json.Serialization;
 
 using Xrpl.Client.Exceptions;
 
@@ -32,7 +32,7 @@ namespace Xrpl.Models.Transactions
         }
 
         /// <inheritdoc />
-        [JsonProperty("OracleDocumentID")]
+        [JsonPropertyName("OracleDocumentID")]
         public uint OracleDocumentID { get; set; }
     }
 
@@ -40,7 +40,7 @@ namespace Xrpl.Models.Transactions
     public class OracleDeleteResponse : TransactionResponse, IOracleDelete
     {
         /// <inheritdoc />
-        [JsonProperty("OracleDocumentID")]
+        [JsonPropertyName("OracleDocumentID")]
         public uint OracleDocumentID { get; set; }
     }
 

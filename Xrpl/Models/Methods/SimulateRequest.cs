@@ -1,4 +1,4 @@
-﻿using Newtonsoft.Json;
+using System.Text.Json.Serialization;
 
 using Xrpl.Client.Json.Converters;
 using Xrpl.Models.Transactions;
@@ -22,70 +22,70 @@ public class SimulateRequest : BaseRequest
     /// The transaction to simulate, in binary format.<br/>
     /// If you include this field, do not also include tx_json.
     /// </summary>
-    [JsonProperty("tx_blob")]
+    [JsonPropertyName("tx_blob")]
     public string TxBlob { get; set; }
 
     /// <summary>
     /// The transaction to simulate, in JSON format.<br/>
     /// If you include this field, do not also include tx_blob.
     /// </summary>
-    [JsonProperty("tx_json")]
+    [JsonPropertyName("tx_json")]
     public ITransactionRequest Transaction { get; set; }
 
     /// <summary>
     /// The default value is false, which returns data and metadata in JSON format.<br/>
     /// If true, returns data and metadata in binary format, serialized to a hexadecimal string.
     /// </summary>
-    [JsonProperty("binary")]
+    [JsonPropertyName("binary")]
     public bool? Binary { get; set; }
 }
 public class SimulateResponse
 {
-    [JsonProperty("applied")]
+    [JsonPropertyName("applied")]
     public bool Applied { get; set; }
     /// <summary>
     /// Text result code indicating the preliminary result of the transaction,  for example `tesSUCCESS`.
     /// </summary>
-    [JsonProperty("engine_result")]
+    [JsonPropertyName("engine_result")]
     public string EngineResult { get; set; }
 
     /// <summary>
     /// Numeric version of the result code.
     /// </summary>
-    [JsonProperty("engine_result_code")]
+    [JsonPropertyName("engine_result_code")]
     public int EngineResultCode { get; set; }
 
     /// <summary>
     /// Human-readable explanation of the transaction's preliminary result.
     /// </summary>
-    [JsonProperty("engine_result_message")]
+    [JsonPropertyName("engine_result_message")]
     public string EngineResultMessage { get; set; }
 
     /// <summary>
     /// The transaction to simulate, in binary format.<br/>
     /// If you include this field, do not also include tx_json.
     /// </summary>
-    [JsonProperty("tx_blob")]
+    [JsonPropertyName("tx_blob")]
     public string TxBlob { get; set; }
 
     /// <summary>
     /// The transaction to simulate, in JSON format.<br/>
     /// If you include this field, do not also include tx_blob.
     /// </summary>
-    [JsonProperty("tx_json")]
+    [JsonPropertyName("tx_json")]
     [JsonConverter(typeof(TransactionRequestConverter))]
-    public object TxJson { get; set; }
+    public ITransactionRequest TxJson { get; set; }
 
     /// <summary>
     /// The default value is false, which returns data and metadata in JSON format.<br/>
     /// If true, returns data and metadata in binary format, serialized to a hexadecimal string.
     /// </summary>
-    [JsonProperty("binary")]
+    [JsonPropertyName("binary")]
     public bool? Binary { get; set; }
 
-    [JsonProperty("meta")]
+    [JsonPropertyName("meta")]
     public Meta Meta { get; set; }
 
-    [JsonProperty("ledger_index")]
+    [JsonPropertyName("ledger_index")]
     public ulong? LedgerIndex { get; set; }
 }

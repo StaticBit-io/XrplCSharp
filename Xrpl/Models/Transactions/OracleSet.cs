@@ -1,8 +1,7 @@
 using System;
 using System.Collections.Generic;
+using System.Text.Json.Serialization;
 using System.Threading.Tasks;
-
-using Newtonsoft.Json;
 
 using Xrpl.Client.Exceptions;
 using Xrpl.Client.Json.Converters;
@@ -69,30 +68,30 @@ namespace Xrpl.Models.Transactions
         }
 
         /// <inheritdoc />
-        [JsonProperty("OracleDocumentID")]
+        [JsonPropertyName("OracleDocumentID")]
         public uint OracleDocumentID { get; set; }
 
         /// <inheritdoc />
-        [JsonProperty("LastUpdateTime")]
+        [JsonPropertyName("LastUpdateTime")]
         [JsonConverter(typeof(UnixDateTimeConverter))]
         public DateTime? LastUpdateTime { get; set; }
 
         /// <inheritdoc />
-        [JsonProperty("PriceDataSeries")]
+        [JsonPropertyName("PriceDataSeries")]
         public List<PriceDataWrapper> PriceDataSeries { get; set; }
 
         /// <inheritdoc />
-        [JsonProperty("Provider", NullValueHandling = NullValueHandling.Ignore)]
+        [JsonPropertyName("Provider")]
         [JsonConverter(typeof(OracleHexStringConverter))]
         public string Provider { get; set; }
 
         /// <inheritdoc />
-        [JsonProperty("URI", NullValueHandling = NullValueHandling.Ignore)]
+        [JsonPropertyName("URI")]
         [JsonConverter(typeof(OracleHexStringConverter))]
         public string URI { get; set; }
 
         /// <inheritdoc />
-        [JsonProperty("AssetClass", NullValueHandling = NullValueHandling.Ignore)]
+        [JsonPropertyName("AssetClass")]
         [JsonConverter(typeof(OracleHexStringConverter))]
         public string AssetClass { get; set; }
     }
@@ -101,30 +100,30 @@ namespace Xrpl.Models.Transactions
     public class OracleSetResponse : TransactionResponse, IOracleSet
     {
         /// <inheritdoc />
-        [JsonProperty("OracleDocumentID")]
+        [JsonPropertyName("OracleDocumentID")]
         public uint OracleDocumentID { get; set; }
 
         /// <inheritdoc />
-        [JsonProperty("LastUpdateTime")]
+        [JsonPropertyName("LastUpdateTime")]
         [JsonConverter(typeof(UnixDateTimeConverter))]
         public DateTime? LastUpdateTime { get; set; }
 
         /// <inheritdoc />
-        [JsonProperty("PriceDataSeries")]
+        [JsonPropertyName("PriceDataSeries")]
         public List<PriceDataWrapper> PriceDataSeries { get; set; }
 
         /// <inheritdoc />
-        [JsonProperty("Provider", NullValueHandling = NullValueHandling.Ignore)]
+        [JsonPropertyName("Provider")]
         [JsonConverter(typeof(OracleHexStringConverter))]
         public string Provider { get; set; }
 
         /// <inheritdoc />
-        [JsonProperty("URI", NullValueHandling = NullValueHandling.Ignore)]
+        [JsonPropertyName("URI")]
         [JsonConverter(typeof(OracleHexStringConverter))]
         public string URI { get; set; }
 
         /// <inheritdoc />
-        [JsonProperty("AssetClass", NullValueHandling = NullValueHandling.Ignore)]
+        [JsonPropertyName("AssetClass")]
         [JsonConverter(typeof(OracleHexStringConverter))]
         public string AssetClass { get; set; }
     }

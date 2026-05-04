@@ -1,9 +1,10 @@
 ﻿using Microsoft.VisualStudio.TestTools.UnitTesting;
 
-using Newtonsoft.Json;
-
 using System;
+using System.Text.Json;
+using System.Text.Json.Serialization;
 
+using Xrpl.Client.Json;
 using Xrpl.Client.Json.Converters;
 
 namespace XrplTests.Client.Json.Converters;
@@ -31,7 +32,7 @@ public class RippleDateTimeConverterTests
     {
         // 784111777 seconds after Ripple Epoch = some date in 2024
         var json = "{\"Timestamp\": 784111777}";
-        var result = JsonConvert.DeserializeObject<RippleModel>(json);
+        var result = JsonSerializer.Deserialize<RippleModel>(json, XrplJsonOptions.Default);
         var expected = RippleEpoch.AddSeconds(784111777);
         Assert.AreEqual(expected, result.Timestamp);
     }
@@ -40,7 +41,7 @@ public class RippleDateTimeConverterTests
     public void Deserialize_Zero_ReturnsRippleEpoch()
     {
         var json = "{\"Timestamp\": 0}";
-        var result = JsonConvert.DeserializeObject<RippleModel>(json);
+        var result = JsonSerializer.Deserialize<RippleModel>(json, XrplJsonOptions.Default);
         Assert.AreEqual(RippleEpoch, result.Timestamp);
     }
 
@@ -48,7 +49,7 @@ public class RippleDateTimeConverterTests
     public void Deserialize_Null_ReturnsNull()
     {
         var json = "{\"Timestamp\": null}";
-        var result = JsonConvert.DeserializeObject<RippleModel>(json);
+        var result = JsonSerializer.Deserialize<RippleModel>(json, XrplJsonOptions.Default);
         Assert.IsNull(result.Timestamp);
     }
 
@@ -56,7 +57,7 @@ public class RippleDateTimeConverterTests
     public void Deserialize_StringNumber_ReturnsCorrectDateTime()
     {
         var json = "{\"Timestamp\": \"784111777\"}";
-        var result = JsonConvert.DeserializeObject<RippleModel>(json);
+        var result = JsonSerializer.Deserialize<RippleModel>(json, XrplJsonOptions.Default);
         var expected = RippleEpoch.AddSeconds(784111777);
         Assert.AreEqual(expected, result.Timestamp);
     }
@@ -69,7 +70,7 @@ public class RippleDateTimeConverterTests
         {
             Timestamp = date,
         };
-        var json = JsonConvert.SerializeObject(model);
+        var json = JsonSerializer.Serialize(model, XrplJsonOptions.Default);
         Assert.Contains(substring: "784111777", json);
     }
 
@@ -80,7 +81,7 @@ public class RippleDateTimeConverterTests
         {
             Timestamp = RippleEpoch,
         };
-        var json = JsonConvert.SerializeObject(model);
+        var json = JsonSerializer.Serialize(model, XrplJsonOptions.Default);
         Assert.Contains(substring: "0", json);
     }
 
@@ -92,8 +93,8 @@ public class RippleDateTimeConverterTests
         {
             Timestamp = original,
         };
-        var json = JsonConvert.SerializeObject(model);
-        var deserialized = JsonConvert.DeserializeObject<RippleModel>(json);
+        var json = JsonSerializer.Serialize(model, XrplJsonOptions.Default);
+        var deserialized = JsonSerializer.Deserialize<RippleModel>(json, XrplJsonOptions.Default);
         Assert.AreEqual(original, deserialized.Timestamp);
     }
 }
@@ -121,7 +122,7 @@ public class UnixDateTimeConverterTests
     {
         // 1718451000 = 2024-06-15 12:30:00 UTC
         var json = "{\"Timestamp\": 1718451000}";
-        var result = JsonConvert.DeserializeObject<UnixModel>(json);
+        var result = JsonSerializer.Deserialize<UnixModel>(json, XrplJsonOptions.Default);
         var expected = UnixEpoch.AddSeconds(1718451000);
         Assert.AreEqual(expected, result.Timestamp);
     }
@@ -130,7 +131,7 @@ public class UnixDateTimeConverterTests
     public void Deserialize_Zero_ReturnsUnixEpoch()
     {
         var json = "{\"Timestamp\": 0}";
-        var result = JsonConvert.DeserializeObject<UnixModel>(json);
+        var result = JsonSerializer.Deserialize<UnixModel>(json, XrplJsonOptions.Default);
         Assert.AreEqual(UnixEpoch, result.Timestamp);
     }
 
@@ -138,7 +139,7 @@ public class UnixDateTimeConverterTests
     public void Deserialize_Null_ReturnsNull()
     {
         var json = "{\"Timestamp\": null}";
-        var result = JsonConvert.DeserializeObject<UnixModel>(json);
+        var result = JsonSerializer.Deserialize<UnixModel>(json, XrplJsonOptions.Default);
         Assert.IsNull(result.Timestamp);
     }
 
@@ -146,7 +147,7 @@ public class UnixDateTimeConverterTests
     public void Deserialize_StringNumber_ReturnsCorrectDateTime()
     {
         var json = "{\"Timestamp\": \"1718451000\"}";
-        var result = JsonConvert.DeserializeObject<UnixModel>(json);
+        var result = JsonSerializer.Deserialize<UnixModel>(json, XrplJsonOptions.Default);
         var expected = UnixEpoch.AddSeconds(1718451000);
         Assert.AreEqual(expected, result.Timestamp);
     }
@@ -157,7 +158,7 @@ public class UnixDateTimeConverterTests
         var date = new DateTime(2024, 6, 15, 12, 30, 0, DateTimeKind.Utc);
         var expected = (long)((DateTimeOffset)date).ToUnixTimeSeconds(); // 1718454600
         var model = new UnixModel { Timestamp = date };
-        var json = JsonConvert.SerializeObject(model);
+        var json = JsonSerializer.Serialize(model, XrplJsonOptions.Default);
         Assert.Contains(expected.ToString(), json);
     }
 
@@ -168,7 +169,7 @@ public class UnixDateTimeConverterTests
         {
             Timestamp = UnixEpoch,
         };
-        var json = JsonConvert.SerializeObject(model);
+        var json = JsonSerializer.Serialize(model, XrplJsonOptions.Default);
         Assert.Contains(substring: "0", json);
     }
 
@@ -180,8 +181,8 @@ public class UnixDateTimeConverterTests
         {
             Timestamp = original,
         };
-        var json = JsonConvert.SerializeObject(model);
-        var deserialized = JsonConvert.DeserializeObject<UnixModel>(json);
+        var json = JsonSerializer.Serialize(model, XrplJsonOptions.Default);
+        var deserialized = JsonSerializer.Deserialize<UnixModel>(json, XrplJsonOptions.Default);
         Assert.AreEqual(original, deserialized.Timestamp);
     }
 
@@ -189,9 +190,9 @@ public class UnixDateTimeConverterTests
     public void DifferentFromRippleConverter_SameInput()
     {
         var json = "{\"Timestamp\": 1718451000}";
-        var unixResult = JsonConvert.DeserializeObject<UnixModel>(json);
+        var unixResult = JsonSerializer.Deserialize<UnixModel>(json, XrplJsonOptions.Default);
         var rippleJson = json.Replace(oldValue: "Timestamp", newValue: "Timestamp");
-        var rippleModel = JsonConvert.DeserializeObject<RippleModel>(rippleJson);
+        var rippleModel = JsonSerializer.Deserialize<RippleModel>(rippleJson, XrplJsonOptions.Default);
 
         // Unix и Ripple конвертеры дают разные даты для одного числа
         // Разница = 946684800 секунд (30 лет)

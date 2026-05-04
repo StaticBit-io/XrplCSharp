@@ -1,6 +1,6 @@
 ﻿using System;
 
-using Newtonsoft.Json;
+using System.Text.Json.Serialization;
 
 using Xrpl.Client.Json.Converters;
 using Xrpl.Models.Common;
@@ -70,12 +70,12 @@ namespace Xrpl.Models.Methods
         /// <summary>
         /// Identifying hash of the transaction that most recently modified this object.
         /// </summary>
-        [JsonProperty("PreviousTxnID")]
+        [JsonPropertyName("PreviousTxnID")]
         public string PreviousTransactionId { get; set; }
         /// <summary>
         /// Index of the ledger that contains the transaction that most recently modified this object.
         /// </summary>
-        [JsonProperty("PreviousTxnLgrSeq")]
+        [JsonPropertyName("PreviousTxnLgrSeq")]
         public uint PreviousTransactionLedgerSequence { get; set; }
 
     }

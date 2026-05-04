@@ -5,7 +5,7 @@
 using System.Collections.Generic;
 using System.Threading.Tasks;
 
-using Newtonsoft.Json;
+using System.Text.Json.Serialization;
 
 using Xrpl.Client.Exceptions;
 
@@ -40,7 +40,8 @@ namespace Xrpl.Models.Transactions
         public string Fulfillment { get; set; }
 
         /// <inheritdoc />
-        [JsonProperty("CredentialIDs", NullValueHandling = NullValueHandling.Ignore)]
+        [JsonPropertyName("CredentialIDs")]
+        [JsonIgnore(Condition = JsonIgnoreCondition.WhenWritingNull)]
         public List<string> CredentialIDs { get; set; }
     }
 
@@ -90,7 +91,8 @@ namespace Xrpl.Models.Transactions
         public string Owner { get; set; }
 
         /// <inheritdoc />
-        [JsonProperty("CredentialIDs", NullValueHandling = NullValueHandling.Ignore)]
+        [JsonPropertyName("CredentialIDs")]
+        [JsonIgnore(Condition = JsonIgnoreCondition.WhenWritingNull)]
         public List<string> CredentialIDs { get; set; }
     }
 

@@ -1,9 +1,10 @@
 ﻿// https://github.com/XRPLF/xrpl.js/blob/main/packages/xrpl/src/models/ledger/DepositPreauth.ts
 // https://xrpl.org/docs/references/protocol/ledger-data/ledger-entry-types/depositpreauth
 
-using Newtonsoft.Json;
+using System.Text.Json.Serialization;
 
 using System.Collections.Generic;
+using Xrpl.Client.Json.Converters;
 
 namespace Xrpl.Models.Ledger
 {
@@ -37,12 +38,13 @@ namespace Xrpl.Models.Ledger
         /// Each entry wraps a <see cref="AuthorizeCredentialBody"/> with Issuer + CredentialType.<br/>
         /// Null when the entry uses address-based preauthorization (<see cref="Authorize"/> is set instead).
         /// </summary>
-        [JsonProperty("AuthorizeCredentials", NullValueHandling = NullValueHandling.Ignore)]
+        [JsonPropertyName("AuthorizeCredentials")]
         public List<AuthorizeCredentialEntry> AuthorizeCredentials { get; set; }
 
         /// <summary>
         /// A bit-map of boolean flags. No flags are currently defined for DepositPreauth, so this value is always 0.
         /// </summary>
+        [JsonConverter(typeof(NumberOrStringConverter))]
         public string Flags { get; set; }
 
         /// <summary>
@@ -68,7 +70,7 @@ namespace Xrpl.Models.Ledger
     /// </summary>
     public class AuthorizeCredentialEntry
     {
-        [JsonProperty("Credential")]
+        [JsonPropertyName("Credential")]
         public AuthorizeCredentialBody Credential { get; set; }
     }
 
@@ -80,13 +82,13 @@ namespace Xrpl.Models.Ledger
         /// <summary>
         /// The account that issued the credential.
         /// </summary>
-        [JsonProperty("Issuer")]
+        [JsonPropertyName("Issuer")]
         public string Issuer { get; set; }
 
         /// <summary>
         /// A hex-encoded value identifying the type of credential.
         /// </summary>
-        [JsonProperty("CredentialType")]
+        [JsonPropertyName("CredentialType")]
         public string CredentialType { get; set; }
     }
 }

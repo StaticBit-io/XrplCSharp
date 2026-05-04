@@ -1,8 +1,8 @@
+using System.Text.Json;
+
 using Microsoft.VisualStudio.TestTools.UnitTesting;
 
-using Newtonsoft.Json;
-
-using Xrpl.Client.Json.Converters;
+using Xrpl.Client.Json;
 using Xrpl.Models.Transactions;
 
 namespace XrplTests.Client.Json.Converters;
@@ -10,11 +10,7 @@ namespace XrplTests.Client.Json.Converters;
 [TestClass]
 public class TransactionRequestConverterTests
 {
-    private static readonly JsonSerializerSettings Settings = new JsonSerializerSettings
-    {
-        NullValueHandling = NullValueHandling.Ignore,
-        Converters = { new TransactionRequestConverter(), new CurrencyConverter() }
-    };
+    private static readonly JsonSerializerOptions Options = XrplJsonOptions.Default;
 
     [TestMethod]
     public void Read_Payment_ReturnsPaymentRequest()
@@ -25,7 +21,7 @@ public class TransactionRequestConverterTests
             ""Destination"": ""rDest"",
             ""Amount"": ""1000000""
         }";
-        ITransactionRequest result = JsonConvert.DeserializeObject<ITransactionRequest>(json, Settings);
+        ITransactionRequest result = JsonSerializer.Deserialize<ITransactionRequest>(json, Options);
         Assert.IsNotNull(result);
         Assert.IsInstanceOfType(result, typeof(Payment));
         Payment payment = (Payment)result;
@@ -40,7 +36,7 @@ public class TransactionRequestConverterTests
             ""TransactionType"": ""AccountSet"",
             ""Account"": ""rTest""
         }";
-        ITransactionRequest result = JsonConvert.DeserializeObject<ITransactionRequest>(json, Settings);
+        ITransactionRequest result = JsonSerializer.Deserialize<ITransactionRequest>(json, Options);
         Assert.IsNotNull(result);
         Assert.IsInstanceOfType(result, typeof(AccountSet));
     }
@@ -53,7 +49,7 @@ public class TransactionRequestConverterTests
             ""Account"": ""rTest"",
             ""LimitAmount"": {""currency"": ""USD"", ""issuer"": ""rIssuer"", ""value"": ""100""}
         }";
-        ITransactionRequest result = JsonConvert.DeserializeObject<ITransactionRequest>(json, Settings);
+        ITransactionRequest result = JsonSerializer.Deserialize<ITransactionRequest>(json, Options);
         Assert.IsNotNull(result);
         Assert.IsInstanceOfType(result, typeof(TrustSet));
     }
@@ -67,7 +63,7 @@ public class TransactionRequestConverterTests
             ""TakerPays"": ""1000000"",
             ""TakerGets"": {""currency"": ""USD"", ""issuer"": ""rIssuer"", ""value"": ""10""}
         }";
-        ITransactionRequest result = JsonConvert.DeserializeObject<ITransactionRequest>(json, Settings);
+        ITransactionRequest result = JsonSerializer.Deserialize<ITransactionRequest>(json, Options);
         Assert.IsNotNull(result);
         Assert.IsInstanceOfType(result, typeof(OfferCreate));
     }
@@ -80,7 +76,7 @@ public class TransactionRequestConverterTests
             ""Account"": ""rTest"",
             ""NFTokenTaxon"": 0
         }";
-        ITransactionRequest result = JsonConvert.DeserializeObject<ITransactionRequest>(json, Settings);
+        ITransactionRequest result = JsonSerializer.Deserialize<ITransactionRequest>(json, Options);
         Assert.IsNotNull(result);
         Assert.IsInstanceOfType(result, typeof(NFTokenMint));
     }
@@ -95,7 +91,7 @@ public class TransactionRequestConverterTests
             ""Amount2"": {""currency"": ""USD"", ""issuer"": ""rIssuer"", ""value"": ""100""},
             ""TradingFee"": 500
         }";
-        ITransactionRequest result = JsonConvert.DeserializeObject<ITransactionRequest>(json, Settings);
+        ITransactionRequest result = JsonSerializer.Deserialize<ITransactionRequest>(json, Options);
         Assert.IsNotNull(result);
         Assert.IsInstanceOfType(result, typeof(AMMCreate));
     }
@@ -107,7 +103,7 @@ public class TransactionRequestConverterTests
             ""TransactionType"": ""OracleSet"",
             ""Account"": ""rTest""
         }";
-        ITransactionRequest result = JsonConvert.DeserializeObject<ITransactionRequest>(json, Settings);
+        ITransactionRequest result = JsonSerializer.Deserialize<ITransactionRequest>(json, Options);
         Assert.IsNotNull(result);
         Assert.IsInstanceOfType(result, typeof(OracleSet));
     }
@@ -119,7 +115,7 @@ public class TransactionRequestConverterTests
             ""TransactionType"": ""DIDSet"",
             ""Account"": ""rTest""
         }";
-        ITransactionRequest result = JsonConvert.DeserializeObject<ITransactionRequest>(json, Settings);
+        ITransactionRequest result = JsonSerializer.Deserialize<ITransactionRequest>(json, Options);
         Assert.IsNotNull(result);
         Assert.IsInstanceOfType(result, typeof(DIDSet));
     }
@@ -133,7 +129,7 @@ public class TransactionRequestConverterTests
             ""Subject"": ""rSubject"",
             ""CredentialType"": ""4B5943""
         }";
-        ITransactionRequest result = JsonConvert.DeserializeObject<ITransactionRequest>(json, Settings);
+        ITransactionRequest result = JsonSerializer.Deserialize<ITransactionRequest>(json, Options);
         Assert.IsNotNull(result);
         Assert.IsInstanceOfType(result, typeof(CredentialCreate));
     }
@@ -146,7 +142,7 @@ public class TransactionRequestConverterTests
             ""Account"": ""rTest"",
             ""RawTransactions"": []
         }";
-        ITransactionRequest result = JsonConvert.DeserializeObject<ITransactionRequest>(json, Settings);
+        ITransactionRequest result = JsonSerializer.Deserialize<ITransactionRequest>(json, Options);
         Assert.IsNotNull(result);
         Assert.IsInstanceOfType(result, typeof(Batch));
     }
@@ -158,7 +154,7 @@ public class TransactionRequestConverterTests
             ""TransactionType"": ""FutureTxType"",
             ""Account"": ""rTest""
         }";
-        ITransactionRequest result = JsonConvert.DeserializeObject<ITransactionRequest>(json, Settings);
+        ITransactionRequest result = JsonSerializer.Deserialize<ITransactionRequest>(json, Options);
         Assert.IsNotNull(result);
     }
 }

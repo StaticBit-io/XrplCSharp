@@ -1,8 +1,7 @@
-﻿using Newtonsoft.Json;
-
-using System;
+﻿using System;
 using System.Collections.Generic;
 using System.Linq;
+using System.Text.Json.Serialization;
 
 namespace Xrpl.Models.Transactions;
 
@@ -26,13 +25,13 @@ public class InnerSigner
     /// <summary>
     /// A signature for this transaction, verifiable using the SigningPubKey.
     /// </summary>
-    [JsonProperty("TxnSignature")]
+    [JsonPropertyName("TxnSignature")]
     public string TransactionSignature { get; set; }
 
     /// <summary>
     /// The public key used to create this signature.
     /// </summary>
-    [JsonProperty("SigningPubKey")]
+    [JsonPropertyName("SigningPubKey")]
     public string SigningPublicKey { get; set; }
 }
 

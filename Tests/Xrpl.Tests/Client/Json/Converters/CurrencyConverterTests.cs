@@ -1,9 +1,10 @@
 using Microsoft.VisualStudio.TestTools.UnitTesting;
 
-using Newtonsoft.Json;
-
 using System;
+using System.Text.Json;
+using System.Text.Json.Serialization;
 
+using Xrpl.Client.Json;
 using Xrpl.Client.Json.Converters;
 using Xrpl.Models.Common;
 
@@ -22,7 +23,7 @@ public class CurrencyConverterTests
     public void Read_XrpDropsString_ReturnsCurrencyXrp()
     {
         string json = "{\"Amount\": \"1000000\"}";
-        Model result = JsonConvert.DeserializeObject<Model>(json);
+        Model result = JsonSerializer.Deserialize<Model>(json, XrplJsonOptions.Default);
         Assert.IsNotNull(result.Amount);
         Assert.AreEqual("XRP", result.Amount.CurrencyCode);
         Assert.AreEqual("1000000", result.Amount.Value);
@@ -32,7 +33,7 @@ public class CurrencyConverterTests
     public void Read_XrpDropsInteger_ReturnsCurrencyXrp()
     {
         string json = "{\"Amount\": 500000}";
-        Model result = JsonConvert.DeserializeObject<Model>(json);
+        Model result = JsonSerializer.Deserialize<Model>(json, XrplJsonOptions.Default);
         Assert.IsNotNull(result.Amount);
         Assert.AreEqual("XRP", result.Amount.CurrencyCode);
         Assert.AreEqual("500000", result.Amount.Value);
@@ -46,7 +47,7 @@ public class CurrencyConverterTests
             ""issuer"": ""rHb9CJAWyB4rj91VRWn96DkukG4bwdtyTh"",
             ""value"": ""100.50""
         }}";
-        Model result = JsonConvert.DeserializeObject<Model>(json);
+        Model result = JsonSerializer.Deserialize<Model>(json, XrplJsonOptions.Default);
         Assert.IsNotNull(result.Amount);
         Assert.AreEqual("USD", result.Amount.CurrencyCode);
         Assert.AreEqual("rHb9CJAWyB4rj91VRWn96DkukG4bwdtyTh", result.Amount.Issuer);
@@ -60,7 +61,7 @@ public class CurrencyConverterTests
             ""mpt_issuance_id"": ""00000001A407AF5856CDF13C0E7B6EDA1A249768ADC1F5E1"",
             ""value"": ""50""
         }}";
-        Model result = JsonConvert.DeserializeObject<Model>(json);
+        Model result = JsonSerializer.Deserialize<Model>(json, XrplJsonOptions.Default);
         Assert.IsNotNull(result.Amount);
         Assert.AreEqual("00000001A407AF5856CDF13C0E7B6EDA1A249768ADC1F5E1", result.Amount.MPTokenIssuanceID);
         Assert.AreEqual("50", result.Amount.Value);
@@ -70,7 +71,7 @@ public class CurrencyConverterTests
     public void Read_Null_ReturnsNull()
     {
         string json = "{\"Amount\": null}";
-        Model result = JsonConvert.DeserializeObject<Model>(json);
+        Model result = JsonSerializer.Deserialize<Model>(json, XrplJsonOptions.Default);
         Assert.IsNull(result.Amount);
     }
 
@@ -81,7 +82,7 @@ public class CurrencyConverterTests
         {
             Amount = new Currency { CurrencyCode = "XRP", Value = "1000000" }
         };
-        string json = JsonConvert.SerializeObject(model);
+        string json = JsonSerializer.Serialize(model, XrplJsonOptions.Default);
         Assert.IsTrue(json.Contains("\"1000000\""));
         Assert.IsFalse(json.Contains("currency"));
     }
@@ -98,7 +99,7 @@ public class CurrencyConverterTests
                 Value = "100"
             }
         };
-        string json = JsonConvert.SerializeObject(model);
+        string json = JsonSerializer.Serialize(model, XrplJsonOptions.Default);
         Assert.IsTrue(json.Contains("\"currency\""));
         Assert.IsTrue(json.Contains("\"USD\""));
         Assert.IsTrue(json.Contains("\"issuer\""));
@@ -115,7 +116,7 @@ public class CurrencyConverterTests
                 Value = "50"
             }
         };
-        string json = JsonConvert.SerializeObject(model);
+        string json = JsonSerializer.Serialize(model, XrplJsonOptions.Default);
         Assert.IsTrue(json.Contains("mpt_issuance_id"));
         Assert.IsTrue(json.Contains("00000001A407AF5856CDF13C0E7B6EDA1A249768ADC1F5E1"));
     }
@@ -127,8 +128,8 @@ public class CurrencyConverterTests
         {
             Amount = new Currency { CurrencyCode = "XRP", Value = "5000000" }
         };
-        string json = JsonConvert.SerializeObject(original);
-        Model deserialized = JsonConvert.DeserializeObject<Model>(json);
+        string json = JsonSerializer.Serialize(original, XrplJsonOptions.Default);
+        Model deserialized = JsonSerializer.Deserialize<Model>(json, XrplJsonOptions.Default);
         Assert.AreEqual("XRP", deserialized.Amount.CurrencyCode);
         Assert.AreEqual("5000000", deserialized.Amount.Value);
     }
@@ -145,8 +146,8 @@ public class CurrencyConverterTests
                 Value = "42.5"
             }
         };
-        string json = JsonConvert.SerializeObject(original);
-        Model deserialized = JsonConvert.DeserializeObject<Model>(json);
+        string json = JsonSerializer.Serialize(original, XrplJsonOptions.Default);
+        Model deserialized = JsonSerializer.Deserialize<Model>(json, XrplJsonOptions.Default);
         Assert.AreEqual("EUR", deserialized.Amount.CurrencyCode);
         Assert.AreEqual("rHb9CJAWyB4rj91VRWn96DkukG4bwdtyTh", deserialized.Amount.Issuer);
         Assert.AreEqual("42.5", deserialized.Amount.Value);
@@ -166,7 +167,7 @@ public class IssuedCurrencyConverterTests
     public void Read_Object_ReturnsIssuedCurrency()
     {
         string json = @"{""Asset"": {""currency"": ""USD"", ""issuer"": ""rAddr""}}";
-        Model result = JsonConvert.DeserializeObject<Model>(json);
+        Model result = JsonSerializer.Deserialize<Model>(json, XrplJsonOptions.Default);
         Assert.IsNotNull(result.Asset);
         Assert.AreEqual("USD", result.Asset.Currency);
     }
@@ -175,7 +176,7 @@ public class IssuedCurrencyConverterTests
     public void Read_String_ReturnsXrp()
     {
         string json = @"{""Asset"": ""XRP""}";
-        Model result = JsonConvert.DeserializeObject<Model>(json);
+        Model result = JsonSerializer.Deserialize<Model>(json, XrplJsonOptions.Default);
         Assert.IsNotNull(result.Asset);
         Assert.AreEqual("XRP", result.Asset.Currency);
     }
@@ -184,7 +185,7 @@ public class IssuedCurrencyConverterTests
     public void Read_Null_ReturnsNull()
     {
         string json = @"{""Asset"": null}";
-        Model result = JsonConvert.DeserializeObject<Model>(json);
+        Model result = JsonSerializer.Deserialize<Model>(json, XrplJsonOptions.Default);
         Assert.IsNull(result.Asset);
     }
 
@@ -195,7 +196,7 @@ public class IssuedCurrencyConverterTests
         {
             Asset = new Common.IssuedCurrency { Currency = "XRP" }
         };
-        string json = JsonConvert.SerializeObject(model);
+        string json = JsonSerializer.Serialize(model, XrplJsonOptions.Default);
         Assert.IsTrue(json.Contains("\"XRP\""));
     }
 }

@@ -1,4 +1,4 @@
-﻿using Newtonsoft.Json;
+﻿using System.Text.Json.Serialization;
 
 using System;
 using System.Collections.Generic;
@@ -60,7 +60,7 @@ namespace Xrpl.Models.Transactions
         public Currency Amount { get; set; }
 
         /// <inheritdoc />
-        [JsonProperty("DeliverMax")]
+        [JsonPropertyName("DeliverMax")]
         [JsonConverter(typeof(CurrencyConverter))]
         private Currency? DeliverMax
         {
@@ -97,7 +97,8 @@ namespace Xrpl.Models.Transactions
         public string DomainID { get; set; }
 
         /// <inheritdoc />
-        [JsonProperty("CredentialIDs", NullValueHandling = NullValueHandling.Ignore)]
+        [JsonPropertyName("CredentialIDs")]
+        [JsonIgnore(Condition = JsonIgnoreCondition.WhenWritingNull)]
         public List<string> CredentialIDs { get; set; }
     }
 
@@ -193,7 +194,7 @@ namespace Xrpl.Models.Transactions
         public Currency Amount { get; set; }
 
         /// <inheritdoc />
-        [JsonProperty("DeliverMax")]
+        [JsonPropertyName("DeliverMax")]
         [JsonConverter(typeof(CurrencyConverter))]
         private Currency? DeliverMax
         {
@@ -231,7 +232,8 @@ namespace Xrpl.Models.Transactions
         public string DomainID { get; set; }
 
         /// <inheritdoc />
-        [JsonProperty("CredentialIDs", NullValueHandling = NullValueHandling.Ignore)]
+        [JsonPropertyName("CredentialIDs")]
+        [JsonIgnore(Condition = JsonIgnoreCondition.WhenWritingNull)]
         public List<string> CredentialIDs { get; set; }
     }
 

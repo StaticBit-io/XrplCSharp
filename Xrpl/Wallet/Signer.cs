@@ -1,11 +1,12 @@
 ﻿using System;
 using System.Collections.Generic;
 using System.Linq;
-
-using Newtonsoft.Json.Linq;
+using System.Text.Json;
+using System.Text.Json.Nodes;
 
 using Xrpl.BinaryCodec;
 using Xrpl.Client.Exceptions;
+using Xrpl.Client.Json;
 using Xrpl.Keypairs;
 
 
@@ -73,7 +74,7 @@ namespace Xrpl.Wallet
 
             var signers = tx["Signers"];
             int signersCount = 0;
-            if (signers is JArray jarr)
+            if (signers is JsonArray jarr)
                 signersCount = jarr.Count;
             else if (signers is Array arr)
                 signersCount = arr.Length;
@@ -117,8 +118,8 @@ namespace Xrpl.Wallet
             Dictionary<string, object> decodedTx = GetDecodedTransaction(tx);
             return XrplKeypairs.Verify(
               XrplBinaryCodec.EncodeForSigning(decodedTx).FromHex(),
-              (string)decodedTx["TxnSignature"],
-              (string)decodedTx["SigningPubKey"]
+              ExtractString(decodedTx, "TxnSignature"),
+              ExtractString(decodedTx, "SigningPubKey")
             );
         }
 
@@ -132,9 +133,16 @@ namespace Xrpl.Wallet
             Dictionary<string, object> decodedTx = GetDecodedTransaction(tx);
             return XrplKeypairs.Verify(
               XrplBinaryCodec.EncodeForSigning(decodedTx).FromHex(),
-              (string)decodedTx["TxnSignature"],
-              (string)decodedTx["SigningPubKey"]
+              ExtractString(decodedTx, "TxnSignature"),
+              ExtractString(decodedTx, "SigningPubKey")
             );
+        }
+
+        private static string ExtractString(Dictionary<string, object> dict, string key)
+        {
+            object value = dict[key];
+            if (value is System.Text.Json.JsonElement je) return je.GetString();
+            return (string)value;
         }
 
         /// <summary>
@@ -173,33 +181,33 @@ namespace Xrpl.Wallet
         /// <returns>A single transaction with all Signers combined, deduped, and sorted.</returns>
         public static Dictionary<string, object> GetTransactionWithAllSigners(Dictionary<string, object>[] transactions)
         {
-            var allSigners = new JArray();
+            var allSigners = new JsonArray();
 
             foreach (var tx in transactions)
             {
                 if (tx.ContainsKey("Signers") && tx["Signers"] != null)
                 {
                     var signers = tx["Signers"];
-                    JArray signersArray;
+                    JsonArray signersArray;
 
-                    if (signers is JArray jarr)
+                    if (signers is JsonArray jarr)
                     {
                         signersArray = jarr;
                     }
                     else
                     {
-                        signersArray = JArray.FromObject(signers);
+                        signersArray = JsonNode.Parse(JsonSerializer.Serialize(signers, XrplJsonOptions.Default))?.AsArray() ?? new JsonArray();
                     }
 
                     foreach (var signer in signersArray)
                     {
-                        allSigners.Add(signer.DeepClone());
+                        allSigners.Add(signer?.DeepClone());
                     }
                 }
             }
 
             var sortedSigners = SignerUtilities.DedupeAndSortSigners(allSigners);
-            var signersAsList = SignerUtilities.ConvertJTokenToClrType(sortedSigners);
+            var signersAsList = SignerUtilities.ConvertJsonNodeToClrType(sortedSigners);
 
             var finalTx = new Dictionary<string, object>(transactions[0]);
             finalTx["Signers"] = signersAsList;
@@ -225,14 +233,14 @@ namespace Xrpl.Wallet
 
         public static Dictionary<string, object> GetDecodedTransaction(Dictionary<string, object>  txOrBlob)
         {
-            return Newtonsoft.Json.JsonConvert.DeserializeObject<Dictionary<string, object>>(
-                XrplBinaryCodec.Decode(XrplBinaryCodec.Encode(txOrBlob)).ToJsonString());
+            return System.Text.Json.JsonSerializer.Deserialize<Dictionary<string, object>>(
+                XrplBinaryCodec.Decode(XrplBinaryCodec.Encode(txOrBlob)).ToJsonString(), Xrpl.Client.Json.XrplJsonOptions.Default);
         }
 
         public static Dictionary<string, object> GetDecodedTransaction(string txOrBlob)
         {
-            return Newtonsoft.Json.JsonConvert.DeserializeObject<Dictionary<string, object>>(
-                XrplBinaryCodec.Decode(txOrBlob).ToJsonString());
+            return System.Text.Json.JsonSerializer.Deserialize<Dictionary<string, object>>(
+                XrplBinaryCodec.Decode(txOrBlob).ToJsonString(), Xrpl.Client.Json.XrplJsonOptions.Default);
         }
     }
 }

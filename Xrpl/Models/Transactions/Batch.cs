@@ -1,4 +1,4 @@
-using Newtonsoft.Json;
+using System.Text.Json.Serialization;
 
 using System;
 using System.Collections.Generic;
@@ -37,21 +37,26 @@ public enum BatchFlags : uint
 
 public sealed class BatchSigner
 {
-    [JsonProperty("BatchSigner", Required = Required.Always)]
+    [JsonPropertyName("BatchSigner")]
+    [JsonRequired]
     public BatchInnerSigner Value { get; set; } = new BatchInnerSigner();
 
     public sealed class BatchInnerSigner
     {
-        [JsonProperty("Account", Required = Required.Always)]
+        [JsonPropertyName("Account")]
+        [JsonRequired]
         public string Account { get; set; } = string.Empty;
 
-        [JsonProperty("SigningPubKey", NullValueHandling = NullValueHandling.Ignore)]
+        [JsonPropertyName("SigningPubKey")]
+        [JsonIgnore(Condition = JsonIgnoreCondition.WhenWritingNull)]
         public string? SigningPubKey { get; set; } = string.Empty;
 
-        [JsonProperty("TxnSignature", NullValueHandling = NullValueHandling.Ignore)]
+        [JsonPropertyName("TxnSignature")]
+        [JsonIgnore(Condition = JsonIgnoreCondition.WhenWritingNull)]
         public string? TxnSignature { get; set; }
 
-        [JsonProperty("Signers", NullValueHandling = NullValueHandling.Ignore)]
+        [JsonPropertyName("Signers")]
+        [JsonIgnore(Condition = JsonIgnoreCondition.WhenWritingNull)]
         public List<SignerWrapper>? Signers { get; set; }
     }
 }
@@ -59,7 +64,8 @@ public sealed class BatchSigner
 public sealed class RawTransactionWrapper
 {
     [JsonConverter(typeof(TransactionRequestConverter))]
-    [JsonProperty("RawTransaction", Required = Required.Always)]
+    [JsonPropertyName("RawTransaction")]
+    [JsonRequired]
     public ITransactionRequest RawTransaction { get; set; }
 }
 
@@ -77,7 +83,8 @@ public sealed class Batch : TransactionRequest, IBatch
     public Batch() => TransactionType = TransactionType.Batch;
 
     // Допустимо — 0 или 1 режим (бит из BatchFlags) вместе с обычными глобальными флагами.
-    [JsonProperty("Flags", NullValueHandling = NullValueHandling.Ignore)]
+    [JsonPropertyName("Flags")]
+    [JsonIgnore(Condition = JsonIgnoreCondition.WhenWritingNull)]
     public new BatchFlags? Flags
     {
         get => base.Flags.HasValue ? (BatchFlags?)base.Flags.Value : null;
@@ -85,27 +92,32 @@ public sealed class Batch : TransactionRequest, IBatch
     }
 
 
-    [JsonProperty("BatchSigners", NullValueHandling = NullValueHandling.Ignore)]
+    [JsonPropertyName("BatchSigners")]
+    [JsonIgnore(Condition = JsonIgnoreCondition.WhenWritingNull)]
     public List<BatchSigner>? BatchSigners { get; set; }
 
-    [JsonProperty("RawTransactions", Required = Required.Always)]
+    [JsonPropertyName("RawTransactions")]
+    [JsonRequired]
     public List<RawTransactionWrapper> RawTransactions { get; set; } = new List<RawTransactionWrapper>();
 }
 
 public sealed class BatchResponse : TransactionResponse, IBatch
 {
     // Допустимо — 0 или 1 режим (бит из BatchFlags) вместе с обычными глобальными флагами.
-    [JsonProperty("Flags", NullValueHandling = NullValueHandling.Ignore)]
+    [JsonPropertyName("Flags")]
+    [JsonIgnore(Condition = JsonIgnoreCondition.WhenWritingNull)]
     public new BatchFlags? Flags
     {
         get => base.Flags.HasValue ? (BatchFlags?)base.Flags.Value : null;
         set => base.Flags = (uint?)value;
     }
 
-    [JsonProperty("BatchSigners", NullValueHandling = NullValueHandling.Ignore)]
+    [JsonPropertyName("BatchSigners")]
+    [JsonIgnore(Condition = JsonIgnoreCondition.WhenWritingNull)]
     public List<BatchSigner>? BatchSigners { get; set; }
 
-    [JsonProperty("RawTransactions", Required = Required.Always)]
+    [JsonPropertyName("RawTransactions")]
+    [JsonRequired]
     public List<RawTransactionWrapper> RawTransactions { get; set; } = new List<RawTransactionWrapper>();
 }
 

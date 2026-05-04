@@ -1,7 +1,9 @@
 using Microsoft.VisualStudio.TestTools.UnitTesting;
 
-using Newtonsoft.Json;
+using System.Text.Json;
+using System.Text.Json.Serialization;
 
+using Xrpl.Client.Json;
 using Xrpl.Client.Json.Converters;
 using Xrpl.Models.Ledger;
 
@@ -23,7 +25,7 @@ public class LedgerBinaryConverterTests
             ""closed"": true,
             ""ledger_data"": ""ABCD1234""
         }}";
-        Model result = JsonConvert.DeserializeObject<Model>(json);
+        Model result = JsonSerializer.Deserialize<Model>(json, XrplJsonOptions.Default);
         Assert.IsNotNull(result.Ledger);
         Assert.IsInstanceOfType(result.Ledger, typeof(LedgerBinaryEntity));
         LedgerBinaryEntity binary = (LedgerBinaryEntity)result.Ledger;
@@ -37,7 +39,7 @@ public class LedgerBinaryConverterTests
         string json = @"{""Ledger"": {
             ""closed"": false
         }}";
-        Model result = JsonConvert.DeserializeObject<Model>(json);
+        Model result = JsonSerializer.Deserialize<Model>(json, XrplJsonOptions.Default);
         Assert.IsNotNull(result.Ledger);
         Assert.IsInstanceOfType(result.Ledger, typeof(LedgerEntity));
         Assert.IsFalse(result.Ledger.Closed);

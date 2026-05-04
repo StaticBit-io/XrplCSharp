@@ -1,9 +1,10 @@
 using Microsoft.VisualStudio.TestTools.UnitTesting;
 
-using Newtonsoft.Json;
-
 using System.Collections.Generic;
+using System.Text.Json;
+using System.Text.Json.Serialization;
 
+using Xrpl.Client.Json;
 using Xrpl.Client.Json.Converters;
 
 namespace XrplTests.Client.Json.Converters;
@@ -21,7 +22,7 @@ public class StringOrArrayConverterTests
     public void Read_String_ReturnsString()
     {
         string json = "{\"Value\": \"hello\"}";
-        Model result = JsonConvert.DeserializeObject<Model>(json);
+        Model result = JsonSerializer.Deserialize<Model>(json, XrplJsonOptions.Default);
         Assert.AreEqual("hello", result.Value);
     }
 
@@ -29,7 +30,7 @@ public class StringOrArrayConverterTests
     public void Read_Null_ReturnsNull()
     {
         string json = "{\"Value\": null}";
-        Model result = JsonConvert.DeserializeObject<Model>(json);
+        Model result = JsonSerializer.Deserialize<Model>(json, XrplJsonOptions.Default);
         Assert.IsNull(result.Value);
     }
 
@@ -37,7 +38,7 @@ public class StringOrArrayConverterTests
     public void Write_String_WritesStringValue()
     {
         Model model = new Model { Value = "test" };
-        string json = JsonConvert.SerializeObject(model);
+        string json = JsonSerializer.Serialize(model, XrplJsonOptions.Default);
         Assert.IsTrue(json.Contains("\"test\""));
     }
 
@@ -45,7 +46,7 @@ public class StringOrArrayConverterTests
     public void Write_List_WritesArray()
     {
         Model model = new Model { Value = new List<string> { "a", "b", "c" } };
-        string json = JsonConvert.SerializeObject(model);
+        string json = JsonSerializer.Serialize(model, XrplJsonOptions.Default);
         Assert.IsTrue(json.Contains("["));
         Assert.IsTrue(json.Contains("\"a\""));
         Assert.IsTrue(json.Contains("\"b\""));
@@ -56,16 +57,16 @@ public class StringOrArrayConverterTests
     public void Write_StringArray_WritesArray()
     {
         Model model = new Model { Value = new string[] { "x", "y" } };
-        string json = JsonConvert.SerializeObject(model);
+        string json = JsonSerializer.Serialize(model, XrplJsonOptions.Default);
         Assert.IsTrue(json.Contains("["));
         Assert.IsTrue(json.Contains("\"x\""));
     }
 
     [TestMethod]
-    public void Write_Null_WritesNull()
+    public void Write_Null_OmitsProperty()
     {
         Model model = new Model { Value = null };
-        string json = JsonConvert.SerializeObject(model);
-        Assert.IsTrue(json.Contains("null"));
+        string json = JsonSerializer.Serialize(model, XrplJsonOptions.Default);
+        Assert.IsFalse(json.Contains("Value"), "Null properties should be omitted with WhenWritingNull");
     }
 }

@@ -4,14 +4,15 @@ using System.Linq;
 using System.Net.Http;
 using System.Net.Http.Headers;
 using System.Text;
+using System.Text.Json;
+using System.Text.Json.Serialization;
 using System.Threading.Tasks;
 using System.Timers;
-
-using Newtonsoft.Json;
 
 using Xrpl.AddressCodec;
 using Xrpl.Client;
 using Xrpl.Client.Exceptions;
+using Xrpl.Client.Json;
 
 // https://github.com/XRPLF/xrpl.js/blob/main/packages/xrpl/src/Wallet/fundWallet.ts
 
@@ -74,26 +75,26 @@ namespace Xrpl.Wallet
 
         public class FaucetAccount
         {
-            [JsonProperty("xAddress")]
+            [JsonPropertyName("xAddress")]
             public string XAddress { get; set; }
 
-            [JsonProperty("classicAddress")]
+            [JsonPropertyName("classicAddress")]
             public string ClassicAddress { get; set; }
 
-            [JsonProperty("secret")]
+            [JsonPropertyName("secret")]
             public string Secret { get; set; }
 
         }
 
         public class FaucetWallet
         {
-            [JsonProperty("account")]
+            [JsonPropertyName("account")]
             public FaucetAccount Account { get; set; }
 
-            [JsonProperty("amount")]
+            [JsonPropertyName("amount")]
             public double Amount { get; set; }
 
-            [JsonProperty("balance")]
+            [JsonPropertyName("balance")]
             public double Balance { get; set; }
 
         }
@@ -130,7 +131,7 @@ namespace Xrpl.Wallet
             {
                 { "destination", walletToFund.ClassicAddress },
             };
-            string jsonData = JsonConvert.SerializeObject(json);
+            string jsonData = JsonSerializer.Serialize(json, XrplJsonOptions.Default);
             byte[] postBody = Encoding.UTF8.GetBytes(jsonData);
             Dictionary<string, object> httpOptions = GetHTTPOptions(client, postBody, faucetHost);
             return await ReturnPromise(httpOptions, client, startingBalance, walletToFund, jsonData);
@@ -224,7 +225,7 @@ namespace Xrpl.Wallet
               XrplWallet walletToFund
         )
         {
-            FaucetWallet faucetWallet = JsonConvert.DeserializeObject<FaucetWallet>(body);
+            FaucetWallet faucetWallet = JsonSerializer.Deserialize<FaucetWallet>(body, XrplJsonOptions.Default);
             string classicAddress = faucetWallet.Account.ClassicAddress;
             if (classicAddress == null)
             {

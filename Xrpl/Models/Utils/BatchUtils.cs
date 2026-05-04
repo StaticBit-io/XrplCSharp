@@ -1,16 +1,18 @@
-using Newtonsoft.Json;
-using Newtonsoft.Json.Linq;
-
 using System;
 using System.Collections;
 using System.Collections.Generic;
 using System.Linq;
+using System.Text.Json;
+using System.Text.Json.Nodes;
 
 using Xrpl.BinaryCodec;
 using Xrpl.Client.Exceptions;
+using Xrpl.Client.Json;
 using Xrpl.Models.Enums;
 using Xrpl.Models.Transactions;
 using Xrpl.Wallet;
+
+using JsonSerializer = System.Text.Json.JsonSerializer;
 
 namespace Xrpl.Models.Utils;
 public static class BatchUtils
@@ -36,7 +38,7 @@ public static class BatchUtils
         batch.RawTransactions.AddRange(batchInnerTxs);
 
         // Валидация как в xrpl.js
-        Xrpl.Models.Transactions.Validation.Validate(JsonConvert.DeserializeObject<Dictionary<string, object>>(batch.ToJson()));
+        Xrpl.Models.Transactions.Validation.Validate(JsonSerializer.Deserialize<Dictionary<string, object>>(batch.ToJson(), XrplJsonOptions.Default));
         return batch;
     }
 
@@ -87,11 +89,13 @@ public static class BatchUtils
 
         var raws = rawTransactions switch
         {
-            JArray ja => ja.ToObject<List<Dictionary<string, object>>>()
-                         ?? new List<Dictionary<string, object>>(),
+            JsonArray ja => ja.Select(n => JsonSerializer.Deserialize<Dictionary<string, object>>(
+                                n.ToJsonString(), XrplJsonOptions.Default))
+                         .ToList(),
             IEnumerable ie => ie.Cast<object>()
                     .Select(o => o as Dictionary<string, object>
-                              ?? JObject.FromObject(o!).ToObject<Dictionary<string, object>>()!)
+                              ?? JsonSerializer.Deserialize<Dictionary<string, object>>(
+                                  JsonSerializer.Serialize(o, XrplJsonOptions.Default), XrplJsonOptions.Default)!)
                     .ToList(),
             _ => throw new ValidationException("RawTransactions must be array/collection.")
         };
@@ -106,7 +110,8 @@ public static class BatchUtils
 
             // convert to pure dictionary
             var rawTx = rawTxObj as Dictionary<string, object>
-                        ?? JObject.FromObject(rawTxObj).ToObject<Dictionary<string, object>>()!;
+                        ?? JsonSerializer.Deserialize<Dictionary<string, object>>(
+                            JsonSerializer.Serialize(rawTxObj, XrplJsonOptions.Default), XrplJsonOptions.Default)!;
 
             wrapper["RawTransaction"] = rawTx;
 
@@ -190,34 +195,36 @@ public static class BatchSignStatusExtensions
             .Distinct(StringComparer.OrdinalIgnoreCase)
             .ToList();
 
-        // Преобразуем в JObject, чтобы удобнее читать BatchSigners
-        var outer = JObject.FromObject(tx);
+        // Преобразуем в JsonObject, чтобы удобнее читать BatchSigners
+        JsonObject outer = JsonNode.Parse(
+            JsonSerializer.Serialize(tx, XrplJsonOptions.Default))?.AsObject();
 
         var signedInner = new HashSet<string>(StringComparer.OrdinalIgnoreCase);
 
         // BatchSigners: [{ BatchSigner: { Account, SigningPubKey/TxnSignature или Signers[] } }, ...]
-        var batchSignersArray = outer["BatchSigners"] as JArray;
+        JsonArray batchSignersArray = outer?["BatchSigners"] as JsonArray;
         if (batchSignersArray != null)
         {
-            foreach (var wrapper in batchSignersArray.Children<JObject>())
+            foreach (JsonNode wrapper in batchSignersArray)
             {
-                var bs = wrapper["BatchSigner"] as JObject ?? wrapper;
-                var acc = (string?)bs["Account"];
+                if (wrapper is not JsonObject wrapperObj) continue;
+                JsonObject bs = wrapperObj["BatchSigner"]?.AsObject() ?? wrapperObj;
+                string acc = bs["Account"]?.GetValue<string>();
                 if (string.IsNullOrWhiteSpace(acc))
                     continue;
 
                 // Проверяем, есть ли реальная подпись
                 bool hasSignature = false;
 
-                var signersArr = bs["Signers"] as JArray;
+                JsonArray signersArr = bs["Signers"] as JsonArray;
                 if (signersArr != null && signersArr.Count > 0)
                 {
                     hasSignature = true;
                 }
                 else
                 {
-                    var spk = (string?)bs["SigningPubKey"];
-                    var sig = (string?)bs["TxnSignature"];
+                    string spk = bs["SigningPubKey"]?.GetValue<string>();
+                    string sig = bs["TxnSignature"]?.GetValue<string>();
                     if (!string.IsNullOrEmpty(spk) && !string.IsNullOrEmpty(sig))
                         hasSignature = true;
                 }
@@ -244,8 +251,9 @@ public static class BatchSignStatusExtensions
 
         if (tx.TryGetValue("Signers", out var signersObj) && signersObj != null)
         {
-            var jt = signersObj is JToken t ? t : JToken.FromObject(signersObj);
-            if (jt is JArray arr && arr.Count > 0)
+            JsonNode jt = signersObj is JsonNode n ? n : JsonNode.Parse(
+                JsonSerializer.Serialize(signersObj, XrplJsonOptions.Default));
+            if (jt is JsonArray arr && arr.Count > 0)
                 rootMulti = true;
         }
 
@@ -275,8 +283,8 @@ public static class BatchSignStatusExtensions
     public static BatchSignStatus GetBatchSignStatus(this SignatureResult signed)
     {
         if (signed == null) throw new ArgumentNullException(nameof(signed));
-        var dict = JsonConvert.DeserializeObject<Dictionary<string, object>>(
-            XrplBinaryCodec.Decode(signed.TxBlob).ToString());
+        var dict = JsonSerializer.Deserialize<Dictionary<string, object>>(
+            XrplBinaryCodec.Decode(signed.TxBlob).ToString(), XrplJsonOptions.Default);
         return dict.GetBatchSignStatus();
     }
 
@@ -288,8 +296,8 @@ public static class BatchSignStatusExtensions
         if (string.IsNullOrWhiteSpace(txBlob))
             throw new ArgumentNullException(nameof(txBlob));
 
-        var dict = JsonConvert.DeserializeObject<Dictionary<string, object>>(
-            XrplBinaryCodec.Decode(txBlob).ToString());
+        var dict = JsonSerializer.Deserialize<Dictionary<string, object>>(
+            XrplBinaryCodec.Decode(txBlob).ToString(), XrplJsonOptions.Default);
         return dict.GetBatchSignStatus();
     }
 }

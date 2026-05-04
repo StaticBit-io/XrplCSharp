@@ -1,7 +1,7 @@
 using System;
 using System.Collections.Generic;
-
-using Newtonsoft.Json.Linq;
+using System.Text.Json;
+using System.Text.Json.Nodes;
 
 using Xrpl.Models.Common;
 using Xrpl.Models.Subscriptions;
@@ -58,7 +58,7 @@ public static class XrplErrorClassifier
         if (response == null) throw new ArgumentNullException(nameof(response));
 
         var error = response.Error?.Trim() ?? string.Empty;
-        var request = ToJObjectSafe(response.Request);
+        var request = ToJsonObjectSafe(response.Request);
 
         var command = GetString(request, "command");
         var warnings = ExtractWarnings(response);
@@ -539,7 +539,7 @@ public static class XrplErrorClassifier
 
     private static XrplErrorInfo BuildMalformedCurrency(
         ErrorResponse response,
-        JObject? request,
+        JsonObject? request,
         string? command,
         IReadOnlyList<string> warnings)
     {
@@ -568,7 +568,7 @@ public static class XrplErrorClassifier
 
     private static XrplErrorInfo BuildInvalidAccountAddress(
         ErrorResponse response,
-        JObject? request,
+        JsonObject? request,
         string? command,
         IReadOnlyList<string> warnings,
         string title,
@@ -626,7 +626,7 @@ public static class XrplErrorClassifier
 
     private static XrplErrorInfo BuildAccountNotFound(
         ErrorResponse response,
-        JObject? request,
+        JsonObject? request,
         string? command,
         IReadOnlyList<string> warnings,
         string title,
@@ -653,7 +653,7 @@ public static class XrplErrorClassifier
 
     private static XrplErrorInfo BuildEntryNotFound(
         ErrorResponse response,
-        JObject? request,
+        JsonObject? request,
         string? command,
         IReadOnlyList<string> warnings)
     {
@@ -727,7 +727,7 @@ public static class XrplErrorClassifier
 
     private static XrplErrorInfo BuildUnknown(
         ErrorResponse response,
-        JObject? request,
+        JsonObject? request,
         string? command,
         IReadOnlyList<string> warnings)
     {
@@ -747,17 +747,25 @@ public static class XrplErrorClassifier
         };
     }
 
-    private static JObject? ToJObjectSafe(object? request)
+    private static JsonObject? ToJsonObjectSafe(object? request)
     {
         if (request == null)
             return null;
 
-        if (request is JObject jObject)
-            return jObject;
+        if (request is JsonObject jsonObject)
+            return jsonObject;
+
+        if (request is JsonElement jsonElement)
+        {
+            if (jsonElement.ValueKind == JsonValueKind.Object)
+                return JsonNode.Parse(jsonElement.GetRawText())?.AsObject();
+            return null;
+        }
 
         try
         {
-            return JObject.FromObject(request);
+            string json = JsonSerializer.Serialize(request);
+            return JsonNode.Parse(json)?.AsObject();
         }
         catch
         {
@@ -765,24 +773,29 @@ public static class XrplErrorClassifier
         }
     }
 
-    private static string? GetString(JObject? request, params string[] path)
+    private static string? GetString(JsonObject? request, params string[] path)
     {
         if (request == null || path.Length == 0)
             return null;
 
-        JToken? token = request;
+        JsonNode? token = request;
 
         foreach (string segment in path)
         {
-            token = token?[segment];
+            if (token is not JsonObject obj)
+                return null;
+            token = obj[segment];
             if (token == null)
                 return null;
         }
 
-        return token.Type == JTokenType.Null ? null : token.Value<string>();
+        if (token is JsonValue value && value.TryGetValue<string>(out string? str))
+            return str;
+
+        return token.GetValueKind() == JsonValueKind.Null ? null : token.ToString();
     }
 
-    private static string? GetFirstString(JObject? request, params string[] fieldNames)
+    private static string? GetFirstString(JsonObject? request, params string[] fieldNames)
     {
         if (request == null || fieldNames.Length == 0)
             return null;
@@ -797,29 +810,32 @@ public static class XrplErrorClassifier
         return null;
     }
 
-    private static string? GetValueText(JObject? request, params string[] path)
+    private static string? GetValueText(JsonObject? request, params string[] path)
     {
         if (request == null || path.Length == 0)
             return null;
 
-        JToken? token = request;
+        JsonNode? token = request;
 
         foreach (string segment in path)
         {
-            token = token?[segment];
+            if (token is not JsonObject obj)
+                return null;
+            token = obj[segment];
             if (token == null)
                 return null;
         }
 
-        return token.Type switch
-        {
-            JTokenType.Null => null,
-            JTokenType.String => token.Value<string>(),
-            _ => token.ToString(Newtonsoft.Json.Formatting.None)
-        };
+        if (token.GetValueKind() == JsonValueKind.Null)
+            return null;
+
+        if (token is JsonValue jsonValue && jsonValue.TryGetValue<string>(out string? str))
+            return str;
+
+        return token.ToJsonString();
     }
 
-    private static string? GetFirstValueText(JObject? request, params string[] fieldNames)
+    private static string? GetFirstValueText(JsonObject? request, params string[] fieldNames)
     {
         if (request == null || fieldNames.Length == 0)
             return null;
@@ -834,7 +850,7 @@ public static class XrplErrorClassifier
         return null;
     }
 
-    private static string? GetFirstFieldName(JObject? request, params string[] fieldNames)
+    private static string? GetFirstFieldName(JsonObject? request, params string[] fieldNames)
     {
         if (fieldNames.Length == 0)
             return null;
@@ -851,7 +867,7 @@ public static class XrplErrorClassifier
         return fieldNames[0];
     }
 
-    private static string? BuildLedgerRange(JObject? request)
+    private static string? BuildLedgerRange(JsonObject? request)
     {
         string? minLedger = GetValueText(request, "min_ledger")
                             ?? GetValueText(request, "ledger_index_min");

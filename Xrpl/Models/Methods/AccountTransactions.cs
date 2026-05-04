@@ -1,8 +1,6 @@
-﻿using System;
+using System;
 using System.Collections.Generic;
-using Newtonsoft.Json;
-using Newtonsoft.Json.Converters;
-
+using System.Text.Json.Serialization;
 using Xrpl.Client.Json.Converters;
 using Xrpl.Models.Transactions;
 
@@ -18,39 +16,39 @@ namespace Xrpl.Models.Methods
         /// <summary>
         /// Unique Address identifying the related account.
         /// </summary>
-        [JsonProperty("account")]
+        [JsonPropertyName("account")]
         public string Account { get; set; }
         /// <summary>
         /// The ledger index of the earliest ledger actually searched for  transactions.
         /// </summary>
-        [JsonProperty("ledger_index_min")]
+        [JsonPropertyName("ledger_index_min")]
         public uint LedgerIndexMin { get; set; }
         /// <summary>
         /// The ledger index of the most recent ledger actually searched for  transactions.
         /// </summary>
-        [JsonProperty("ledger_index_max")]
+        [JsonPropertyName("ledger_index_max")]
         public uint LedgerIndexMax { get; set; }
         /// <summary>
         /// The limit value used in the request.
         /// </summary>
-        [JsonProperty("limit")]
+        [JsonPropertyName("limit")]
         public int Limit { get; set; }
         /// <summary>
         /// Server-defined value indicating the response is paginated.<br/>
         /// Pass this  to the next call to resume where this call left off.
         /// </summary>
-        [JsonProperty("marker")]
+        [JsonPropertyName("marker")]
         public object Marker { get; set; }
         /// <summary>
         /// Array of transactions matching the request's criteria, as explained  below.
         /// </summary>
-        [JsonProperty("transactions")]
+        [JsonPropertyName("transactions")]
         public List<TransactionSummary> Transactions { get; set; }
         /// <summary>
         /// If included and set to true, the information in this response comes from  a validated ledger version.<br/>
         /// Otherwise, the information is subject to  change.
         /// </summary>
-        [JsonProperty("validated")]
+        [JsonPropertyName("validated")]
         public bool Validated { get; set; }
     }
 
@@ -97,43 +95,43 @@ namespace Xrpl.Models.Methods
         /// <summary>
         /// The ledger close time represented in ISO 8601 time format.
         /// </summary>
-        [JsonProperty("close_time_iso")]
-        [JsonConverter(typeof(IsoDateTimeConverter))]
+        [JsonPropertyName("close_time_iso")]
+        [JsonConverter(typeof(FromStringDateTimeConverter))]
         public DateTime? CloseTimeIso { get; set; }
 
         /// <summary>
         /// A hex string of the ledger version that included this transaction.
         /// </summary>
-        [JsonProperty("ledger_hash")]
+        [JsonPropertyName("ledger_hash")]
         public string LedgerHash { get; set; }
         /// <summary>
         /// The ledger index of the ledger version that included this transaction.
         /// </summary>
-        [JsonProperty("ledger_index")]
+        [JsonPropertyName("ledger_index")]
         public ulong? LedgerIndex { get; set; }
         /// <summary>
         /// If binary is True, then this is a hex string of the transaction metadata.<br/>
         /// Otherwise, the transaction metadata is included in JSON format.
         /// </summary>
-        [JsonProperty("meta")]
+        [JsonPropertyName("meta")]
         [JsonConverter(typeof(MetaBinaryConverter))]
         public Meta Meta { get; set; }
         /// <summary>
         /// JSON object defining the transaction.
         /// </summary>
-        [JsonProperty("tx_json")]
+        [JsonPropertyName("tx_json")]
         public TransactionResponse Transaction { get; set; }
 
         /// <summary>
         /// Unique hashed String representing the transaction.
         /// </summary>
-        [JsonProperty("hash")]
+        [JsonPropertyName("hash")]
         public string Hash { get; set; }
         /// <summary>
         /// Whether or not the transaction is included in a validated ledger.<br/>
         /// Any transaction not yet in a validated ledger is subject to change.
         /// </summary>
-        [JsonProperty("validated")]
+        [JsonPropertyName("validated")]
         public bool Validated { get; set; }
     }
     /// <summary>
@@ -164,45 +162,45 @@ namespace Xrpl.Models.Methods
         /// <summary>
         /// A unique identifier for the account, most commonly the account's address.
         /// </summary>
-        [JsonProperty("account")]
+        [JsonPropertyName("account")]
         public string Account { get; set; }
         /// <summary>
         /// Use to specify the earliest ledger to include transactions from.<br/>
         /// A value of -1 instructs the server to use the earliest validated ledger version available.
         /// </summary>
-        [JsonProperty("ledger_index_min")]
+        [JsonPropertyName("ledger_index_min")]
         public int? LedgerIndexMin { get; set; }
         /// <summary>
         /// Use to specify the most recent ledger to include transactions from.<br/>
         /// A value of -1 instructs the server to use the most recent validated ledger version available.
         /// </summary>
-        [JsonProperty("ledger_index_max")]
+        [JsonPropertyName("ledger_index_max")]
         public int? LedgerIndexMax { get; set; }
         /// <summary>
         /// If true, return transactions as hex strings instead of JSON.<br/>
         /// The default is false.
         /// </summary>
-        [JsonProperty("binary")]
+        [JsonPropertyName("binary")]
         public bool? Binary { get; set; }
         /// <summary>
         /// If true, returns values indexed with the oldest ledger first.<br/>
         /// Otherwise, the results are indexed with the newest ledger first.
         /// </summary>
-        [JsonProperty("forward")]
+        [JsonPropertyName("forward")]
         public bool? Forward { get; set; }
         /// <summary>
         /// Default varies.<br/>
         /// Limit the number of transactions to retrieve.<br/>
         /// The server is not required to honor this value.
         /// </summary>
-        [JsonProperty("limit")]
+        [JsonPropertyName("limit")]
         public int? Limit { get; set; }
         /// <summary>
         /// Value from a previous paginated response.<br/>
         /// Resume retrieving data where that response left off.<br/>
         /// This value is stable even if there is a change in the server's range of available ledgers.
         /// </summary>
-        [JsonProperty("marker")]
+        [JsonPropertyName("marker")]
         public object Marker { get; set; }
 
         /// <summary>
@@ -210,7 +208,7 @@ namespace Xrpl.Models.Methods
         /// such as "Clawback", "AccountSet", "AccountDelete", et al. Case-insensitive.<br/>
         /// Supports any transaction type except AMM* (See Transaction Types https://xrpl.org/transaction-types.html)
         /// </summary>
-        [JsonProperty("tx_type")]
+        [JsonPropertyName("tx_type")]
         public string TxType { get; set; }
     }
 }

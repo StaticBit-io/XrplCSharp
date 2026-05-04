@@ -1,4 +1,4 @@
-﻿using Newtonsoft.Json;
+﻿using System.Text.Json.Serialization;
 
 using System.Collections.Generic;
 
@@ -70,14 +70,14 @@ public interface ITransactionMetadata
     /// Gets or sets the amount that was actually delivered.
     /// </summary>
     [JsonConverter(typeof(CurrencyConverter))]
-    [JsonProperty("DeliveredAmount")]
+    [JsonPropertyName("DeliveredAmount")]
     Currency PartialDeliveredAmount { get; set; }
 
     /// <summary>
     /// Gets or sets the delivered amount (may be 'unavailable' for transactions before 2014-01-20).
     /// </summary>
     [JsonConverter(typeof(CurrencyConverter))]
-    [JsonProperty("delivered_amount")]
+    [JsonPropertyName("delivered_amount")]
     Currency ActuallyDeliveredAmount { get; set; }
 
     /// <summary>
@@ -93,21 +93,21 @@ public interface ITransactionMetadata
     /// <summary>
     /// Shows the OfferIDof a new NFTokenOffer in a response from a NFTokenCreateOffer transaction.
     /// </summary>
-    [JsonProperty("offer_id")]
+    [JsonPropertyName("offer_id")]
     public string OfferID { get; set; }
 
     /// <summary>
     /// Shows the NFTokenID for the NFToken that changed on the ledger as a result of the transaction.
     /// Only present if the transaction is NFTokenMint or NFTokenAcceptOffer
     /// </summary>
-    [JsonProperty("nftoken_id")]
+    [JsonPropertyName("nftoken_id")]
     public string NFTokenId { get; set; }
 
     /// <summary>
     /// Shows all the NFTokenIDs for the NFTokens that changed on the ledger as a result of the transaction.
     /// Only present if the transaction is NFTokenCancelOffer.
     /// </summary>
-    [JsonProperty("nftoken_ids")]
+    [JsonPropertyName("nftoken_ids")]
     public string[] NFTokenIds { get; set; }
 
     /// <summary>
@@ -119,6 +119,6 @@ public interface ITransactionMetadata
     /// Shows the MPTokenIssuanceID for the MPTokenIssuance that was created by this transaction.
     /// Only present if the transaction is MPTokenIssuanceCreate.
     /// </summary>
-    [JsonProperty("mpt_issuance_id")]
+    [JsonPropertyName("mpt_issuance_id")]
     public string MptIssuanceId { get; set; }
 }

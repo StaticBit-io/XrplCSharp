@@ -5,7 +5,7 @@
 using System.Collections.Generic;
 using System.Threading.Tasks;
 
-using Newtonsoft.Json;
+using System.Text.Json.Serialization;
 
 using Xrpl.Client.Exceptions;
 using Xrpl.Models.Ledger;
@@ -27,11 +27,13 @@ namespace Xrpl.Models.Transactions
         public string Unauthorize { get; set; }
 
         /// <inheritdoc />
-        [JsonProperty("AuthorizeCredentials", NullValueHandling = NullValueHandling.Ignore)]
+        [JsonPropertyName("AuthorizeCredentials")]
+        [JsonIgnore(Condition = JsonIgnoreCondition.WhenWritingNull)]
         public List<AuthorizeCredentialEntry> AuthorizeCredentials { get; set; }
 
         /// <inheritdoc />
-        [JsonProperty("UnauthorizeCredentials", NullValueHandling = NullValueHandling.Ignore)]
+        [JsonPropertyName("UnauthorizeCredentials")]
+        [JsonIgnore(Condition = JsonIgnoreCondition.WhenWritingNull)]
         public List<AuthorizeCredentialEntry> UnauthorizeCredentials { get; set; }
     }
 
@@ -79,11 +81,13 @@ namespace Xrpl.Models.Transactions
         public string Unauthorize { get; set; }
 
         /// <inheritdoc />
-        [JsonProperty("AuthorizeCredentials", NullValueHandling = NullValueHandling.Ignore)]
+        [JsonPropertyName("AuthorizeCredentials")]
+        [JsonIgnore(Condition = JsonIgnoreCondition.WhenWritingNull)]
         public List<AuthorizeCredentialEntry> AuthorizeCredentials { get; set; }
 
         /// <inheritdoc />
-        [JsonProperty("UnauthorizeCredentials", NullValueHandling = NullValueHandling.Ignore)]
+        [JsonPropertyName("UnauthorizeCredentials")]
+        [JsonIgnore(Condition = JsonIgnoreCondition.WhenWritingNull)]
         public List<AuthorizeCredentialEntry> UnauthorizeCredentials { get; set; }
     }
 

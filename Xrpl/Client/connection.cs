@@ -1,16 +1,16 @@
-using Newtonsoft.Json;
-
 using System;
 using System.Collections.Generic;
 using System.Diagnostics;
 using System.IO;
 using System.Net.WebSockets;
+using System.Text.Json;
 using System.Threading;
 using System.Threading.Channels;
 using System.Threading.Tasks;
 
 using Xrpl.AddressCodec;
 using Xrpl.Client.Exceptions;
+using Xrpl.Client.Json;
 using Xrpl.Models.Methods;
 using Xrpl.Models.Subscriptions;
 
@@ -2495,7 +2495,7 @@ public class Connection
         BaseResponse data;
         try
         {
-            data = JsonConvert.DeserializeObject<BaseResponse>(message);
+            data = JsonSerializer.Deserialize<BaseResponse>(message, XrplJsonOptions.Default);
         }
         catch (Exception error)
         {
@@ -2524,7 +2524,7 @@ public class Connection
             {
                 case ResponseStreamType.ledgerClosed:
                 {
-                    var response = JsonConvert.DeserializeObject<LedgerStream>(message);
+                    var response = JsonSerializer.Deserialize<LedgerStream>(message, XrplJsonOptions.Default);
                     if (OnLedgerClosed is not null)
                     {
                         await OnLedgerClosed.Invoke(response)!;
@@ -2534,7 +2534,7 @@ public class Connection
 
                 case ResponseStreamType.validationReceived:
                 {
-                    var response = JsonConvert.DeserializeObject<ValidationStream>(message);
+                    var response = JsonSerializer.Deserialize<ValidationStream>(message, XrplJsonOptions.Default);
                     if (OnManifestReceived is not null)
                     {
                         await OnManifestReceived.Invoke(response)!;
@@ -2544,7 +2544,7 @@ public class Connection
 
                 case ResponseStreamType.transaction:
                 {
-                    var response = JsonConvert.DeserializeObject<TransactionStream>(message);
+                    var response = JsonSerializer.Deserialize<TransactionStream>(message, XrplJsonOptions.Default);
                     if (OnTransaction is not null)
                     {
                         await OnTransaction.Invoke(response)!;
@@ -2554,7 +2554,7 @@ public class Connection
 
                 case ResponseStreamType.peerStatusChange:
                 {
-                    var response = JsonConvert.DeserializeObject<PeerStatusStream>(message);
+                    var response = JsonSerializer.Deserialize<PeerStatusStream>(message, XrplJsonOptions.Default);
                     if (OnPeerStatusChange is not null)
                     {
                         await OnPeerStatusChange.Invoke(response)!;
@@ -2564,7 +2564,7 @@ public class Connection
 
                 case ResponseStreamType.consensusPhase:
                 {
-                    var response = JsonConvert.DeserializeObject<ConsensusStream>(message);
+                    var response = JsonSerializer.Deserialize<ConsensusStream>(message, XrplJsonOptions.Default);
                     if (OnConsensusPhase is not null)
                     {
                         await OnConsensusPhase.Invoke(response)!;
@@ -2574,7 +2574,7 @@ public class Connection
 
                 case ResponseStreamType.path_find:
                 {
-                    var response = JsonConvert.DeserializeObject<PathFindStream>(message);
+                    var response = JsonSerializer.Deserialize<PathFindStream>(message, XrplJsonOptions.Default);
                     if (OnPathFind is not null)
                     {
                         await OnPathFind.Invoke(response)!;
@@ -2584,10 +2584,10 @@ public class Connection
 
                 case ResponseStreamType.error:
                 {
-                    var response = JsonConvert.DeserializeObject<ErrorResponse>(message);
+                    var response = JsonSerializer.Deserialize<ErrorResponse>(message, XrplJsonOptions.Default);
                     if (OnError is not null)
                     {
-                        await OnError.Invoke(response.Error, response.ErrorMessage, response.ErrorCode, response);
+                        await OnError.Invoke(response.Error, response.ErrorMessage, response.ErrorCode?.ToString(), response);
                     }
 
                     break;

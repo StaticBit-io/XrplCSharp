@@ -1,9 +1,8 @@
 #nullable enable
 using System;
 using System.Collections.Generic;
+using System.Text.Json.Serialization;
 using System.Threading.Tasks;
-
-using Newtonsoft.Json;
 
 using Xrpl.Client.Exceptions;
 
@@ -60,11 +59,11 @@ namespace Xrpl.Models.Transactions
         }
 
         /// <inheritdoc />
-        [JsonProperty("MPTokenIssuanceID")]
+        [JsonPropertyName("MPTokenIssuanceID")]
         public string MPTokenIssuanceID { get; set; } = null!;
 
         /// <inheritdoc />
-        [JsonProperty("Holder")]
+        [JsonPropertyName("Holder")]
         public string? Holder { get; set; }
         public new MPTokenIssuanceSetFlags? Flags
         {
@@ -80,11 +79,11 @@ namespace Xrpl.Models.Transactions
         #region Implementation of IMPTokenIssuanceSet
 
         /// <inheritdoc />
-        [JsonProperty("MPTokenIssuanceID")]
+        [JsonPropertyName("MPTokenIssuanceID")]
         public string MPTokenIssuanceID { get; set; } = null!;
 
         /// <inheritdoc />
-        [JsonProperty("Holder")]
+        [JsonPropertyName("Holder")]
         public string? Holder { get; set; }
 
         #endregion

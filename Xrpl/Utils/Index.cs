@@ -1,7 +1,6 @@
-﻿using Newtonsoft.Json.Linq;
-
-using System;
+﻿using System;
 using System.Collections.Generic;
+using System.Text.Json.Nodes;
 
 using Xrpl.AddressCodec;
 using Xrpl.BinaryCodec;
@@ -48,9 +47,9 @@ namespace Xrpl.Utils
             return XrplBinaryCodec.EncodeForMultiSigning(transaction, signer);
         }
     
-        public static JToken Decode(string hex)
+        public static JsonNode Decode(string hex)
         {
-            return JToken.Parse(XrplBinaryCodec.Decode(hex).ToJsonString());
+            return XrplBinaryCodec.Decode(hex);
         }
     
         public static bool IsValidAddress(string address)

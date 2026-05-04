@@ -1,4 +1,4 @@
-﻿using Newtonsoft.Json;
+﻿using System.Text.Json.Serialization;
 
 using System;
 
@@ -34,6 +34,7 @@ namespace Xrpl.Models.Ledger
         /// A bit-map of boolean flags.<br/>
         /// No flags are defined for Checks, so this value is always 0.
         /// </summary>
+        [JsonConverter(typeof(NumberOrStringConverter))]
         public string Flags { get; set; }
         /// <summary>
         /// A hint indicating which page of the sender's owner directory links to this object,

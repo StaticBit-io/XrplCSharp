@@ -174,14 +174,14 @@ namespace Xrpl.Tests.Wallet.Tests
         public void TestVerifySignatureJson()
         {
             SignatureResult signedTx = verifyWallet.Sign(tx);
-            Assert.IsTrue(Signer.VerifySignature(Newtonsoft.Json.JsonConvert.DeserializeObject<Dictionary<string, object>>(XrplBinaryCodec.Decode(signedTx.TxBlob).ToJsonString())));
+            Assert.IsTrue(Signer.VerifySignature(System.Text.Json.JsonSerializer.Deserialize<Dictionary<string, object>>(XrplBinaryCodec.Decode(signedTx.TxBlob).ToJsonString(), Xrpl.Client.Json.XrplJsonOptions.Default)));
         }
 
         [TestMethod]
         public void TestVerifyInvalidSigningKey()
         {
             SignatureResult signedTx = verifyWallet.Sign(tx);
-            Dictionary<string, object> decodedTx = Newtonsoft.Json.JsonConvert.DeserializeObject<Dictionary<string, object>>(XrplBinaryCodec.Decode(signedTx.TxBlob).ToJsonString());
+            Dictionary<string, object> decodedTx = System.Text.Json.JsonSerializer.Deserialize<Dictionary<string, object>>(XrplBinaryCodec.Decode(signedTx.TxBlob).ToJsonString(), Xrpl.Client.Json.XrplJsonOptions.Default);
             decodedTx["SigningPubKey"] = "0330E7FC9D56BB25D6893BA3F317AE5BCF33B3291BD63DB32654A313222F7FD020";
             Assert.IsFalse(Signer.VerifySignature(decodedTx));
         }

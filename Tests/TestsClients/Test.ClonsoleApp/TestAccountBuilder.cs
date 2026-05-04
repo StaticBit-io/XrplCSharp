@@ -1,5 +1,3 @@
-using Newtonsoft.Json;
-
 using Org.BouncyCastle.Ocsp;
 using Org.BouncyCastle.Utilities.Encoders;
 

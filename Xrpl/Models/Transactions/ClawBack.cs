@@ -1,10 +1,13 @@
 using System.Collections.Generic;
+using System.Text.Json;
+using System.Text.Json.Serialization;
 using System.Threading.Tasks;
 
-using Newtonsoft.Json;
-
 using Xrpl.Client.Exceptions;
+using Xrpl.Client.Json;
 using Xrpl.Client.Json.Converters;
+
+using JsonSerializer = System.Text.Json.JsonSerializer;
 
 using Currency = Xrpl.Models.Common.Currency;
 
@@ -27,7 +30,7 @@ namespace Xrpl.Models.Transactions
         public Xrpl.Models.Common.Currency Amount { get; set; }
 
         /// <inheritdoc />
-        [JsonProperty("Holder")]
+        [JsonPropertyName("Holder")]
         public string Holder { get; set; }
     }
 
@@ -64,7 +67,7 @@ namespace Xrpl.Models.Transactions
         public Currency Amount { get; set; }
 
         /// <inheritdoc />
-        [JsonProperty("Holder")]
+        [JsonPropertyName("Holder")]
         public string Holder { get; set; }
 
         #endregion
@@ -93,8 +96,8 @@ namespace Xrpl.Models.Transactions
 
             if (!tx.TryGetValue("Account", out var acc) || acc is null)
                 throw new ValidationException("ClawBack: invalid Account");
-            var amountJson = JsonConvert.SerializeObject(Amount);
-            var amount = JsonConvert.DeserializeObject<Currency>(amountJson);
+            var amountJson = JsonSerializer.Serialize(Amount, XrplJsonOptions.Default);
+            var amount = JsonSerializer.Deserialize<Currency>(amountJson, XrplJsonOptions.Default);
             if (amount.Issuer == (string)acc)
             {
                 throw new ValidationException("ClawBack: invalid holder Account");

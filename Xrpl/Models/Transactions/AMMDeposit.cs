@@ -1,6 +1,6 @@
 using System.Collections.Generic;
+using System.Text.Json.Serialization;
 using System.Threading.Tasks;
-using Newtonsoft.Json;
 using static Xrpl.Models.Common.Common;
 using Xrpl.Client.Exceptions;
 using Currency = Xrpl.Models.Common.Currency;

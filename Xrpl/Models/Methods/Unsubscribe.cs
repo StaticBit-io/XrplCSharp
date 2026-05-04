@@ -1,6 +1,6 @@
-﻿// https://github.com/XRPLF/xrpl.js/blob/main/packages/xrpl/src/models/methods/unsubscribe.ts
+// https://github.com/XRPLF/xrpl.js/blob/main/packages/xrpl/src/models/methods/unsubscribe.ts
 
-using Newtonsoft.Json;
+using System.Text.Json.Serialization;
 using System.Collections.Generic;
 
 using Xrpl.Models.Enums;
@@ -28,7 +28,7 @@ namespace Xrpl.Models.Methods
         /// The server sends a notification for any transaction that affects at least
         /// one of these accounts.
         /// </summary>
-        [JsonProperty("streams")]
+        [JsonPropertyName("streams")]
         [JsonConverter(typeof(StreamTypeListConverter))]
         public List<StreamType>? Streams { get; set; }
         /// <summary>
@@ -36,17 +36,17 @@ namespace Xrpl.Models.Methods
         /// The addresses must be in the XRP Ledger's base58 format.
         /// The server sends a notification for any transaction that affects at least one of these accounts
         /// </summary>
-        [JsonProperty("accounts")]
+        [JsonPropertyName("accounts")]
         public List<string>? Accounts { get; set; }
         /// <summary>
         /// (Optional) Like accounts, but include transactions that are not yet finalized.
         /// </summary>
-        [JsonProperty("accounts_proposed")]
+        [JsonPropertyName("accounts_proposed")]
         public List<string>? AccountsProposed { get; set; }
         /// <summary>
         /// (Optional) Array of objects defining order books  to monitor for updates.
         /// </summary>
-        [JsonProperty("books")]
+        [JsonPropertyName("books")]
         public List<Book>? Books { get; set; }
     }
 }

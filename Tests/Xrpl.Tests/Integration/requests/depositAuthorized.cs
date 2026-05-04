@@ -9,8 +9,6 @@ using System.Threading.Tasks;
 
 using Microsoft.VisualStudio.TestTools.UnitTesting;
 
-using Newtonsoft.Json;
-
 using Xrpl.Models.Methods;
 using Xrpl.Models.Transactions;
 using Xrpl.Utils.Hashes;
@@ -70,7 +68,7 @@ namespace XrplTests.Xrpl.ClientLib.Integration
                 Subject = walletSubject.ClassicAddress,
                 CredentialType = credTypeHex,
             };
-            Dictionary<string, object> createJson = JsonConvert.DeserializeObject<Dictionary<string, object>>(createTx.ToJson());
+            Dictionary<string, object> createJson = createTx.ToDictionary();
             await Utils.TestTransaction(runner.client, createJson, runner.wallet);
 
             CredentialAccept acceptTx = new CredentialAccept
@@ -79,7 +77,7 @@ namespace XrplTests.Xrpl.ClientLib.Integration
                 Issuer = runner.wallet.ClassicAddress,
                 CredentialType = credTypeHex,
             };
-            Dictionary<string, object> acceptJson = JsonConvert.DeserializeObject<Dictionary<string, object>>(acceptTx.ToJson());
+            Dictionary<string, object> acceptJson = acceptTx.ToDictionary();
             await Utils.TestTransaction(runner.client, acceptJson, walletSubject);
 
             string credentialId = Hashes.HashCredential(

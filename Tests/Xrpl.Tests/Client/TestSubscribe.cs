@@ -6,8 +6,9 @@ using System.Text;
 using System.Threading;
 using System.Threading.Tasks;
 using Microsoft.VisualStudio.TestTools.UnitTesting;
-using Newtonsoft.Json;
+using System.Text.Json;
 using Xrpl.Client;
+using Xrpl.Client.Json;
 using Xrpl.Models;
 using Xrpl.Models.Methods;
 using Xrpl.Models.Subscriptions;
@@ -42,7 +43,7 @@ namespace Xrpl.Tests.ClientLib
         {
 
             string jsonString = "{\"id\":0,\"status\":\"success\",\"type\":\"response\",\"result\":{\"fee_base\":10,\"fee_ref\":10,\"hostid\":\"NAP\",\"ledger_hash\":\"60EBABF55F6AB58864242CADA0B24FBEA027F2426917F39CA56576B335C0065A\",\"ledger_index\":8819951,\"ledger_time\":463782770,\"load_base\":256,\"load_factor\":256,\"pubkey_node\":\"n9Lt7DgQmxjHF5mYJsV2U9anALHmPem8PWQHWGpw4XMz79HA5aJY\",\"random\":\"EECFEE93BBB608914F190EC177B11DE52FC1D75D2C97DACBD26D2DFC6050E874\",\"reserve_base\":20000000,\"reserve_inc\":5000000,\"server_status\":\"full\",\"validated_ledgers\":\"32570-8819951\"}}";
-            Dictionary<string, object> jsonData = JsonConvert.DeserializeObject<Dictionary<string, object>>(jsonString);
+            Dictionary<string, object> jsonData = JsonSerializer.Deserialize<Dictionary<string, object>>(jsonString);
             runner.mockedRippled.AddResponse("subscribe", jsonData);
             Dictionary<string, object> tx = new Dictionary<string, object>
             {
@@ -56,7 +57,7 @@ namespace Xrpl.Tests.ClientLib
         {
 
             string jsonString = "{\"id\":0,\"status\":\"success\",\"type\":\"response\",\"result\":{}}";
-            Dictionary<string, object> jsonData = JsonConvert.DeserializeObject<Dictionary<string, object>>(jsonString);
+            Dictionary<string, object> jsonData = JsonSerializer.Deserialize<Dictionary<string, object>>(jsonString);
             runner.mockedRippled.AddResponse("unsubscribe", jsonData);
             Dictionary<string, object> tx = new Dictionary<string, object>
             {
@@ -254,12 +255,7 @@ namespace Xrpl.Tests.ClientLib
                         StreamType.Ledger,
                     })
             };
-            var serializerSettings = new JsonSerializerSettings();
-            serializerSettings.NullValueHandling = NullValueHandling.Ignore;
-            serializerSettings.DateTimeZoneHandling = DateTimeZoneHandling.Utc;
-            serializerSettings.FloatParseHandling = FloatParseHandling.Double;
-            serializerSettings.FloatFormatHandling = FloatFormatHandling.DefaultValue;
-            string jsonString = JsonConvert.SerializeObject(request, serializerSettings);
+            string jsonString = JsonSerializer.Serialize(request, XrplJsonOptions.Default);
             client.connection.WebsocketSendAsync(client.connection.ws, jsonString);
 
             Debug.WriteLine($"BEFORE: {DateTime.Now}");

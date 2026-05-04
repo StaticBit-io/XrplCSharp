@@ -1,8 +1,7 @@
 using Microsoft.VisualStudio.TestTools.UnitTesting;
 
-using Newtonsoft.Json;
-
 using System;
+using System.Text.Json.Serialization;
 using System.Collections.Generic;
 using System.Threading;
 using System.Threading.Tasks;
@@ -286,10 +285,10 @@ public class TestUCancellationToken
     /// </summary>
     private class FakeGRequest
     {
-        [JsonProperty("id")]
+        [JsonPropertyName("id")]
         public object Id { get; set; }
 
-        [JsonProperty("command")]
+        [JsonPropertyName("command")]
         public string Command { get; set; } = "fake";
     }
 

@@ -1,7 +1,6 @@
 using System.Collections.Generic;
+using System.Text.Json.Serialization;
 using System.Threading.Tasks;
-
-using Newtonsoft.Json;
 
 using Xrpl.Client.Exceptions;
 using Xrpl.Models.Utils;
@@ -46,17 +45,17 @@ namespace Xrpl.Models.Transactions
         }
 
         /// <inheritdoc />
-        [JsonProperty("Subject")]
+        [JsonPropertyName("Subject")]
         public string Subject { get; set; }
 
         /// <inheritdoc />
-        [JsonProperty("Issuer")]
+        [JsonPropertyName("Issuer")]
         public string Issuer { get; set; }
 
         private string _credentialType;
 
         /// <inheritdoc />
-        [JsonProperty("CredentialType")]
+        [JsonPropertyName("CredentialType")]
         public string CredentialType
         {
             get => _credentialType;
@@ -77,17 +76,17 @@ namespace Xrpl.Models.Transactions
     public class CredentialDeleteResponse : TransactionResponse, ICredentialDelete
     {
         /// <inheritdoc />
-        [JsonProperty("Subject")]
+        [JsonPropertyName("Subject")]
         public string Subject { get; set; }
 
         /// <inheritdoc />
-        [JsonProperty("Issuer")]
+        [JsonPropertyName("Issuer")]
         public string Issuer { get; set; }
 
         private string _credentialType;
 
         /// <inheritdoc />
-        [JsonProperty("CredentialType")]
+        [JsonPropertyName("CredentialType")]
         public string CredentialType
         {
             get => _credentialType;

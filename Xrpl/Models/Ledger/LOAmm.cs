@@ -1,6 +1,7 @@
-﻿using System.Collections.Generic;
+﻿using System;
+using System.Collections.Generic;
 
-using Newtonsoft.Json;
+using System.Text.Json.Serialization;
 
 using Xrpl.Client.Json.Converters;
 using Xrpl.Models.Common;
@@ -71,7 +72,7 @@ namespace Xrpl.Models.Ledger
     }
     public class AuthAccount : IAuthAccount
     {
-        [JsonProperty("account")]
+        [JsonPropertyName("account")]
         public string Account { get; set; }
     }
 
@@ -83,11 +84,11 @@ namespace Xrpl.Models.Ledger
     }
     public class VoteEntry : IVoteEntry
     {
-        [JsonProperty("account")]
+        [JsonPropertyName("account")]
         public string Account { get; set; }
-        [JsonProperty("trading_fee")]
+        [JsonPropertyName("trading_fee")]
         public uint TradingFee { get; set; }
-        [JsonProperty("vote_weight")]
+        [JsonPropertyName("vote_weight")]
         public uint VoteWeight { get; set; }
     }
     /// <summary>
@@ -98,29 +99,29 @@ namespace Xrpl.Models.Ledger
         /// <summary>
         /// The current owner of this auction slot.
         /// </summary>
-        [JsonProperty("account")]
+        [JsonPropertyName("account")]
         public string Account { get; set; }
         /// <summary>
         /// A list of at most 4 additional accounts that are authorized to trade at the discounted fee for this AMM instance.
         /// </summary>
-        [JsonProperty("auth_accounts")]
+        [JsonPropertyName("auth_accounts")]
         public List<AuthAccount> AuthAccounts { get; set; }
         /// <summary>
         /// The trading fee to be charged to the auction owner, in the same format as TradingFee.<br/>
         /// By default this is 0, meaning that the auction owner can trade at no fee instead of the standard fee for this AMM.
         /// </summary>
-        [JsonProperty("discounted_fee")]
+        [JsonPropertyName("discounted_fee")]
         public uint DiscountedFee { get; set; }
         /// <summary>
         /// The time when this slot expires, in seconds since the Ripple Epoch.
         /// </summary>
-        [JsonProperty("expiration")]
+        [JsonPropertyName("expiration")]
         [JsonConverter(typeof(FromStringDateTimeConverter))]
-        public object? Expiration { get; set; }
+        public DateTime? Expiration { get; set; }
         /// <summary>
         /// The amount the auction owner paid to win this slot, in LPTokens.
         /// </summary>
-        [JsonProperty("price")]
+        [JsonPropertyName("price")]
         [JsonConverter(typeof(CurrencyConverter))]
         public Currency Price { get; set; }
         /// <summary>
@@ -128,7 +129,7 @@ namespace Xrpl.Models.Ledger
         /// The auction slot expires after 24 hours (20 intervals of 72 minutes)
         /// and affects the cost to outbid the current holder and how much the current holder is refunded if someone outbids them.
         /// </summary>
-        [JsonProperty("time_interval")]
+        [JsonPropertyName("time_interval")]
         public uint TimeInterval { get; set; }
     }
 

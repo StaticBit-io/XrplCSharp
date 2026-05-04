@@ -1,17 +1,18 @@
 using NBitcoin;
 
-using Newtonsoft.Json;
-using Newtonsoft.Json.Linq;
-
 using System;
 using System.Collections.Generic;
 using System.Linq;
 using System.Security.Cryptography;
 using System.Text;
+using System.Text.Json;
+using System.Text.Json.Nodes;
+using System.Text.Json.Serialization;
 
 using Xrpl.AddressCodec;
 using Xrpl.BinaryCodec;
 using Xrpl.Client.Exceptions;
+using Xrpl.Client.Json;
 using Xrpl.Keypairs;
 using Xrpl.Models.Transactions;
 using Xrpl.Models.Utils;
@@ -23,10 +24,10 @@ namespace Xrpl.Wallet
 {
     public class SignatureResult
     {
-        [JsonProperty(propertyName: "tx_blob")]
+        [JsonPropertyName("tx_blob")]
         public string TxBlob { get; set; }
 
-        [JsonProperty(propertyName: "hash")]
+        [JsonPropertyName("hash")]
         public string Hash { get; set; }
 
         public SignatureResult(string txBlob, string hash)
@@ -44,7 +45,7 @@ namespace Xrpl.Wallet
 
             var dic = XrplBinaryCodec.Decode(TxBlob);
             dic["hash"] = Hash; // add hash to the dictionary for convenience
-            return JsonConvert.DeserializeObject<Dictionary<string, object>>(dic.ToString());
+            return JsonSerializer.Deserialize<Dictionary<string, object>>(dic.ToString(), XrplJsonOptions.Default);
         }
 
         public ITransactionRequest GetTx()
@@ -53,8 +54,8 @@ namespace Xrpl.Wallet
             {
                 throw new NullReferenceException(nameof(TxBlob));
             }
-            return JsonConvert.DeserializeObject<TransactionRequest>(
-                XrplBinaryCodec.Decode(TxBlob).ToString());
+            return JsonSerializer.Deserialize<TransactionRequest>(
+                XrplBinaryCodec.Decode(TxBlob).ToString(), XrplJsonOptions.Default);
         }
     }
     public enum TextWalletKdf
@@ -577,7 +578,7 @@ namespace Xrpl.Wallet
         public SignatureResult Sign(Dictionary<string, object> transaction, bool multisign = false, string? signingFor = null)
         {
             // 1) специальный кейс Batch inner-part
-            if (transaction[nameof(ITransactionCommon.TransactionType)] == "Batch")
+            if (string.Equals($"{transaction[nameof(ITransactionCommon.TransactionType)]}", "Batch", StringComparison.OrdinalIgnoreCase))
             {
                 var accounts = transaction.GetBatchSignerAccounts();
                 var myAccount = signingFor ?? this.ClassicAddress;
@@ -608,11 +609,11 @@ namespace Xrpl.Wallet
                     throw new ValidationException("txJSON must not contain `TxnSignature` or `Signers` properties");
                 }
 
-                JObject txToSignAndEncode = JToken.FromObject(transaction).ToObject<JObject>();
+                JsonObject txToSignAndEncode = JsonNode.Parse(JsonSerializer.Serialize(transaction, XrplJsonOptions.Default))?.AsObject();
                 txToSignAndEncode["SigningPubKey"] = multisignAddress != "" ? "" : this.PublicKey;
 
-                string signature = ComputeSignature(txToSignAndEncode.ToObject<Dictionary<string, object>>(), this.PrivateKey);
-                txToSignAndEncode.Add("TxnSignature", signature);
+                string signature = ComputeSignature(JsonSerializer.Deserialize<Dictionary<string, object>>(txToSignAndEncode.ToJsonString(), XrplJsonOptions.Default), this.PrivateKey);
+                txToSignAndEncode["TxnSignature"] = signature;
 
                 string serialized = XrplBinaryCodec.Encode(txToSignAndEncode);
                 //this.checkTxSerialization(serialized, tx);
@@ -630,10 +631,10 @@ namespace Xrpl.Wallet
         private SignatureResult SignMulti(Dictionary<string, object> transaction, string signerAccount)
         {
             // txBase — то, что в итоге отправим (накапливает Signers)
-            var txBase = JObject.FromObject(transaction);
+            var txBase = JsonNode.Parse(JsonSerializer.Serialize(transaction, XrplJsonOptions.Default))?.AsObject();
 
             // txForSign — копия для preimage: без Signers и TxnSignature
-            var txForSign = (JObject)txBase.DeepClone();
+            var txForSign = txBase.DeepClone().AsObject();
             txForSign["SigningPubKey"] = "";
             txForSign.Remove("TxnSignature");
             txForSign.Remove("Signers");
@@ -643,10 +644,13 @@ namespace Xrpl.Wallet
 
             string sig = Xrpl.Keypairs.XrplKeypairs.Sign(preimage, this.PrivateKey);
 
-            var signers = (txBase["Signers"] as JArray) ?? new JArray();
-            signers.Add(new JObject
+            var existingSigners = txBase["Signers"] as JsonArray;
+            var signers = existingSigners != null
+                ? JsonNode.Parse(existingSigners.ToJsonString())?.AsArray() ?? new JsonArray()
+                : new JsonArray();
+            signers.Add(new JsonObject
             {
-                ["Signer"] = new JObject
+                ["Signer"] = new JsonObject
                 {
                     ["Account"] = signerAccount,
                     ["SigningPubKey"] = this.PublicKey,
@@ -655,14 +659,14 @@ namespace Xrpl.Wallet
             });
 
             // КРИТИЧЕСКОЕ: сортировка Signers по Account
-            signers = new JArray(
-                signers.OrderBy(s =>
+            signers = new JsonArray(
+                signers.Select(s => s?.DeepClone()).OrderBy(s =>
                 {
-                    var acc = (string?)s["Signer"]?["Account"] ?? "";
+                    var acc = s?["Signer"]?["Account"]?.GetValue<string>() ?? "";
                     // для строгого соответствия спекам — сортируем по байтам адреса
                     var accBytes = Xrpl.AddressCodec.XrplCodec.DecodeAccountID(acc);
                     return BitConverter.ToString(accBytes);
-                })
+                }).ToArray()
             );
 
             txBase["Signers"] = signers;
@@ -676,7 +680,7 @@ namespace Xrpl.Wallet
         public SignatureResult SignAsBatchPart(IBatch transaction, bool multisign, string? signingFor)
         {
             var json = transaction.ToJson();
-            var tx = JsonConvert.DeserializeObject<Dictionary<string, object>>(json)
+            var tx = JsonSerializer.Deserialize<Dictionary<string, object>>(json, XrplJsonOptions.Default)
                          ?? throw new ValidationException("Failed to deserialize tx json");
             return SignAsBatchPart(tx, multisign, signingFor);
         }
@@ -684,28 +688,29 @@ namespace Xrpl.Wallet
         {
             VerifyBatchSubmitter(transaction, signingFor, false);
 
-            // 1) Стандартизируем вход в JObject
-            var outer = JObject.FromObject(transaction) ?? throw new ArgumentException("tx is null");
+            // 1) Стандартизируем вход в JsonObject
+            var outer = JsonNode.Parse(JsonSerializer.Serialize(transaction, XrplJsonOptions.Default))?.AsObject()
+                ?? throw new ArgumentException("tx is null");
 
             // 2) Базовые проверки "Batch"
-            var txType = outer.Value<string>("TransactionType");
+            var txType = outer["TransactionType"]?.GetValue<string>();
             if (!string.Equals(txType, "Batch", StringComparison.OrdinalIgnoreCase))
                 throw new ArgumentException("TransactionType must be 'Batch'.");
 
-            var innerTransactions = outer["RawTransactions"] as JArray
+            var innerTransactions = outer["RawTransactions"]?.AsArray()
                 ?? throw new ValidationException("Batch transaction must have RawTransactions (array).");
 
             if (innerTransactions.Count == 0 || innerTransactions.Count > 8)
                 throw new ValidationException("Batch.RawTransactions length must be between 1 and 8.");
 
-            var normalizedInners = new List<JObject>(innerTransactions.Count);
+            var normalizedInners = new List<JsonObject>(innerTransactions.Count);
             // 3) Пройдём по внутренним транзакциям и провалидируем по XLS-56
-            foreach (var item in innerTransactions.Children<JObject>())
+            foreach (var item in innerTransactions.Where(n => n is JsonObject).Select(n => n!.AsObject()))
             {
-                var innerTx = item["RawTransaction"] as JObject
+                var innerTx = item["RawTransaction"]?.AsObject()
                               ?? throw new ValidationException("RawTransaction must be an object.");
                 // TransactionType обязателен и не Batch
-                var innerType = innerTx.Value<string>("TransactionType");
+                var innerType = innerTx["TransactionType"]?.GetValue<string>();
                 if (string.IsNullOrWhiteSpace(innerType))
                     throw new ValidationException("Inner RawTransaction.TransactionType is required.");
                 if (string.Equals(innerType, "Batch", StringComparison.OrdinalIgnoreCase))
@@ -716,11 +721,11 @@ namespace Xrpl.Wallet
                     throw new ValidationException("Inner tx must NOT contain TxnSignature, Signers or LastLedgerSequence.");
 
                 // Fee (если присутствует) — ровно "0"
-                if (innerTx["Fee"] != null && innerTx.Value<string>("Fee") != "0")
+                if (innerTx["Fee"] != null && innerTx["Fee"]?.GetValue<string>() != "0")
                     throw new ValidationException("Inner tx Fee must be string \"0\" when present.");
 
                 // SigningPubKey (если присутствует) — ровно ""
-                if (innerTx["SigningPubKey"] != null && innerTx.Value<string>("SigningPubKey") != "")
+                if (innerTx["SigningPubKey"] != null && innerTx["SigningPubKey"]?.GetValue<string>() != "")
                     throw new ValidationException("Inner tx SigningPubKey must be empty string when present.");
 
                 // Нормализуем под расчёт txid (Fee=\"0\", SigningPubKey=\"\", + tfInnerBatchTxn)
@@ -737,8 +742,8 @@ namespace Xrpl.Wallet
             var fTok = outer["Flags"];
             if (fTok != null)
             {
-                if (fTok.Type == JTokenType.Integer) flags = (uint)fTok.Value<long>();
-                else if (fTok.Type == JTokenType.String && uint.TryParse((string)fTok, out var u)) flags = u;
+                if (fTok is JsonValue fVal && fVal.TryGetValue<long>(out var fLong)) flags = (uint)fLong;
+                else if (fTok is JsonValue fStr && fStr.TryGetValue<string>(out var fStrVal) && uint.TryParse(fStrVal, out var u)) flags = u;
                 outer["Flags"] = flags;
             }
 
@@ -747,8 +752,8 @@ namespace Xrpl.Wallet
             var nTok = outer["NetworkID"];
             if (nTok != null)
             {
-                if (nTok.Type == JTokenType.Integer) networkId = (uint)nTok.Value<long>();
-                else if (nTok.Type == JTokenType.String && uint.TryParse((string)nTok, out var n)) networkId = n;
+                if (nTok is JsonValue nVal && nVal.TryGetValue<long>(out var nLong)) networkId = (uint)nLong;
+                else if (nTok is JsonValue nStr && nStr.TryGetValue<string>(out var nStrVal) && uint.TryParse(nStrVal, out var n)) networkId = n;
             }
 
             // 6) Подписание (оба режима строят один и тот же batch-preimage)
@@ -761,9 +766,12 @@ namespace Xrpl.Wallet
 
                 var accountFor = NormalizeClassic(signingFor);
 
-                var batchSigners = (outer["BatchSigners"] as JArray) ?? new JArray();
+                var existingBatchSigners = outer["BatchSigners"] as JsonArray;
+                var batchSigners = existingBatchSigners != null
+                    ? JsonNode.Parse(existingBatchSigners.ToJsonString())?.AsArray() ?? new JsonArray()
+                    : new JsonArray();
 
-                var signerObj = new JObject
+                var signerObj = new JsonObject
                 {
                     ["Account"] = accountFor,
                     ["SigningPubKey"] = this.PublicKey,
@@ -771,7 +779,7 @@ namespace Xrpl.Wallet
                     // Если нужен мультисиг под ЭТИМ ЖЕ аккаунтом — вместо пары выше положи "Signers": [ { Signer{Account,SigningPubKey,TxnSignature} }, ... ]
                     // Подпись каждого Signer — над тем же preimage.
                 };
-                batchSigners.Add(new JObject { ["BatchSigner"] = signerObj });
+                batchSigners.Add(new JsonObject { ["BatchSigner"] = signerObj });
 
                 // Сортировка BatchSigners и вложенных Signers по account-id (как в XRPL)
                 outer["BatchSigners"] = BatchSigningHelper.SortBatchSigners(batchSigners);
@@ -804,7 +812,10 @@ namespace Xrpl.Wallet
                 var sig = Xrpl.Keypairs.XrplKeypairs.Sign(fullPreimage, this.PrivateKey);
 
                 // Достаём/создаём BatchSigner для ownerAccount
-                var batchSigners = (outer["BatchSigners"] as JArray) ?? new JArray();
+                var existingBatchSigners = outer["BatchSigners"] as JsonArray;
+                var batchSigners = existingBatchSigners != null
+                    ? JsonNode.Parse(existingBatchSigners.ToJsonString())?.AsArray() ?? new JsonArray()
+                    : new JsonArray();
                 var bs = BatchSigningHelper.FindOrCreateBatchSigner(batchSigners, ownerAccount);
 
                 // Переводим (если нужно) single-форму в мультисиг-форму
@@ -812,14 +823,14 @@ namespace Xrpl.Wallet
                 {
                     bs.Remove("SigningPubKey");
                     bs.Remove("TxnSignature");
-                    bs["Signers"] = new JArray();
+                    bs["Signers"] = new JsonArray();
                 }
 
                 // Добавляем текущего подписанта
-                var signersArr = (JArray)bs["Signers"]!;
-                var signerEntry = new JObject
+                var signersArr = bs["Signers"]!.AsArray();
+                var signerEntry = new JsonObject
                 {
-                    ["Signer"] = new JObject
+                    ["Signer"] = new JsonObject
                     {
                         ["Account"] = this.ClassicAddress,   // именно аккаунт ПОДПИСАНТА (из локального кошелька)
                         ["SigningPubKey"] = this.PublicKey,
@@ -828,12 +839,14 @@ namespace Xrpl.Wallet
                 };
 
                 // Защита от дублей (по тройке Account|SigningPubKey|TxnSignature)
-                static string KeyOf(JObject se)
+                static string KeyOf(JsonObject se)
                 {
-                    var so = (JObject)se["Signer"]!;
-                    return $"{(string?)so["Account"]}|{(string?)so["SigningPubKey"]}|{(string?)so["TxnSignature"]}";
+                    var so = se["Signer"]!.AsObject();
+                    return $"{so["Account"]?.GetValue<string>()}|{so["SigningPubKey"]?.GetValue<string>()}|{so["TxnSignature"]?.GetValue<string>()}";
                 }
-                var seen = new HashSet<string>(signersArr.Children<JObject>().Select(KeyOf), StringComparer.Ordinal);
+                var seen = new HashSet<string>(
+                    signersArr.Where(n => n is JsonObject).Select(n => KeyOf(n!.AsObject())),
+                    StringComparer.Ordinal);
                 if (seen.Add(KeyOf(signerEntry)))
                     signersArr.Add(signerEntry);
 
@@ -879,27 +892,28 @@ namespace Xrpl.Wallet
                 {
                     try
                     {
-                        var outer = JObject.FromObject(transaction);
-                        var batchSigners = outer["BatchSigners"] as JArray;
+                        var outer = JsonNode.Parse(JsonSerializer.Serialize(transaction, XrplJsonOptions.Default))?.AsObject();
+                        var batchSigners = outer?["BatchSigners"] as JsonArray;
 
                         if (batchSigners != null)
                         {
                             // Найдем BatchSigner для owner = me
-                            foreach (var w in batchSigners.Children<JObject>())
+                            foreach (var w in batchSigners.Where(n => n is JsonObject).Select(n => n!.AsObject()))
                             {
-                                var bs = w["BatchSigner"] as JObject ?? w;
-                                var acc = (string?)bs["Account"];
+                                var bs = w["BatchSigner"]?.AsObject() ?? w;
+                                var acc = bs["Account"]?.GetValue<string>();
                                 if (!string.Equals(acc, me, StringComparison.OrdinalIgnoreCase))
                                     continue;
 
-                                var signersArr = bs["Signers"] as JArray;
+                                var signersArr = bs["Signers"] as JsonArray;
                                 if (signersArr == null)
                                     break; // single-sig BatchSigner: повтор запрещаем
 
                                 // Проверяем, не добавлял ли этот signer уже подпись для данного owner
                                 var signerMe = NormalizeClassic(this.ClassicAddress);
-                                var already = signersArr.Children<JObject>()
-                                    .Select(x => (string?)x["Signer"]?["Account"])
+                                var already = signersArr
+                                    .Where(n => n is JsonObject).Select(n => n!.AsObject())
+                                    .Select(x => x["Signer"]?["Account"]?.GetValue<string>())
                                     .Where(x => !string.IsNullOrWhiteSpace(x))
                                     .Any(x => string.Equals(NormalizeClassic(x!), signerMe, StringComparison.OrdinalIgnoreCase));
 
@@ -939,7 +953,7 @@ namespace Xrpl.Wallet
         /// <returns>A Wallet derived from the seed.</returns>
         public SignatureResult Sign(ITransactionRequest tx, bool multisign = false, string? signingFor = null)
         {
-            Dictionary<string, object> txJson = JsonConvert.DeserializeObject<Dictionary<string, object>>(tx.ToJson());
+            Dictionary<string, object> txJson = JsonSerializer.Deserialize<Dictionary<string, object>>(tx.ToJson(), XrplJsonOptions.Default);
             return Sign(txJson, multisign, signingFor);
         }
 
@@ -950,8 +964,8 @@ namespace Xrpl.Wallet
         /// <returns>Returns true if a signedTransaction is valid.</returns>
         public bool VerifyTransaction(string signedTransaction)
         {
-            System.Text.Json.Nodes.JsonNode txNode = XrplBinaryCodec.Decode(signedTransaction);
-            Dictionary<string, object> txDict = Newtonsoft.Json.JsonConvert.DeserializeObject<Dictionary<string, object>>(txNode.ToJsonString());
+            JsonNode txNode = XrplBinaryCodec.Decode(signedTransaction);
+            Dictionary<string, object> txDict = JsonSerializer.Deserialize<Dictionary<string, object>>(txNode.ToJsonString(), XrplJsonOptions.Default);
             string messageHex = XrplBinaryCodec.EncodeForSigning(txDict);
             string signature = txNode["TxnSignature"]?.GetValue<string>();
             return XrplKeypairs.Verify(messageHex.FromHex(), signature, this.PublicKey);
@@ -985,9 +999,9 @@ namespace Xrpl.Wallet
             }
 
             // Канонизация тела: выкидываем *все* подписи (outer + inner + multisign)
-            static JObject Canonicalize(JObject x)
+            static JsonObject Canonicalize(JsonObject x)
             {
-                var c = (JObject)x.DeepClone();
+                var c = x.DeepClone().AsObject();
                 c.Remove("TxnSignature");
                 c.Remove("SigningPubKey");
                 c.Remove("BatchSigners");
@@ -1000,7 +1014,7 @@ namespace Xrpl.Wallet
             var decoded = txBlobs.Select(DecodeToObject).ToList();
             foreach (var o in decoded)
             {
-                var tt = (string?)o["TransactionType"];
+                var tt = o["TransactionType"]?.GetValue<string>();
                 if (!string.Equals(tt, "Batch", StringComparison.OrdinalIgnoreCase))
                     throw new InvalidOperationException("All blobs must be Batch transactions.");
             }
@@ -1010,13 +1024,13 @@ namespace Xrpl.Wallet
             var baseCanon = Canonicalize(decoded[0]);
             for (int i = 1; i < decoded.Count; i++)
             {
-                if (!JToken.DeepEquals(baseCanon, Canonicalize(decoded[i])))
+                if (!JsonNode.DeepEquals(baseCanon, Canonicalize(decoded[i])))
                     throw new InvalidOperationException("Incompatible Batch bodies. All inputs must have identical non-signing fields.");
             }
 
             // ---------- 3) base для результата ----------
 
-            var combined = (JObject)decoded[0].DeepClone();
+            var combined = decoded[0].DeepClone().AsObject();
             combined.Remove("BatchSigners");
             combined.Remove("Signers");
             combined.Remove("TxnSignature");
@@ -1024,24 +1038,24 @@ namespace Xrpl.Wallet
 
             // ---------- 4) собираем и мержим BatchSigners (inner-подписи) ----------
 
-            var byAccount = new Dictionary<string, JObject>(StringComparer.Ordinal); // Account -> BatchSigner object
+            var byAccount = new Dictionary<string, JsonObject>(StringComparer.Ordinal); // Account -> BatchSigner object
 
             foreach (var outer in decoded)
             {
-                var arr = outer["BatchSigners"] as JArray;
+                var arr = outer["BatchSigners"] as JsonArray;
                 if (arr == null) continue;
 
-                foreach (var w in arr.Children<JObject>())
+                foreach (var w in arr.Where(n => n is JsonObject).Select(n => n!.AsObject()))
                 {
-                    var bs = w["BatchSigner"] as JObject ?? w;
-                    var accRaw = (string?)bs["Account"] ?? throw new InvalidOperationException("BatchSigner missing Account.");
+                    var bs = w["BatchSigner"]?.AsObject() ?? w;
+                    var accRaw = bs["Account"]?.GetValue<string>() ?? throw new InvalidOperationException("BatchSigner missing Account.");
 
                     var acc = SignerUtilities.NormalizeClassicAddress(accRaw);
                     bs["Account"] = acc; // нормализуем
 
                     if (!byAccount.TryGetValue(acc, out var existing))
                     {
-                        byAccount[acc] = (JObject)bs.DeepClone();
+                        byAccount[acc] = bs.DeepClone().AsObject();
                     }
                     else
                     {
@@ -1056,7 +1070,7 @@ namespace Xrpl.Wallet
             foreach (var kvp in byAccount.ToList())
             {
                 var bs = kvp.Value;
-                var signersArr = bs["Signers"] as JArray;
+                var signersArr = bs["Signers"] as JsonArray;
                 if (signersArr == null || signersArr.Count == 0)
                     continue;
 
@@ -1064,26 +1078,27 @@ namespace Xrpl.Wallet
             }
 
             // Собираем в массив-обёртку
-            var mergedBatchSignersArr = new JArray(byAccount.Values.Select(v => new JObject { ["BatchSigner"] = v }));
+            var mergedBatchSignersArr = new JsonArray(byAccount.Values.Select(v => (JsonNode)new JsonObject { ["BatchSigner"] = v }).ToArray());
             combined["BatchSigners"] = BatchSigningHelper.SortBatchSigners(mergedBatchSignersArr);
 
             // ---------- 5) собираем и мержим root Signers (top multisign) ----------
 
-            var allRootSigners = new List<JObject>();
+            var allRootSigners = new List<JsonNode>();
 
             foreach (var outer in decoded)
             {
-                if (outer["Signers"] is not JArray arr) continue;
-                foreach (var it in arr.Children<JObject>())
+                if (outer["Signers"] is not JsonArray arr) continue;
+                foreach (var it in arr)
                 {
-                    allRootSigners.Add((JObject)it.DeepClone());
+                    if (it is JsonObject itObj)
+                        allRootSigners.Add(itObj.DeepClone());
                 }
             }
 
             if (allRootSigners.Count > 0)
             {
                 // dedupe and sort root Signers using helper
-                var sortedRootSigners = SignerUtilities.DedupeAndSortSigners(new JArray(allRootSigners));
+                var sortedRootSigners = SignerUtilities.DedupeAndSortSigners(new JsonArray(allRootSigners.ToArray()));
                 combined["Signers"] = sortedRootSigners;
 
                 // XRPL-правило для multisign: SigningPubKey = "", TxnSignature отсутствует
@@ -1099,8 +1114,8 @@ namespace Xrpl.Wallet
 
                 foreach (var o in decoded)
                 {
-                    var s = (string?)o["TxnSignature"];
-                    var p = (string?)o["SigningPubKey"];
+                    var s = o["TxnSignature"]?.GetValue<string>();
+                    var p = o["SigningPubKey"]?.GetValue<string>();
 
                     if (string.IsNullOrEmpty(s) && string.IsNullOrEmpty(p))
                         continue;
@@ -1141,11 +1156,11 @@ namespace Xrpl.Wallet
             return new SignatureResult(signedHex, txHash);
         }
 
-        /// <summary>Декодирует hex blob в JObject.</summary>
-        private static JObject DecodeToObject(string blobHex)
+        /// <summary>Декодирует hex blob в JsonObject.</summary>
+        private static JsonObject DecodeToObject(string blobHex)
         {
-            System.Text.Json.Nodes.JsonNode dec = XrplBinaryCodec.Decode(blobHex);
-            return JObject.Parse(dec.ToJsonString());
+            JsonNode dec = XrplBinaryCodec.Decode(blobHex);
+            return dec.AsObject();
         }
     }
 }

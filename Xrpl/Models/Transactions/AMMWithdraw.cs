@@ -1,6 +1,5 @@
-using Newtonsoft.Json;
-
 using System.Collections.Generic;
+using System.Text.Json.Serialization;
 using System.Threading.Tasks;
 
 using Xrpl.Client.Exceptions;

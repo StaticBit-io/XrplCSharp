@@ -1,4 +1,4 @@
-﻿using Newtonsoft.Json;
+﻿using System.Text.Json.Serialization;
 
 // https://github.com/XRPLF/xrpl.js/blob/main/packages/xrpl/src/models/methods/subscribe.ts
 
@@ -14,7 +14,7 @@ namespace Xrpl.Models.Subscriptions
         /// <summary>
         /// The new consensus phase the server is in. Possible values are open, establish, and accepted.
         /// </summary>
-        [JsonProperty("consensus")]
+        [JsonPropertyName("consensus")]
         public string Consensus { get; set; }
 
     }

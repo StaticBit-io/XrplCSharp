@@ -1,10 +1,10 @@
 using Microsoft.VisualStudio.TestTools.UnitTesting;
 
-using Newtonsoft.Json;
-
 using System.Collections.Generic;
 using System.Linq;
+using System.Text.Json;
 
+using Xrpl.Client.Json;
 using Xrpl.Client.Json.Converters;
 using Xrpl.Models.Common;
 using Xrpl.Models.Methods;
@@ -35,7 +35,7 @@ public class GatewayBalancesResponseConverterTests
             ""assets"": {},
             ""frozen_balances"": {}
         }";
-        GatewayBalancesResponse result = JsonConvert.DeserializeObject<GatewayBalancesResponse>(json);
+        GatewayBalancesResponse result = JsonSerializer.Deserialize<GatewayBalancesResponse>(json, XrplJsonOptions.Default);
         Assert.IsNotNull(result);
         Assert.AreEqual("rMwjYedjc7qqtKYVLiAccJSmCwih4LnE2q", result.Account);
         Assert.AreEqual("ABCDEF", result.LedgerHash);
@@ -56,7 +56,7 @@ public class GatewayBalancesResponseConverterTests
         string json = @"{
             ""account"": ""rTest""
         }";
-        GatewayBalancesResponse result = JsonConvert.DeserializeObject<GatewayBalancesResponse>(json);
+        GatewayBalancesResponse result = JsonSerializer.Deserialize<GatewayBalancesResponse>(json, XrplJsonOptions.Default);
         Assert.IsNotNull(result);
         Assert.AreEqual("rTest", result.Account);
         Assert.AreEqual(0, result.Assets.Count);
@@ -81,7 +81,7 @@ public class GatewayBalancesResponseConverterTests
                 new Currency { CurrencyCode = "USD", Value = "100", Issuer = "rTest" }
             }
         };
-        string json = JsonConvert.SerializeObject(response);
+        string json = JsonSerializer.Serialize(response, XrplJsonOptions.Default);
         Assert.IsTrue(json.Contains("\"account\""));
         Assert.IsTrue(json.Contains("rTest"));
         Assert.IsTrue(json.Contains("obligations"));
@@ -105,9 +105,9 @@ public class GatewayBalancesResponseConverterTests
             ""ledger_index"": 100,
             ""validated"": true
         }";
-        GatewayBalancesResponse parsed = JsonConvert.DeserializeObject<GatewayBalancesResponse>(json);
-        string reserialized = JsonConvert.SerializeObject(parsed);
-        GatewayBalancesResponse reparsed = JsonConvert.DeserializeObject<GatewayBalancesResponse>(reserialized);
+        GatewayBalancesResponse parsed = JsonSerializer.Deserialize<GatewayBalancesResponse>(json, XrplJsonOptions.Default);
+        string reserialized = JsonSerializer.Serialize(parsed, XrplJsonOptions.Default);
+        GatewayBalancesResponse reparsed = JsonSerializer.Deserialize<GatewayBalancesResponse>(reserialized, XrplJsonOptions.Default);
 
         Assert.AreEqual(parsed.Account, reparsed.Account);
         Assert.AreEqual(parsed.Obligations.Count, reparsed.Obligations.Count);

@@ -1,9 +1,10 @@
 using Microsoft.VisualStudio.TestTools.UnitTesting;
 
-using Newtonsoft.Json;
-
 using System;
+using System.Text.Json;
+using System.Text.Json.Serialization;
 
+using Xrpl.Client.Json;
 using Xrpl.Client.Json.Converters;
 
 namespace XrplTests.Client.Json.Converters;
@@ -21,7 +22,7 @@ public class UInt64StringJsonConverterTests
     public void Read_StringNumber_ReturnsValue()
     {
         string json = "{\"Value\": \"1000000\"}";
-        Model result = JsonConvert.DeserializeObject<Model>(json);
+        Model result = JsonSerializer.Deserialize<Model>(json, XrplJsonOptions.Default);
         Assert.AreEqual(1000000UL, result.Value);
     }
 
@@ -29,7 +30,7 @@ public class UInt64StringJsonConverterTests
     public void Read_Integer_ReturnsValue()
     {
         string json = "{\"Value\": 42}";
-        Model result = JsonConvert.DeserializeObject<Model>(json);
+        Model result = JsonSerializer.Deserialize<Model>(json, XrplJsonOptions.Default);
         Assert.AreEqual(42UL, result.Value);
     }
 
@@ -37,7 +38,7 @@ public class UInt64StringJsonConverterTests
     public void Read_Zero_ReturnsZero()
     {
         string json = "{\"Value\": \"0\"}";
-        Model result = JsonConvert.DeserializeObject<Model>(json);
+        Model result = JsonSerializer.Deserialize<Model>(json, XrplJsonOptions.Default);
         Assert.AreEqual(0UL, result.Value);
     }
 
@@ -46,7 +47,7 @@ public class UInt64StringJsonConverterTests
     {
         string maxVal = long.MaxValue.ToString();
         string json = $"{{\"Value\": \"{maxVal}\"}}";
-        Model result = JsonConvert.DeserializeObject<Model>(json);
+        Model result = JsonSerializer.Deserialize<Model>(json, XrplJsonOptions.Default);
         Assert.AreEqual((ulong)long.MaxValue, result.Value);
     }
 
@@ -56,16 +57,16 @@ public class UInt64StringJsonConverterTests
         ulong overflow = (ulong)long.MaxValue + 1;
         string json = $"{{\"Value\": \"{overflow}\"}}";
         bool threw = false;
-        try { JsonConvert.DeserializeObject<Model>(json); }
-        catch (JsonSerializationException) { threw = true; }
-        Assert.IsTrue(threw, "Expected JsonSerializationException");
+        try { JsonSerializer.Deserialize<Model>(json, XrplJsonOptions.Default); }
+        catch (JsonException) { threw = true; }
+        Assert.IsTrue(threw, "Expected JsonException");
     }
 
     [TestMethod]
     public void Write_Value_ReturnsStringRepresentation()
     {
         Model model = new Model { Value = 999 };
-        string json = JsonConvert.SerializeObject(model);
+        string json = JsonSerializer.Serialize(model, XrplJsonOptions.Default);
         Assert.IsTrue(json.Contains("\"999\""));
     }
 
@@ -73,7 +74,7 @@ public class UInt64StringJsonConverterTests
     public void Write_Zero_ReturnsStringZero()
     {
         Model model = new Model { Value = 0 };
-        string json = JsonConvert.SerializeObject(model);
+        string json = JsonSerializer.Serialize(model, XrplJsonOptions.Default);
         Assert.IsTrue(json.Contains("\"0\""));
     }
 
@@ -81,8 +82,8 @@ public class UInt64StringJsonConverterTests
     public void RoundTrip_PreservesValue()
     {
         Model original = new Model { Value = 123456789 };
-        string json = JsonConvert.SerializeObject(original);
-        Model deserialized = JsonConvert.DeserializeObject<Model>(json);
+        string json = JsonSerializer.Serialize(original, XrplJsonOptions.Default);
+        Model deserialized = JsonSerializer.Deserialize<Model>(json, XrplJsonOptions.Default);
         Assert.AreEqual(original.Value, deserialized.Value);
     }
 }

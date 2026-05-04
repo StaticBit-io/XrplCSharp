@@ -1,21 +1,23 @@
-﻿using Newtonsoft.Json;
-using Newtonsoft.Json.Converters;
-
-using System;
+﻿using System;
 using System.Collections.Generic;
 using System.Globalization;
 using System.Linq;
 using System.Security.Cryptography;
+using System.Text.Json;
+using System.Text.Json.Serialization;
 using System.Threading.Tasks;
 
 using Xrpl.Client.Exceptions;
 using Xrpl.Client.Extensions;
+using Xrpl.Client.Json;
 using Xrpl.Client.Json.Converters;
 using Xrpl.Models.Common;
 using Xrpl.Models.Ledger;
 using Xrpl.Models.Utils;
 
 using static Xrpl.Models.Transactions.BatchSigner;
+
+using JsonSerializer = System.Text.Json.JsonSerializer;
 
 // https://github.com/XRPLF/xrpl.js/blob/main/packages/xrpl/src/models/transactions/common.ts
 
@@ -273,32 +275,28 @@ namespace Xrpl.Models.Transactions
         /// <inheritdoc />
         public uint? Sequence { get; set; }
         /// <inheritdoc />
-        [JsonProperty("SigningPubKey")]
+        [JsonPropertyName("SigningPubKey")]
         public string SigningPublicKey { get; set; }
         /// <inheritdoc />
         public List<SignerWrapper> Signers { get; set; }
         /// <inheritdoc />
-        [JsonConverter(typeof(StringEnumConverter))]
+        [JsonConverter(typeof(TransactionTypeConverter))]
         public TransactionType TransactionType { get; set; }
 
         /// <inheritdoc />
-        [JsonProperty("TxnSignature")]
+        [JsonPropertyName("TxnSignature")]
         public string TransactionSignature { get; set; }
 
         /// <inheritdoc />
         public string ToJson()
         {
-            JsonSerializerSettings serializerSettings = new JsonSerializerSettings();
-            serializerSettings.NullValueHandling = NullValueHandling.Ignore;
-            serializerSettings.DateTimeZoneHandling = DateTimeZoneHandling.Utc;
-
-            return JsonConvert.SerializeObject(this, serializerSettings);
+            return JsonSerializer.Serialize(this, this.GetType(), XrplJsonOptions.Default);
         }
 
         public Dictionary<string, object> ToDictionary()
         {
             var json = ToJson();
-            return JsonConvert.DeserializeObject<Dictionary<string, object>>(json) ?? throw new ValidationException("Failed to deserialize tx json");
+            return JsonSerializer.Deserialize<Dictionary<string, object>>(json, XrplJsonOptions.Default) ?? throw new ValidationException("Failed to deserialize tx json");
         }
 
         /// <inheritdoc />
@@ -317,7 +315,7 @@ namespace Xrpl.Models.Transactions
         /// <summary>
         /// The Memos field includes arbitrary messaging data with the transaction.
         /// </summary>
-        [JsonProperty("Memo")]
+        [JsonPropertyName("Memo")]
         public Memo Memo { get; set; }
     }
 
@@ -392,20 +390,20 @@ namespace Xrpl.Models.Transactions
         /// <summary>
         /// Shows the OfferIDof a new NFTokenOffer in a response from a NFTokenCreateOffer transaction.
         /// </summary>
-        [JsonProperty("offer_id")]
+        [JsonPropertyName("offer_id")]
         public string OfferID { get; set; }
         /// <summary>
         /// Shows the NFTokenID for the NFToken that changed on the ledger as a result of the transaction.
         /// Only present if the transaction is NFTokenMint or NFTokenAcceptOffer
         /// </summary>
-        [JsonProperty("nftoken_id")]
+        [JsonPropertyName("nftoken_id")]
         public string NFTokenId { get; set; }
 
         /// <summary>
         /// Shows all the NFTokenIDs for the NFTokens that changed on the ledger as a result of the transaction.
         /// Only present if the transaction is NFTokenCancelOffer.
         /// </summary>
-        [JsonProperty("nftoken_ids")]
+        [JsonPropertyName("nftoken_ids")]
         public string[] NFTokenIds { get; set; }
 
         /// <inheritdoc />
@@ -415,7 +413,7 @@ namespace Xrpl.Models.Transactions
         /// Shows the MPTokenIssuanceID for the MPTokenIssuance that was created by this transaction.
         /// Only present if the transaction is MPTokenIssuanceCreate.
         /// </summary>
-        [JsonProperty("mpt_issuance_id")]
+        [JsonPropertyName("mpt_issuance_id")]
         public string MptIssuanceId { get; set; }
 
         /// <summary>
@@ -424,14 +422,14 @@ namespace Xrpl.Models.Transactions
         /// See this description for details.
         /// </summary>
         [JsonConverter(typeof(CurrencyConverter))]
-        [JsonProperty("delivered_amount")]
+        [JsonPropertyName("delivered_amount")]
         public Currency ActuallyDeliveredAmount { get; set; }
         /// <summary>
         /// (May be omitted) For a partial payment, this field records the amount of currency actually delivered to the destination.<br/>
         /// To avoid errors when reading transactions, instead use the delivered_amount field, which is provided for all Payment transactions, partial or not.
         /// </summary>
         [JsonConverter(typeof(CurrencyConverter))]
-        [JsonProperty("DeliveredAmount")]
+        [JsonPropertyName("DeliveredAmount")]
         public Currency PartialDeliveredAmount { get; set; }
     }
 
@@ -468,7 +466,7 @@ namespace Xrpl.Models.Transactions
         /// <summary>
         /// The type of ledger object
         /// </summary>
-        [JsonConverter(typeof(StringEnumConverter))]
+        [JsonConverter(typeof(LedgerEntryTypeConverter))]
         public LedgerEntryType LedgerEntryType { get; set; }
         /// <summary>
         /// The ID of this ledger object in the ledger's state tree.<br/>
@@ -480,7 +478,7 @@ namespace Xrpl.Models.Transactions
         /// (May be omitted) The identifying hash of the previous transaction to modify this ledger object.<br/>
         /// Omitted for ledger object types that do not have a PreviousTxnID field.
         /// </summary>
-        [JsonProperty("PreviousTxnID")]
+        [JsonPropertyName("PreviousTxnID")]
         public string PreviousTxnID { get; set; }
 
         /// <summary>
@@ -488,7 +486,7 @@ namespace Xrpl.Models.Transactions
         /// (May be omitted) The Ledger Index of the ledger version containing the previous transaction to modify this ledger object.<br/>
         /// Omitted for ledger object types that do not have a PreviousTxnLgrSeq field.
         /// </summary>
-        [JsonProperty("PreviousTxnLgrSeq")]
+        [JsonPropertyName("PreviousTxnLgrSeq")]
         public uint? PreviousTxnLgrSeq { get; set; }
         /// <summary>
         /// <remarks>
@@ -662,38 +660,34 @@ namespace Xrpl.Models.Transactions
         /// <inheritdoc/>
         public uint? Sequence { get; set; }
         /// <inheritdoc/>
-        [JsonProperty("SigningPubKey")]
+        [JsonPropertyName("SigningPubKey")]
         public string SigningPublicKey { get; set; }
 
         /// <inheritdoc/>
         public List<SignerWrapper> Signers { get; set; }
 
         /// <inheritdoc/>
-        [JsonConverter(typeof(StringEnumConverter))]
+        [JsonConverter(typeof(TransactionTypeConverter))]
         public TransactionType TransactionType { get; set; }
 
         /// <inheritdoc/>
-        [JsonProperty("TxnSignature")]
+        [JsonPropertyName("TxnSignature")]
         public string TransactionSignature { get; set; }
 
         /// <inheritdoc/>
-        [JsonProperty("meta")]
+        [JsonPropertyName("meta")]
         public Meta Meta { get; set; }
 
         /// <inheritdoc/>
         public string ToJson()
         {
-            JsonSerializerSettings serializerSettings = new JsonSerializerSettings();
-            serializerSettings.NullValueHandling = NullValueHandling.Ignore;
-            serializerSettings.DateTimeZoneHandling = DateTimeZoneHandling.Utc;
-
-            return JsonConvert.SerializeObject(this, serializerSettings);
+            return JsonSerializer.Serialize(this, this.GetType(), XrplJsonOptions.Default);
         }
 
         public Dictionary<string, object> ToDictionary()
         {
             var json = ToJson();
-            return JsonConvert.DeserializeObject<Dictionary<string, object>>(json) ?? throw new ValidationException("Failed to deserialize tx json");
+            return JsonSerializer.Deserialize<Dictionary<string, object>>(json, XrplJsonOptions.Default) ?? throw new ValidationException("Failed to deserialize tx json");
         }
 
         /// <inheritdoc />
@@ -711,7 +705,7 @@ namespace Xrpl.Models.Transactions
         /// <summary>
         /// Gets or sets the new fields created.
         /// </summary>
-        [JsonProperty("NewFields")]
+        [JsonPropertyName("NewFields")]
         public BaseLedgerEntry? NewFields { get; set; }
 
         public bool TryGetNew<T>(out T? value) where T : BaseLedgerEntry
@@ -730,25 +724,25 @@ namespace Xrpl.Models.Transactions
         /// <summary>
         /// Gets or sets the final fields after modification.
         /// </summary>
-        [JsonProperty("FinalFields")]
+        [JsonPropertyName("FinalFields")]
         public BaseLedgerEntry? FinalFields { get; set; }
 
         /// <summary>
         /// Gets or sets the previous fields before modification.
         /// </summary>
-        [JsonProperty("PreviousFields")]
+        [JsonPropertyName("PreviousFields")]
         public BaseLedgerEntry? PreviousFields { get; set; }
 
         /// <summary>
         /// Gets or sets the previous transaction ID.
         /// </summary>
-        [JsonProperty("PreviousTxnID")]
+        [JsonPropertyName("PreviousTxnID")]
         public string PreviousTxnID { get; set; }
 
         /// <summary>
         /// Gets or sets the previous transaction ledger sequence.
         /// </summary>
-        [JsonProperty("PreviousTxnLgrSeq")]
+        [JsonPropertyName("PreviousTxnLgrSeq")]
         public uint? PreviousTxnLgrSeq { get; set; }
 
         public bool TryGetFinal<T>(out T? value) where T : BaseLedgerEntry
@@ -774,14 +768,14 @@ namespace Xrpl.Models.Transactions
         /// The content fields of the ledger entry immediately before it was deleted.
         /// Which fields are present depends on what type of ledger entry was created.
         /// </summary>
-        [JsonProperty("FinalFields")]
+        [JsonPropertyName("FinalFields")]
         public BaseLedgerEntry? FinalFields { get; set; }
 
         /// <summary>
         /// (May be omitted) Selected fields of the ledger entry before it was deleted.
         /// Which fields are present depends on what type of ledger entry was created.
         /// </summary>
-        [JsonProperty("PreviousFields")]
+        [JsonPropertyName("PreviousFields")]
         public BaseLedgerEntry? PreviousFields { get; set; }
 
         public bool TryGetFinal<T>(out T? value) where T : BaseLedgerEntry
@@ -804,14 +798,14 @@ namespace Xrpl.Models.Transactions
         /// <summary>
         /// Type of entry in the ledger
         /// </summary>
-        [JsonProperty("LedgerEntryType")]
-        [JsonConverter(typeof(StringEnumConverter))]
+        [JsonPropertyName("LedgerEntryType")]
+        [JsonConverter(typeof(LedgerEntryTypeConverter))]
         public LedgerEntryType LedgerEntryType { get; set; }
 
         /// <summary>
         /// Identifier of this object in the ledger's state tree
         /// </summary>
-        [JsonProperty("LedgerIndex")]
+        [JsonPropertyName("LedgerIndex")]
         public string LedgerIndex { get; set; } = string.Empty;
     }
 

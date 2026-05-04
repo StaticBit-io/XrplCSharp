@@ -1,5 +1,6 @@
 ﻿using System;
-using Newtonsoft.Json;
+using System.Text.Json;
+using System.Text.Json.Serialization;
 
 namespace Xrpl.Client.Json.Converters
 {
@@ -7,27 +8,37 @@ namespace Xrpl.Client.Json.Converters
     /// generic object json converter
     /// </summary>
     /// <typeparam name="T"></typeparam>
-    public class GenericStringConverter<T> : JsonConverter
+    public class GenericStringConverter<T> : JsonConverter<T>
     {
         /// <inheritdoc />
-        public override void WriteJson(JsonWriter writer, object value, JsonSerializer serializer)
+        public override T Read(ref Utf8JsonReader reader, Type typeToConvert, JsonSerializerOptions options)
         {
-            writer.WriteValue(value.ToString());
-        }
-
-        /// <inheritdoc />
-        public override object ReadJson(JsonReader reader, Type objectType, object existingValue, JsonSerializer serializer)
-        {
-            if (reader.TokenType == JsonToken.StartObject)
+            if (reader.TokenType == JsonTokenType.StartObject)
             {
-                return serializer.Deserialize<T>(reader);
+                JsonSerializerOptions innerOptions = new JsonSerializerOptions(options);
+                for (int i = innerOptions.Converters.Count - 1; i >= 0; i--)
+                {
+                    if (innerOptions.Converters[i] is GenericStringConverter<T>)
+                        innerOptions.Converters.RemoveAt(i);
+                }
+                return JsonSerializer.Deserialize<T>(ref reader, innerOptions);
             }
 
-            T item = JsonConvert.DeserializeObject<T>(reader.Value.ToString());
-            return item;
+            if (reader.TokenType == JsonTokenType.Number)
+            {
+                using JsonDocument doc = JsonDocument.ParseValue(ref reader);
+                string raw = doc.RootElement.GetRawText();
+                return JsonSerializer.Deserialize<T>(raw, options);
+            }
+
+            string str = reader.GetString();
+            return JsonSerializer.Deserialize<T>(str, options);
         }
 
         /// <inheritdoc />
-        public override bool CanConvert(Type objectType) => objectType == typeof(T);
+        public override void Write(Utf8JsonWriter writer, T value, JsonSerializerOptions options)
+        {
+            writer.WriteStringValue(value.ToString());
+        }
     }
 }

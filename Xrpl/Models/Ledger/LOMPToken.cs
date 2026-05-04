@@ -1,4 +1,4 @@
-﻿using Newtonsoft.Json;
+﻿using System.Text.Json.Serialization;
 
 using System;
 
@@ -40,21 +40,21 @@ namespace Xrpl.Models.Ledger
         /// Owner (holder) of these MPTs.
         /// AccountID
         /// </summary>
-        [JsonProperty("Account")]
+        [JsonPropertyName("Account")]
         public string Account { get; init; } = default!;
 
         /// <summary>
         /// MPTokenIssuance identifier.
         /// UInt192 (hex)
         /// </summary>
-        [JsonProperty("MPTokenIssuanceID")]
+        [JsonPropertyName("MPTokenIssuanceID")]
         public string MPTokenIssuanceID { get; init; } = default!;
 
         /// <summary>
         /// Amount of tokens currently held by the owner.
         /// UInt64 (0 .. 2^63-1)
         /// </summary>
-        [JsonProperty("MPTAmount")]
+        [JsonPropertyName("MPTAmount")]
         [JsonConverter(typeof(UInt64StringJsonConverter))]
         public ulong? MPTAmount { get; init; }
 
@@ -64,7 +64,7 @@ namespace Xrpl.Models.Ledger
         /// Requires TokenEscrow amendment.
         /// Optional
         /// </summary>
-        [JsonProperty("LockedAmount")]
+        [JsonPropertyName("LockedAmount")]
         [JsonConverter(typeof(UInt64StringJsonConverter))]
         public ulong? LockedAmount { get; init; }
 
@@ -72,21 +72,21 @@ namespace Xrpl.Models.Ledger
         /// Hash of the transaction that last modified this entry.
         /// UInt256
         /// </summary>
-        [JsonProperty("PreviousTxnID")]
+        [JsonPropertyName("PreviousTxnID")]
         public string? PreviousTxnID { get; init; }
 
         /// <summary>
         /// Ledger index of the previous modifying transaction.
         /// UInt32
         /// </summary>
-        [JsonProperty("PreviousTxnLgrSeq")]
+        [JsonPropertyName("PreviousTxnLgrSeq")]
         public uint? PreviousTxnLgrSeq { get; init; }
 
         /// <summary>
         /// Owner directory page hint.
         /// UInt64 (hex)
         /// </summary>
-        [JsonProperty("OwnerNode")]
+        [JsonPropertyName("OwnerNode")]
         [JsonConverter(typeof(UInt64HexJsonConverter))]
         public ulong? OwnerNode { get; init; }
     }

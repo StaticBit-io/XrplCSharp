@@ -2,7 +2,7 @@
 using System.Collections.Generic;
 using System.Threading.Tasks;
 
-using Newtonsoft.Json;
+using System.Text.Json.Serialization;
 
 using Xrpl.Client.Exceptions;
 
@@ -34,7 +34,7 @@ namespace Xrpl.Models.Transactions
         }
 
         /// <inheritdoc />
-        [JsonProperty("MPTokenIssuanceID")]
+        [JsonPropertyName("MPTokenIssuanceID")]
         public string MPTokenIssuanceID { get; set; } = null!;
     }
 
@@ -44,7 +44,7 @@ namespace Xrpl.Models.Transactions
         #region Implementation of IMPTokenIssuanceDestroy
 
         /// <inheritdoc />
-        [JsonProperty("MPTokenIssuanceID")]
+        [JsonPropertyName("MPTokenIssuanceID")]
         public string MPTokenIssuanceID { get; set; } = null!;
 
         #endregion

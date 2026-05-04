@@ -1,7 +1,6 @@
-﻿using Newtonsoft.Json;
-using Newtonsoft.Json.Linq;
-
-using System;
+﻿using System;
+using System.Text.Json;
+using System.Text.Json.Serialization;
 
 using Xrpl.Models.Transactions;
 
@@ -10,35 +9,36 @@ using Xrpl.Models.Transactions;
 namespace Xrpl.Client.Json.Converters
 {
     /// <summary> Transaction json Converter </summary>
-    public class TransactionResponseConverter : JsonConverter
+    public class TransactionResponseConverter : JsonConverter<ITransactionResponse>
     {
         /// <summary>
         /// Writes an <see cref="ITransactionResponse"/> to JSON.
-        /// Null fields are ignored based on the serializer settings.
         /// </summary>
-        /// <param name="writer">The JSON writer.</param>
-        /// <param name="value">The <see cref="ITransactionResponse"/> value to serialize.</param>
-        /// <param name="serializer">The JSON serializer.</param>
-        public override void WriteJson(JsonWriter writer, object value, JsonSerializer serializer)
+        public override void Write(Utf8JsonWriter writer, ITransactionResponse value, JsonSerializerOptions options)
         {
             if (value == null)
             {
-                writer.WriteNull();
+                writer.WriteNullValue();
                 return;
             }
 
-            var jObject = JObject.FromObject(value, serializer);
-            jObject.WriteTo(writer);
+            // Remove this converter to avoid infinite recursion
+            JsonSerializerOptions innerOptions = new JsonSerializerOptions(options);
+            for (int i = innerOptions.Converters.Count - 1; i >= 0; i--)
+            {
+                if (innerOptions.Converters[i] is TransactionResponseConverter)
+                    innerOptions.Converters.RemoveAt(i);
+            }
+
+            JsonSerializer.Serialize(writer, value, value.GetType(), innerOptions);
         }
 
         /// <summary>
-        /// create <see cref="ITransactionResponse"/> 
+        /// create <see cref="ITransactionResponse"/> by TransactionType discriminator
         /// </summary>
-        /// <param name="jObject">json object LedgerEntity</param>
-        /// <returns><see cref="ITransactionResponse"/> </returns>
-        public ITransactionResponse Create(JObject jObject)
+        public static ITransactionResponse Create(string transactionType)
         {
-            return jObject.Property("TransactionType")?.Value.ToString() switch
+            return transactionType switch
             {
                 "AccountSet" => new AccountSetResponse(),
                 "AccountDelete" => new AccountDeleteResponse(),
@@ -103,35 +103,51 @@ namespace Xrpl.Client.Json.Converters
                 "CredentialAccept" => new CredentialAcceptResponse(),
                 "CredentialDelete" => new CredentialDeleteResponse(),
                 //_ => throw new Exception("Can't create transaction type" + transactionType)
-                _ => SetUnknownType(jObject),
+                _ => new TransactionResponseUnknown(),
             };
         }
 
-        static TransactionResponse SetUnknownType(JObject jObject)
+        /// <summary>
+        /// Private sentinel type for unknown transaction types.
+        /// Using a distinct type avoids the cached converter mapping for TransactionResponse
+        /// in System.Text.Json's shared TypeInfoResolver, which causes infinite recursion.
+        /// </summary>
+        private class TransactionResponseUnknown : TransactionResponse, ITransactionResponse
         {
-            jObject.Property("TransactionType").Value = "Unknown";
-            return new TransactionResponse();
         }
 
         /// <summary> read  <see cref="ITransactionResponse"/>   from json object </summary>
-        /// <param name="reader">json reader</param>
-        /// <param name="objectType">object type</param>
-        /// <param name="existingValue">object value</param>
-        /// <param name="serializer">json serializer</param>
-        /// <returns><see cref="ITransactionResponse"/> </returns>
-        public override object ReadJson(JsonReader reader, Type objectType, object existingValue, JsonSerializer serializer)
+        public override ITransactionResponse Read(ref Utf8JsonReader reader, Type typeToConvert, JsonSerializerOptions options)
         {
-            JObject jObject = JObject.Load(reader);
-            
-            ITransactionResponse transaction = Create(jObject);
-            serializer.Populate(jObject.CreateReader(), transaction);
-            return transaction;
+            using JsonDocument doc = JsonDocument.ParseValue(ref reader);
+            JsonElement root = doc.RootElement;
+
+            string transactionType = root.TryGetProperty("TransactionType", out JsonElement ttEl)
+                ? ttEl.GetString()
+                : null;
+
+            ITransactionResponse transaction = Create(transactionType);
+            string rawJson = root.GetRawText();
+
+            // Remove this converter to avoid infinite recursion
+            JsonSerializerOptions innerOptions = new JsonSerializerOptions(options);
+            for (int i = innerOptions.Converters.Count - 1; i >= 0; i--)
+            {
+                if (innerOptions.Converters[i] is TransactionResponseConverter)
+                    innerOptions.Converters.RemoveAt(i);
+            }
+
+            try
+            {
+                return (ITransactionResponse)JsonSerializer.Deserialize(rawJson, transaction.GetType(), innerOptions);
+            }
+            catch (JsonException)
+            {
+                return transaction;
+            }
         }
 
         /// <inheritdoc />
-        public override bool CanConvert(Type objectType) => typeof(ITransactionResponse).IsAssignableFrom(objectType);
-
-        /// <inheritdoc />
-        public override bool CanWrite => false;
+        public override bool CanConvert(Type typeToConvert) => typeof(ITransactionResponse).IsAssignableFrom(typeToConvert);
     }
 }

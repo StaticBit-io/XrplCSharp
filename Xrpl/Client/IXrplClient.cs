@@ -1,12 +1,11 @@
-using Newtonsoft.Json;
-using Newtonsoft.Json.Linq;
-
 using System;
 using System.Collections.Concurrent;
 using System.Collections.Generic;
+using System.Text.Json;
 using System.Threading;
 using System.Threading.Tasks;
 
+using Xrpl.Client.Json;
 using Xrpl.Client.Json.Converters;
 using Xrpl.Models.Ledger;
 using Xrpl.Models.Methods;
@@ -14,6 +13,8 @@ using Xrpl.Models.Subscriptions;
 using Xrpl.Models.Transactions;
 using Xrpl.Sugar;
 using Xrpl.Wallet;
+
+using JsonSerializer = System.Text.Json.JsonSerializer;
 
 using static Xrpl.Client.Connection;
 using static Xrpl.Client.XrplClient;
@@ -549,15 +550,8 @@ namespace Xrpl.Client
         {
             var dic = tx.ToDictionary();
             var filled = await AutofillSugar.Autofill(this, dic, signersCount, cancellationToken).ConfigureAwait(false);
-            var jObject = JObject.FromObject(filled);
-            var settings = new JsonSerializerSettings
-            {
-                ObjectCreationHandling = ObjectCreationHandling.Replace,
-                //ContractResolver = new NoTransactionConverterResolver()
-            };
-            var serializer = JsonSerializer.CreateDefault(settings);
-            await using var reader = jObject.CreateReader();
-            serializer.Populate(reader, tx);
+            var json = JsonSerializer.Serialize(filled, XrplJsonOptions.Default);
+            tx = (T)JsonSerializer.Deserialize(json, tx.GetType(), XrplJsonOptions.Default);
 
             return tx;
         }
@@ -582,7 +576,7 @@ namespace Xrpl.Client
 
             var json = tx.ToJson();
             //var json = JsonConvert.SerializeObject(tx);
-            Dictionary<string, object> txJson = JsonConvert.DeserializeObject<Dictionary<string, object>>(json);
+            Dictionary<string, object> txJson = JsonSerializer.Deserialize<Dictionary<string, object>>(json, XrplJsonOptions.Default);
             return this.Submit(txJson, autoFill, failHard, wallet, cancellationToken);
         }
 

@@ -1,4 +1,4 @@
-﻿using Newtonsoft.Json;
+﻿using System.Text.Json.Serialization;
 
 // https://github.com/XRPLF/xrpl.js/blob/main/packages/xrpl/src/models/common/index.ts
 
@@ -12,12 +12,12 @@ namespace Xrpl.Models.Common
     //    /// <summary>
     //    /// Currency code
     //    /// </summary>
-    //    [JsonProperty("currency")]
+    //    [JsonPropertyName("currency")]
     //    public string Currency { get; set; }
     //    /// <summary>
     //    /// Currency Issuer
     //    /// </summary>
-    //    [JsonProperty("issuer")]
+    //    [JsonPropertyName("issuer")]
     //    public string Issuer { get; set; }
     //}
 
@@ -28,7 +28,7 @@ namespace Xrpl.Models.Common
         public class XRP
         {
             /// <summary> XRP currency code </summary>
-            [JsonProperty("currency")]
+            [JsonPropertyName("currency")]
             public string Currency = "XRP";
         }
 
@@ -38,13 +38,13 @@ namespace Xrpl.Models.Common
             /// <summary>
             /// currency code
             /// </summary>
-            [JsonProperty("currency")]
+            [JsonPropertyName("currency")]
             public string Currency { get; set; }
 
             /// <summary>
             /// currency issuer
             /// </summary>
-            [JsonProperty("issuer")]
+            [JsonPropertyName("issuer")]
             public string Issuer { get; set; }
 
             public bool IsXrp()
@@ -59,7 +59,7 @@ namespace Xrpl.Models.Common
         public class IssuedCurrencyAmount : IssuedCurrency
         {
             /// <summary> currency value </summary>
-            [JsonProperty("value")]
+            [JsonPropertyName("value")]
             public string Value { get; set; }
         }
 
@@ -71,7 +71,7 @@ namespace Xrpl.Models.Common
             /// <summary>
             /// The unique identifier for the MPT issuance.
             /// </summary>
-            [JsonProperty("mpt_issuance_id")]
+            [JsonPropertyName("mpt_issuance_id")]
             public string MptIssuanceId { get; set; }
         }
 
@@ -83,7 +83,7 @@ namespace Xrpl.Models.Common
             /// <summary>
             /// The amount of MPT tokens.
             /// </summary>
-            [JsonProperty("value")]
+            [JsonPropertyName("value")]
             public string Value { get; set; }
         }
     }

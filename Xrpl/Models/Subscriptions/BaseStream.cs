@@ -1,4 +1,4 @@
-﻿using Newtonsoft.Json;
+﻿using System.Text.Json.Serialization;
 
 namespace Xrpl.Models.Subscriptions
 {
@@ -8,7 +8,8 @@ namespace Xrpl.Models.Subscriptions
         /// consensusPhase indicates this is from the consensus stream<br/>
         /// consensusPhase - type
         /// </summary>
-        [JsonProperty("type")]
+        [JsonPropertyName("type")]
+        [JsonConverter(typeof(JsonStringEnumConverter))]
         public ResponseStreamType Type { get; set; }
     }
 }

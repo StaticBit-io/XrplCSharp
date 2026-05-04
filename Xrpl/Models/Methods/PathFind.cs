@@ -1,5 +1,5 @@
 using System.Collections.Generic;
-using Newtonsoft.Json;
+using System.Text.Json.Serialization;
 using Xrpl.Client.Json.Converters;
 using Xrpl.Models.Common;
 
@@ -17,21 +17,21 @@ namespace Xrpl.Models.Methods
         /// <summary>
         /// Array of arrays of objects defining payment paths.
         /// </summary>
-        [JsonProperty("paths_computed")]
+        [JsonPropertyName("paths_computed")]
         public List<List<Path>> PathsComputed { get; set; }
 
         /// <summary>
         /// (Deprecated) Array of arrays of objects defining canonical payment paths.<br/>
         /// May be present in server responses but should be disregarded.
         /// </summary>
-        [JsonProperty("paths_canonical")]
+        [JsonPropertyName("paths_canonical")]
         public List<List<Path>> PathsCanonical { get; set; }
 
         /// <summary>
         /// Currency Amount that the source would have to send along this path
         /// for the destination to receive the desired amount.
         /// </summary>
-        [JsonProperty("source_amount")]
+        [JsonPropertyName("source_amount")]
         [JsonConverter(typeof(CurrencyConverter))]
         public Currency SourceAmount { get; set; }
 
@@ -39,7 +39,7 @@ namespace Xrpl.Models.Methods
         /// (May be omitted) Currency Amount that the destination would receive along this path.<br/>
         /// Only included when the destination_amount from the request was the "-1" special case.
         /// </summary>
-        [JsonProperty("destination_amount")]
+        [JsonPropertyName("destination_amount")]
         [JsonConverter(typeof(CurrencyConverter))]
         public Currency DestinationAmount { get; set; }
     }
@@ -53,39 +53,39 @@ namespace Xrpl.Models.Methods
         /// Array of objects with suggested paths to take.<br/>
         /// If empty, then no paths were found connecting the source and destination accounts.
         /// </summary>
-        [JsonProperty("alternatives")]
+        [JsonPropertyName("alternatives")]
         public List<PathAlternative> Alternatives { get; set; }
 
         /// <summary>
         /// Unique address of the account that would receive a payment.
         /// </summary>
-        [JsonProperty("destination_account")]
+        [JsonPropertyName("destination_account")]
         public string DestinationAccount { get; set; }
 
         /// <summary>
         /// Currency Amount that the destination would receive in a transaction.
         /// </summary>
-        [JsonProperty("destination_amount")]
+        [JsonPropertyName("destination_amount")]
         [JsonConverter(typeof(CurrencyConverter))]
         public Currency DestinationAmount { get; set; }
 
         /// <summary>
         /// Unique address of the account that would send a payment.
         /// </summary>
-        [JsonProperty("source_account")]
+        [JsonPropertyName("source_account")]
         public string SourceAccount { get; set; }
 
         /// <summary>
         /// If false, this is the result of an incomplete search.<br/>
         /// If true, then this is the best path found.
         /// </summary>
-        [JsonProperty("full_reply")]
+        [JsonPropertyName("full_reply")]
         public bool FullReply { get; set; }
 
         /// <summary>
         /// (path_find close only) The value true indicates this reply is in response to a path_find close command.
         /// </summary>
-        [JsonProperty("closed")]
+        [JsonPropertyName("closed")]
         public bool? Closed { get; set; }
     }
 
@@ -123,19 +123,19 @@ namespace Xrpl.Models.Methods
         /// <summary>
         /// Use "create" to send the create sub-command.
         /// </summary>
-        [JsonProperty("subcommand")]
+        [JsonPropertyName("subcommand")]
         public string SubCommand { get; set; }
 
         /// <summary>
         /// Unique address of the account to find a path from (the sender).
         /// </summary>
-        [JsonProperty("source_account")]
+        [JsonPropertyName("source_account")]
         public string SourceAccount { get; set; }
 
         /// <summary>
         /// Unique address of the account to find a path to (the receiver).
         /// </summary>
-        [JsonProperty("destination_account")]
+        [JsonPropertyName("destination_account")]
         public string DestinationAccount { get; set; }
 
         /// <summary>
@@ -143,7 +143,7 @@ namespace Xrpl.Models.Methods
         /// Special case: provide -1 as the value to request a path to deliver as much as possible,
         /// while spending no more than the amount specified in send_max.
         /// </summary>
-        [JsonProperty("destination_amount")]
+        [JsonPropertyName("destination_amount")]
         [JsonConverter(typeof(CurrencyConverter))]
         public Currency DestinationAmount { get; set; }
 
@@ -151,7 +151,7 @@ namespace Xrpl.Models.Methods
         /// (Optional) Currency Amount — the maximum amount that would be spent.<br/>
         /// Not compatible with source_currencies.
         /// </summary>
-        [JsonProperty("send_max")]
+        [JsonPropertyName("send_max")]
         [JsonConverter(typeof(CurrencyConverter))]
         public Currency SendMax { get; set; }
 
@@ -160,7 +160,7 @@ namespace Xrpl.Models.Methods
         /// You can use this to keep updated on changes to particular paths you already know about,
         /// or to check the overall cost to make a payment along a certain path.
         /// </summary>
-        [JsonProperty("paths")]
+        [JsonPropertyName("paths")]
         public List<List<Path>> Paths { get; set; }
     }
 
@@ -187,7 +187,7 @@ namespace Xrpl.Models.Methods
         /// <summary>
         /// Use "close" to send the close sub-command.
         /// </summary>
-        [JsonProperty("subcommand")]
+        [JsonPropertyName("subcommand")]
         public string SubCommand { get; set; }
     }
 
@@ -214,7 +214,7 @@ namespace Xrpl.Models.Methods
         /// <summary>
         /// Use "status" to send the status sub-command.
         /// </summary>
-        [JsonProperty("subcommand")]
+        [JsonPropertyName("subcommand")]
         public string SubCommand { get; set; }
     }
 }

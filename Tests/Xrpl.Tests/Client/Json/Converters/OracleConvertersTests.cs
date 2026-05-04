@@ -1,9 +1,10 @@
 using Microsoft.VisualStudio.TestTools.UnitTesting;
 
-using Newtonsoft.Json;
-
 using System;
+using System.Text.Json;
+using System.Text.Json.Serialization;
 
+using Xrpl.Client.Json;
 using Xrpl.Client.Json.Converters;
 
 namespace XrplTests.Client.Json.Converters;
@@ -21,7 +22,7 @@ public class AssetPriceConverterTests
     public void Read_HexString_ReturnsUlong()
     {
         string json = "{\"Price\": \"ff\"}";
-        Model result = JsonConvert.DeserializeObject<Model>(json);
+        Model result = JsonSerializer.Deserialize<Model>(json, XrplJsonOptions.Default);
         Assert.AreEqual(255UL, result.Price);
     }
 
@@ -29,7 +30,7 @@ public class AssetPriceConverterTests
     public void Read_Integer_ReturnsUlong()
     {
         string json = "{\"Price\": 100}";
-        Model result = JsonConvert.DeserializeObject<Model>(json);
+        Model result = JsonSerializer.Deserialize<Model>(json, XrplJsonOptions.Default);
         Assert.AreEqual(100UL, result.Price);
     }
 
@@ -37,7 +38,7 @@ public class AssetPriceConverterTests
     public void Read_Null_ReturnsNull()
     {
         string json = "{\"Price\": null}";
-        Model result = JsonConvert.DeserializeObject<Model>(json);
+        Model result = JsonSerializer.Deserialize<Model>(json, XrplJsonOptions.Default);
         Assert.IsNull(result.Price);
     }
 
@@ -45,24 +46,24 @@ public class AssetPriceConverterTests
     public void Write_Value_WritesLowercaseHex()
     {
         Model model = new Model { Price = 255UL };
-        string json = JsonConvert.SerializeObject(model);
+        string json = JsonSerializer.Serialize(model, XrplJsonOptions.Default);
         Assert.IsTrue(json.Contains("\"ff\""));
     }
 
     [TestMethod]
-    public void Write_Null_WritesNull()
+    public void Write_Null_OmitsProperty()
     {
         Model model = new Model { Price = null };
-        string json = JsonConvert.SerializeObject(model);
-        Assert.IsTrue(json.Contains("null"));
+        string json = JsonSerializer.Serialize(model, XrplJsonOptions.Default);
+        Assert.IsFalse(json.Contains("Price"), "Null properties should be omitted with WhenWritingNull");
     }
 
     [TestMethod]
     public void RoundTrip_PreservesValue()
     {
         Model original = new Model { Price = 0xABCDUL };
-        string json = JsonConvert.SerializeObject(original);
-        Model deserialized = JsonConvert.DeserializeObject<Model>(json);
+        string json = JsonSerializer.Serialize(original, XrplJsonOptions.Default);
+        Model deserialized = JsonSerializer.Deserialize<Model>(json, XrplJsonOptions.Default);
         Assert.AreEqual(0xABCDUL, deserialized.Price);
     }
 }
@@ -80,7 +81,7 @@ public class OracleCurrencyConverterTests
     public void Read_ShortCode_ReturnsAsIs()
     {
         string json = "{\"Currency\": \"USD\"}";
-        Model result = JsonConvert.DeserializeObject<Model>(json);
+        Model result = JsonSerializer.Deserialize<Model>(json, XrplJsonOptions.Default);
         Assert.AreEqual("USD", result.Currency);
     }
 
@@ -89,7 +90,7 @@ public class OracleCurrencyConverterTests
     {
         string hex = "5553440000000000000000000000000000000000"; // "USD" padded to 40 chars
         string json = $"{{\"Currency\": \"{hex}\"}}";
-        Model result = JsonConvert.DeserializeObject<Model>(json);
+        Model result = JsonSerializer.Deserialize<Model>(json, XrplJsonOptions.Default);
         Assert.AreEqual("USD", result.Currency);
     }
 
@@ -97,7 +98,7 @@ public class OracleCurrencyConverterTests
     public void Read_Null_ReturnsNull()
     {
         string json = "{\"Currency\": null}";
-        Model result = JsonConvert.DeserializeObject<Model>(json);
+        Model result = JsonSerializer.Deserialize<Model>(json, XrplJsonOptions.Default);
         Assert.IsNull(result.Currency);
     }
 
@@ -105,7 +106,7 @@ public class OracleCurrencyConverterTests
     public void Write_ShortCode_WritesAsIs()
     {
         Model model = new Model { Currency = "XRP" };
-        string json = JsonConvert.SerializeObject(model);
+        string json = JsonSerializer.Serialize(model, XrplJsonOptions.Default);
         Assert.IsTrue(json.Contains("\"XRP\""));
     }
 
@@ -113,7 +114,7 @@ public class OracleCurrencyConverterTests
     public void Write_LongCode_WritesHex40Chars()
     {
         Model model = new Model { Currency = "Bitcoin" };
-        string json = JsonConvert.SerializeObject(model);
+        string json = JsonSerializer.Serialize(model, XrplJsonOptions.Default);
         // "Bitcoin" (7 chars) should be padded to 40 hex chars
         string expected = "426974636f696e00000000000000000000000000";
         Assert.IsTrue(json.Contains(expected));
@@ -123,8 +124,8 @@ public class OracleCurrencyConverterTests
     public void RoundTrip_ShortCode_Preserved()
     {
         Model original = new Model { Currency = "BTC" };
-        string json = JsonConvert.SerializeObject(original);
-        Model deserialized = JsonConvert.DeserializeObject<Model>(json);
+        string json = JsonSerializer.Serialize(original, XrplJsonOptions.Default);
+        Model deserialized = JsonSerializer.Deserialize<Model>(json, XrplJsonOptions.Default);
         Assert.AreEqual("BTC", deserialized.Currency);
     }
 }
@@ -143,7 +144,7 @@ public class OracleHexStringConverterTests
     {
         // "test" in hex = 74657374
         string json = "{\"Provider\": \"74657374\"}";
-        Model result = JsonConvert.DeserializeObject<Model>(json);
+        Model result = JsonSerializer.Deserialize<Model>(json, XrplJsonOptions.Default);
         Assert.AreEqual("test", result.Provider);
     }
 
@@ -151,7 +152,7 @@ public class OracleHexStringConverterTests
     public void Read_Null_ReturnsNull()
     {
         string json = "{\"Provider\": null}";
-        Model result = JsonConvert.DeserializeObject<Model>(json);
+        Model result = JsonSerializer.Deserialize<Model>(json, XrplJsonOptions.Default);
         Assert.IsNull(result.Provider);
     }
 
@@ -160,7 +161,7 @@ public class OracleHexStringConverterTests
     {
         // "abc" has odd length, not treated as hex
         string json = "{\"Provider\": \"abc\"}";
-        Model result = JsonConvert.DeserializeObject<Model>(json);
+        Model result = JsonSerializer.Deserialize<Model>(json, XrplJsonOptions.Default);
         Assert.AreEqual("abc", result.Provider);
     }
 
@@ -168,7 +169,7 @@ public class OracleHexStringConverterTests
     public void Write_PlainText_WritesHex()
     {
         Model model = new Model { Provider = "test" };
-        string json = JsonConvert.SerializeObject(model);
+        string json = JsonSerializer.Serialize(model, XrplJsonOptions.Default);
         Assert.IsTrue(json.Contains("74657374"));
     }
 
@@ -176,7 +177,7 @@ public class OracleHexStringConverterTests
     public void Write_AlreadyHex_PassesThrough()
     {
         Model model = new Model { Provider = "74657374" };
-        string json = JsonConvert.SerializeObject(model);
+        string json = JsonSerializer.Serialize(model, XrplJsonOptions.Default);
         Assert.IsTrue(json.Contains("74657374"));
     }
 
@@ -184,8 +185,8 @@ public class OracleHexStringConverterTests
     public void RoundTrip_PreservesValue()
     {
         Model original = new Model { Provider = "oracle_provider" };
-        string json = JsonConvert.SerializeObject(original);
-        Model deserialized = JsonConvert.DeserializeObject<Model>(json);
+        string json = JsonSerializer.Serialize(original, XrplJsonOptions.Default);
+        Model deserialized = JsonSerializer.Deserialize<Model>(json, XrplJsonOptions.Default);
         Assert.AreEqual("oracle_provider", deserialized.Provider);
     }
 }

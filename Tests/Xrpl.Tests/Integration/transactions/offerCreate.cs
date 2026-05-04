@@ -1,7 +1,6 @@
 using System.Collections.Generic;
 using System.Threading.Tasks;
 using Microsoft.VisualStudio.TestTools.UnitTesting;
-using Newtonsoft.Json;
 using Xrpl.Models.Common;
 using Xrpl.Models.Methods;
 using Xrpl.Models.Transactions;
@@ -39,7 +38,7 @@ namespace XrplTests.Xrpl.ClientLib.Integration
                     Value = "10",
                 }
             };
-            Dictionary<string, object> setupJson = JsonConvert.DeserializeObject<Dictionary<string, object>>(setupTx.ToJson());
+            Dictionary<string, object> setupJson = setupTx.ToDictionary();
             await Utils.TestTransaction(runner.client, setupJson, runner.wallet);
 
             AccountOffersRequest request2 = new AccountOffersRequest(runner.wallet.ClassicAddress);

@@ -1,7 +1,7 @@
 ﻿using System;
 using System.Collections.Generic;
 
-using Newtonsoft.Json;
+using System.Text.Json.Serialization;
 
 using Xrpl.Client.Json.Converters;
 using Xrpl.Models.Common;
@@ -21,12 +21,12 @@ namespace Xrpl.Models.Ledger
         /// <summary>
         /// The ID of the offer directory that links to this offer.
         /// </summary>
-        [JsonProperty("BookDirectory")]
+        [JsonPropertyName("BookDirectory")]
         public string BookDirectory { get; set; }
         /// <summary>
         /// A hint indicating which page of the offer directory links to this entry.
         /// </summary>
-        [JsonProperty("BookNode")]
+        [JsonPropertyName("BookNode")]
         public string BookNode { get; set; }
     }
 
@@ -39,7 +39,7 @@ namespace Xrpl.Models.Ledger
         /// <summary>
         /// The inner Book object containing directory reference.
         /// </summary>
-        [JsonProperty("Book")]
+        [JsonPropertyName("Book")]
         public BookReference Book { get; set; }
     }
 
@@ -90,12 +90,12 @@ namespace Xrpl.Models.Ledger
         /// <summary>
         /// The identifying hash of the transaction that most recently modified this object.
         /// </summary>
-        [JsonProperty("PreviousTxnID")]
+        [JsonPropertyName("PreviousTxnID")]
         public string PreviousTxnID { get; set; }
         /// <summary>
         /// The index of the ledger that contains the transaction that most recently modified this object.
         /// </summary>
-        [JsonProperty("PreviousTxnLgrSeq")]
+        [JsonPropertyName("PreviousTxnLgrSeq")]
         public uint PreviousTxnLgrSeq { get; set; }
         /// <summary>
         /// The time this Offer expires, in seconds since the Ripple Epoch.

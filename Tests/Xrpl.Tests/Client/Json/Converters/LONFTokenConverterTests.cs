@@ -1,7 +1,8 @@
 using Microsoft.VisualStudio.TestTools.UnitTesting;
 
-using Newtonsoft.Json;
+using System.Text.Json;
 
+using Xrpl.Client.Json;
 using Xrpl.Client.Json.Converters;
 using Xrpl.Models.Methods;
 
@@ -19,7 +20,7 @@ public class LONFTokenConverterTests
                 ""URI"": ""68747470733A2F2F6578616D706C652E636F6D""
             }
         }";
-        NFToken result = JsonConvert.DeserializeObject<NFToken>(json);
+        NFToken result = JsonSerializer.Deserialize<NFToken>(json, XrplJsonOptions.Default);
         Assert.IsNotNull(result);
         Assert.AreEqual("000800006203F49C21D5D6E022CB16DE3538F248662FC73C29ABA6A90000000D", result.NFTokenID);
         Assert.AreEqual("68747470733A2F2F6578616D706C652E636F6D", result.URI);
@@ -33,7 +34,7 @@ public class LONFTokenConverterTests
                 ""NFTokenID"": ""000800006203F49C21D5D6E022CB16DE3538F248662FC73C29ABA6A90000000D""
             }
         }";
-        NFToken result = JsonConvert.DeserializeObject<NFToken>(json);
+        NFToken result = JsonSerializer.Deserialize<NFToken>(json, XrplJsonOptions.Default);
         Assert.IsNotNull(result);
         Assert.AreEqual("000800006203F49C21D5D6E022CB16DE3538F248662FC73C29ABA6A90000000D", result.NFTokenID);
         Assert.IsNull(result.URI);

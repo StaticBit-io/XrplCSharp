@@ -1,5 +1,5 @@
 ﻿using System.Collections.Generic;
-using Newtonsoft.Json;
+using System.Text.Json.Serialization;
 using Xrpl.Client.Json.Converters;
 using Xrpl.Models.Common;
 using Xrpl.Models.Methods;
@@ -18,19 +18,19 @@ namespace Xrpl.Models.Subscriptions
         /// <summary>
         /// Unique address that would send a transaction.
         /// </summary>
-        [JsonProperty("source_account")]
+        [JsonPropertyName("source_account")]
         public string SourceAccount { get; set; }
 
         /// <summary>
         /// Unique address of the account that would receive a transaction.
         /// </summary>
-        [JsonProperty("destination_account")]
+        [JsonPropertyName("destination_account")]
         public string DestinationAccount { get; set; }
 
         /// <summary>
         /// Currency Amount that the destination would receive in a transaction.
         /// </summary>
-        [JsonProperty("destination_amount")]
+        [JsonPropertyName("destination_amount")]
         [JsonConverter(typeof(CurrencyConverter))]
         public Currency DestinationAmount { get; set; }
 
@@ -39,19 +39,19 @@ namespace Xrpl.Models.Subscriptions
         /// If true, then this is the best path found.<br/>
         /// Until you close the pathfinding request, rippled continues to send updates each time a new ledger closes.
         /// </summary>
-        [JsonProperty("full_reply")]
+        [JsonPropertyName("full_reply")]
         public bool FullReply { get; set; }
 
         /// <summary>
         /// The ID provided in the WebSocket request is included again at this level.
         /// </summary>
-        [JsonProperty("id")]
+        [JsonPropertyName("id")]
         public object Id { get; set; }
 
         /// <summary>
         /// (Optional) Currency Amount that would be spent in the transaction.
         /// </summary>
-        [JsonProperty("send_max")]
+        [JsonPropertyName("send_max")]
         [JsonConverter(typeof(CurrencyConverter))]
         public Currency SendMax { get; set; }
 
@@ -59,7 +59,7 @@ namespace Xrpl.Models.Subscriptions
         /// Array of objects with suggested paths to take.<br/>
         /// If empty, then no paths were found connecting the source and destination accounts.
         /// </summary>
-        [JsonProperty("alternatives")]
+        [JsonPropertyName("alternatives")]
         public List<PathAlternative> Alternatives { get; set; }
     }
 }

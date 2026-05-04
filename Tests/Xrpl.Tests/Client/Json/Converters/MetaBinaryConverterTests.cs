@@ -1,7 +1,9 @@
 using Microsoft.VisualStudio.TestTools.UnitTesting;
 
-using Newtonsoft.Json;
+using System.Text.Json;
+using System.Text.Json.Serialization;
 
+using Xrpl.Client.Json;
 using Xrpl.Client.Json.Converters;
 using Xrpl.Models.Transactions;
 
@@ -20,7 +22,7 @@ public class MetaBinaryConverterTests
     public void Read_Null_ReturnsNull()
     {
         string json = "{\"MetaData\": null}";
-        Model result = JsonConvert.DeserializeObject<Model>(json);
+        Model result = JsonSerializer.Deserialize<Model>(json, XrplJsonOptions.Default);
         Assert.IsNull(result.MetaData);
     }
 
@@ -31,7 +33,7 @@ public class MetaBinaryConverterTests
             ""TransactionIndex"": 5,
             ""AffectedNodes"": []
         }}";
-        Model result = JsonConvert.DeserializeObject<Model>(json);
+        Model result = JsonSerializer.Deserialize<Model>(json, XrplJsonOptions.Default);
         Assert.IsNotNull(result.MetaData);
         Assert.AreEqual(5, result.MetaData.TransactionIndex);
     }
@@ -41,6 +43,6 @@ public class MetaBinaryConverterTests
     {
         MetaBinaryConverter converter = new MetaBinaryConverter();
         Assert.IsTrue(converter.CanConvert(typeof(Meta)));
-        Assert.IsTrue(converter.CanConvert(typeof(string)));
+        Assert.IsFalse(converter.CanConvert(typeof(string)));
     }
 }

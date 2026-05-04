@@ -1,5 +1,5 @@
-﻿using Newtonsoft.Json;
-using Newtonsoft.Json.Converters;
+﻿using System.Text.Json.Serialization;
+using Xrpl.Client.Json.Converters;
 
 //https://github.com/XRPLF/xrpl.js/blob/76b73e16a97e1a371261b462ee1a24f1c01dbb0c/packages/xrpl/src/models/ledger/BaseLedgerEntry.ts
 
@@ -8,7 +8,7 @@ namespace Xrpl.Models.Ledger
     public class BaseLedgerEntry
     {
 
-        [JsonConverter(typeof(StringEnumConverter))]
+        [JsonConverter(typeof(LedgerEntryTypeConverter))]
         public LedgerEntryType LedgerEntryType { get; set; }
 
         /// <summary>
@@ -16,9 +16,9 @@ namespace Xrpl.Models.Ledger
         /// In JSON, this field is represented with different names depending on the context and API method.<br/>
         /// (Note, even though this is specified as "optional" in the code, every ledger entry should have one unless it's legacy data from very early in the XRP Ledger's history.)
         /// </summary>
-        [JsonProperty("index")]
+        [JsonPropertyName("index")]
         public string Index { get; set; }
-        [JsonProperty("LedgerIndex")]
+        [JsonPropertyName("LedgerIndex")]
         public string LedgerIndex { get; set; }
     }
 }

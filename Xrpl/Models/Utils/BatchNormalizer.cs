@@ -1,5 +1,6 @@
-using Newtonsoft.Json;
-using Newtonsoft.Json.Linq;
+using System.Text.Json;
+using System.Text.Json.Nodes;
+using System.Text.Json.Serialization;
 
 using System;
 using System.Collections;
@@ -10,6 +11,7 @@ using System.Threading.Tasks;
 
 using Xrpl.Client;
 using Xrpl.Client.Exceptions;
+using Xrpl.Client.Json;
 using Xrpl.Models.Common;
 using Xrpl.Models.Enums;
 using Xrpl.Models.Ledger;
@@ -26,9 +28,9 @@ public static class BatchNormalizer
     /// - добавляет флаг tfInnerBatchTxn;
     /// - удаляет TxnSignature, Signers, LastLedgerSequence;
     /// - принудительно выставляет Fee = "0" (строка), SigningPubKey = "".
-    /// Возвращает новый JObject (исходник не меняется).
+    /// Возвращает новый JsonObject (исходник не меняется).
     /// </summary>
-    public static JObject NormalizeInnerTransaction(this JObject source)
+    public static JsonObject NormalizeInnerTransaction(this JsonObject source)
     {
         if (source == null) throw new ArgumentNullException(nameof(source));
 
@@ -40,12 +42,16 @@ public static class BatchNormalizer
         source["SigningPubKey"] = "";
 
         uint flags = 0;
-        if (source.TryGetValue("Flags", out var fv))
+        JsonNode fv = source["Flags"];
+        if (fv != null)
         {
-            if (fv.Type == JTokenType.Integer)
-                flags = (uint)fv.Value<long>();
-            else if (fv.Type == JTokenType.String && uint.TryParse(fv.ToString(), out var u))
-                flags = u;
+            if (fv is JsonValue jv)
+            {
+                if (jv.TryGetValue<long>(out long lv))
+                    flags = (uint)lv;
+                else if (jv.TryGetValue<string>(out string sv) && uint.TryParse(sv, out uint u))
+                    flags = u;
+            }
         }
 
         if ((flags & TF_INNER_BATCH_TXN) == 0)
@@ -57,18 +63,19 @@ public static class BatchNormalizer
     }
 
     /// <summary>
-    /// Нормализует внутреннюю транзакцию (object → JObject).
+    /// Нормализует внутреннюю транзакцию (object → JsonObject).
     /// </summary>
-    public static JObject NormalizeInnerTransaction(object source)
+    public static JsonObject NormalizeInnerTransaction(object source)
     {
-        if (source is JObject jo)
+        if (source is JsonObject jo)
             return NormalizeInnerTransaction(jo);
 
-        return NormalizeInnerTransaction(JObject.FromObject(source));
+        return NormalizeInnerTransaction(
+            JsonNode.Parse(JsonSerializer.Serialize(source, XrplJsonOptions.Default))?.AsObject());
     }
 
     /// <summary>
-    /// Нормализует внутреннюю транзакцию (object → JObject).
+    /// Нормализует внутреннюю транзакцию (object → JsonObject).
     /// </summary>
     public static async Task NormalizeBatchTransaction(
         this IXrplClient client,
@@ -123,7 +130,8 @@ public static class BatchNormalizer
                 throw new ValidationException("Each item in RawTransactions must contain 'RawTransaction'.");
 
             var normalized = NormalizeInnerTransaction(rawTxObj);
-            var rawTx = normalized.ToObject<Dictionary<string, object>>()!;
+            var rawTx = JsonSerializer.Deserialize<Dictionary<string, object>>(
+                normalized.ToJsonString(), XrplJsonOptions.Default)!;
             wrapper["RawTransaction"] = rawTx;
 
             var account = rawTx.TryGetValue("Account", out object accObj)
@@ -142,11 +150,13 @@ public static class BatchNormalizer
     {
         return rawTransactions switch
         {
-            JArray ja => ja.ToObject<List<Dictionary<string, object>>>()
-                         ?? new List<Dictionary<string, object>>(),
+            JsonArray ja => ja.Select(n => JsonSerializer.Deserialize<Dictionary<string, object>>(
+                                n.ToJsonString(), XrplJsonOptions.Default))
+                         .ToList(),
             IEnumerable ie when ie is not string => ie.Cast<object>()
                 .Select(o => o as Dictionary<string, object>
-                          ?? JObject.FromObject(o!).ToObject<Dictionary<string, object>>()!)
+                          ?? JsonSerializer.Deserialize<Dictionary<string, object>>(
+                              JsonSerializer.Serialize(o, XrplJsonOptions.Default), XrplJsonOptions.Default)!)
                 .ToList(),
             _ => throw new ValidationException("RawTransactions must be array/collection.")
         };
@@ -156,9 +166,9 @@ public static class BatchNormalizer
     /// Вычисляет transactionID для нормализованной внутренней транзакции.
     /// Алгоритм: txid = SHA512Half( HashPrefix.TXN + STObject(tx).ToBytes() ).
     /// </summary>
-    public static string ComputeInnerTxId(this JObject normalizedInnerTx)
+    public static string ComputeInnerTxId(this JsonObject normalizedInnerTx)
     {
-        var st = Xrpl.BinaryCodec.Types.StObject.FromJson(System.Text.Json.Nodes.JsonNode.Parse(normalizedInnerTx.ToString()));
+        var st = Xrpl.BinaryCodec.Types.StObject.FromJson(JsonNode.Parse(normalizedInnerTx.ToJsonString()));
         var bytes = st.ToBytes();
 
         var prefix = Xrpl.BinaryCodec.Util.Bits.GetBytes((uint)Xrpl.BinaryCodec.Hashing.HashPrefix.TransactionId);
@@ -193,7 +203,7 @@ public static class BatchNormalizer
             int i when i >= 0 => (uint)i,
             long l when l >= 0 => checked((uint)l),
             string s => uint.Parse(s, System.Globalization.CultureInfo.InvariantCulture),
-            JValue jv => ToUInt(jv.Value),
+            JsonValue jv when jv.TryGetValue<long>(out long lv) => checked((uint)lv),
             _ => Convert.ToUInt32(v, System.Globalization.CultureInfo.InvariantCulture)
         };
     }

@@ -1,4 +1,4 @@
-using Newtonsoft.Json;
+using System.Text.Json.Serialization;
 using Xrpl.Client.Json.Converters;
 
 namespace Xrpl.Models.Common
@@ -11,7 +11,7 @@ namespace Xrpl.Models.Common
         /// <summary>
         /// The PriceData object containing the price information.
         /// </summary>
-        [JsonProperty("PriceData")]
+        [JsonPropertyName("PriceData")]
         public PriceData PriceData { get; set; }
     }
 
@@ -26,7 +26,7 @@ namespace Xrpl.Models.Common
         /// the base asset; in 912810RR9/BTC, 912810RR9 is the base asset.
         /// Serialized as a 40-character hex string for XRPL protocol.
         /// </summary>
-        [JsonProperty("BaseAsset")]
+        [JsonPropertyName("BaseAsset")]
         [JsonConverter(typeof(OracleCurrencyConverter))]
         public string BaseAsset { get; set; }
 
@@ -35,7 +35,7 @@ namespace Xrpl.Models.Common
         /// of the base asset. For example, in the BTC/USD pair, USD is the quote asset.
         /// Serialized as a 40-character hex string for XRPL protocol.
         /// </summary>
-        [JsonProperty("QuoteAsset")]
+        [JsonPropertyName("QuoteAsset")]
         [JsonConverter(typeof(OracleCurrencyConverter))]
         public string QuoteAsset { get; set; }
 
@@ -44,7 +44,7 @@ namespace Xrpl.Models.Common
         /// the last update transaction didn't include the BaseAsset/QuoteAsset pair.
         /// Serialized as a lowercase hexadecimal string for XRPL protocol.
         /// </summary>
-        [JsonProperty("AssetPrice", NullValueHandling = NullValueHandling.Ignore)]
+        [JsonPropertyName("AssetPrice")]
         [JsonConverter(typeof(AssetPriceConverter))]
         public object AssetPrice { get; set; }
 
@@ -54,7 +54,7 @@ namespace Xrpl.Models.Common
         /// are 0-10. It's not included if the last update transaction didn't include
         /// the BaseAsset/QuoteAsset pair.
         /// </summary>
-        [JsonProperty("Scale", NullValueHandling = NullValueHandling.Ignore, DefaultValueHandling = DefaultValueHandling.Ignore)]
+        [JsonPropertyName("Scale")]
         public uint? Scale { get; set; }
     }
 }

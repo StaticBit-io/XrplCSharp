@@ -1,6 +1,6 @@
 using Microsoft.VisualStudio.TestTools.UnitTesting;
 
-using Newtonsoft.Json.Linq;
+using System.Text.Json.Nodes;
 
 using System;
 using System.Collections.Generic;
@@ -166,19 +166,19 @@ public class TestUAutofillFees
         {
             ["TransactionType"] = "Batch",
             ["Account"] = "rTestAccount",
-            ["RawTransactions"] = new JArray
+            ["RawTransactions"] = new JsonArray
             {
-                new JObject
+                new JsonObject
                 {
-                    ["RawTransaction"] = new JObject
+                    ["RawTransaction"] = new JsonObject
                     {
                         ["TransactionType"] = "Payment",
                         ["Account"] = "rAccount1"
                     }
                 },
-                new JObject
+                new JsonObject
                 {
-                    ["RawTransaction"] = new JObject
+                    ["RawTransaction"] = new JsonObject
                     {
                         ["TransactionType"] = "Payment",
                         ["Account"] = "rAccount2"
@@ -202,19 +202,19 @@ public class TestUAutofillFees
         {
             ["TransactionType"] = "Batch",
             ["Account"] = "rTestAccount",
-            ["RawTransactions"] = new JArray
+            ["RawTransactions"] = new JsonArray
             {
-                new JObject
+                new JsonObject
                 {
-                    ["RawTransaction"] = new JObject
+                    ["RawTransaction"] = new JsonObject
                     {
                         ["TransactionType"] = "Payment",
                         ["Account"] = "rAccount1"
                     }
                 },
-                new JObject
+                new JsonObject
                 {
-                    ["RawTransaction"] = new JObject
+                    ["RawTransaction"] = new JsonObject
                     {
                         ["TransactionType"] = "AMMCreate",
                         ["Account"] = "rAccount2"
@@ -326,7 +326,7 @@ internal sealed class FeeTestClient : IXrplClient
                 LoadFactor = 1,
                 ValidatedLedger = new ValidatedLedger()
                 {
-                    BaseFeeXrp = double.Parse(_feeXrp, System.Globalization.CultureInfo.InvariantCulture)
+                    BaseFeeXrp = decimal.Parse(_feeXrp, System.Globalization.CultureInfo.InvariantCulture)
                 }
             }
         };

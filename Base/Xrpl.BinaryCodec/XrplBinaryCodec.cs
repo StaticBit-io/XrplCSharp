@@ -2,10 +2,8 @@
 using System.Collections.Generic;
 using System.Diagnostics;
 using System.Linq;
+using System.Text.Json;
 using System.Text.Json.Nodes;
-
-using Newtonsoft.Json;
-using Newtonsoft.Json.Linq;
 
 using Xrpl.BinaryCodec.Binary;
 using Xrpl.BinaryCodec.Hashing;
@@ -43,25 +41,14 @@ namespace Xrpl.BinaryCodec
         }
 
         /// <summary>
-        /// Encode a JToken into binary hex string.
-        /// </summary>
-        /// <param name="token"></param>
-        /// <returns>string</returns>
-        [System.Obsolete("Use Encode(JsonNode) instead. This bridge will be removed in a future version.")]
-        public static string Encode(JToken token)
-        {
-            return Encode(JsonNode.Parse(token.ToString()));
-        }
-
-        /// <summary>
         /// Encode an object into binary hex string.
         /// </summary>
         /// <param name="json"></param>
         /// <returns>string</returns>
         public static string Encode(object json)
         {
-            JToken token = JToken.FromObject(json, new JsonSerializer() { NullValueHandling = NullValueHandling.Ignore });
-            return Encode(JsonNode.Parse(token.ToString()));
+            JsonNode node = ObjectToJsonNode(json, ignoreNull: true);
+            return Encode(node);
         }
 
         /// <summary>
@@ -71,8 +58,7 @@ namespace Xrpl.BinaryCodec
         /// <returns>string</returns>
         public static string EncodeForSigning(object json)
         {
-            JToken token = JToken.FromObject(json);
-            JsonNode node = JsonNode.Parse(token.ToString());
+            JsonNode node = ObjectToJsonNode(json);
             return SerializeJson(node, HashPrefix.TransactionSig.Bytes(), null, true);
         }
 
@@ -83,8 +69,7 @@ namespace Xrpl.BinaryCodec
         /// <returns>string</returns> The binary-encoded claim, ready to be signed.
         public static string EncodeForSigningClaim(object obj)
         {
-            JToken jtoken = JToken.FromObject(obj);
-            JsonNode json = JsonNode.Parse(jtoken.ToString());
+            JsonNode json = ObjectToJsonNode(obj);
 
             byte[] prefix = Bits.GetBytes(PAYMENT_CHANNEL_CLAIM_PREFIX);
             byte[] channel = Hash256.FromHex(json["channel"].GetValue<string>()).Buffer;
@@ -105,9 +90,20 @@ namespace Xrpl.BinaryCodec
         public static string EncodeForMultiSigning(object json, string signingAccount)
         {
             string accountID = new AccountId(signingAccount).ToHex();
-            JToken jtoken = JToken.FromObject(json);
-            JsonNode token = JsonNode.Parse(jtoken.ToString());
+            JsonNode token = ObjectToJsonNode(json);
             return SerializeJson(token, HashPrefix.TransactionMultiSig.Bytes(), accountID.FromHex(), true);
+        }
+
+        private static JsonNode ObjectToJsonNode(object obj, bool ignoreNull = false)
+        {
+            if (obj is JsonNode node) return node;
+
+            JsonSerializerOptions options = ignoreNull
+                ? new JsonSerializerOptions { DefaultIgnoreCondition = System.Text.Json.Serialization.JsonIgnoreCondition.WhenWritingNull }
+                : new JsonSerializerOptions();
+
+            string jsonString = JsonSerializer.Serialize(obj, options);
+            return JsonNode.Parse(jsonString);
         }
 
         /// <summary>

@@ -1,4 +1,4 @@
-﻿using Newtonsoft.Json;
+using System.Text.Json.Serialization;
 
 using System.Collections.Generic;
 
@@ -14,27 +14,27 @@ namespace Xrpl.Models.Methods
         /// <summary>
         /// The identifying hash of the ledger version used to retrieve this data as hex.
         /// </summary>
-        [JsonProperty("ledger_hash")]
+        [JsonPropertyName("ledger_hash")]
         public string LedgerHash { get; set; }
         /// <summary>
         /// The ledger index of the ledger version used to retrieve this data.
         /// </summary>
-        [JsonProperty("ledger_index")]
+        [JsonPropertyName("ledger_index")]
         public int LedgerIndex { get; set; }
         /// <summary>
         /// Array of Currency Codes for currencies that this account can receive.
         /// </summary>
-        [JsonProperty("receive_currencies")]
+        [JsonPropertyName("receive_currencies")]
         public List<string> ReceiveCurrencies { get; set; }
         /// <summary>
         /// Array of Currency Codes for currencies that this account can send.
         /// </summary>
-        [JsonProperty("send_currencies")]
+        [JsonPropertyName("send_currencies")]
         public List<string> SendCurrencies { get; set; }
         /// <summary>
         /// If true, this data comes from a validated ledger.
         /// </summary>
-        [JsonProperty("validated")]
+        [JsonPropertyName("validated")]
         public bool Validated { get; set; }
 
     }
@@ -61,14 +61,14 @@ namespace Xrpl.Models.Methods
         /// <summary>
         /// A unique identifier for the account, most commonly the account's address.
         /// </summary>
-        [JsonProperty("account")]
+        [JsonPropertyName("account")]
         public string Account { get; set; }
         /// <summary>
         /// If true, then the account field only accepts a public key or XRP Ledger address.<br/>
         /// Otherwise, account can be a secret or passphrase (not recommended).<br/>
         /// The default is false.
         /// </summary>
-        [JsonProperty("strict")]
+        [JsonPropertyName("strict")]
         public bool? Strict { get; set; }
     }
 }

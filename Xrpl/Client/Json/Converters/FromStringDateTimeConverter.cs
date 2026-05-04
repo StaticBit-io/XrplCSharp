@@ -1,32 +1,24 @@
-﻿using Newtonsoft.Json;
-
-using System;
+﻿using System;
 using System.Globalization;
+using System.Text.Json;
+using System.Text.Json.Serialization;
 
 namespace Xrpl.Client.Json.Converters;
 
-public class FromStringDateTimeConverter : JsonConverter
+public class FromStringDateTimeConverter : JsonConverter<DateTime?>
 {
     private static DateTime RippleStartTime = new DateTime(2000, 1, 1, 0, 0, 0, 0, DateTimeKind.Utc);
 
-    public override bool CanConvert(Type objectType)
-    {
-        return objectType == typeof(DateTime);
-    }
-
-    public override object ReadJson(JsonReader reader, Type objectType, object existingValue, JsonSerializer serializer)
+    public override DateTime? Read(ref Utf8JsonReader reader, Type typeToConvert, JsonSerializerOptions options)
     {
         switch (reader.TokenType)
         {
-            case JsonToken.Null: return null;
+            case JsonTokenType.Null:
+                return null;
 
-            case JsonToken.Date:
+            case JsonTokenType.String:
                 {
-                    return (DateTime?)reader.Value;
-                }
-            case JsonToken.String:
-                {
-                    string dateTimeString = (string)reader.Value;
+                    string dateTimeString = reader.GetString();
                     // Попробуем разобрать строку в DateTime
                     if (DateTime.TryParseExact(dateTimeString, "yyyy-MM-ddTHH:mm:sszzz", CultureInfo.InvariantCulture, DateTimeStyles.AssumeUniversal, out DateTime dateTime))
                     {
@@ -35,37 +27,36 @@ public class FromStringDateTimeConverter : JsonConverter
 
                     return null;
                 }
-            case JsonToken.Integer:
+            case JsonTokenType.Number:
                 {
                     double totalSeconds;
 
                     try
                     {
-                        totalSeconds = Convert.ToDouble(reader.Value, CultureInfo.InvariantCulture);
+                        totalSeconds = reader.GetDouble();
                     }
                     catch
                     {
-                        throw new Exception("Invalid double value.");
+                        throw new JsonException("Invalid double value.");
                     }
 
                     return RippleStartTime.AddSeconds(totalSeconds);
                 }
-            default: throw new Exception("Invalid token. Expected string");
+            default:
+                throw new JsonException($"Invalid token {reader.TokenType}. Expected string or number");
         }
-
-        throw new JsonSerializationException("Expected string value for DateTime.");
     }
 
-    public override void WriteJson(JsonWriter writer, object value, JsonSerializer serializer)
+    public override void Write(Utf8JsonWriter writer, DateTime? value, JsonSerializerOptions options)
     {
         if (value is DateTime dateTime)
         {
             // Записываем в формате ISO 8601
-            writer.WriteValue(dateTime.ToString("yyyy-MM-ddTHH:mm:sszzz", CultureInfo.InvariantCulture));
+            writer.WriteStringValue(dateTime.ToString("yyyy-MM-ddTHH:mm:sszzz", CultureInfo.InvariantCulture));
         }
         else
         {
-            throw new JsonSerializationException("Expected DateTime value.");
+            writer.WriteNullValue();
         }
     }
 }

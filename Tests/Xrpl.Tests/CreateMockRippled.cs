@@ -7,11 +7,9 @@ using System.Net.Sockets;
 using System.Text;
 using System.Text.RegularExpressions;
 using System.Threading;
+using System.Text.Json;
+using System.Text.Json.Nodes;
 using Microsoft.VisualStudio.TestPlatform.CommunicationUtilities;
-using Newtonsoft.Json;
-using Newtonsoft.Json.Linq;
-using Org.BouncyCastle.Asn1.Ocsp;
-using Org.BouncyCastle.Utilities.Net;
 using Xrpl.AddressCodec;
 using Xrpl.Client.Exceptions;
 using Xrpl.Tests.MockRippled;
@@ -79,17 +77,17 @@ namespace Xrpl.Tests
         string CreateResponse(Dictionary<string, object> request, Dictionary<string, object> response)
         {
             var cloneResp = response;
-            if (response["type"] == null && response["error"] == null)
+            if (!response.ContainsKey("type") && !response.ContainsKey("error"))
             {
-                throw new AddressCodecException($"Bad response format. Must contain `type` or `error`. {response["type"]}");
+                throw new AddressCodecException($"Bad response format. Must contain `type` or `error`. {response}");
             }
             cloneResp["id"] = request["id"];
-            return JsonConvert.SerializeObject(cloneResp);
+            return JsonSerializer.Serialize(cloneResp);
         }
 
         public void AddResponse(string command, Dictionary<string, object> response)
         {
-            if (response["type"] == null && response["error"] == null)
+            if (!response.ContainsKey("type") && !response.ContainsKey("error"))
             {
                 throw new AddressCodecException($"Bad response format. Must contain `type` or `error`. {response}");
             }
@@ -98,7 +96,7 @@ namespace Xrpl.Tests
 
         Dictionary<string, object> GetResponse(Dictionary<string, object> request)
         {
-            string command = (string)request["command"];
+            string command = request["command"]?.ToString();
             if (command == null)
             {
                 throw new AddressCodecException($"No handler for {command}");
@@ -113,8 +111,12 @@ namespace Xrpl.Tests
 
         void TestCommand(MockClient client, Dictionary<string, object> request)
         {
-            JToken jdata = (JToken)request["data"];
-            Dictionary<string, object> data = jdata.ToObject<Dictionary<string, object>>();
+            Dictionary<string, object> data;
+            object rawData = request["data"];
+            if (rawData is JsonElement je)
+                data = JsonSerializer.Deserialize<Dictionary<string, object>>(je.GetRawText());
+            else
+                data = JsonSerializer.Deserialize<Dictionary<string, object>>(JsonSerializer.Serialize(rawData));
 
             data.TryGetValue("disconnectIn", out var disconnectIn);
             data.TryGetValue("openOnOtherPort", out var openOnOtherPort);
@@ -209,7 +211,7 @@ namespace Xrpl.Tests
                 { "status", "Success" },
                 { "type", "response" },
             };
-            Send(client, JsonConvert.SerializeObject(response));
+            Send(client, JsonSerializer.Serialize(response));
         }
         public void Start()
         {
@@ -229,31 +231,32 @@ namespace Xrpl.Tests
                 Dictionary<string, object> request = null;
                 try
                 {
-                    request = JsonConvert.DeserializeObject<Dictionary<string, object>>(jsonStr);
+                    request = JsonSerializer.Deserialize<Dictionary<string, object>>(jsonStr);
                     var _command = request.TryGetValue("command", out var command);
-                    if (request["id"] == null)
+                    if (!request.ContainsKey("id"))
                     {
-                        throw new XrplException($"Request has no id: {JsonConvert.SerializeObject(request)}");
+                        throw new XrplException($"Request has no id: {JsonSerializer.Serialize(request)}");
                     }
                     if (!_command)
                     {
-                        throw new XrplException($"Request has no command: {JsonConvert.SerializeObject(request)}");
+                        throw new XrplException($"Request has no command: {JsonSerializer.Serialize(request)}");
                     }
-                    if (command == "ping")
+                    string commandStr = command?.ToString();
+                    if (commandStr == "ping")
                     {
                         Ping(e.GetClient(), request);
                     }
-                    else if (command == "test_command")
+                    else if (commandStr == "test_command")
                     {
                         this.TestCommand(e.GetClient(), request);
                     }
-                    else if (this._responses.ContainsKey((string)command))
+                    else if (this._responses.ContainsKey(commandStr))
                     {
                         this.Send(e.GetClient(), this.CreateResponse(request, this.GetResponse(request)));
                     }
                     else
                     {
-                        throw new XrplException($"No event handler registered in mock rippled for {request["command"]}");
+                        throw new XrplException($"No event handler registered in mock rippled for {commandStr}");
                     }
                 }
                 catch (XrplException err)

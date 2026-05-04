@@ -1,7 +1,8 @@
 using Microsoft.VisualStudio.TestTools.UnitTesting;
 
-using Newtonsoft.Json;
+using System.Text.Json;
 
+using Xrpl.Client.Json;
 using Xrpl.Client.Json.Converters;
 using Xrpl.Models.Ledger;
 
@@ -14,7 +15,7 @@ public class TransactionOrHashConverterTests
     public void Read_StringHash_SetsTransactionHash()
     {
         string json = "\"E7A4A2D3E3B3D2D9E0C0A1B3C4D5E6F7E8F9A0B1C2D3E4F5A6B7C8D9E0F1A2\"";
-        HashOrTransaction result = JsonConvert.DeserializeObject<HashOrTransaction>(json);
+        HashOrTransaction result = JsonSerializer.Deserialize<HashOrTransaction>(json, XrplJsonOptions.Default);
         Assert.IsNotNull(result);
         Assert.AreEqual("E7A4A2D3E3B3D2D9E0C0A1B3C4D5E6F7E8F9A0B1C2D3E4F5A6B7C8D9E0F1A2", result.TransactionHash);
         Assert.IsNull(result.Transaction);
@@ -33,7 +34,7 @@ public class TransactionOrHashConverterTests
                 ""Amount"": ""1000000""
             }
         }";
-        HashOrTransaction result = JsonConvert.DeserializeObject<HashOrTransaction>(json);
+        HashOrTransaction result = JsonSerializer.Deserialize<HashOrTransaction>(json, XrplJsonOptions.Default);
         Assert.IsNotNull(result);
         Assert.IsNull(result.TransactionHash);
         Assert.IsNotNull(result.Transaction);
@@ -47,7 +48,7 @@ public class TransactionOrHashConverterTests
         {
             TransactionHash = "DEADBEEF"
         };
-        string json = JsonConvert.SerializeObject(value);
+        string json = JsonSerializer.Serialize(value, XrplJsonOptions.Default);
         Assert.AreEqual("\"DEADBEEF\"", json);
     }
 
@@ -55,7 +56,7 @@ public class TransactionOrHashConverterTests
     public void Write_Null_WritesNull()
     {
         HashOrTransaction value = null;
-        string json = JsonConvert.SerializeObject(value);
+        string json = JsonSerializer.Serialize(value, XrplJsonOptions.Default);
         Assert.AreEqual("null", json);
     }
 }

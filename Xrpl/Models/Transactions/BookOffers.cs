@@ -1,5 +1,4 @@
-﻿using Newtonsoft.Json;
-using Newtonsoft.Json.Converters;
+﻿using System.Text.Json.Serialization;
 
 using System;
 using System.Collections.Generic;
@@ -49,22 +48,22 @@ namespace Xrpl.Models.Transactions
         /// <summary>
         /// The ledger index of the current in-progress ledger version, which was  used to retrieve this information.
         /// </summary>
-        [JsonProperty("ledger_current_index")]
+        [JsonPropertyName("ledger_current_index")]
         public uint? LedgerCurrentIndex { get; set; }
         /// <summary>
         /// The ledger index of the ledger version that was used when retrieving  this data, as requested.
         /// </summary>
-        [JsonProperty("ledger_index")]
+        [JsonPropertyName("ledger_index")]
         public uint? LedgerIndex { get; set; }
         /// <summary>
         /// The identifying hash of the ledger version that was used when retrieving  this data, as requested.
         /// </summary>
-        [JsonProperty("ledger_hash")]
+        [JsonPropertyName("ledger_hash")]
         public string LedgerHash { get; set; }
         /// <summary>
         /// Array of offer objects, each of which has the fields of an Offer object.
         /// </summary>
-        [JsonProperty("offers")]
+        [JsonPropertyName("offers")]
         public List<Offer> Offers { get; set; }
 
         //todo not found field  validated?: boolean
@@ -86,10 +85,10 @@ namespace Xrpl.Models.Transactions
         /// <summary>
         /// The value 0x006F, mapped to the string Offer, indicates that this object describes an order to trade currency.
         /// </summary>
-        [JsonConverter(typeof(StringEnumConverter))]
+        [JsonConverter(typeof(LedgerEntryTypeConverter))]
         public LedgerEntryType LedgerEntryType { get; set; }
 
-        [JsonProperty("index")]
+        [JsonPropertyName("index")]
         public string Index { get; set; } //todo unknown field
         /// <summary>
         /// The address of the account that placed this Offer.
@@ -145,12 +144,12 @@ namespace Xrpl.Models.Transactions
         /// <summary>
         /// The identifying hash of the transaction that most recently modified this object.
         /// </summary>
-        [JsonProperty("PreviousTxnID")]
+        [JsonPropertyName("PreviousTxnID")]
         public string PreviousTxnID { get; set; }
         /// <summary>
         /// The index of the ledger that contains the transaction that most recently modified this object.
         /// </summary>
-        [JsonProperty("PreviousTxnLgrSeq")]
+        [JsonPropertyName("PreviousTxnLgrSeq")]
         public uint PreviousTxnLgrSeq { get; set; }
         /// <summary>
         /// The time this Offer expires, in seconds since the Ripple Epoch.
@@ -167,25 +166,25 @@ namespace Xrpl.Models.Transactions
         /// (XRP is represented as drops; any other currency is represented as a decimal value.<br/>
         /// ) If a trader has multiple offers in the same book, only the highest-ranked offer includes this field.
         /// </summary>
-        [JsonProperty("owner_funds")]
+        [JsonPropertyName("owner_funds")]
         public string OwnerFunds { get; set; }
         /// <summary>
         /// The maximum amount of currency that the taker can get, given the funding status of the offer.
         /// </summary>
-        [JsonProperty("taker_gets_funded")]
+        [JsonPropertyName("taker_gets_funded")]
         [JsonConverter(typeof(CurrencyConverter))]
         public Currency TakerGetsFunded { get; set; }
         /// <summary>
         /// The maximum amount of currency that the taker would pay, given the funding status of the offer.
         /// </summary>
-        [JsonProperty("taker_pays_funded")]
+        [JsonPropertyName("taker_pays_funded")]
         [JsonConverter(typeof(CurrencyConverter))]
         public Currency TakerPaysFunded { get; set; }
         /// <summary>
         /// The exchange rate, as the ratio taker_pays divided by taker_gets.<br/>
         /// For fairness, offers that have the same quality are automatically taken first-in, first-out.
         /// </summary>
-        [JsonProperty("quality")]
+        [JsonPropertyName("quality")]
         public decimal? Quality { get; set; }
     }
 }

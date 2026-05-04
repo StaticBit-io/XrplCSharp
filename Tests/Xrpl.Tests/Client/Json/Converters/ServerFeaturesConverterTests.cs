@@ -1,9 +1,9 @@
 using Microsoft.VisualStudio.TestTools.UnitTesting;
 
-using Newtonsoft.Json;
-
 using System.Collections.Generic;
+using System.Text.Json;
 
+using Xrpl.Client.Json;
 using Xrpl.Client.Json.Converters;
 using Xrpl.Models.Methods;
 
@@ -34,7 +34,7 @@ public class ServerFeaturesConverterTests
                 }
             }
         }";
-        ServerFeatures result = JsonConvert.DeserializeObject<ServerFeatures>(json);
+        ServerFeatures result = JsonSerializer.Deserialize<ServerFeatures>(json, XrplJsonOptions.Default);
         Assert.IsNotNull(result);
         Assert.AreEqual("ABC123", result.LedgerHash);
         Assert.AreEqual(1000UL, result.LedgerIndex);
@@ -61,7 +61,7 @@ public class ServerFeaturesConverterTests
                 ""supported"": true
             }
         }";
-        ServerFeatures result = JsonConvert.DeserializeObject<ServerFeatures>(json);
+        ServerFeatures result = JsonSerializer.Deserialize<ServerFeatures>(json, XrplJsonOptions.Default);
         Assert.IsNotNull(result);
         Assert.AreEqual("DEF456", result.LedgerHash);
         Assert.AreEqual(2000UL, result.LedgerIndex);
@@ -79,7 +79,7 @@ public class ServerFeaturesConverterTests
             ""validated"": true,
             ""features"": {}
         }";
-        ServerFeatures result = JsonConvert.DeserializeObject<ServerFeatures>(json);
+        ServerFeatures result = JsonSerializer.Deserialize<ServerFeatures>(json, XrplJsonOptions.Default);
         Assert.IsNotNull(result);
         Assert.AreEqual(0, result.Features.Count);
     }
@@ -97,7 +97,7 @@ public class ServerFeaturesConverterTests
                 }
             }
         }";
-        ServerFeatures result = JsonConvert.DeserializeObject<ServerFeatures>(json);
+        ServerFeatures result = JsonSerializer.Deserialize<ServerFeatures>(json, XrplJsonOptions.Default);
         FeatureInfo feature = result.Features["ABC123"];
         Assert.IsTrue(feature.IsVetoed);
         Assert.IsNull(feature.VetoedReason);
@@ -116,7 +116,7 @@ public class ServerFeaturesConverterTests
                 }
             }
         }";
-        ServerFeatures result = JsonConvert.DeserializeObject<ServerFeatures>(json);
+        ServerFeatures result = JsonSerializer.Deserialize<ServerFeatures>(json, XrplJsonOptions.Default);
         FeatureInfo feature = result.Features["ABC123"];
         Assert.IsTrue(feature.IsVetoed);
         Assert.AreEqual("Obsolete", feature.VetoedReason);

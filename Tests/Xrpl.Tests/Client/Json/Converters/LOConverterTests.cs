@@ -1,8 +1,8 @@
+using System.Text.Json;
+
 using Microsoft.VisualStudio.TestTools.UnitTesting;
 
-using Newtonsoft.Json;
-
-using Xrpl.Client.Json.Converters;
+using Xrpl.Client.Json;
 using Xrpl.Models;
 using Xrpl.Models.Ledger;
 using Xrpl.Models.Methods;
@@ -12,11 +12,7 @@ namespace XrplTests.Client.Json.Converters;
 [TestClass]
 public class LOConverterTests
 {
-    private static readonly JsonSerializerSettings Settings = new JsonSerializerSettings
-    {
-        NullValueHandling = NullValueHandling.Ignore,
-        Converters = { new LOConverter(), new CurrencyConverter() }
-    };
+    private static readonly JsonSerializerOptions Options = XrplJsonOptions.Default;
 
     [TestMethod]
     public void Read_AccountRoot_ReturnsLOAccountRoot()
@@ -28,7 +24,7 @@ public class LOConverterTests
             ""Flags"": 0,
             ""Sequence"": 1
         }";
-        BaseLedgerEntry result = JsonConvert.DeserializeObject<BaseLedgerEntry>(json, Settings);
+        BaseLedgerEntry result = JsonSerializer.Deserialize<BaseLedgerEntry>(json, Options);
         Assert.IsNotNull(result);
         Assert.IsInstanceOfType(result, typeof(LOAccountRoot));
         LOAccountRoot accountRoot = (LOAccountRoot)result;
@@ -45,7 +41,7 @@ public class LOConverterTests
             ""Flags"": 0,
             ""Sequence"": 100
         }";
-        BaseLedgerEntry result = JsonConvert.DeserializeObject<BaseLedgerEntry>(json, Settings);
+        BaseLedgerEntry result = JsonSerializer.Deserialize<BaseLedgerEntry>(json, Options);
         Assert.IsNotNull(result);
         Assert.IsInstanceOfType(result, typeof(LOOffer));
         Assert.AreEqual(LedgerEntryType.Offer, result.LedgerEntryType);
@@ -60,7 +56,7 @@ public class LOConverterTests
             ""LowLimit"": {""currency"": ""USD"", ""issuer"": ""rLow"", ""value"": ""0""},
             ""HighLimit"": {""currency"": ""USD"", ""issuer"": ""rHigh"", ""value"": ""100""}
         }";
-        BaseLedgerEntry result = JsonConvert.DeserializeObject<BaseLedgerEntry>(json, Settings);
+        BaseLedgerEntry result = JsonSerializer.Deserialize<BaseLedgerEntry>(json, Options);
         Assert.IsNotNull(result);
         Assert.IsInstanceOfType(result, typeof(LORippleState));
         Assert.AreEqual(LedgerEntryType.RippleState, result.LedgerEntryType);
@@ -75,7 +71,7 @@ public class LOConverterTests
             ""Amount"": ""1000000"",
             ""Destination"": ""rDest""
         }";
-        BaseLedgerEntry result = JsonConvert.DeserializeObject<BaseLedgerEntry>(json, Settings);
+        BaseLedgerEntry result = JsonSerializer.Deserialize<BaseLedgerEntry>(json, Options);
         Assert.IsNotNull(result);
         Assert.IsInstanceOfType(result, typeof(LOEscrow));
     }
@@ -89,7 +85,7 @@ public class LOConverterTests
             ""Destination"": ""rDest"",
             ""SendMax"": ""1000000""
         }";
-        BaseLedgerEntry result = JsonConvert.DeserializeObject<BaseLedgerEntry>(json, Settings);
+        BaseLedgerEntry result = JsonSerializer.Deserialize<BaseLedgerEntry>(json, Options);
         Assert.IsNotNull(result);
         Assert.IsInstanceOfType(result, typeof(LOCheck));
     }
@@ -101,7 +97,7 @@ public class LOConverterTests
             ""LedgerEntryType"": ""Amm"",
             ""Account"": ""rAmmAccount""
         }";
-        BaseLedgerEntry result = JsonConvert.DeserializeObject<BaseLedgerEntry>(json, Settings);
+        BaseLedgerEntry result = JsonSerializer.Deserialize<BaseLedgerEntry>(json, Options);
         Assert.IsNotNull(result);
         Assert.IsInstanceOfType(result, typeof(LOAmm));
     }
@@ -113,7 +109,7 @@ public class LOConverterTests
             ""LedgerEntryType"": ""DID"",
             ""Account"": ""rTest""
         }";
-        BaseLedgerEntry result = JsonConvert.DeserializeObject<BaseLedgerEntry>(json, Settings);
+        BaseLedgerEntry result = JsonSerializer.Deserialize<BaseLedgerEntry>(json, Options);
         Assert.IsNotNull(result);
         Assert.IsInstanceOfType(result, typeof(LODID));
     }
@@ -125,7 +121,7 @@ public class LOConverterTests
             ""LedgerEntryType"": ""Oracle"",
             ""Owner"": ""rTest""
         }";
-        BaseLedgerEntry result = JsonConvert.DeserializeObject<BaseLedgerEntry>(json, Settings);
+        BaseLedgerEntry result = JsonSerializer.Deserialize<BaseLedgerEntry>(json, Options);
         Assert.IsNotNull(result);
         Assert.IsInstanceOfType(result, typeof(LOOracle));
     }
@@ -138,22 +134,35 @@ public class LOConverterTests
             ""Subject"": ""rSubject"",
             ""Issuer"": ""rIssuer""
         }";
-        BaseLedgerEntry result = JsonConvert.DeserializeObject<BaseLedgerEntry>(json, Settings);
+        BaseLedgerEntry result = JsonSerializer.Deserialize<BaseLedgerEntry>(json, Options);
         Assert.IsNotNull(result);
         Assert.IsInstanceOfType(result, typeof(LOCredential));
     }
 
     [TestMethod]
-    public void Read_UnknownType_ThrowsOnInvalidEnum()
+    public void Read_UnknownType_ReturnsBaseLedgerEntry()
     {
         string json = @"{
             ""LedgerEntryType"": ""FutureLedgerType"",
-            ""SomeField"": ""value""
+            ""Flags"": 0
         }";
-        bool threw = false;
-        try { JsonConvert.DeserializeObject<BaseLedgerEntry>(json, Settings); }
-        catch (JsonSerializationException) { threw = true; }
-        Assert.IsTrue(threw, "Unknown LedgerEntryType should throw");
+        BaseLedgerEntry result = JsonSerializer.Deserialize<BaseLedgerEntry>(json, Options);
+        Assert.IsNotNull(result);
+        Assert.IsInstanceOfType(result, typeof(BaseLedgerEntry));
+        Assert.AreEqual(LedgerEntryType.Unknown, result.LedgerEntryType);
+    }
+
+    [TestMethod]
+    public void Read_UnknownType_WithExtraFields_PreservesBaseProperties()
+    {
+        string json = @"{
+            ""LedgerEntryType"": ""SomeNewLedgerObject"",
+            ""index"": ""ABC123""
+        }";
+        BaseLedgerEntry result = JsonSerializer.Deserialize<BaseLedgerEntry>(json, Options);
+        Assert.IsNotNull(result);
+        Assert.AreEqual(LedgerEntryType.Unknown, result.LedgerEntryType);
+        Assert.AreEqual("ABC123", result.Index);
     }
 
     [TestMethod]
@@ -164,7 +173,7 @@ public class LOConverterTests
             ""Account"": ""rTest"",
             ""Authorize"": ""rAuth""
         }";
-        BaseLedgerEntry result = JsonConvert.DeserializeObject<BaseLedgerEntry>(json, Settings);
+        BaseLedgerEntry result = JsonSerializer.Deserialize<BaseLedgerEntry>(json, Options);
         Assert.IsNotNull(result);
         Assert.IsInstanceOfType(result, typeof(LODepositPreauth));
     }
@@ -176,7 +185,7 @@ public class LOConverterTests
             ""LedgerEntryType"": ""MPTokenIssuance"",
             ""Issuer"": ""rIssuer""
         }";
-        BaseLedgerEntry result = JsonConvert.DeserializeObject<BaseLedgerEntry>(json, Settings);
+        BaseLedgerEntry result = JsonSerializer.Deserialize<BaseLedgerEntry>(json, Options);
         Assert.IsNotNull(result);
         Assert.IsInstanceOfType(result, typeof(LOMPTokenIssuance));
     }
@@ -188,7 +197,7 @@ public class LOConverterTests
             ""LedgerEntryType"": ""PermissionedDomain"",
             ""Owner"": ""rOwner""
         }";
-        BaseLedgerEntry result = JsonConvert.DeserializeObject<BaseLedgerEntry>(json, Settings);
+        BaseLedgerEntry result = JsonSerializer.Deserialize<BaseLedgerEntry>(json, Options);
         Assert.IsNotNull(result);
         Assert.IsInstanceOfType(result, typeof(LOPermissionedDomain));
     }
