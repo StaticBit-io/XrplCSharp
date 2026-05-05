@@ -55,7 +55,11 @@ namespace Xrpl.BinaryCodec.Types
             
             if (str.StartsWith("0x", StringComparison.OrdinalIgnoreCase))
             {
-                string hexPart = str.Substring(2).PadLeft(16, '0');
+                string hexPart = str.Substring(2);
+                if (!Regex.IsMatch(hexPart, HEX_REGEX))
+                    throw new FormatException($"Cannot parse '{str}' as Uint64. Expected up to 16 hex digits after 0x.");
+
+                hexPart = hexPart.PadLeft(16, '0');
                 return new Uint64(Bits.ToUInt64(B16.Decode(hexPart), 0));
             }
             

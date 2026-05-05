@@ -269,17 +269,17 @@ namespace Xrpl.Models.Methods
     public class AccountingStateInfo
     {
         [JsonPropertyName("duration_us")]
-        public string DurationMs { get; set; }
+        public string DurationUs { get; set; }
 
         [JsonIgnore]
         public TimeSpan Duration
         {
             get
             {
-                if (string.IsNullOrEmpty(DurationMs))
+                if (string.IsNullOrEmpty(DurationUs))
                     return TimeSpan.Zero;
-                long ms = long.Parse(DurationMs);
-                return TimeSpan.FromMilliseconds(ms);
+                long microseconds = long.Parse(DurationUs, System.Globalization.CultureInfo.InvariantCulture);
+                return TimeSpan.FromTicks(microseconds * 10);
             }
         }
         

@@ -44,20 +44,14 @@ namespace Xrpl.Client.Json.Converters
                 return;
             }
 
-            ulong numericValue;
-            if (value is ulong ul)
-                numericValue = ul;
-            else if (value is long l)
-                numericValue = (ulong)l;
-            else if (value is int i)
-                numericValue = (ulong)i;
-            else if (value is uint u)
-                numericValue = u;
-            else
+            ulong numericValue = value switch
             {
-                writer.WriteStringValue(value.ToString());
-                return;
-            }
+                ulong ul => ul,
+                uint u => u,
+                long l when l >= 0 => (ulong)l,
+                int i when i >= 0 => (ulong)i,
+                _ => throw new JsonException($"Unsupported AssetPrice value: {value}")
+            };
 
             writer.WriteStringValue(numericValue.ToString("x"));
         }
@@ -121,10 +115,11 @@ namespace Xrpl.Client.Json.Converters
                 return;
             }
 
-            // More than 3 characters - convert to 40-char left-aligned hex (lowercase)
             byte[] bytes = Encoding.ASCII.GetBytes(value);
+            if (bytes.Length > 20)
+                throw new JsonException($"Oracle currency codes must be 20 ASCII bytes or fewer, got {bytes.Length}.");
             byte[] paddedBytes = new byte[20];
-            Array.Copy(bytes, 0, paddedBytes, 0, Math.Min(bytes.Length, 20));
+            Array.Copy(bytes, 0, paddedBytes, 0, bytes.Length);
             writer.WriteStringValue(BitConverter.ToString(paddedBytes).Replace("-", "").ToLowerInvariant());
         }
 
@@ -194,12 +189,6 @@ namespace Xrpl.Client.Json.Converters
             if (value == null)
             {
                 writer.WriteNullValue();
-                return;
-            }
-
-            if (value.Length % 2 == 0 && IsHexString(value))
-            {
-                writer.WriteStringValue(value);
                 return;
             }
 

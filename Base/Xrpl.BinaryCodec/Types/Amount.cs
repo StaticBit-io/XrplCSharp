@@ -88,7 +88,10 @@ namespace Xrpl.BinaryCodec.Types
 
                 if (token["currency"]?.GetValue<string>() == "XRP")
                 {
-                    return new Amount(token["value"].GetValue<string>());
+                    JsonNode valueTokenForXrp = token["value"];
+                    if (valueTokenForXrp == null || valueTokenForXrp.GetValueKind() != JsonValueKind.String)
+                        throw new InvalidJsonException("XRP Amount object must contain string property `value`.");
+                    return new Amount(valueTokenForXrp.GetValue<string>());
                 }
                 JsonNode valueToken = token["value"];
                 JsonNode currencyToken = token["currency"];

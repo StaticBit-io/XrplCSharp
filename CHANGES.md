@@ -1,6 +1,35 @@
 # Changes
 
-### 10.2.0.0
+### 10.3.0.0 05/05/2026
+* **BREAKING**: Migrate entire solution from `Newtonsoft.Json` to `System.Text.Json` — all models, converters, client infrastructure, wallet signing, binary codec
+* **BREAKING**: Remove `dynamic` keyword from all production code — replace with `object`, `JsonNode`, `JsonElement` for iOS Full AOT compatibility
+* **BREAKING**: Remove `Newtonsoft.Json` NuGet dependency from all projects (`Xrpl`, `Xrpl.BinaryCodec`, `Xrpl.AddressCodec`, `Xrpl.Keypairs`)
+* Add centralized `XrplJsonOptions.Default` with all custom converters registered globally
+* Add new converters: `DictionaryObjectConverter`, `EnumMemberValueConverter<T>`, `NumberOrStringConverter`, `ScientificDecimalConverter`, `TransactionTypeConverter`, `LedgerEntryTypeConverter`
+* Migrate all `[JsonProperty]` → `[JsonPropertyName]`, `[JsonIgnore]` → `System.Text.Json.Serialization.JsonIgnore`
+* Migrate all `JObject`/`JToken`/`JArray` → `JsonNode`/`JsonObject`/`JsonArray` in wallet signing, batch transactions, signer utilities
+* Migrate all `JsonConvert.SerializeObject`/`DeserializeObject` → `JsonSerializer.Serialize`/`Deserialize`
+* Add `ITransactionRequest.ToDictionary()` helper for safe `System.Text.Json` round-trip in tests
+* Fix `SerializedType.ToJson()` return type — `object` → `JsonNode` to match `ISerializedType` contract
+* Fix `ServerFeatures.FeatureInfo.Count` — `[JsonPropertyName("count")]` was inside XML doc comment, not applied to property
+* Fix `ChannelAuthorize.RippleAmount` setter — `Convert.ToUInt32` → `Convert.ToUInt64` to prevent overflow at > 4294 XRP
+* Fix `AccountingStateInfo.Duration` — `duration_us` field was parsed as milliseconds instead of microseconds (1000x inflation)
+* Fix `LedgerTransaction.CloseTimeIso` and `LOLedger.CloseTimeIso` — add `FromStringDateTimeConverter` for consistent ISO 8601 parsing
+* Fix `CredentialQuery.CredentialType` wire field — `credentialType` → `credential_type`
+* Fix `Amount.FromJson` XRP branch — add null/type validation on `value` property to prevent `NullReferenceException`
+* Fix `AccountId.FromJson` — explicit null check to prevent `DecodeAccountID(null)` crash
+* Fix `Uint64` parsing — validate hex length after `0x` prefix to reject oversized inputs
+* Fix `AssetPriceConverter.Write` — reject negative `int`/`long` values instead of silent `ulong` underflow
+* Fix `OracleCurrencyConverter.Write` — reject currency codes > 20 ASCII bytes instead of silent truncation
+* Fix `OracleHexStringConverter.Write` — remove content-sniffing that misidentified plain text as pre-encoded hex
+* Fix `LOOracle` — add missing `OracleHexStringConverter` on `Provider`, `AssetClass`, `URI` properties (matching `OracleSet`)
+* Fix `XrplBinaryCodec.EncodeForSigningClaim` — add null checks on `channel` and `amount` properties
+* Fix `SimulateRequest.Transaction` — add explicit `TransactionRequestConverter` attribute for reliable polymorphic serialization
+* Fix `LedgerObjectConverter` — extract shared `GetTypeForLedgerEntry()` helper, eliminating duplicated 23-type switch
+* Fix `ScientificDecimalConverter` — parse raw token text via `decimal.Parse` instead of lossy `double` cast
+* Fix `EnumMemberValueConverter` — remove permissive `Enum.TryParse` fallback that accepted numeric strings
+
+### 10.2.0.0 03/05/2026
 * Add `path_find` WebSocket command — `PathFind(create)`, `PathFindClose`, `PathFindStatus` methods with `PathFindCreateRequest`, `PathFindCloseRequest`, `PathFindStatusRequest` models and `PathFindResponse`
 * Add `ripple_path_find` command — `RipplePathFind` method with `RipplePathFindRequest`, `RipplePathFindResponse`, `SourceCurrency` models
 * Add `PathAlternative` shared model with `PathsComputed`, `PathsCanonical`, `SourceAmount`, `DestinationAmount`

@@ -88,6 +88,7 @@ namespace Xrpl.Models.Ledger
         public DateTime? CloseTime { get; set; }
 
         [JsonPropertyName("close_time_iso")]
+        [JsonConverter(typeof(FromStringDateTimeConverter))]
         public DateTime? CloseTimeIso { get; set; }
         /// <summary>
         /// The approximate time this ledger was closed, in human-readable format.<br/>

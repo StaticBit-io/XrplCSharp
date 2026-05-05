@@ -26,7 +26,8 @@ namespace Xrpl.Models.Ledger
         /// The ledger close time represented in ISO 8601 time format.
         /// </summary>
         [JsonPropertyName("close_time_iso")]
-        public DateTime CloseTimeIso { get; set; }
+        [JsonConverter(typeof(FromStringDateTimeConverter))]
+        public DateTime? CloseTimeIso { get; set; }
 
         /// <summary>
         /// A hex string of the ledger version that included this transaction.

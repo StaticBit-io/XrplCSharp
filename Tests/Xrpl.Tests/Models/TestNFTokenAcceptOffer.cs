@@ -46,7 +46,7 @@ namespace XrplTests.Xrpl.Models
             var offer = new Dictionary<string, object>
             {
                 { "TransactionType", "NFTokenAcceptOffer" },
-                { "NFTokenBuyOffer", NFTOKEN_SELL_OFFER },
+                { "NFTokenSellOffer", NFTOKEN_SELL_OFFER },
                 {"Account", "rWYkbWkCeg8dP6rXALnjgZSjjLyih5NXm"},
                 {"Fee", "5000000"},
                 {"Sequence", 2470665u},

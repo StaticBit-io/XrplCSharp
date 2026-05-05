@@ -76,8 +76,8 @@ namespace Xrpl.Tests
 
         string CreateResponse(Dictionary<string, object> request, Dictionary<string, object> response)
         {
-            var cloneResp = response;
-            if (!response.ContainsKey("type") && !response.ContainsKey("error"))
+            var cloneResp = new Dictionary<string, object>(response);
+            if (!cloneResp.ContainsKey("type") && !cloneResp.ContainsKey("error"))
             {
                 throw new AddressCodecException($"Bad response format. Must contain `type` or `error`. {response}");
             }
@@ -211,7 +211,7 @@ namespace Xrpl.Tests
                 { "status", "Success" },
                 { "type", "response" },
             };
-            Send(client, JsonSerializer.Serialize(response));
+            Send(client, CreateResponse(request, response));
         }
         public void Start()
         {

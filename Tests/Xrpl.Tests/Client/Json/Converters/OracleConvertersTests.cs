@@ -174,11 +174,13 @@ public class OracleHexStringConverterTests
     }
 
     [TestMethod]
-    public void Write_AlreadyHex_PassesThrough()
+    public void Write_HexLookingText_EncodesAsAscii()
     {
         Model model = new Model { Provider = "74657374" };
         string json = JsonSerializer.Serialize(model, XrplJsonOptions.Default);
-        Assert.IsTrue(json.Contains("74657374"));
+        // "74657374" is treated as plain ASCII text, each char encoded to hex
+        Assert.IsFalse(json.Contains("\"74657374\""));
+        Assert.IsTrue(json.Contains("3734363537333734"));
     }
 
     [TestMethod]

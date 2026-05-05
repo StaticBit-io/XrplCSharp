@@ -36,6 +36,7 @@ namespace Xrpl.Models.Ledger
         /// This field is a string, up to 256 ASCII hex encoded characters (0x20-0x7E).
         /// </summary>
         [JsonPropertyName("Provider")]
+        [JsonConverter(typeof(OracleHexStringConverter))]
         public string Provider { get; set; }
 
         /// <summary>
@@ -43,6 +44,7 @@ namespace Xrpl.Models.Ledger
         /// Must be formatted as hexadecimal representing ASCII characters (0x20-0x7E), maximum 16 bytes.
         /// </summary>
         [JsonPropertyName("AssetClass")]
+        [JsonConverter(typeof(OracleHexStringConverter))]
         public string AssetClass { get; set; }
 
         /// <summary>
@@ -65,6 +67,7 @@ namespace Xrpl.Models.Ledger
         /// This field is limited to 256 bytes.
         /// </summary>
         [JsonPropertyName("URI")]
+        [JsonConverter(typeof(OracleHexStringConverter))]
         public string URI { get; set; }
 
         /// <summary>

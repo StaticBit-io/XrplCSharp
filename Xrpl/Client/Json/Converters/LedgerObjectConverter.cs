@@ -173,6 +173,34 @@ public class DeletedNodeConverter : NodeConverterBase<DeletedNode>
 /// </summary>
 public class LOConverter : JsonConverter<BaseLedgerEntry>
 {
+    private static Type GetTypeForLedgerEntry(LedgerEntryType type) => type switch
+    {
+        LedgerEntryType.AccountRoot => typeof(LOAccountRoot),
+        LedgerEntryType.Amendments => typeof(LOAmendments),
+        LedgerEntryType.DirectoryNode => typeof(LODirectoryNode),
+        LedgerEntryType.Escrow => typeof(LOEscrow),
+        LedgerEntryType.FeeSettings => typeof(LOFeeSettings),
+        LedgerEntryType.LedgerHashes => typeof(LOLedgerHashes),
+        LedgerEntryType.Offer => typeof(LOOffer),
+        LedgerEntryType.PayChannel => typeof(LOPayChannel),
+        LedgerEntryType.RippleState => typeof(LORippleState),
+        LedgerEntryType.SignerList => typeof(LOSignerList),
+        LedgerEntryType.NFTokenOffer => typeof(LONFTokenOffer),
+        LedgerEntryType.NegativeUNL => typeof(LONegativeUNL),
+        LedgerEntryType.NFTokenPage => typeof(LONFTokenPage),
+        LedgerEntryType.Ticket => typeof(LOTicket),
+        LedgerEntryType.AMM => typeof(LOAmm),
+        LedgerEntryType.Check => typeof(LOCheck),
+        LedgerEntryType.MPToken => typeof(LOMPToken),
+        LedgerEntryType.MPTokenIssuance => typeof(LOMPTokenIssuance),
+        LedgerEntryType.Oracle => typeof(LOOracle),
+        LedgerEntryType.DID => typeof(LODID),
+        LedgerEntryType.PermissionedDomain => typeof(LOPermissionedDomain),
+        LedgerEntryType.Credential => typeof(LOCredential),
+        LedgerEntryType.DepositPreauth => typeof(LODepositPreauth),
+        _ => typeof(BaseLedgerEntry),
+    };
+
     /// <summary>
     /// Convert ledger entry json element to typed ledger object
     /// </summary>
@@ -200,33 +228,7 @@ public class LOConverter : JsonConverter<BaseLedgerEntry>
                 innerOptions.Converters.RemoveAt(i);
         }
 
-        Type targetType = type switch
-        {
-            LedgerEntryType.AccountRoot => typeof(LOAccountRoot),
-            LedgerEntryType.Amendments => typeof(LOAmendments),
-            LedgerEntryType.DirectoryNode => typeof(LODirectoryNode),
-            LedgerEntryType.Escrow => typeof(LOEscrow),
-            LedgerEntryType.FeeSettings => typeof(LOFeeSettings),
-            LedgerEntryType.LedgerHashes => typeof(LOLedgerHashes),
-            LedgerEntryType.Offer => typeof(LOOffer),
-            LedgerEntryType.PayChannel => typeof(LOPayChannel),
-            LedgerEntryType.RippleState => typeof(LORippleState),
-            LedgerEntryType.SignerList => typeof(LOSignerList),
-            LedgerEntryType.NFTokenOffer => typeof(LONFTokenOffer),
-            LedgerEntryType.NegativeUNL => typeof(LONegativeUNL),
-            LedgerEntryType.NFTokenPage => typeof(LONFTokenPage),
-            LedgerEntryType.Ticket => typeof(LOTicket),
-            LedgerEntryType.AMM => typeof(LOAmm),
-            LedgerEntryType.Check => typeof(LOCheck),
-            LedgerEntryType.MPToken => typeof(LOMPToken),
-            LedgerEntryType.MPTokenIssuance => typeof(LOMPTokenIssuance),
-            LedgerEntryType.Oracle => typeof(LOOracle),
-            LedgerEntryType.DID => typeof(LODID),
-            LedgerEntryType.PermissionedDomain => typeof(LOPermissionedDomain),
-            LedgerEntryType.Credential => typeof(LOCredential),
-            LedgerEntryType.DepositPreauth => typeof(LODepositPreauth),
-            _ => typeof(BaseLedgerEntry),
-        };
+        Type targetType = GetTypeForLedgerEntry(type);
 
         BaseLedgerEntry result = (BaseLedgerEntry)JsonSerializer.Deserialize(rawJson, targetType, innerOptions);
 
@@ -315,33 +317,7 @@ public class LOConverter : JsonConverter<BaseLedgerEntry>
         if (ledgerEntryType != null)
             Enum.TryParse(ledgerEntryType, ignoreCase: true, out entryType);
 
-        return entryType switch
-        {
-            LedgerEntryType.AccountRoot => typeof(LOAccountRoot),
-            LedgerEntryType.Amendments => typeof(LOAmendments),
-            LedgerEntryType.DirectoryNode => typeof(LODirectoryNode),
-            LedgerEntryType.Escrow => typeof(LOEscrow),
-            LedgerEntryType.FeeSettings => typeof(LOFeeSettings),
-            LedgerEntryType.LedgerHashes => typeof(LOLedgerHashes),
-            LedgerEntryType.Offer => typeof(LOOffer),
-            LedgerEntryType.PayChannel => typeof(LOPayChannel),
-            LedgerEntryType.RippleState => typeof(LORippleState),
-            LedgerEntryType.SignerList => typeof(LOSignerList),
-            LedgerEntryType.NegativeUNL => typeof(LONegativeUNL),
-            LedgerEntryType.NFTokenOffer => typeof(LONFTokenOffer),
-            LedgerEntryType.NFTokenPage => typeof(LONFTokenPage),
-            LedgerEntryType.Ticket => typeof(LOTicket),
-            LedgerEntryType.Check => typeof(LOCheck),
-            LedgerEntryType.DepositPreauth => typeof(LODepositPreauth),
-            LedgerEntryType.AMM => typeof(LOAmm),
-            LedgerEntryType.MPToken => typeof(LOMPToken),
-            LedgerEntryType.MPTokenIssuance => typeof(LOMPTokenIssuance),
-            LedgerEntryType.Oracle => typeof(LOOracle),
-            LedgerEntryType.DID => typeof(LODID),
-            LedgerEntryType.PermissionedDomain => typeof(LOPermissionedDomain),
-            LedgerEntryType.Credential => typeof(LOCredential),
-            _ => typeof(BaseLedgerEntry),
-        };
+        return GetTypeForLedgerEntry(entryType);
     }
 
     /// <summary> read <see cref="BaseLedgerEntry"/>  from json object </summary>

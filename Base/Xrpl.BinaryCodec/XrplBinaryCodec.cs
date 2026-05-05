@@ -72,8 +72,10 @@ namespace Xrpl.BinaryCodec
             JsonNode json = ObjectToJsonNode(obj);
 
             byte[] prefix = Bits.GetBytes(PAYMENT_CHANNEL_CLAIM_PREFIX);
-            byte[] channel = Hash256.FromHex(json["channel"].GetValue<string>()).Buffer;
-            byte[] amount = Uint64.FromValue(int.Parse(json["amount"].GetValue<string>())).ToBytes();
+            JsonNode channelNode = json["channel"] ?? throw new ArgumentException("Missing 'channel' property");
+            JsonNode amountNode = json["amount"] ?? throw new ArgumentException("Missing 'amount' property");
+            byte[] channel = Hash256.FromHex(channelNode.GetValue<string>()).Buffer;
+            byte[] amount = Uint64.FromValue(int.Parse(amountNode.GetValue<string>())).ToBytes();
             byte[] rv = new byte[prefix.Length + channel.Length + amount.Length];
             System.Buffer.BlockCopy(prefix, 0, rv, 0, prefix.Length);
             System.Buffer.BlockCopy(channel, 0, rv, prefix.Length, channel.Length);

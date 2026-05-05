@@ -30,6 +30,7 @@ public class SimulateRequest : BaseRequest
     /// If you include this field, do not also include tx_blob.
     /// </summary>
     [JsonPropertyName("tx_json")]
+    [JsonConverter(typeof(TransactionRequestConverter))]
     public ITransactionRequest Transaction { get; set; }
 
     /// <summary>

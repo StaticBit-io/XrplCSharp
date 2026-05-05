@@ -475,7 +475,7 @@ public class CredentialQuery
     /// <summary>
     /// The type of the credential, as issued.
     /// </summary>
-    [JsonPropertyName("credentialType")]
+    [JsonPropertyName("credential_type")]
     public string CredentialType { get; set; }
 }
 

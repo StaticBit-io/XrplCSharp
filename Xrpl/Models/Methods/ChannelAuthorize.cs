@@ -87,7 +87,7 @@ namespace Xrpl.Models.Methods
         public double RippleAmount
         {
             get => (double) Amount / 1000000;
-            set => Amount =  Convert.ToUInt32(value * 1000000);
+            set => Amount = Convert.ToUInt64(value * 1000000);
         }
     }
 }

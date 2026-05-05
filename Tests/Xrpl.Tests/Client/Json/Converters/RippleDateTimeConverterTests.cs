@@ -71,7 +71,7 @@ public class RippleDateTimeConverterTests
             Timestamp = date,
         };
         var json = JsonSerializer.Serialize(model, XrplJsonOptions.Default);
-        Assert.Contains(substring: "784111777", json);
+        StringAssert.Contains(json, "784111777");
     }
 
     [TestMethod]
@@ -82,7 +82,7 @@ public class RippleDateTimeConverterTests
             Timestamp = RippleEpoch,
         };
         var json = JsonSerializer.Serialize(model, XrplJsonOptions.Default);
-        Assert.Contains(substring: "0", json);
+        StringAssert.Contains(json, "0");
     }
 
     [TestMethod]
@@ -159,7 +159,7 @@ public class UnixDateTimeConverterTests
         var expected = (long)((DateTimeOffset)date).ToUnixTimeSeconds(); // 1718454600
         var model = new UnixModel { Timestamp = date };
         var json = JsonSerializer.Serialize(model, XrplJsonOptions.Default);
-        Assert.Contains(expected.ToString(), json);
+        StringAssert.Contains(json, expected.ToString());
     }
 
     [TestMethod]
@@ -170,7 +170,7 @@ public class UnixDateTimeConverterTests
             Timestamp = UnixEpoch,
         };
         var json = JsonSerializer.Serialize(model, XrplJsonOptions.Default);
-        Assert.Contains(substring: "0", json);
+        StringAssert.Contains(json, "0");
     }
 
     [TestMethod]

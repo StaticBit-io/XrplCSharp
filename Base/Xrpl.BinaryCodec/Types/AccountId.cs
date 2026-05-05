@@ -84,7 +84,7 @@ namespace Xrpl.BinaryCodec.Types
         /// <param name="json">json object</param>
         public new static AccountId FromJson(JsonNode json)
         {
-            return json?.GetValue<string>();
+            return json is null ? null : new AccountId(json.GetValue<string>());
         }
 
         public static readonly AccountId Zero = 0;

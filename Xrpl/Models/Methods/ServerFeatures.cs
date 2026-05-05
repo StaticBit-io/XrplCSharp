@@ -150,7 +150,8 @@ public sealed class FeatureInfo
     /// <summary>
     /// Current number of validations or votes for this amendment.
     /// Present only in extended responses.
-    /// </summary>    [JsonPropertyName("count")]
+    /// </summary>
+    [JsonPropertyName("count")]
     public int? Count { get; set; }
     /// <summary>
     /// Required number of validations for this amendment to pass voting.

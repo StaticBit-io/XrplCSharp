@@ -31,9 +31,9 @@ namespace Xrpl.BinaryCodec.Types
             return bl.ToBytes();
         }
 
-        public object ToJson()
+        public virtual JsonNode ToJson()
         {
-            return ToHex();
+            return JsonValue.Create(ToHex())!;
         }
 
         public override string ToString()

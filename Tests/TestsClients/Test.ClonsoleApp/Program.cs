@@ -5,6 +5,7 @@ using System.Text.Json;
 
 using Xrpl.Client;
 using Xrpl.Client.Exceptions;
+using Xrpl.Client.Json;
 using Xrpl.Models;
 using Xrpl.Models.Common;
 using Xrpl.Models.Ledger;
@@ -135,7 +136,8 @@ internal class Program
 
     private static async Task TestPayment()
     {
-        var payment = JsonSerializer.Deserialize<Payment>(tx);
+        var payment = JsonSerializer.Deserialize<Payment>(tx, XrplJsonOptions.Default)
+            ?? throw new InvalidOperationException("Failed to deserialize Payment payload.");
 
         //var offers = await client.AccountOffers(
         //    new AccountOffersRequest(TestAccountBuilder.IssuerAccount.ClassicAddress)

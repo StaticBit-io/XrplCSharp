@@ -7,7 +7,6 @@ using Microsoft.VisualStudio.TestTools.UnitTesting;
 
 using System.Threading.Tasks;
 
-using Xrpl.Models.Transaction;
 using Xrpl.Models.Utils;
 
 namespace XrplTests.Xrpl.Models
@@ -64,6 +63,9 @@ namespace XrplTests.Xrpl.Models
                         {"tfSell",true},
                     }}
                 };
+                Flags.SetTransactionFlagsToNumber(offerCrete);
+                uint expectedFlags = 0x00010000 | 0x00040000 | 0x00080000; // = 851968 = 0xD0000 tfPassive | tfFillOrKill | tfSell
+                Assert.AreEqual(expectedFlags, (uint)offerCrete["Flags"]);
             }
         }
 

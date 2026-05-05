@@ -19,8 +19,11 @@ namespace Xrpl.Client.Json.Converters
                 if (reader.TryGetDecimal(out decimal value))
                     return value;
 
-                double doubleValue = reader.GetDouble();
-                return (decimal)doubleValue;
+                using JsonDocument document = JsonDocument.ParseValue(ref reader);
+                return decimal.Parse(
+                    document.RootElement.GetRawText(),
+                    NumberStyles.Float,
+                    CultureInfo.InvariantCulture);
             }
 
             if (reader.TokenType == JsonTokenType.String)

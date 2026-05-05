@@ -42,8 +42,6 @@ namespace Xrpl.Client.Json.Converters
             string str = reader.GetString();
             if (str != null && StringToEnum.TryGetValue(str, out T result))
                 return result;
-            if (str != null && Enum.TryParse(str, ignoreCase: true, out T parsed))
-                return parsed;
             throw new JsonException($"Unknown {typeof(T).Name} value: '{str}'.");
         }
 
