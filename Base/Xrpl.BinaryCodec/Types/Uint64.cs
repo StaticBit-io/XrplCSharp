@@ -42,7 +42,7 @@ namespace Xrpl.BinaryCodec.Types
         public override string ToString() => B16.Encode(ToBytes());
 
         /// <summary> Deserialize Uint64 from JSON </summary>
-        /// <param name="token">json token - supports both decimal strings (e.g., "1234567890") and hex strings (e.g., "0x499602D2" or "499602D2")</param>
+        /// <param name="token">json token - decimal digit-only strings, <c>0x</c>-prefixed hex, or bare hex (fixtures / rippled may omit the prefix)</param>
         /// <returns>Uint64 value</returns>
         public static Uint64 FromJson(JsonNode token)
         {
@@ -73,13 +73,13 @@ namespace Xrpl.BinaryCodec.Types
             {
                 return new Uint64(ulong.Parse(str));
             }
-            
+
             if (Regex.IsMatch(str, HEX_REGEX))
             {
                 string padded = str.PadLeft(16, '0');
                 return new Uint64(Bits.ToUInt64(B16.Decode(padded), 0));
             }
-            
+
             throw new FormatException($"Cannot parse '{str}' as Uint64. Expected decimal or hex string.");
         }
 

@@ -84,9 +84,13 @@ namespace Xrpl.BinaryCodec.Types
                     JsonNode mptValue = token["value"];
                     if (mptValue == null)
                         throw new InvalidJsonException("MPT Amount object must contain property `value`.");
+                    if (!(mptIssuanceId is JsonValue idJv) || idJv.GetValueKind() != JsonValueKind.String)
+                        throw new InvalidJsonException("MPT Amount property `mpt_issuance_id` must be a JSON string.");
+                    if (!(mptValue is JsonValue valJv) || valJv.GetValueKind() != JsonValueKind.String)
+                        throw new InvalidJsonException("MPT Amount property `value` must be a JSON string.");
                     if (token.AsObject().Count > 2)
                         throw new InvalidJsonException("MPT Amount object has too many properties.");
-                    return new MptAmount(mptValue.GetValue<string>(), mptIssuanceId.GetValue<string>());
+                    return new MptAmount(valJv.GetValue<string>(), idJv.GetValue<string>());
                 }
 
                 JsonNode currencyNodeForXrp = token["currency"];

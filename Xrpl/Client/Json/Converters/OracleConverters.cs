@@ -105,18 +105,33 @@ namespace Xrpl.Client.Json.Converters
             if (reader.TokenType == JsonTokenType.Null)
                 return null;
 
+            if (reader.TokenType != JsonTokenType.String)
+            {
+                throw new JsonException(
+                    $"Oracle currency must be a JSON string; got token type {reader.TokenType}.");
+            }
+
             string value = reader.GetString();
             if (string.IsNullOrEmpty(value))
                 return value;
 
             // Standard currency code (exactly three characters), per XRPL Currency type JSON display rules.
             if (value.Length == 3)
+            {
+                OracleAsciiValidation.ValidatePrintableAsciiChars(value.AsSpan(), "Oracle currency code");
                 return value;
+            }
 
             // 40-char hex string - decode to currency code
             if (value.Length == 40 && IsHexString(value))
             {
                 return DecodeOracleCurrency(value);
+            }
+
+            OracleAsciiValidation.ValidatePrintableAsciiChars(value.AsSpan(), "Oracle currency code");
+            if (value.Length > 20)
+            {
+                throw new JsonException("Oracle currency plain text must be at most 20 ASCII characters.");
             }
 
             return value;
@@ -191,6 +206,12 @@ namespace Xrpl.Client.Json.Converters
             if (reader.TokenType == JsonTokenType.Null)
                 return null;
 
+            if (reader.TokenType != JsonTokenType.String)
+            {
+                throw new JsonException(
+                    $"Oracle hex string field must be a JSON string; got token type {reader.TokenType}.");
+            }
+
             string value = reader.GetString();
             if (string.IsNullOrEmpty(value))
                 return value;
@@ -198,6 +219,7 @@ namespace Xrpl.Client.Json.Converters
             if (value.Length % 2 == 0 && IsHexString(value))
                 return DecodeHexString(value);
 
+            OracleAsciiValidation.ValidatePrintableAsciiChars(value.AsSpan(), "Oracle hex string");
             return value;
         }
 

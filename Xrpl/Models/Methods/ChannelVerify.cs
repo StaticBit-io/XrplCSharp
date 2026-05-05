@@ -62,6 +62,9 @@ namespace Xrpl.Models.Methods
                 if (dropsDecimal != decimal.Truncate(dropsDecimal))
                     throw new ArgumentException("RippleAmount must be a whole number of drops.", nameof(value));
 
+                if (dropsDecimal > ulong.MaxValue)
+                    throw new OverflowException("RippleAmount in drops exceeds ulong.MaxValue.");
+
                 ulong truncated = (ulong)decimal.Truncate(dropsDecimal);
                 Amount = truncated;
             }

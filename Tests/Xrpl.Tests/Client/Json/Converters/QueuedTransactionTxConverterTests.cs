@@ -5,6 +5,8 @@ using System.Text.Json;
 using Xrpl.Client.Json;
 using Xrpl.Models.Ledger;
 
+using XrplTests;
+
 namespace XrplTests.Client.Json.Converters;
 
 [TestClass]
@@ -77,5 +79,32 @@ public class QueuedTransactionTxConverterTests
         Assert.IsInstanceOfType(deserialized.Transaction, typeof(JsonElement));
         JsonElement tx = (JsonElement)deserialized.Transaction;
         Assert.AreEqual("H1", tx.GetProperty("hash").GetString());
+    }
+
+    [TestMethod]
+    public void Read_InvalidTxNumber_ThrowsJsonException()
+    {
+        string json = @"{
+            ""account"": ""rN7n7otQDd6FczFgLdlqtyMVrn3HMdfsCk"",
+            ""tx"": 123,
+            ""retries_remaining"": 5,
+            ""preflight_result"": ""tesSUCCESS""
+        }";
+        Helper.ThrowsException<JsonException>(() =>
+            JsonSerializer.Deserialize<QueuedTransaction>(json, XrplJsonOptions.Default));
+    }
+
+    [TestMethod]
+    public void Write_InvalidTransactionValue_ThrowsJsonException()
+    {
+        QueuedTransaction original = new QueuedTransaction
+        {
+            Account = "rAcc",
+            Transaction = 123,
+            RetriesRemaining = 1,
+            PreflightResult = "tesSUCCESS",
+        };
+        Helper.ThrowsException<JsonException>(() =>
+            JsonSerializer.Serialize(original, XrplJsonOptions.Default));
     }
 }
