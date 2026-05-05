@@ -3,8 +3,40 @@ using System.Text;
 using System.Text.Json;
 using System.Text.Json.Serialization;
 
+using Xrpl.Client.Exceptions;
+using Xrpl.Utils.Hashes;
+
 namespace Xrpl.Client.Json.Converters
 {
+    internal static class OracleAsciiValidation
+    {
+        internal static void ValidatePrintableAsciiChars(ReadOnlySpan<char> chars, string context)
+        {
+            for (int i = 0; i < chars.Length; i++)
+            {
+                char c = chars[i];
+                if (c < (char)0x20 || c > (char)0x7E)
+                {
+                    throw new JsonException(
+                        $"{context} must use printable ASCII (U+0020–U+007E). Invalid character U+{((ushort)c):X4} at index {i}.");
+                }
+            }
+        }
+
+        internal static void ValidatePrintableAsciiBytes(ReadOnlySpan<byte> bytes, string context)
+        {
+            for (int i = 0; i < bytes.Length; i++)
+            {
+                byte b = bytes[i];
+                if (b < 0x20 || b > 0x7E)
+                {
+                    throw new JsonException(
+                        $"{context} must decode to printable ASCII (0x20–0x7E). Invalid byte 0x{b:X2} at index {i}.");
+                }
+            }
+        }
+    }
+
     /// <summary>
     /// Converts AssetPrice values between numeric and hexadecimal string representation.
     /// When writing, converts ulong to lowercase hex string without leading zeros.
@@ -58,9 +90,10 @@ namespace Xrpl.Client.Json.Converters
     }
 
     /// <summary>
-    /// Converts Oracle currency identifiers (BaseAsset/QuoteAsset) following XRPL standard rules.
-    /// Currencies with 3 characters or less remain as plain strings (XRP, USD, BTC).
-    /// Currencies with more than 3 characters are converted to 40-character left-aligned hex.
+    /// Converts Oracle currency identifiers (BaseAsset/QuoteAsset) following XRPL Currency rules:
+    /// standard codes are exactly three characters as plain strings; nonstandard codes use 40-character hex
+    /// (see <see href="https://xrpl.org/docs/references/protocol/data-types/currency-formats">Currency formats</see>).
+    /// Serialization matches <see cref="Hashes.CurrencyToHex"/>.
     /// </summary>
     public sealed class OracleCurrencyConverter : JsonConverter<string>
     {
@@ -76,8 +109,8 @@ namespace Xrpl.Client.Json.Converters
             if (string.IsNullOrEmpty(value))
                 return value;
 
-            // Already a plain 3-char code
-            if (value.Length <= 3)
+            // Standard currency code (exactly three characters), per XRPL Currency type JSON display rules.
+            if (value.Length == 3)
                 return value;
 
             // 40-char hex string - decode to currency code
@@ -90,8 +123,7 @@ namespace Xrpl.Client.Json.Converters
         }
 
         /// <summary>
-        /// Writes an Oracle currency to JSON following XRPL standard rules.
-        /// 3 characters or less = plain string. More than 3 characters = 40-char hex.
+        /// Writes an Oracle currency using the same rules as <see cref="Hashes.CurrencyToHex"/>.
         /// </summary>
         public override void Write(Utf8JsonWriter writer, string value, JsonSerializerOptions options)
         {
@@ -101,26 +133,22 @@ namespace Xrpl.Client.Json.Converters
                 return;
             }
 
-            // Already a 40-char hex string - pass through
-            if (value.Length == 40 && IsHexString(value))
+            OracleAsciiValidation.ValidatePrintableAsciiChars(value.AsSpan(), "Oracle currency code");
+
+            string encoded;
+            try
             {
-                writer.WriteStringValue(value);
-                return;
+                encoded = value.CurrencyToHex();
+            }
+            catch (XrplException ex)
+            {
+                throw new JsonException(ex.Message, ex);
             }
 
-            // 3 characters or less - write as plain string (XRP, USD, BTC, etc.)
-            if (value.Length <= 3)
-            {
-                writer.WriteStringValue(value);
-                return;
-            }
-
-            byte[] bytes = Encoding.ASCII.GetBytes(value);
-            if (bytes.Length > 20)
-                throw new JsonException($"Oracle currency codes must be 20 ASCII bytes or fewer, got {bytes.Length}.");
-            byte[] paddedBytes = new byte[20];
-            Array.Copy(bytes, 0, paddedBytes, 0, bytes.Length);
-            writer.WriteStringValue(BitConverter.ToString(paddedBytes).Replace("-", "").ToLowerInvariant());
+            if (encoded.Length == 40 && IsHexString(encoded))
+                writer.WriteStringValue(encoded.ToLowerInvariant());
+            else
+                writer.WriteStringValue(encoded);
         }
 
         private static bool IsHexString(string value)
@@ -145,6 +173,7 @@ namespace Xrpl.Client.Json.Converters
             for (int i = 0; i < 20 && bytes[i] != 0; i++)
                 length++;
 
+            OracleAsciiValidation.ValidatePrintableAsciiBytes(bytes.AsSpan(0, length), "Oracle currency code");
             return Encoding.ASCII.GetString(bytes, 0, length);
         }
     }
@@ -167,16 +196,7 @@ namespace Xrpl.Client.Json.Converters
                 return value;
 
             if (value.Length % 2 == 0 && IsHexString(value))
-            {
-                try
-                {
-                    return DecodeHexString(value);
-                }
-                catch
-                {
-                    return value;
-                }
-            }
+                return DecodeHexString(value);
 
             return value;
         }
@@ -192,6 +212,7 @@ namespace Xrpl.Client.Json.Converters
                 return;
             }
 
+            OracleAsciiValidation.ValidatePrintableAsciiChars(value.AsSpan(), "Oracle hex string");
             byte[] bytes = Encoding.ASCII.GetBytes(value);
             writer.WriteStringValue(BitConverter.ToString(bytes).Replace("-", "").ToLowerInvariant());
         }
@@ -213,6 +234,8 @@ namespace Xrpl.Client.Json.Converters
             {
                 bytes[i] = Convert.ToByte(hex.Substring(i * 2, 2), 16);
             }
+
+            OracleAsciiValidation.ValidatePrintableAsciiBytes(bytes, "Oracle hex string");
             return Encoding.ASCII.GetString(bytes);
         }
     }

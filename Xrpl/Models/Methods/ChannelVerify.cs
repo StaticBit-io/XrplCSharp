@@ -53,7 +53,18 @@ namespace Xrpl.Models.Methods
         public double RippleAmount
         {
             get => (double)Amount / 1000000;
-            set => Amount = Convert.ToUInt32(value * 1000000);
+            set
+            {
+                if (value < 0)
+                    throw new ArgumentOutOfRangeException(nameof(value), value, "RippleAmount must be non-negative.");
+
+                decimal dropsDecimal = (decimal)value * 1000000m;
+                if (dropsDecimal != decimal.Truncate(dropsDecimal))
+                    throw new ArgumentException("RippleAmount must be a whole number of drops.", nameof(value));
+
+                ulong truncated = (ulong)decimal.Truncate(dropsDecimal);
+                Amount = truncated;
+            }
         }
     }
     //todo not found ChannelVerifyResponse https://github.com/XRPLF/xrpl.js/blob/b20c05c3680d80344006d20c44b4ae1c3b0ffcac/packages/xrpl/src/models/methods/channelVerify.ts#L33

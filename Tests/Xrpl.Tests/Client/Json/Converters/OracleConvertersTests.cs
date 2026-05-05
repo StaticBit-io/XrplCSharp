@@ -7,6 +7,8 @@ using System.Text.Json.Serialization;
 using Xrpl.Client.Json;
 using Xrpl.Client.Json.Converters;
 
+using XrplTests;
+
 namespace XrplTests.Client.Json.Converters;
 
 [TestClass]
@@ -115,9 +117,25 @@ public class OracleCurrencyConverterTests
     {
         Model model = new Model { Currency = "Bitcoin" };
         string json = JsonSerializer.Serialize(model, XrplJsonOptions.Default);
-        // "Bitcoin" (7 chars) should be padded to 40 hex chars
+        // "Bitcoin" (7 chars) should be padded to 40 hex chars (Hashes.CurrencyToHex)
         string expected = "426974636f696e00000000000000000000000000";
         Assert.IsTrue(json.Contains(expected));
+    }
+
+    [TestMethod]
+    public void Write_TwoCharCode_EncodesAsHex40Chars()
+    {
+        Model model = new Model { Currency = "BT" };
+        string json = JsonSerializer.Serialize(model, XrplJsonOptions.Default);
+        string expected = "4254000000000000000000000000000000000000";
+        Assert.IsTrue(json.Contains(expected), "Non-standard codes (not exactly 3 chars) must use 40-char hex.");
+    }
+
+    [TestMethod]
+    public void Write_NonAsciiCurrency_ThrowsJsonException()
+    {
+        Model model = new Model { Currency = "€UR" };
+        Helper.ThrowsException<JsonException>(() => JsonSerializer.Serialize(model, XrplJsonOptions.Default));
     }
 
     [TestMethod]
@@ -146,6 +164,13 @@ public class OracleHexStringConverterTests
         string json = "{\"Provider\": \"74657374\"}";
         Model result = JsonSerializer.Deserialize<Model>(json, XrplJsonOptions.Default);
         Assert.AreEqual("test", result.Provider);
+    }
+
+    [TestMethod]
+    public void Read_HexDecodedNonPrintable_ThrowsJsonException()
+    {
+        string json = "{\"Provider\": \"01\"}";
+        Helper.ThrowsException<JsonException>(() => JsonSerializer.Deserialize<Model>(json, XrplJsonOptions.Default));
     }
 
     [TestMethod]
@@ -181,6 +206,13 @@ public class OracleHexStringConverterTests
         // "74657374" is treated as plain ASCII text, each char encoded to hex
         Assert.IsFalse(json.Contains("\"74657374\""));
         Assert.IsTrue(json.Contains("3734363537333734"));
+    }
+
+    [TestMethod]
+    public void Write_NonAsciiProvider_ThrowsJsonException()
+    {
+        Model model = new Model { Provider = "тест" };
+        Helper.ThrowsException<JsonException>(() => JsonSerializer.Serialize(model, XrplJsonOptions.Default));
     }
 
     [TestMethod]

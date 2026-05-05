@@ -29,6 +29,13 @@ namespace Xrpl.Client.Json.Converters
                 FieldInfo field = typeof(T).GetField(value.ToString())!;
                 EnumMemberAttribute attr = field.GetCustomAttribute<EnumMemberAttribute>();
                 string name = attr?.Value ?? value.ToString();
+                if (StringToEnum.TryGetValue(name, out T existingForName)
+                    && !EqualityComparer<T>.Default.Equals(existingForName, value))
+                {
+                    throw new InvalidOperationException(
+                        $"Enum '{typeof(T).Name}' maps multiple members to the same serialization string '{name}': '{existingForName}' and '{value}'.");
+                }
+
                 EnumToString[value] = name;
                 StringToEnum[name] = value;
                 string memberName = value.ToString();
@@ -39,6 +46,11 @@ namespace Xrpl.Client.Json.Converters
 
         public override T Read(ref Utf8JsonReader reader, Type typeToConvert, JsonSerializerOptions options)
         {
+            if (reader.TokenType != JsonTokenType.String)
+            {
+                throw new JsonException($"{typeof(T).Name} value must be a JSON string; got token type {reader.TokenType}.");
+            }
+
             string str = reader.GetString();
             if (str != null && StringToEnum.TryGetValue(str, out T result))
                 return result;

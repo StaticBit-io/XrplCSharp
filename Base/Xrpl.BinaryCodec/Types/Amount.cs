@@ -64,6 +64,9 @@ namespace Xrpl.BinaryCodec.Types
 
         public static Amount FromJson(JsonNode token)
         {
+            if (token == null)
+                throw new InvalidJsonException("Cannot create Amount from null JSON.");
+
             JsonValueKind kind = token.GetValueKind();
             if (kind == JsonValueKind.String)
             {
@@ -86,8 +89,14 @@ namespace Xrpl.BinaryCodec.Types
                     return new MptAmount(mptValue.GetValue<string>(), mptIssuanceId.GetValue<string>());
                 }
 
-                if (token["currency"]?.GetValue<string>() == "XRP")
+                JsonNode currencyNodeForXrp = token["currency"];
+                if (currencyNodeForXrp is JsonValue currencyJv
+                    && currencyJv.GetValueKind() == JsonValueKind.String
+                    && currencyJv.GetValue<string>() == "XRP")
                 {
+                    if (token.AsObject().Count != 2)
+                        throw new InvalidJsonException("XRP Amount object must contain only `currency` and `value`.");
+
                     JsonNode valueTokenForXrp = token["value"];
                     if (valueTokenForXrp == null || valueTokenForXrp.GetValueKind() != JsonValueKind.String)
                         throw new InvalidJsonException("XRP Amount object must contain string property `value`.");

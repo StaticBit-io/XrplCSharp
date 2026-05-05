@@ -46,12 +46,18 @@ namespace Xrpl.BinaryCodec.Types
         /// <returns>Uint64 value</returns>
         public static Uint64 FromJson(JsonNode token)
         {
-            if (token is JsonValue jv && jv.GetValueKind() == System.Text.Json.JsonValueKind.Number)
+            if (token == null)
+                throw new FormatException("Uint64 JSON token cannot be null.");
+
+            if (token is JsonValue jvNum && jvNum.GetValueKind() == System.Text.Json.JsonValueKind.Number)
             {
-                return new Uint64(jv.GetValue<ulong>());
+                return new Uint64(jvNum.GetValue<ulong>());
             }
 
-            string str = token.GetValue<string>();
+            if (!(token is JsonValue jvStr) || jvStr.GetValueKind() != System.Text.Json.JsonValueKind.String)
+                throw new FormatException($"Uint64 JSON token must be a JSON number or string, got {token.GetType().Name}.");
+
+            string str = jvStr.GetValue<string>();
             
             if (str.StartsWith("0x", StringComparison.OrdinalIgnoreCase))
             {

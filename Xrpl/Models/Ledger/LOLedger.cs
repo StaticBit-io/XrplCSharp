@@ -166,7 +166,7 @@ namespace Xrpl.Models.Ledger
         /// transaction object including the transaction's identifying hash in the hash field.
         /// </summary>
         [JsonPropertyName("tx")]
-        //TODO: This needs to be made into a JsonConverter for string or object
+        [JsonConverter(typeof(QueuedTransactionTxConverter))]
         public object Transaction { get; set; }
         /// <summary>
         /// How many times this transaction can be retried before being dropped.

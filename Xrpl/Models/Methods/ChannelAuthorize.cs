@@ -87,7 +87,18 @@ namespace Xrpl.Models.Methods
         public double RippleAmount
         {
             get => (double) Amount / 1000000;
-            set => Amount = Convert.ToUInt64(value * 1000000);
+            set
+            {
+                if (value < 0)
+                    throw new ArgumentOutOfRangeException(nameof(value), value, "RippleAmount must be non-negative.");
+
+                decimal dropsDecimal = (decimal)value * 1000000m;
+                if (dropsDecimal != decimal.Truncate(dropsDecimal))
+                    throw new ArgumentException("RippleAmount must be a whole number of drops.", nameof(value));
+
+                ulong truncated = (ulong)decimal.Truncate(dropsDecimal);
+                Amount = truncated;
+            }
         }
     }
 }
