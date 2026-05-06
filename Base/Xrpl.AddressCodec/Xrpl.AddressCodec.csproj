@@ -6,14 +6,14 @@
     <TargetFramework>netstandard2.0</TargetFramework>
     <RootNamespace>Xrpl</RootNamespace>
     <PackOnBuild>true</PackOnBuild>
-    <Authors>Chris Will, Denis Angell</Authors>
-    <Owners>Xrpl Foundation</Owners>
+    <Authors>Chris Will, Denis Angell, Aleksandr Platonenkov, StaticBit-io</Authors>
+    <Owners>StaticBit-io</Owners>
     <Description>A C# library to interact with the XRP Ledger (XRPL) blockchain</Description>
     <NeutralLanguage>en-US</NeutralLanguage>
-    <PackageLicenseUrl>https://github.com/Transia-RnD/XrplCSharp/LICENSE</PackageLicenseUrl>
-    <PackageProjectUrl>https://github.com/Transia-RnD/XrplCSharp</PackageProjectUrl>
+    <PackageLicenseExpression>Apache-2.0</PackageLicenseExpression>
+    <PackageProjectUrl>https://github.com/StaticBit-io/XrplCSharp</PackageProjectUrl>
     <Title>XrplCSharp</Title>
-    <PackageVersion>2.0.0</PackageVersion>
+    <PackageVersion>10.3.0.0</PackageVersion>
   </PropertyGroup>
 
   <PropertyGroup>

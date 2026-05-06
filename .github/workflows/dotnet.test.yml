@@ -1,17 +1,13 @@
-# This workflow will do a clean install of .net dependencies, build the source code and run tests across different versions of .net
-# For more information see: https://help.github.com/actions/language-and-framework-guides/using-net-with-github-actions
-
 name: .NET CI
 
 env:
-  RIPPLED_DOCKER_IMAGE: rippleci/rippled:2.0.0-b4
-  DOTNET_VERSION: '9.0.x'
+  DOTNET_VERSION: '10.0.x'
 
 on:
   push:
-    branches: [ main ]
+    branches: [ dev, main ]
   pull_request:
-    branches: [ main ]
+    branches: [ dev, main ]
   workflow_dispatch:
 
 jobs:
@@ -19,23 +15,21 @@ jobs:
     runs-on: ubuntu-latest
 
     steps:
-    - uses: actions/checkout@v3
+    - uses: actions/checkout@v4
     - name: Use .NET ${{ env.DOTNET_VERSION }}
-      uses: actions/setup-dotnet@v3
+      uses: actions/setup-dotnet@v4
       with:
         dotnet-version: ${{ env.DOTNET_VERSION }}
     - name: Build
       run: dotnet build
-    # - name: Lint
-    #   run: dotnet lint
 
   unit:
     runs-on: ubuntu-latest
 
     steps:
-    - uses: actions/checkout@v3
+    - uses: actions/checkout@v4
     - name: Use .NET ${{ env.DOTNET_VERSION }}
-      uses: actions/setup-dotnet@v3
+      uses: actions/setup-dotnet@v4
       with:
         dotnet-version: ${{ env.DOTNET_VERSION }}
     - name: Build
@@ -45,38 +39,38 @@ jobs:
 
   integration:
     runs-on: ubuntu-latest
-    
-    steps:
-    - uses: actions/checkout@v3
 
-    - name: Run docker in background
+    steps:
+    - uses: actions/checkout@v4
+
+    - name: Start rippled + ledger-acceptor
+      run: docker compose -f .ci-config/docker-compose.ci.yml up -d
+
+    - name: Wait for rippled to be healthy
       run: |
-        docker run --detach --rm --name rippled-service -p 6006:6006 --volume "${{ github.workspace }}/.ci-config/":"/opt/ripple/etc/" --health-cmd="wget localhost:6006 || exit 1" --health-interval=5s --health-retries=10 --health-timeout=2s --env GITHUB_ACTIONS=true --env CI=true ${{ env.RIPPLED_DOCKER_IMAGE }} /opt/ripple/bin/rippled -a --conf /opt/ripple/etc/rippled.cfg
+        for i in $(seq 1 60); do
+          if docker inspect --format='{{.State.Health.Status}}' rippled-service 2>/dev/null | grep -q healthy; then
+            echo "rippled is healthy"
+            break
+          fi
+          echo "Waiting for rippled... ($i/60)"
+          sleep 2
+        done
 
     - name: Use .NET ${{ env.DOTNET_VERSION }}
-      uses: actions/setup-dotnet@v3
+      uses: actions/setup-dotnet@v4
       with:
         dotnet-version: ${{ env.DOTNET_VERSION }}
     - name: Restore dependencies
       run: dotnet restore
     - name: Build
       run: dotnet build
-    - name: Wait for rippled
-      run: |
-        for i in $(seq 1 30); do
-          if docker inspect --format='{{.State.Health.Status}}' rippled-service 2>/dev/null | grep -q healthy; then
-            echo "rippled is healthy"
-            break
-          fi
-          echo "Waiting for rippled... ($i/30)"
-          sleep 2
-        done
     - name: Test Integration
       run: dotnet test Tests/Xrpl.Tests/Xrpl.Tests.csproj --verbosity normal --settings test.runsettings --filter "TestI"
       env:
         HOST: localhost
         PORT: 6006
-    
-    - name: Stop docker container
+
+    - name: Stop docker containers
       if: always()
-      run: docker stop rippled-service
+      run: docker compose -f .ci-config/docker-compose.ci.yml down

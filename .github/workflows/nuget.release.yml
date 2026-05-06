@@ -1,39 +1,39 @@
-name: .NET
+name: NuGet Release
 
 on:
   push:
     branches: [ release ]
-  pull_request:
-    branches: [ release ]
 
 jobs:
   release:
-
     runs-on: ubuntu-latest
 
     steps:
-    - uses: actions/checkout@v3
+    - uses: actions/checkout@v4
+
     - name: Setup .NET
-      uses: actions/setup-dotnet@v3
+      uses: actions/setup-dotnet@v4
       with:
-        dotnet-version: 9.0.x
-        
+        dotnet-version: 10.0.x
+
     - name: Restore dependencies
       run: dotnet restore
-      
+
     - name: Build
-      run: dotnet build --no-restore
-      
+      run: dotnet build --no-restore -c Release
+
     - name: Test
-      run: dotnet test --no-build --verbosity normal --settings test.runsettings --filter "TestU"
-      
-    - name: Packing
+      run: dotnet test --no-build -c Release --verbosity normal --settings test.runsettings --filter "TestU"
+
+    - name: Pack all projects
       run: |
-          dotnet build Xrpl/Xrpl.csproj -c Release
-          dotnet pack Xrpl/Xrpl.csproj -c Release
-          
-    - name: Push package
-      run: dotnet nuget push "**/*.nupkg" --skip-duplicate --source https://nuget.pkg.github.com/dangell7/index.json -k ${{ secrets.GITHUB_TOKEN }}
-  
-    - name: Publishing
-      run: dotnet nuget push "**/*.nupkg" -k ${{ secrets.NUGET_API_KEY }} --skip-duplicate -s https://api.nuget.org/v3/index.json
+        dotnet pack Xrpl/Xrpl.csproj -c Release --no-build
+        dotnet pack Base/Xrpl.AddressCodec/Xrpl.AddressCodec.csproj -c Release --no-build
+        dotnet pack Base/Xrpl.BinaryCodec/Xrpl.BinaryCodec.csproj -c Release --no-build
+        dotnet pack Base/Xrpl.Keypairs/Xrpl.Keypairs.csproj -c Release --no-build
+
+    - name: Push to GitHub Packages
+      run: dotnet nuget push "**/*.nupkg" --skip-duplicate --source https://nuget.pkg.github.com/StaticBit-io/index.json -k ${{ secrets.GITHUB_TOKEN }}
+
+    - name: Publish to NuGet.org
+      run: dotnet nuget push "**/*.nupkg" --skip-duplicate -s https://api.nuget.org/v3/index.json -k ${{ secrets.NUGET_API_KEY }}

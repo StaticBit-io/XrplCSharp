@@ -1,0 +1,37 @@
+version: "3.8"
+
+services:
+  xrpld:
+    image: xrpllabsofficial/xrpld:latest
+    container_name: rippled-service
+    command: ["-a", "--start"]
+    ports:
+      - "5005:5005"
+      - "5006:5006"
+      - "6006:6006"
+    volumes:
+      - ./rippled.cfg:/etc/opt/ripple/rippled.cfg:ro
+      - ./validators.txt:/etc/opt/ripple/validators.txt:ro
+    healthcheck:
+      test: ["CMD", "wget", "-q", "--spider", "http://localhost:6006"]
+      interval: 5s
+      timeout: 2s
+      retries: 20
+
+  ledger-acceptor:
+    image: curlimages/curl:latest
+    container_name: ledger-acceptor
+    depends_on:
+      xrpld:
+        condition: service_healthy
+    entrypoint:
+      - sh
+      - -c
+      - |
+        while true; do
+          curl -s -X POST http://xrpld:5006/ \
+            -H "Content-Type: application/json" \
+            -d '{"method":"ledger_accept"}'
+          sleep 4
+        done
+    restart: unless-stopped
