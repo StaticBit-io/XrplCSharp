@@ -35,6 +35,17 @@ namespace Xrpl.Client.Json.Converters
                 }
             }
         }
+
+        internal static bool IsHexString(ReadOnlySpan<char> value)
+        {
+            for (int i = 0; i < value.Length; i++)
+            {
+                char c = value[i];
+                if (!((c >= '0' && c <= '9') || (c >= 'a' && c <= 'f') || (c >= 'A' && c <= 'F')))
+                    return false;
+            }
+            return true;
+        }
     }
 
     /// <summary>
@@ -70,7 +81,7 @@ namespace Xrpl.Client.Json.Converters
             if (reader.TokenType == JsonTokenType.Number)
                 return reader.GetUInt64();
 
-            throw new JsonException($"Invalid AssetPrice value");
+            throw new JsonException($"Invalid AssetPrice value; expected String or Number token, got {reader.TokenType}.");
         }
 
         /// <summary>
@@ -131,7 +142,7 @@ namespace Xrpl.Client.Json.Converters
             }
 
             // 40-char hex string - decode to currency code
-            if (value.Length == 40 && IsHexString(value))
+            if (value.Length == 40 && OracleAsciiValidation.IsHexString(value.AsSpan()))
             {
                 return DecodeOracleCurrency(value);
             }
@@ -168,20 +179,10 @@ namespace Xrpl.Client.Json.Converters
                 throw new JsonException(ex.Message, ex);
             }
 
-            if (encoded.Length == 40 && IsHexString(encoded))
+            if (encoded.Length == 40 && OracleAsciiValidation.IsHexString(encoded.AsSpan()))
                 writer.WriteStringValue(encoded.ToLowerInvariant());
             else
                 writer.WriteStringValue(encoded);
-        }
-
-        private static bool IsHexString(string value)
-        {
-            foreach (char c in value)
-            {
-                if (!((c >= '0' && c <= '9') || (c >= 'a' && c <= 'f') || (c >= 'A' && c <= 'F')))
-                    return false;
-            }
-            return true;
         }
 
         private static string DecodeOracleCurrency(string hex)
@@ -224,7 +225,7 @@ namespace Xrpl.Client.Json.Converters
             if (string.IsNullOrEmpty(value))
                 return value;
 
-            if (value.Length % 2 == 0 && IsHexString(value))
+            if (value.Length % 2 == 0 && OracleAsciiValidation.IsHexString(value.AsSpan()))
                 return DecodeHexString(value);
 
             OracleAsciiValidation.ValidatePrintableAsciiChars(value.AsSpan(), "Oracle hex string");
@@ -245,16 +246,6 @@ namespace Xrpl.Client.Json.Converters
             OracleAsciiValidation.ValidatePrintableAsciiChars(value.AsSpan(), "Oracle hex string");
             byte[] bytes = Encoding.ASCII.GetBytes(value);
             writer.WriteStringValue(BitConverter.ToString(bytes).Replace("-", "").ToLowerInvariant());
-        }
-
-        private static bool IsHexString(string value)
-        {
-            foreach (char c in value)
-            {
-                if (!((c >= '0' && c <= '9') || (c >= 'a' && c <= 'f') || (c >= 'A' && c <= 'F')))
-                    return false;
-            }
-            return true;
         }
 
         private static string DecodeHexString(string hex)

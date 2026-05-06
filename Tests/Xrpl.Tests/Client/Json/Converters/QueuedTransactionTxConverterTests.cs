@@ -136,4 +136,21 @@ public class QueuedTransactionTxConverterTests
         Helper.ThrowsException<JsonException>(() =>
             JsonSerializer.Serialize(original, XrplJsonOptions.Default));
     }
+
+    [TestMethod]
+    public void Write_DictionaryTransactionValue_SerializesAsObject()
+    {
+        QueuedTransaction original = new QueuedTransaction
+        {
+            Account = "rAcc",
+            Transaction = new Dictionary<string, object> { ["hash"] = "H1", ["TransactionType"] = "Payment" },
+            RetriesRemaining = 1,
+            PreflightResult = "tesSUCCESS",
+        };
+        string json = JsonSerializer.Serialize(original, XrplJsonOptions.Default);
+        QueuedTransaction deserialized = JsonSerializer.Deserialize<QueuedTransaction>(json, XrplJsonOptions.Default);
+        Assert.IsInstanceOfType(deserialized.Transaction, typeof(JsonElement));
+        JsonElement tx = (JsonElement)deserialized.Transaction;
+        Assert.AreEqual("H1", tx.GetProperty("hash").GetString());
+    }
 }

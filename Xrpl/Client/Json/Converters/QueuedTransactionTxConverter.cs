@@ -1,5 +1,4 @@
 using System;
-using System.Collections;
 using System.Text.Json;
 using System.Text.Json.Serialization;
 
@@ -51,19 +50,14 @@ namespace Xrpl.Client.Json.Converters
             }
 
             Type runtimeType = value.GetType();
-            if (runtimeType.IsPrimitive || value is decimal)
+            using JsonDocument doc = JsonSerializer.SerializeToDocument(value, runtimeType, options);
+            JsonValueKind kind = doc.RootElement.ValueKind;
+            if (kind != JsonValueKind.Object && kind != JsonValueKind.String)
             {
                 throw new JsonException(
-                    $"QueuedTransaction.tx must be a JSON string or object; got CLR type {runtimeType.Name}.");
+                    $"QueuedTransaction.tx must be a JSON string or object; got JSON {kind} from CLR type {runtimeType.Name}.");
             }
-
-            if (value is IEnumerable)
-            {
-                throw new JsonException(
-                    $"QueuedTransaction.tx cannot be a collection; got CLR type {runtimeType.Name}.");
-            }
-
-            JsonSerializer.Serialize(writer, value, runtimeType, options);
+            doc.RootElement.WriteTo(writer);
         }
     }
 }
