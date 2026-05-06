@@ -1,5 +1,6 @@
 using Microsoft.VisualStudio.TestTools.UnitTesting;
 
+using System.Collections.Generic;
 using System.Text.Json;
 
 using Xrpl.Client.Json;
@@ -101,6 +102,34 @@ public class QueuedTransactionTxConverterTests
         {
             Account = "rAcc",
             Transaction = 123,
+            RetriesRemaining = 1,
+            PreflightResult = "tesSUCCESS",
+        };
+        Helper.ThrowsException<JsonException>(() =>
+            JsonSerializer.Serialize(original, XrplJsonOptions.Default));
+    }
+
+    [TestMethod]
+    public void Write_ArrayTransactionValue_ThrowsJsonException()
+    {
+        QueuedTransaction original = new QueuedTransaction
+        {
+            Account = "rAcc",
+            Transaction = new[] { 1 },
+            RetriesRemaining = 1,
+            PreflightResult = "tesSUCCESS",
+        };
+        Helper.ThrowsException<JsonException>(() =>
+            JsonSerializer.Serialize(original, XrplJsonOptions.Default));
+    }
+
+    [TestMethod]
+    public void Write_ListTransactionValue_ThrowsJsonException()
+    {
+        QueuedTransaction original = new QueuedTransaction
+        {
+            Account = "rAcc",
+            Transaction = new List<int> { 1 },
             RetriesRemaining = 1,
             PreflightResult = "tesSUCCESS",
         };

@@ -56,7 +56,15 @@ namespace Xrpl.Client.Json.Converters
             if (reader.TokenType == JsonTokenType.String)
             {
                 string hexStr = reader.GetString();
-                return Convert.ToUInt64(hexStr, 16);
+                try
+                {
+                    return Convert.ToUInt64(hexStr, 16);
+                }
+                catch (Exception ex) when (ex is FormatException or OverflowException)
+                {
+                    throw new JsonException(
+                        $"Invalid AssetPrice hex string '{hexStr}': {ex.Message}", ex);
+                }
             }
 
             if (reader.TokenType == JsonTokenType.Number)

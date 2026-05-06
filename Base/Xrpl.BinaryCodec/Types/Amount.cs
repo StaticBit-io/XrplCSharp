@@ -1,4 +1,5 @@
-﻿using System.Globalization;
+﻿using System;
+using System.Globalization;
 using System.Text.Json;
 using System.Text.Json.Nodes;
 using Xrpl.BinaryCodec.Binary;
@@ -74,7 +75,15 @@ namespace Xrpl.BinaryCodec.Types
             }
             else if (kind == JsonValueKind.Number)
             {
-                return token.GetValue<ulong>();
+                try
+                {
+                    return token.GetValue<ulong>();
+                }
+                catch (Exception ex) when (ex is FormatException or OverflowException or InvalidOperationException)
+                {
+                    throw new InvalidJsonException(
+                        $"Cannot convert numeric JSON value to a valid XRP drops amount: {ex.Message}", ex);
+                }
             }
             else if (token is JsonObject)
             {

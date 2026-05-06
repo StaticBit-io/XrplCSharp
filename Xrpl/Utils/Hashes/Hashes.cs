@@ -85,9 +85,7 @@ namespace Xrpl.Utils.Hashes
 
         public static string HashPaymentChannel(string address, string dstAddress, int sequence)
         {
-            return (LedgerSpaceHex(LedgerSpace.Paychan) +
-                    AddressToHex(address) +
-                    AddressToHex(dstAddress) +
+            return (LedgerSpace.Paychan.LedgerSpaceHex() + address.AddressToHex() + dstAddress.AddressToHex() +
                     sequence.ToString("X").PadLeft(BYTE_LENGTH * 2, '0')).Sha512Half();
         }
 
@@ -99,39 +97,39 @@ namespace Xrpl.Utils.Hashes
 
         public static string HashAccountRoot(this string address)
         {
-            return (LedgerSpaceHex(LedgerSpace.Account) + AddressToHex(address)).Sha512Half();
+            return (LedgerSpace.Account.LedgerSpaceHex() + address.AddressToHex()).Sha512Half();
         }
 
         public static string HashSignerListId(this string address)
         {
-            return (LedgerSpaceHex(LedgerSpace.SignerList) + AddressToHex(address) + "00000000").Sha512Half();
+            return (LedgerSpace.SignerList.LedgerSpaceHex() + address.AddressToHex() + "00000000").Sha512Half();
         }
 
         public static string HashOfferId(string address, int sequence)
         {
 
-            string hexPrefix = LedgerSpaceHex(LedgerSpace.Offer).PadLeft(2, '0');
+            string hexPrefix = LedgerSpace.Offer.LedgerSpaceHex().PadLeft(2, '0');
             string hexSequence = sequence.ToString("X").PadLeft(8, '0');
             string prefix = "00" + hexPrefix;
-            return (prefix + AddressToHex(address) + hexSequence).Sha512Half();
+            return (prefix + address.AddressToHex() + hexSequence).Sha512Half();
         }
 
         public static string HashTrustline(string address1, string address2, string currency)
         {
-            string address1Hex = AddressToHex(address1);
-            string address2Hex = AddressToHex(address2);
+            string address1Hex = address1.AddressToHex();
+            string address2Hex = address2.AddressToHex();
 
             bool swap = (BigInteger.Parse(address1Hex, NumberStyles.HexNumber)>(BigInteger.Parse(address2Hex, NumberStyles.HexNumber)));
             string lowAddressHex = swap ? address2Hex : address1Hex;
             string highAddressHex = swap ? address1Hex : address2Hex;
 
-            string prefix = LedgerSpaceHex(LedgerSpace.RippleState);
-            return (prefix + lowAddressHex + highAddressHex + CurrencyToHex(currency)).Sha512Half();
+            string prefix = LedgerSpace.RippleState.LedgerSpaceHex();
+            return (prefix + lowAddressHex + highAddressHex + currency.CurrencyToHex()).Sha512Half();
         }
 
         public static string HashEscrow(string address, int sequence)
         {
-            return (LedgerSpaceHex(LedgerSpace.Escrow) + AddressToHex(address) + sequence.ToString("X").PadLeft(BYTE_LENGTH * 2, '0')).Sha512Half();
+            return (LedgerSpace.Escrow.LedgerSpaceHex() + address.AddressToHex() + sequence.ToString("X").PadLeft(BYTE_LENGTH * 2, '0')).Sha512Half();
         }
 
         /// <summary>
@@ -172,9 +170,9 @@ namespace Xrpl.Utils.Hashes
                 throw new ArgumentException("credentialTypeHex cannot exceed 64 bytes (128 hex characters)", nameof(credentialTypeHex));
             }
 
-            return (LedgerSpaceHex(LedgerSpace.Credential)
-                    + AddressToHex(subject)
-                    + AddressToHex(issuer)
+            return (LedgerSpace.Credential.LedgerSpaceHex()
+                    + subject.AddressToHex()
+                    + issuer.AddressToHex()
                     + normalized).Sha512Half();
         }
 

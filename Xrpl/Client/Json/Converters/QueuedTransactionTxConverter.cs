@@ -1,4 +1,5 @@
 using System;
+using System.Collections;
 using System.Text.Json;
 using System.Text.Json.Serialization;
 
@@ -40,6 +41,11 @@ namespace Xrpl.Client.Json.Converters
 
             if (value is JsonElement jsonElement)
             {
+                if (jsonElement.ValueKind != JsonValueKind.Object && jsonElement.ValueKind != JsonValueKind.String)
+                {
+                    throw new JsonException(
+                        $"QueuedTransaction.tx must be a JSON string or object; got JsonElement of kind {jsonElement.ValueKind}.");
+                }
                 JsonSerializer.Serialize(writer, jsonElement, options);
                 return;
             }
@@ -51,9 +57,10 @@ namespace Xrpl.Client.Json.Converters
                     $"QueuedTransaction.tx must be a JSON string or object; got CLR type {runtimeType.Name}.");
             }
 
-            if (value is Array)
+            if (value is IEnumerable)
             {
-                throw new JsonException("QueuedTransaction.tx cannot be a JSON array.");
+                throw new JsonException(
+                    $"QueuedTransaction.tx cannot be a collection; got CLR type {runtimeType.Name}.");
             }
 
             JsonSerializer.Serialize(writer, value, runtimeType, options);
