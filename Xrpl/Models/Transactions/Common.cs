@@ -1,21 +1,23 @@
-﻿using Newtonsoft.Json;
-using Newtonsoft.Json.Converters;
-
-using System;
+﻿using System;
 using System.Collections.Generic;
 using System.Globalization;
 using System.Linq;
 using System.Security.Cryptography;
+using System.Text.Json;
+using System.Text.Json.Serialization;
 using System.Threading.Tasks;
 
 using Xrpl.Client.Exceptions;
 using Xrpl.Client.Extensions;
+using Xrpl.Client.Json;
 using Xrpl.Client.Json.Converters;
 using Xrpl.Models.Common;
 using Xrpl.Models.Ledger;
 using Xrpl.Models.Utils;
 
 using static Xrpl.Models.Transactions.BatchSigner;
+
+using JsonSerializer = System.Text.Json.JsonSerializer;
 
 // https://github.com/XRPLF/xrpl.js/blob/main/packages/xrpl/src/models/transactions/common.ts
 
@@ -27,31 +29,30 @@ namespace Xrpl.Models.Transactions
         private const int SIGNER_SIZE = 3;
         private const int MEMO_SIZE = 3;
 
-        public static bool IsRecord(dynamic value)
+        public static bool IsRecord(object value)
         {
-            return value != null && value is Dictionary<string, dynamic>;
+            return value != null && value is Dictionary<string, object>;
         }
         /// <summary>
         /// Verify the form and type of an IssuedCurrencyAmount at runtime.
         /// </summary>
         /// <param name="input">The input to check the form and type of.</param>
         /// <returns>Whether the IssuedCurrencyAmount is malformed.</returns>
-        public static bool IsIssuedCurrency(dynamic input)
+        public static bool IsIssuedCurrency(object input)
         {
-            return (
-                IsRecord(input) &&
-                input.Count == ISSUED_CURRENCY_SIZE &&
-                input["value"] is string &&
-                input["issuer"] is string &&
-                input["currency"] is string
-            );
+            if (input is not Dictionary<string, object> dict)
+                return false;
+            return dict.Count == ISSUED_CURRENCY_SIZE &&
+                dict.TryGetValue("value", out object val) && val is string &&
+                dict.TryGetValue("issuer", out object iss) && iss is string &&
+                dict.TryGetValue("currency", out object cur) && cur is string;
         }
         /// <summary>
         /// Verify the form and type of an Amount at runtime.
         /// </summary>
         /// <param name="amount">The object to check the form and type of.</param>
         /// <returns>Whether the Amount is malformed.</returns>
-        public static bool IsAmount(dynamic amount)
+        public static bool IsAmount(object amount)
         {
             return amount is string || IsIssuedCurrency(amount);
         }
@@ -62,30 +63,30 @@ namespace Xrpl.Models.Transactions
         /// </summary>
         /// <param name="signer">The object to check the form and type of.</param>
         /// <returns>Whether the Signer is malformed.</returns>
-        public static bool IsSigner(dynamic signer)
+        public static bool IsSigner(object signer)
         {
-            if (signer is not Dictionary<string, dynamic> { Count: SIGNER_SIZE } value)
+            if (signer is not Dictionary<string, object> { Count: SIGNER_SIZE } value)
                 return false;
 
-            return (value.TryGetValue("Account", out var account) && account is string { }) &&
-                   (value.TryGetValue("TxnSignature", out var TxnSignature) && TxnSignature is string { }) &&
-                   (value.TryGetValue("SigningPubKey", out var SigningPubKey) && SigningPubKey is string { });
+            return (value.TryGetValue("Account", out object account) && account is string { }) &&
+                   (value.TryGetValue("TxnSignature", out object TxnSignature) && TxnSignature is string { }) &&
+                   (value.TryGetValue("SigningPubKey", out object SigningPubKey) && SigningPubKey is string { });
         }
         /// <summary>
         /// Verify the form and type of Memo at runtime.
         /// </summary>
         /// <param name="memo">The object to check the form and type of.</param>
         /// <returns>Whether the Memo is malformed.</returns>
-        public static bool IsMemo(dynamic memo)
+        public static bool IsMemo(object memo)
         {
-            if (memo is not Dictionary<string, dynamic> { } value)
+            if (memo is not Dictionary<string, object> { } value)
                 return false;
 
-            var size = value.Count;
+            int size = value.Count;
 
-            var valid_data = value.TryGetValue("MemoData", out var MemoData) || MemoData is string;
-            var valid_format = value.TryGetValue("MemoFormat", out var MemoFormat) || MemoFormat is string;
-            var valid_type = value.TryGetValue("MemoType", out var MemoType) || MemoType is string;
+            bool valid_data = value.TryGetValue("MemoData", out object MemoData) || MemoData is string;
+            bool valid_format = value.TryGetValue("MemoFormat", out object MemoFormat) || MemoFormat is string;
+            bool valid_type = value.TryGetValue("MemoType", out object MemoType) || MemoType is string;
             return size is >= 1 and <= MEMO_SIZE && valid_data && valid_format && valid_type
                    && value.OnlyHasFields(new[] { "MemoFormat", "MemoData", "MemoType" });
         }
@@ -97,16 +98,16 @@ namespace Xrpl.Models.Transactions
         /// <param name="amount"> An Amount to parse for its value.</param>
         /// <returns></returns>
         /// <exception cref="ValidationException">The parsed amount value, or null if the amount count not be parsed.</exception>
-        public static double ParseAmountValue(dynamic amount)
+        public static double ParseAmountValue(object amount)
         {
             if (!Common.IsAmount(amount))
             {
                 return double.NaN;
             }
-            if (amount is string)
+            if (amount is string strAmount)
             {
                 return double.Parse(
-                    amount, NumberStyles.AllowLeadingSign
+                    strAmount, NumberStyles.AllowLeadingSign
                                  | (NumberStyles.AllowLeadingSign & NumberStyles.AllowExponent)
                                  | (NumberStyles.AllowLeadingSign & NumberStyles.AllowExponent & NumberStyles.AllowDecimalPoint)
                                  | (NumberStyles.AllowExponent & NumberStyles.AllowDecimalPoint)
@@ -115,8 +116,9 @@ namespace Xrpl.Models.Transactions
                     CultureInfo.InvariantCulture);
             }
 
+            Dictionary<string, object> dict = (Dictionary<string, object>)amount;
             return double.Parse(
-                amount.value, NumberStyles.AllowLeadingSign
+                (string)dict["value"], NumberStyles.AllowLeadingSign
                              | (NumberStyles.AllowLeadingSign & NumberStyles.AllowExponent)
                              | (NumberStyles.AllowLeadingSign & NumberStyles.AllowExponent & NumberStyles.AllowDecimalPoint)
                              | (NumberStyles.AllowExponent & NumberStyles.AllowDecimalPoint)
@@ -129,18 +131,15 @@ namespace Xrpl.Models.Transactions
         /// </summary>
         /// <param name="input">The object to check the form and type of.</param>
         /// <returns>Whether the Issue is malformed.</returns>
-        public static bool IsIssue(dynamic input)
+        public static bool IsIssue(object input)
         {
-            if (!IsRecord(input))
-                return false;
-            if (input is not Dictionary<string, dynamic> issue)
+            if (input is not Dictionary<string, object> issue)
                 return false;
 
-
-            var length = issue.Count;
-            issue.TryGetValue("currency", out var currency);
-            issue.TryGetValue("issuer", out var issuer);
-            return (length == 1 && currency == "XRP") || (length == 2 && currency is string && issuer is string);
+            int length = issue.Count;
+            issue.TryGetValue("currency", out object currency);
+            issue.TryGetValue("issuer", out object issuer);
+            return (length == 1 && currency is string c && c == "XRP") || (length == 2 && currency is string && issuer is string);
         }
         /// <summary>
         /// Verify the common fields of a transaction.<br/>
@@ -150,7 +149,7 @@ namespace Xrpl.Models.Transactions
         /// <param name="tx">An interface w/ common transaction fields.</param>
         /// <returns></returns>
         /// <exception cref="ValidationException"> When the common param is malformed.</exception>
-        public static Task ValidateBaseTransaction(Dictionary<string, dynamic> tx)
+        public static Task ValidateBaseTransaction(Dictionary<string, object> tx)
         {
             if (!tx.TryGetValue("Account", out var Account) || Account is null)
             {
@@ -200,7 +199,7 @@ namespace Xrpl.Models.Transactions
             tx.TryGetValue("Memos", out var Memos);
             if (Memos is not null)
             {
-                if (Memos is not IEnumerable<dynamic> { } memos)
+                if (Memos is not IEnumerable<object> { } memos)
                     throw new ValidationException("BaseTransaction: invalid Memos");
 
                 if (memos.Any(memo => !Common.IsMemo(memo)))
@@ -214,7 +213,7 @@ namespace Xrpl.Models.Transactions
 
             if (Signers is not null)
             {
-                if (Signers is not List<dynamic> signers)
+                if (Signers is not List<object> signers)
                     throw new ValidationException("BaseTransaction: invalid Signers");
 
                 if (signers.ToArray().Length == 0)
@@ -276,32 +275,28 @@ namespace Xrpl.Models.Transactions
         /// <inheritdoc />
         public uint? Sequence { get; set; }
         /// <inheritdoc />
-        [JsonProperty("SigningPubKey")]
+        [JsonPropertyName("SigningPubKey")]
         public string SigningPublicKey { get; set; }
         /// <inheritdoc />
         public List<SignerWrapper> Signers { get; set; }
         /// <inheritdoc />
-        [JsonConverter(typeof(StringEnumConverter))]
+        [JsonConverter(typeof(TransactionTypeConverter))]
         public TransactionType TransactionType { get; set; }
 
         /// <inheritdoc />
-        [JsonProperty("TxnSignature")]
+        [JsonPropertyName("TxnSignature")]
         public string TransactionSignature { get; set; }
 
         /// <inheritdoc />
         public string ToJson()
         {
-            JsonSerializerSettings serializerSettings = new JsonSerializerSettings();
-            serializerSettings.NullValueHandling = NullValueHandling.Ignore;
-            serializerSettings.DateTimeZoneHandling = DateTimeZoneHandling.Utc;
-
-            return JsonConvert.SerializeObject(this, serializerSettings);
+            return JsonSerializer.Serialize(this, this.GetType(), XrplJsonOptions.Default);
         }
 
-        public Dictionary<string, dynamic> ToDictionary()
+        public Dictionary<string, object> ToDictionary()
         {
             var json = ToJson();
-            return JsonConvert.DeserializeObject<Dictionary<string, dynamic>>(json) ?? throw new ValidationException("Failed to deserialize tx json");
+            return JsonSerializer.Deserialize<Dictionary<string, object>>(json, XrplJsonOptions.Default) ?? throw new ValidationException("Failed to deserialize tx json");
         }
 
         /// <inheritdoc />
@@ -320,7 +315,7 @@ namespace Xrpl.Models.Transactions
         /// <summary>
         /// The Memos field includes arbitrary messaging data with the transaction.
         /// </summary>
-        [JsonProperty("Memo")]
+        [JsonPropertyName("Memo")]
         public Memo Memo { get; set; }
     }
 
@@ -395,20 +390,20 @@ namespace Xrpl.Models.Transactions
         /// <summary>
         /// Shows the OfferIDof a new NFTokenOffer in a response from a NFTokenCreateOffer transaction.
         /// </summary>
-        [JsonProperty("offer_id")]
+        [JsonPropertyName("offer_id")]
         public string OfferID { get; set; }
         /// <summary>
         /// Shows the NFTokenID for the NFToken that changed on the ledger as a result of the transaction.
         /// Only present if the transaction is NFTokenMint or NFTokenAcceptOffer
         /// </summary>
-        [JsonProperty("nftoken_id")]
+        [JsonPropertyName("nftoken_id")]
         public string NFTokenId { get; set; }
 
         /// <summary>
         /// Shows all the NFTokenIDs for the NFTokens that changed on the ledger as a result of the transaction.
         /// Only present if the transaction is NFTokenCancelOffer.
         /// </summary>
-        [JsonProperty("nftoken_ids")]
+        [JsonPropertyName("nftoken_ids")]
         public string[] NFTokenIds { get; set; }
 
         /// <inheritdoc />
@@ -418,7 +413,7 @@ namespace Xrpl.Models.Transactions
         /// Shows the MPTokenIssuanceID for the MPTokenIssuance that was created by this transaction.
         /// Only present if the transaction is MPTokenIssuanceCreate.
         /// </summary>
-        [JsonProperty("mpt_issuance_id")]
+        [JsonPropertyName("mpt_issuance_id")]
         public string MptIssuanceId { get; set; }
 
         /// <summary>
@@ -427,14 +422,14 @@ namespace Xrpl.Models.Transactions
         /// See this description for details.
         /// </summary>
         [JsonConverter(typeof(CurrencyConverter))]
-        [JsonProperty("delivered_amount")]
+        [JsonPropertyName("delivered_amount")]
         public Currency ActuallyDeliveredAmount { get; set; }
         /// <summary>
         /// (May be omitted) For a partial payment, this field records the amount of currency actually delivered to the destination.<br/>
         /// To avoid errors when reading transactions, instead use the delivered_amount field, which is provided for all Payment transactions, partial or not.
         /// </summary>
         [JsonConverter(typeof(CurrencyConverter))]
-        [JsonProperty("DeliveredAmount")]
+        [JsonPropertyName("DeliveredAmount")]
         public Currency PartialDeliveredAmount { get; set; }
     }
 
@@ -471,7 +466,7 @@ namespace Xrpl.Models.Transactions
         /// <summary>
         /// The type of ledger object
         /// </summary>
-        [JsonConverter(typeof(StringEnumConverter))]
+        [JsonConverter(typeof(LedgerEntryTypeConverter))]
         public LedgerEntryType LedgerEntryType { get; set; }
         /// <summary>
         /// The ID of this ledger object in the ledger's state tree.<br/>
@@ -483,7 +478,7 @@ namespace Xrpl.Models.Transactions
         /// (May be omitted) The identifying hash of the previous transaction to modify this ledger object.<br/>
         /// Omitted for ledger object types that do not have a PreviousTxnID field.
         /// </summary>
-        [JsonProperty("PreviousTxnID")]
+        [JsonPropertyName("PreviousTxnID")]
         public string PreviousTxnID { get; set; }
 
         /// <summary>
@@ -491,7 +486,7 @@ namespace Xrpl.Models.Transactions
         /// (May be omitted) The Ledger Index of the ledger version containing the previous transaction to modify this ledger object.<br/>
         /// Omitted for ledger object types that do not have a PreviousTxnLgrSeq field.
         /// </summary>
-        [JsonProperty("PreviousTxnLgrSeq")]
+        [JsonPropertyName("PreviousTxnLgrSeq")]
         public uint? PreviousTxnLgrSeq { get; set; }
         /// <summary>
         /// <remarks>
@@ -614,7 +609,7 @@ namespace Xrpl.Models.Transactions
         /// </summary>
         /// <returns></returns>
         string ToJson();
-        Dictionary<string, dynamic> ToDictionary();
+        Dictionary<string, object> ToDictionary();
     }
     public interface ITransactionRequest : ITransactionCommon
     {
@@ -665,38 +660,34 @@ namespace Xrpl.Models.Transactions
         /// <inheritdoc/>
         public uint? Sequence { get; set; }
         /// <inheritdoc/>
-        [JsonProperty("SigningPubKey")]
+        [JsonPropertyName("SigningPubKey")]
         public string SigningPublicKey { get; set; }
 
         /// <inheritdoc/>
         public List<SignerWrapper> Signers { get; set; }
 
         /// <inheritdoc/>
-        [JsonConverter(typeof(StringEnumConverter))]
+        [JsonConverter(typeof(TransactionTypeConverter))]
         public TransactionType TransactionType { get; set; }
 
         /// <inheritdoc/>
-        [JsonProperty("TxnSignature")]
+        [JsonPropertyName("TxnSignature")]
         public string TransactionSignature { get; set; }
 
         /// <inheritdoc/>
-        [JsonProperty("meta")]
+        [JsonPropertyName("meta")]
         public Meta Meta { get; set; }
 
         /// <inheritdoc/>
         public string ToJson()
         {
-            JsonSerializerSettings serializerSettings = new JsonSerializerSettings();
-            serializerSettings.NullValueHandling = NullValueHandling.Ignore;
-            serializerSettings.DateTimeZoneHandling = DateTimeZoneHandling.Utc;
-
-            return JsonConvert.SerializeObject(this, serializerSettings);
+            return JsonSerializer.Serialize(this, this.GetType(), XrplJsonOptions.Default);
         }
 
-        public Dictionary<string, dynamic> ToDictionary()
+        public Dictionary<string, object> ToDictionary()
         {
             var json = ToJson();
-            return JsonConvert.DeserializeObject<Dictionary<string, dynamic>>(json) ?? throw new ValidationException("Failed to deserialize tx json");
+            return JsonSerializer.Deserialize<Dictionary<string, object>>(json, XrplJsonOptions.Default) ?? throw new ValidationException("Failed to deserialize tx json");
         }
 
         /// <inheritdoc />
@@ -714,7 +705,7 @@ namespace Xrpl.Models.Transactions
         /// <summary>
         /// Gets or sets the new fields created.
         /// </summary>
-        [JsonProperty("NewFields")]
+        [JsonPropertyName("NewFields")]
         public BaseLedgerEntry? NewFields { get; set; }
 
         public bool TryGetNew<T>(out T? value) where T : BaseLedgerEntry
@@ -733,25 +724,25 @@ namespace Xrpl.Models.Transactions
         /// <summary>
         /// Gets or sets the final fields after modification.
         /// </summary>
-        [JsonProperty("FinalFields")]
+        [JsonPropertyName("FinalFields")]
         public BaseLedgerEntry? FinalFields { get; set; }
 
         /// <summary>
         /// Gets or sets the previous fields before modification.
         /// </summary>
-        [JsonProperty("PreviousFields")]
+        [JsonPropertyName("PreviousFields")]
         public BaseLedgerEntry? PreviousFields { get; set; }
 
         /// <summary>
         /// Gets or sets the previous transaction ID.
         /// </summary>
-        [JsonProperty("PreviousTxnID")]
+        [JsonPropertyName("PreviousTxnID")]
         public string PreviousTxnID { get; set; }
 
         /// <summary>
         /// Gets or sets the previous transaction ledger sequence.
         /// </summary>
-        [JsonProperty("PreviousTxnLgrSeq")]
+        [JsonPropertyName("PreviousTxnLgrSeq")]
         public uint? PreviousTxnLgrSeq { get; set; }
 
         public bool TryGetFinal<T>(out T? value) where T : BaseLedgerEntry
@@ -777,14 +768,14 @@ namespace Xrpl.Models.Transactions
         /// The content fields of the ledger entry immediately before it was deleted.
         /// Which fields are present depends on what type of ledger entry was created.
         /// </summary>
-        [JsonProperty("FinalFields")]
+        [JsonPropertyName("FinalFields")]
         public BaseLedgerEntry? FinalFields { get; set; }
 
         /// <summary>
         /// (May be omitted) Selected fields of the ledger entry before it was deleted.
         /// Which fields are present depends on what type of ledger entry was created.
         /// </summary>
-        [JsonProperty("PreviousFields")]
+        [JsonPropertyName("PreviousFields")]
         public BaseLedgerEntry? PreviousFields { get; set; }
 
         public bool TryGetFinal<T>(out T? value) where T : BaseLedgerEntry
@@ -807,14 +798,14 @@ namespace Xrpl.Models.Transactions
         /// <summary>
         /// Type of entry in the ledger
         /// </summary>
-        [JsonProperty("LedgerEntryType")]
-        [JsonConverter(typeof(StringEnumConverter))]
+        [JsonPropertyName("LedgerEntryType")]
+        [JsonConverter(typeof(LedgerEntryTypeConverter))]
         public LedgerEntryType LedgerEntryType { get; set; }
 
         /// <summary>
         /// Identifier of this object in the ledger's state tree
         /// </summary>
-        [JsonProperty("LedgerIndex")]
+        [JsonPropertyName("LedgerIndex")]
         public string LedgerIndex { get; set; } = string.Empty;
     }
 

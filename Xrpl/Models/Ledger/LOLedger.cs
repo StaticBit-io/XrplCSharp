@@ -1,5 +1,4 @@
-﻿using Newtonsoft.Json;
-using Newtonsoft.Json.Converters;
+﻿using System.Text.Json.Serialization;
 
 using System;
 using System.Collections.Generic;
@@ -22,7 +21,7 @@ namespace Xrpl.Models.Ledger
         /// <summary>
         /// The complete header data of this {@link Ledger}.
         /// </summary>
-        [JsonProperty("ledger")]
+        [JsonPropertyName("ledger")]
         [JsonConverter(typeof(LedgerBinaryConverter))]
         public IBaseLedgerEntity LedgerEntity { get; set; }
         /// <summary>
@@ -30,21 +29,21 @@ namespace Xrpl.Models.Ledger
         /// If the request specified expand as true, members contain full  representations of the transactions,
         /// in either JSON or binary depending  on whether the request specified binary as true.
         /// </summary>
-        [JsonProperty("queue_data")]
+        [JsonPropertyName("queue_data")]
         public List<QueuedTransaction>? QueueData { get; set; }
 
         /// <summary>
         /// If true, this is a validated ledger version. If omitted or set to false,
         /// this ledger's data is not final.
         /// </summary>
-        [JsonProperty("validated")]
+        [JsonPropertyName("validated")]
         public bool Validated { get; set; }
     }
 
     public abstract class BaseLedgerEntity : IBaseLedgerEntity
     {
         /// <summary> Whether or not this ledger has been closed. </summary>
-        [JsonProperty("closed")]
+        [JsonPropertyName("closed")]
         public bool Closed { get; set; }
     }
     public interface IBaseLedgerEntity
@@ -55,10 +54,10 @@ namespace Xrpl.Models.Ledger
 
     public class LedgerBinaryEntity : BaseLedgerEntity
     {
-        [JsonProperty("ledger_data")]
+        [JsonPropertyName("ledger_data")]
         public string LedgerData { get; set; }
 
-        [JsonProperty("transactions")]
+        [JsonPropertyName("transactions")]
         public List<string> Transactions { get; set; }
     }
     /// <summary>
@@ -70,13 +69,13 @@ namespace Xrpl.Models.Ledger
         /// <summary>
         /// The SHA-512Half of this ledger's state tree information.
         /// </summary>
-        [JsonProperty("account_hash")]
+        [JsonPropertyName("account_hash")]
         public string AccountHash { get; set; }
 
         /// <summary>
         /// A bit-map of flags relating to the closing of this ledger.
         /// </summary>
-        [JsonProperty("close_flags")]
+        [JsonPropertyName("close_flags")]
         public uint CloseFlags { get; set; }
 
         /// <summary>
@@ -84,56 +83,57 @@ namespace Xrpl.Models.Ledger
         /// as the number of seconds since the Ripple Epoch of 2000-01-01 00:00:00.<br/>
         /// This value is rounded based on the close_time_resolution.
         /// </summary>
-        [JsonProperty("close_time")]
+        [JsonPropertyName("close_time")]
         [JsonConverter(typeof(RippleDateTimeConverter))]
         public DateTime? CloseTime { get; set; }
 
-        [JsonProperty("close_time_iso")]
-        [JsonConverter(typeof(IsoDateTimeConverter))]
+        [JsonPropertyName("close_time_iso")]
+        [JsonConverter(typeof(FromStringDateTimeConverter))]
         public DateTime? CloseTimeIso { get; set; }
         /// <summary>
         /// The approximate time this ledger was closed, in human-readable format.<br/>
         /// Always uses the UTC time zone.
         /// </summary>
-        [JsonProperty("close_time_human")]
+        [JsonPropertyName("close_time_human")]
         public string CloseTimeHuman { get; set; }
         /// <summary>
         /// An integer in the range [2,120] indicating the maximum number of seconds by which the close_time could be rounded.
         /// </summary>
-        [JsonProperty("close_time_resolution")]
+        [JsonPropertyName("close_time_resolution")]
         public int CloseTimeResolution { get; set; }
         /// <summary>
         /// The SHA-512Half of this ledger version.<br/>
         /// This serves as a unique identifier for this ledger and all its contents.
         /// </summary>
-        [JsonProperty("ledger_hash")]
+        [JsonPropertyName("ledger_hash")]
         public string LedgerHash { get; set; }
         /// <summary>
         /// The ledger index of the ledger.<br/>
         /// Some API methods display this as a quoted integer; some display it as a native JSON number.
         /// </summary>
-        [JsonProperty("ledger_index")]
+        [JsonPropertyName("ledger_index")]
+        [JsonConverter(typeof(NumberOrStringConverter))]
         public string LedgerIndex { get; set; }
 
         /// <summary>
         /// The approximate time at which the previous ledger was closed.
         /// </summary>
-        [JsonProperty("parent_close_time")]
+        [JsonPropertyName("parent_close_time")]
         public uint ParentCloseTime { get; set; }
         /// <summary>
         /// Unique identifying hash of the ledger that came immediately before this one
         /// </summary>
-        [JsonProperty("parent_hash")]
+        [JsonPropertyName("parent_hash")]
         public string ParentHash { get; set; }
         /// <summary>
         /// Total number of XRP drops in the network, as a quoted integer.
         /// </summary>
-        [JsonProperty("total_coins")]
+        [JsonPropertyName("total_coins")]
         public string TotalCoins { get; set; }
         /// <summary>
         /// Hash of the transaction information included in this ledger, as hex.
         /// </summary>
-        [JsonProperty("transaction_hash")]
+        [JsonPropertyName("transaction_hash")]
         public string TransactionHash { get; set; }
         /// <summary>
         /// Transactions applied in this ledger version.<br/>
@@ -142,7 +142,7 @@ namespace Xrpl.Models.Ledger
         /// members are full representations of the transactions instead,
         /// in either JSON or binary depending on whether the request specified binary as true.
         /// </summary>
-        [JsonProperty("transactions")]
+        [JsonPropertyName("transactions")]
         public List<HashOrTransaction> Transactions { get; set; }
     }
     /// <summary>
@@ -156,7 +156,7 @@ namespace Xrpl.Models.Ledger
         /// <summary>
         /// The Address of the sender for this queued transaction.
         /// </summary>
-        [JsonProperty("account")]
+        [JsonPropertyName("account")]
         public string Account { get; set; }
         /// <summary>
         /// By default, this is a String containing the identifying hash of the transaction.<br/>
@@ -165,44 +165,44 @@ namespace Xrpl.Models.Ledger
         /// If transactions are expanded in JSON format, this is an object containing the
         /// transaction object including the transaction's identifying hash in the hash field.
         /// </summary>
-        [JsonProperty("tx")]
-        //TODO: This needs to be made into a JsonConverter for string or object
+        [JsonPropertyName("tx")]
+        [JsonConverter(typeof(QueuedTransactionTxConverter))]
         public object Transaction { get; set; }
         /// <summary>
         /// How many times this transaction can be retried before being dropped.
         /// </summary>
-        [JsonProperty("retries_remaining")]
+        [JsonPropertyName("retries_remaining")]
         public uint RetriesRemaining { get; set; }
         /// <summary>
         /// The tentative result from preliminary transaction checking.<br/>
         /// This is always tesSUCCESS.
         /// </summary>
-        [JsonProperty("preflight_result")]
+        [JsonPropertyName("preflight_result")]
         public string PreflightResult { get; set; }
         /// <summary>
         /// May be omitted) If this transaction was left in the queue after getting a retriable (ter) result, this is the exact ter result code it got.
         /// </summary>
-        [JsonProperty("last_result")]
+        [JsonPropertyName("last_result")]
         public string LastResult { get; set; }
         /// <summary>
         /// (May be omitted) Whether this transaction changes this address's ways of authorizing transactions.
         /// </summary>
-        [JsonProperty("auth_change")]
+        [JsonPropertyName("auth_change")]
         public bool? AuthChange { get; set; }
         /// <summary>
         /// (May be omitted) The Transaction Cost of this transaction, in drops of XRP.
         /// </summary>
-        [JsonProperty("fee")]
+        [JsonPropertyName("fee")]
         public string Fee { get; set; }
         /// <summary>
         /// (May be omitted) The transaction cost of this transaction, relative to the minimum cost for this type of transaction, in fee levels.
         /// </summary>
-        [JsonProperty("fee_level")]
+        [JsonPropertyName("fee_level")]
         public string FeeLevel { get; set; }
         /// <summary>
         /// (May be omitted) The maximum amount of XRP, in drops, this transaction could potentially send or destroy.
         /// </summary>
-        [JsonProperty("max_spend_drops")]
+        [JsonPropertyName("max_spend_drops")]
         public string MaxSpendDrops { get; set; }
     }
 }

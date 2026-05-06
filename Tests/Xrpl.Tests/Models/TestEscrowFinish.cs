@@ -1,4 +1,4 @@
-﻿
+
 
 // https://github.com/XRPLF/xrpl.js/blob/main/packages/xrpl/test/models/escrowFinish.ts
 
@@ -14,12 +14,12 @@ namespace XrplTests.Xrpl.Models
     [TestClass]
     public class TestUEscrowFinish
     {
-        public static Dictionary<string, dynamic> escrowFinish;
+        public static Dictionary<string, object> escrowFinish;
 
         [ClassInitialize]
         public static void MyClassInitialize(TestContext testContext)
         {
-            escrowFinish = new Dictionary<string, dynamic>
+            escrowFinish = new Dictionary<string, object>
             {
                 {"TransactionType", "EscrowFinish"},
                 {"Account", "rf1BiGeXwwQoi8Z2ueFYTEXSwuJYfV2Jpn"},
@@ -75,7 +75,7 @@ namespace XrplTests.Xrpl.Models
         [TestMethod]
         public async Task TestVerify_Valid_EscrowFinish_WithCredentialIDs()
         {
-            Dictionary<string, dynamic> tx = new Dictionary<string, dynamic>
+            Dictionary<string, object> tx = new Dictionary<string, object>
             {
                 { "TransactionType", "EscrowFinish" },
                 { "Account", "rf1BiGeXwwQoi8Z2ueFYTEXSwuJYfV2Jpn" },
@@ -91,7 +91,7 @@ namespace XrplTests.Xrpl.Models
         public async Task TestVerify_Invalid_EscrowFinish_DuplicateCredentialIDs()
         {
             string id = "A1B2C3D4E5F6789012345678901234567890ABCDEF1234567890ABCDEF123456";
-            Dictionary<string, dynamic> tx = new Dictionary<string, dynamic>
+            Dictionary<string, object> tx = new Dictionary<string, object>
             {
                 { "TransactionType", "EscrowFinish" },
                 { "Account", "rf1BiGeXwwQoi8Z2ueFYTEXSwuJYfV2Jpn" },

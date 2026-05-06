@@ -9,7 +9,7 @@ namespace Xrpl.Client
 
         public Type Type { get; set; }
 
-        public dynamic TaskCompletionResult { get; set; }
+        public object TaskCompletionResult { get; set; }
 
         public bool RemoveUponCompletion { get; set; }
 

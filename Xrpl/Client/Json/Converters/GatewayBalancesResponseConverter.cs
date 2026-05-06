@@ -1,9 +1,8 @@
-﻿using Newtonsoft.Json;
-using Newtonsoft.Json.Linq;
-
-using System;
+﻿using System;
 using System.Collections.Generic;
 using System.Linq;
+using System.Text.Json;
+using System.Text.Json.Serialization;
 
 using Xrpl.Models.Common;
 using Xrpl.Models.Methods;
@@ -12,95 +11,87 @@ namespace Xrpl.Client.Json.Converters;
 
 public class GatewayBalancesResponseConverter : JsonConverter<GatewayBalancesResponse>
 {
-    public override GatewayBalancesResponse ReadJson(
-        JsonReader reader,
-        Type objectType,
-        GatewayBalancesResponse existingValue,
-        bool hasExistingValue,
-        JsonSerializer serializer)
+    public override GatewayBalancesResponse Read(ref Utf8JsonReader reader, Type typeToConvert, JsonSerializerOptions options)
     {
-        if (reader.TokenType == JsonToken.Null)
+        if (reader.TokenType == JsonTokenType.Null)
         {
             return null;
         }
 
-        var obj = JObject.Load(reader);
+        using JsonDocument doc = JsonDocument.ParseValue(ref reader);
+        JsonElement root = doc.RootElement;
 
-        var account = obj["account"]?.ToString();
+        string account = root.TryGetProperty("account", out JsonElement accEl) ? accEl.GetString() : null;
 
-        var response = new GatewayBalancesResponse
+        GatewayBalancesResponse response = new GatewayBalancesResponse
         {
             Account = account,
-            LedgerHash = obj["ledger_hash"]?.ToString(),
-            LedgerIndex = obj["ledger_index"]?.ToObject<uint?>(serializer),
-            Validated = obj["validated"]?.ToObject<bool>(serializer),
+            LedgerHash = root.TryGetProperty("ledger_hash", out JsonElement lhEl) ? lhEl.GetString() : null,
+            LedgerIndex = root.TryGetProperty("ledger_index", out JsonElement liEl) ? liEl.GetUInt32() : null,
+            Validated = root.TryGetProperty("validated", out JsonElement vEl) ? vEl.GetBoolean() : null,
 
-            Assets = ReadIssuerCurrencyList(obj["assets"], serializer),
-            Balances = ReadIssuerCurrencyList(obj["balances"], serializer),
-            FrozenBalances = ReadIssuerCurrencyList(obj["frozen_balances"], serializer),
-            Obligations = ReadObligations(obj["obligations"], account)
+            Assets = ReadIssuerCurrencyList(root, "assets", options),
+            Balances = ReadIssuerCurrencyList(root, "balances", options),
+            FrozenBalances = ReadIssuerCurrencyList(root, "frozen_balances", options),
+            Obligations = ReadObligations(root, "obligations", account)
         };
 
         return response;
     }
 
-    public override void WriteJson(JsonWriter writer, GatewayBalancesResponse value, JsonSerializer serializer)
+    public override void Write(Utf8JsonWriter writer, GatewayBalancesResponse value, JsonSerializerOptions options)
     {
         writer.WriteStartObject();
 
         if (!string.IsNullOrWhiteSpace(value.Account))
         {
-            writer.WritePropertyName("account");
-            writer.WriteValue(value.Account);
+            writer.WriteString("account", value.Account);
         }
 
-        WriteIssuerCurrencyList(writer, serializer, "assets", value.Assets);
-        WriteIssuerCurrencyList(writer, serializer, "balances", value.Balances);
-        WriteIssuerCurrencyList(writer, serializer, "frozen_balances", value.FrozenBalances);
+        WriteIssuerCurrencyList(writer, options, "assets", value.Assets);
+        WriteIssuerCurrencyList(writer, options, "balances", value.Balances);
+        WriteIssuerCurrencyList(writer, options, "frozen_balances", value.FrozenBalances);
         WriteObligations(writer, "obligations", value.Obligations);
 
         if (!string.IsNullOrWhiteSpace(value.LedgerHash))
         {
-            writer.WritePropertyName("ledger_hash");
-            writer.WriteValue(value.LedgerHash);
+            writer.WriteString("ledger_hash", value.LedgerHash);
         }
 
         if (value.LedgerIndex.HasValue)
         {
-            writer.WritePropertyName("ledger_index");
-            writer.WriteValue(value.LedgerIndex.Value);
+            writer.WriteNumber("ledger_index", value.LedgerIndex.Value);
         }
 
         if (value.Validated.HasValue)
         {
-            writer.WritePropertyName("validated");
-            writer.WriteValue(value.Validated.Value);
+            writer.WriteBoolean("validated", value.Validated.Value);
         }
 
         writer.WriteEndObject();
     }
 
-    private static List<Currency> ReadIssuerCurrencyList(JToken token, JsonSerializer serializer)
+    private static List<Currency> ReadIssuerCurrencyList(JsonElement root, string propertyName, JsonSerializerOptions options)
     {
-        var result = new List<Currency>();
+        List<Currency> result = new List<Currency>();
 
-        if (token is not JObject obj)
+        if (!root.TryGetProperty(propertyName, out JsonElement token) || token.ValueKind != JsonValueKind.Object)
         {
             return result;
         }
 
-        foreach (var property in obj.Properties())
+        foreach (JsonProperty property in token.EnumerateObject())
         {
-            var issuer = property.Name;
+            string issuer = property.Name;
 
-            if (property.Value.Type != JTokenType.Array)
+            if (property.Value.ValueKind != JsonValueKind.Array)
             {
                 continue;
             }
 
-            var items = property.Value.ToObject<List<Currency>>(serializer) ?? new List<Currency>();
+            List<Currency> items = JsonSerializer.Deserialize<List<Currency>>(property.Value.GetRawText(), options) ?? new List<Currency>();
 
-            foreach (var item in items.Where(x => x != null))
+            foreach (Currency item in items.Where(x => x != null))
             {
                 item.Issuer = issuer;
                 result.Add(item);
@@ -110,21 +101,21 @@ public class GatewayBalancesResponseConverter : JsonConverter<GatewayBalancesRes
         return result;
     }
 
-    private static List<Currency> ReadObligations(JToken token, string account)
+    private static List<Currency> ReadObligations(JsonElement root, string propertyName, string account)
     {
-        var result = new List<Currency>();
+        List<Currency> result = new List<Currency>();
 
-        if (token is not JObject obj)
+        if (!root.TryGetProperty(propertyName, out JsonElement token) || token.ValueKind != JsonValueKind.Object)
         {
             return result;
         }
 
-        foreach (var property in obj.Properties())
+        foreach (JsonProperty property in token.EnumerateObject())
         {
             result.Add(new Currency
             {
                 CurrencyCode = property.Name,
-                Value = property.Value?.ToString(),
+                Value = property.Value.ToString(),
                 Issuer = account
             });
         }
@@ -133,8 +124,8 @@ public class GatewayBalancesResponseConverter : JsonConverter<GatewayBalancesRes
     }
 
     private static void WriteIssuerCurrencyList(
-        JsonWriter writer,
-        JsonSerializer serializer,
+        Utf8JsonWriter writer,
+        JsonSerializerOptions options,
         string propertyName,
         List<Currency> items)
     {
@@ -146,19 +137,19 @@ public class GatewayBalancesResponseConverter : JsonConverter<GatewayBalancesRes
         writer.WritePropertyName(propertyName);
         writer.WriteStartObject();
 
-        foreach (var group in items
+        foreach (IGrouping<string, Currency> group in items
                      .Where(x => !string.IsNullOrWhiteSpace(x.Issuer))
                      .GroupBy(x => x.Issuer))
         {
             writer.WritePropertyName(group.Key);
-            serializer.Serialize(writer, group.ToList());
+            JsonSerializer.Serialize(writer, group.ToList(), options);
         }
 
         writer.WriteEndObject();
     }
 
     private static void WriteObligations(
-        JsonWriter writer,
+        Utf8JsonWriter writer,
         string propertyName,
         List<Currency> items)
     {
@@ -170,10 +161,9 @@ public class GatewayBalancesResponseConverter : JsonConverter<GatewayBalancesRes
         writer.WritePropertyName(propertyName);
         writer.WriteStartObject();
 
-        foreach (var item in items.Where(x => !string.IsNullOrWhiteSpace(x.CurrencyCode)))
+        foreach (Currency item in items.Where(x => !string.IsNullOrWhiteSpace(x.CurrencyCode)))
         {
-            writer.WritePropertyName(item.CurrencyCode);
-            writer.WriteValue(item.Value);
+            writer.WriteString(item.CurrencyCode, item.Value);
         }
 
         writer.WriteEndObject();

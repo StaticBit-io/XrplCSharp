@@ -4,13 +4,13 @@ using System.Collections.Generic;
 
 using Microsoft.VisualStudio.TestTools.UnitTesting;
 
-using Newtonsoft.Json;
-
 using System.Linq;
 using System.Threading.Tasks;
 
+using System.Text.Json;
+
 using Xrpl.Client;
-using Xrpl.Client.Json.Converters;
+using Xrpl.Client.Json;
 using Xrpl.Models.Common;
 using Xrpl.Models.Ledger;
 using Xrpl.Models.Methods;
@@ -77,10 +77,9 @@ public class TestIGatewayBalances
   ""ledger_hash"": ""0FD2A81794A0CEF35D71BA4A23DB8D8FB78F412D1FD9413A697EAA1F6E54CF8B""
 }";
 
-        var settings = new JsonSerializerSettings();
-        settings.Converters.Add(new GatewayBalancesResponseConverter());
+        JsonSerializerOptions options = XrplJsonOptions.Default;
 
-        var result = JsonConvert.DeserializeObject<GatewayBalancesResponse>(json, settings);
+        var result = JsonSerializer.Deserialize<GatewayBalancesResponse>(json, options);
 
         Assert.IsNotNull(result);
         Assert.AreEqual(expected: "rLiooJRSKeiNfRJcDBUhu4rcjQjGLWqa4p", result.Account);
@@ -130,10 +129,9 @@ public class TestIGatewayBalances
   ""ledger_hash"": ""20ED11316FDC245F8E43F1D31FEF322B2AC483F6F3F41FD95B414C4ABA938AE2""
 }";
 
-        var settings = new JsonSerializerSettings();
-        settings.Converters.Add(new GatewayBalancesResponseConverter());
+        JsonSerializerOptions options = XrplJsonOptions.Default;
 
-        var result = JsonConvert.DeserializeObject<GatewayBalancesResponse>(json, settings);
+        var result = JsonSerializer.Deserialize<GatewayBalancesResponse>(json, options);
 
         Assert.IsNotNull(result);
         Assert.AreEqual(expected: "rXPMxBeefHGxx2K7g5qmmWq3gFsgawkoa", result.Account);

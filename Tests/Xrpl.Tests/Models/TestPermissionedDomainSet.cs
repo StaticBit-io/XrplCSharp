@@ -11,14 +11,14 @@ namespace XrplTests.Xrpl.Models
     [TestClass]
     public class TestUPermissionedDomainSet
     {
-        private static List<Dictionary<string, dynamic>> CreateValidCredentials(int count = 1)
+        private static List<Dictionary<string, object>> CreateValidCredentials(int count = 1)
         {
-            var credentials = new List<Dictionary<string, dynamic>>();
+            var credentials = new List<Dictionary<string, object>>();
             for (int i = 0; i < count; i++)
             {
-                credentials.Add(new Dictionary<string, dynamic>
+                credentials.Add(new Dictionary<string, object>
                 {
-                    { "Credential", new Dictionary<string, dynamic>
+                    { "Credential", new Dictionary<string, object>
                         {
                             { "Issuer", "ra5nK24KXen9AHvsdFTKHSANinZseWnPcX" },
                             { "CredentialType", $"6D795F63726564656E7469616C{i:D2}" }
@@ -32,7 +32,7 @@ namespace XrplTests.Xrpl.Models
         [TestMethod]
         public async Task TestVerify_Valid_CreateNewDomain()
         {
-            var tx = new Dictionary<string, dynamic>
+            var tx = new Dictionary<string, object>
             {
                 { "Account", "rf1BiGeXwwQoi8Z2ueFYTEXSwuJYfV2Jpn" },
                 { "TransactionType", "PermissionedDomainSet" },
@@ -47,7 +47,7 @@ namespace XrplTests.Xrpl.Models
         [TestMethod]
         public async Task TestVerify_Valid_ModifyExistingDomain()
         {
-            var tx = new Dictionary<string, dynamic>
+            var tx = new Dictionary<string, object>
             {
                 { "Account", "rf1BiGeXwwQoi8Z2ueFYTEXSwuJYfV2Jpn" },
                 { "TransactionType", "PermissionedDomainSet" },
@@ -63,7 +63,7 @@ namespace XrplTests.Xrpl.Models
         [TestMethod]
         public async Task TestVerify_Valid_MaxCredentials()
         {
-            var tx = new Dictionary<string, dynamic>
+            var tx = new Dictionary<string, object>
             {
                 { "Account", "rf1BiGeXwwQoi8Z2ueFYTEXSwuJYfV2Jpn" },
                 { "TransactionType", "PermissionedDomainSet" },
@@ -78,7 +78,7 @@ namespace XrplTests.Xrpl.Models
         [TestMethod]
         public async Task TestVerify_Invalid_MissingAcceptedCredentials()
         {
-            var tx = new Dictionary<string, dynamic>
+            var tx = new Dictionary<string, object>
             {
                 { "Account", "rf1BiGeXwwQoi8Z2ueFYTEXSwuJYfV2Jpn" },
                 { "TransactionType", "PermissionedDomainSet" },
@@ -93,13 +93,13 @@ namespace XrplTests.Xrpl.Models
         [TestMethod]
         public async Task TestVerify_Invalid_EmptyAcceptedCredentials()
         {
-            var tx = new Dictionary<string, dynamic>
+            var tx = new Dictionary<string, object>
             {
                 { "Account", "rf1BiGeXwwQoi8Z2ueFYTEXSwuJYfV2Jpn" },
                 { "TransactionType", "PermissionedDomainSet" },
                 { "Fee", "10" },
                 { "Sequence", 390u },
-                { "AcceptedCredentials", new List<Dictionary<string, dynamic>>() }
+                { "AcceptedCredentials", new List<Dictionary<string, object>>() }
             };
             await Helper.ThrowsExceptionAsync<ValidationException>(
                 () => Validation.ValidatePermissionedDomainSet(tx),
@@ -109,7 +109,7 @@ namespace XrplTests.Xrpl.Models
         [TestMethod]
         public async Task TestVerify_Invalid_TooManyCredentials()
         {
-            var tx = new Dictionary<string, dynamic>
+            var tx = new Dictionary<string, object>
             {
                 { "Account", "rf1BiGeXwwQoi8Z2ueFYTEXSwuJYfV2Jpn" },
                 { "TransactionType", "PermissionedDomainSet" },
@@ -125,18 +125,18 @@ namespace XrplTests.Xrpl.Models
         [TestMethod]
         public async Task TestVerify_Invalid_MissingCredentialIssuer()
         {
-            var credentials = new List<Dictionary<string, dynamic>>
+            var credentials = new List<Dictionary<string, object>>
             {
-                new Dictionary<string, dynamic>
+                new Dictionary<string, object>
                 {
-                    { "Credential", new Dictionary<string, dynamic>
+                    { "Credential", new Dictionary<string, object>
                         {
                             { "CredentialType", "6D795F63726564656E7469616C" }
                         }
                     }
                 }
             };
-            var tx = new Dictionary<string, dynamic>
+            var tx = new Dictionary<string, object>
             {
                 { "Account", "rf1BiGeXwwQoi8Z2ueFYTEXSwuJYfV2Jpn" },
                 { "TransactionType", "PermissionedDomainSet" },
@@ -152,18 +152,18 @@ namespace XrplTests.Xrpl.Models
         [TestMethod]
         public async Task TestVerify_Invalid_MissingCredentialType()
         {
-            var credentials = new List<Dictionary<string, dynamic>>
+            var credentials = new List<Dictionary<string, object>>
             {
-                new Dictionary<string, dynamic>
+                new Dictionary<string, object>
                 {
-                    { "Credential", new Dictionary<string, dynamic>
+                    { "Credential", new Dictionary<string, object>
                         {
                             { "Issuer", "ra5nK24KXen9AHvsdFTKHSANinZseWnPcX" }
                         }
                     }
                 }
             };
-            var tx = new Dictionary<string, dynamic>
+            var tx = new Dictionary<string, object>
             {
                 { "Account", "rf1BiGeXwwQoi8Z2ueFYTEXSwuJYfV2Jpn" },
                 { "TransactionType", "PermissionedDomainSet" },
@@ -180,11 +180,11 @@ namespace XrplTests.Xrpl.Models
         public async Task TestVerify_Invalid_CredentialTypeTooLong()
         {
             var longCredentialType = new string('A', 130);
-            var credentials = new List<Dictionary<string, dynamic>>
+            var credentials = new List<Dictionary<string, object>>
             {
-                new Dictionary<string, dynamic>
+                new Dictionary<string, object>
                 {
-                    { "Credential", new Dictionary<string, dynamic>
+                    { "Credential", new Dictionary<string, object>
                         {
                             { "Issuer", "ra5nK24KXen9AHvsdFTKHSANinZseWnPcX" },
                             { "CredentialType", longCredentialType }
@@ -192,7 +192,7 @@ namespace XrplTests.Xrpl.Models
                     }
                 }
             };
-            var tx = new Dictionary<string, dynamic>
+            var tx = new Dictionary<string, object>
             {
                 { "Account", "rf1BiGeXwwQoi8Z2ueFYTEXSwuJYfV2Jpn" },
                 { "TransactionType", "PermissionedDomainSet" },
@@ -208,20 +208,20 @@ namespace XrplTests.Xrpl.Models
         [TestMethod]
         public async Task TestVerify_Invalid_DuplicateCredentials()
         {
-            var credentials = new List<Dictionary<string, dynamic>>
+            var credentials = new List<Dictionary<string, object>>
             {
-                new Dictionary<string, dynamic>
+                new Dictionary<string, object>
                 {
-                    { "Credential", new Dictionary<string, dynamic>
+                    { "Credential", new Dictionary<string, object>
                         {
                             { "Issuer", "ra5nK24KXen9AHvsdFTKHSANinZseWnPcX" },
                             { "CredentialType", "6D795F63726564656E7469616C" }
                         }
                     }
                 },
-                new Dictionary<string, dynamic>
+                new Dictionary<string, object>
                 {
-                    { "Credential", new Dictionary<string, dynamic>
+                    { "Credential", new Dictionary<string, object>
                         {
                             { "Issuer", "ra5nK24KXen9AHvsdFTKHSANinZseWnPcX" },
                             { "CredentialType", "6D795F63726564656E7469616C" }
@@ -229,7 +229,7 @@ namespace XrplTests.Xrpl.Models
                     }
                 }
             };
-            var tx = new Dictionary<string, dynamic>
+            var tx = new Dictionary<string, object>
             {
                 { "Account", "rf1BiGeXwwQoi8Z2ueFYTEXSwuJYfV2Jpn" },
                 { "TransactionType", "PermissionedDomainSet" },
@@ -245,20 +245,20 @@ namespace XrplTests.Xrpl.Models
         [TestMethod]
         public async Task TestVerify_Valid_UniqueCredentialsSameIssuerDifferentType()
         {
-            var credentials = new List<Dictionary<string, dynamic>>
+            var credentials = new List<Dictionary<string, object>>
             {
-                new Dictionary<string, dynamic>
+                new Dictionary<string, object>
                 {
-                    { "Credential", new Dictionary<string, dynamic>
+                    { "Credential", new Dictionary<string, object>
                         {
                             { "Issuer", "ra5nK24KXen9AHvsdFTKHSANinZseWnPcX" },
                             { "CredentialType", "74797065315F63726564" }
                         }
                     }
                 },
-                new Dictionary<string, dynamic>
+                new Dictionary<string, object>
                 {
-                    { "Credential", new Dictionary<string, dynamic>
+                    { "Credential", new Dictionary<string, object>
                         {
                             { "Issuer", "ra5nK24KXen9AHvsdFTKHSANinZseWnPcX" },
                             { "CredentialType", "74797065325F63726564" }
@@ -266,7 +266,7 @@ namespace XrplTests.Xrpl.Models
                     }
                 }
             };
-            var tx = new Dictionary<string, dynamic>
+            var tx = new Dictionary<string, object>
             {
                 { "Account", "rf1BiGeXwwQoi8Z2ueFYTEXSwuJYfV2Jpn" },
                 { "TransactionType", "PermissionedDomainSet" },

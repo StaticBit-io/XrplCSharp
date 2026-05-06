@@ -1,4 +1,4 @@
-﻿using Newtonsoft.Json;
+using System.Text.Json.Serialization;
 
 using System;
 using Xrpl.Client.Json.Converters;
@@ -35,7 +35,7 @@ namespace Xrpl.Models.Methods
         /// <summary>
         /// The unique ID of the payment channel to use.
         /// </summary>
-        [JsonProperty("channel_id")]
+        [JsonPropertyName("channel_id")]
         public string ChannelId { get; set; }
 
         /// <summary>
@@ -44,7 +44,7 @@ namespace Xrpl.Models.Methods
         /// This must be the same key pair as the public key specified in the channel.<br/>
         /// Cannot be used with seed, seed_hex, or passphrase.
         /// </summary> 
-        [JsonProperty("secret")]
+        [JsonPropertyName("secret")]
         public string Secret { get; set; }
         /// <summary>
         /// <b>*** Do not send your secret to a server that you do not control or do not trust. ***</b><br/>
@@ -54,7 +54,7 @@ namespace Xrpl.Models.Methods
         /// If provided, you must also specify the key_type.<br/>
         /// Cannot be used with secret, seed_hex, or passphrase.
         /// </summary>
-        [JsonProperty("seed")]
+        [JsonPropertyName("seed")]
         public string Seed { get; set; }
         /// <summary>
         /// <b>*** Do not send your secret to a server that you do not control or do not trust. ***</b><br/>
@@ -64,7 +64,7 @@ namespace Xrpl.Models.Methods
         /// If provided, you must also specify the key_type.<br/>
         /// Cannot be used with secret, seed, or seed_hex.
         /// </summary>
-        [JsonProperty("passphrase")]
+        [JsonPropertyName("passphrase")]
         public string Passphrase { get; set; }
         /// <summary>
         /// <b>*** Do not send your secret to a server that you do not control or do not trust. ***</b><br/>
@@ -72,14 +72,14 @@ namespace Xrpl.Models.Methods
         /// Valid types are secp256k1 or ed25519.<br/>
         /// The default is secp256k1.
         /// </summary>
-        [JsonProperty("key_type")]
+        [JsonPropertyName("key_type")]
         public string KeyType { get; set; }
 
         /// <summary>
         /// Cumulative amount of XRP, in drops, to authorize.<br/>
         /// If the destination has already received a lesser amount of XRP from this channel, the signature created by this method can be redeemed for the difference.
         /// </summary>
-        [JsonProperty("amount")]
+        [JsonPropertyName("amount")]
         [JsonConverter(typeof(GenericStringConverter<ulong>))]
         public ulong Amount { get; set; }
 
@@ -87,7 +87,21 @@ namespace Xrpl.Models.Methods
         public double RippleAmount
         {
             get => (double) Amount / 1000000;
-            set => Amount =  Convert.ToUInt32(value * 1000000);
+            set
+            {
+                if (value < 0)
+                    throw new ArgumentOutOfRangeException(nameof(value), value, "RippleAmount must be non-negative.");
+
+                decimal dropsDecimal = (decimal)value * 1000000m;
+                if (dropsDecimal != decimal.Truncate(dropsDecimal))
+                    throw new ArgumentException("RippleAmount must be a whole number of drops.", nameof(value));
+
+                if (dropsDecimal > ulong.MaxValue)
+                    throw new OverflowException("RippleAmount in drops exceeds ulong.MaxValue.");
+
+                ulong truncated = (ulong)decimal.Truncate(dropsDecimal);
+                Amount = truncated;
+            }
         }
     }
 }

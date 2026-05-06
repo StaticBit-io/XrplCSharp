@@ -1,4 +1,4 @@
-using Newtonsoft.Json;
+using System.Text.Json.Serialization;
 
 using System;
 using System.Collections.Generic;
@@ -53,13 +53,13 @@ namespace Xrpl.Models.Transactions
         }
 
         /// <inheritdoc />
-        [JsonProperty("Subject")]
+        [JsonPropertyName("Subject")]
         public string Subject { get; set; }
 
         private string _credentialType;
 
         /// <inheritdoc />
-        [JsonProperty("CredentialType")]
+        [JsonPropertyName("CredentialType")]
         public string CredentialType
         {
             get => _credentialType;
@@ -75,13 +75,13 @@ namespace Xrpl.Models.Transactions
 
         /// <inheritdoc />
         [JsonConverter(typeof(RippleDateTimeConverter))]
-        [JsonProperty("Expiration")]
+        [JsonPropertyName("Expiration")]
         public DateTime? Expiration { get; set; }
 
         private string _uri;
 
         /// <inheritdoc />
-        [JsonProperty("URI")]
+        [JsonPropertyName("URI")]
         public string URI
         {
             get => _uri;
@@ -102,13 +102,13 @@ namespace Xrpl.Models.Transactions
     public class CredentialCreateResponse : TransactionResponse, ICredentialCreate
     {
         /// <inheritdoc />
-        [JsonProperty("Subject")]
+        [JsonPropertyName("Subject")]
         public string Subject { get; set; }
 
         private string _credentialType;
 
         /// <inheritdoc />
-        [JsonProperty("CredentialType")]
+        [JsonPropertyName("CredentialType")]
         public string CredentialType
         {
             get => _credentialType;
@@ -124,13 +124,13 @@ namespace Xrpl.Models.Transactions
 
         /// <inheritdoc />
         [JsonConverter(typeof(RippleDateTimeConverter))]
-        [JsonProperty("Expiration")]
+        [JsonPropertyName("Expiration")]
         public DateTime? Expiration { get; set; }
 
         private string _uri;
 
         /// <inheritdoc />
-        [JsonProperty("URI")]
+        [JsonPropertyName("URI")]
         public string URI
         {
             get => _uri;
@@ -157,7 +157,7 @@ namespace Xrpl.Models.Transactions
         /// </summary>
         /// <param name="tx">A CredentialCreate transaction.</param>
         /// <exception cref="ValidationException">When the CredentialCreate is malformed.</exception>
-        public static async Task ValidateCredentialCreate(Dictionary<string, dynamic> tx)
+        public static async Task ValidateCredentialCreate(Dictionary<string, object> tx)
         {
             await Common.ValidateBaseTransaction(tx);
 

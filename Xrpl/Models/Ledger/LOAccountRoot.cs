@@ -1,5 +1,5 @@
 ﻿using System;
-using Newtonsoft.Json;
+using System.Text.Json.Serialization;
 using Xrpl.Client.Json.Converters;
 using Xrpl.Models.Common;
 
@@ -97,7 +97,7 @@ namespace Xrpl.Models.Ledger
         /// <summary>
         /// Identifier of the associated AMM (Automated Market Maker) instance.
         /// </summary>
-        [JsonProperty("AMMID")]
+        [JsonPropertyName("AMMID")]
         public string? AmmId { get; set; }
         /// <summary>
         /// The identifying (classic) address of this account.

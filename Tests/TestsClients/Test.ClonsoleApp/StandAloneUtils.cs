@@ -1,5 +1,3 @@
-﻿using Newtonsoft.Json;
-
 using Xrpl.Client;
 using Xrpl.Client.Exceptions;
 using Xrpl.Models.Common;
@@ -37,7 +35,7 @@ public static class StandAloneUtils
             Destination = wallet.ClassicAddress,
             Amount = new Currency { Value = "400000000", CurrencyCode = "XRP" }
         };
-        var values = JsonConvert.DeserializeObject<Dictionary<string, dynamic>>(payment.ToJson());
+        var values = payment.ToDictionary();
         var master = XrplWallet.FromSeed(masterSecret);
         Submit response = await client.Submit(values, master);
         if (response.EngineResult != "tesSUCCESS")

@@ -1,22 +1,20 @@
-﻿using Microsoft.VisualStudio.TestPlatform.CommunicationUtilities;
+using Microsoft.VisualStudio.TestPlatform.CommunicationUtilities;
 using Microsoft.VisualStudio.TestTools.UnitTesting;
 
 using NBitcoin.Protocol;
-
-using Newtonsoft.Json;
-
-using Org.BouncyCastle.Asn1.Ocsp;
 
 using System;
 using System.Collections.Generic;
 using System.Diagnostics;
 using System.Net.WebSockets;
+using System.Text.Json;
 using System.Threading;
 using System.Threading.Tasks;
 using System.Timers;
 
 using Xrpl.Client;
 using Xrpl.Client.Exceptions;
+using Xrpl.Client.Json;
 using Xrpl.Models;
 using Xrpl.Models.Methods;
 using Xrpl.Models.Subscriptions;
@@ -37,9 +35,9 @@ namespace Xrpl.Tests.ClientLib
         public void TestSome()
         {
             var message = "{\"fee_base\":10,\"fee_ref\":10,\"ledger_hash\":\"4118BC9FD82A6245BDD32092CE93A86676978D3EBD6F9A47C3ABCEFE80E2B3F5\",\"ledger_index\":75551992,\"ledger_time\":720984480,\"reserve_base\":10000000,\"reserve_inc\":2000000,\"txn_count\":54,\"type\":\"ledgerClosed\",\"validated_ledgers\":\"32570-75551992\"}";
-            var response = JsonConvert.DeserializeObject<Dictionary<string, dynamic>>(message);
-            var message1 = JsonConvert.SerializeObject(response);
-            var response1 = JsonConvert.DeserializeObject<LedgerStream>(message1);
+            var response = JsonSerializer.Deserialize<Dictionary<string, object>>(message, XrplJsonOptions.Default);
+            var message1 = JsonSerializer.Serialize(response, XrplJsonOptions.Default);
+            var response1 = JsonSerializer.Deserialize<LedgerStream>(message1, XrplJsonOptions.Default);
         }
 
         [TestMethod]

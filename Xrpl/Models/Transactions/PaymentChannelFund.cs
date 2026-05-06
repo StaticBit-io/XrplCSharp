@@ -1,8 +1,7 @@
-﻿using System;
+using System;
 using System.Collections.Generic;
+using System.Text.Json.Serialization;
 using System.Threading.Tasks;
-
-using Newtonsoft.Json;
 
 using Xrpl.Client.Exceptions;
 using Xrpl.Client.Json.Converters;
@@ -77,7 +76,7 @@ namespace Xrpl.Models.Transactions
         /// </summary>
         /// <param name="tx"> A PaymentChannelFund Transaction.</param>
         /// <exception cref="ValidationException">When the PaymentChannelFund is malformed.</exception>
-        public static async Task ValidatePaymentChannelFund(Dictionary<string, dynamic> tx)
+        public static async Task ValidatePaymentChannelFund(Dictionary<string, object> tx)
         {
             await Common.ValidateBaseTransaction(tx);
 

@@ -1,6 +1,5 @@
-﻿using Newtonsoft.Json;
-
 using System.Collections.Generic;
+using System.Text.Json.Serialization;
 using System.Threading.Tasks;
 
 using Xrpl.Client.Exceptions;
@@ -190,7 +189,7 @@ namespace Xrpl.Models.Transactions
         /// </summary>
         /// <param name="tx">An AMMWithdraw Transaction.</param>
         /// <throws>When the AMMWithdraw is Malformed.</throws>
-        public static async Task ValidateAMMWithdraw(Dictionary<string, dynamic> tx)
+        public static async Task ValidateAMMWithdraw(Dictionary<string, object> tx)
         {
             await Common.ValidateBaseTransaction(tx);
 

@@ -1,47 +1,47 @@
-﻿using Newtonsoft.Json;
-
-using System;
+﻿using System;
 using System.Collections.Generic;
 using System.Linq;
 using System.Reflection;
 using System.Runtime.Serialization;
+using System.Text.Json;
+using System.Text.Json.Serialization;
 
 namespace Xrpl.Models.Enums;
 public class StreamTypeListConverter : JsonConverter<List<StreamType>>
 {
-    public override void WriteJson(JsonWriter writer, List<StreamType>? value, JsonSerializer serializer)
+    public override void Write(Utf8JsonWriter writer, List<StreamType> value, JsonSerializerOptions options)
     {
         writer.WriteStartArray();
         if (value != null)
         {
-            foreach (var item in value)
+            foreach (StreamType item in value)
             {
-                var enumMember = item.GetType()
+                EnumMemberAttribute enumMember = item.GetType()
                     .GetMember(item.ToString()!)
                     .FirstOrDefault()?
                     .GetCustomAttribute<EnumMemberAttribute>();
 
-                writer.WriteValue(enumMember?.Value ?? item.ToString());
+                writer.WriteStringValue(enumMember?.Value ?? item.ToString());
             }
         }
         writer.WriteEndArray();
     }
 
-    public override List<StreamType> ReadJson(JsonReader reader, Type objectType, List<StreamType>? existingValue, bool hasExistingValue, JsonSerializer serializer)
+    public override List<StreamType> Read(ref Utf8JsonReader reader, Type typeToConvert, JsonSerializerOptions options)
     {
-        var result = new List<StreamType>();
+        List<StreamType> result = new List<StreamType>();
 
-        if (reader.TokenType != JsonToken.StartArray)
-            throw new JsonSerializationException("Expected array for StreamType list");
+        if (reader.TokenType != JsonTokenType.StartArray)
+            throw new JsonException("Expected array for StreamType list");
 
-        while (reader.Read() && reader.TokenType != JsonToken.EndArray)
+        while (reader.Read() && reader.TokenType != JsonTokenType.EndArray)
         {
-            if (reader.TokenType != JsonToken.String)
+            if (reader.TokenType != JsonTokenType.String)
                 continue;
 
-            var stringValue = (string?)reader.Value;
+            string stringValue = reader.GetString();
 
-            var match = typeof(StreamType)
+            FieldInfo match = typeof(StreamType)
                 .GetFields(BindingFlags.Public | BindingFlags.Static)
                 .FirstOrDefault(f =>
                     f.GetCustomAttribute<EnumMemberAttribute>()?.Value == stringValue
@@ -54,6 +54,4 @@ public class StreamTypeListConverter : JsonConverter<List<StreamType>>
 
         return result;
     }
-
-    public override bool CanRead => true;
 }

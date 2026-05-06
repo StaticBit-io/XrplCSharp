@@ -3,7 +3,7 @@ using System.Collections.Generic;
 using System.Threading.Tasks;
 
 using Microsoft.VisualStudio.TestTools.UnitTesting;
-using Newtonsoft.Json.Linq;
+using System.Text.Json.Nodes;
 
 using Xrpl.Client;
 using Xrpl.Client.Exceptions;
@@ -1042,7 +1042,7 @@ public class TestUXrplErrorClassifier
     [TestMethod]
     public void Classify_JObjectRequest_UsesRequestDirectly()
     {
-        JObject request = JObject.Parse("{\"command\":\"gateway_balances\",\"hotwallet\":[\"rHot1\"]}");
+        JsonObject request = JsonNode.Parse("{\"command\":\"gateway_balances\",\"hotwallet\":[\"rHot1\"]}")!.AsObject();
         ErrorResponse response = CreateErrorResponse(XrplErrorCodes.InvalidHotWallet, request);
 
         XrplErrorInfo info = XrplErrorClassifier.Classify(response);

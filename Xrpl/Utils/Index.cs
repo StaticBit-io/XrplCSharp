@@ -1,6 +1,6 @@
-﻿using Newtonsoft.Json.Linq;
-
-using System;
+﻿using System;
+using System.Collections.Generic;
+using System.Text.Json.Nodes;
 
 using Xrpl.AddressCodec;
 using Xrpl.BinaryCodec;
@@ -47,7 +47,7 @@ namespace Xrpl.Utils
             return XrplBinaryCodec.EncodeForMultiSigning(transaction, signer);
         }
     
-        public static JToken Decode(string hex)
+        public static JsonNode Decode(string hex)
         {
             return XrplBinaryCodec.Decode(hex);
         }
@@ -59,7 +59,7 @@ namespace Xrpl.Utils
     
         public static bool HasNextPage(this BaseResponse response)
         {
-            return response.Result.ContainsKey("marker");
+            return response.Result is Dictionary<string, object> dict && dict.ContainsKey("marker");
         }
     }
 }

@@ -2,7 +2,7 @@ using System.Collections.Generic;
 using System.Linq;
 using System.Threading.Tasks;
 
-using Newtonsoft.Json;
+using System.Text.Json.Serialization;
 
 using Xrpl.Client.Exceptions;
 
@@ -42,11 +42,11 @@ namespace Xrpl.Models.Transactions
         }
 
         /// <inheritdoc />
-        [JsonProperty("DomainID")]
+        [JsonPropertyName("DomainID")]
         public string DomainID { get; set; }
 
         /// <inheritdoc />
-        [JsonProperty("AcceptedCredentials")]
+        [JsonPropertyName("AcceptedCredentials")]
         public List<AcceptedCredentialWrapper> AcceptedCredentials { get; set; }
     }
 
@@ -56,11 +56,11 @@ namespace Xrpl.Models.Transactions
     public class PermissionedDomainSetResponse : TransactionResponse, IPermissionedDomainSet
     {
         /// <inheritdoc />
-        [JsonProperty("DomainID")]
+        [JsonPropertyName("DomainID")]
         public string DomainID { get; set; }
 
         /// <inheritdoc />
-        [JsonProperty("AcceptedCredentials")]
+        [JsonPropertyName("AcceptedCredentials")]
         public List<AcceptedCredentialWrapper> AcceptedCredentials { get; set; }
     }
 
@@ -73,7 +73,7 @@ namespace Xrpl.Models.Transactions
         /// <summary>
         /// The credential object containing issuer and credential type.
         /// </summary>
-        [JsonProperty("Credential")]
+        [JsonPropertyName("Credential")]
         public AcceptedCredential Credential { get; set; }
     }
 
@@ -85,14 +85,14 @@ namespace Xrpl.Models.Transactions
         /// <summary>
         /// The issuer of the credential.
         /// </summary>
-        [JsonProperty("Issuer")]
+        [JsonPropertyName("Issuer")]
         public string Issuer { get; set; }
 
         /// <summary>
         /// The type of credential, as hexadecimal.
         /// This is an arbitrary value from 1 to 64 bytes that the issuer sets when they issue a credential.
         /// </summary>
-        [JsonProperty("CredentialType")]
+        [JsonPropertyName("CredentialType")]
         public string CredentialType { get; set; }
     }
 
@@ -108,7 +108,7 @@ namespace Xrpl.Models.Transactions
         /// </summary>
         /// <param name="tx">A PermissionedDomainSet transaction.</param>
         /// <exception cref="ValidationException">When the PermissionedDomainSet is malformed.</exception>
-        public static async Task ValidatePermissionedDomainSet(Dictionary<string, dynamic> tx)
+        public static async Task ValidatePermissionedDomainSet(Dictionary<string, object> tx)
         {
             await Common.ValidateBaseTransaction(tx);
 
@@ -133,14 +133,14 @@ namespace Xrpl.Models.Transactions
             var seen = new HashSet<string>();
             foreach (var item in credentialsList)
             {
-                Dictionary<string, dynamic> wrapper = null;
-                if (item is Dictionary<string, dynamic> dict)
+                Dictionary<string, object> wrapper = null;
+                if (item is Dictionary<string, object> dict)
                 {
                     wrapper = dict;
                 }
                 else if (item is IDictionary<string, object> idict)
                 {
-                    wrapper = idict.ToDictionary(k => k.Key, k => (dynamic)k.Value);
+                    wrapper = idict.ToDictionary(k => k.Key, k => (object)k.Value);
                 }
 
                 if (wrapper == null || !wrapper.TryGetValue("Credential", out var credentialObj))
@@ -148,14 +148,14 @@ namespace Xrpl.Models.Transactions
                     throw new ValidationException("PermissionedDomainSet: Each AcceptedCredentials entry must have a Credential object");
                 }
 
-                Dictionary<string, dynamic> credential = null;
-                if (credentialObj is Dictionary<string, dynamic> credDict)
+                Dictionary<string, object> credential = null;
+                if (credentialObj is Dictionary<string, object> credDict)
                 {
                     credential = credDict;
                 }
                 else if (credentialObj is IDictionary<string, object> credIdict)
                 {
-                    credential = credIdict.ToDictionary(k => k.Key, k => (dynamic)k.Value);
+                    credential = credIdict.ToDictionary(k => k.Key, k => (object)k.Value);
                 }
 
                 if (credential == null)

@@ -147,4 +147,9 @@ public enum LedgerEntryType
     /// A record of attestations for creating an account via a cross-chain transfer.
     /// </summary>
     XChainOwnedCreateAccountClaimID,
+
+    /// <summary>
+    /// Unknown ledger entry type (for forward compatibility with future ledger objects).
+    /// </summary>
+    Unknown,
 }

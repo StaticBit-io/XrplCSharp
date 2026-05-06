@@ -1,11 +1,11 @@
-﻿////See https://aka.ms/new-console-template for more information
-
-using Newtonsoft.Json;
+////See https://aka.ms/new-console-template for more information
 
 using System.Diagnostics;
+using System.Text.Json;
 
 using Xrpl.Client;
 using Xrpl.Client.Exceptions;
+using Xrpl.Client.Json;
 using Xrpl.Models;
 using Xrpl.Models.Common;
 using Xrpl.Models.Ledger;
@@ -136,7 +136,8 @@ internal class Program
 
     private static async Task TestPayment()
     {
-        var payment = JsonConvert.DeserializeObject<Payment>(tx);
+        var payment = JsonSerializer.Deserialize<Payment>(tx, XrplJsonOptions.Default)
+            ?? throw new InvalidOperationException("Failed to deserialize Payment payload.");
 
         //var offers = await client.AccountOffers(
         //    new AccountOffersRequest(TestAccountBuilder.IssuerAccount.ClassicAddress)
@@ -175,21 +176,11 @@ internal class Program
         var simulate2 = await client.Simulate(new SimulateRequest() { Transaction = offer });
         var changes = BalanceChanges.GetBalanceChanges(simulate.Meta);
         var changes2 = BalanceChanges.GetBalanceChanges(simulate2.Meta);
-        var jsonSimulate = JsonConvert.SerializeObject(
-            simulate2,
-            new JsonSerializerSettings
-            {
-                ObjectCreationHandling = ObjectCreationHandling.Replace,
-            });
+        var jsonSimulate = JsonSerializer.Serialize(simulate2);
 
         //var res = await client.SubmitAndWait(offer, walletPrimary);
         //var changes3 = BalanceChanges.GetBalanceChanges(res.Meta);
-        //var jsonChanges3 = JsonConvert.SerializeObject(
-        //    changes3,
-        //    new JsonSerializerSettings
-        //    {
-        //        ObjectCreationHandling = ObjectCreationHandling.Replace,
-        //    });
+        //var jsonChanges3 = JsonSerializer.Serialize(changes3);
     }
 
     private static async Task InitForDataForTest()
@@ -550,7 +541,7 @@ internal class Program
         };
 
         // sign and submit the transaction
-        Dictionary<string, dynamic> txJson = JsonConvert.DeserializeObject<Dictionary<string, dynamic>>(tx.ToJson());
+        Dictionary<string, object> txJson = tx.ToDictionary();
         var txResult = await client.SubmitAndWait(txJson, wallet, autofill: true, failHard: false);
         Console.WriteLine(txResult.Meta.TransactionResult);
 
@@ -670,7 +661,7 @@ internal class Program
                 ValueAsXrp = 0.00002m,
             },
         };
-        Dictionary<string, dynamic> txJson = JsonConvert.DeserializeObject<Dictionary<string, dynamic>>(tx.ToJson());
+        Dictionary<string, object> txJson = tx.ToDictionary();
         var response = await client.Submit(txJson, wallet);
         Console.WriteLine(response.EngineResult);
     }
@@ -742,7 +733,7 @@ internal class Program
         return Task.CompletedTask;
     }
 
-    private static Task OnError(string errorCode, string errorMessage, string error, dynamic data)
+    private static Task OnError(string errorCode, string errorMessage, string error, object data)
     {
         Console.WriteLine(errorCode);
         Console.WriteLine(errorMessage);

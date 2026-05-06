@@ -1,6 +1,4 @@
-﻿using Microsoft.VisualStudio.TestTools.UnitTesting;
-
-using Newtonsoft.Json;
+using Microsoft.VisualStudio.TestTools.UnitTesting;
 
 using System;
 using System.Collections.Generic;
@@ -70,7 +68,7 @@ namespace Xrpl.Tests
             ConnectionOptions options = new ConnectionOptions(){RequestPolicy = RequestFailurePolicy.ImmediateFail};
             Connection connection = new Connection("url", options);
 
-            Dictionary<string, dynamic> tx = new Dictionary<string, dynamic>
+            Dictionary<string, object> tx = new Dictionary<string, object>
             {
                 { "command", "ledger" },
                 { "ledger_index", "validated" },
@@ -81,10 +79,10 @@ namespace Xrpl.Tests
         [TestMethod]
         public async Task TestDisconnectedError()
         {
-            Dictionary<string, dynamic> tx = new Dictionary<string, dynamic>
+            Dictionary<string, object> tx = new Dictionary<string, object>
             {
                 { "command", "test_command" },
-                { "data", new Dictionary<string, dynamic> {
+                { "data", new Dictionary<string, object> {
                    { "closeServer", true },
                 } },
             };
@@ -132,7 +130,7 @@ namespace Xrpl.Tests
         public async Task TestNoCrashError()
         {
             runner.mockedRippled.suppressOutput = true;
-            Dictionary<string, dynamic> tx = new Dictionary<string, dynamic>
+            Dictionary<string, object> tx = new Dictionary<string, object>
             {
                 { "command", "test_garbage" },
             };

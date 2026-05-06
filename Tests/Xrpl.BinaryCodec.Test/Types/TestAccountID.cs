@@ -15,7 +15,7 @@ namespace XrplTests.BinaryCodecLib.Types
         public void TestFromValueHex()
         {
             AccountId accountId = AccountId.FromValue(TestAccountID.HEX_ENCODING);
-            Assert.AreEqual(accountId.ToJson(), TestAccountID.BASE58_ENCODING);
+            Assert.AreEqual(accountId.ToJson().GetValue<string>(), TestAccountID.BASE58_ENCODING);
         }
 
         [TestMethod]

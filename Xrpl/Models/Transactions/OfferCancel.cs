@@ -1,4 +1,4 @@
-﻿
+
 
 // https://github.com/XRPLF/xrpl.js/blob/main/packages/xrpl/src/models/transactions/offerCancel.ts
 
@@ -49,7 +49,7 @@ namespace Xrpl.Models.Transactions
         /// </summary>
         /// <param name="tx"> A OfferCancel Transaction.</param>
         /// <exception cref="ValidationException">When the OfferCancel is malformed.</exception>
-        public static async Task ValidateOfferCancel(Dictionary<string, dynamic> tx)
+        public static async Task ValidateOfferCancel(Dictionary<string, object> tx)
         {
             await Common.ValidateBaseTransaction(tx);
             if (!tx.TryGetValue("OfferSequence", out var OfferSequence) || OfferSequence is null)

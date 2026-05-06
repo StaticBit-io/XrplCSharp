@@ -1,15 +1,15 @@
 using NBitcoin.Protocol;
 
-using Newtonsoft.Json;
-
 using System;
 using System.Collections.Concurrent;
 using System.Collections.Generic;
 using System.Diagnostics;
+using System.Text.Json;
 using System.Threading;
 using System.Threading.Tasks;
 
 using Xrpl.Client.Exceptions;
+using Xrpl.Client.Json;
 using Xrpl.Models.Subscriptions;
 
 using TimeoutException = Xrpl.Client.Exceptions.TimeoutException;
@@ -32,26 +32,23 @@ namespace Xrpl.Client
         {
             public Guid Id { get; set; }
             public string Message { get; set; }
-            public Task<Dictionary<string, dynamic>> Promise { get; set; }
+            public Task<Dictionary<string, object>> Promise { get; set; }
         }
 
         public class XrplGRequest
         {
             public Guid Id { get; set; }
             public string Message { get; set; }
-            public Task<dynamic> Promise { get; set; }
+            public Task<object> Promise { get; set; }
         }
 
         private Guid nextId = Guid.NewGuid();
         private readonly ConcurrentDictionary<Guid, Timer> timeoutsAwaitingResponse = new ConcurrentDictionary<Guid, Timer>();
         private readonly ConcurrentDictionary<Guid, TaskInfo> promisesAwaitingResponse = new ConcurrentDictionary<Guid, TaskInfo>();
-        private readonly JsonSerializerSettings serializerSettings;
+        private readonly JsonSerializerOptions serializerOptions = XrplJsonOptions.Default;
 
         public RequestManager()
         {
-            serializerSettings = new JsonSerializerSettings();
-            serializerSettings.NullValueHandling = NullValueHandling.Ignore;
-            serializerSettings.DateTimeZoneHandling = DateTimeZoneHandling.Utc;
         }
 
         /// <summary>
@@ -69,7 +66,7 @@ namespace Xrpl.Client
 
             try
             {
-                var deserialized = JsonConvert.DeserializeObject($"{response.Result}", taskInfo.Type, serializerSettings);
+                var deserialized = JsonSerializer.Deserialize(response.Result?.ToString() ?? "{}", taskInfo.Type, serializerOptions);
                 var setResult = taskInfo.TaskCompletionResult.GetType().GetMethod("TrySetResult");
                 setResult.Invoke(taskInfo.TaskCompletionResult, new[] { deserialized });
                 this.DeletePromise(id, taskInfo);
@@ -112,7 +109,7 @@ namespace Xrpl.Client
         /// When a Task faults but is never awaited, .NET raises UnobservedTaskException event.
         /// By adding a ContinueWith that reads the exception, we mark it as "observed".
         /// </summary>
-        private void ObserveTaskException(dynamic taskCompletionSource)
+        private void ObserveTaskException(object taskCompletionSource)
         {
             try
             {
@@ -183,14 +180,14 @@ namespace Xrpl.Client
 
             info.SetValue(request, newId, null);
 
-            string newRequest = JsonConvert.SerializeObject(request, serializerSettings);
+            string newRequest = JsonSerializer.Serialize(request, serializerOptions);
 
             if (this.promisesAwaitingResponse.ContainsKey(newId))
             {
                 throw new XrplException($"Response with id '${newId}' is already pending");
             }
 
-            TaskCompletionSource<dynamic> task = new TaskCompletionSource<dynamic>();
+            TaskCompletionSource<object> task = new TaskCompletionSource<object>();
             TaskInfo taskInfo = new TaskInfo();
             taskInfo.TaskId = newId;
             taskInfo.TaskCompletionResult = task;
@@ -244,7 +241,7 @@ namespace Xrpl.Client
 
         /// <summary>
         /// </summary>
-        public XrplRequest CreateRequest(Dictionary<string, dynamic> request, TimeSpan timeout, CancellationToken cancellationToken = default)
+        public XrplRequest CreateRequest(Dictionary<string, object> request, TimeSpan timeout, CancellationToken cancellationToken = default)
         {
             if (timeout != System.Threading.Timeout.InfiniteTimeSpan && timeout <= TimeSpan.Zero)
             {
@@ -266,19 +263,19 @@ namespace Xrpl.Client
 
             request["id"] = newId;
 
-            string newRequest = JsonConvert.SerializeObject(request, serializerSettings);
+            string newRequest = JsonSerializer.Serialize(request, serializerOptions);
 
             if (this.promisesAwaitingResponse.ContainsKey(newId))
             {
                 throw new XrplException($"Response with id '${newId}' is already pending");
             }
 
-            TaskCompletionSource<Dictionary<string, dynamic>> task = new TaskCompletionSource<Dictionary<string, dynamic>>();
+            TaskCompletionSource<Dictionary<string, object>> task = new TaskCompletionSource<Dictionary<string, object>>();
             TaskInfo taskInfo = new TaskInfo();
             taskInfo.TaskId = newId;
             taskInfo.TaskCompletionResult = task;
             taskInfo.RemoveUponCompletion = true;
-            taskInfo.Type = typeof(Dictionary<string, dynamic>);
+            taskInfo.Type = typeof(Dictionary<string, object>);
 
             promisesAwaitingResponse.TryAdd(newId, taskInfo);
 
@@ -333,7 +330,7 @@ namespace Xrpl.Client
         /// </summary>
         public (BaseResponse Response, bool Handled) HandleResponse(string message)
         {
-            var response = JsonConvert.DeserializeObject<ErrorResponse>(message);
+            var response = JsonSerializer.Deserialize<ErrorResponse>(message, serializerOptions);
 
             if (response.Id == null)
             {
@@ -372,7 +369,7 @@ namespace Xrpl.Client
                 ErrorResponse errorResponse = null;
                 try
                 {
-                    errorResponse = JsonConvert.DeserializeObject<ErrorResponse>(message);
+                    errorResponse = JsonSerializer.Deserialize<ErrorResponse>(message, serializerOptions);
 
                 }
                 catch (Exception e)

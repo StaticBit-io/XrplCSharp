@@ -1,4 +1,8 @@
-﻿// https://github.com/XRPLF/xrpl.js/blob/main/packages/xrpl/src/models/ledger/Ticket.ts
+﻿using System.Text.Json.Serialization;
+
+using Xrpl.Client.Json.Converters;
+
+// https://github.com/XRPLF/xrpl.js/blob/main/packages/xrpl/src/models/ledger/Ticket.ts
 
 namespace Xrpl.Models.Ledger
 {
@@ -24,6 +28,7 @@ namespace Xrpl.Models.Ledger
         /// Currently, there are no flags defined for Tickets.<br/>
         /// No flags are defined for Checks, so this value is always 0.
         /// </summary>
+        [JsonConverter(typeof(NumberOrStringConverter))]
         public string Flags { get; set; }
 
         /// <summary>

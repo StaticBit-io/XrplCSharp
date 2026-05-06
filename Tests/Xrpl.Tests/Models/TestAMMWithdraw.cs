@@ -1,4 +1,4 @@
-﻿// https://github.com/XRPLF/xrpl.js/blob/amm-beta/packages/xrpl/test/models/AMMWithdraw.ts
+// https://github.com/XRPLF/xrpl.js/blob/amm-beta/packages/xrpl/test/models/AMMWithdraw.ts
 
 using Microsoft.VisualStudio.TestTools.UnitTesting;
 
@@ -13,24 +13,24 @@ namespace XrplTests.Xrpl.Models
     [TestClass]
     public class TestUAMMWithdraw
     {
-        public static Dictionary<string, dynamic> LPTokenIn;
-        public static Dictionary<string, dynamic> withdraw;
+        public static Dictionary<string, object> LPTokenIn;
+        public static Dictionary<string, object> withdraw;
 
         [ClassInitialize]
         public static void MyClassInitialize(TestContext testContext)
         {
-            LPTokenIn = new Dictionary<string, dynamic>()
+            LPTokenIn = new Dictionary<string, object>()
             {
                 { "currency", "B3813FCAB4EE68B3D0D735D6849465A9113EE048" },
                 { "issuer", "rH438jEAzTs5PYtV6CHZqpDpwCKQmPW9Cg" },
                 { "value", "1000" },
             };
-            withdraw = new Dictionary<string, dynamic>
+            withdraw = new Dictionary<string, object>
             {
                 {"TransactionType", "AMMWithdraw"},
                 {"Account", "rWYkbWkCeg8dP6rXALnjgZSjjLyih5NXm"},
-                {"Asset", new Dictionary<string,dynamic>(){{"currency","XRP"}}},
-                {"Asset2", new Dictionary<string,dynamic>(){{"currency","ETH"},{"issuer", "rP9jPyP5kyvFRb6ZiRghAGw5u8SGAmU4bd" } }},
+                {"Asset", new Dictionary<string,object>(){{"currency","XRP"}}},
+                {"Asset2", new Dictionary<string,object>(){{"currency","ETH"},{"issuer", "rP9jPyP5kyvFRb6ZiRghAGw5u8SGAmU4bd" } }},
                 {"Sequence", 1337u},
                 {"Flags", 0u},
             };
@@ -56,7 +56,7 @@ namespace XrplTests.Xrpl.Models
 
             //verifies valid AMMWithdraw with Amount and Amount2
             withdraw["Amount"] = "1000";
-            withdraw["Amount2"] = new Dictionary<string, dynamic>()
+            withdraw["Amount2"] = new Dictionary<string, object>()
             {
                 {"currency","ETH"},
                 {"issuer","rP9jPyP5kyvFRb6ZiRghAGw5u8SGAmU4bd"},
@@ -103,23 +103,23 @@ namespace XrplTests.Xrpl.Models
             //throws w/ missing field Asset
             withdraw.Remove("Asset");
             await Helper.ThrowsExceptionAsync<ValidationException>(() => Validation.Validate(withdraw), "AMMWithdraw: missing field Asset");
-            withdraw["Asset"] = new Dictionary<string, dynamic>() { { "currency", "XRP" } };
+            withdraw["Asset"] = new Dictionary<string, object>() { { "currency", "XRP" } };
             //throws w/ Asset must be an Issue
             withdraw["Asset"] = 1234;
             await Helper.ThrowsExceptionAsync<ValidationException>(() => Validation.Validate(withdraw), "AMMWithdraw: Asset must be an Issue");
-            withdraw["Asset"] = new Dictionary<string, dynamic>() { { "currency", "XRP" } };
+            withdraw["Asset"] = new Dictionary<string, object>() { { "currency", "XRP" } };
 
             //throws w/ missing field Asset2
             withdraw.Remove("Asset2");
             await Helper.ThrowsExceptionAsync<ValidationException>(() => Validation.Validate(withdraw), "AMMWithdraw: missing field Asset2");
-            withdraw["Asset2"] = new Dictionary<string, dynamic>() { { "currency", "XRP" } };
+            withdraw["Asset2"] = new Dictionary<string, object>() { { "currency", "XRP" } };
             //throws w/ Asset must be an Issue
             withdraw["Asset2"] = 1234;
             await Helper.ThrowsExceptionAsync<ValidationException>(() => Validation.Validate(withdraw), "AMMWithdraw: Asset2 must be an Issue");
-            withdraw["Asset2"] = new Dictionary<string, dynamic>() { { "currency", "ETH" }, { "issuer", "rP9jPyP5kyvFRb6ZiRghAGw5u8SGAmU4bd" } };
+            withdraw["Asset2"] = new Dictionary<string, object>() { { "currency", "ETH" }, { "issuer", "rP9jPyP5kyvFRb6ZiRghAGw5u8SGAmU4bd" } };
 
             //throws w/ must set Amount with Amount2
-            withdraw["Amount2"] = new Dictionary<string, dynamic>()
+            withdraw["Amount2"] = new Dictionary<string, object>()
             {
                 { "currency", "ETH" },
                 { "issuer", "rP9jPyP5kyvFRb6ZiRghAGw5u8SGAmU4bd" },

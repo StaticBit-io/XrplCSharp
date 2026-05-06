@@ -1,4 +1,4 @@
-﻿// https://github.com/XRPLF/xrpl.js/blob/main/packages/xrpl/src/models/transactions/accountSet.ts
+// https://github.com/XRPLF/xrpl.js/blob/main/packages/xrpl/src/models/transactions/accountSet.ts
 
 using System;
 using System.Collections.Generic;
@@ -222,7 +222,7 @@ namespace Xrpl.Models.Transactions
         /// </summary>
         /// <param name="tx"> A AccountSet Transaction.</param>
         /// <exception cref="ValidationException">When the AccountSet is malformed.</exception>
-        public static async Task ValidateAccountSet(Dictionary<string, dynamic> tx)
+        public static async Task ValidateAccountSet(Dictionary<string, object> tx)
         {
             await Common.ValidateBaseTransaction(tx);
             if (tx.TryGetValue("ClearFlag", out var ClearFlag) && ClearFlag is not null)
@@ -247,7 +247,7 @@ namespace Xrpl.Models.Transactions
                 if (SetFlag is not uint { })
                     throw new ValidationException("AccountSet: invalid SetFlag");
 
-                if (Enum.GetValues<AccountSetAsfFlags>().All(c => (uint)c != SetFlag))
+                if (Enum.GetValues<AccountSetAsfFlags>().All(c => (uint)c != (uint)SetFlag))
                     throw new ValidationException("AccountSet: missing field Destination");
             }
 

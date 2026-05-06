@@ -1,4 +1,4 @@
-﻿
+
 
 // https://github.com/XRPLF/xrpl.js/blob/main/packages/xrpl/test/models/offerCancel.ts
 
@@ -19,7 +19,7 @@ namespace XrplTests.Xrpl.Models
         [TestMethod]
         public async Task TestVerify_Valid_OfferCreate1()
         {
-            var tx = new Dictionary<string, dynamic>
+            var tx = new Dictionary<string, object>
             {
                 { "Account", "r3rhWeE31Jt5sWmi4QiGLMZnY3ENgqw96W" },
                 {"Fee", "10"},
@@ -29,7 +29,7 @@ namespace XrplTests.Xrpl.Models
                 {"SigningPubKey", "03C48299E57F5AE7C2BE1391B581D313F1967EA2301628C07AC412092FDC15BA22"},
                 {"Expiration", 10u},
                 {"OfferSequence", 12u},
-                {"TakerGets", new Dictionary<string,dynamic>()
+                {"TakerGets", new Dictionary<string,object>()
                 {
                     {"currency", "DSH"},
                     {"issuer", "rcXY84C4g14iFp6taFXjjQGVeHqSCh9RX"},
@@ -46,7 +46,7 @@ namespace XrplTests.Xrpl.Models
         [TestMethod]
         public async Task TestVerify_Valid_OfferCreate2()
         {
-            var tx = new Dictionary<string, dynamic>
+            var tx = new Dictionary<string, object>
             {
                 { "Account", "r3rhWeE31Jt5sWmi4QiGLMZnY3ENgqw96W" },
                 {"Fee", "10"},
@@ -54,7 +54,7 @@ namespace XrplTests.Xrpl.Models
                 {"LastLedgerSequence", 65453019u},
                 {"Sequence", 40949322u},
                 {"SigningPubKey", "03C48299E57F5AE7C2BE1391B581D313F1967EA2301628C07AC412092FDC15BA22"},
-                {"TakerPays", new Dictionary<string,dynamic>()
+                {"TakerPays", new Dictionary<string,object>()
                 {
                     {"currency", "DSH"},
                     {"issuer", "rcXY84C4g14iFp6taFXjjQGVeHqSCh9RX"},
@@ -71,7 +71,7 @@ namespace XrplTests.Xrpl.Models
         [TestMethod]
         public async Task TestVerify_Valid_OfferCreate3()
         {
-            var tx = new Dictionary<string, dynamic>
+            var tx = new Dictionary<string, object>
             {
                 { "Account", "r3rhWeE31Jt5sWmi4QiGLMZnY3ENgqw96W" },
                 {"Fee", "10"},
@@ -79,13 +79,13 @@ namespace XrplTests.Xrpl.Models
                 {"LastLedgerSequence", 65453019u},
                 {"Sequence", 40949322u},
                 {"SigningPubKey", "03C48299E57F5AE7C2BE1391B581D313F1967EA2301628C07AC412092FDC15BA22"},
-                {"TakerGets", new Dictionary<string,dynamic>()
+                {"TakerGets", new Dictionary<string,object>()
                 {
                     {"currency", "DSH"},
                     {"issuer", "rcXY84C4g14iFp6taFXjjQGVeHqSCh9RX"},
                     {"value", "43.11584856965009"},
                 }},
-                {"TakerPays", new Dictionary<string,dynamic>()
+                {"TakerPays", new Dictionary<string,object>()
                 {
                     {"currency", "DSH"},
                     {"issuer", "rcXY84C4g14iFp6taFXjjQGVeHqSCh9RX"},
@@ -101,7 +101,7 @@ namespace XrplTests.Xrpl.Models
         [TestMethod]
         public async Task TestVerify_InValid_Expiration()
         {
-            var tx = new Dictionary<string, dynamic>
+            var tx = new Dictionary<string, object>
             {
                 { "Account", "r3rhWeE31Jt5sWmi4QiGLMZnY3ENgqw96W" },
                 {"Fee", "10"},
@@ -111,7 +111,7 @@ namespace XrplTests.Xrpl.Models
                 {"SigningPubKey", "03C48299E57F5AE7C2BE1391B581D313F1967EA2301628C07AC412092FDC15BA22"},
                 {"Expiration", "11"},
                 {"OfferSequence", 12u},
-                {"TakerGets", new Dictionary<string,dynamic>()
+                {"TakerGets", new Dictionary<string,object>()
                 {
                     {"currency", "DSH"},
                     {"issuer", "rcXY84C4g14iFp6taFXjjQGVeHqSCh9RX"},
@@ -128,7 +128,7 @@ namespace XrplTests.Xrpl.Models
         [TestMethod]
         public async Task TestVerify_InValid_OfferSequence()
         {
-            var tx = new Dictionary<string, dynamic>
+            var tx = new Dictionary<string, object>
             {
                 { "Account", "r3rhWeE31Jt5sWmi4QiGLMZnY3ENgqw96W" },
                 {"Fee", "10"},
@@ -138,7 +138,7 @@ namespace XrplTests.Xrpl.Models
                 {"SigningPubKey", "03C48299E57F5AE7C2BE1391B581D313F1967EA2301628C07AC412092FDC15BA22"},
                 {"Expiration", 10u},
                 {"OfferSequence", "11"},
-                {"TakerGets", new Dictionary<string,dynamic>()
+                {"TakerGets", new Dictionary<string,object>()
                 {
                     {"currency", "DSH"},
                     {"issuer", "rcXY84C4g14iFp6taFXjjQGVeHqSCh9RX"},
@@ -155,7 +155,7 @@ namespace XrplTests.Xrpl.Models
         [TestMethod]
         public async Task TestVerify_InValid_TakerPays()
         {
-            var tx = new Dictionary<string, dynamic>
+            var tx = new Dictionary<string, object>
             {
                 { "Account", "r3rhWeE31Jt5sWmi4QiGLMZnY3ENgqw96W" },
                 {"Fee", "10"},
@@ -165,7 +165,7 @@ namespace XrplTests.Xrpl.Models
                 {"SigningPubKey", "03C48299E57F5AE7C2BE1391B581D313F1967EA2301628C07AC412092FDC15BA22"},
                 {"Expiration", 10u},
                 {"OfferSequence", 12u},
-                {"TakerGets", new Dictionary<string,dynamic>()
+                {"TakerGets", new Dictionary<string,object>()
                 {
                     {"currency", "DSH"},
                     {"issuer", "rcXY84C4g14iFp6taFXjjQGVeHqSCh9RX"},
@@ -181,7 +181,7 @@ namespace XrplTests.Xrpl.Models
         [TestMethod]
         public async Task TestVerify_InValid_TakerGets()
         {
-            var tx = new Dictionary<string, dynamic>
+            var tx = new Dictionary<string, object>
             {
                 { "Account", "r3rhWeE31Jt5sWmi4QiGLMZnY3ENgqw96W" },
                 {"Fee", "10"},
@@ -192,7 +192,7 @@ namespace XrplTests.Xrpl.Models
                 {"Expiration", 10u},
                 {"OfferSequence", 12u},
                 {"TakerGets", 11},
-                {"TakerPays",new Dictionary<string,dynamic>()
+                {"TakerPays",new Dictionary<string,object>()
                 {
                     {"currency", "DSH"},
                     {"issuer", "rcXY84C4g14iFp6taFXjjQGVeHqSCh9RX"},

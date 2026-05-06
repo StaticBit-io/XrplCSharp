@@ -1,6 +1,6 @@
 ﻿using System;
-using Newtonsoft.Json;
-using Newtonsoft.Json.Linq;
+using System.Text.Json;
+using System.Text.Json.Serialization;
 using Xrpl.Models.Ledger;
 using Xrpl.Models.Methods;
 
@@ -9,54 +9,54 @@ namespace Xrpl.Client.Json.Converters;
 /// <summary>
 /// <see cref="BaseLedgerEntry"/> json converter
 /// </summary>
-public class LONFTokenConverter : JsonConverter
+public class LONFTokenConverter : JsonConverter<NFToken>
 {
 
     /// <summary>
     /// Writes an <see cref="NFToken"/> to JSON, wrapping it in an NFToken property.
     /// Null fields are ignored based on the serializer settings.
     /// </summary>
-    /// <param name="writer">The JSON writer.</param>
-    /// <param name="value">The <see cref="NFToken"/> value to serialize.</param>
-    /// <param name="serializer">The JSON serializer.</param>
-    public override void WriteJson(JsonWriter writer, object value, JsonSerializer serializer)
+    public override void Write(Utf8JsonWriter writer, NFToken value, JsonSerializerOptions options)
     {
         if (value == null)
         {
-            writer.WriteNull();
+            writer.WriteNullValue();
             return;
         }
 
         writer.WriteStartObject();
         writer.WritePropertyName("NFToken");
-        var jObject = JObject.FromObject(value, serializer);
-        jObject.WriteTo(writer);
+
+        // Remove this converter to avoid infinite recursion
+        JsonSerializerOptions innerOptions = new JsonSerializerOptions(options);
+        innerOptions.Converters.Remove(this);
+        JsonSerializer.Serialize(writer, value, innerOptions);
+
         writer.WriteEndObject();
     }
 
 
     /// <summary> read <see cref="BaseLedgerEntry"/>  from json object </summary>
     /// <param name="reader">json reader</param>
-    /// <param name="objectType">object type</param>
-    /// <param name="existingValue">object value</param>
-    /// <param name="serializer">json serializer</param>
+    /// <param name="typeToConvert">target type</param>
+    /// <param name="options">json serializer options</param>
     /// <returns><see cref="NFToken"/> </returns>
-    /// <exception cref="NotSupportedException">Cannot convert value</exception>
-    public override object ReadJson(JsonReader reader, Type objectType, object existingValue, JsonSerializer serializer)
+    public override NFToken Read(ref Utf8JsonReader reader, Type typeToConvert, JsonSerializerOptions options)
     {
-        JObject jObject = JObject.Load(reader);
-        var value = jObject.GetValue("NFToken");
-        var target = new NFToken();
-        serializer.Populate(value.CreateReader(), target);
+        using JsonDocument doc = JsonDocument.ParseValue(ref reader);
+        JsonElement root = doc.RootElement;
 
-        return target;
+        JsonElement target = root.TryGetProperty("NFToken", out JsonElement nfTokenEl)
+            ? nfTokenEl
+            : root;
+
+        return new NFToken
+        {
+            NFTokenID = target.TryGetProperty("NFTokenID", out JsonElement idEl) ? idEl.GetString() : null,
+            URI = target.TryGetProperty("URI", out JsonElement uriEl) ? uriEl.GetString() : null,
+        };
     }
 
     /// <inheritdoc />
-    public override bool CanConvert(Type objectType)
-    {
-        return typeof(NFToken).IsAssignableFrom(objectType);
-    }
-
-    public override bool CanWrite => false;
+    public override bool CanConvert(Type typeToConvert) => typeof(NFToken).IsAssignableFrom(typeToConvert);
 }

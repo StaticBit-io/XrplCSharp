@@ -1,11 +1,11 @@
 ﻿using System.Runtime.Serialization;
 using System.Text.Json.Serialization;
 
-using Newtonsoft.Json.Converters;
+using Xrpl.Client.Json.Converters;
 
 namespace Xrpl.Models;
 
-[JsonConverter(typeof(StringEnumConverter))]
+[JsonConverter(typeof(EnumMemberValueConverter<StreamType>))]
 public enum StreamType
 {
     [EnumMember(Value = "book_changes")]

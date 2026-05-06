@@ -1,7 +1,7 @@
 using System.Collections.Generic;
 using System.Threading.Tasks;
 
-using Newtonsoft.Json;
+using System.Text.Json.Serialization;
 
 using Xrpl.Client.Exceptions;
 using Xrpl.Models.Utils;
@@ -38,13 +38,13 @@ namespace Xrpl.Models.Transactions
         }
 
         /// <inheritdoc />
-        [JsonProperty("Issuer")]
+        [JsonPropertyName("Issuer")]
         public string Issuer { get; set; }
 
         private string _credentialType;
 
         /// <inheritdoc />
-        [JsonProperty("CredentialType")]
+        [JsonPropertyName("CredentialType")]
         public string CredentialType
         {
             get => _credentialType;
@@ -65,13 +65,13 @@ namespace Xrpl.Models.Transactions
     public class CredentialAcceptResponse : TransactionResponse, ICredentialAccept
     {
         /// <inheritdoc />
-        [JsonProperty("Issuer")]
+        [JsonPropertyName("Issuer")]
         public string Issuer { get; set; }
 
         private string _credentialType;
 
         /// <inheritdoc />
-        [JsonProperty("CredentialType")]
+        [JsonPropertyName("CredentialType")]
         public string CredentialType
         {
             get => _credentialType;
@@ -96,7 +96,7 @@ namespace Xrpl.Models.Transactions
         /// </summary>
         /// <param name="tx">A CredentialAccept transaction.</param>
         /// <exception cref="ValidationException">When the CredentialAccept is malformed.</exception>
-        public static async Task ValidateCredentialAccept(Dictionary<string, dynamic> tx)
+        public static async Task ValidateCredentialAccept(Dictionary<string, object> tx)
         {
             await Common.ValidateBaseTransaction(tx);
 

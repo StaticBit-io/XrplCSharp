@@ -1,6 +1,6 @@
 using Microsoft.VisualStudio.TestTools.UnitTesting;
 
-using Newtonsoft.Json.Linq;
+using System.Text.Json.Nodes;
 
 using System;
 using System.Collections.Generic;
@@ -93,7 +93,7 @@ public class TestUAutofillFees
     public async Task TestUCalculateFee_EscrowFinishWithFulfillment_UsesFormula()
     {
         var client = new FeeTestClient(MAINNET_BASE_FEE, RESERVE_INC);
-        var tx = new Dictionary<string, dynamic>
+        var tx = new Dictionary<string, object>
         {
             ["TransactionType"] = "EscrowFinish",
             ["Account"] = "rTestAccount",
@@ -122,7 +122,7 @@ public class TestUAutofillFees
     public async Task TestUCalculateFee_AccountDelete_UsesReserveFee()
     {
         var client = new FeeTestClient(MAINNET_BASE_FEE, RESERVE_INC);
-        var tx = new Dictionary<string, dynamic>
+        var tx = new Dictionary<string, object>
         {
             ["TransactionType"] = "AccountDelete",
             ["Account"] = "rTestAccount",
@@ -139,12 +139,12 @@ public class TestUAutofillFees
     public async Task TestUCalculateFee_AMMCreate_UsesReserveFee()
     {
         var client = new FeeTestClient(MAINNET_BASE_FEE, RESERVE_INC);
-        var tx = new Dictionary<string, dynamic>
+        var tx = new Dictionary<string, object>
         {
             ["TransactionType"] = "AMMCreate",
             ["Account"] = "rTestAccount",
-            ["Amount"] = new Dictionary<string, dynamic> { ["value"] = "100" },
-            ["Amount2"] = new Dictionary<string, dynamic> { ["value"] = "100" },
+            ["Amount"] = new Dictionary<string, object> { ["value"] = "100" },
+            ["Amount2"] = new Dictionary<string, object> { ["value"] = "100" },
             ["TradingFee"] = 100
         };
 
@@ -162,23 +162,23 @@ public class TestUAutofillFees
     public async Task TestUCalculateFee_Batch_CalculatesCorrectly()
     {
         var client = new FeeTestClient(MAINNET_BASE_FEE, RESERVE_INC);
-        var tx = new Dictionary<string, dynamic>
+        var tx = new Dictionary<string, object>
         {
             ["TransactionType"] = "Batch",
             ["Account"] = "rTestAccount",
-            ["RawTransactions"] = new JArray
+            ["RawTransactions"] = new JsonArray
             {
-                new JObject
+                new JsonObject
                 {
-                    ["RawTransaction"] = new JObject
+                    ["RawTransaction"] = new JsonObject
                     {
                         ["TransactionType"] = "Payment",
                         ["Account"] = "rAccount1"
                     }
                 },
-                new JObject
+                new JsonObject
                 {
-                    ["RawTransaction"] = new JObject
+                    ["RawTransaction"] = new JsonObject
                     {
                         ["TransactionType"] = "Payment",
                         ["Account"] = "rAccount2"
@@ -198,23 +198,23 @@ public class TestUAutofillFees
     public async Task TestUCalculateFee_Batch_WithReserveInner_AddsReserveFee()
     {
         var client = new FeeTestClient(MAINNET_BASE_FEE, RESERVE_INC);
-        var tx = new Dictionary<string, dynamic>
+        var tx = new Dictionary<string, object>
         {
             ["TransactionType"] = "Batch",
             ["Account"] = "rTestAccount",
-            ["RawTransactions"] = new JArray
+            ["RawTransactions"] = new JsonArray
             {
-                new JObject
+                new JsonObject
                 {
-                    ["RawTransaction"] = new JObject
+                    ["RawTransaction"] = new JsonObject
                     {
                         ["TransactionType"] = "Payment",
                         ["Account"] = "rAccount1"
                     }
                 },
-                new JObject
+                new JsonObject
                 {
-                    ["RawTransaction"] = new JObject
+                    ["RawTransaction"] = new JsonObject
                     {
                         ["TransactionType"] = "AMMCreate",
                         ["Account"] = "rAccount2"
@@ -234,7 +234,7 @@ public class TestUAutofillFees
     public async Task TestUCalculateFee_Batch_NoRawTransactions_ThrowsValidation()
     {
         var client = new FeeTestClient(MAINNET_BASE_FEE, RESERVE_INC);
-        var tx = new Dictionary<string, dynamic>
+        var tx = new Dictionary<string, object>
         {
             ["TransactionType"] = "Batch",
             ["Account"] = "rTestAccount"
@@ -267,7 +267,7 @@ public class TestUAutofillFees
     public async Task TestUCalculateFee_AccountDelete_NotCapped()
     {
         var client = new FeeTestClient(MAINNET_BASE_FEE, RESERVE_INC, maxFeeXRP: "0.000050");
-        var tx = new Dictionary<string, dynamic>
+        var tx = new Dictionary<string, object>
         {
             ["TransactionType"] = "AccountDelete",
             ["Account"] = "rTestAccount",
@@ -284,7 +284,7 @@ public class TestUAutofillFees
 
     #region Helpers
 
-    private static Dictionary<string, dynamic> CreatePaymentTx() => new()
+    private static Dictionary<string, object> CreatePaymentTx() => new()
     {
         ["TransactionType"] = "Payment",
         ["Account"] = "rTestAccount",
@@ -326,7 +326,7 @@ internal sealed class FeeTestClient : IXrplClient
                 LoadFactor = 1,
                 ValidatedLedger = new ValidatedLedger()
                 {
-                    BaseFeeXrp = double.Parse(_feeXrp, System.Globalization.CultureInfo.InvariantCulture)
+                    BaseFeeXrp = decimal.Parse(_feeXrp, System.Globalization.CultureInfo.InvariantCulture)
                 }
             }
         };
@@ -353,7 +353,7 @@ internal sealed class FeeTestClient : IXrplClient
     public Task<uint> GetLedgerIndex(CancellationToken cancellationToken = default) => Task.FromResult(100u);
     public Task<string> GetXrpBalance(string address, CancellationToken cancellationToken = default) => throw new NotSupportedException();
 
-    public Task<Dictionary<string, dynamic>> Autofill(Dictionary<string, dynamic> tx, int? signersCount = null, CancellationToken cancellationToken = default) => throw new NotSupportedException();
+    public Task<Dictionary<string, object>> Autofill(Dictionary<string, object> tx, int? signersCount = null, CancellationToken cancellationToken = default) => throw new NotSupportedException();
     public Task<T> Autofill<T>(T tx, int? signersCount = null, CancellationToken cancellationToken = default) where T : ITransactionRequest => throw new NotSupportedException();
 
     public Task ChangeServer(string server, XrplClient.ClientOptions? options = null, System.Threading.CancellationToken cancellationToken = default) => throw new NotSupportedException();
@@ -386,7 +386,7 @@ internal sealed class FeeTestClient : IXrplClient
     public Task<LOLedgerCurrentIndex> LedgerCurrent(LedgerCurrentRequest request, CancellationToken cancellationToken = default) => throw new NotSupportedException();
     public Task<LOLedgerData> LedgerData(LedgerDataRequest request, CancellationToken cancellationToken = default) => throw new NotSupportedException();
     public Task<LedgerEntryResponse> LedgerEntry(LedgerEntryRequest request, CancellationToken cancellationToken = default) => throw new NotSupportedException();
-    public Task<Submit> Submit(Dictionary<string, dynamic> tx, XrplWallet wallet, bool autoFill = true, bool failHard = false, CancellationToken cancellationToken = default) => throw new NotSupportedException();
+    public Task<Submit> Submit(Dictionary<string, object> tx, XrplWallet wallet, bool autoFill = true, bool failHard = false, CancellationToken cancellationToken = default) => throw new NotSupportedException();
     public Task<Submit> Submit(ITransactionRequest tx, XrplWallet wallet, bool autoFill = true, bool failHard = false, CancellationToken cancellationToken = default) => throw new NotSupportedException();
     public Task<TransactionResponse> Tx(TxRequest request, CancellationToken cancellationToken = default) => throw new NotSupportedException();
     public Task<TransactionSummary> TxV2(TxRequest request, CancellationToken cancellationToken = default) => throw new NotSupportedException();
@@ -398,7 +398,7 @@ internal sealed class FeeTestClient : IXrplClient
     public Task<AMMInfoResponse> AmmInfo(AMMInfoRequest request, CancellationToken cancellationToken = default) => throw new NotSupportedException();
     public Task<object> Random(CancellationToken cancellationToken = default) => throw new NotSupportedException();
     public Task<object> AnyRequest(BaseRequest request, CancellationToken cancellationToken = default) => throw new NotSupportedException();
-    public Task<Dictionary<string, dynamic>> Request(Dictionary<string, dynamic> request, CancellationToken cancellationToken = default) => throw new NotSupportedException();
+    public Task<Dictionary<string, object>> Request(Dictionary<string, object> request, CancellationToken cancellationToken = default) => throw new NotSupportedException();
     public Task<T> GRequest<T, R>(R request, CancellationToken cancellationToken = default) where R : BaseRequest => throw new NotSupportedException();
     public Task<SimulateResponse> Simulate(SimulateRequest request, CancellationToken cancellationToken = default) => throw new NotSupportedException();
     public Task<PathFindResponse> PathFind(PathFindCreateRequest request, CancellationToken cancellationToken = default) => throw new NotSupportedException();

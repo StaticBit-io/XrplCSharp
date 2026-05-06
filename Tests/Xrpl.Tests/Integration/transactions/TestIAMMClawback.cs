@@ -1,8 +1,7 @@
 using Microsoft.VisualStudio.TestTools.UnitTesting;
 
-using Newtonsoft.Json;
-
 using System;
+using System.Text.Json;
 using System.Collections.Generic;
 using System.Linq;
 using System.Threading.Tasks;
@@ -205,7 +204,7 @@ public class TestIAMMClawback
         };
 
         var autofilled = await client.Autofill(ammClawback);
-        Console.WriteLine($"AMMClawback tx: {JsonConvert.SerializeObject(autofilled, Formatting.Indented)}");
+        Console.WriteLine($"AMMClawback tx: {JsonSerializer.Serialize(autofilled, new JsonSerializerOptions { WriteIndented = true })}");
 
         var res = await client.SubmitAndWait(autofilled, walletIssuer, true);
         var result = res.Meta?.TransactionResult;
@@ -244,7 +243,7 @@ public class TestIAMMClawback
         };
 
         var autofilled = await client.Autofill(ammClawback);
-        Console.WriteLine($"AMMClawback with amount tx: {JsonConvert.SerializeObject(autofilled, Formatting.Indented)}");
+        Console.WriteLine($"AMMClawback with amount tx: {JsonSerializer.Serialize(autofilled, new JsonSerializerOptions { WriteIndented = true })}");
 
         var res = await client.SubmitAndWait(autofilled, walletIssuer, true);
         var result = res.Meta?.TransactionResult;

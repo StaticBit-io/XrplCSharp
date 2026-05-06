@@ -1,14 +1,14 @@
-﻿using Newtonsoft.Json;
-using Newtonsoft.Json.Converters;
+﻿using System.Runtime.Serialization;
+using System.Text.Json.Serialization;
 
-using System.Runtime.Serialization;
+using Xrpl.Client.Json.Converters;
 
 namespace Xrpl.Models.Enums;
 
 /// <summary>
 /// LedgerEntryFilter is used to filter the types of ledger entries returned by certain API calls (account_objects request).
 /// </summary>
-[JsonConverter(typeof(StringEnumConverter))]
+[JsonConverter(typeof(EnumMemberValueConverter<LedgerEntryFilter>))]
 public enum LedgerEntryFilter
 {
     [EnumMember(Value = "account")]

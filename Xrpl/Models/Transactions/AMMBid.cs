@@ -1,8 +1,8 @@
-﻿#nullable enable
+#nullable enable
 using System.Collections.Generic;
 using System.Threading.Tasks;
 
-using Newtonsoft.Json;
+using System.Text.Json.Serialization;
 
 using Xrpl.Client.Exceptions;
 using Xrpl.Client.Json.Converters;
@@ -109,7 +109,7 @@ namespace Xrpl.Models.Transactions
         /// <param name="tx">An AMMBid Transaction.</param>
         /// <returns></returns>
         /// <exception cref="ValidationException">When the AMMBid is Malformed.</exception>
-        public static async Task ValidateAMMBid(Dictionary<string, dynamic> tx)
+        public static async Task ValidateAMMBid(Dictionary<string, object> tx)
         {
             await Common.ValidateBaseTransaction(tx);
 
@@ -145,7 +145,7 @@ namespace Xrpl.Models.Transactions
 
             if (tx.TryGetValue("AuthAccounts", out var AuthAccounts) && AuthAccounts is not null)
             {
-                if (AuthAccounts is not List<Dictionary<string, dynamic>> auth_accounts)
+                if (AuthAccounts is not List<Dictionary<string, object>> auth_accounts)
                 {
                     throw new ValidationException("AMMBid: AuthAccounts must be an AuthAccount array");
                 }
@@ -154,15 +154,15 @@ namespace Xrpl.Models.Transactions
                     throw new ValidationException($"AMMBid: AuthAccounts length must not be greater than {MAX_AUTH_ACCOUNTS}");
                 }
 
-                ValidateAuthAccounts(tx["Account"], auth_accounts);
+                ValidateAuthAccounts((string)tx["Account"], auth_accounts);
             }
         }
 
-        public static bool ValidateAuthAccounts(string senderAddress, List<Dictionary<string, dynamic>> authAccounts)
+        public static bool ValidateAuthAccounts(string senderAddress, List<Dictionary<string, object>> authAccounts)
         {
             foreach (var account in authAccounts)
             {
-                if (!account.TryGetValue("AuthAccount", out var auth) || auth is not Dictionary<string, dynamic> { } auth_acc)
+                if (!account.TryGetValue("AuthAccount", out var auth) || auth is not Dictionary<string, object> { } auth_acc)
                     throw new ValidationException("AMMBid: invalid AuthAccounts");
 
                 if (!auth_acc.TryGetValue("Account", out var acc) || acc is null)

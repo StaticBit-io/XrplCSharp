@@ -1,6 +1,6 @@
-﻿using System.Collections.Generic;
+using System.Collections.Generic;
 
-using Newtonsoft.Json;
+using System.Text.Json.Serialization;
 
 using Xrpl.Client.Json.Converters;
 using Xrpl.Models.Common;
@@ -21,27 +21,27 @@ public class AMMInfoRequest : BaseLedgerRequest
     /// <summary>
     /// Show only LP Tokens held by this liquidity provider.
     /// </summary>
-    [JsonProperty("account")]
+    [JsonPropertyName("account")]
     public string? Account { get; set; }
 
     /// <summary>
     /// The address of the AMM's special AccountRoot. (This is the issuer of the AMM's LP Tokens.)
     /// </summary>
-    [JsonProperty("amm_account")]
+    [JsonPropertyName("amm_account")]
     public string? AmmAccount { get; set; }
 
     /// <summary>
     /// Specifies one of the pool assets (XRP or token) of the AMM instance.<br/>
     /// Both asset and asset2 must be defined to specify an AMM instance.
     /// </summary>
-    [JsonProperty("asset"), JsonConverter(typeof(IssuedCurrencyConverter)),]
+    [JsonPropertyName("asset"), JsonConverter(typeof(IssuedCurrencyConverter)),]
     public Common.Common.IssuedCurrency Asset { get; set; }
 
     /// <summary>
     /// Specifies the other pool asset of the AMM instance.<br/>
     /// Both asset and asset2 must be defined to specify an AMM instance.
     /// </summary>
-    [JsonProperty("asset2"), JsonConverter(typeof(IssuedCurrencyConverter)),]
+    [JsonPropertyName("asset2"), JsonConverter(typeof(IssuedCurrencyConverter)),]
     public Common.Common.IssuedCurrency Asset2 { get; set; }
 }
 
@@ -50,25 +50,25 @@ public class AMMInfoRequest : BaseLedgerRequest
 /// </summary>
 public class AMMInfoResponse
 {
-    [JsonProperty("amm")]
+    [JsonPropertyName("amm")]
     public AMMInfo Amm { get; set; }
     /// <summary>
     /// The ledger index of the ledger version that was used to generate this response.
     /// </summary>
-    [JsonProperty("ledger_index")]
+    [JsonPropertyName("ledger_index")]
     public int? LedgerIndex { get; set; }
 
     /// <summary>
     ///The identifying hash of the ledger that was used to generate this response.
     /// </summary>
-    [JsonProperty("ledger_hash")]
+    [JsonPropertyName("ledger_hash")]
     public string? LedgerHash { get; set; }
 
     /// <summary>
     /// True if this data is from a validated ledger version;<br/>
     /// if omitted or set to false, this data is not final.
     /// </summary>
-    [JsonProperty("validated")]
+    [JsonPropertyName("validated")]
     public bool? Validated { get; set; }
 }
 
@@ -77,31 +77,31 @@ public class AMMInfo
     /// <summary>
     /// The account that tracks the balance of LPTokens between the AMM instance via Trustline.
     /// </summary>
-    [JsonProperty("account")]
+    [JsonPropertyName("account")]
     public string Account { get; set; }
 
     /// <summary>
     /// Specifies one of the pool assets (XRP or token) of the AMM instance.
     /// </summary>
-    [JsonProperty("amount"), JsonConverter(typeof(CurrencyConverter)),]
+    [JsonPropertyName("amount"), JsonConverter(typeof(CurrencyConverter)),]
     public Currency Amount { get; set; }
 
     /// <summary>
     /// Specifies the other pool asset of the AMM instance.
     /// </summary>
-    [JsonProperty("amount2"), JsonConverter(typeof(CurrencyConverter))]
+    [JsonPropertyName("amount2"), JsonConverter(typeof(CurrencyConverter))]
     public Currency Amount2 { get; set; }
 
-    [JsonProperty("asset_frozen"),]
+    [JsonPropertyName("asset_frozen"), ]
     public bool? AssetFrozen { get; set; }
 
-    [JsonProperty("asset2_frozen")]
+    [JsonPropertyName("asset2_frozen")]
     public bool? Asset2Frozen { get; set; }
 
     /// <summary>
     /// Details of the current owner of the auction slot.
     /// </summary>
-    [JsonProperty("auction_slot")]
+    [JsonPropertyName("auction_slot")]
     public AuctionSlot AuctionSlot { get; set; }
 
     /// <summary>
@@ -109,7 +109,7 @@ public class AMMInfo
     /// The holders of these tokens can vote on the AMM's trading fee in proportion to their holdings,
     /// or redeem the tokens for a share of the AMM's assets which grows with the trading fees collected.
     /// </summary>
-    [JsonProperty("lp_token"), JsonConverter(typeof(CurrencyConverter)),]
+    [JsonPropertyName("lp_token"), JsonConverter(typeof(CurrencyConverter)),]
     public Currency LPTokenBalance { get; set; }
 
     /// <summary>
@@ -121,12 +121,12 @@ public class AMMInfo
     /// between 0% and 1%.<br/>
     /// This field is required.
     /// </summary>
-    [JsonProperty("trading_fee")]
+    [JsonPropertyName("trading_fee")]
     public uint TradingFee { get; set; }
 
     /// <summary>
     /// Keeps a track of up to eight active votes for the instance.
     /// </summary>
-    [JsonProperty("vote_slots")]
+    [JsonPropertyName("vote_slots")]
     public List<VoteEntry> VoteSlots { get; set; }
 }

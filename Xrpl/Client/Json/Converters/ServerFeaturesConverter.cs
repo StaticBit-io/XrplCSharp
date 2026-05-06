@@ -1,9 +1,8 @@
 ﻿
 using System;
 using System.Collections.Generic;
-
-using Newtonsoft.Json;
-using Newtonsoft.Json.Linq;
+using System.Text.Json;
+using System.Text.Json.Serialization;
 
 namespace Xrpl.Client.Json.Converters;
 
@@ -20,45 +19,45 @@ public sealed class ServerFeaturesConverter : JsonConverter<ServerFeatures>
         "features"
     };
 
-    public override ServerFeatures ReadJson(
-        JsonReader reader,
-        Type objectType,
-        ServerFeatures? existingValue,
-        bool hasExistingValue,
-        JsonSerializer serializer)
+    public override ServerFeatures Read(ref Utf8JsonReader reader, Type typeToConvert, JsonSerializerOptions options)
     {
-        var root = JObject.Load(reader);
+        using JsonDocument doc = JsonDocument.ParseValue(ref reader);
+        JsonElement root = doc.RootElement;
 
-        var response = new ServerFeatures
+        ServerFeatures response = new ServerFeatures
         {
-            LedgerHash = root.Value<string>("ledger_hash"),
-            LedgerIndex = root.Value<uint?>("ledger_index") ?? 0,
-            Validated = root.Value<bool?>("validated") ?? false
+            LedgerHash = root.TryGetProperty("ledger_hash", out JsonElement lh) ? lh.GetString() : null,
+            LedgerIndex = root.TryGetProperty("ledger_index", out JsonElement li) ? li.GetUInt32() : 0,
+            Validated = root.TryGetProperty("validated", out JsonElement v) && v.GetBoolean()
         };
 
         // ─────────────────────────────────────────────
-        // Format №1: { "features": { HASH: { ... } } }
+        // Format #1: { "features": { HASH: { ... } } }
         // ─────────────────────────────────────────────
-        if (root.TryGetValue("features", out var featuresToken) &&
-            featuresToken is JObject featuresObj)
+        if (root.TryGetProperty("features", out JsonElement featuresEl) &&
+            featuresEl.ValueKind == JsonValueKind.Object)
         {
-            response.Features = featuresObj.ToObject<Dictionary<string, FeatureInfo>>(serializer)
-                                ?? new Dictionary<string, FeatureInfo>();
+            foreach (JsonProperty prop in featuresEl.EnumerateObject())
+            {
+                FeatureInfo info = JsonSerializer.Deserialize<FeatureInfo>(prop.Value.GetRawText(), options);
+                if (info != null)
+                    response.Features[prop.Name] = info;
+            }
 
             return response;
         }
 
         // ─────────────────────────────────────────────
-        // Format №2: { "HASH": { ... }, ledger_* }
+        // Format #2: { "HASH": { ... }, ledger_* }
         // ─────────────────────────────────────────────
-        foreach (var prop in root.Properties())
+        foreach (JsonProperty prop in root.EnumerateObject())
         {
             if (MetaFields.Contains(prop.Name))
                 continue;
 
-            if (prop.Value is JObject featureObj)
+            if (prop.Value.ValueKind == JsonValueKind.Object)
             {
-                var info = featureObj.ToObject<FeatureInfo>(serializer);
+                FeatureInfo info = JsonSerializer.Deserialize<FeatureInfo>(prop.Value.GetRawText(), options);
                 if (info != null)
                     response.Features[prop.Name] = info;
             }
@@ -67,8 +66,6 @@ public sealed class ServerFeaturesConverter : JsonConverter<ServerFeatures>
         return response;
     }
 
-    public override void WriteJson(JsonWriter writer, ServerFeatures? value, JsonSerializer serializer)
+    public override void Write(Utf8JsonWriter writer, ServerFeatures value, JsonSerializerOptions options)
         => throw new NotSupportedException("Serialization is not required.");
-
-    public override bool CanWrite => false;
 }

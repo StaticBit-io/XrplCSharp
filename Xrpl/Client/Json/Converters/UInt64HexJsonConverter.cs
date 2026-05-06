@@ -1,29 +1,24 @@
 ﻿using System;
-
-using Newtonsoft.Json;
+using System.Text.Json;
+using System.Text.Json.Serialization;
 
 namespace Xrpl.Client.Json.Converters;
 
 public sealed class UInt64HexJsonConverter : JsonConverter<ulong>
 {
-    public override ulong ReadJson(
-        JsonReader reader,
-        Type objectType,
-        ulong existingValue,
-        bool hasExistingValue,
-        JsonSerializer serializer)
+    public override ulong Read(ref Utf8JsonReader reader, Type typeToConvert, JsonSerializerOptions options)
     {
-        if (reader.TokenType == JsonToken.String)
-            return Convert.ToUInt64((string)reader.Value!, 16);
+        if (reader.TokenType == JsonTokenType.String)
+            return Convert.ToUInt64(reader.GetString()!, 16);
 
-        if (reader.TokenType == JsonToken.Integer)
-            return Convert.ToUInt64(reader.Value);
+        if (reader.TokenType == JsonTokenType.Number)
+            return reader.GetUInt64();
 
-        throw new JsonSerializationException("Invalid UInt64 hex value");
+        throw new JsonException("Invalid UInt64 hex value");
     }
 
-    public override void WriteJson(JsonWriter writer, ulong value, JsonSerializer serializer)
+    public override void Write(Utf8JsonWriter writer, ulong value, JsonSerializerOptions options)
     {
-        writer.WriteValue(value.ToString("X"));
+        writer.WriteStringValue(value.ToString("X"));
     }
 }

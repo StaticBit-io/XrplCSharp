@@ -1,11 +1,11 @@
-﻿
+
 
 // https://github.com/XRPLF/xrpl.js/blob/main/packages/xrpl/src/models/transactions/depositPreauth.ts
 
 using System.Collections.Generic;
 using System.Threading.Tasks;
 
-using Newtonsoft.Json;
+using System.Text.Json.Serialization;
 
 using Xrpl.Client.Exceptions;
 using Xrpl.Models.Ledger;
@@ -27,11 +27,13 @@ namespace Xrpl.Models.Transactions
         public string Unauthorize { get; set; }
 
         /// <inheritdoc />
-        [JsonProperty("AuthorizeCredentials", NullValueHandling = NullValueHandling.Ignore)]
+        [JsonPropertyName("AuthorizeCredentials")]
+        [JsonIgnore(Condition = JsonIgnoreCondition.WhenWritingNull)]
         public List<AuthorizeCredentialEntry> AuthorizeCredentials { get; set; }
 
         /// <inheritdoc />
-        [JsonProperty("UnauthorizeCredentials", NullValueHandling = NullValueHandling.Ignore)]
+        [JsonPropertyName("UnauthorizeCredentials")]
+        [JsonIgnore(Condition = JsonIgnoreCondition.WhenWritingNull)]
         public List<AuthorizeCredentialEntry> UnauthorizeCredentials { get; set; }
     }
 
@@ -79,11 +81,13 @@ namespace Xrpl.Models.Transactions
         public string Unauthorize { get; set; }
 
         /// <inheritdoc />
-        [JsonProperty("AuthorizeCredentials", NullValueHandling = NullValueHandling.Ignore)]
+        [JsonPropertyName("AuthorizeCredentials")]
+        [JsonIgnore(Condition = JsonIgnoreCondition.WhenWritingNull)]
         public List<AuthorizeCredentialEntry> AuthorizeCredentials { get; set; }
 
         /// <inheritdoc />
-        [JsonProperty("UnauthorizeCredentials", NullValueHandling = NullValueHandling.Ignore)]
+        [JsonPropertyName("UnauthorizeCredentials")]
+        [JsonIgnore(Condition = JsonIgnoreCondition.WhenWritingNull)]
         public List<AuthorizeCredentialEntry> UnauthorizeCredentials { get; set; }
     }
 
@@ -94,7 +98,7 @@ namespace Xrpl.Models.Transactions
         /// </summary>
         /// <param name="tx"> A DepositPreauth Transaction.</param>
         /// <exception cref="ValidationException">When the DepositPreauth is malformed.</exception>
-        public static async Task ValidateDepositPreauth(Dictionary<string, dynamic> tx)
+        public static async Task ValidateDepositPreauth(Dictionary<string, object> tx)
         {
             await Common.ValidateBaseTransaction(tx);
 

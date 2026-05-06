@@ -14,7 +14,7 @@ namespace XrplTests.Xrpl.Models
         [TestMethod]
         public async Task TestVerify_Valid_WithDomainID()
         {
-            var tx = new Dictionary<string, dynamic>
+            var tx = new Dictionary<string, object>
             {
                 { "Account", "rHb9CJAWyB4rj91VRWn96DkukG4bwdtyTh" },
                 { "TransactionType", "PermissionedDomainDelete" },
@@ -29,7 +29,7 @@ namespace XrplTests.Xrpl.Models
         [TestMethod]
         public async Task TestVerify_Invalid_MissingDomainID()
         {
-            var tx = new Dictionary<string, dynamic>
+            var tx = new Dictionary<string, object>
             {
                 { "Account", "rHb9CJAWyB4rj91VRWn96DkukG4bwdtyTh" },
                 { "TransactionType", "PermissionedDomainDelete" },
@@ -44,7 +44,7 @@ namespace XrplTests.Xrpl.Models
         [TestMethod]
         public async Task TestVerify_Invalid_EmptyDomainID()
         {
-            var tx = new Dictionary<string, dynamic>
+            var tx = new Dictionary<string, object>
             {
                 { "Account", "rHb9CJAWyB4rj91VRWn96DkukG4bwdtyTh" },
                 { "TransactionType", "PermissionedDomainDelete" },

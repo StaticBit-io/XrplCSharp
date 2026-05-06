@@ -2,7 +2,7 @@
 
 using System.Collections.Generic;
 
-using Newtonsoft.Json;
+using System.Text.Json.Serialization;
 
 namespace Xrpl.Models.Methods
 {
@@ -37,20 +37,20 @@ namespace Xrpl.Models.Methods
         /// <summary>
         /// The sender of a possible payment.
         /// </summary>
-        [JsonProperty("source_account")]
+        [JsonPropertyName("source_account")]
         public string SourceAccount { get; set; }
 
         /// <summary>
         /// The recipient of a possible payment.
         /// </summary>
-        [JsonProperty("destination_account")]
+        [JsonPropertyName("destination_account")]
         public string DestinationAccount { get; set; }
 
         /// <summary>
         /// (Optional, XLS-70) Hex-encoded object IDs (64 hex chars each) of accepted Credentials objects
         /// to use for credential-based deposit preauthorization.
         /// </summary>
-        [JsonProperty("credentials", NullValueHandling = NullValueHandling.Ignore)]
+        [JsonPropertyName("credentials")]
         public List<string> Credentials { get; set; }
     }
 
@@ -64,50 +64,50 @@ namespace Xrpl.Models.Methods
         /// If true, depositing to the destination account is either possible without authorization, the source account
         /// has the necessary preauthorization, or the destination account does not require Deposit Authorization.
         /// </summary>
-        [JsonProperty("deposit_authorized")]
+        [JsonPropertyName("deposit_authorized")]
         public bool IsDepositAuthorized { get; set; }
 
         /// <summary>
         /// The destination account specified in the request.
         /// </summary>
-        [JsonProperty("destination_account")]
+        [JsonPropertyName("destination_account")]
         public string DestinationAccount { get; set; }
 
         /// <summary>
         /// The source account specified in the request.
         /// </summary>
-        [JsonProperty("source_account")]
+        [JsonPropertyName("source_account")]
         public string SourceAccount { get; set; }
 
         /// <summary>
         /// (May be omitted) The hash of the ledger version used to generate this response.
         /// </summary>
-        [JsonProperty("ledger_hash", NullValueHandling = NullValueHandling.Ignore)]
+        [JsonPropertyName("ledger_hash")]
         public string LedgerHash { get; set; }
 
         /// <summary>
         /// (May be omitted) The ledger index of the ledger version used to generate this response.
         /// </summary>
-        [JsonProperty("ledger_index", NullValueHandling = NullValueHandling.Ignore)]
+        [JsonPropertyName("ledger_index")]
         public uint? LedgerIndex { get; set; }
 
         /// <summary>
         /// (May be omitted) The ledger index of the current in-progress ledger version, used when no ledger version
         /// was specified in the request.
         /// </summary>
-        [JsonProperty("ledger_current_index", NullValueHandling = NullValueHandling.Ignore)]
+        [JsonPropertyName("ledger_current_index")]
         public uint? LedgerCurrentIndex { get; set; }
 
         /// <summary>
         /// (May be omitted) If true, the information comes from a validated ledger version.
         /// </summary>
-        [JsonProperty("validated", NullValueHandling = NullValueHandling.Ignore)]
+        [JsonPropertyName("validated")]
         public bool? Validated { get; set; }
 
         /// <summary>
         /// (Optional, XLS-70) The credentials specified in the request, echoed back.
         /// </summary>
-        [JsonProperty("credentials", NullValueHandling = NullValueHandling.Ignore)]
+        [JsonPropertyName("credentials")]
         public List<string> Credentials { get; set; }
     }
 }

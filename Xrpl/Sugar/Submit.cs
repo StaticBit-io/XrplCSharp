@@ -1,20 +1,22 @@
-using Newtonsoft.Json;
-using Newtonsoft.Json.Linq;
-
 using System;
 using System.Collections.Generic;
 using System.Linq;
+using System.Text.Json;
+using System.Text.Json.Nodes;
 using System.Threading;
 using System.Threading.Tasks;
 
 using Xrpl.BinaryCodec;
 using Xrpl.Client;
 using Xrpl.Client.Exceptions;
+using Xrpl.Client.Json;
 using Xrpl.Models;
 using Xrpl.Models.Methods;
 using Xrpl.Models.Transactions;
 using Xrpl.Utils.Hashes;
 using Xrpl.Wallet;
+
+using JsonSerializer = System.Text.Json.JsonSerializer;
 
 // https://github.com/XRPLF/xrpl.js/blob/main/packages/xrpl/src/sugar/submit.ts
 
@@ -42,7 +44,7 @@ public static class SubmitSugar
     /// <returns>A promise that contains SubmitResponse</returns>
     public static async Task<Submit> Submit(
         this IXrplClient client,
-        Dictionary<string, dynamic> transaction,
+        Dictionary<string, object> transaction,
         bool autofill = true,
         bool failHard = false,
         XrplWallet wallet = null,
@@ -85,7 +87,7 @@ public static class SubmitSugar
     /// <returns>A promise that contains TxResponse, that will return when the transaction has been validated.</returns>
     public static async Task<TransactionSummary> SubmitAndWait(
         this IXrplClient client,
-        Dictionary<string, dynamic> transaction,
+        Dictionary<string, object> transaction,
         XrplWallet wallet = null,
         bool autofill = true,
         bool failHard = false,
@@ -113,7 +115,7 @@ public static class SubmitSugar
     {
         var signedTx = GetTxBlob(signedTransaction);
         var decoded = XrplBinaryCodec.Decode(signedTx).ToString();
-        var tx = JObject.Parse(decoded);
+        var tx = JsonNode.Parse(decoded)?.AsObject();
         var lastLedger = GetLastLedgerSequence(tx);
         if (lastLedger == null)
         {
@@ -194,7 +196,7 @@ public static class SubmitSugar
         CancellationToken cancellationToken = default)
     {
         var json = tx.ToJson();
-        var txJson = JsonConvert.DeserializeObject<Dictionary<string, dynamic>>(json)
+        var txJson = JsonSerializer.Deserialize<Dictionary<string, object>>(json, XrplJsonOptions.Default)
                      ?? throw new ValidationException("Failed to deserialize tx json");
         var response = await SubmitMulti(client, txJson, wallets, autofill, failHard, cancellationToken);
         return response;
@@ -211,7 +213,7 @@ public static class SubmitSugar
     /// <returns></returns>
     public static async Task<Submit> SubmitMulti(
         this IXrplClient client,
-        Dictionary<string, dynamic> tx,
+        Dictionary<string, object> tx,
         IEnumerable<XrplWallet> wallets,
         bool autofill = true,
         bool failHard = false,
@@ -247,7 +249,7 @@ public static class SubmitSugar
     /// <returns></returns>
     public static async Task<Submit> SubmitMultiBatch(
         this IXrplClient client,
-        Dictionary<string, dynamic> txJson,
+        Dictionary<string, object> txJson,
         IEnumerable<XrplWallet> wallets,
         bool autofill = true,
         bool failHard = false,
@@ -271,14 +273,14 @@ public static class SubmitSugar
             txJson = await client.Autofill(txJson, signersCount: walletList.Count, cancellationToken: cancellationToken);
         }
 
-        var root = JObject.FromObject(txJson);
-        var rawArray = root["RawTransactions"] as JArray ?? new JArray();
+        var root = JsonNode.Parse(JsonSerializer.Serialize(txJson, XrplJsonOptions.Default))?.AsObject();
+        var rawArray = root["RawTransactions"]?.AsArray() ?? new JsonArray();
 
         // 1) подписи владельцев внутренних tx
         var partialBlobs = new List<string>();
-        foreach (var entry in rawArray.OfType<JObject>())
+        foreach (var entry in rawArray.Where(n => n is JsonObject).Select(n => n!.AsObject()))
         {
-            var acct = (string?)entry["RawTransaction"]?["Account"];
+            var acct = entry["RawTransaction"]?["Account"]?.GetValue<string>();
             if (string.IsNullOrWhiteSpace(acct))
             {
                 throw new ValidationException("Inner tx missing Account");
@@ -324,7 +326,7 @@ public static class SubmitSugar
 
         // 2) склейка внутренних подписей
         var combined = XrplWallet.CombineBatchSigners(partialBlobs.ToArray());
-        var combinedJson = JObject.Parse(XrplBinaryCodec.Decode(combined.TxBlob).ToString());
+        var combinedJson = JsonNode.Parse(XrplBinaryCodec.Decode(combined.TxBlob).ToJsonString())?.AsObject();
         // 3) корневая подпись: single-sig ИЛИ multi-sig по наличию SignerList у корня
         var aiRoot = await client.AccountInfo(
             new AccountInfoRequest(mainAcc)
@@ -337,7 +339,7 @@ public static class SubmitSugar
             // обычная подпись плательщика комиссии (должен быть в wallets)
             if (!walletByAddr.TryGetValue(mainAcc, out var main))
                 throw new ValidationException($"Main account {mainAcc} not found in provided wallets");
-            var final = main.Sign(JsonConvert.DeserializeObject<Dictionary<string, dynamic>>(combinedJson.ToString()));
+            var final = main.Sign(JsonSerializer.Deserialize<Dictionary<string, object>>(combinedJson.ToJsonString(), XrplJsonOptions.Default));
             var submit = await client.SubmitRequest(final.TxBlob, failHard, cancellationToken);
             //var txRes = XrplBinaryCodec.Decode(submit.TxBlob);
             return submit;
@@ -355,7 +357,7 @@ public static class SubmitSugar
             //combinedJson["SigningPubKey"] = "";
 
             var msBlobs = picked.Select(w => w.Sign(
-                JsonConvert.DeserializeObject<Dictionary<string, dynamic>>(combinedJson.ToString()),
+                JsonSerializer.Deserialize<Dictionary<string, object>>(combinedJson.ToJsonString(), XrplJsonOptions.Default),
                 multisign: true).TxBlob).ToArray();
             var msCombined = Signer.Multisign(msBlobs);
             //var txRes = XrplBinaryCodec.Decode(msCombined);
@@ -383,7 +385,7 @@ public static class SubmitSugar
     CancellationToken cancellationToken = default)
     {
         var json = tx.ToJson();
-        var txJson = JsonConvert.DeserializeObject<Dictionary<string, dynamic>>(json)
+        var txJson = JsonSerializer.Deserialize<Dictionary<string, object>>(json, XrplJsonOptions.Default)
                     ?? throw new ValidationException("Failed to deserialize tx json");
 
         var response = await client.SubmitMultiBatch(txJson, wallets, autofill, failHard, cancellationToken);
@@ -477,9 +479,9 @@ public static class SubmitSugar
     /// <param name="failHard">If true, and the transaction fails locally, do not retry or relay the transaction to other servers.</param>
     /// <param name="wallet">A wallet to sign a transaction. It must be provided when submitting an unsigned transaction.</param>
     /// <returns>A Wallet derived from a seed.</returns>
-    public static async Task<(string txBlob, Dictionary<string, dynamic> tx)> GetSignedTx(
+    public static async Task<(string txBlob, Dictionary<string, object> tx)> GetSignedTx(
         this IXrplClient client,
-        Dictionary<string, dynamic> transaction,
+        Dictionary<string, object> transaction,
         bool autofill = false,
         bool failHard = false,
         XrplWallet? wallet = null,
@@ -512,7 +514,7 @@ public static class SubmitSugar
 
     public static bool IsSigned(object transaction)
     {
-        if (transaction is Dictionary<string, dynamic> { } tx)
+        if (transaction is Dictionary<string, object> { } tx)
         {
             return (tx.TryGetValue(key: "SigningPubKey", value: out var SigningPubKey) && SigningPubKey is not null) ||
                    (tx.TryGetValue(key: "TxnSignature", value: out var TxnSignature) && TxnSignature is not null);
@@ -520,11 +522,12 @@ public static class SubmitSugar
         else
         {
             var ob = XrplBinaryCodec.Encode(transaction);
-            var json = JObject.Parse($"{ob}");
-            return (json.TryGetValue(propertyName: "SigningPubKey", value: out var SigningPubKey) &&
-                    !string.IsNullOrWhiteSpace(SigningPubKey.ToString())) ||
-                   (json.TryGetValue(propertyName: "TxnSignature", value: out var TxnSignature) &&
-                    !string.IsNullOrWhiteSpace(TxnSignature.ToString()));
+            var json = JsonNode.Parse($"{ob}")?.AsObject();
+            if (json == null) return false;
+            return (json.TryGetPropertyValue("SigningPubKey", out var SigningPubKey) &&
+                    !string.IsNullOrWhiteSpace(SigningPubKey?.ToString())) ||
+                   (json.TryGetPropertyValue("TxnSignature", out var TxnSignature) &&
+                    !string.IsNullOrWhiteSpace(TxnSignature?.ToString()));
         }
     }
 
@@ -542,7 +545,7 @@ public static class SubmitSugar
     /// <returns></returns>
     public static bool IsAccountDelete(object transaction)
     {
-        if (transaction is Dictionary<string, dynamic> { } tx)
+        if (transaction is Dictionary<string, object> { } tx)
         {
             return tx.TryGetValue(key: "TransactionType", value: out var TransactionType) &&
                    $"{TransactionType}" == "AccountDelete";
@@ -554,10 +557,11 @@ public static class SubmitSugar
         else
         {
             var ob = XrplBinaryCodec.Encode(transaction);
-            var json = JObject.Parse($"{ob}");
+            var json = JsonNode.Parse($"{ob}")?.AsObject();
+            if (json == null) return false;
 
-            return json.TryGetValue(propertyName: "TransactionType", value: out var TransactionType) &&
-                   TransactionType.ToString() == "AccountDelete";
+            return json.TryGetPropertyValue("TransactionType", out var TransactionType) &&
+                   TransactionType?.ToString() == "AccountDelete";
         }
     }
 }

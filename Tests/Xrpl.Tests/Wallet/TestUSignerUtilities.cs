@@ -1,7 +1,7 @@
-﻿using System;
+using System;
 using System.Collections.Generic;
+using System.Text.Json.Nodes;
 using Microsoft.VisualStudio.TestTools.UnitTesting;
-using Newtonsoft.Json.Linq;
 using Xrpl.Wallet;
 
 namespace Xrpl.Tests.Wallet.Tests
@@ -70,7 +70,7 @@ namespace Xrpl.Tests.Wallet.Tests
         [TestMethod]
         public void TestUDedupeAndSortSigners_EmptyArray()
         {
-            var signers = new JArray();
+            var signers = new JsonArray();
             var result = SignerUtilities.DedupeAndSortSigners(signers);
             Assert.AreEqual(0, result.Count);
         }
@@ -86,11 +86,11 @@ namespace Xrpl.Tests.Wallet.Tests
         [TestMethod]
         public void TestUDedupeAndSortSigners_SingleSigner()
         {
-            var signers = new JArray
+            var signers = new JsonArray
             {
-                new JObject
+                new JsonObject
                 {
-                    ["Signer"] = new JObject
+                    ["Signer"] = new JsonObject
                     {
                         ["Account"] = ClassicAddress1,
                         ["SigningPubKey"] = "PUBKEY1",
@@ -105,20 +105,20 @@ namespace Xrpl.Tests.Wallet.Tests
         [TestMethod]
         public void TestUDedupeAndSortSigners_RemovesDuplicates()
         {
-            var signers = new JArray
+            var signers = new JsonArray
             {
-                new JObject
+                new JsonObject
                 {
-                    ["Signer"] = new JObject
+                    ["Signer"] = new JsonObject
                     {
                         ["Account"] = ClassicAddress1,
                         ["SigningPubKey"] = "PUBKEY1",
                         ["TxnSignature"] = "SIG1"
                     }
                 },
-                new JObject
+                new JsonObject
                 {
-                    ["Signer"] = new JObject
+                    ["Signer"] = new JsonObject
                     {
                         ["Account"] = ClassicAddress1,
                         ["SigningPubKey"] = "PUBKEY1",
@@ -133,20 +133,20 @@ namespace Xrpl.Tests.Wallet.Tests
         [TestMethod]
         public void TestUDedupeAndSortSigners_KeepsDifferentSignatures()
         {
-            var signers = new JArray
+            var signers = new JsonArray
             {
-                new JObject
+                new JsonObject
                 {
-                    ["Signer"] = new JObject
+                    ["Signer"] = new JsonObject
                     {
                         ["Account"] = ClassicAddress1,
                         ["SigningPubKey"] = "PUBKEY1",
                         ["TxnSignature"] = "SIG1"
                     }
                 },
-                new JObject
+                new JsonObject
                 {
-                    ["Signer"] = new JObject
+                    ["Signer"] = new JsonObject
                     {
                         ["Account"] = ClassicAddress1,
                         ["SigningPubKey"] = "PUBKEY1",
@@ -161,20 +161,20 @@ namespace Xrpl.Tests.Wallet.Tests
         [TestMethod]
         public void TestUDedupeAndSortSigners_SortsByAccountId()
         {
-            var signers = new JArray
+            var signers = new JsonArray
             {
-                new JObject
+                new JsonObject
                 {
-                    ["Signer"] = new JObject
+                    ["Signer"] = new JsonObject
                     {
                         ["Account"] = ClassicAddress2,
                         ["SigningPubKey"] = "PUBKEY2",
                         ["TxnSignature"] = "SIG2"
                     }
                 },
-                new JObject
+                new JsonObject
                 {
-                    ["Signer"] = new JObject
+                    ["Signer"] = new JsonObject
                     {
                         ["Account"] = ClassicAddress1,
                         ["SigningPubKey"] = "PUBKEY1",
@@ -185,19 +185,19 @@ namespace Xrpl.Tests.Wallet.Tests
             var result = SignerUtilities.DedupeAndSortSigners(signers);
             Assert.AreEqual(2, result.Count);
 
-            var bytes1 = SignerUtilities.GetAccountIdBytes((string)result[0]["Signer"]["Account"]);
-            var bytes2 = SignerUtilities.GetAccountIdBytes((string)result[1]["Signer"]["Account"]);
+            var bytes1 = SignerUtilities.GetAccountIdBytes(result[0]["Signer"]["Account"].GetValue<string>());
+            var bytes2 = SignerUtilities.GetAccountIdBytes(result[1]["Signer"]["Account"].GetValue<string>());
             Assert.IsTrue(SignerUtilities.ByteArrayComparer.Instance.Compare(bytes1, bytes2) < 0);
         }
 
         [TestMethod]
         public void TestUDedupeAndSortSigners_PreservesWrapperStructure()
         {
-            var signers = new JArray
+            var signers = new JsonArray
             {
-                new JObject
+                new JsonObject
                 {
-                    ["Signer"] = new JObject
+                    ["Signer"] = new JsonObject
                     {
                         ["Account"] = ClassicAddress1,
                         ["SigningPubKey"] = "PUBKEY1",
@@ -216,25 +216,25 @@ namespace Xrpl.Tests.Wallet.Tests
         [TestMethod]
         public void TestUSortSignersArray_SortsByAccountId()
         {
-            var signers = new JArray
+            var signers = new JsonArray
             {
-                new JObject
+                new JsonObject
                 {
-                    ["Signer"] = new JObject
+                    ["Signer"] = new JsonObject
                     {
                         ["Account"] = ClassicAddress3
                     }
                 },
-                new JObject
+                new JsonObject
                 {
-                    ["Signer"] = new JObject
+                    ["Signer"] = new JsonObject
                     {
                         ["Account"] = ClassicAddress1
                     }
                 },
-                new JObject
+                new JsonObject
                 {
-                    ["Signer"] = new JObject
+                    ["Signer"] = new JsonObject
                     {
                         ["Account"] = ClassicAddress2
                     }
@@ -243,9 +243,9 @@ namespace Xrpl.Tests.Wallet.Tests
             var result = SignerUtilities.SortSignersArray(signers);
             Assert.AreEqual(3, result.Count);
 
-            var acc0 = (string)result[0]["Signer"]["Account"];
-            var acc1 = (string)result[1]["Signer"]["Account"];
-            var acc2 = (string)result[2]["Signer"]["Account"];
+            var acc0 = result[0]["Signer"]["Account"].GetValue<string>();
+            var acc1 = result[1]["Signer"]["Account"].GetValue<string>();
+            var acc2 = result[2]["Signer"]["Account"].GetValue<string>();
 
             var bytes0 = SignerUtilities.GetAccountIdBytes(acc0);
             var bytes1 = SignerUtilities.GetAccountIdBytes(acc1);
@@ -257,85 +257,84 @@ namespace Xrpl.Tests.Wallet.Tests
 
         #endregion
 
-        #region ConvertJTokenToClrType Tests
+        #region ConvertJsonNodeToClrType Tests
 
         [TestMethod]
-        public void TestUConvertJTokenToClrType_String()
+        public void TestUConvertJsonNodeToClrType_String()
         {
-            var token = new JValue("test");
-            var result = SignerUtilities.ConvertJTokenToClrType(token);
+            JsonNode token = JsonValue.Create("test");
+            var result = SignerUtilities.ConvertJsonNodeToClrType(token);
             Assert.AreEqual("test", result);
         }
 
         [TestMethod]
-        public void TestUConvertJTokenToClrType_Integer()
+        public void TestUConvertJsonNodeToClrType_Integer()
         {
-            var token = new JValue(42);
-            var result = SignerUtilities.ConvertJTokenToClrType(token);
+            JsonNode token = JsonValue.Create(42);
+            var result = SignerUtilities.ConvertJsonNodeToClrType(token);
             Assert.AreEqual(42L, result);
         }
 
         [TestMethod]
-        public void TestUConvertJTokenToClrType_Float()
+        public void TestUConvertJsonNodeToClrType_Float()
         {
-            var token = new JValue(3.14);
-            var result = SignerUtilities.ConvertJTokenToClrType(token);
+            JsonNode token = JsonValue.Create(3.14);
+            var result = SignerUtilities.ConvertJsonNodeToClrType(token);
             Assert.AreEqual(3.14, result);
         }
 
         [TestMethod]
-        public void TestUConvertJTokenToClrType_Boolean()
+        public void TestUConvertJsonNodeToClrType_Boolean()
         {
-            var token = new JValue(true);
-            var result = SignerUtilities.ConvertJTokenToClrType(token);
+            JsonNode token = JsonValue.Create(true);
+            var result = SignerUtilities.ConvertJsonNodeToClrType(token);
             Assert.AreEqual(true, result);
         }
 
         [TestMethod]
-        public void TestUConvertJTokenToClrType_Null()
+        public void TestUConvertJsonNodeToClrType_Null()
         {
-            var token = JValue.CreateNull();
-            var result = SignerUtilities.ConvertJTokenToClrType(token);
+            var result = SignerUtilities.ConvertJsonNodeToClrType(null);
             Assert.IsNull(result);
         }
 
         [TestMethod]
-        public void TestUConvertJTokenToClrType_Object()
+        public void TestUConvertJsonNodeToClrType_Object()
         {
-            var token = new JObject
+            JsonNode token = new JsonObject
             {
                 ["key1"] = "value1",
                 ["key2"] = 42
             };
-            var result = SignerUtilities.ConvertJTokenToClrType(token) as Dictionary<string, dynamic>;
+            var result = SignerUtilities.ConvertJsonNodeToClrType(token) as Dictionary<string, object>;
             Assert.IsNotNull(result);
             Assert.AreEqual("value1", result["key1"]);
             Assert.AreEqual(42L, result["key2"]);
         }
 
         [TestMethod]
-        public void TestUConvertJTokenToClrType_Array()
+        public void TestUConvertJsonNodeToClrType_Array()
         {
-            var token = new JArray { "a", "b", "c" };
-            var result = SignerUtilities.ConvertJTokenToClrType(token) as List<dynamic>;
+            JsonNode token = new JsonArray { JsonValue.Create("a"), JsonValue.Create("b"), JsonValue.Create("c") };
+            var result = SignerUtilities.ConvertJsonNodeToClrType(token) as List<object>;
             Assert.IsNotNull(result);
             Assert.AreEqual(3, result.Count);
             Assert.AreEqual("a", result[0]);
         }
 
         [TestMethod]
-        public void TestUConvertJTokenToClrType_NestedObject()
+        public void TestUConvertJsonNodeToClrType_NestedObject()
         {
-            var token = new JObject
+            JsonNode token = new JsonObject
             {
-                ["outer"] = new JObject
+                ["outer"] = new JsonObject
                 {
                     ["inner"] = "value"
                 }
             };
-            var result = SignerUtilities.ConvertJTokenToClrType(token) as Dictionary<string, dynamic>;
+            var result = SignerUtilities.ConvertJsonNodeToClrType(token) as Dictionary<string, object>;
             Assert.IsNotNull(result);
-            var outer = result["outer"] as Dictionary<string, dynamic>;
+            var outer = result["outer"] as Dictionary<string, object>;
             Assert.IsNotNull(outer);
             Assert.AreEqual("value", outer["inner"]);
         }

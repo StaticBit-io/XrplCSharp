@@ -1,5 +1,5 @@
 ﻿using System;
-using Newtonsoft.Json.Linq;
+using System.Text.Json.Nodes;
 using Xrpl.BinaryCodec.Binary;
 using Xrpl.BinaryCodec.Util;
 
@@ -105,9 +105,9 @@ namespace Xrpl.BinaryCodec.Types
         /// </summary>
         /// <param name="token">json field</param>
         /// <returns></returns>
-        public new static Currency FromJson(JToken token)
+        public new static Currency FromJson(JsonNode token)
         {
-            return token == null ? null : FromString(token.ToString());
+            return token == null ? null : FromString(token.GetValue<string>());
         }
         /// <summary>
         /// Decode currency from JSON for Oracle fields (XLS-47 format).
@@ -115,9 +115,9 @@ namespace Xrpl.BinaryCodec.Types
         /// </summary>
         /// <param name="token">JSON token containing currency code.</param>
         /// <returns>Currency with Oracle encoding.</returns>
-        public static Currency FromOracleJson(JToken token)
+        public static Currency FromOracleJson(JsonNode token)
         {
-            return token == null ? null : FromOracleString(token.ToString());
+            return token == null ? null : FromOracleString(token.GetValue<string>());
         }
         /// <summary>
         /// decode currency from string
@@ -209,13 +209,13 @@ namespace Xrpl.BinaryCodec.Types
         {
             return FromString(v);
         }
-        public static implicit operator Currency(JToken v)
+        public static implicit operator Currency(JsonNode v)
         {
             return FromJson(v);
         }
-        public static implicit operator JToken(Currency v)
+        public static implicit operator JsonNode(Currency v)
         {
-            return v.ToString();
+            return JsonValue.Create(v.ToString());
         }
 
         /// <inheritdoc />

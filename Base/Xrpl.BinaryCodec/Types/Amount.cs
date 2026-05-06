@@ -1,7 +1,7 @@
-﻿using Newtonsoft.Json.Linq;
-
+﻿using System;
 using System.Globalization;
-using System.Linq;
+using System.Text.Json;
+using System.Text.Json.Nodes;
 using Xrpl.BinaryCodec.Binary;
 
 // https://github.com/XRPLF/xrpl.js/blob/main/packages/ripple-binary-codec/src/types/amount.ts
@@ -49,73 +49,102 @@ namespace Xrpl.BinaryCodec.Types
             }
         }
 
-        public virtual JToken ToJson()
+        public virtual JsonNode ToJson()
         {
             if (this.IsNative())
             {
-                return Value.ToString();
+                return JsonValue.Create(Value.ToString());
             }
-            return new JObject
+            return new JsonObject
             {
                 ["value"] = Value.ToString(),
-                ["currency"] = Currency,
-                ["issuer"] = Issuer,
+                ["currency"] = (JsonNode)Currency,
+                ["issuer"] = (JsonNode)Issuer,
             };
         }
 
-        public static Amount FromJson(JToken token)
+        public static Amount FromJson(JsonNode token)
         {
-            switch (token.Type)
+            if (token == null)
+                throw new InvalidJsonException("Cannot create Amount from null JSON.");
+
+            JsonValueKind kind = token.GetValueKind();
+            if (kind == JsonValueKind.String)
             {
-                case JTokenType.String:
+                return new Amount(token.GetValue<string>());
+            }
+            else if (kind == JsonValueKind.Number)
+            {
+                try
+                {
+                    return token.GetValue<ulong>();
+                }
+                catch (Exception ex) when (ex is FormatException or OverflowException or InvalidOperationException)
+                {
+                    throw new InvalidJsonException(
+                        $"Cannot convert numeric JSON value to a valid XRP drops amount: {ex.Message}", ex);
+                }
+            }
+            else if (token is JsonObject)
+            {
+                JsonNode mptIssuanceId = token["mpt_issuance_id"];
+                if (mptIssuanceId != null)
+                {
+                    JsonNode mptValue = token["value"];
+                    if (mptValue == null)
+                        throw new InvalidJsonException("MPT Amount object must contain property `value`.");
+                    if (!(mptIssuanceId is JsonValue idJv) || idJv.GetValueKind() != JsonValueKind.String)
+                        throw new InvalidJsonException("MPT Amount property `mpt_issuance_id` must be a JSON string.");
+                    if (!(mptValue is JsonValue valJv) || valJv.GetValueKind() != JsonValueKind.String)
+                        throw new InvalidJsonException("MPT Amount property `value` must be a JSON string.");
+                    if (token.AsObject().Count > 2)
+                        throw new InvalidJsonException("MPT Amount object has too many properties.");
+                    return new MptAmount(valJv.GetValue<string>(), idJv.GetValue<string>());
+                }
 
-                    return new Amount(token.ToString());
-                case JTokenType.Integer:
-                    return (ulong)token;
-                case JTokenType.Object:
-                    var mptIssuanceId = token["mpt_issuance_id"];
-                    if (mptIssuanceId != null)
-                    {
-                        var mptValue = token["value"];
-                        if (mptValue == null)
-                            throw new InvalidJsonException("MPT Amount object must contain property `value`.");
-                        if (token.Children().Count() > 2)
-                            throw new InvalidJsonException("MPT Amount object has too many properties.");
-                        return new MptAmount((string)mptValue, (string)mptIssuanceId);
-                    }
+                JsonNode currencyNodeForXrp = token["currency"];
+                if (currencyNodeForXrp is JsonValue currencyJv
+                    && currencyJv.GetValueKind() == JsonValueKind.String
+                    && currencyJv.GetValue<string>() == "XRP")
+                {
+                    if (token.AsObject().Count != 2)
+                        throw new InvalidJsonException("XRP Amount object must contain only `currency` and `value`.");
 
-                    if ((string)token["currency"] == "XRP")
-                    {
-                        return new Amount(token["value"].ToString());
-                    }
-                    var valueToken = token["value"];
-                    var currencyToken = token["currency"];
-                    var issuerToken = token["issuer"];
+                    JsonNode valueTokenForXrp = token["value"];
+                    if (valueTokenForXrp == null || valueTokenForXrp.GetValueKind() != JsonValueKind.String)
+                        throw new InvalidJsonException("XRP Amount object must contain string property `value`.");
+                    return new Amount(valueTokenForXrp.GetValue<string>());
+                }
+                JsonNode valueToken = token["value"];
+                JsonNode currencyToken = token["currency"];
+                JsonNode issuerToken = token["issuer"];
 
-                    if (valueToken == null)
-                        throw new InvalidJsonException("Amount object must contain property `value`.");
+                if (valueToken == null)
+                    throw new InvalidJsonException("Amount object must contain property `value`.");
 
-                    if (currencyToken == null)
-                        throw new InvalidJsonException("Amount object must contain property `currency`.");
+                if (currencyToken == null)
+                    throw new InvalidJsonException("Amount object must contain property `currency`.");
 
-                    if (issuerToken == null)
-                        throw new InvalidJsonException("Amount object must contain property `issuer`.");
+                if (issuerToken == null)
+                    throw new InvalidJsonException("Amount object must contain property `issuer`.");
 
-                    if (token.Children().Count() > 3)
-                        throw new InvalidJsonException("Amount object has too many properties.");
+                if (token.AsObject().Count > 3)
+                    throw new InvalidJsonException("Amount object has too many properties.");
 
-                    if (valueToken.Type != JTokenType.String)
-                        throw new InvalidJsonException("Property `value` must be string.");
+                if (valueToken.GetValueKind() != JsonValueKind.String)
+                    throw new InvalidJsonException("Property `value` must be string.");
 
-                    if (currencyToken.Type != JTokenType.String)
-                        throw new InvalidJsonException("Property `currency` must be string.");
+                if (currencyToken.GetValueKind() != JsonValueKind.String)
+                    throw new InvalidJsonException("Property `currency` must be string.");
 
-                    if (issuerToken.Type != JTokenType.String)
-                        throw new InvalidJsonException("Property `issuer` must be string.");
+                if (issuerToken.GetValueKind() != JsonValueKind.String)
+                    throw new InvalidJsonException("Property `issuer` must be string.");
 
-                    return new Amount((string)valueToken, (string)currencyToken, (string)issuerToken);
-                default:
-                    throw new InvalidJsonException("Can not create Amount from `{token}`");
+                return new Amount(valueToken.GetValue<string>(), currencyToken.GetValue<string>(), issuerToken.GetValue<string>());
+            }
+            else
+            {
+                throw new InvalidJsonException($"Can not create Amount from `{kind}`");
             }
         }
 

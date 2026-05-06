@@ -1,4 +1,4 @@
-﻿using Newtonsoft.Json;
+﻿using System.Text.Json.Serialization;
 
 using System;
 using System.Globalization;
@@ -32,7 +32,7 @@ public class Currency
     /// <summary>
     /// The ID of the MPT to authorize.
     /// </summary>
-    [JsonProperty("mpt_issuance_id", NullValueHandling = NullValueHandling.Ignore)]
+    [JsonPropertyName("mpt_issuance_id")]
     public string MPTokenIssuanceID
     {
         get => _mpTokenIssuanceId;
@@ -52,7 +52,7 @@ public class Currency
     /// all uppercase and lowercase letters, digits, as well as the symbols ? ! @ # $ % ^ * ( ) { } [ ] | and symbols ampersand, less, greater<br/>
     /// Currency codes are case-sensitive.
     /// </summary>
-    [JsonProperty(propertyName: "currency", NullValueHandling = NullValueHandling.Ignore)]
+    [JsonPropertyName("currency")]
     public string CurrencyCode { get; set; }
 
     /// <summary>
@@ -61,14 +61,14 @@ public class Currency
     /// Both e and E may be used.<br/>
     /// This can be negative when displaying balances, but negative values are disallowed in other contexts such as specifying how much to send.
     /// </summary>
-    [JsonProperty(propertyName: "value", NullValueHandling = NullValueHandling.Ignore)]
+    [JsonPropertyName("value")]
     public string Value { get; set; }
 
     /// <summary>
     /// Generally, the account that issues this token.<br/>
     /// In special cases, this can refer to the account that holds the token instead.
     /// </summary>
-    [JsonProperty(propertyName: "issuer", NullValueHandling = NullValueHandling.Ignore)]
+    [JsonPropertyName("issuer")]
     public string Issuer { get; set; }
 
     /// <summary>

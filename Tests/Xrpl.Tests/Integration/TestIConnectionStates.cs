@@ -195,7 +195,7 @@ public class TestIConnectionStates
 
         stateChanges.Clear();
 
-        await client.ChangeServer("wss://s.altnet.rippletest.net:51233", new XrplClient.ClientOptions
+        await client.ChangeServer("wss://s.devnet.rippletest.net:51233", new XrplClient.ClientOptions
         {
             MaxReconnectAttempts = 5,
             StopAfterMaxAttempts = true,

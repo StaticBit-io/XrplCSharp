@@ -1,4 +1,4 @@
-﻿using Newtonsoft.Json;
+﻿using System.Text.Json.Serialization;
 
 using System;
 
@@ -62,21 +62,21 @@ namespace Xrpl.Models.Ledger
             LedgerEntryType = LedgerEntryType.MPTokenIssuance;
         }
 
-        [JsonProperty("Flags")]
+        [JsonPropertyName("Flags")]
         public MPTokenIssuanceFlags? Flags { get; init; }
 
         /// <summary>
         /// The address of the account that controls the issuance.
         /// AccountID
         /// </summary>
-        [JsonProperty("Issuer")]
+        [JsonPropertyName("Issuer")]
         public string Issuer { get; init; } = default!;
 
         /// <summary>
         /// Asset scale (decimal places).
         /// UInt8
         /// </summary>
-        [JsonProperty("AssetScale")]
+        [JsonPropertyName("AssetScale")]
         public byte AssetScale { get; init; }
 
         /// <summary>
@@ -84,7 +84,7 @@ namespace Xrpl.Models.Ledger
         /// UInt64 (0 .. 2^63-1)
         /// Optional
         /// </summary>
-        [JsonProperty("MaximumAmount")]
+        [JsonPropertyName("MaximumAmount")]
         [JsonConverter(typeof(UInt64StringJsonConverter))]
         public ulong? MaximumAmount { get; init; }
 
@@ -92,7 +92,7 @@ namespace Xrpl.Models.Ledger
         /// Total amount of tokens currently in circulation.
         /// UInt64 (0 .. 2^63-1)
         /// </summary>
-        [JsonProperty("OutstandingAmount")]
+        [JsonPropertyName("OutstandingAmount")]
         [JsonConverter(typeof(UInt64StringJsonConverter))]
         public ulong OutstandingAmount { get; init; }
 
@@ -102,7 +102,7 @@ namespace Xrpl.Models.Ledger
         /// Requires TokenEscrow amendment.
         /// Optional
         /// </summary>
-        [JsonProperty("LockedAmount")]
+        [JsonPropertyName("LockedAmount")]
         [JsonConverter(typeof(UInt64StringJsonConverter))]
         public ulong? LockedAmount { get; init; }
 
@@ -110,14 +110,14 @@ namespace Xrpl.Models.Ledger
         /// Transfer fee in tenths of a basis point.
         /// UInt16 (0 .. 50000)
         /// </summary>
-        [JsonProperty("TransferFee")]
+        [JsonPropertyName("TransferFee")]
         public ushort? TransferFee { get; init; }
 
         /// <summary>
         /// Arbitrary metadata in hex format (max 1024 bytes).
         /// Blob
         /// </summary>
-        [JsonProperty("MPTokenMetadata")]
+        [JsonPropertyName("MPTokenMetadata")]
         public string? MPTokenMetadata { get; init; }
 
         [JsonIgnore]
@@ -135,7 +135,7 @@ namespace Xrpl.Models.Ledger
         /// Owner directory page hint.
         /// UInt64
         /// </summary>
-        [JsonProperty("OwnerNode")]
+        [JsonPropertyName("OwnerNode")]
         [JsonConverter(typeof(UInt64HexJsonConverter))]
         public ulong? OwnerNode { get; init; }
 
@@ -143,21 +143,21 @@ namespace Xrpl.Models.Ledger
         /// Hash of the transaction that last modified this entry.
         /// UInt256
         /// </summary>
-        [JsonProperty("PreviousTxnID")]
+        [JsonPropertyName("PreviousTxnID")]
         public string PreviousTxnID { get; init; } = default!;
 
         /// <summary>
         /// Ledger index of the previous modifying transaction.
         /// UInt32
         /// </summary>
-        [JsonProperty("PreviousTxnLgrSeq")]
+        [JsonPropertyName("PreviousTxnLgrSeq")]
         public uint PreviousTxnLgrSeq { get; init; }
 
         /// <summary>
         /// Sequence or Ticket number that created this issuance.
         /// UInt32
         /// </summary>
-        [JsonProperty("Sequence")]
+        [JsonPropertyName("Sequence")]
         public uint Sequence { get; init; }
 
         /// <summary>

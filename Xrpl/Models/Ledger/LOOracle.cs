@@ -1,4 +1,4 @@
-using Newtonsoft.Json;
+using System.Text.Json.Serialization;
 
 using System;
 using System.Collections.Generic;
@@ -28,35 +28,37 @@ namespace Xrpl.Models.Ledger
         /// The XRPL account with update and delete privileges for the oracle.
         /// It's recommended to set up multi-signing on this account.
         /// </summary>
-        [JsonProperty("Owner")]
+        [JsonPropertyName("Owner")]
         public string Owner { get; set; }
 
         /// <summary>
         /// An arbitrary value that identifies an oracle provider, such as Chainlink, Band, or DIA.
         /// This field is a string, up to 256 ASCII hex encoded characters (0x20-0x7E).
         /// </summary>
-        [JsonProperty("Provider")]
+        [JsonPropertyName("Provider")]
+        [JsonConverter(typeof(OracleHexStringConverter))]
         public string Provider { get; set; }
 
         /// <summary>
         /// Describes the type of asset, such as "currency", "commodity", or "index".
         /// Must be formatted as hexadecimal representing ASCII characters (0x20-0x7E), maximum 16 bytes.
         /// </summary>
-        [JsonProperty("AssetClass")]
+        [JsonPropertyName("AssetClass")]
+        [JsonConverter(typeof(OracleHexStringConverter))]
         public string AssetClass { get; set; }
 
         /// <summary>
         /// An array of up to 10 PriceData objects, each representing the price information for an asset pair.
         /// More than five PriceData objects require two owner reserves.
         /// </summary>
-        [JsonProperty("PriceDataSeries")]
+        [JsonPropertyName("PriceDataSeries")]
         public List<PriceDataWrapper> PriceDataSeries { get; set; }
 
         /// <summary>
         /// The time the data was last updated, represented in Unix time.
         /// Note: Unlike many other time values on the XRP Ledger, this value does not use the Ripple Epoch.
         /// </summary>
-        [JsonProperty("LastUpdateTime")]
+        [JsonPropertyName("LastUpdateTime")]
         [JsonConverter(typeof(UnixDateTimeConverter))]
         public DateTime? LastUpdateTime { get; set; }
 
@@ -64,33 +66,34 @@ namespace Xrpl.Models.Ledger
         /// An optional Universal Resource Identifier to reference price data off-chain.
         /// This field is limited to 256 bytes.
         /// </summary>
-        [JsonProperty("URI", NullValueHandling = NullValueHandling.Ignore)]
+        [JsonPropertyName("URI")]
+        [JsonConverter(typeof(OracleHexStringConverter))]
         public string URI { get; set; }
 
         /// <summary>
         /// A hint indicating which page of the oracle owner's owner directory links to this entry,
         /// in case the directory consists of multiple pages.
         /// </summary>
-        [JsonProperty("OwnerNode")]
+        [JsonPropertyName("OwnerNode")]
         public string OwnerNode { get; set; }
 
         /// <summary>
         /// The hash of the previous transaction that modified this entry.
         /// </summary>
-        [JsonProperty("PreviousTxnID")]
+        [JsonPropertyName("PreviousTxnID")]
         public string PreviousTxnID { get; set; }
 
         /// <summary>
         /// The ledger index that this object was most recently modified or created in.
         /// </summary>
-        [JsonProperty("PreviousTxnLgrSeq")]
+        [JsonPropertyName("PreviousTxnLgrSeq")]
         public uint PreviousTxnLgrSeq { get; set; }
 
         /// <summary>
         /// A bit-map of boolean flags. No flags are defined for the Oracle object type,
         /// so this value is always 0.
         /// </summary>
-        [JsonProperty("Flags")]
+        [JsonPropertyName("Flags")]
         public uint Flags { get; set; }
     }
 }

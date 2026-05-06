@@ -1,12 +1,14 @@
 using Microsoft.VisualStudio.TestTools.UnitTesting;
 
-using Newtonsoft.Json;
 using System;
 using System.Collections.Generic;
+using System.Text.Json;
+using System.Text.Json.Nodes;
 using System.Threading.Tasks;
 
 using Xrpl.BinaryCodec.Types;
 using Xrpl.Client.Exceptions;
+using Xrpl.Client.Json;
 using Xrpl.Models.Transactions;
 
 using XrplTests;
@@ -30,7 +32,7 @@ namespace XrplTests.Xrpl.Models
         [TestMethod]
         public async Task TestVerify_Valid_OracleSet()
         {
-            var tx = new Dictionary<string, dynamic>
+            var tx = new Dictionary<string, object>
             {
                 { "Account", "r3rhWeE31Jt5sWmi4QiGLMZnY3ENgqw96W" },
                 { "TransactionType", "OracleSet" },
@@ -42,9 +44,9 @@ namespace XrplTests.Xrpl.Models
                 { "AssetClass", "currency" },
                 { "PriceDataSeries", new List<object>
                     {
-                        new Dictionary<string, dynamic>
+                        new Dictionary<string, object>
                         {
-                            { "PriceData", new Dictionary<string, dynamic>
+                            { "PriceData", new Dictionary<string, object>
                                 {
                                     { "BaseAsset", "XRP" },
                                     { "QuoteAsset", "USD" },
@@ -66,7 +68,7 @@ namespace XrplTests.Xrpl.Models
         [TestMethod]
         public async Task TestVerify_Valid_OracleSet_MultiplePriceData()
         {
-            var tx = new Dictionary<string, dynamic>
+            var tx = new Dictionary<string, object>
             {
                 { "Account", "r3rhWeE31Jt5sWmi4QiGLMZnY3ENgqw96W" },
                 { "TransactionType", "OracleSet" },
@@ -78,9 +80,9 @@ namespace XrplTests.Xrpl.Models
                 { "AssetClass", "currency" },
                 { "PriceDataSeries", new List<object>
                     {
-                        new Dictionary<string, dynamic>
+                        new Dictionary<string, object>
                         {
-                            { "PriceData", new Dictionary<string, dynamic>
+                            { "PriceData", new Dictionary<string, object>
                                 {
                                     { "BaseAsset", "XRP" },
                                     { "QuoteAsset", "USD" },
@@ -89,9 +91,9 @@ namespace XrplTests.Xrpl.Models
                                 }
                             }
                         },
-                        new Dictionary<string, dynamic>
+                        new Dictionary<string, object>
                         {
-                            { "PriceData", new Dictionary<string, dynamic>
+                            { "PriceData", new Dictionary<string, object>
                                 {
                                     { "BaseAsset", "BTC" },
                                     { "QuoteAsset", "USD" },
@@ -112,7 +114,7 @@ namespace XrplTests.Xrpl.Models
         [TestMethod]
         public async Task TestVerify_Invalid_MissingOracleDocumentID()
         {
-            var tx = new Dictionary<string, dynamic>
+            var tx = new Dictionary<string, object>
             {
                 { "Account", "r3rhWeE31Jt5sWmi4QiGLMZnY3ENgqw96W" },
                 { "TransactionType", "OracleSet" },
@@ -123,9 +125,9 @@ namespace XrplTests.Xrpl.Models
                 { "AssetClass", "currency" },
                 { "PriceDataSeries", new List<object>
                     {
-                        new Dictionary<string, dynamic>
+                        new Dictionary<string, object>
                         {
-                            { "PriceData", new Dictionary<string, dynamic>
+                            { "PriceData", new Dictionary<string, object>
                                 {
                                     { "BaseAsset", "XRP" },
                                     { "QuoteAsset", "USD" }
@@ -146,7 +148,7 @@ namespace XrplTests.Xrpl.Models
         [TestMethod]
         public async Task TestVerify_Invalid_MissingLastUpdateTime()
         {
-            var tx = new Dictionary<string, dynamic>
+            var tx = new Dictionary<string, object>
             {
                 { "Account", "r3rhWeE31Jt5sWmi4QiGLMZnY3ENgqw96W" },
                 { "TransactionType", "OracleSet" },
@@ -157,9 +159,9 @@ namespace XrplTests.Xrpl.Models
                 { "AssetClass", "currency" },
                 { "PriceDataSeries", new List<object>
                     {
-                        new Dictionary<string, dynamic>
+                        new Dictionary<string, object>
                         {
-                            { "PriceData", new Dictionary<string, dynamic>
+                            { "PriceData", new Dictionary<string, object>
                                 {
                                     { "BaseAsset", "XRP" },
                                     { "QuoteAsset", "USD" }
@@ -180,7 +182,7 @@ namespace XrplTests.Xrpl.Models
         [TestMethod]
         public async Task TestVerify_Invalid_MissingPriceDataSeries()
         {
-            var tx = new Dictionary<string, dynamic>
+            var tx = new Dictionary<string, object>
             {
                 { "Account", "r3rhWeE31Jt5sWmi4QiGLMZnY3ENgqw96W" },
                 { "TransactionType", "OracleSet" },
@@ -202,7 +204,7 @@ namespace XrplTests.Xrpl.Models
         [TestMethod]
         public async Task TestVerify_Invalid_EmptyPriceDataSeries()
         {
-            var tx = new Dictionary<string, dynamic>
+            var tx = new Dictionary<string, object>
             {
                 { "Account", "r3rhWeE31Jt5sWmi4QiGLMZnY3ENgqw96W" },
                 { "TransactionType", "OracleSet" },
@@ -228,9 +230,9 @@ namespace XrplTests.Xrpl.Models
             var priceDataList = new List<object>();
             for (int i = 0; i < 11; i++)
             {
-                priceDataList.Add(new Dictionary<string, dynamic>
+                priceDataList.Add(new Dictionary<string, object>
                 {
-                    { "PriceData", new Dictionary<string, dynamic>
+                    { "PriceData", new Dictionary<string, object>
                         {
                             { "BaseAsset", $"AS{i}" },
                             { "QuoteAsset", "USD" }
@@ -239,7 +241,7 @@ namespace XrplTests.Xrpl.Models
                 });
             }
 
-            var tx = new Dictionary<string, dynamic>
+            var tx = new Dictionary<string, object>
             {
                 { "Account", "r3rhWeE31Jt5sWmi4QiGLMZnY3ENgqw96W" },
                 { "TransactionType", "OracleSet" },
@@ -262,7 +264,7 @@ namespace XrplTests.Xrpl.Models
         [TestMethod]
         public async Task TestVerify_Invalid_ScaleExceedsMax()
         {
-            var tx = new Dictionary<string, dynamic>
+            var tx = new Dictionary<string, object>
             {
                 { "Account", "r3rhWeE31Jt5sWmi4QiGLMZnY3ENgqw96W" },
                 { "TransactionType", "OracleSet" },
@@ -274,9 +276,9 @@ namespace XrplTests.Xrpl.Models
                 { "AssetClass", "currency" },
                 { "PriceDataSeries", new List<object>
                     {
-                        new Dictionary<string, dynamic>
+                        new Dictionary<string, object>
                         {
-                            { "PriceData", new Dictionary<string, dynamic>
+                            { "PriceData", new Dictionary<string, object>
                                 {
                                     { "BaseAsset", "XRP" },
                                     { "QuoteAsset", "USD" },
@@ -299,7 +301,7 @@ namespace XrplTests.Xrpl.Models
         [TestMethod]
         public async Task TestVerify_Invalid_MissingBaseAsset()
         {
-            var tx = new Dictionary<string, dynamic>
+            var tx = new Dictionary<string, object>
             {
                 { "Account", "r3rhWeE31Jt5sWmi4QiGLMZnY3ENgqw96W" },
                 { "TransactionType", "OracleSet" },
@@ -311,9 +313,9 @@ namespace XrplTests.Xrpl.Models
                 { "AssetClass", "currency" },
                 { "PriceDataSeries", new List<object>
                     {
-                        new Dictionary<string, dynamic>
+                        new Dictionary<string, object>
                         {
-                            { "PriceData", new Dictionary<string, dynamic>
+                            { "PriceData", new Dictionary<string, object>
                                 {
                                     { "QuoteAsset", "USD" }
                                 }
@@ -333,7 +335,7 @@ namespace XrplTests.Xrpl.Models
         [TestMethod]
         public async Task TestVerify_Invalid_MissingQuoteAsset()
         {
-            var tx = new Dictionary<string, dynamic>
+            var tx = new Dictionary<string, object>
             {
                 { "Account", "r3rhWeE31Jt5sWmi4QiGLMZnY3ENgqw96W" },
                 { "TransactionType", "OracleSet" },
@@ -345,9 +347,9 @@ namespace XrplTests.Xrpl.Models
                 { "AssetClass", "currency" },
                 { "PriceDataSeries", new List<object>
                     {
-                        new Dictionary<string, dynamic>
+                        new Dictionary<string, object>
                         {
-                            { "PriceData", new Dictionary<string, dynamic>
+                            { "PriceData", new Dictionary<string, object>
                                 {
                                     { "BaseAsset", "XRP" }
                                 }
@@ -367,7 +369,7 @@ namespace XrplTests.Xrpl.Models
         [TestMethod]
         public void TestVerify_OracleSet_Serialization_MultiplePriceData()
         {
-            var oracleSet = Newtonsoft.Json.Linq.JObject.Parse(@"{
+            var oracleSetJson = @"{
                 ""TransactionType"": ""OracleSet"",
                 ""Account"": ""rME8MrCTc1eCn3cs2HhnzfgJWuJnRNWenK"",
                 ""OracleDocumentID"": 12345,
@@ -394,10 +396,11 @@ namespace XrplTests.Xrpl.Models
                         }
                     }
                 ]
-            }");
+            }";
+            var oracleSet = JsonNode.Parse(oracleSetJson);
 
             Console.WriteLine("Input JSON:");
-            Console.WriteLine(oracleSet.ToString(Newtonsoft.Json.Formatting.Indented));
+            Console.WriteLine(oracleSet.ToJsonString(new JsonSerializerOptions { WriteIndented = true }));
 
             var stObject = global::Xrpl.BinaryCodec.Types.StObject.FromJson(oracleSet);
             var hex = stObject.ToHex();
@@ -491,22 +494,22 @@ namespace XrplTests.Xrpl.Models
                 }
             };
 
-            var json = JsonConvert.SerializeObject(oracleSet, Formatting.Indented);
+            var json = JsonSerializer.Serialize(oracleSet, XrplJsonOptions.Default);
             Console.WriteLine("Serialized OracleSet JSON:");
             Console.WriteLine(json);
 
             // Verify AssetPrice is hex string
-            Assert.IsTrue(json.Contains("\"AssetPrice\": \"fde8\""), "AssetPrice 65000 should be serialized as 'fde8'");
-            Assert.IsTrue(json.Contains("\"AssetPrice\": \"2e4\""), "AssetPrice 740 should be serialized as '2e4'");
+            Assert.IsTrue(json.Contains("\"AssetPrice\":\"fde8\""), "AssetPrice 65000 should be serialized as 'fde8'");
+            Assert.IsTrue(json.Contains("\"AssetPrice\":\"2e4\""), "AssetPrice 740 should be serialized as '2e4'");
 
             // Verify 3-char currencies remain as plain strings (XRPL standard rule)
-            Assert.IsTrue(json.Contains("\"BaseAsset\": \"BTC\""), "BTC (3 chars) should remain as plain string");
-            Assert.IsTrue(json.Contains("\"QuoteAsset\": \"USD\""), "USD (3 chars) should remain as plain string");
-            Assert.IsTrue(json.Contains("\"BaseAsset\": \"XRP\""), "XRP (3 chars) should remain as plain string");
+            Assert.IsTrue(json.Contains("\"BaseAsset\":\"BTC\""), "BTC (3 chars) should remain as plain string");
+            Assert.IsTrue(json.Contains("\"QuoteAsset\":\"USD\""), "USD (3 chars) should remain as plain string");
+            Assert.IsTrue(json.Contains("\"BaseAsset\":\"XRP\""), "XRP (3 chars) should remain as plain string");
 
             // Verify Provider and AssetClass are hex
-            Assert.IsTrue(json.Contains("\"Provider\": \"4d756c746950726f7669646572\""), "Provider should be hex ASCII");
-            Assert.IsTrue(json.Contains("\"AssetClass\": \"63757272656e6379\""), "AssetClass should be hex ASCII");
+            Assert.IsTrue(json.Contains("\"Provider\":\"4d756c746950726f7669646572\""), "Provider should be hex ASCII");
+            Assert.IsTrue(json.Contains("\"AssetClass\":\"63757272656e6379\""), "AssetClass should be hex ASCII");
         }
 
         /// <summary>
@@ -525,7 +528,7 @@ namespace XrplTests.Xrpl.Models
                 }
             }";
 
-            var wrapper = JsonConvert.DeserializeObject<ModelPriceDataWrapper>(json);
+            var wrapper = JsonSerializer.Deserialize<ModelPriceDataWrapper>(json, XrplJsonOptions.Default);
             
             Assert.AreEqual("FDUSD", wrapper.PriceData.BaseAsset, "BaseAsset FDUSD should be decoded from hex");
             Assert.AreEqual("USD", wrapper.PriceData.QuoteAsset, "QuoteAsset USD should remain as plain string");
@@ -572,7 +575,7 @@ namespace XrplTests.Xrpl.Models
                 }
             };
 
-            var json = JsonConvert.SerializeObject(oracleSet, Formatting.Indented);
+            var json = JsonSerializer.Serialize(oracleSet, XrplJsonOptions.Default);
             Console.WriteLine("Serialized OracleSet with long currencies:");
             Console.WriteLine(json);
 
@@ -581,8 +584,8 @@ namespace XrplTests.Xrpl.Models
             Assert.IsTrue(json.Contains("524c555344000000000000000000000000000000"), "RLUSD should be 40-char lowercase hex");
 
             // Verify 3-char currencies remain as plain strings
-            Assert.IsTrue(json.Contains("\"QuoteAsset\": \"USD\""), "USD (3 chars) should remain as plain string");
-            Assert.IsTrue(json.Contains("\"BaseAsset\": \"XRP\""), "XRP (3 chars) should remain as plain string");
+            Assert.IsTrue(json.Contains("\"QuoteAsset\":\"USD\""), "USD (3 chars) should remain as plain string");
+            Assert.IsTrue(json.Contains("\"BaseAsset\":\"XRP\""), "XRP (3 chars) should remain as plain string");
         }
 
     }

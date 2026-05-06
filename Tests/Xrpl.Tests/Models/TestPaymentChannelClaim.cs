@@ -1,4 +1,4 @@
-﻿
+
 
 // https://github.com/XRPLF/xrpl.js/blob/main/packages/xrpl/test/models/paymentChannelClaim.ts
 
@@ -16,12 +16,12 @@ namespace XrplTests.Xrpl.Models
     [TestClass]
     public class TestUPaymentChannelClaim
     {
-        public static Dictionary<string, dynamic> channel;
+        public static Dictionary<string, object> channel;
 
         [ClassInitialize]
         public static void MyClassInitialize(TestContext testContext)
         {
-            channel = new Dictionary<string, dynamic>
+            channel = new Dictionary<string, object>
             {
                 {"TransactionType", "PaymentChannelClaim"},
                 {"Account", "rB5Ux4Lv2nRx6eeoAAsZmtctnBQ2LiACnk"},
@@ -95,7 +95,7 @@ namespace XrplTests.Xrpl.Models
         [TestMethod]
         public async Task TestVerify_Valid_PaymentChannelClaim_WithCredentialIDs()
         {
-            Dictionary<string, dynamic> tx = new Dictionary<string, dynamic>
+            Dictionary<string, object> tx = new Dictionary<string, object>
             {
                 { "TransactionType", "PaymentChannelClaim" },
                 { "Account", "rB5Ux4Lv2nRx6eeoAAsZmtctnBQ2LiACnk" },
@@ -110,7 +110,7 @@ namespace XrplTests.Xrpl.Models
         public async Task TestVerify_Invalid_PaymentChannelClaim_DuplicateCredentialIDs()
         {
             string id = "A1B2C3D4E5F6789012345678901234567890ABCDEF1234567890ABCDEF123456";
-            Dictionary<string, dynamic> tx = new Dictionary<string, dynamic>
+            Dictionary<string, object> tx = new Dictionary<string, object>
             {
                 { "TransactionType", "PaymentChannelClaim" },
                 { "Account", "rB5Ux4Lv2nRx6eeoAAsZmtctnBQ2LiACnk" },

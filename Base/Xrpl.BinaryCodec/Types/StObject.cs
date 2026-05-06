@@ -2,7 +2,8 @@
 using System.Collections.Generic;
 using System.Diagnostics;
 using System.Linq;
-using Newtonsoft.Json.Linq;
+using System.Text.Json;
+using System.Text.Json.Nodes;
 using Xrpl.BinaryCodec.Binary;
 using Xrpl.BinaryCodec.Enums;
 using Xrpl.BinaryCodec.Hashing;
@@ -108,7 +109,7 @@ namespace Xrpl.BinaryCodec.Types
         /// </summary>
         /// <param name="token">An object to include</param>
         /// <returns></returns>
-        public static StObject FromJson(JToken token)
+        public static StObject FromJson(JsonNode token)
         {
             return FromJson(token, false);
         }
@@ -119,13 +120,13 @@ namespace Xrpl.BinaryCodec.Types
         /// <param name="strict">optional, denote which field to include in serialized object</param>
         /// <returns></returns>
         /// <exception cref="InvalidJsonException">unknown field or token is not an object</exception>
-        public static StObject FromJson(JToken token, bool signingOnly)
+        public static StObject FromJson(JsonNode token, bool signingOnly)
         {
-            if (token.Type != JTokenType.Object)
-                throw new InvalidJsonException($"{token.Type} is not an object");
+            if (!(token is JsonObject))
+                throw new InvalidJsonException($"{token.GetValueKind()} is not an object");
 
             var so = new StObject();
-            foreach (var pair in (JObject)token)
+            foreach (KeyValuePair<string, JsonNode?> pair in token.AsObject())
             {
                 if (!Field.Values.Has(pair.Key))
                 {
@@ -156,19 +157,19 @@ namespace Xrpl.BinaryCodec.Types
         }
 
         /// <inheritdoc />
-        public JToken ToJson()
+        public JsonNode ToJson()
         {
             return ToJsonObject();
         }
         /// <summary>
         /// Get the JSON interpretation of this.bytes
         /// </summary>
-        public JObject ToJsonObject()
+        public JsonObject ToJsonObject()
         {
-            var json = new JObject();
-            foreach (var pair in Fields)
+            JsonObject json = new JsonObject();
+            foreach (KeyValuePair<Field, ISerializedType> pair in Fields)
             {
-                json[pair.Key] = pair.Value.ToJson();
+                json[(string)pair.Key] = pair.Value.ToJson();
             }
             return json;
         }
@@ -189,7 +190,7 @@ namespace Xrpl.BinaryCodec.Types
         /// Construct a STObject from a JSON object
         /// </summary>
         /// <param name="token">An object to include</param>
-        public static implicit operator StObject(JToken token) => FromJson(token);
+        public static implicit operator StObject(JsonNode token) => FromJson(token);
         /// <summary>
         /// Construct a STObject from a hex string
         /// </summary>

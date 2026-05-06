@@ -1,5 +1,5 @@
-﻿#nullable enable
-using Newtonsoft.Json;
+#nullable enable
+using System.Text.Json.Serialization;
 
 using System;
 using System.Collections.Generic;
@@ -114,19 +114,19 @@ namespace Xrpl.Models.Transactions
         }
 
         /// <inheritdoc />
-        [JsonProperty("AssetScale")]
+        [JsonPropertyName("AssetScale")]
         public uint? AssetScale { get; set; }
 
         /// <inheritdoc />
-        [JsonProperty("MaximumAmount")]
+        [JsonPropertyName("MaximumAmount")]
         public string? MaximumAmount { get; set; }
 
         /// <inheritdoc />
-        [JsonProperty("TransferFee")]
+        [JsonPropertyName("TransferFee")]
         public ushort? TransferFee { get; set; }
 
         /// <inheritdoc />
-        [JsonProperty("MPTokenMetadata")]
+        [JsonPropertyName("MPTokenMetadata")]
         public string? MPTokenMetadata { get; set; }
 
         [JsonIgnore]
@@ -154,21 +154,21 @@ namespace Xrpl.Models.Transactions
         #region Implementation of IMPTokenIssuanceCreate
 
         /// <inheritdoc />
-        [JsonProperty("AssetScale")]
+        [JsonPropertyName("AssetScale")]
         public uint? AssetScale { get; set; }
 
         /// <inheritdoc />
-        [JsonProperty("MaximumAmount")]
+        [JsonPropertyName("MaximumAmount")]
         public string? MaximumAmount { get; set; }
 
         /// <inheritdoc />
-        [JsonProperty("TransferFee")]
+        [JsonPropertyName("TransferFee")]
         public ushort? TransferFee { get; set; }
 
         /// <inheritdoc />
         private string? _mpTokenMetadata;
 
-        [JsonProperty("MPTokenMetadata")]
+        [JsonPropertyName("MPTokenMetadata")]
         public string? MPTokenMetadata
         {
             get => _mpTokenMetadata;
@@ -222,7 +222,7 @@ namespace Xrpl.Models.Transactions
         /// </summary>
         /// <param name="tx">An MPTokenIssuanceCreate Transaction.</param>
         /// <exception cref="ValidationException">When the MPTokenIssuanceCreate is Malformed.</exception>
-        public static async Task ValidateMPTokenIssuanceCreate(Dictionary<string, dynamic> tx)
+        public static async Task ValidateMPTokenIssuanceCreate(Dictionary<string, object> tx)
         {
             await Common.ValidateBaseTransaction(tx);
 

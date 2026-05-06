@@ -1,9 +1,8 @@
-﻿using System;
+using System;
 using System.Collections.Generic;
 using System.Diagnostics;
 using System.Threading.Tasks;
 using Microsoft.VisualStudio.TestTools.UnitTesting;
-using Newtonsoft.Json;
 using Xrpl.Models.Transactions;
 using Xrpl.Utils.Hashes;
 using Xrpl.Wallet;
@@ -38,7 +37,7 @@ namespace XrplTests.Xrpl.ClientLib.Integration
                 SettleDelay = 86400,
                 PublicKey = runner.wallet.PublicKey
             };
-            Dictionary<string, dynamic> setupJson = JsonConvert.DeserializeObject<Dictionary<string, dynamic>>(setupTx.ToJson());
+            Dictionary<string, object> setupJson = setupTx.ToDictionary();
 
             Submit paymentChannelResponse = await runner.client.Submit(setupJson, runner.wallet);
 
@@ -52,11 +51,11 @@ namespace XrplTests.Xrpl.ClientLib.Integration
                Channel = Hashes.HashPaymentChannel(
                     runner.wallet.ClassicAddress,
                     wallet2.ClassicAddress,
-                    (int)paymentChannelResponse.TxJson.Sequence
+                    (int)paymentChannelResponse.Transaction.Sequence
                 ),
                 Amount = "100"
             };
-            Dictionary<string, dynamic> txJson = JsonConvert.DeserializeObject<Dictionary<string, dynamic>>(tx.ToJson());
+            Dictionary<string, object> txJson = tx.ToDictionary();
             await Utils.TestTransaction(runner.client, txJson, runner.wallet);
         }
     }

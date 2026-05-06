@@ -1,8 +1,8 @@
-﻿using System;
+using System;
 using System.Collections.Generic;
 using System.Threading.Tasks;
 
-using Newtonsoft.Json;
+using System.Text.Json.Serialization;
 
 using Xrpl.Client.Exceptions;
 using Xrpl.Models.Enums;
@@ -69,7 +69,8 @@ namespace Xrpl.Models.Transactions
         public string PublicKey { get; set; }
 
         /// <inheritdoc />
-        [JsonProperty("CredentialIDs", NullValueHandling = NullValueHandling.Ignore)]
+        [JsonPropertyName("CredentialIDs")]
+        [JsonIgnore(Condition = JsonIgnoreCondition.WhenWritingNull)]
         public List<string> CredentialIDs { get; set; }
     }
     /// <summary>
@@ -157,7 +158,8 @@ namespace Xrpl.Models.Transactions
         public string Signature { get; set; }
 
         /// <inheritdoc />
-        [JsonProperty("CredentialIDs", NullValueHandling = NullValueHandling.Ignore)]
+        [JsonPropertyName("CredentialIDs")]
+        [JsonIgnore(Condition = JsonIgnoreCondition.WhenWritingNull)]
         public List<string> CredentialIDs { get; set; }
     }
 
@@ -168,7 +170,7 @@ namespace Xrpl.Models.Transactions
         /// </summary>
         /// <param name="tx"> A PaymentChannelClaim Transaction.</param>
         /// <exception cref="ValidationException">When the PaymentChannelClaim is malformed.</exception>
-        public static async Task ValidatePaymentChannelClaim(Dictionary<string, dynamic> tx)
+        public static async Task ValidatePaymentChannelClaim(Dictionary<string, object> tx)
         {
             await Common.ValidateBaseTransaction(tx);
 

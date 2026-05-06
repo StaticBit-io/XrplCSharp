@@ -1,9 +1,9 @@
-﻿using Newtonsoft.Json;
-using Newtonsoft.Json.Linq;
-
 using System;
 using System.Collections.Generic;
 using System.Linq;
+using System.Text.Json;
+using System.Text.Json.Nodes;
+using System.Text.Json.Serialization;
 
 using Xrpl.Client.Json.Converters;
 
@@ -20,12 +20,12 @@ public class ServerFeatures
     /// <summary>
     /// The identifying hash of the ledger version that was closed.
     /// </summary>
-    [JsonProperty("ledger_hash")]
+    [JsonPropertyName("ledger_hash")]
     public string LedgerHash { get; set; }
     /// <summary>
     /// The ledger index of the ledger that was closed.
     /// </summary>
-    [JsonProperty("ledger_index")]
+    [JsonPropertyName("ledger_index")]
     public ulong LedgerIndex { get; set; }
     public bool Validated { get; set; }
 
@@ -132,58 +132,64 @@ public sealed class FeatureInfo
     /// <summary>
     /// (May be omitted) The human-readable name for this amendment, if known.
     /// </summary>
-    [JsonProperty("name")]
+    [JsonPropertyName("name")]
     public string? Name { get; set; }
     /// <summary>
     /// Whether this amendment is currently enabled in the latest ledger.
     /// </summary>
-    [JsonProperty("enabled")]
+    [JsonPropertyName("enabled")]
     public bool Enabled { get; set; }
     /// <summary>
     /// Whether the server knows how to apply this amendment.<br/>
     /// If this field is set to false (the server does not know how to apply this amendment) and enabled is set to true (this amendment is enabled in the latest ledger),
     /// this amendment may cause your server to be amendment blocked.
     /// </summary>
-    [JsonProperty("supported")]
+    [JsonPropertyName("supported")]
     public bool Supported { get; set; }
 
     /// <summary>
     /// Current number of validations or votes for this amendment.
     /// Present only in extended responses.
-    /// </summary>    [JsonProperty("count")]
+    /// </summary>
+    [JsonPropertyName("count")]
     public int? Count { get; set; }
     /// <summary>
     /// Required number of validations for this amendment to pass voting.
     /// Present only in extended responses.
     /// </summary>
-    [JsonProperty("threshold")]
+    [JsonPropertyName("threshold")]
     public int? Threshold { get; set; }
 
     /// <summary>
     /// Total number of validator validations observed for this amendment.
     /// May differ from <see cref="Count"/> depending on rippled version.
     /// </summary>
-    [JsonProperty("validations")]
+    [JsonPropertyName("validations")]
     public int? Validations { get; set; }
     /// <summary>
     /// Raw "vetoed" value as returned by rippled.
     /// Can be: boolean (true/false) or string reason (e.g. "Obsolete").
     /// </summary>
-    [JsonProperty("vetoed")]
-    public JToken? VetoedRaw { get; set; }
+    [JsonPropertyName("vetoed")]
+    public JsonNode? VetoedRaw { get; set; }
 
     /// <summary>
     /// Normalized flag: amendment is vetoed (regardless of whether the server returned bool or string).
     /// </summary>
     [JsonIgnore]
     public bool IsVetoed
-        => VetoedRaw switch
+    {
+        get
         {
-            null => false,
-            { Type: JTokenType.Boolean } => VetoedRaw.Value<bool>(),
-            { Type: JTokenType.String } => !string.IsNullOrWhiteSpace(VetoedRaw.Value<string>()),
-            _ => true // be conservative if an unknown type appears
-        };
+            if (VetoedRaw is null) return false;
+            if (VetoedRaw is JsonValue jv)
+            {
+                if (jv.TryGetValue<bool>(out bool b)) return b;
+                if (jv.TryGetValue<string>(out string s)) return !string.IsNullOrWhiteSpace(s);
+            }
+            return true;
+        }
+    }
 
     /// <summary>
     /// Normalized veto reason when server returns a string (e.g. "Obsolete").
@@ -191,7 +197,14 @@ public sealed class FeatureInfo
     /// </summary>
     [JsonIgnore]
     public string? VetoedReason
-        => VetoedRaw?.Type == JTokenType.String ? VetoedRaw.Value<string>() : null;
+    {
+        get
+        {
+            if (VetoedRaw is JsonValue jv && jv.TryGetValue<string>(out string s))
+                return s;
+            return null;
+        }
+    }
 
     /// <summary>
     /// Indicates that the server returned voting-related fields for this amendment.

@@ -478,7 +478,7 @@ public class TestIPermissionedDomain
     [TestMethod]
     public async Task TestOfferCreate_HybridFlag_WithoutDomainID_ShouldFail()
     {
-        var hybridOfferNoDoamin = new Dictionary<string, dynamic>
+        var hybridOfferNoDoamin = new Dictionary<string, object>
         {
             { "TransactionType", "OfferCreate" },
             { "Account", "rHb9CJAWyB4rj91VRWn96DkukG4bwdtyTh" },
@@ -502,7 +502,7 @@ public class TestIPermissionedDomain
     [TestMethod]
     public async Task TestOfferCreate_InvalidDomainID_ShouldFail()
     {
-        var invalidDomainIdOffer = new Dictionary<string, dynamic>
+        var invalidDomainIdOffer = new Dictionary<string, object>
         {
             { "TransactionType", "OfferCreate" },
             { "Account", "rHb9CJAWyB4rj91VRWn96DkukG4bwdtyTh" },
@@ -526,7 +526,7 @@ public class TestIPermissionedDomain
     [TestMethod]
     public async Task TestPayment_InvalidDomainID_ShouldFail()
     {
-        var invalidDomainIdPayment = new Dictionary<string, dynamic>
+        var invalidDomainIdPayment = new Dictionary<string, object>
         {
             { "TransactionType", "Payment" },
             { "Account", "rHb9CJAWyB4rj91VRWn96DkukG4bwdtyTh" },

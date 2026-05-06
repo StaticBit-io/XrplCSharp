@@ -1,5 +1,11 @@
-﻿using Newtonsoft.Json;
+﻿using System.Text.Json;
+
+using System.Text.Json.Serialization;
+
+using Xrpl.Client.Json;
 using Xrpl.Models.Transactions;
+
+using JsonSerializer = System.Text.Json.JsonSerializer;
 
 // https://github.com/XRPLF/xrpl.js/blob/main/packages/xrpl/src/models/methods/subscribe.ts
 
@@ -14,40 +20,40 @@ namespace Xrpl.Models.Subscriptions
         /// <summary>
         /// String Transaction result code
         /// </summary>
-        [JsonProperty("engine_result")]
+        [JsonPropertyName("engine_result")]
         public string EngineResult { get; set; }
         /// <summary>
         /// Numeric transaction response code, if applicable.
         /// </summary>
-        [JsonProperty("engine_result_code")]
+        [JsonPropertyName("engine_result_code")]
         public int EngineResultCode { get; set; }
         /// <summary>
         /// Human-readable explanation for the transaction response
         /// </summary>
-        [JsonProperty("engine_result_message")]
+        [JsonPropertyName("engine_result_message")]
         public string EngineResultMessage { get; set; }
 
         /// <summary>
         /// (Validated transactions only) The transaction metadata, which shows the exact outcome of the transaction in detail.
         /// </summary>
-        [JsonProperty("meta")]
+        [JsonPropertyName("meta")]
         public Meta Meta { get; set; }
 
-        [JsonProperty("status")]
+        [JsonPropertyName("status")]
         public string Status { get; set; }
         /// <summary>
         /// The definition of the transaction in JSON format
         /// </summary>
-        [JsonProperty("transaction")]
-        public dynamic TransactionJson { get; set; }
+        [JsonPropertyName("transaction")]
+        public object TransactionJson { get; set; }
 
         [JsonIgnore]
-        public ITransactionResponse Transaction => JsonConvert.DeserializeObject<TransactionResponse>(TransactionJson.ToString());
+        public ITransactionResponse Transaction => JsonSerializer.Deserialize<TransactionResponse>(TransactionJson.ToString(), XrplJsonOptions.Default);
         /// <summary>
         /// If true, this transaction is included in a validated ledger and its outcome is final.<br/>
         /// Responses from the transaction stream should always be validated.
         /// </summary>
-        [JsonProperty("validated")]
+        [JsonPropertyName("validated")]
         public bool Validated { get; set; }
     }
 }

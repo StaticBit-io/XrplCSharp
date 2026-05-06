@@ -1,7 +1,6 @@
 using System.Collections.Generic;
+using System.Text.Json.Serialization;
 using System.Threading.Tasks;
-
-using Newtonsoft.Json;
 
 using Xrpl.Client.Exceptions;
 
@@ -46,15 +45,15 @@ namespace Xrpl.Models.Transactions
         }
 
         /// <inheritdoc />
-        [JsonProperty("Data")]
+        [JsonPropertyName("Data")]
         public string Data { get; set; }
 
         /// <inheritdoc />
-        [JsonProperty("DIDDocument")]
+        [JsonPropertyName("DIDDocument")]
         public string DIDDocument { get; set; }
 
         /// <inheritdoc />
-        [JsonProperty("URI")]
+        [JsonPropertyName("URI")]
         public string URI { get; set; }
     }
 
@@ -62,15 +61,15 @@ namespace Xrpl.Models.Transactions
     public class DIDSetResponse : TransactionResponse, IDIDSet
     {
         /// <inheritdoc />
-        [JsonProperty("Data")]
+        [JsonPropertyName("Data")]
         public string Data { get; set; }
 
         /// <inheritdoc />
-        [JsonProperty("DIDDocument")]
+        [JsonPropertyName("DIDDocument")]
         public string DIDDocument { get; set; }
 
         /// <inheritdoc />
-        [JsonProperty("URI")]
+        [JsonPropertyName("URI")]
         public string URI { get; set; }
     }
 
@@ -83,7 +82,7 @@ namespace Xrpl.Models.Transactions
         /// <exception cref="ValidationException">When the DIDSet is malformed.</exception>
         private const int MaxDIDFieldLength = 512;
 
-        public static async Task ValidateDIDSet(Dictionary<string, dynamic> tx)
+        public static async Task ValidateDIDSet(Dictionary<string, object> tx)
         {
             await Common.ValidateBaseTransaction(tx);
 

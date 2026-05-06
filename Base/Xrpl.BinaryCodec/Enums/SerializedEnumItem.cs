@@ -1,6 +1,6 @@
 ﻿using System;
 using System.Runtime.InteropServices;
-using Newtonsoft.Json.Linq;
+using System.Text.Json.Nodes;
 using Xrpl.BinaryCodec.Binary;
 using Xrpl.BinaryCodec.Types;
 using Xrpl.BinaryCodec.Util;
@@ -16,9 +16,9 @@ namespace Xrpl.BinaryCodec.Enums
             sink.Put(Bytes);
         }
 
-        public JToken ToJson()
+        public JsonNode ToJson()
         {
-            return ToString();
+            return JsonValue.Create(ToString());
         }
 
         protected SerializedEnumItem(string name, int ordinal) : base(name, ordinal)

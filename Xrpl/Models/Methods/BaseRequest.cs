@@ -1,5 +1,5 @@
-﻿using System;
-using Newtonsoft.Json;
+using System;
+using System.Text.Json.Serialization;
 
 //https://github.com/XRPLF/xrpl.js/blob/main/packages/xrpl/src/models/methods/baseMethod.ts
 
@@ -21,17 +21,17 @@ namespace Xrpl.Models.Methods
         /// The response to this request uses the same id field.<br/>
         /// This way, even if responses arrive out of order, you know which request prompted which response.
         /// </summary>
-        [JsonProperty("id")]
+        [JsonPropertyName("id")]
         public object? Id { get; set; }
         /** The name of the API method. */
-        [JsonProperty("command")]
+        [JsonPropertyName("command")]
         public string Command { get; set; }
 
         /// <summary>
         /// The API version to use.<br/>
         /// If omitted, use version 1.
         /// </summary>
-        [JsonProperty("api_version")]
+        [JsonPropertyName("api_version")]
         public uint? ApiVersion { get; set; }
     }
 }

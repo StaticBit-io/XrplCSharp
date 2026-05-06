@@ -1,6 +1,10 @@
-﻿using Newtonsoft.Json;
+﻿using System.Text.Json;
+using System.Text.Json.Serialization;
 
+using Xrpl.Client.Json;
 using Xrpl.Models.Methods;
+
+using JsonSerializer = System.Text.Json.JsonSerializer;
 
 //https://github.com/XRPLF/xrpl.js/blob/b20c05c3680d80344006d20c44b4ae1c3b0ffcac/packages/xrpl/src/models/methods/submit.ts#L28
 namespace Xrpl.Models.Transactions;
@@ -10,65 +14,65 @@ namespace Xrpl.Models.Transactions;
 /// </summary>
 public class Submit //todo rename to SubmitResponse extends BaseResponse
 {
-    [JsonProperty("Accepted")]
+    [JsonPropertyName("Accepted")]
     public bool Accepted { get; set; }
 
-    [JsonProperty("applied")]
+    [JsonPropertyName("applied")]
     public bool Applied { get; set; }
 
-    [JsonProperty("broadcast")]
+    [JsonPropertyName("broadcast")]
     public bool Broadcast { get; set; }
 
-    [JsonProperty("open_ledger_cost")]
+    [JsonPropertyName("open_ledger_cost")]
     public string OpenLedgerCost { get; set; }
 
     /// <summary>
     /// Text result code indicating the preliminary result of the transaction,  for example `tesSUCCESS`.
     /// </summary>
-    [JsonProperty("engine_result")]
+    [JsonPropertyName("engine_result")]
     public string EngineResult { get; set; }
 
     /// <summary>
     /// Numeric version of the result code.
     /// </summary>
-    [JsonProperty("engine_result_code")]
+    [JsonPropertyName("engine_result_code")]
     public int EngineResultCode { get; set; }
 
     /// <summary>
     /// Human-readable explanation of the transaction's preliminary result.
     /// </summary>
-    [JsonProperty("engine_result_message")]
+    [JsonPropertyName("engine_result_message")]
     public string EngineResultMessage { get; set; }
 
     /// <summary>
     /// The complete transaction in hex string format.
     /// </summary>
-    [JsonProperty("tx_blob")]
+    [JsonPropertyName("tx_blob")]
     public string TxBlob { get; set; }
 
     /// <summary>
     /// Next account sequence number.
     /// </summary>
-    [JsonProperty("account_sequence_next")]
+    [JsonPropertyName("account_sequence_next")]
     public uint? AccountSequenceNext { get; set; }
 
     /// <summary>
     /// Available account sequence number.
     /// </summary>
-    [JsonProperty("account_sequence_available")]
+    [JsonPropertyName("account_sequence_available")]
     public uint? AccountSequenceAvailable { get; set; }
 
     /// <summary>
     /// The complete transaction in JSON format.
     /// </summary>
-    [JsonProperty("tx_json")]
-    public dynamic TxJson { get; set; }
+    [JsonPropertyName("tx_json")]
+    public object TxJson { get; set; }
 
     //[JsonIgnore]
     /// <summary>
     /// The complete transaction.
     /// </summary>
-    public ITransactionResponse Transaction => JsonConvert.DeserializeObject<TransactionResponse>(TxJson.ToString());
+    public ITransactionResponse Transaction => JsonSerializer.Deserialize<TransactionResponse>(TxJson.ToString(), XrplJsonOptions.Default);
 
 
     //todo not found fields accepted: boolean,  account_sequence_available: number, account_sequence_next: number, applied: boolean,  broadcast: boolean

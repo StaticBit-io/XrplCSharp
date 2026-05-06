@@ -1,17 +1,18 @@
-﻿using System;
+using System;
 using System.Collections.Generic;
 using System.Linq;
 using System.Net.Http;
 using System.Net.Http.Headers;
 using System.Text;
+using System.Text.Json;
+using System.Text.Json.Serialization;
 using System.Threading.Tasks;
 using System.Timers;
-
-using Newtonsoft.Json;
 
 using Xrpl.AddressCodec;
 using Xrpl.Client;
 using Xrpl.Client.Exceptions;
+using Xrpl.Client.Json;
 
 // https://github.com/XRPLF/xrpl.js/blob/main/packages/xrpl/src/Wallet/fundWallet.ts
 
@@ -74,26 +75,26 @@ namespace Xrpl.Wallet
 
         public class FaucetAccount
         {
-            [JsonProperty("xAddress")]
+            [JsonPropertyName("xAddress")]
             public string XAddress { get; set; }
 
-            [JsonProperty("classicAddress")]
+            [JsonPropertyName("classicAddress")]
             public string ClassicAddress { get; set; }
 
-            [JsonProperty("secret")]
+            [JsonPropertyName("secret")]
             public string Secret { get; set; }
 
         }
 
         public class FaucetWallet
         {
-            [JsonProperty("account")]
+            [JsonPropertyName("account")]
             public FaucetAccount Account { get; set; }
 
-            [JsonProperty("amount")]
+            [JsonPropertyName("amount")]
             public double Amount { get; set; }
 
-            [JsonProperty("balance")]
+            [JsonPropertyName("balance")]
             public double Balance { get; set; }
 
         }
@@ -126,18 +127,18 @@ namespace Xrpl.Wallet
 
             // Create the POST request body
 
-            Dictionary<string, dynamic> json = new Dictionary<string, dynamic>
+            Dictionary<string, object> json = new Dictionary<string, object>
             {
                 { "destination", walletToFund.ClassicAddress },
             };
-            string jsonData = JsonConvert.SerializeObject(json);
+            string jsonData = JsonSerializer.Serialize(json, XrplJsonOptions.Default);
             byte[] postBody = Encoding.UTF8.GetBytes(jsonData);
-            Dictionary<string, dynamic> httpOptions = GetHTTPOptions(client, postBody, faucetHost);
+            Dictionary<string, object> httpOptions = GetHTTPOptions(client, postBody, faucetHost);
             return await ReturnPromise(httpOptions, client, startingBalance, walletToFund, jsonData);
         }
 
         private static async Task<Funded> ReturnPromise(
-              Dictionary<string, dynamic> options,
+              Dictionary<string, object> options,
               IXrplClient client,
               double startingBalance,
               XrplWallet walletToFund,
@@ -145,10 +146,10 @@ namespace Xrpl.Wallet
         )
         {
             HttpClient httpsClient = new HttpClient();
-            httpsClient.BaseAddress = new Uri($"https://{options["hostname"]}");
+            httpsClient.BaseAddress = new Uri($"https://{(string)options["hostname"]}");
             httpsClient.DefaultRequestHeaders.Accept.Add(new MediaTypeWithQualityHeaderValue("application/json"));
             StringContent contentData = new StringContent(postBody, Encoding.UTF8, "application/json");
-            var response = await httpsClient.PostAsync(options["path"], contentData);
+            var response = await httpsClient.PostAsync((string)options["path"], contentData);
             var row = await response.Content.ReadAsStringAsync();
             if (!response.IsSuccessStatusCode)
             {
@@ -166,19 +167,19 @@ namespace Xrpl.Wallet
             );
         }
 
-        private static Dictionary<string, dynamic> GetHTTPOptions(
+        private static Dictionary<string, object> GetHTTPOptions(
               IXrplClient client,
               byte[] postBody,
               string hostname
         )
         {
-            Dictionary<string, dynamic> options = new Dictionary<string, dynamic>
+            Dictionary<string, object> options = new Dictionary<string, object>
             {
                 { "hostname", hostname ?? GetFaucetHost(client) },
                 { "port", 443 },
                 { "path", "/accounts" },
                 { "method", "POST" },
-                { "headers", new Dictionary<string, dynamic> {
+                { "headers", new Dictionary<string, object> {
                     { "Content-Type", "application/json" },
                     { "Content-Length", postBody.Length }
                 } }
@@ -207,7 +208,7 @@ namespace Xrpl.Wallet
             }
             else
             {
-                Dictionary<string, dynamic> errorResponse = new Dictionary<string, dynamic>
+                Dictionary<string, object> errorResponse = new Dictionary<string, object>
                 {
                     { "statusCode", response.StatusCode },
                     { "contentType", response.Content.Headers.GetValues("Content-Type").First() },
@@ -224,7 +225,7 @@ namespace Xrpl.Wallet
               XrplWallet walletToFund
         )
         {
-            FaucetWallet faucetWallet = JsonConvert.DeserializeObject<FaucetWallet>(body);
+            FaucetWallet faucetWallet = JsonSerializer.Deserialize<FaucetWallet>(body, XrplJsonOptions.Default);
             string classicAddress = faucetWallet.Account.ClassicAddress;
             if (classicAddress == null)
             {

@@ -1,9 +1,9 @@
-﻿// https://github.com/XRPLF/xrpl.js/blob/main/packages/xrpl/src/models/transactions/accountDelete.ts
+// https://github.com/XRPLF/xrpl.js/blob/main/packages/xrpl/src/models/transactions/accountDelete.ts
 
 using System.Collections.Generic;
 using System.Threading.Tasks;
 
-using Newtonsoft.Json;
+using System.Text.Json.Serialization;
 
 using Xrpl.Client.Exceptions;
 
@@ -51,7 +51,8 @@ namespace Xrpl.Models.Transactions
         public uint? DestinationTag { get; set; }
 
         /// <inheritdoc />
-        [JsonProperty("CredentialIDs", NullValueHandling = NullValueHandling.Ignore)]
+        [JsonPropertyName("CredentialIDs")]
+        [JsonIgnore(Condition = JsonIgnoreCondition.WhenWritingNull)]
         public List<string> CredentialIDs { get; set; }
     }
 
@@ -65,7 +66,8 @@ namespace Xrpl.Models.Transactions
         public uint? DestinationTag { get; set; }
 
         /// <inheritdoc />
-        [JsonProperty("CredentialIDs", NullValueHandling = NullValueHandling.Ignore)]
+        [JsonPropertyName("CredentialIDs")]
+        [JsonIgnore(Condition = JsonIgnoreCondition.WhenWritingNull)]
         public List<string> CredentialIDs { get; set; }
     }
 
@@ -77,7 +79,7 @@ namespace Xrpl.Models.Transactions
         /// </summary>
         /// <param name="tx"> A AccountDelete Transaction.</param>
         /// <exception cref="ValidationException">When the AccountDelete is malformed.</exception>
-        public static async Task ValidateAccountDelete(Dictionary<string, dynamic> tx)
+        public static async Task ValidateAccountDelete(Dictionary<string, object> tx)
         {
             await Common.ValidateBaseTransaction(tx);
             if (!tx.TryGetValue("Destination", out var Destination) || Destination is null)

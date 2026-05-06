@@ -100,7 +100,7 @@ namespace Xrpl.Client.Exceptions
     /// </summary>
     public class TimeoutException : XrplException
     {
-        public TimeoutException(string message, dynamic data = null) : base(message)
+        public TimeoutException(string message, object data = null) : base(message)
         {
 
         }
@@ -110,7 +110,7 @@ namespace Xrpl.Client.Exceptions
     /// </summary>
     public class ResponseFormatException : XrplException
     {
-        public ResponseFormatException(string message, dynamic data = null) : base(message)
+        public ResponseFormatException(string message, object data = null) : base(message)
         {
         }
     }

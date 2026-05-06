@@ -1,10 +1,11 @@
-﻿using System;
+using System;
 using System.Collections.Generic;
 using System.Linq;
-
-using Newtonsoft.Json.Linq;
+using System.Text.Json;
+using System.Text.Json.Nodes;
 
 using Xrpl.AddressCodec;
+using Xrpl.Client.Json;
 
 namespace Xrpl.Wallet;
 
@@ -46,87 +47,92 @@ public static class SignerUtilities
     /// Handles both wrapped ({"Signer": {...}}) and unwrapped formats, preserving the original structure.
     /// </summary>
     /// <param name="signers">The signers array to deduplicate and sort.</param>
-    /// <returns>A new JArray with deduplicated and sorted signers.</returns>
-    public static JArray DedupeAndSortSigners(JArray signers)
+    /// <returns>A new JsonArray with deduplicated and sorted signers.</returns>
+    public static JsonArray DedupeAndSortSigners(JsonArray signers)
     {
         if (signers == null || signers.Count == 0)
-            return signers ?? new JArray();
+            return signers ?? new JsonArray();
 
-        var map = new Dictionary<string, JObject>(StringComparer.Ordinal);
-        foreach (var item in signers.Children<JObject>())
+        var map = new Dictionary<string, JsonObject>(StringComparer.Ordinal);
+        foreach (var item in signers)
         {
-            var signer = item["Signer"] as JObject ?? item;
-            var acc = NormalizeClassicAddress((string?)signer["Account"] ?? "");
-            var pk = (string?)signer["SigningPubKey"] ?? "";
-            var sig = (string?)signer["TxnSignature"] ?? "";
+            if (item is not JsonObject itemObj) continue;
+            var signer = itemObj["Signer"]?.AsObject() ?? itemObj;
+            var acc = NormalizeClassicAddress(signer["Account"]?.GetValue<string>() ?? "");
+            var pk = signer["SigningPubKey"]?.GetValue<string>() ?? "";
+            var sig = signer["TxnSignature"]?.GetValue<string>() ?? "";
             var key = $"{acc}|{pk}|{sig}";
 
             if (!map.ContainsKey(key))
-                map[key] = (JObject)item.DeepClone();
+                map[key] = itemObj.DeepClone().AsObject();
         }
 
-        return new JArray(map.Values.OrderBy(j =>
+        return new JsonArray(map.Values.OrderBy(j =>
         {
-            var signer = j["Signer"] as JObject ?? j;
-            var acc = (string?)signer["Account"] ?? "";
+            var signer = j["Signer"]?.AsObject() ?? j;
+            var acc = signer["Account"]?.GetValue<string>() ?? "";
             return GetAccountIdBytes(acc);
-        }, ByteArrayComparer.Instance));
+        }, ByteArrayComparer.Instance).Select(n => (JsonNode)n).ToArray());
     }
 
     /// <summary>
     /// Sorts a Signers array by account ID bytes without deduplication.
     /// </summary>
     /// <param name="signers">The signers array to sort.</param>
-    /// <returns>A new JArray with sorted signers.</returns>
-    public static JArray SortSignersArray(JArray signers)
+    /// <returns>A new JsonArray with sorted signers.</returns>
+    public static JsonArray SortSignersArray(JsonArray signers)
     {
-        return new JArray(
-            signers.OrderBy(s =>
+        return new JsonArray(
+            signers.Select(s => s?.DeepClone()).OrderBy(s =>
             {
-                var acc = (string?)s["Signer"]?["Account"] ?? "";
+                var acc = s?["Signer"]?["Account"]?.GetValue<string>() ?? "";
                 var accBytes = GetAccountIdBytes(acc);
                 return BitConverter.ToString(accBytes);
-            })
+            }).ToArray()
         );
     }
 
     /// <summary>
-    /// Converts JToken objects to CLR types (Dictionary, List, primitives) for proper binary encoding.
-    /// The XrplBinaryCodec.Encode expects native CLR types, not Newtonsoft JTokens.
+    /// Converts JsonNode objects to CLR types (Dictionary, List, primitives) for proper binary encoding.
+    /// The XrplBinaryCodec.Encode expects native CLR types, not JsonNode instances.
     /// </summary>
-    /// <param name="token">The JToken to convert.</param>
+    /// <param name="node">The JsonNode to convert.</param>
     /// <returns>A CLR object (Dictionary, List, or primitive).</returns>
-    public static object ConvertJTokenToClrType(JToken token)
+    public static object ConvertJsonNodeToClrType(JsonNode node)
     {
-        switch (token.Type)
+        if (node == null) return null;
+
+        if (node is JsonObject obj)
         {
-            case JTokenType.Object:
-                var dict = new Dictionary<string, dynamic>();
-                foreach (var prop in ((JObject)token).Properties())
-                {
-                    dict[prop.Name] = ConvertJTokenToClrType(prop.Value);
-                }
-                return dict;
-            case JTokenType.Array:
-                var list = new List<dynamic>();
-                foreach (var item in (JArray)token)
-                {
-                    list.Add(ConvertJTokenToClrType(item));
-                }
-                return list;
-            case JTokenType.Integer:
-                return token.Value<long>();
-            case JTokenType.Float:
-                return token.Value<double>();
-            case JTokenType.String:
-                return token.Value<string>();
-            case JTokenType.Boolean:
-                return token.Value<bool>();
-            case JTokenType.Null:
-                return null;
-            default:
-                return token.ToString();
+            var dict = new Dictionary<string, object>();
+            foreach (var prop in obj)
+            {
+                dict[prop.Key] = ConvertJsonNodeToClrType(prop.Value);
+            }
+            return dict;
         }
+
+        if (node is JsonArray arr)
+        {
+            var list = new List<object>();
+            foreach (var item in arr)
+            {
+                list.Add(ConvertJsonNodeToClrType(item));
+            }
+            return list;
+        }
+
+        if (node is JsonValue val)
+        {
+            if (val.TryGetValue<int>(out var i)) return (long)i;
+            if (val.TryGetValue<long>(out var l)) return l;
+            if (val.TryGetValue<double>(out var d)) return d;
+            if (val.TryGetValue<bool>(out var b)) return b;
+            if (val.TryGetValue<string>(out var s)) return s;
+            return val.ToString();
+        }
+
+        return node.ToString();
     }
 
     /// <summary>

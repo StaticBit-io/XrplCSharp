@@ -1,4 +1,4 @@
-﻿using Newtonsoft.Json;
+using System.Text.Json.Serialization;
 //https://github.com/XRPLF/xrpl.js/blob/main/packages/xrpl/src/models/methods/tx.ts
 namespace Xrpl.Models.Methods
 {
@@ -17,7 +17,7 @@ namespace Xrpl.Models.Methods
         /// <summary>
         /// The 256-bit hash of the transaction to look up, as hexadecimal.
         /// </summary>
-        [JsonProperty("transaction")]
+        [JsonPropertyName("transaction")]
         public string? Transaction { get; set; }
 
         /// <summary>
@@ -25,7 +25,7 @@ namespace Xrpl.Models.Methods
         /// Must use uppercase hexadecimal only.<br/>
         /// New in: rippled 1.12.0 (Not supported in Clio v2.0 and earlier)
         /// </summary>
-        [JsonProperty("ctid")]
+        [JsonPropertyName("ctid")]
         public string? CtId { get; set; }
 
         /// <summary>
@@ -33,7 +33,7 @@ namespace Xrpl.Models.Methods
         /// If false, return transaction data and metadata as JSON.<br/>
         /// The default is false.
         /// </summary>
-        [JsonProperty("binary")]
+        [JsonPropertyName("binary")]
         public bool? Binary { get; set; }
 
         /// <summary>
@@ -41,7 +41,7 @@ namespace Xrpl.Models.Methods
         /// If the server cannot find the transaction,<br/>
         /// it confirms whether it was able to search all the ledgers in this range.
         /// </summary>
-        [JsonProperty("min_ledger")]
+        [JsonPropertyName("min_ledger")]
         public uint? MinLedger { get; set; }
 
         /// <summary>
@@ -49,7 +49,7 @@ namespace Xrpl.Models.Methods
         /// If the server cannot find the transaction,<br/>
         /// it confirms whether it was able to search all the ledgers in the requested range.
         /// </summary>
-        [JsonProperty("max_ledger")]
+        [JsonPropertyName("max_ledger")]
         public uint? MaxLedger { get; set; }
     }
     // todo not found class TxResponse extends BaseResponse

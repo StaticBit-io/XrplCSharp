@@ -2,8 +2,8 @@ using System;
 using System.Threading.Tasks;
 using Microsoft.VisualStudio.TestTools.UnitTesting;
 using Xrpl.Models.Methods;
-using Newtonsoft.Json.Linq;
-using Newtonsoft.Json;
+using System.Text.Json;
+using System.Text.Json.Nodes;
 using System.Collections.Generic;
 using Xrpl.Client;
 using Xrpl.Client.Exceptions;
@@ -253,7 +253,7 @@ namespace XrplTests.Xrpl.ClientLib.Integration
                 Amount = new Currency { ValueAsXrp = xrpSize, CurrencyCode = "XRP" }
             };
             
-            var values = JsonConvert.DeserializeObject<Dictionary<string, dynamic>>(payment.ToJson());
+            var values = JsonSerializer.Deserialize<Dictionary<string, object>>(payment.ToJson(), global::Xrpl.Client.Json.XrplJsonOptions.Default);
             var response = await client.SubmitAndWait(values, FaucetFiller, autofill:true);
 
             if (response.Meta.TransactionResult != "tesSUCCESS")
@@ -275,7 +275,7 @@ namespace XrplTests.Xrpl.ClientLib.Integration
                 Destination = wallet.ClassicAddress,
                 Amount = new Currency { Value = "400000000", CurrencyCode = "XRP" }
             };
-            var values = JsonConvert.DeserializeObject<Dictionary<string, dynamic>>(payment.ToJson());
+            var values = JsonSerializer.Deserialize<Dictionary<string, object>>(payment.ToJson(), global::Xrpl.Client.Json.XrplJsonOptions.Default);
             var master = XrplWallet.FromSeed(MasterSecret);
             var response = await client.SubmitAndWait(values, master, autofill: true);
 
@@ -346,7 +346,7 @@ namespace XrplTests.Xrpl.ClientLib.Integration
                 Destination = wallet.ClassicAddress,
                 Amount = new Currency { Value = "400000000", CurrencyCode = "XRP" }
             };
-            var values = JsonConvert.DeserializeObject<Dictionary<string, dynamic>>(payment.ToJson());
+            var values = JsonSerializer.Deserialize<Dictionary<string, object>>(payment.ToJson(), global::Xrpl.Client.Json.XrplJsonOptions.Default);
             var master = XrplWallet.FromSeed(masterSecret);
             var response = await client.SubmitAndWait(values, master, autofill: true);
             if (response.Meta.TransactionResult != "tesSUCCESS")
@@ -363,19 +363,29 @@ namespace XrplTests.Xrpl.ClientLib.Integration
             return wallet;
         }
 
-        public static async Task VerifySubmittedTransaction(IXrplClient client, JToken tx, string? hashTx = null)
+        public static async Task VerifySubmittedTransaction(IXrplClient client, object tx, string? hashTx = null)
         {
-            string hash = hashTx != null ? hashTx : HashLedger.HashSignedTx(tx);
+            string hash;
+            if (hashTx != null)
+                hash = hashTx;
+            else if (tx is string txStr)
+                hash = HashLedger.HashSignedTx(txStr);
+            else if (tx is JsonNode txNode)
+                hash = HashLedger.HashSignedTx(txNode);
+            else
+                hash = HashLedger.HashSignedTx(JsonNode.Parse(
+                    JsonSerializer.Serialize(tx, global::Xrpl.Client.Json.XrplJsonOptions.Default)));
             TxRequest request = new TxRequest(hash);
             TransactionResponse data = await client.Tx(request);
         }
 
-        public static async Task TestTransaction(IXrplClient client, Dictionary<string, dynamic> transaction, XrplWallet wallet)
+        public static async Task TestTransaction(IXrplClient client, Dictionary<string, object> transaction, XrplWallet wallet)
         {
             await LedgerAccept(client);
             Submit response = await client.Submit(transaction, wallet);
             Assert.AreEqual("tesSUCCESS", response.EngineResult);
-            response.TxJson.Property("hash").Remove();
+            if (response.TxJson is JsonObject txJsonObj)
+                txJsonObj.Remove("hash");
             await LedgerAccept(client);
             await VerifySubmittedTransaction(client, response.TxJson);
         }

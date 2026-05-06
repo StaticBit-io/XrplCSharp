@@ -179,10 +179,10 @@ namespace Xrpl.Models.Transactions
                 return direct;
             }
 
-            if (value is Dictionary<string, dynamic> dyn)
+            if (value is Dictionary<string, object> dyn)
             {
                 Dictionary<string, object> result = new Dictionary<string, object>(dyn.Count);
-                foreach (KeyValuePair<string, dynamic> kv in dyn)
+                foreach (KeyValuePair<string, object> kv in dyn)
                 {
                     result[kv.Key] = kv.Value;
                 }

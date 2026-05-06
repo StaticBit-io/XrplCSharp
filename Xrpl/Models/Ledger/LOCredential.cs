@@ -1,4 +1,4 @@
-using Newtonsoft.Json;
+using System.Text.Json.Serialization;
 
 using System;
 
@@ -39,13 +39,13 @@ namespace Xrpl.Models.Ledger
         /// <summary>
         /// The account that is the subject (holder) of the credential.
         /// </summary>
-        [JsonProperty("Subject")]
+        [JsonPropertyName("Subject")]
         public string Subject { get; set; }
 
         /// <summary>
         /// The account that issued the credential.
         /// </summary>
-        [JsonProperty("Issuer")]
+        [JsonPropertyName("Issuer")]
         public string Issuer { get; set; }
 
         private string _credentialType;
@@ -54,7 +54,7 @@ namespace Xrpl.Models.Ledger
         /// A value identifying the type of credential, stored as a hex-encoded string.
         /// Automatically normalizes text input to hex on assignment.
         /// </summary>
-        [JsonProperty("CredentialType")]
+        [JsonPropertyName("CredentialType")]
         public string CredentialType
         {
             get => _credentialType;
@@ -71,7 +71,7 @@ namespace Xrpl.Models.Ledger
         /// <summary>
         /// The time after which the credential expires, in seconds since the Ripple Epoch.
         /// </summary>
-        [JsonProperty("Expiration", NullValueHandling = NullValueHandling.Ignore)]
+        [JsonPropertyName("Expiration")]
         [JsonConverter(typeof(RippleDateTimeConverter))]
         public DateTime? Expiration { get; set; }
 
@@ -81,7 +81,7 @@ namespace Xrpl.Models.Ledger
         /// An arbitrary URI reference for additional credential data, stored as a hex-encoded string.
         /// Automatically normalizes text input to hex on assignment.
         /// </summary>
-        [JsonProperty("URI", NullValueHandling = NullValueHandling.Ignore)]
+        [JsonPropertyName("URI")]
         public string URI
         {
             get => _uri;
@@ -98,37 +98,37 @@ namespace Xrpl.Models.Ledger
         /// <summary>
         /// A bit-map of boolean flags. See <see cref="CredentialFlags"/>.
         /// </summary>
-        [JsonProperty("Flags")]
+        [JsonPropertyName("Flags")]
         public new uint Flags { get; set; }
 
         /// <summary>
         /// A hint indicating which page of the owner directory links to this entry.
         /// </summary>
-        [JsonProperty("OwnerNode")]
+        [JsonPropertyName("OwnerNode")]
         public string OwnerNode { get; set; }
 
         /// <summary>
         /// A hint indicating which page of the subject's owner directory links to this entry.
         /// </summary>
-        [JsonProperty("SubjectNode")]
+        [JsonPropertyName("SubjectNode")]
         public string SubjectNode { get; set; }
 
         /// <summary>
         /// A hint indicating which page of the issuer's owner directory links to this entry.
         /// </summary>
-        [JsonProperty("IssuerNode")]
+        [JsonPropertyName("IssuerNode")]
         public string IssuerNode { get; set; }
 
         /// <summary>
         /// The identifying hash of the transaction that most recently modified this entry.
         /// </summary>
-        [JsonProperty("PreviousTxnID")]
+        [JsonPropertyName("PreviousTxnID")]
         public string PreviousTxnID { get; set; }
 
         /// <summary>
         /// The index of the ledger that contains the transaction that most recently modified this entry.
         /// </summary>
-        [JsonProperty("PreviousTxnLgrSeq")]
+        [JsonPropertyName("PreviousTxnLgrSeq")]
         public uint PreviousTxnLgrSeq { get; set; }
     }
 }

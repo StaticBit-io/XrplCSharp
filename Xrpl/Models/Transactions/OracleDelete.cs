@@ -1,7 +1,7 @@
 using System.Collections.Generic;
 using System.Threading.Tasks;
 
-using Newtonsoft.Json;
+using System.Text.Json.Serialization;
 
 using Xrpl.Client.Exceptions;
 
@@ -32,7 +32,7 @@ namespace Xrpl.Models.Transactions
         }
 
         /// <inheritdoc />
-        [JsonProperty("OracleDocumentID")]
+        [JsonPropertyName("OracleDocumentID")]
         public uint OracleDocumentID { get; set; }
     }
 
@@ -40,7 +40,7 @@ namespace Xrpl.Models.Transactions
     public class OracleDeleteResponse : TransactionResponse, IOracleDelete
     {
         /// <inheritdoc />
-        [JsonProperty("OracleDocumentID")]
+        [JsonPropertyName("OracleDocumentID")]
         public uint OracleDocumentID { get; set; }
     }
 
@@ -51,7 +51,7 @@ namespace Xrpl.Models.Transactions
         /// </summary>
         /// <param name="tx">An OracleDelete Transaction.</param>
         /// <exception cref="ValidationException">When the OracleDelete is malformed.</exception>
-        public static async Task ValidateOracleDelete(Dictionary<string, dynamic> tx)
+        public static async Task ValidateOracleDelete(Dictionary<string, object> tx)
         {
             await Common.ValidateBaseTransaction(tx);
 

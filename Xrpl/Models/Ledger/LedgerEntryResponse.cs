@@ -1,4 +1,4 @@
-﻿using Newtonsoft.Json;
+﻿using System.Text.Json.Serialization;
 
 using Xrpl.Client.Json.Converters;
 
@@ -7,10 +7,10 @@ namespace Xrpl.Models.Ledger
 {
     public class LedgerEntryResponse //todo rename LedgerEntryResponse: BaseResponse
     {
-        [JsonProperty("index")]
+        [JsonPropertyName("index")]
         public string Index { get; set; }
 
-        [JsonProperty("node")]
+        [JsonPropertyName("node")]
         [JsonConverter(typeof(LOConverter))]
         public BaseLedgerEntry Node { get; set; }
 

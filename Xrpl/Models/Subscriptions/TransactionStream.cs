@@ -1,8 +1,8 @@
 ﻿using System;
+using System.Text.Json;
+using System.Text.Json.Serialization;
 
-using Newtonsoft.Json;
-using Newtonsoft.Json.Converters;
-
+using Xrpl.Client.Json;
 using Xrpl.Models.Methods;
 using Xrpl.Models.Transactions;
 
@@ -23,82 +23,81 @@ namespace Xrpl.Models.Subscriptions
         /// <summary>
         /// The ledger close time represented in ISO 8601 time format.
         /// </summary>
-        [JsonProperty("close_time_iso")]
-        [JsonConverter(typeof(IsoDateTimeConverter))]
+        [JsonPropertyName("close_time_iso")]
         public DateTime? CloseTimeIso { get; set; }
 
         /// <summary>
         /// String Transaction result code
         /// </summary>
-        [JsonProperty("engine_result")]
+        [JsonPropertyName("engine_result")]
         public string EngineResult { get; set; }
 
-        [JsonProperty("status")]
+        [JsonPropertyName("status")]
         public string Status { get; set; }
         /// <summary>
         /// Numeric transaction response code, if applicable.
         /// </summary>
-        [JsonProperty("engine_result_code")]
+        [JsonPropertyName("engine_result_code")]
         public int EngineResultCode { get; set; }
         /// <summary>
         /// Human-readable explanation for the transaction response
         /// </summary>
-        [JsonProperty("engine_result_message")]
+        [JsonPropertyName("engine_result_message")]
         public string EngineResultMessage { get; set; }
 
         /// <summary>
         /// The unique hash identifier of the transaction.
         /// </summary>
-        [JsonProperty("hash")]
+        [JsonPropertyName("hash")]
         public string Hash { get; set; }
 
         /// <summary>
         /// (Validated transactions only) The identifying hash of the ledger version that includes this transaction
         /// </summary>
-        [JsonProperty("ledger_hash")]
+        [JsonPropertyName("ledger_hash")]
         public string LedgerHash { get; set; }
         /// <summary>
         /// (Validated transactions only) The ledger index of the ledger version that includes this transaction.
         /// </summary>
-        [JsonProperty("ledger_index")]
+        [JsonPropertyName("ledger_index")]
         public ulong? LedgerIndex { get; set; }
         /// <summary>
         /// (Unvalidated transactions only) The ledger index of the current in-progress ledger version for which this transaction is currently proposed.
         /// </summary>
-        [JsonProperty("ledger_current_index")]
+        [JsonPropertyName("ledger_current_index")]
         public uint? LedgerCurrentIndex { get; set; }
         /// <summary>
         /// (Validated transactions only) The transaction metadata, which shows the exact outcome of the transaction in detail.
         /// </summary>
-        [JsonProperty("meta")]
+        [JsonPropertyName("meta")]
         public Meta Meta { get; set; }
         /// <summary>
         /// The definition of the transaction in JSON format
         /// </summary>
-        //[JsonProperty("transaction")]
-        [JsonProperty("tx_json")]
-        public dynamic TransactionJson { get; set; }
+        //[JsonPropertyName("transaction")]
+        [JsonPropertyName("tx_json")]
+        public object TransactionJson { get; set; }
         /// <summary>
         /// The definition of the proposed transaction in JSON format<br/>
         /// </summary>
-        [JsonProperty("transaction")]
-        public dynamic Proposed { get; set; }
+        [JsonPropertyName("transaction")]
+        public object Proposed { get; set; }
 
         [JsonIgnore]
-        public TransactionResponse Transaction => JsonConvert.DeserializeObject<TransactionResponse>((TransactionJson ?? Proposed).ToString());
+        public TransactionResponse Transaction => JsonSerializer.Deserialize<TransactionResponse>((TransactionJson ?? Proposed).ToString(), XrplJsonOptions.Default);
 
         /// <summary>
         /// If true, this transaction is included in a validated ledger and its outcome is final.<br/>
         /// Responses from the transaction stream should always be validated.
         /// </summary>
-        [JsonProperty("validated")]
+        [JsonPropertyName("validated")]
         public bool Validated { get; set; }
 
         /// <summary>
         /// May be omitted) If this field is provided, it contains one or more Warnings Objects with important warnings.<br/>
         /// For details, see API Warnings (https://xrpl.org/response-formatting.html#api-warnings)
         /// </summary>
-        [JsonProperty("warnings")]
+        [JsonPropertyName("warnings")]
         public object Warnings { get; set; }
     }
 }

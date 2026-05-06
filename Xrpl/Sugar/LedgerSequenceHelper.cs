@@ -1,11 +1,11 @@
-﻿using Newtonsoft.Json.Linq;
-
 using System;
 using System.Collections.Generic;
 using System.Globalization;
+using System.Text.Json;
+using System.Text.Json.Nodes;
 
 using Xrpl.BinaryCodec;
-
+using Xrpl.Client.Json;
 using Xrpl.Models.Transactions;
 
 namespace Xrpl.Sugar;
@@ -14,29 +14,29 @@ public static class LedgerSequenceHelper
 {
     public static uint? GetLastLedgerSequence(object transaction)
     {
-        // 1) Dictionary<string, dynamic>
+        // 1) Dictionary<string, object>
         if (transaction is IDictionary<string, object> dictObj)
             return TryGetUint(dictObj, "LastLedgerSequence");
 
-        if (transaction is Dictionary<string, dynamic> dictDyn)
+        if (transaction is Dictionary<string, object> dictDyn)
             return TryGetUint(dictDyn, "LastLedgerSequence");
 
         // 2) твой тип
         if (transaction is TransactionRequest txc)
             return txc.LastLedgerSequence;
 
-        // 3) JObject
-        if (transaction is JObject j)
+        // 3) JsonObject
+        if (transaction is JsonObject j)
             return TryGetUint(j, "LastLedgerSequence");
 
         // 4) fallback: encode -> parse
         var encoded = XrplBinaryCodec.Encode(transaction);
-        var json = JObject.Parse($"{encoded}");
-        return TryGetUint(json, "LastLedgerSequence");
+        var json = JsonNode.Parse($"{encoded}")?.AsObject();
+        return json != null ? TryGetUint(json, "LastLedgerSequence") : null;
     }
 
-    private static uint? TryGetUint(JObject j, string name)
-        => j.TryGetValue(name, out var token) ? ToUInt32Nullable(token) : null;
+    private static uint? TryGetUint(JsonObject j, string name)
+        => j.TryGetPropertyValue(name, out var token) ? ToUInt32Nullable(token) : null;
 
     private static uint? TryGetUint<T>(IDictionary<string, T> dict, string key)
         => dict.TryGetValue(key, out var value) ? ToUInt32Nullable(value) : null;
@@ -45,11 +45,27 @@ public static class LedgerSequenceHelper
     {
         if (value is null) return null;
 
-        // если dynamic внутри оказался JToken/JValue
-        if (value is JToken jt)
+        // если dynamic внутри оказался JsonNode/JsonElement
+        if (value is JsonNode jn)
         {
-            if (jt.Type == JTokenType.Null || jt.Type == JTokenType.Undefined) return null;
-            value = (jt as JValue)?.Value ?? jt.ToString();
+            if (jn is JsonValue jv)
+            {
+                if (jv.TryGetValue<long>(out var lv)) value = lv;
+                else if (jv.TryGetValue<double>(out var dv)) value = dv;
+                else if (jv.TryGetValue<string>(out var sv)) value = sv;
+                else value = jn.ToString();
+            }
+            else
+            {
+                value = jn.ToString();
+            }
+        }
+        else if (value is JsonElement je)
+        {
+            if (je.ValueKind == JsonValueKind.Null || je.ValueKind == JsonValueKind.Undefined) return null;
+            if (je.ValueKind == JsonValueKind.Number && je.TryGetUInt32(out var u)) return u;
+            if (je.ValueKind == JsonValueKind.String) value = je.GetString();
+            else value = je.ToString();
         }
 
         try

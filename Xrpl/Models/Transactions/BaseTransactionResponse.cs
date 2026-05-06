@@ -1,5 +1,6 @@
 ﻿using System;
-using Newtonsoft.Json;
+using System.Text.Json.Serialization;
+
 using Xrpl.Client.Json.Converters;
 
 namespace Xrpl.Models.Transactions
@@ -15,25 +16,25 @@ namespace Xrpl.Models.Transactions
         /// The date/time when this transaction was included in a validated ledger.
         /// </summary>
         [JsonConverter(typeof(RippleDateTimeConverter))]
-        [JsonProperty("date")]
+        [JsonPropertyName("date")]
         DateTime? Date { get; set; }
 
         /// <summary>
         /// An identifying hash value unique to this transaction, as a hex string.
         /// </summary>
-        [JsonProperty("hash")]
+        [JsonPropertyName("hash")]
         string Hash { get; set; }
 
-        [JsonProperty("inLedger")]
+        [JsonPropertyName("inLedger")]
         uint? InLedger { get; set; }
 
         /// <summary>
         /// The sequence number of the ledger that included this transaction.
         /// </summary>
-        [JsonProperty("ledger_index")]
+        [JsonPropertyName("ledger_index")]
         uint? LedgerIndex { get; set; }
 
-        [JsonProperty("validated")]
+        [JsonPropertyName("validated")]
         bool? Validated { get; set; }
     }
 
@@ -42,21 +43,21 @@ namespace Xrpl.Models.Transactions
     {
         /// <inheritdoc />
         [JsonConverter(typeof(RippleDateTimeConverter))]
-        [JsonProperty("date")]
+        [JsonPropertyName("date")]
         public DateTime? Date { get; set; }
 
         /// <inheritdoc />
-        [JsonProperty("hash")]
+        [JsonPropertyName("hash")]
         public string Hash { get; set; }
 
-        [JsonProperty("inLedger")]
+        [JsonPropertyName("inLedger")]
         public uint? InLedger { get; set; }
 
         /// <inheritdoc />
-        [JsonProperty("ledger_index")]
+        [JsonPropertyName("ledger_index")]
         public uint? LedgerIndex { get; set; }
 
-        [JsonProperty("validated")]
+        [JsonPropertyName("validated")]
         public bool? Validated { get; set; }
     }
 }

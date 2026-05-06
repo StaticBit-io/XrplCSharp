@@ -6,7 +6,7 @@ namespace Xrpl.Client.Exceptions;
 public sealed class XrplErrorInfo
 {
     public string RawError { get; init; } = string.Empty;
-    public string? RawErrorCode { get; init; }
+    public int? RawErrorCode { get; init; }
     public string? RawErrorMessage { get; init; }
 
     public XrplErrorCategory Category { get; init; }

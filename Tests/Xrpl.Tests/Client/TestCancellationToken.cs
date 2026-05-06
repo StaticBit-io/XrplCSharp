@@ -1,8 +1,7 @@
 using Microsoft.VisualStudio.TestTools.UnitTesting;
 
-using Newtonsoft.Json;
-
 using System;
+using System.Text.Json.Serialization;
 using System.Collections.Generic;
 using System.Threading;
 using System.Threading.Tasks;
@@ -35,7 +34,7 @@ public class TestUCancellationToken
     {
         RequestManager rm = new RequestManager();
         using CancellationTokenSource cts = new CancellationTokenSource();
-        Dictionary<string, dynamic> request = new Dictionary<string, dynamic> { ["command"] = "test" };
+        Dictionary<string, object> request = new Dictionary<string, object> { ["command"] = "test" };
 
         RequestManager.XrplRequest xrplRequest = rm.CreateRequest(
             request, System.Threading.Timeout.InfiniteTimeSpan, cts.Token);
@@ -55,7 +54,7 @@ public class TestUCancellationToken
     {
         RequestManager rm = new RequestManager();
         using CancellationTokenSource cts = new CancellationTokenSource();
-        Dictionary<string, dynamic> request = new Dictionary<string, dynamic> { ["command"] = "test" };
+        Dictionary<string, object> request = new Dictionary<string, object> { ["command"] = "test" };
 
         RequestManager.XrplRequest xrplRequest = rm.CreateRequest(
             request, System.Threading.Timeout.InfiniteTimeSpan, cts.Token);
@@ -79,7 +78,7 @@ public class TestUCancellationToken
     {
         RequestManager rm = new RequestManager();
         using CancellationTokenSource cts = new CancellationTokenSource();
-        Dictionary<string, dynamic> request = new Dictionary<string, dynamic> { ["command"] = "test" };
+        Dictionary<string, object> request = new Dictionary<string, object> { ["command"] = "test" };
 
         RequestManager.XrplRequest xrplRequest = rm.CreateRequest(
             request, System.Threading.Timeout.InfiniteTimeSpan, cts.Token);
@@ -87,7 +86,7 @@ public class TestUCancellationToken
         string json = $"{{\"id\":\"{xrplRequest.Id}\",\"status\":\"success\",\"type\":\"response\",\"result\":{{\"value\":42}}}}";
         rm.HandleResponse(json);
 
-        Dictionary<string, dynamic> result = await xrplRequest.Promise;
+        Dictionary<string, object> result = await xrplRequest.Promise;
         Assert.IsNotNull(result);
 
         cts.Cancel();
@@ -103,7 +102,7 @@ public class TestUCancellationToken
     {
         RequestManager rm = new RequestManager();
         using CancellationTokenSource cts = new CancellationTokenSource();
-        Dictionary<string, dynamic> request = new Dictionary<string, dynamic> { ["command"] = "test" };
+        Dictionary<string, object> request = new Dictionary<string, object> { ["command"] = "test" };
 
         RequestManager.XrplRequest xrplRequest = rm.CreateRequest(
             request, TimeSpan.FromSeconds(5), cts.Token);
@@ -135,7 +134,7 @@ public class TestUCancellationToken
     {
         RequestManager rm = new RequestManager();
         using CancellationTokenSource cts = new CancellationTokenSource();
-        Dictionary<string, dynamic> request = new Dictionary<string, dynamic> { ["command"] = "test" };
+        Dictionary<string, object> request = new Dictionary<string, object> { ["command"] = "test" };
 
         RequestManager.XrplRequest xrplRequest = rm.CreateRequest(
             request, TimeSpan.FromMilliseconds(100), cts.Token);
@@ -165,7 +164,7 @@ public class TestUCancellationToken
     public async Task DefaultToken_WorksAsBeforeTimeout()
     {
         RequestManager rm = new RequestManager();
-        Dictionary<string, dynamic> request = new Dictionary<string, dynamic> { ["command"] = "test" };
+        Dictionary<string, object> request = new Dictionary<string, object> { ["command"] = "test" };
 
         RequestManager.XrplRequest xrplRequest = rm.CreateRequest(
             request, TimeSpan.FromMilliseconds(100));
@@ -212,7 +211,7 @@ public class TestUCancellationToken
             using CancellationTokenSource cts = new CancellationTokenSource();
             cts.Cancel();
 
-            Dictionary<string, dynamic> request = new Dictionary<string, dynamic>
+            Dictionary<string, object> request = new Dictionary<string, object>
             {
                 ["command"] = "server_info"
             };
@@ -248,7 +247,7 @@ public class TestUCancellationToken
             using CancellationTokenSource cts = new CancellationTokenSource();
             cts.Cancel();
 
-            Dictionary<string, dynamic> cancelledRequest = new Dictionary<string, dynamic>
+            Dictionary<string, object> cancelledRequest = new Dictionary<string, object>
             {
                 ["command"] = "server_info"
             };
@@ -263,11 +262,11 @@ public class TestUCancellationToken
 
             await Task.Delay(100);
 
-            Dictionary<string, dynamic> normalRequest = new Dictionary<string, dynamic>
+            Dictionary<string, object> normalRequest = new Dictionary<string, object>
             {
                 ["command"] = "server_info"
             };
-            Dictionary<string, dynamic> result = await runner.client.connection.Request(normalRequest);
+            Dictionary<string, object> result = await runner.client.connection.Request(normalRequest);
             Assert.IsNotNull(result, "Request after cancelled request should succeed");
         }
         finally
@@ -286,10 +285,10 @@ public class TestUCancellationToken
     /// </summary>
     private class FakeGRequest
     {
-        [JsonProperty("id")]
+        [JsonPropertyName("id")]
         public object Id { get; set; }
 
-        [JsonProperty("command")]
+        [JsonPropertyName("command")]
         public string Command { get; set; } = "fake";
     }
 

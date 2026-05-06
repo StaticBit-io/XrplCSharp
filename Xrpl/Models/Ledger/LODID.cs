@@ -1,4 +1,4 @@
-using Newtonsoft.Json;
+using System.Text.Json.Serialization;
 
 // https://xrpl.org/docs/references/protocol/ledger-data/ledger-entry-types/did
 
@@ -21,44 +21,44 @@ namespace Xrpl.Models.Ledger
         /// <summary>
         /// The account that controls the DID.
         /// </summary>
-        [JsonProperty("Account")]
+        [JsonPropertyName("Account")]
         public string Account { get; set; }
 
         /// <summary>
         /// The public attestations of identity credentials associated with the DID.
         /// </summary>
-        [JsonProperty("Data", NullValueHandling = NullValueHandling.Ignore)]
+        [JsonPropertyName("Data")]
         public string Data { get; set; }
 
         /// <summary>
         /// The DID document associated with the DID.
         /// </summary>
-        [JsonProperty("DIDDocument", NullValueHandling = NullValueHandling.Ignore)]
+        [JsonPropertyName("DIDDocument")]
         public string DIDDocument { get; set; }
 
         /// <summary>
         /// The Universal Resource Identifier associated with the DID.
         /// </summary>
-        [JsonProperty("URI", NullValueHandling = NullValueHandling.Ignore)]
+        [JsonPropertyName("URI")]
         public string URI { get; set; }
 
         /// <summary>
         /// A hint indicating which page of the owner directory links to this entry,
         /// in case the directory consists of multiple pages.
         /// </summary>
-        [JsonProperty("OwnerNode")]
+        [JsonPropertyName("OwnerNode")]
         public string OwnerNode { get; set; }
 
         /// <summary>
         /// The identifying hash of the transaction that most recently modified this entry.
         /// </summary>
-        [JsonProperty("PreviousTxnID")]
+        [JsonPropertyName("PreviousTxnID")]
         public string PreviousTxnID { get; set; }
 
         /// <summary>
         /// The index of the ledger that contains the transaction that most recently modified this entry.
         /// </summary>
-        [JsonProperty("PreviousTxnLgrSeq")]
+        [JsonPropertyName("PreviousTxnLgrSeq")]
         public uint PreviousTxnLgrSeq { get; set; }
     }
 }

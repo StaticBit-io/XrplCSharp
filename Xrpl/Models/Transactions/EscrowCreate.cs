@@ -1,8 +1,8 @@
-﻿using System;
+using System;
 using System.Collections.Generic;
 using System.Threading.Tasks;
 
-using Newtonsoft.Json;
+using System.Text.Json.Serialization;
 
 using Xrpl.Client.Exceptions;
 using Xrpl.Client.Json.Converters;
@@ -112,7 +112,7 @@ namespace Xrpl.Models.Transactions
         /// </summary>
         /// <param name="tx"> A EscrowCreate Transaction.</param>
         /// <exception cref="ValidationException">When the EscrowCreate is malformed.</exception>
-        public static async Task ValidateEscrowCreate(Dictionary<string, dynamic> tx)
+        public static async Task ValidateEscrowCreate(Dictionary<string, object> tx)
         {
             await Common.ValidateBaseTransaction(tx);
             tx.TryGetValue("Amount", out var Amount);
@@ -120,7 +120,7 @@ namespace Xrpl.Models.Transactions
             if (Amount is null)
                 throw new ValidationException("EscrowCreate: missing field Amount");
 
-            if (Amount is not string && Amount is not Dictionary<string, dynamic>)
+            if (Amount is not string && Amount is not Dictionary<string, object>)
                 throw new ValidationException("EscrowCreate: Amount must be a string (XRP) or object (IOU/MPT)");
 
 

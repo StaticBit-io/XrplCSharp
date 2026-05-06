@@ -1,8 +1,7 @@
-﻿using System;
+using System;
 using System.Collections.Generic;
+using System.Text.Json.Serialization;
 using System.Threading.Tasks;
-
-using Newtonsoft.Json;
 
 using Xrpl.Client.Exceptions;
 using Xrpl.Client.Json.Converters;
@@ -134,13 +133,13 @@ namespace Xrpl.Models.Transactions
     public partial class Validation
     {
         //https://github.com/XRPLF/xrpl.js/blob/b40a519a0d949679a85bf442be29026b76c63a22/packages/xrpl/src/models/transactions/NFTokenCreateOffer.ts#L86
-        public static Task ValidateNFTokenSellOfferCases(Dictionary<string, dynamic> tx)
+        public static Task ValidateNFTokenSellOfferCases(Dictionary<string, object> tx)
         {
             if (tx.TryGetValue("Owner", out var Owner) && Owner is not null)
                 throw new ValidationException("NFTokenCreateOffer: Owner must not be present for sell offers");
             return Task.CompletedTask;
         }
-        public static Task ValidateNFTokenBuyOfferCases(Dictionary<string, dynamic> tx)
+        public static Task ValidateNFTokenBuyOfferCases(Dictionary<string, object> tx)
         {
             if (!tx.TryGetValue("Owner", out var Owner) || Owner is null)
                 throw new ValidationException("NFTokenCreateOffer: Owner must be present for buy offers");
@@ -156,7 +155,7 @@ namespace Xrpl.Models.Transactions
         /// <param name="tx">An NFTokenCreateOffer Transaction.</param>
         /// <returns>When the NFTokenCreateOffer is Malformed.</returns>
         /// <exception cref="ValidationException"></exception>
-        public static Task ValidateNFTokenCreateOffer(Dictionary<string, dynamic> tx)
+        public static Task ValidateNFTokenCreateOffer(Dictionary<string, object> tx)
         {
             Common.ValidateBaseTransaction(tx);
 

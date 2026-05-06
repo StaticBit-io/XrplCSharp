@@ -1,4 +1,4 @@
-﻿using Newtonsoft.Json.Linq;
+﻿using System.Text.Json.Nodes;
 
 //todo not found doc
 
@@ -37,7 +37,7 @@ namespace Xrpl.BinaryCodec.Enums
         /// <summary>Represents a permissioned domain object in the ledger.</summary>
         public static readonly LedgerEntryType PermissionedDomain = Add(nameof(PermissionedDomain), 130);
 
-        public static LedgerEntryType FromJson(JToken jToken)
+        public static LedgerEntryType FromJson(JsonNode jToken)
         {
             return Values.FromJson(jToken);
         }

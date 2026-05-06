@@ -1,8 +1,9 @@
 ﻿using Microsoft.VisualStudio.TestTools.UnitTesting;
 
-using Newtonsoft.Json;
-
 using System.Linq;
+using System.Text.Json;
+
+using Xrpl.Client.Json;
 
 using Xrpl.Models.Transactions;
 using Xrpl.Utils;
@@ -15,7 +16,7 @@ public class GetBalanceChangesTests
     public void TestBalanceChanges_Metadata1()
     {
         // Arrange
-        var metadata = JsonConvert.DeserializeObject<Meta>(metaData_1);
+        var metadata = JsonSerializer.Deserialize<Meta>(metaData_1, XrplJsonOptions.Default);
         var buyer = "rLiooJRSKeiNfRJcDBUhu4rcjQjGLWqa4p";
         var seller = "rnFApzSsKwXyTZtci4Z6nLVL8E1nLZzSBF";
         var issuer = "rXPMxBeefHGxx2K7g5qmmWq3gFsgawkoa";

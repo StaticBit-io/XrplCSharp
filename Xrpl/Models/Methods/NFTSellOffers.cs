@@ -1,4 +1,4 @@
-﻿using Newtonsoft.Json;
+using System.Text.Json.Serialization;
 
 using System;
 using System.Collections.Generic;
@@ -18,35 +18,35 @@ namespace Xrpl.Models.Methods
         /// <summary>
         /// A list of sell offers for the specified NFToken.
         /// </summary>
-        [JsonProperty("offers")]
+        [JsonPropertyName("offers")]
         public List<NFTOffer> Offers { get; set; }
 
         /// <summary>
         /// The token ID of the NFToken to which these offers pertain.
         /// </summary>
-        [JsonProperty("nft_id")]
+        [JsonPropertyName("nft_id")]
         public string TokenID { get; set; }
     }
 
     public class NFTOffer: IDestination
     {
-        [JsonProperty("amount")]
+        [JsonPropertyName("amount")]
         [JsonConverter(typeof(CurrencyConverter))]
         public Currency Amount { get; set; }
 
-        [JsonProperty("flags")]
+        [JsonPropertyName("flags")]
         public uint Flags { get; set; }
 
-        [JsonProperty("nft_offer_index")]
+        [JsonPropertyName("nft_offer_index")]
         public string Index { get; set; }
 
-        [JsonProperty("owner")]
+        [JsonPropertyName("owner")]
         public string Owner { get; set; }
 
-        [JsonProperty("destination")]
+        [JsonPropertyName("destination")]
         public string Destination { get; set; }
 
-        [JsonProperty("expiration")]
+        [JsonPropertyName("expiration")]
         [JsonConverter(typeof(RippleDateTimeConverter))]
         public DateTime? Expiration { get; set; }
     }
@@ -66,7 +66,7 @@ namespace Xrpl.Models.Methods
         /// The unique identifier of an NFToken.<br/>
         /// The request returns sell offers for this NFToken.
         /// </summary>
-        [JsonProperty("nft_id")]
+        [JsonPropertyName("nft_id")]
         public string NFTokenID { get; set; }
     }
 }

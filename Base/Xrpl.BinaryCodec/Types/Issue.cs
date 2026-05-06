@@ -1,5 +1,5 @@
-﻿using Newtonsoft.Json.Linq;
-
+﻿using System.Text.Json;
+using System.Text.Json.Nodes;
 using Xrpl.BinaryCodec.Binary;
 
 // https://github.com/XRPLF/xrpl.js/blob/amm/packages/ripple-binary-codec/src/types/issue.ts
@@ -45,38 +45,38 @@ namespace Xrpl.BinaryCodec.Types
         }
 
         /// <inheritdoc/>
-        public JToken ToJson()
+        public JsonNode ToJson()
         {
             if (Currency.IsNative)
             {
                 // Return JSON { "currency": "XRP" }
-                return new JObject
+                return new JsonObject
                 {
                     ["currency"] = Currency.ToString()
                 };
             }
             // Return JSON { "currency": "<code>", "issuer": "<address>" }
-            return new JObject
+            return new JsonObject
             {
-                ["currency"] = Currency,
-                ["issuer"] = Issuer
+                ["currency"] = (JsonNode)Currency,
+                ["issuer"] = (JsonNode)Issuer
             };
         }
 
         /// <summary>
         /// Deserialize from JSON, distinguishing XRP and IOU issues.
         /// </summary>
-        public static Issue FromJson(JToken token)
+        public static Issue FromJson(JsonNode token)
         {
-            if (token.Type != JTokenType.Object)
-                throw new InvalidJsonException($"Issue must be a JSON object, got {token.Type}");
+            if (!(token is JsonObject))
+                throw new InvalidJsonException($"Issue must be a JSON object, got {token.GetValueKind()}");
 
-            var obj = (JObject)token;
-            var currencyStr = obj.Value<string>("currency");
+            JsonObject obj = token.AsObject();
+            string currencyStr = obj["currency"]?.GetValue<string>();
             if (currencyStr is null)
                 throw new InvalidJsonException("Issue object must contain property 'currency'.");
 
-            var currency = Currency.FromString(currencyStr);
+            Currency currency = Currency.FromString(currencyStr);
 
             if (currency.IsNative)
             {
@@ -90,11 +90,11 @@ namespace Xrpl.BinaryCodec.Types
             if (obj.Count != 2)
                 throw new InvalidJsonException("Issued currency object must contain exactly 'currency' and 'issuer'.");
 
-            var issuerStr = obj.Value<string>("issuer");
+            string issuerStr = obj["issuer"]?.GetValue<string>();
             if (issuerStr is null)
                 throw new InvalidJsonException("Issue object must contain property 'issuer'.");
 
-            var issuer = new AccountId(issuerStr);
+            AccountId issuer = new AccountId(issuerStr);
             return new Issue(currency, issuer);
         }
 

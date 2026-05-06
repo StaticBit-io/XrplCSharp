@@ -1,4 +1,4 @@
-﻿using Newtonsoft.Json;
+﻿using System.Text.Json.Serialization;
 
 //https://github.com/XRPLF/xrpl.js/blob/b20c05c3680d80344006d20c44b4ae1c3b0ffcac/packages/xrpl/src/models/methods/subscribe.ts#L294
 
@@ -19,32 +19,32 @@ namespace Xrpl.Models.Subscriptions
         /// SWITCHED_LEDGER - The peer concluded it was not following the rest of the network and switched to a different ledger version.<br/>
         /// LOST_SYNC - The peer fell behind the rest of the network in tracking which ledger versions are validated and which are undergoing consensus.
         /// </summary>
-        [JsonProperty("action")]
+        [JsonPropertyName("action")]
         public string Action { get; set; }
         /// <summary>
         /// The time this event occurred, in seconds since the Ripple Epoch.
         /// </summary>
-        [JsonProperty("date")]
+        [JsonPropertyName("date")]
         public ulong Date { get; set; }
         /// <summary>
         /// (May be omitted) The identifying Hash of a ledger version to which this message pertains.
         /// </summary>
-        [JsonProperty("ledger_hash")]
+        [JsonPropertyName("ledger_hash")]
         public string LedgerHash { get; set; }
         /// <summary>
         /// (May be omitted) The Ledger Index of a ledger version to which this message pertains.
         /// </summary>
-        [JsonProperty("ledger_index")]
+        [JsonPropertyName("ledger_index")]
         public ulong? LedgerIndex { get; set; }
         /// <summary>
         /// (May be omitted) The largest Ledger Index the peer has currently available.
         /// </summary>
-        [JsonProperty("ledger_index_max")]
+        [JsonPropertyName("ledger_index_max")]
         public ulong? ledger_index_max { get; set; }
         /// <summary>
         /// (May be omitted) The smallest Ledger Index the peer has currently available.
         /// </summary>
-        [JsonProperty("ledger_index_min")]
+        [JsonPropertyName("ledger_index_min")]
         public ulong? ledger_index_min { get; set; }
 
     }

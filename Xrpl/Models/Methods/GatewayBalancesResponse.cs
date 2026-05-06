@@ -1,4 +1,4 @@
-﻿using Newtonsoft.Json;
+using System.Text.Json.Serialization;
 
 using System.Collections.Generic;
 
@@ -20,39 +20,39 @@ public class GatewayBalancesResponse //todo rename to  GatewayBalancesResponse
     /// <summary>
     /// The address of the account that issued the balances.
     /// </summary>
-    [JsonProperty("account")]
+    [JsonPropertyName("account")]
     public string Account { get; set; }
 
     /// <summary>
     /// Total amounts held that are issued by others.<br/>
     /// In the recommended  configuration, the issuing address should have none.
     /// </summary>
-    [JsonProperty("assets")]
+    [JsonPropertyName("assets")]
     public List<Currency> Assets { get; set; }
 
     /// <summary>
     /// Amounts issued to the hotwallet addresses from the request.<br/>
     /// The keys are  addresses and the values are arrays of currency amounts they hold.
     /// </summary>
-    [JsonProperty("balances")]
+    [JsonPropertyName("balances")]
     public List<Currency> Balances { get; init; }
 
-    [JsonProperty("frozen_balances")]
+    [JsonPropertyName("frozen_balances")]
     public List<Currency> FrozenBalances { get; init; }
 
     /// <summary>
     /// Total amounts issued to addresses not excluded, as a map of currencies  to the total value issued.
     /// </summary>
-    [JsonProperty("obligations")]
+    [JsonPropertyName("obligations")]
     public List<Currency> Obligations { get; init; }
 
-    [JsonProperty("ledger_hash")]
+    [JsonPropertyName("ledger_hash")]
     public string LedgerHash { get; set; }
 
-    [JsonProperty("ledger_index")]
+    [JsonPropertyName("ledger_index")]
     public uint? LedgerIndex { get; set; }
 
-    [JsonProperty("validated")]
+    [JsonPropertyName("validated")]
     public bool? Validated { get; set; }
 }
 
@@ -82,20 +82,20 @@ public class GatewayBalancesRequest : BaseLedgerRequest
     /// The Address to check.<br/>
     /// This should be the issuing address.
     /// </summary>
-    [JsonProperty("account")]
+    [JsonPropertyName("account")]
     public string Account { get; set; }
 
     /// <summary>
     /// If true, only accept an address or public key for the account parameter.<br/>
     /// Defaults to false.
     /// </summary>
-    [JsonProperty("strict")]
+    [JsonPropertyName("strict")]
     public bool? Strict { get; set; }
 
     /// <summary>
     /// An operational address to exclude from the balances issued, or an array of Such addresses.
     /// </summary>
-    [JsonProperty("hotwallet")]
+    [JsonPropertyName("hotwallet")]
     [JsonConverter(typeof(StringOrArrayConverter))]
     public object HotWallet { get; set; }
 }

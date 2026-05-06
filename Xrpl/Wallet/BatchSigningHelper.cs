@@ -1,8 +1,7 @@
-﻿using Newtonsoft.Json.Linq;
-
-using System;
+﻿using System;
 using System.Collections.Generic;
 using System.Linq;
+using System.Text.Json.Nodes;
 
 using Xrpl.Models.Ledger;
 
@@ -14,41 +13,44 @@ namespace Xrpl.Wallet;
 /// </summary>
 public static class BatchSigningHelper
 {
-    public static JArray SortBatchSigners(JArray batchSigners)
+    public static JsonArray SortBatchSigners(JsonArray batchSigners)
     {
-        foreach (var wrapper in batchSigners.Children<JObject>())
+        foreach (var wrapper in batchSigners)
         {
-            var bs = wrapper["BatchSigner"] as JObject ?? wrapper;
-            if (bs["Signers"] is JArray innerSigners && innerSigners.Count > 1)
+            if (wrapper is not JsonObject wrapperObj) continue;
+            var bs = wrapperObj["BatchSigner"]?.AsObject() ?? wrapperObj;
+            if (bs["Signers"] is JsonArray innerSigners && innerSigners.Count > 1)
             {
                 bs["Signers"] = SignerUtilities.SortSignersArray(innerSigners);
             }
         }
 
-        return new JArray(
-            batchSigners.OrderBy(b =>
+        return new JsonArray(
+            batchSigners.Select(b => b?.DeepClone()).OrderBy(b =>
             {
-                var bs = b["BatchSigner"] as JObject ?? b as JObject;
-                var acc = (string?)(bs?["Account"]) ?? "";
+                var bObj = b as JsonObject;
+                var bs = bObj?["BatchSigner"]?.AsObject() ?? bObj;
+                var acc = bs?["Account"]?.GetValue<string>() ?? "";
                 return SignerUtilities.GetAccountIdBytes(acc);
-            }, SignerUtilities.ByteArrayComparer.Instance)
+            }, SignerUtilities.ByteArrayComparer.Instance).ToArray()
         );
     }
 
-    public static JObject FindOrCreateBatchSigner(JArray batchSigners, string ownerAccount)
+    public static JsonObject FindOrCreateBatchSigner(JsonArray batchSigners, string ownerAccount)
     {
         var normalized = SignerUtilities.NormalizeClassicAddress(ownerAccount);
 
-        foreach (var wrapper in batchSigners.Children<JObject>())
+        foreach (var wrapper in batchSigners)
         {
-            var bs = wrapper["BatchSigner"] as JObject ?? wrapper;
-            var acc = (string?)bs["Account"];
+            if (wrapper is not JsonObject wrapperObj) continue;
+            var bs = wrapperObj["BatchSigner"]?.AsObject() ?? wrapperObj;
+            var acc = bs["Account"]?.GetValue<string>();
             if (string.Equals(SignerUtilities.NormalizeClassicAddress(acc ?? ""), normalized, StringComparison.OrdinalIgnoreCase))
                 return bs;
         }
 
-        var newBs = new JObject { ["Account"] = normalized };
-        batchSigners.Add(new JObject { ["BatchSigner"] = newBs });
+        var newBs = new JsonObject { ["Account"] = normalized };
+        batchSigners.Add(new JsonObject { ["BatchSigner"] = newBs });
         return newBs;
     }
 
@@ -57,10 +59,10 @@ public static class BatchSigningHelper
     /// Handles both single-sig (SigningPubKey/TxnSignature) and multi-sig (Signers[]) cases.
     /// Preserves the original wrapper structure of signer entries.
     /// </summary>
-    public static void MergeBatchSigner(JObject target, JObject incoming)
+    public static void MergeBatchSigner(JsonObject target, JsonObject incoming)
     {
-        var targetSigners = target["Signers"] as JArray;
-        var incomingSigners = incoming["Signers"] as JArray;
+        var targetSigners = target["Signers"] as JsonArray;
+        var incomingSigners = incoming["Signers"] as JsonArray;
 
         if (incomingSigners != null)
         {
@@ -68,24 +70,26 @@ public static class BatchSigningHelper
             {
                 target.Remove("SigningPubKey");
                 target.Remove("TxnSignature");
-                targetSigners = new JArray();
+                targetSigners = new JsonArray();
                 target["Signers"] = targetSigners;
             }
 
             var seen = new HashSet<string>(StringComparer.Ordinal);
-            foreach (var s in targetSigners.Children<JObject>())
+            foreach (var s in targetSigners)
             {
-                var so = s["Signer"] as JObject ?? s;
-                var key = $"{(string?)so["Account"]}|{(string?)so["SigningPubKey"]}|{(string?)so["TxnSignature"]}";
+                if (s is not JsonObject sObj) continue;
+                var so = sObj["Signer"]?.AsObject() ?? sObj;
+                var key = $"{so["Account"]?.GetValue<string>()}|{so["SigningPubKey"]?.GetValue<string>()}|{so["TxnSignature"]?.GetValue<string>()}";
                 seen.Add(key);
             }
 
-            foreach (var s in incomingSigners.Children<JObject>())
+            foreach (var s in incomingSigners)
             {
-                var so = s["Signer"] as JObject ?? s;
-                var key = $"{(string?)so["Account"]}|{(string?)so["SigningPubKey"]}|{(string?)so["TxnSignature"]}";
+                if (s is not JsonObject sObj) continue;
+                var so = sObj["Signer"]?.AsObject() ?? sObj;
+                var key = $"{so["Account"]?.GetValue<string>()}|{so["SigningPubKey"]?.GetValue<string>()}|{so["TxnSignature"]?.GetValue<string>()}";
                 if (seen.Add(key))
-                    targetSigners.Add((JObject)s.DeepClone());
+                    targetSigners.Add(sObj.DeepClone());
             }
             return;
         }
@@ -93,10 +97,10 @@ public static class BatchSigningHelper
         if (targetSigners != null)
             return;
 
-        var tPub = (string?)target["SigningPubKey"];
-        var tSig = (string?)target["TxnSignature"];
-        var iPub = (string?)incoming["SigningPubKey"];
-        var iSig = (string?)incoming["TxnSignature"];
+        var tPub = target["SigningPubKey"]?.GetValue<string>();
+        var tSig = target["TxnSignature"]?.GetValue<string>();
+        var iPub = incoming["SigningPubKey"]?.GetValue<string>();
+        var iSig = incoming["TxnSignature"]?.GetValue<string>();
 
         if (string.Equals(tPub, iPub, StringComparison.Ordinal)
             && string.Equals(tSig, iSig, StringComparison.Ordinal))

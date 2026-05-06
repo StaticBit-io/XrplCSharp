@@ -1,7 +1,6 @@
-﻿using System.Collections.Generic;
+using System.Collections.Generic;
 using System.Threading.Tasks;
 using Microsoft.VisualStudio.TestTools.UnitTesting;
-using Newtonsoft.Json;
 using Xrpl.Client.Extensions;
 using Xrpl.Models.Methods;
 using Xrpl.Models.Transactions;
@@ -35,7 +34,7 @@ namespace XrplTests.Xrpl.ClientLib.Integration
                 Domain = "example.com".ConvertStringToHex()
             };
 
-            Dictionary<string, dynamic> txRequest = JsonConvert.DeserializeObject<Dictionary<string, dynamic>>(request.ToJson());
+            Dictionary<string, object> txRequest = request.ToDictionary();
             Submit response = await runner.client.Submit(txRequest, runner.wallet);
             string hash = HashLedger.HashSignedTx(response.TxBlob);
             TxRequest request1 = new TxRequest(hash);

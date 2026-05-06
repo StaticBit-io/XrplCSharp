@@ -1,10 +1,9 @@
-﻿
+
 
 // https://github.com/XRPLF/xrpl.js/blob/main/packages/xrpl/src/models/transactions/NFTokenAcceptOffer.ts
 
-using Newtonsoft.Json;
-
 using System.Collections.Generic;
+using System.Text.Json.Serialization;
 using System.Threading.Tasks;
 
 using Xrpl.Client.Exceptions;
@@ -93,7 +92,7 @@ namespace Xrpl.Models.Transactions
 
     public partial class Validation
     {
-        public static Task ValidateNFTokenBrokerFee(Dictionary<string, dynamic> tx)
+        public static Task ValidateNFTokenBrokerFee(Dictionary<string, object> tx)
         {
             if (!tx.TryGetValue("NFTokenBrokerFee", out var NFTokenBrokerFee) || NFTokenBrokerFee is null)
                 throw new ValidationException("NFTokenAcceptOffer: invalid NFTokenBrokerFee");
@@ -116,7 +115,7 @@ namespace Xrpl.Models.Transactions
         /// </summary>
         /// <param name="tx">An NFTokenAcceptOffer Transaction.</param>
         /// <exception cref="ValidationException">When the NFTokenAcceptOffer is Malformed.</exception>
-        public static async Task ValidateNFTokenAcceptOffer(Dictionary<string, dynamic> tx)
+        public static async Task ValidateNFTokenAcceptOffer(Dictionary<string, object> tx)
         {
             await Common.ValidateBaseTransaction(tx);
 
