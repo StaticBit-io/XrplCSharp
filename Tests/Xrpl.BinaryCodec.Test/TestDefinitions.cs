@@ -8,7 +8,7 @@ using Microsoft.VisualStudio.TestTools.UnitTesting;
 namespace Xrpl.BinaryCodec.Tests
 {
     [TestClass]
-    public class TestDefinitions
+    public class TestUDefinitions
     {
         [TestMethod]
         public void TestOne()

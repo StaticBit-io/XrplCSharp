@@ -10,7 +10,7 @@ using Xrpl.Client.Json.Converters;
 namespace XrplTests.Client.Json.Converters;
 
 [TestClass]
-public class FromStringDateTimeConverterTests
+public class TestUFromStringDateTimeConverter
 {
     private static readonly DateTime RippleEpoch = new DateTime(2000, 1, 1, 0, 0, 0, DateTimeKind.Utc);
 

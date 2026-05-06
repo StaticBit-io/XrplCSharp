@@ -10,7 +10,7 @@ using Xrpl.Models.Methods;
 namespace XrplTests.Client.Json.Converters;
 
 [TestClass]
-public class ServerFeaturesConverterTests
+public class TestUServerFeaturesConverter
 {
     [TestMethod]
     public void Read_Format1_WithFeaturesObject()

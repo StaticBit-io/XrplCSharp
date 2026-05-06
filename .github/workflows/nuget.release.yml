@@ -16,7 +16,7 @@ jobs:
     - name: Setup .NET
       uses: actions/setup-dotnet@v3
       with:
-        dotnet-version: 6.0.x
+        dotnet-version: 9.0.x
         
     - name: Restore dependencies
       run: dotnet restore
@@ -25,7 +25,7 @@ jobs:
       run: dotnet build --no-restore
       
     - name: Test
-      run: dotnet test --no-build --verbosity normal --filter "TestU"
+      run: dotnet test --no-build --verbosity normal --settings test.runsettings --filter "TestU"
       
     - name: Packing
       run: |

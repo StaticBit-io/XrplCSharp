@@ -26,7 +26,6 @@ namespace XrplTests.Xrpl.ClientLib.Integration;
 /// Each test creates its own fresh wallets and AMM pool to ensure independence.
 /// </summary>
 [TestClass]
-[DoNotParallelize]
 public class TestIAMMClawback
 {
     public TestContext TestContext { get; set; }

@@ -10,7 +10,7 @@ using Xrpl.Models.Methods;
 namespace XrplTests.Client.Json.Converters;
 
 [TestClass]
-public class LOConverterTests
+public class TestULOConverter
 {
     private static readonly JsonSerializerOptions Options = XrplJsonOptions.Default;
 

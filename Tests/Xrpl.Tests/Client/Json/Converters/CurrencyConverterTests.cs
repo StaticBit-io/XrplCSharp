@@ -11,7 +11,7 @@ using Xrpl.Models.Common;
 namespace XrplTests.Client.Json.Converters;
 
 [TestClass]
-public class CurrencyConverterTests
+public class TestUCurrencyConverter
 {
     private class Model
     {
@@ -155,7 +155,7 @@ public class CurrencyConverterTests
 }
 
 [TestClass]
-public class IssuedCurrencyConverterTests
+public class TestUIssuedCurrencyConverter
 {
     private class Model
     {

@@ -17,7 +17,6 @@ using Xrpl.Wallet;
 namespace XrplTests.Xrpl.ClientLib.Integration;
 
 [TestClass]
-[DoNotParallelize]
 public class TestIPermissionedDomain
 {
     public TestContext TestContext { get; set; }

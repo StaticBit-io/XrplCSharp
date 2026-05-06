@@ -12,7 +12,7 @@ using Xrpl.Models.Ledger;
 namespace XrplTests.Client.Json.Converters;
 
 [TestClass]
-public class LedgerIndexConverterTests
+public class TestULedgerIndexConverter
 {
     private class Model
     {

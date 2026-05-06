@@ -18,7 +18,6 @@ using XrplTests.Xrpl.ClientLib.Integration;
 namespace XrplTests.Client.Exceptions;
 
 [TestClass]
-[DoNotParallelize]
 public class TestIXrplErrorClassifier
 {
     public TestContext TestContext { get; set; } = null!;

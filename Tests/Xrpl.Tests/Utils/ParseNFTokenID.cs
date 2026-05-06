@@ -15,7 +15,7 @@ using Xrpl.Utils;
 namespace XrplTests.Xrpl.Utils
 {
     [TestClass]
-    public class ParseNFTokenID
+    public class TestUParseNFTokenID
     {
         [TestMethod]
         public void ParsingNFTokenID()

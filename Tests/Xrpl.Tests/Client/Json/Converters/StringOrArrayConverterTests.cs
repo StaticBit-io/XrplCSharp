@@ -10,7 +10,7 @@ using Xrpl.Client.Json.Converters;
 namespace XrplTests.Client.Json.Converters;
 
 [TestClass]
-public class StringOrArrayConverterTests
+public class TestUStringOrArrayConverter
 {
     private class Model
     {

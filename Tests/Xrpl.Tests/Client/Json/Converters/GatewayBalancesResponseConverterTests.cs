@@ -12,7 +12,7 @@ using Xrpl.Models.Methods;
 namespace XrplTests.Client.Json.Converters;
 
 [TestClass]
-public class GatewayBalancesResponseConverterTests
+public class TestUGatewayBalancesResponseConverter
 {
     [TestMethod]
     public void Read_FullResponse_ParsesAllFields()

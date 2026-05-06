@@ -7,7 +7,7 @@ using Xrpl.Models.Common;
 namespace XrplTests.Xrpl.Models
 {
     [TestClass]
-    public class TestCurrency
+    public class TestUCurrency
     {
         #region Round-trip ValueAsNumber (G16 fix verification)
 

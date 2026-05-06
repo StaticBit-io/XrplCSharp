@@ -261,6 +261,9 @@ __pycache__/
 *.pyc
 .DS_Store
 
+# Test results
+TestResults/
+
 # Replit files
 .cache/
 .replit

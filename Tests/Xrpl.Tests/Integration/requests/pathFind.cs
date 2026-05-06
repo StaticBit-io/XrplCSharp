@@ -13,20 +13,17 @@ using Xrpl.Wallet;
 namespace XrplTests.Xrpl.ClientLib.Integration
 {
     [TestClass]
-    [DoNotParallelize]
     public class TestIPathFind
     {
         public TestContext TestContext { get; set; }
         public static IXrplClient client;
 
-        static XrplWallet wallet = XrplWallet.FromNormalizedText("path find test account");
-        public static TestNodeType nodeType = TestNodeType.TestNet;
+        public static TestNodeType nodeType = IntegrationTestConfig.CurrentNodeType;
 
         [ClassInitialize]
         public static async Task MyClassInitializeAsync(TestContext testContext)
         {
             client = await IntegrationTestConfig.CreateClientAsync(nodeType);
-            await IntegrationTestConfig.TryFundWalletAsync(client, wallet, nodeType);
         }
 
         [ClassCleanup]
@@ -38,77 +35,115 @@ namespace XrplTests.Xrpl.ClientLib.Integration
         [TestMethod]
         public async Task TestPathFindCreate()
         {
-            Currency destinationAmount = new Currency
+            XrplWallet wallet = XrplWallet.Generate();
+            await IntegrationTestConfig.TryFundWalletAsync(client, wallet, nodeType);
+
+            IXrplClient pfClient = await IntegrationTestConfig.CreateClientAsync(nodeType);
+            try
             {
-                CurrencyCode = "USD",
-                Issuer = wallet.ClassicAddress,
-                Value = "0.001"
-            };
+                Currency destinationAmount = new Currency
+                {
+                    CurrencyCode = "USD",
+                    Issuer = wallet.ClassicAddress,
+                    Value = "0.001"
+                };
 
-            PathFindCreateRequest request = new PathFindCreateRequest(
-                sourceAccount: wallet.ClassicAddress,
-                destinationAccount: wallet.ClassicAddress,
-                destinationAmount: destinationAmount
-            );
+                PathFindCreateRequest request = new PathFindCreateRequest(
+                    sourceAccount: wallet.ClassicAddress,
+                    destinationAccount: wallet.ClassicAddress,
+                    destinationAmount: destinationAmount
+                );
 
-            PathFindResponse response = await client.PathFind(request);
-            Assert.IsNotNull(response);
-            Assert.IsNotNull(response.Alternatives);
-            Assert.AreEqual(wallet.ClassicAddress, response.DestinationAccount);
+                PathFindResponse response = await pfClient.PathFind(request);
+                Assert.IsNotNull(response);
+                Assert.IsNotNull(response.Alternatives);
+                Assert.AreEqual(wallet.ClassicAddress, response.DestinationAccount);
+            }
+            finally
+            {
+                try { await pfClient.PathFindClose(new PathFindCloseRequest()); } catch { }
+                pfClient.Dispose();
+            }
         }
 
         [TestMethod]
         public async Task TestPathFindClose()
         {
-            Currency destinationAmount = new Currency
+            XrplWallet wallet = XrplWallet.Generate();
+            await IntegrationTestConfig.TryFundWalletAsync(client, wallet, nodeType);
+
+            IXrplClient pfClient = await IntegrationTestConfig.CreateClientAsync(nodeType);
+            try
             {
-                CurrencyCode = "USD",
-                Issuer = wallet.ClassicAddress,
-                Value = "0.001"
-            };
+                Currency destinationAmount = new Currency
+                {
+                    CurrencyCode = "USD",
+                    Issuer = wallet.ClassicAddress,
+                    Value = "0.001"
+                };
 
-            PathFindCreateRequest createRequest = new PathFindCreateRequest(
-                sourceAccount: wallet.ClassicAddress,
-                destinationAccount: wallet.ClassicAddress,
-                destinationAmount: destinationAmount
-            );
+                PathFindCreateRequest createRequest = new PathFindCreateRequest(
+                    sourceAccount: wallet.ClassicAddress,
+                    destinationAccount: wallet.ClassicAddress,
+                    destinationAmount: destinationAmount
+                );
 
-            await client.PathFind(createRequest);
+                await pfClient.PathFind(createRequest);
 
-            PathFindCloseRequest closeRequest = new PathFindCloseRequest();
-            PathFindResponse closeResponse = await client.PathFindClose(closeRequest);
-            Assert.IsNotNull(closeResponse);
-            Assert.IsTrue(closeResponse.Closed.HasValue && closeResponse.Closed.Value);
+                PathFindCloseRequest closeRequest = new PathFindCloseRequest();
+                PathFindResponse closeResponse = await pfClient.PathFindClose(closeRequest);
+                Assert.IsNotNull(closeResponse);
+                Assert.IsTrue(closeResponse.Closed.HasValue && closeResponse.Closed.Value);
+            }
+            finally
+            {
+                pfClient.Dispose();
+            }
         }
 
         [TestMethod]
         public async Task TestPathFindStatus()
         {
-            Currency destinationAmount = new Currency
+            XrplWallet wallet = XrplWallet.Generate();
+            await IntegrationTestConfig.TryFundWalletAsync(client, wallet, nodeType);
+
+            IXrplClient pfClient = await IntegrationTestConfig.CreateClientAsync(nodeType);
+            try
             {
-                CurrencyCode = "USD",
-                Issuer = wallet.ClassicAddress,
-                Value = "0.001"
-            };
+                Currency destinationAmount = new Currency
+                {
+                    CurrencyCode = "USD",
+                    Issuer = wallet.ClassicAddress,
+                    Value = "0.001"
+                };
 
-            PathFindCreateRequest createRequest = new PathFindCreateRequest(
-                sourceAccount: wallet.ClassicAddress,
-                destinationAccount: wallet.ClassicAddress,
-                destinationAmount: destinationAmount
-            );
+                PathFindCreateRequest createRequest = new PathFindCreateRequest(
+                    sourceAccount: wallet.ClassicAddress,
+                    destinationAccount: wallet.ClassicAddress,
+                    destinationAmount: destinationAmount
+                );
 
-            await client.PathFind(createRequest);
+                await pfClient.PathFind(createRequest);
 
-            PathFindStatusRequest statusRequest = new PathFindStatusRequest();
-            PathFindResponse statusResponse = await client.PathFindStatus(statusRequest);
-            Assert.IsNotNull(statusResponse);
-            Assert.IsNotNull(statusResponse.Alternatives);
+                PathFindStatusRequest statusRequest = new PathFindStatusRequest();
+                PathFindResponse statusResponse = await pfClient.PathFindStatus(statusRequest);
+                Assert.IsNotNull(statusResponse);
+                Assert.IsNotNull(statusResponse.Alternatives);
+            }
+            finally
+            {
+                try { await pfClient.PathFindClose(new PathFindCloseRequest()); } catch { }
+                pfClient.Dispose();
+            }
         }
 
         [TestMethod]
         [Timeout(90000)]
         public async Task TestPathFindStreamReceivesMultipleUpdates()
         {
+            XrplWallet wallet = XrplWallet.Generate();
+            await IntegrationTestConfig.TryFundWalletAsync(client, wallet, nodeType);
+
             IXrplClient streamClient = await IntegrationTestConfig.CreateClientAsync(nodeType);
 
             List<PathFindStream> received = new List<PathFindStream>();

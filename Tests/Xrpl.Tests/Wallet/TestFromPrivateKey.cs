@@ -5,7 +5,7 @@ using Xrpl.Wallet;
 namespace Xrpl.Tests.Wallet.Tests.Mnemonic;
 
 [TestClass]
-public class TestFromPrivateKey
+public class TestUFromPrivateKey
 {
     private string mnemonic = "assault rare scout seed design extend noble drink talk control guitar quote";
     private string publicKey = "035953FCD81D001CF634EB44A87940F3F98ADF2483D09C914BAED0539BE50F385D";

@@ -10,7 +10,7 @@ using Xrpl.Models.Transactions;
 namespace XrplTests.Client.Json.Converters;
 
 [TestClass]
-public class MetaBinaryConverterTests
+public class TestUMetaBinaryConverter
 {
     private class Model
     {

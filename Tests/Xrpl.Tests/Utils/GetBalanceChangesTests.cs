@@ -10,7 +10,7 @@ using Xrpl.Utils;
 
 namespace XrplTests.Utils;
 [TestClass]
-public class GetBalanceChangesTests
+public class TestUGetBalanceChanges
 {
     [TestMethod]
     public void TestBalanceChanges_Metadata1()

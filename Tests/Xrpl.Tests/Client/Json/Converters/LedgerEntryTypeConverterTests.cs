@@ -9,7 +9,7 @@ using Xrpl.Models;
 namespace XrplTests.Client.Json.Converters;
 
 [TestClass]
-public class LedgerEntryTypeConverterTests
+public class TestULedgerEntryTypeConverter
 {
     private static readonly JsonSerializerOptions Options = XrplJsonOptions.Default;
 

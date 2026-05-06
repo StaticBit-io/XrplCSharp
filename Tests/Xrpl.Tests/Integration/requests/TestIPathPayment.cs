@@ -15,7 +15,6 @@ using Xrpl.Wallet;
 namespace XrplTests.Xrpl.ClientLib.Integration
 {
     [TestClass]
-    [DoNotParallelize]
     public class TestIPathPayment
     {
         public TestContext TestContext { get; set; }

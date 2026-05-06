@@ -19,7 +19,6 @@ namespace XrplTests.Xrpl.ClientLib.Integration;
 /// Each test uses its own wallet for isolation.
 /// </summary>
 [TestClass]
-[DoNotParallelize]
 public class TestIDID
 {
     public TestContext TestContext { get; set; }

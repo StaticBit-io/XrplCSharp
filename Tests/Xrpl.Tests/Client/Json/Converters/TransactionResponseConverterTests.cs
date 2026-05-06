@@ -9,7 +9,7 @@ using Xrpl.Models.Transactions;
 namespace XrplTests.Client.Json.Converters;
 
 [TestClass]
-public class TransactionResponseConverterTests
+public class TestUTransactionResponseConverter
 {
     private static readonly JsonSerializerOptions Options = XrplJsonOptions.Default;
 

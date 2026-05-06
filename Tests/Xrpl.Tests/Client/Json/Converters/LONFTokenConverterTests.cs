@@ -9,7 +9,7 @@ using Xrpl.Models.Methods;
 namespace XrplTests.Client.Json.Converters;
 
 [TestClass]
-public class LONFTokenConverterTests
+public class TestULONFTokenConverter
 {
     [TestMethod]
     public void Read_WrappedNFToken_UnwrapsCorrectly()

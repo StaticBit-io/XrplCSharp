@@ -418,17 +418,6 @@ public static class SubmitSugar
             // Ждём закрытие следующего леджера
             await Task.Delay(LEDGER_CLOSE_TIME, cancellationToken);
 
-            var latestLedger = await client.GetLedgerIndex(cancellationToken);
-
-            // Если у нас есть LastLedgerSequence и мы его уже перешагнули — транзакция точно не попадёт в леджер
-            if (lastLedgerSequence.HasValue && latestLedger > lastLedgerSequence.Value)
-            {
-                throw new ValidationException(
-                    $"Transaction {txHash} has expired. " +
-                    $"Latest ledger: {latestLedger}, LastLedgerSequence: {lastLedgerSequence}. " +
-                    $"Preliminary result: {submissionResult}");
-            }
-
             TransactionSummary txResponse;
 
             try
@@ -441,9 +430,18 @@ public static class SubmitSugar
             }
             catch (RippledException ex) when (ex.Response?.Error == XrplErrorCodes.TxnNotFound)
             {
+            	// Если у нас есть LastLedgerSequence и мы его уже перешагнули — транзакция точно не попадёт в леджер
+                var latestLedger = await client.GetLedgerIndex(cancellationToken);
+                if (lastLedgerSequence.HasValue && latestLedger > lastLedgerSequence.Value)
+                {
+                    throw new ValidationException(
+                        $"Transaction {txHash} has expired. " +
+                        $"Latest ledger: {latestLedger}, LastLedgerSequence: {lastLedgerSequence}. " +
+                        $"Preliminary result: {submissionResult}");
+                }
                 continue;
             }
-            catch (RippledException ex)
+            catch (RippledException)
             {
                 throw;
             }
@@ -455,18 +453,31 @@ public static class SubmitSugar
                     $"Details: {ex.Message}", ex);
             }
 
-            // Как только транзакция валидирована — это финальный результат (успех или ошибка)
             if (txResponse.Validated == true)
             {
+                string txResult = txResponse.Meta?.TransactionResult;
+                if (txResult != null && !txResult.StartsWith("tes") && txResult != "terQUEUED")
+                {
+                    throw new RippleException($"Final tx result is not success: {txResult}");
+                }
                 return txResponse;
             }
 
             if (submissionResult != "tesSUCCESS" && submissionResult != "terQUEUED")
-            { // Ошибочная транзакция тоже финальна, не валидируется сетью в большинстве случаев.
+            {
+            	// Ошибочная транзакция тоже финальна, не валидируется сетью в большинстве случаев.
                 throw new RippleException($"Final tx result is not success: {submissionResult}");
             }
 
-            // Не валидирована и не txnNotFound → просто ждём дальше
+            // Не валидирована и не txnNotFound → просто ждём дальше после проверки текущего леджера
+            var currentLedger = await client.GetLedgerIndex(cancellationToken);
+            if (lastLedgerSequence.HasValue && currentLedger > lastLedgerSequence.Value)
+            {
+                throw new ValidationException(
+                    $"Transaction {txHash} has expired. " +
+                    $"Latest ledger: {currentLedger}, LastLedgerSequence: {lastLedgerSequence}. " +
+                    $"Preliminary result: {submissionResult}");
+            }
         }
     }
 

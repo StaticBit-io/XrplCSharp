@@ -27,21 +27,17 @@ namespace XrplTests.Xrpl.ClientLib.Integration;
 /// Set XRPL_TEST_NODE environment variable to "standalone" or "testnet" to switch modes.
 /// </summary>
 [TestClass]
-[DoNotParallelize]
 public class TestIOracle
 {
     public TestContext TestContext { get; set; }
     public static IXrplClient client;
 
-    static XrplWallet walletOracle = XrplWallet.FromNormalizedText("oracle test account");
     public static TestNodeType nodeType = TestNodeType.Standalone;
 
     [ClassInitialize]
     public static async Task MyClassInitializeAsync(TestContext testContext)
     {
         client = await IntegrationTestConfig.CreateClientAsync(nodeType);
-
-        await IntegrationTestConfig.TryFundWalletAsync(client, walletOracle);
     }
 
     [ClassCleanup]
@@ -58,6 +54,9 @@ public class TestIOracle
     [TestMethod]
     public async Task TestOracleSet_CreateOracle_SinglePriceData()
     {
+        XrplWallet walletOracle = XrplWallet.Generate();
+        await IntegrationTestConfig.TryFundWalletAsync(client, walletOracle, nodeType);
+
         var oracleDocumentId = (uint)new Random().Next(1, 100000);
         var lastUpdateTime = await GetLedgerCloseTimeAsync();
 
@@ -100,6 +99,9 @@ public class TestIOracle
     [TestMethod]
     public async Task TestOracleSet_CreateOracle_MultiplePriceData()
     {
+        XrplWallet walletOracle = XrplWallet.Generate();
+        await IntegrationTestConfig.TryFundWalletAsync(client, walletOracle, nodeType);
+
         var oracleDocumentId = (uint)new Random().Next(100001, 200000);
         var lastUpdateTime = await GetLedgerCloseTimeAsync();
 
@@ -182,6 +184,9 @@ public class TestIOracle
     [TestMethod]
     public async Task TestOracleSet_UpdateOracle()
     {
+        XrplWallet walletOracle = XrplWallet.Generate();
+        await IntegrationTestConfig.TryFundWalletAsync(client, walletOracle, nodeType);
+
         var oracleDocumentId = (uint)new Random().Next(200001, 300000);
         var lastUpdateTime = await GetLedgerCloseTimeAsync();
 
@@ -254,6 +259,9 @@ public class TestIOracle
     [TestMethod]
     public async Task TestOracleDelete_DeleteExistingOracle()
     {
+        XrplWallet walletOracle = XrplWallet.Generate();
+        await IntegrationTestConfig.TryFundWalletAsync(client, walletOracle, nodeType);
+
         var oracleDocumentId = (uint)new Random().Next(300001, 400000);
         var lastUpdateTime = await GetLedgerCloseTimeAsync();
 
@@ -312,6 +320,9 @@ public class TestIOracle
     [TestMethod]
     public async Task TestOracleDelete_NonExistentOracle()
     {
+        XrplWallet walletOracle = XrplWallet.Generate();
+        await IntegrationTestConfig.TryFundWalletAsync(client, walletOracle, nodeType);
+
         var oracleDocumentId = (uint)new Random().Next(900000, 999999);
 
         var existsBefore = await VerifyOracleExists(walletOracle.ClassicAddress, oracleDocumentId);
@@ -343,6 +354,9 @@ public class TestIOracle
     [TestMethod]
     public async Task TestOracle_FullLifecycle()
     {
+        XrplWallet walletOracle = XrplWallet.Generate();
+        await IntegrationTestConfig.TryFundWalletAsync(client, walletOracle, nodeType);
+
         var oracleDocumentId = (uint)new Random().Next(400001, 500000);
 
         var createOracle = new OracleSet

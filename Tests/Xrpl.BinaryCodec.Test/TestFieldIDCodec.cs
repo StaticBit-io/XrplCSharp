@@ -8,7 +8,7 @@ using Microsoft.VisualStudio.TestTools.UnitTesting;
 namespace Xrpl.BinaryCodec.Tests
 {
     [TestClass]
-    public class TestFieldIDCodec
+    public class TestUFieldIDCodec
     {
         private static JsonNode GetTestsJson()
         {

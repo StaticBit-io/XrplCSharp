@@ -12,20 +12,17 @@ using Xrpl.Wallet;
 namespace XrplTests.Xrpl.ClientLib.Integration
 {
     [TestClass]
-    [DoNotParallelize]
     public class TestIRipplePathFind
     {
         public TestContext TestContext { get; set; }
         public static IXrplClient client;
 
-        static XrplWallet wallet = XrplWallet.FromNormalizedText("ripple path find test account");
-        public static TestNodeType nodeType = TestNodeType.TestNet;
+        public static TestNodeType nodeType = IntegrationTestConfig.CurrentNodeType;
 
         [ClassInitialize]
         public static async Task MyClassInitializeAsync(TestContext testContext)
         {
             client = await IntegrationTestConfig.CreateClientAsync(nodeType);
-            await IntegrationTestConfig.TryFundWalletAsync(client, wallet, nodeType);
         }
 
         [ClassCleanup]
@@ -37,6 +34,9 @@ namespace XrplTests.Xrpl.ClientLib.Integration
         [TestMethod]
         public async Task TestRequestMethod()
         {
+            XrplWallet wallet = XrplWallet.Generate();
+            await IntegrationTestConfig.TryFundWalletAsync(client, wallet, nodeType);
+
             Currency destinationAmount = new Currency
             {
                 CurrencyCode = "USD",
@@ -59,6 +59,9 @@ namespace XrplTests.Xrpl.ClientLib.Integration
         [TestMethod]
         public async Task TestRequestWithSourceCurrencies()
         {
+            XrplWallet wallet = XrplWallet.Generate();
+            await IntegrationTestConfig.TryFundWalletAsync(client, wallet, nodeType);
+
             Currency destinationAmount = new Currency
             {
                 CurrencyCode = "USD",

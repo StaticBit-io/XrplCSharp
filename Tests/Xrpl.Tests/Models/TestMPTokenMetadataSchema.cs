@@ -11,7 +11,7 @@ namespace XrplTests.Xrpl.Models
     /// Tests serialization, deserialization, and roundtrip conversions for XLS-89 metadata.
     /// </summary>
     [TestClass]
-    public class TestMPTokenMetadataSchema
+    public class TestUMPTokenMetadataSchema
     {
         [TestMethod]
         public void TestToHexAndFromHexRoundtrip()

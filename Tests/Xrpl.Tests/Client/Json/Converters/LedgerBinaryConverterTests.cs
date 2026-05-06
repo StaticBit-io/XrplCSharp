@@ -10,7 +10,7 @@ using Xrpl.Models.Ledger;
 namespace XrplTests.Client.Json.Converters;
 
 [TestClass]
-public class LedgerBinaryConverterTests
+public class TestULedgerBinaryConverter
 {
     private class Model
     {

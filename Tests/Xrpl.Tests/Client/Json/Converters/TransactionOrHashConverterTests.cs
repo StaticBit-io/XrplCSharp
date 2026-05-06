@@ -9,7 +9,7 @@ using Xrpl.Models.Ledger;
 namespace XrplTests.Client.Json.Converters;
 
 [TestClass]
-public class TransactionOrHashConverterTests
+public class TestUTransactionOrHashConverter
 {
     [TestMethod]
     public void Read_StringHash_SetsTransactionHash()

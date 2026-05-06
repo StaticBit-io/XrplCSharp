@@ -10,7 +10,7 @@ using Xrpl.Client.Json.Converters;
 namespace XrplTests.Client.Json.Converters;
 
 [TestClass]
-public class UInt64StringJsonConverterTests
+public class TestUUInt64StringJsonConverter
 {
     private class Model
     {

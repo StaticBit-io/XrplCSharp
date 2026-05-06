@@ -6,7 +6,7 @@ using Xrpl.BinaryCodec.Types;
 namespace XrplTests.BinaryCodecLib.Types
 {
     [TestClass]
-    public class TestAccountID
+    public class TestUAccountID
     {
         static string HEX_ENCODING = "5E7B112523F68D2F5E879DB4EAC51C6698A69304";
         static string BASE58_ENCODING = "r9cZA1mLK5R5Am25ArfXFmqgNwjZgnfk59";
@@ -14,15 +14,15 @@ namespace XrplTests.BinaryCodecLib.Types
         [TestMethod]
         public void TestFromValueHex()
         {
-            AccountId accountId = AccountId.FromValue(TestAccountID.HEX_ENCODING);
-            Assert.AreEqual(accountId.ToJson().GetValue<string>(), TestAccountID.BASE58_ENCODING);
+            AccountId accountId = AccountId.FromValue(TestUAccountID.HEX_ENCODING);
+            Assert.AreEqual(accountId.ToJson().GetValue<string>(), TestUAccountID.BASE58_ENCODING);
         }
 
         [TestMethod]
         public void TestFromValueBase58()
         {
-            AccountId accountId = AccountId.FromValue(TestAccountID.BASE58_ENCODING);
-            Assert.AreEqual(accountId.ToString(), TestAccountID.BASE58_ENCODING);
+            AccountId accountId = AccountId.FromValue(TestUAccountID.BASE58_ENCODING);
+            Assert.AreEqual(accountId.ToString(), TestUAccountID.BASE58_ENCODING);
         }
     }
 }

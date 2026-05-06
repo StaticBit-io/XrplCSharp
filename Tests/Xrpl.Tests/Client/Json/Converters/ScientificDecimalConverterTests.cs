@@ -10,7 +10,7 @@ using Xrpl.Client.Json.Converters;
 namespace XrplTests.Client.Json.Converters;
 
 [TestClass]
-public class ScientificDecimalConverterTests
+public class TestUScientificDecimalConverter
 {
     private class Model
     {

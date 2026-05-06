@@ -24,24 +24,17 @@ namespace XrplTests.Xrpl.ClientLib.Integration;
 /// Tests the complete lifecycle of Credentials on DevNet.
 /// </summary>
 [TestClass]
-[DoNotParallelize]
 public class TestICredential
 {
     public TestContext TestContext { get; set; }
     public static IXrplClient client;
 
-    static XrplWallet walletIssuer;
-    static XrplWallet walletSubject;
     public static TestNodeType nodeType = TestNodeType.Standalone;
 
     [ClassInitialize]
     public static async Task MyClassInitializeAsync(TestContext testContext)
     {
         client = await IntegrationTestConfig.CreateClientAsync(nodeType);
-
-        walletIssuer = XrplWallet.Generate();
-        walletSubject = XrplWallet.Generate();
-        await IntegrationTestConfig.TryFundWalletsAsync(client, nodeType, walletIssuer, walletSubject);
     }
 
     [ClassCleanup]
@@ -58,6 +51,10 @@ public class TestICredential
     [TestMethod]
     public async Task TestCredentialCreate_Basic()
     {
+        XrplWallet walletIssuer = XrplWallet.Generate();
+        XrplWallet walletSubject = XrplWallet.Generate();
+        await IntegrationTestConfig.TryFundWalletsAsync(client, nodeType, walletIssuer, walletSubject);
+
         var credTypeHex = ToHex("cred_basic_test");
 
         var tx = new CredentialCreate
@@ -78,6 +75,10 @@ public class TestICredential
     [TestMethod]
     public async Task TestCredentialCreate_WithURI()
     {
+        XrplWallet walletIssuer = XrplWallet.Generate();
+        XrplWallet walletSubject = XrplWallet.Generate();
+        await IntegrationTestConfig.TryFundWalletsAsync(client, nodeType, walletIssuer, walletSubject);
+
         var credTypeHex = ToHex("cred_uri_test");
         var uriHex = ToHex("https://example.com/credential");
 
@@ -100,6 +101,10 @@ public class TestICredential
     [TestMethod]
     public async Task TestCredentialCreate_WithExpiration()
     {
+        XrplWallet walletIssuer = XrplWallet.Generate();
+        XrplWallet walletSubject = XrplWallet.Generate();
+        await IntegrationTestConfig.TryFundWalletsAsync(client, nodeType, walletIssuer, walletSubject);
+
         var credTypeHex = ToHex("cred_expiration_test");
 
         var tx = new CredentialCreate
@@ -121,6 +126,10 @@ public class TestICredential
     [TestMethod]
     public async Task TestCredentialCreate_SelfIssued()
     {
+        XrplWallet walletIssuer = XrplWallet.Generate();
+        XrplWallet walletSubject = XrplWallet.Generate();
+        await IntegrationTestConfig.TryFundWalletsAsync(client, nodeType, walletIssuer, walletSubject);
+
         var credTypeHex = ToHex("cred_self_issued_test");
 
         var tx = new CredentialCreate
@@ -145,6 +154,10 @@ public class TestICredential
     [TestMethod]
     public async Task TestCredentialAccept_Basic()
     {
+        XrplWallet walletIssuer = XrplWallet.Generate();
+        XrplWallet walletSubject = XrplWallet.Generate();
+        await IntegrationTestConfig.TryFundWalletsAsync(client, nodeType, walletIssuer, walletSubject);
+
         var credTypeHex = ToHex("cred_accept_basic_test");
 
         var createTx = new CredentialCreate
@@ -179,6 +192,10 @@ public class TestICredential
     [TestMethod]
     public async Task TestCredentialDelete_ByIssuer()
     {
+        XrplWallet walletIssuer = XrplWallet.Generate();
+        XrplWallet walletSubject = XrplWallet.Generate();
+        await IntegrationTestConfig.TryFundWalletsAsync(client, nodeType, walletIssuer, walletSubject);
+
         var credTypeHex = ToHex("cred_del_issuer_test");
 
         await TryCreateAndAcceptCredential(walletIssuer, walletSubject, credTypeHex);
@@ -201,6 +218,10 @@ public class TestICredential
     [TestMethod]
     public async Task TestCredentialDelete_BySubject()
     {
+        XrplWallet walletIssuer = XrplWallet.Generate();
+        XrplWallet walletSubject = XrplWallet.Generate();
+        await IntegrationTestConfig.TryFundWalletsAsync(client, nodeType, walletIssuer, walletSubject);
+
         var credTypeHex = ToHex("cred_del_subject_test");
 
         await TryCreateAndAcceptCredential(walletIssuer, walletSubject, credTypeHex);
@@ -227,6 +248,10 @@ public class TestICredential
     [TestMethod]
     public async Task TestCredential_FullLifecycle()
     {
+        XrplWallet walletIssuer = XrplWallet.Generate();
+        XrplWallet walletSubject = XrplWallet.Generate();
+        await IntegrationTestConfig.TryFundWalletsAsync(client, nodeType, walletIssuer, walletSubject);
+
         var credTypeHex = ToHex("cred_lifecycle_test");
 
         var createTx = new CredentialCreate
@@ -288,8 +313,10 @@ public class TestICredential
     [TestMethod]
     public async Task TestCredential_EndToEnd_DepositPreauthAndPayment()
     {
+        XrplWallet walletIssuer = XrplWallet.Generate();
+        XrplWallet walletSubject = XrplWallet.Generate();
         XrplWallet walletRecipient = XrplWallet.Generate();
-        await IntegrationTestConfig.TryFundWalletsAsync(client, nodeType, walletRecipient);
+        await IntegrationTestConfig.TryFundWalletsAsync(client, nodeType, walletIssuer, walletSubject, walletRecipient);
 
         string credTypeHex = ToHex("cred_e2e_xls70");
 
@@ -365,6 +392,10 @@ public class TestICredential
     [TestMethod]
     public async Task TestCredentialAccept_FailsForNonexistent()
     {
+        XrplWallet walletIssuer = XrplWallet.Generate();
+        XrplWallet walletSubject = XrplWallet.Generate();
+        await IntegrationTestConfig.TryFundWalletsAsync(client, nodeType, walletIssuer, walletSubject);
+
         var credTypeHex = ToHex("cred_nonexistent_test");
 
         var acceptTx = new CredentialAccept
@@ -385,6 +416,10 @@ public class TestICredential
     [TestMethod]
     public async Task TestCredentialCreate_DuplicateFails()
     {
+        XrplWallet walletIssuer = XrplWallet.Generate();
+        XrplWallet walletSubject = XrplWallet.Generate();
+        await IntegrationTestConfig.TryFundWalletsAsync(client, nodeType, walletIssuer, walletSubject);
+
         var credTypeHex = ToHex("cred_duplicate_test");
 
         var tx1 = new CredentialCreate

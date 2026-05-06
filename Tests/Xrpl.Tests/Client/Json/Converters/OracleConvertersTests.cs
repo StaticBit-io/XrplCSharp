@@ -12,7 +12,7 @@ using XrplTests;
 namespace XrplTests.Client.Json.Converters;
 
 [TestClass]
-public class AssetPriceConverterTests
+public class TestUAssetPriceConverter
 {
     private class Model
     {
@@ -71,7 +71,7 @@ public class AssetPriceConverterTests
 }
 
 [TestClass]
-public class OracleCurrencyConverterTests
+public class TestUOracleCurrencyConverter
 {
     private class Model
     {
@@ -149,7 +149,7 @@ public class OracleCurrencyConverterTests
 }
 
 [TestClass]
-public class OracleHexStringConverterTests
+public class TestUOracleHexStringConverter
 {
     private class Model
     {

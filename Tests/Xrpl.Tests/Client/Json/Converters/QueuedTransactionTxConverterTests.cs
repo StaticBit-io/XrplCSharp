@@ -11,7 +11,7 @@ using XrplTests;
 namespace XrplTests.Client.Json.Converters;
 
 [TestClass]
-public class QueuedTransactionTxConverterTests
+public class TestUQueuedTransactionTxConverter
 {
     [TestMethod]
     public void Read_StringTx_ReturnsHash()

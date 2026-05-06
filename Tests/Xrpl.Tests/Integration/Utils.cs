@@ -1,4 +1,5 @@
 using System;
+using System.Threading;
 using System.Threading.Tasks;
 using Microsoft.VisualStudio.TestTools.UnitTesting;
 using Xrpl.Models.Methods;
@@ -17,6 +18,17 @@ using Xrpl.Sugar;
 
 namespace XrplTests.Xrpl.ClientLib.Integration
 {
+    /// <summary>
+    /// Shared lock for standalone master account operations.
+    /// Prevents sequence number conflicts when parallel test classes
+    /// fund wallets from the same master account simultaneously.
+    /// </summary>
+    internal static class StandaloneLock
+    {
+        internal static readonly SemaphoreSlim MasterFunding = new(1, 1);
+        internal static readonly SemaphoreSlim FaucetFunding = new(1, 1);
+    }
+
     /// <summary>
     /// Specifies the type of XRPL node to connect to for integration tests.
     /// </summary>
@@ -218,26 +230,35 @@ namespace XrplTests.Xrpl.ClientLib.Integration
 
         /// <summary>
         /// Funds a wallet from the testnet/devnet faucet.
+        /// Serialized via StandaloneLock to prevent FaucetFiller sequence conflicts.
         /// </summary>
         private static async Task FundFromFaucetAsync(IXrplClient client, XrplWallet wallet)
         {
-            if (FaucetFiller is null)
+            await StandaloneLock.FaucetFunding.WaitAsync();
+            try
             {
-                FaucetFiller = XrplWallet.Generate();
-                Console.WriteLine($"[IntegrationTest] FaucetFiller generated {FaucetFiller.ClassicAddress}");
-                var result = await client.FundWallet(FaucetFiller);
-                Console.WriteLine($"[IntegrationTest] FaucetFiller funded {FaucetFiller.ClassicAddress}: {result.Balance} XRP");
-            }
+                if (FaucetFiller is null)
+                {
+                    FaucetFiller = XrplWallet.Generate();
+                    Console.WriteLine($"[IntegrationTest] FaucetFiller generated {FaucetFiller.ClassicAddress}");
+                    var result = await client.FundWallet(FaucetFiller);
+                    Console.WriteLine($"[IntegrationTest] FaucetFiller funded {FaucetFiller.ClassicAddress}: {result.Balance} XRP");
+                }
 
-            if (await client.GetXrpFreeBalance(FaucetFiller.ClassicAddress) is { } balance and > 50)
-            {
-                await  FundFromFaucetFillerAsync(client, wallet, 10);
+                if (await client.GetXrpFreeBalance(FaucetFiller.ClassicAddress) is { } balance and > 50)
+                {
+                    await FundFromFaucetFillerAsync(client, wallet, 10);
+                }
+                else
+                {
+                    var result = await client.FundWallet(FaucetFiller);
+                    Console.WriteLine($"[IntegrationTest] FaucetFiller funded {FaucetFiller.ClassicAddress}: {result.Balance} XRP");
+                    await FundFromFaucetFillerAsync(client, wallet, 10);
+                }
             }
-            else
+            finally
             {
-                var result = await client.FundWallet(FaucetFiller);
-                Console.WriteLine($"[IntegrationTest] FaucetFiller funded {FaucetFiller.ClassicAddress}: {result.Balance} XRP");
-                await FundFromFaucetFillerAsync(client, wallet, 10);
+                StandaloneLock.FaucetFunding.Release();
             }
         }
 
@@ -266,26 +287,37 @@ namespace XrplTests.Xrpl.ClientLib.Integration
 
         /// <summary>
         /// Funds a wallet from the standalone master account.
+        /// Uses Submit + LedgerAccept instead of SubmitAndWait to avoid
+        /// LastLedgerSequence expiration when parallel tests advance the ledger.
+        /// Serialized via StandaloneLock to prevent sequence number conflicts.
         /// </summary>
         private static async Task FundFromMasterAsync(IXrplClient client, XrplWallet wallet)
         {
-            Payment payment = new Payment
+            await StandaloneLock.MasterFunding.WaitAsync();
+            try
             {
-                Account = MasterAccount,
-                Destination = wallet.ClassicAddress,
-                Amount = new Currency { Value = "400000000", CurrencyCode = "XRP" }
-            };
-            var values = JsonSerializer.Deserialize<Dictionary<string, object>>(payment.ToJson(), global::Xrpl.Client.Json.XrplJsonOptions.Default);
-            var master = XrplWallet.FromSeed(MasterSecret);
-            var response = await client.SubmitAndWait(values, master, autofill: true);
+                Payment payment = new Payment
+                {
+                    Account = MasterAccount,
+                    Destination = wallet.ClassicAddress,
+                    Amount = new Currency { Value = "400000000", CurrencyCode = "XRP" }
+                };
+                var values = JsonSerializer.Deserialize<Dictionary<string, object>>(payment.ToJson(), global::Xrpl.Client.Json.XrplJsonOptions.Default);
+                var master = XrplWallet.FromSeed(MasterSecret);
+                Submit response = await client.Submit(values, master);
 
-            if (response.Meta.TransactionResult != "tesSUCCESS")
-            {
-                throw new Exception($"Master funding failed: {response.Meta.TransactionResult}");
+                if (response.EngineResult != "tesSUCCESS")
+                {
+                    throw new Exception($"Master funding failed: {response.EngineResult}");
+                }
+
+                await LedgerAcceptAsync(client);
+                Console.WriteLine($"[IntegrationTest] Master funded {wallet.ClassicAddress}");
             }
-
-            await LedgerAcceptAsync(client);
-            Console.WriteLine($"[IntegrationTest] Master funded {wallet.ClassicAddress}");
+            finally
+            {
+                StandaloneLock.MasterFunding.Release();
+            }
         }
 
         /// <summary>
@@ -340,20 +372,28 @@ namespace XrplTests.Xrpl.ClientLib.Integration
 
         public static async Task FundAccount(IXrplClient client, XrplWallet wallet)
         {
-            Payment payment = new Payment
+            await StandaloneLock.MasterFunding.WaitAsync();
+            try
             {
-                Account = masterAccount,
-                Destination = wallet.ClassicAddress,
-                Amount = new Currency { Value = "400000000", CurrencyCode = "XRP" }
-            };
-            var values = JsonSerializer.Deserialize<Dictionary<string, object>>(payment.ToJson(), global::Xrpl.Client.Json.XrplJsonOptions.Default);
-            var master = XrplWallet.FromSeed(masterSecret);
-            var response = await client.SubmitAndWait(values, master, autofill: true);
-            if (response.Meta.TransactionResult != "tesSUCCESS")
-            {
-                throw new XrplException($"Response not successful, {response.Meta.TransactionResult}");
+                Payment payment = new Payment
+                {
+                    Account = masterAccount,
+                    Destination = wallet.ClassicAddress,
+                    Amount = new Currency { Value = "400000000", CurrencyCode = "XRP" }
+                };
+                var values = JsonSerializer.Deserialize<Dictionary<string, object>>(payment.ToJson(), global::Xrpl.Client.Json.XrplJsonOptions.Default);
+                var master = XrplWallet.FromSeed(masterSecret);
+                Submit response = await client.Submit(values, master);
+                if (response.EngineResult != "tesSUCCESS")
+                {
+                    throw new XrplException($"Response not successful, {response.EngineResult}");
+                }
+                await LedgerAccept(client);
             }
-            await LedgerAccept(client);
+            finally
+            {
+                StandaloneLock.MasterFunding.Release();
+            }
         }
 
         public static async Task<XrplWallet> GenerateFundedWallet(IXrplClient client)

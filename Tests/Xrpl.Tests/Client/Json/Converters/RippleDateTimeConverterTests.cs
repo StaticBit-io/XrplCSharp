@@ -10,7 +10,7 @@ using Xrpl.Client.Json.Converters;
 namespace XrplTests.Client.Json.Converters;
 
 [TestClass]
-public class RippleDateTimeConverterTests
+public class TestURippleDateTimeConverter
 {
     private static readonly DateTime RippleEpoch = new(
         year: 2000,
@@ -114,7 +114,7 @@ public class RippleDateTimeConverterTests
 }
 
 [TestClass]
-public class UnixDateTimeConverterTests
+public class TestUUnixDateTimeConverter
 {
     private static readonly DateTime UnixEpoch = new(
         year: 1970,
