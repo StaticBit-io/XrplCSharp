@@ -273,3 +273,6 @@ replit.md
 .upm/
 .breakpoints
 attached_assets/
+
+# DocFx build output
+docs/

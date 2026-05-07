@@ -32,6 +32,9 @@ jobs:
     - name: Restore dependencies
       run: dotnet restore
 
+    - name: Clean previous build output
+      run: rm -rf docs/
+
     - name: Build metadata and docs
       run: docfx DocFx/docfx.json
 
