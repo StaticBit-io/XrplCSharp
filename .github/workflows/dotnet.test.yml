@@ -46,14 +46,14 @@ jobs:
     - name: Start rippled + ledger-acceptor
       run: docker compose -f .ci-config/docker-compose.ci.yml up -d
 
-    - name: Wait for rippled to be healthy
+    - name: Wait for rippled to be ready
       run: |
-        for i in $(seq 1 60); do
-          if docker inspect --format='{{.State.Health.Status}}' rippled-service 2>/dev/null | grep -q healthy; then
-            echo "rippled is healthy"
+        for i in $(seq 1 30); do
+          if curl -sf http://localhost:5005/ -d '{"method":"server_info"}' > /dev/null 2>&1; then
+            echo "rippled is ready"
             break
           fi
-          echo "Waiting for rippled... ($i/60)"
+          echo "Waiting for rippled... ($i/30)"
           sleep 2
         done
 

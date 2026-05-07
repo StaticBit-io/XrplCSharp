@@ -1,5 +1,3 @@
-version: "3.8"
-
 services:
   xrpld:
     image: xrpllabsofficial/xrpld:latest
@@ -12,22 +10,17 @@ services:
     volumes:
       - ./rippled.cfg:/etc/opt/ripple/rippled.cfg:ro
       - ./validators.txt:/etc/opt/ripple/validators.txt:ro
-    healthcheck:
-      test: ["CMD", "wget", "-q", "--spider", "http://localhost:6006"]
-      interval: 5s
-      timeout: 2s
-      retries: 20
 
   ledger-acceptor:
     image: curlimages/curl:latest
     container_name: ledger-acceptor
     depends_on:
-      xrpld:
-        condition: service_healthy
+      - xrpld
     entrypoint:
       - sh
       - -c
       - |
+        sleep 3
         while true; do
           curl -s -X POST http://xrpld:5006/ \
             -H "Content-Type: application/json" \
