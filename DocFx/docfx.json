@@ -51,7 +51,7 @@
         "dest": "../docs",
         "globalMetadataFiles": [],
         "fileMetadataFiles": [],
-        "template": [ "default", "templates/unity" ],
+        "template": [ "modern" ],
         "postProcessors": [],
         "markdownEngineName": "markdig",
         "noLangKeyword": false,
