@@ -273,9 +273,9 @@ namespace XrplTests.Xrpl.ClientLib.Integration
                 Destination = wallet.ClassicAddress,
                 Amount = new Currency { ValueAsXrp = xrpSize, CurrencyCode = "XRP" }
             };
-            
+
             var values = JsonSerializer.Deserialize<Dictionary<string, object>>(payment.ToJson(), global::Xrpl.Client.Json.XrplJsonOptions.Default);
-            var response = await client.SubmitAndWait(values, FaucetFiller, autofill:true);
+            var response = await client.SubmitAndWait(values, FaucetFiller, autofill: true);
 
             if (response.Meta.TransactionResult != "tesSUCCESS")
             {
@@ -296,23 +296,34 @@ namespace XrplTests.Xrpl.ClientLib.Integration
             await StandaloneLock.MasterFunding.WaitAsync();
             try
             {
-                Payment payment = new Payment
+                const int maxRetries = 3;
+                for (int attempt = 0; attempt < maxRetries; attempt++)
                 {
-                    Account = MasterAccount,
-                    Destination = wallet.ClassicAddress,
-                    Amount = new Currency { Value = "400000000", CurrencyCode = "XRP" }
-                };
-                var values = JsonSerializer.Deserialize<Dictionary<string, object>>(payment.ToJson(), global::Xrpl.Client.Json.XrplJsonOptions.Default);
-                var master = XrplWallet.FromSeed(MasterSecret);
-                Submit response = await client.Submit(values, master);
+                    Payment payment = new Payment
+                    {
+                        Account = MasterAccount,
+                        Destination = wallet.ClassicAddress,
+                        Amount = new Currency { Value = "400000000", CurrencyCode = "XRP" }
+                    };
+                    var master = XrplWallet.FromSeed(MasterSecret);
+                    Submit response = await client.Submit(payment, master, true);
 
-                if (response.EngineResult != "tesSUCCESS")
-                {
+                    if (response.EngineResult == "tesSUCCESS")
+                    {
+                        await LedgerAcceptAsync(client);
+                        Console.WriteLine($"[IntegrationTest] Master funded {wallet.ClassicAddress}");
+                        return;
+                    }
+
+                    if (response.EngineResult == "tefMAX_LEDGER" && attempt < maxRetries - 1)
+                    {
+                        Console.WriteLine($"[IntegrationTest] FundFromMaster got {response.EngineResult}, retrying ({attempt + 1}/{maxRetries})...");
+                        await Task.Delay(1000);
+                        continue;
+                    }
+
                     throw new Exception($"Master funding failed: {response.EngineResult}");
                 }
-
-                await LedgerAcceptAsync(client);
-                Console.WriteLine($"[IntegrationTest] Master funded {wallet.ClassicAddress}");
             }
             finally
             {
@@ -375,20 +386,34 @@ namespace XrplTests.Xrpl.ClientLib.Integration
             await StandaloneLock.MasterFunding.WaitAsync();
             try
             {
-                Payment payment = new Payment
+                const int maxRetries = 3;
+                for (int attempt = 0; attempt < maxRetries; attempt++)
                 {
-                    Account = masterAccount,
-                    Destination = wallet.ClassicAddress,
-                    Amount = new Currency { Value = "400000000", CurrencyCode = "XRP" }
-                };
-                var values = JsonSerializer.Deserialize<Dictionary<string, object>>(payment.ToJson(), global::Xrpl.Client.Json.XrplJsonOptions.Default);
-                var master = XrplWallet.FromSeed(masterSecret);
-                Submit response = await client.Submit(values, master);
-                if (response.EngineResult != "tesSUCCESS")
-                {
+                    Payment payment = new Payment
+                    {
+                        Account = masterAccount,
+                        Destination = wallet.ClassicAddress,
+                        Amount = new Currency { Value = "400000000", CurrencyCode = "XRP" }
+                    };
+                    var values = JsonSerializer.Deserialize<Dictionary<string, object>>(payment.ToJson(), global::Xrpl.Client.Json.XrplJsonOptions.Default);
+                    var master = XrplWallet.FromSeed(masterSecret);
+                    Submit response = await client.Submit(values, master);
+
+                    if (response.EngineResult == "tesSUCCESS")
+                    {
+                        await LedgerAccept(client);
+                        return;
+                    }
+
+                    if (response.EngineResult == "tefMAX_LEDGER" && attempt < maxRetries - 1)
+                    {
+                        Console.WriteLine($"[IntegrationTest] FundAccount got {response.EngineResult}, retrying ({attempt + 1}/{maxRetries})...");
+                        await Task.Delay(1000);
+                        continue;
+                    }
+
                     throw new XrplException($"Response not successful, {response.EngineResult}");
                 }
-                await LedgerAccept(client);
             }
             finally
             {

@@ -374,17 +374,10 @@ namespace XrplTests.Xrpl.ClientLib.Integration
 
         private static async Task SubmitTx(IXrplClient client, ITransactionRequest tx, XrplWallet wallet, string label)
         {
-            try
-            {
-                var autofilled = await client.Autofill(tx);
-                var res = await client.SubmitAndWait(autofilled, wallet, true);
-                string result = res.Meta?.TransactionResult;
-                Console.WriteLine($"[PathPayment] {label}: {result}");
-            }
-            catch (Exception ex)
-            {
-                Console.WriteLine($"[PathPayment] {label} exception: {ex.Message}");
-            }
+            var autofilled = await client.Autofill(tx);
+            TransactionSummary res = await client.SubmitAndWait(autofilled, wallet, true);
+            string result = res.Meta?.TransactionResult;
+            Console.WriteLine($"[PathPayment] {label}: {result}");
         }
     }
 }

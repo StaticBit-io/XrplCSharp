@@ -13,6 +13,7 @@ using Xrpl.Wallet;
 namespace XrplTests.Xrpl.ClientLib.Integration
 {
     [TestClass]
+    [DoNotParallelize] // requires multiple ledger skip transactions to be submitted after 256 ledgers, and may cause issues if run in parallel with other tests
     public class TestIAccountDelete
     {
         // private static int Timeout = 20;
@@ -30,12 +31,10 @@ namespace XrplTests.Xrpl.ClientLib.Integration
         {
             XrplWallet wallet2 = await Utils.GenerateFundedWallet(runner.client);
 
-            var promises = new List<Task>();
-            for (var iter = 0; iter < 256; iter++)
+            for (int iter = 0; iter < 256; iter++)
             {
-                promises.Add(Utils.LedgerAccept(runner.client));
+                await Utils.LedgerAccept(runner.client);
             }
-            await Task.WhenAll(promises);
 
             LedgerIndex index = new LedgerIndex(LedgerIndexType.Validated);
             AccountChannelsRequest request = new AccountChannelsRequest(runner.wallet.ClassicAddress) { LedgerIndex = index };
