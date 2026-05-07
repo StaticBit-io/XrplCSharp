@@ -33,6 +33,8 @@ namespace Xrpl.Utils.Hashes
         Paychan = 'x',
         Check = 'C',
         DepositPreauth = 'p',
+        // XLS-70 Credential entry namespace ('D').
+        Credential = 'D',
     }
 }
 

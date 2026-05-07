@@ -1,7 +1,10 @@
-﻿// https://github.com/XRPLF/xrpl.js/blob/main/packages/xrpl/src/models/transactions/accountDelete.ts
+// https://github.com/XRPLF/xrpl.js/blob/main/packages/xrpl/src/models/transactions/accountDelete.ts
 
 using System.Collections.Generic;
 using System.Threading.Tasks;
+
+using System.Text.Json.Serialization;
+
 using Xrpl.Client.Exceptions;
 
 namespace Xrpl.Models.Transactions
@@ -11,7 +14,7 @@ namespace Xrpl.Models.Transactions
     /// An AccountDelete transaction deletes an account and any objects it owns in  the XRP Ledger,
     /// if possible, sending the account's remaining XRP to a  specified destination account.
     /// </summary>
-    public interface IAccountDelete : ITransactionCommon
+    public interface IAccountDelete : ITransactionCommon, IDestination
     {
         /// <summary>
         /// The address of an account to receive any leftover XRP after deleting the sending account.<br/>
@@ -24,10 +27,17 @@ namespace Xrpl.Models.Transactions
         /// information for the recipient of the deleted account's leftover XRP.
         /// </summary>
         uint? DestinationTag { get; set; }
+
+        /// <summary>
+        /// (Optional) Set of Credentials (object IDs, hex 64-char each) used to authorize delivering
+        /// the residual XRP when the destination account requires Deposit Authorization with credential-based preauth (XLS-70).
+        /// Maximum 8 entries.
+        /// </summary>
+        List<string> CredentialIDs { get; set; }
     }
 
     /// <inheritdoc cref="IAccountDelete" />
-    public class AccountDelete : TransactionCommon, IAccountDelete
+    public class AccountDelete : TransactionRequest, IAccountDelete, IDestination
     {
         public AccountDelete()
         {
@@ -39,16 +49,26 @@ namespace Xrpl.Models.Transactions
 
         /// <inheritdoc />
         public uint? DestinationTag { get; set; }
+
+        /// <inheritdoc />
+        [JsonPropertyName("CredentialIDs")]
+        [JsonIgnore(Condition = JsonIgnoreCondition.WhenWritingNull)]
+        public List<string> CredentialIDs { get; set; }
     }
 
     /// <inheritdoc cref="IAccountDelete" />
-    public class AccountDeleteResponse : TransactionResponseCommon, IAccountDelete
+    public class AccountDeleteResponse : TransactionResponse, IAccountDelete, IDestination
     {
         /// <inheritdoc />
         public string Destination { get; set; }
 
         /// <inheritdoc />
         public uint? DestinationTag { get; set; }
+
+        /// <inheritdoc />
+        [JsonPropertyName("CredentialIDs")]
+        [JsonIgnore(Condition = JsonIgnoreCondition.WhenWritingNull)]
+        public List<string> CredentialIDs { get; set; }
     }
 
     public partial class Validation
@@ -59,7 +79,7 @@ namespace Xrpl.Models.Transactions
         /// </summary>
         /// <param name="tx"> A AccountDelete Transaction.</param>
         /// <exception cref="ValidationException">When the AccountDelete is malformed.</exception>
-        public static async Task ValidateAccountDelete(Dictionary<string, dynamic> tx)
+        public static async Task ValidateAccountDelete(Dictionary<string, object> tx)
         {
             await Common.ValidateBaseTransaction(tx);
             if (!tx.TryGetValue("Destination", out var Destination) || Destination is null)
@@ -69,6 +89,11 @@ namespace Xrpl.Models.Transactions
 
             if (tx.TryGetValue("DestinationTag", out var DestinationTag) && DestinationTag is not uint { })
                 throw new ValidationException("AccountDelete: invalid DestinationTag");
+
+            if (tx.TryGetValue("CredentialIDs", out var credentialIds) && credentialIds is not null)
+            {
+                CredentialsValidator.ValidateCredentialsList(credentialIds, "AccountDelete", "CredentialIDs", isStringID: true);
+            }
         }
     }
 

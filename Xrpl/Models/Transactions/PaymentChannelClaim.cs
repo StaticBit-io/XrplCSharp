@@ -1,8 +1,11 @@
-﻿using System;
+using System;
 using System.Collections.Generic;
 using System.Threading.Tasks;
 
+using System.Text.Json.Serialization;
+
 using Xrpl.Client.Exceptions;
+using Xrpl.Models.Enums;
 
 // https://github.com/XRPLF/xrpl.js/blob/main/packages/xrpl/src/models/transactions/paymentChannelClaim.ts
 
@@ -14,6 +17,10 @@ namespace Xrpl.Models.Transactions
     [Flags]
     public enum PaymentChannelClaimFlags : uint
     {
+        /// <summary>
+        /// batch inner transaction
+        /// </summary>
+        tfInnerBatchTxn = XrplGlobalFlags.tfInnerBatchTxn,
         /// <summary>
         /// Clear the channel's Expiration time.<br/>
         /// (Expiration is different from the channel's immutable CancelAfter time.)<br/>
@@ -32,7 +39,7 @@ namespace Xrpl.Models.Transactions
         tfClose = 131072
     }
     /// <inheritdoc cref="IPaymentChannelClaim" />
-    public class PaymentChannelClaim : TransactionCommon, IPaymentChannelClaim
+    public class PaymentChannelClaim : TransactionRequest, IPaymentChannelClaim
     {
         public PaymentChannelClaim()
         {
@@ -49,13 +56,22 @@ namespace Xrpl.Models.Transactions
         public string Amount { get; set; }
 
         /// <inheritdoc />
-        public new PaymentChannelClaimFlags? Flags { get; set; }
+        public new PaymentChannelClaimFlags? Flags
+        {
+            get => base.Flags.HasValue ? (PaymentChannelClaimFlags?)base.Flags.Value : null;
+            set => base.Flags = (uint?)value;
+        }
 
         /// <inheritdoc />
         public string Signature { get; set; }
 
         /// <inheritdoc />
         public string PublicKey { get; set; }
+
+        /// <inheritdoc />
+        [JsonPropertyName("CredentialIDs")]
+        [JsonIgnore(Condition = JsonIgnoreCondition.WhenWritingNull)]
+        public List<string> CredentialIDs { get; set; }
     }
     /// <summary>
     /// Claim XRP from a payment channel, adjust the payment channel's expiration,  or both.
@@ -111,10 +127,17 @@ namespace Xrpl.Models.Transactions
         /// Required unless the sender of the transaction is the source address of the channel.
         /// </summary>
         string Signature { get; set; }
+
+        /// <summary>
+        /// (Optional) Set of Credentials (object IDs, hex 64-char each) used to authorize the claim
+        /// when the destination account requires Deposit Authorization with credential-based preauth (XLS-70).
+        /// Maximum 8 entries.
+        /// </summary>
+        List<string> CredentialIDs { get; set; }
     }
 
     /// <inheritdoc cref="IPaymentChannelClaim" />
-    public class PaymentChannelClaimResponse : TransactionResponseCommon, IPaymentChannelClaim
+    public class PaymentChannelClaimResponse : TransactionResponse, IPaymentChannelClaim
     {
         /// <inheritdoc />
         public string Amount { get; set; }
@@ -123,11 +146,21 @@ namespace Xrpl.Models.Transactions
         /// <inheritdoc />
         public string Channel { get; set; }
         /// <inheritdoc />
-        public new PaymentChannelClaimFlags? Flags { get; set; }
+        public new PaymentChannelClaimFlags? Flags
+        {
+            get => base.Flags.HasValue ? (PaymentChannelClaimFlags?)base.Flags.Value : null;
+            set => base.Flags = (uint?)value;
+        }
+
         /// <inheritdoc />
         public string PublicKey { get; set; }
         /// <inheritdoc />
         public string Signature { get; set; }
+
+        /// <inheritdoc />
+        [JsonPropertyName("CredentialIDs")]
+        [JsonIgnore(Condition = JsonIgnoreCondition.WhenWritingNull)]
+        public List<string> CredentialIDs { get; set; }
     }
 
     public partial class Validation
@@ -137,7 +170,7 @@ namespace Xrpl.Models.Transactions
         /// </summary>
         /// <param name="tx"> A PaymentChannelClaim Transaction.</param>
         /// <exception cref="ValidationException">When the PaymentChannelClaim is malformed.</exception>
-        public static async Task ValidatePaymentChannelClaim(Dictionary<string, dynamic> tx)
+        public static async Task ValidatePaymentChannelClaim(Dictionary<string, object> tx)
         {
             await Common.ValidateBaseTransaction(tx);
 
@@ -155,6 +188,11 @@ namespace Xrpl.Models.Transactions
                 throw new ValidationException("PaymentChannelClaim: Signature must be a string");
             if (tx.TryGetValue("PublicKey", out var PublicKey) && PublicKey is not string)
                 throw new ValidationException("PaymentChannelClaim: PublicKey must be a string");
+
+            if (tx.TryGetValue("CredentialIDs", out var credentialIds) && credentialIds is not null)
+            {
+                CredentialsValidator.ValidateCredentialsList(credentialIds, "PaymentChannelClaim", "CredentialIDs", isStringID: true);
+            }
 
         }
     }

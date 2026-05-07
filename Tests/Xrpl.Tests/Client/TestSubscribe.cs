@@ -1,12 +1,15 @@
-﻿using System;
+using System;
 using System.Collections.Generic;
 using System.Diagnostics;
 using System.Net.WebSockets;
 using System.Text;
+using System.Threading;
 using System.Threading.Tasks;
 using Microsoft.VisualStudio.TestTools.UnitTesting;
-using Newtonsoft.Json;
+using System.Text.Json;
 using Xrpl.Client;
+using Xrpl.Client.Json;
+using Xrpl.Models;
 using Xrpl.Models.Methods;
 using Xrpl.Models.Subscriptions;
 using Xrpl.Sugar;
@@ -40,9 +43,9 @@ namespace Xrpl.Tests.ClientLib
         {
 
             string jsonString = "{\"id\":0,\"status\":\"success\",\"type\":\"response\",\"result\":{\"fee_base\":10,\"fee_ref\":10,\"hostid\":\"NAP\",\"ledger_hash\":\"60EBABF55F6AB58864242CADA0B24FBEA027F2426917F39CA56576B335C0065A\",\"ledger_index\":8819951,\"ledger_time\":463782770,\"load_base\":256,\"load_factor\":256,\"pubkey_node\":\"n9Lt7DgQmxjHF5mYJsV2U9anALHmPem8PWQHWGpw4XMz79HA5aJY\",\"random\":\"EECFEE93BBB608914F190EC177B11DE52FC1D75D2C97DACBD26D2DFC6050E874\",\"reserve_base\":20000000,\"reserve_inc\":5000000,\"server_status\":\"full\",\"validated_ledgers\":\"32570-8819951\"}}";
-            Dictionary<string, dynamic> jsonData = JsonConvert.DeserializeObject<Dictionary<string, dynamic>>(jsonString);
+            Dictionary<string, object> jsonData = JsonSerializer.Deserialize<Dictionary<string, object>>(jsonString);
             runner.mockedRippled.AddResponse("subscribe", jsonData);
-            Dictionary<string, dynamic> tx = new Dictionary<string, dynamic>
+            Dictionary<string, object> tx = new Dictionary<string, object>
             {
                 { "command", "subscribe" },
             };
@@ -54,9 +57,9 @@ namespace Xrpl.Tests.ClientLib
         {
 
             string jsonString = "{\"id\":0,\"status\":\"success\",\"type\":\"response\",\"result\":{}}";
-            Dictionary<string, dynamic> jsonData = JsonConvert.DeserializeObject<Dictionary<string, dynamic>>(jsonString);
+            Dictionary<string, object> jsonData = JsonSerializer.Deserialize<Dictionary<string, object>>(jsonString);
             runner.mockedRippled.AddResponse("unsubscribe", jsonData);
-            Dictionary<string, dynamic> tx = new Dictionary<string, dynamic>
+            Dictionary<string, object> tx = new Dictionary<string, object>
             {
                 { "command", "unsubscribe" },
             };
@@ -69,7 +72,7 @@ namespace Xrpl.Tests.ClientLib
             bool isDone = false;
             runner.client.connection.OnTransaction += r =>
             {
-                Assert.IsTrue(r.Type == ResponseStreamType.transaction);
+                Assert.AreEqual(ResponseStreamType.transaction, r.Type);
                 isDone = true;
                 return Task.CompletedTask;
             };
@@ -101,7 +104,7 @@ namespace Xrpl.Tests.ClientLib
         {
             runner.client.connection.OnPeerStatusChange += r =>
             {
-                Assert.IsTrue(r.Type == ResponseStreamType.consensusPhase);
+                Assert.AreEqual(ResponseStreamType.consensusPhase, r.Type);
                 return Task.CompletedTask;
             };
 
@@ -110,16 +113,44 @@ namespace Xrpl.Tests.ClientLib
         }
 
         [TestMethod]
-        public void TestEmitsPathFind()
+        public async Task TestEmitsPathFind()
         {
+            List<PathFindStream> received = new List<PathFindStream>();
+            var tcs = new TaskCompletionSource<bool>();
+
             runner.client.connection.OnPathFind += r =>
             {
-                Assert.IsTrue(r.Type == ResponseStreamType.path_find);
+                received.Add(r);
+                if (received.Count >= 2)
+                    tcs.TrySetResult(true);
                 return Task.CompletedTask;
             };
 
-            string jsonString = "{\"alternatives\":[{\"paths_computed\":[[{\"currency\":\"USD\",\"issuer\":\"rvYAfWj5gh67oV6fW32ZzP3Aw4Eubs59B\",\"type\":48}],[{\"currency\":\"USD\",\"issuer\":\"rhub8VRN55s94qWKDv6jmDy1pUykJzF3wq\",\"type\":48},{\"currency\":\"USD\",\"issuer\":\"rvYAfWj5gh67oV6fW32ZzP3Aw4Eubs59B\",\"type\":48}],[{\"currency\":\"USD\",\"issuer\":\"rhub8VRN55s94qWKDv6jmDy1pUykJzF3wq\",\"type\":48},{\"account\":\"rhub8VRN55s94qWKDv6jmDy1pUykJzF3wq\",\"type\":1},{\"account\":\"rpix35SSFEukMTm64NB4k4BPBS7fXJrLJM\",\"type\":1}],[{\"currency\":\"CNY\",\"issuer\":\"rKiCet8SdvWxPXnAgYarFUXMh1zCPz432Y\",\"type\":48},{\"currency\":\"USD\",\"issuer\":\"rvYAfWj5gh67oV6fW32ZzP3Aw4Eubs59B\",\"type\":48}]],\"source_amount\":\"786\"}],\"destination_account\":\"rf1BiGeXwwQoi8Z2ueFYTEXSwuJYfV2Jpn\",\"destination_amount\":{\"currency\":\"USD\",\"issuer\":\"rvYAfWj5gh67oV6fW32ZzP3Aw4Eubs59B\",\"value\":\"0.001\"},\"full_reply\":true,\"id\":8,\"source_account\":\"rf1BiGeXwwQoi8Z2ueFYTEXSwuJYfV2Jpn\",\"type\":\"path_find\"}";
-            runner.client.connection.OnMessage(jsonString);
+            string msg1 = "{\"alternatives\":[{\"paths_computed\":[[{\"currency\":\"USD\",\"issuer\":\"rvYAfWj5gh67oV6fW32ZzP3Aw4Eubs59B\",\"type\":48}],[{\"currency\":\"USD\",\"issuer\":\"rhub8VRN55s94qWKDv6jmDy1pUykJzF3wq\",\"type\":48},{\"currency\":\"USD\",\"issuer\":\"rvYAfWj5gh67oV6fW32ZzP3Aw4Eubs59B\",\"type\":48}],[{\"currency\":\"USD\",\"issuer\":\"rhub8VRN55s94qWKDv6jmDy1pUykJzF3wq\",\"type\":48},{\"account\":\"rhub8VRN55s94qWKDv6jmDy1pUykJzF3wq\",\"type\":1},{\"account\":\"rpix35SSFEukMTm64NB4k4BPBS7fXJrLJM\",\"type\":1}],[{\"currency\":\"CNY\",\"issuer\":\"rKiCet8SdvWxPXnAgYarFUXMh1zCPz432Y\",\"type\":48},{\"currency\":\"USD\",\"issuer\":\"rvYAfWj5gh67oV6fW32ZzP3Aw4Eubs59B\",\"type\":48}]],\"source_amount\":\"786\"}],\"destination_account\":\"rf1BiGeXwwQoi8Z2ueFYTEXSwuJYfV2Jpn\",\"destination_amount\":{\"currency\":\"USD\",\"issuer\":\"rvYAfWj5gh67oV6fW32ZzP3Aw4Eubs59B\",\"value\":\"0.001\"},\"full_reply\":false,\"id\":8,\"source_account\":\"rf1BiGeXwwQoi8Z2ueFYTEXSwuJYfV2Jpn\",\"type\":\"path_find\"}";
+
+            string msg2 = "{\"alternatives\":[{\"paths_computed\":[[{\"currency\":\"USD\",\"issuer\":\"rvYAfWj5gh67oV6fW32ZzP3Aw4Eubs59B\",\"type\":48}]],\"source_amount\":\"400\"}],\"destination_account\":\"rf1BiGeXwwQoi8Z2ueFYTEXSwuJYfV2Jpn\",\"destination_amount\":{\"currency\":\"USD\",\"issuer\":\"rvYAfWj5gh67oV6fW32ZzP3Aw4Eubs59B\",\"value\":\"0.001\"},\"full_reply\":true,\"id\":8,\"source_account\":\"rf1BiGeXwwQoi8Z2ueFYTEXSwuJYfV2Jpn\",\"type\":\"path_find\"}";
+
+            await runner.client.connection.OnMessage(msg1);
+            await runner.client.connection.OnMessage(msg2);
+
+            var completed = await Task.WhenAny(tcs.Task, Task.Delay(5000));
+            Assert.AreEqual(tcs.Task, completed, "OnPathFind was not invoked at least 2 times within timeout");
+
+            Assert.AreEqual(2, received.Count);
+
+            PathFindStream first = received[0];
+            Assert.AreEqual(ResponseStreamType.path_find, first.Type);
+            Assert.AreEqual("rf1BiGeXwwQoi8Z2ueFYTEXSwuJYfV2Jpn", first.SourceAccount);
+            Assert.AreEqual("rf1BiGeXwwQoi8Z2ueFYTEXSwuJYfV2Jpn", first.DestinationAccount);
+            Assert.IsFalse(first.FullReply);
+            Assert.AreEqual(1, first.Alternatives.Count);
+            Assert.AreEqual("786", first.Alternatives[0].SourceAmount.Value);
+
+            PathFindStream second = received[1];
+            Assert.AreEqual(ResponseStreamType.path_find, second.Type);
+            Assert.IsTrue(second.FullReply);
+            Assert.AreEqual(1, second.Alternatives.Count);
+            Assert.AreEqual("400", second.Alternatives[0].SourceAmount.Value);
         }
 
         [TestMethod]
@@ -127,7 +158,7 @@ namespace Xrpl.Tests.ClientLib
         {
             runner.client.connection.OnManifestReceived += r =>
             {
-                Assert.IsTrue(r.Type == ResponseStreamType.validationReceived);
+                Assert.AreEqual(ResponseStreamType.validationReceived, r.Type);
                 return Task.CompletedTask;
             };
 
@@ -168,9 +199,9 @@ namespace Xrpl.Tests.ClientLib
                 return Task.CompletedTask;
             };
 
-            client.connection.OnDisconnect += (code) =>
+            client.connection.OnDisconnect += (code, description) =>
             {
-                Console.WriteLine($"DISCONNECTED: {code}");
+                Console.WriteLine($"Disconnected from XRPL with code: {code}, description: {description}");
                 isFinished = true;
                 return Task.CompletedTask;
             };
@@ -178,7 +209,7 @@ namespace Xrpl.Tests.ClientLib
             client.connection.OnLedgerClosed += (message) =>
             {
                 Console.WriteLine($"MESSAGE RECEIVED: {message}");
-                //Dictionary<string, dynamic> json = JsonConvert.DeserializeObject<Dictionary<string, dynamic>>(message);
+                //Dictionary<string, object> json = JsonConvert.DeserializeObject<Dictionary<string, object>>(message);
                 //if (message["type"] == "ledgerClosed")
                 //{
                 //    isTested = true;
@@ -207,7 +238,7 @@ namespace Xrpl.Tests.ClientLib
             //    System.Threading.Thread.Sleep(TimeSpan.FromSeconds(1));
             //}
 
-            await client.connection.Connect();
+            await client.connection.Connect(CancellationToken.None);
 
             //var subscribe = await client.Subscribe(
             //new SubscribeRequest()
@@ -219,17 +250,12 @@ namespace Xrpl.Tests.ClientLib
             //});
             var request = new SubscribeRequest()
             {
-                Streams = new List<string>(new[]
+                Streams = new List<StreamType>(new[]
                     {
-                        "ledger",
+                        StreamType.Ledger,
                     })
             };
-            var serializerSettings = new JsonSerializerSettings();
-            serializerSettings.NullValueHandling = NullValueHandling.Ignore;
-            serializerSettings.DateTimeZoneHandling = DateTimeZoneHandling.Utc;
-            serializerSettings.FloatParseHandling = FloatParseHandling.Double;
-            serializerSettings.FloatFormatHandling = FloatFormatHandling.DefaultValue;
-            string jsonString = JsonConvert.SerializeObject(request, serializerSettings);
+            string jsonString = JsonSerializer.Serialize(request, XrplJsonOptions.Default);
             client.connection.WebsocketSendAsync(client.connection.ws, jsonString);
 
             Debug.WriteLine($"BEFORE: {DateTime.Now}");

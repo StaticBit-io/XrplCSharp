@@ -1,6 +1,6 @@
-﻿using System;
-using System.Globalization;
+﻿using System.Globalization;
 using System.Text;
+
 using Org.BouncyCastle.Utilities.Encoders;
 
 namespace Xrpl.Client.Extensions

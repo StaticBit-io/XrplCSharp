@@ -1,7 +1,7 @@
-﻿using Newtonsoft.Json.Linq;
+﻿using System.Text.Json.Nodes;
 using Xrpl.BinaryCodec.Types;
 
 namespace Xrpl.BinaryCodec.Enums
 {
-    public delegate ISerializedType FromJson(JToken token);
+    public delegate ISerializedType FromJson(JsonNode token);
 }

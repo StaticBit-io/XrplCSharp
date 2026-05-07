@@ -1,4 +1,7 @@
 ﻿using System;
+using System.Text.RegularExpressions;
+
+using Xrpl.Models.Subscriptions;
 
 namespace Xrpl.Client.Exceptions
 {
@@ -26,17 +29,37 @@ namespace Xrpl.Client.Exceptions
 
         public XrplException(string message) : base(message) { }
         public XrplException(string message, Exception? InnerException) : base(message, InnerException) { }
-        //public XrplException(string message, dynamic data) : base(message, data) { }
     }
 
     /// <summary>
     /// Exception thrown when rippled responds with an Exception.
     /// </summary>
-    public class RippledException : XrplException {
-        public RippledException(string message, dynamic data = null) : base(message)
+    public class RippledException : XrplException
+    {
+        public ErrorResponse Response { get; }
+
+        public RippledException(string message, ErrorResponse response) : base(message)
         {
+            Response = response;
         }
     }
+
+    public static class RippledErrorParser
+    {
+        private static readonly Regex RippledLineRegex =
+            new(@"^RippledError:\s*(?<msg>[^\r\n]+)",
+                RegexOptions.Multiline | RegexOptions.Compiled);
+
+        public static string? TryExtractRippledError(string errorMessage)
+        {
+            if (string.IsNullOrWhiteSpace(errorMessage))
+                return null;
+
+            var m = RippledLineRegex.Match(errorMessage);
+            return m.Success ? m.Groups["msg"].Value.Trim() : errorMessage;
+        }
+    }
+
     /// <summary>
     /// Exception thrown when xrpl.js cannot specify Exception type.
     /// </summary>
@@ -75,13 +98,19 @@ namespace Xrpl.Client.Exceptions
     /// <summary>
     /// Exception thrown when xrpl.js times out.
     /// </summary>
-    public class TimeoutException : XrplException { }
+    public class TimeoutException : XrplException
+    {
+        public TimeoutException(string message, object data = null) : base(message)
+        {
+
+        }
+    }
     /// <summary>
     /// Exception thrown when xrpl.js sees a response in the wrong format.
     /// </summary>
     public class ResponseFormatException : XrplException
     {
-        public ResponseFormatException(string message, dynamic data = null) : base(message)
+        public ResponseFormatException(string message, object data = null) : base(message)
         {
         }
     }
@@ -93,6 +122,7 @@ namespace Xrpl.Client.Exceptions
         public ValidationException(string message = null) : base(message)
         {
         }
+        public ValidationException(string message, Exception? InnerException) : base(message, InnerException) { }
     }
     /// <summary>
     /// Exception thrown when a client cannot generate a wallet from the testnet/devnet

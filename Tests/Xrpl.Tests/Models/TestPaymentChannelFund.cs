@@ -1,4 +1,4 @@
-﻿
+
 
 // https://github.com/XRPLF/xrpl.js/blob/main/packages/xrpl/test/models/paymentChannelFund.ts
 
@@ -14,12 +14,12 @@ namespace XrplTests.Xrpl.Models
     [TestClass]
     public class TestUPaymentChannelFund
     {
-        public static Dictionary<string, dynamic> channel;
+        public static Dictionary<string, object> channel;
 
         [ClassInitialize]
         public static void MyClassInitialize(TestContext testContext)
         {
-            channel = new Dictionary<string, dynamic>
+            channel = new Dictionary<string, object>
             {
                 {"TransactionType", "PaymentChannelFund"},
                 {"Account", "rf1BiGeXwwQoi8Z2ueFYTEXSwuJYfV2Jpn"},
@@ -46,32 +46,32 @@ namespace XrplTests.Xrpl.Models
 
             // throws w/ missing Amount
             channel.Remove("Amount");
-            await Assert.ThrowsExceptionAsync<ValidationException>(() => Validation.ValidatePaymentChannelFund(channel), "PaymentChannelFund: missing Amount");
-            await Assert.ThrowsExceptionAsync<ValidationException>(() => Validation.Validate(channel), "PaymentChannelFund: missing Amount");
+            await Helper.ThrowsExceptionAsync<ValidationException>(() => Validation.ValidatePaymentChannelFund(channel), "PaymentChannelFund: missing field Amount");
+            await Helper.ThrowsExceptionAsync<ValidationException>(() => Validation.Validate(channel), "PaymentChannelFund: missing field Amount");
             channel["Amount"] = "200000";
 
             // throws w/ missing Channel
             channel.Remove("Channel");
-            await Assert.ThrowsExceptionAsync<ValidationException>(() => Validation.ValidatePaymentChannelFund(channel), "PaymentChannelFund: missing Channel");
-            await Assert.ThrowsExceptionAsync<ValidationException>(() => Validation.Validate(channel), "PaymentChannelFund: missing Channel");
+            await Helper.ThrowsExceptionAsync<ValidationException>(() => Validation.ValidatePaymentChannelFund(channel), "PaymentChannelFund: missing field Channel");
+            await Helper.ThrowsExceptionAsync<ValidationException>(() => Validation.Validate(channel), "PaymentChannelFund: missing field Channel");
             channel["Channel"] = "C1AE6DDDEEC05CF2978C0BAD6FE302948E9533691DC749DCDD3B9E5992CA6198";
 
             // throws w/ Amount must be a string
             channel["Amount"] = 100;
-            await Assert.ThrowsExceptionAsync<ValidationException>(() => Validation.ValidatePaymentChannelFund(channel), "PaymentChannelFund: Amount must be a string");
-            await Assert.ThrowsExceptionAsync<ValidationException>(() => Validation.Validate(channel), "PaymentChannelFund: Amount must be a string");
+            await Helper.ThrowsExceptionAsync<ValidationException>(() => Validation.ValidatePaymentChannelFund(channel), "PaymentChannelFund: Amount must be a string");
+            await Helper.ThrowsExceptionAsync<ValidationException>(() => Validation.Validate(channel), "PaymentChannelFund: Amount must be a string");
             channel["Amount"] = "1000000";
 
             // throws w/ Channel must be a string
             channel["Channel"] = 1000;
-            await Assert.ThrowsExceptionAsync<ValidationException>(() => Validation.ValidatePaymentChannelFund(channel), "PaymentChannelFund: Channel must be a string");
-            await Assert.ThrowsExceptionAsync<ValidationException>(() => Validation.Validate(channel), "PaymentChannelFund: Channel must be a string");
+            await Helper.ThrowsExceptionAsync<ValidationException>(() => Validation.ValidatePaymentChannelFund(channel), "PaymentChannelFund: Channel must be a string");
+            await Helper.ThrowsExceptionAsync<ValidationException>(() => Validation.Validate(channel), "PaymentChannelFund: Channel must be a string");
             channel["Channel"] = "C1AE6DDDEEC05CF2978C0BAD6FE302948E9533691DC749DCDD3B9E5992CA6198";
 
             // throws w/ Expiration must be a string
             channel["Expiration"] = "10";
-            await Assert.ThrowsExceptionAsync<ValidationException>(() => Validation.ValidatePaymentChannelFund(channel), "PaymentChannelFund: Expiration must be a number");
-            await Assert.ThrowsExceptionAsync<ValidationException>(() => Validation.Validate(channel), "PaymentChannelFund: Expiration must be a number");
+            await Helper.ThrowsExceptionAsync<ValidationException>(() => Validation.ValidatePaymentChannelFund(channel), "PaymentChannelFund: Expiration must be a number");
+            await Helper.ThrowsExceptionAsync<ValidationException>(() => Validation.Validate(channel), "PaymentChannelFund: Expiration must be a number");
             channel["Expiration"] = 543171558u;
 
         }

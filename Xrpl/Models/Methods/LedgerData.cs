@@ -1,5 +1,6 @@
-﻿using Newtonsoft.Json;
+using System.Text.Json.Serialization;
 
+using Xrpl.Client.Json.Converters;
 //https://github.com/XRPLF/xrpl.js/blob/main/packages/xrpl/src/models/methods/ledgerData.ts
 namespace Xrpl.Models.Methods
 {
@@ -25,19 +26,26 @@ namespace Xrpl.Models.Methods
         /// <summary>
         /// If set to true, return ledger objects as hashed hex strings instead of JSON.
         /// </summary>
-        [JsonProperty("binary")]
+        [JsonPropertyName("binary")]
         public bool? Binary { get; set; }
         /// <summary>
         /// Limit the number of ledger objects to retrieve.<br/>
         /// The server is not required to honor this value.
         /// </summary>
-        [JsonProperty("limit")]
+        [JsonPropertyName("limit")]
         public uint? Limit { get; set; }
         /// <summary>
         /// Value from a previous paginated response.<br/>
         /// Resume retrieving data where that response left off.
         /// </summary>
-        [JsonProperty("marker")]
-        public object Marker { get; set; }
+        [JsonPropertyName("marker")]
+        public object? Marker { get; set; }
+
+        /// <summary>
+        /// Filter results to a specific type of ledger entry. This field accepts canonical names of ledger entry types (case insensitive) or short names. If omitted, return ledger entries of all types.
+        /// </summary>
+        [JsonPropertyName("type")]
+        [JsonConverter(typeof(LedgerEntryTypeConverter))]
+        public LedgerEntryType? LedgerEntryType { get; set; }
     }
 }

@@ -1,12 +1,12 @@
-﻿#nullable enable
+#nullable enable
 using System.Collections.Generic;
 using System.Threading.Tasks;
-using Newtonsoft.Json;
-using Xrpl.BinaryCodec.Types;
+
+using System.Text.Json.Serialization;
+
 using Xrpl.Client.Exceptions;
 using Xrpl.Client.Json.Converters;
-using Xrpl.Models.Ledger;
-using Xrpl.Models.Methods;
+
 using Currency = Xrpl.Models.Common.Currency;
 
 namespace Xrpl.Models.Transactions
@@ -16,7 +16,7 @@ namespace Xrpl.Models.Transactions
     /// AMMCreate is used to create AccountRoot and the corresponding AMM ledger entries.
     /// This allows for the creation of only one AMM instance per unique asset pair.
     /// </summary>
-    public class AMMCreate : TransactionCommon, IAMMCreate
+    public class AMMCreate : TransactionRequest, IAMMCreate
     {
         public AMMCreate()
         {
@@ -58,7 +58,7 @@ namespace Xrpl.Models.Transactions
     }
 
     /// <inheritdoc cref="IAMMCreate" />
-    public class AMMCreateResponse : TransactionResponseCommon, IAMMCreate
+    public class AMMCreateResponse : TransactionResponse, IAMMCreate
     {
         #region Implementation of IAMMCreate
 
@@ -83,7 +83,7 @@ namespace Xrpl.Models.Transactions
         /// <param name="tx">An AMMCreate Transaction.</param>
         /// <returns></returns>
         /// <exception cref="ValidationException"> When the AMMCreate is Malformed.</exception>
-        public static async Task ValidateAMMCreate(Dictionary<string, dynamic> tx)
+        public static async Task ValidateAMMCreate(Dictionary<string, object> tx)
         {
             await Common.ValidateBaseTransaction(tx);
 

@@ -1,4 +1,6 @@
-﻿using Newtonsoft.Json.Linq;
+﻿using System;
+using System.Text.Json;
+using System.Text.Json.Nodes;
 
 using System.Text.RegularExpressions;
 using Xrpl.BinaryCodec.Binary;
@@ -15,6 +17,7 @@ namespace Xrpl.BinaryCodec.Types
     public class Uint64 : Uint<ulong>
     {
         static string HEX_REGEX = @"^[a-fA-F0-9]{1,16}$";
+        static string DECIMAL_REGEX = @"^[0-9]+$";
 
         /// <summary>
         /// create instance of this value
@@ -38,10 +41,47 @@ namespace Xrpl.BinaryCodec.Types
         /// <inheritdoc />
         public override string ToString() => B16.Encode(ToBytes());
 
-        /// <summary> Deserialize Uint64 </summary>
-        /// <param name="token">json token</param>
+        /// <summary> Deserialize Uint64 from JSON </summary>
+        /// <param name="token">json token - decimal digit-only strings, <c>0x</c>-prefixed hex, or bare hex (fixtures / rippled may omit the prefix)</param>
         /// <returns>Uint64 value</returns>
-        public static Uint64 FromJson(JToken token) => Bits.ToUInt64(B16.Decode(token.ToString()), 0);
+        public static Uint64 FromJson(JsonNode token)
+        {
+            if (token == null)
+                throw new FormatException("Uint64 JSON token cannot be null.");
+
+            if (token is JsonValue jvNum && jvNum.GetValueKind() == System.Text.Json.JsonValueKind.Number)
+            {
+                return new Uint64(jvNum.GetValue<ulong>());
+            }
+
+            if (!(token is JsonValue jvStr) || jvStr.GetValueKind() != System.Text.Json.JsonValueKind.String)
+                throw new FormatException($"Uint64 JSON token must be a JSON number or string, got {token.GetType().Name}.");
+
+            string str = jvStr.GetValue<string>();
+            
+            if (str.StartsWith("0x", StringComparison.OrdinalIgnoreCase))
+            {
+                string hexPart = str.Substring(2);
+                if (!Regex.IsMatch(hexPart, HEX_REGEX))
+                    throw new FormatException($"Cannot parse '{str}' as Uint64. Expected up to 16 hex digits after 0x.");
+
+                hexPart = hexPart.PadLeft(16, '0');
+                return new Uint64(Bits.ToUInt64(B16.Decode(hexPart), 0));
+            }
+            
+            if (Regex.IsMatch(str, DECIMAL_REGEX))
+            {
+                return new Uint64(ulong.Parse(str));
+            }
+
+            if (Regex.IsMatch(str, HEX_REGEX))
+            {
+                string padded = str.PadLeft(16, '0');
+                return new Uint64(Bits.ToUInt64(B16.Decode(padded), 0));
+            }
+
+            throw new FormatException($"Cannot parse '{str}' as Uint64. Expected decimal or hex string.");
+        }
 
         public static implicit operator Uint64(ulong v) => new Uint64(v);
 
@@ -61,7 +101,7 @@ namespace Xrpl.BinaryCodec.Types
         }
 
         /// <summary>
-        /// create instance of this value from string
+        /// create instance of this value from hex string
         /// </summary>
         public static Uint64 FromValue(string v)
         {
@@ -76,9 +116,9 @@ namespace Xrpl.BinaryCodec.Types
         }
 
         /// <inheritdoc />
-        public override JToken ToJson()
+        public override JsonNode ToJson()
         {
-            return ToBytes().ToHex();
+            return JsonValue.Create(ToBytes().ToHex());
         }
 
         /// <summary>

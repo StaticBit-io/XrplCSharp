@@ -1,4 +1,4 @@
-using System.Threading.Tasks;
+﻿using System.Threading.Tasks;
 using Microsoft.VisualStudio.TestTools.UnitTesting;
 using Xrpl.Models.Common;
 using Xrpl.Models.Ledger;
@@ -11,7 +11,7 @@ using Xrpl.Models.Methods;
 namespace XrplTests.Xrpl.ClientLib.Integration
 {
     [TestClass]
-    public class AccountICurrenciesRequests
+    public class TestIAccountCurrenciesRequests
     {
         // private static int Timeout = 20;
         public TestContext TestContext { get; set; }

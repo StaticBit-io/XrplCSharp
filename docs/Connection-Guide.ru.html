@@ -1,0 +1,543 @@
+<!DOCTYPE html>
+<!--[if IE]><![endif]-->
+<html>
+
+  <head>
+    <meta charset="utf-8">
+    <meta http-equiv="X-UA-Compatible" content="IE=edge,chrome=1">
+    <title>Руководство по подключению XrplCSharp </title>
+    <meta name="viewport" content="width=device-width">
+    <meta name="title" content="Руководство по подключению XrplCSharp ">
+    <meta name="generator" content="docfx ">
+  
+    <link rel="shortcut icon" href="favicon.ico">
+    <link rel="stylesheet" href="styles/docfx.vendor.css">
+    <link rel="stylesheet" href="styles/docfx.css">
+    <link rel="stylesheet" href="styles/main.css">
+    <link href="https://fonts.googleapis.com/css?family=Roboto" rel="stylesheet"> 
+    <meta property="docfx:navrel" content="toc.html">
+    <meta property="docfx:tocrel" content="toc.html">
+  
+  
+  
+  </head>  <body data-spy="scroll" data-target="#affix" data-offset="120">
+    <div id="wrapper">
+      <header>
+
+        <nav id="autocollapse" class="navbar navbar-inverse ng-scope" role="navigation">
+          <div class="container">
+            <div class="navbar-header">
+              <button type="button" class="navbar-toggle" data-toggle="collapse" data-target="#navbar">
+                <span class="sr-only">Toggle navigation</span>
+                <span class="icon-bar"></span>
+                <span class="icon-bar"></span>
+                <span class="icon-bar"></span>
+              </button>
+
+              <a class="navbar-brand" href="index.html">
+                <img id="logo" class="svg" src="logo.svg" alt="">
+              </a>
+            </div>
+            <div class="collapse navbar-collapse" id="navbar">
+              <form class="navbar-form navbar-right" role="search" id="search">
+                <div class="form-group">
+                  <input type="text" class="form-control" id="search-query" placeholder="Search" autocomplete="off">
+                </div>
+              </form>
+            </div>
+          </div>
+        </nav>
+
+        <div class="subnav navbar navbar-default">
+          <div class="container hide-when-search" id="breadcrumb">
+            <ul class="breadcrumb">
+              <li></li>
+            </ul>
+          </div>
+        </div>
+      </header>
+      <div role="main" class="container body-content hide-when-search">
+        <div class="article row grid">
+          <div class="col-md-10">
+            <article class="content wrap" id="_content" data-uid="">
+<h1 id="руководство-по-подключению-xrplcsharp">Руководство по подключению XrplCSharp</h1>
+
+<p>Это руководство объясняет, как настроить и управлять WebSocket-подключениями к узлам XRP Ledger с помощью библиотеки XrplCSharp.</p>
+<h2 id="содержание">Содержание</h2>
+<ul>
+<li><a href="#%D0%B1%D1%8B%D1%81%D1%82%D1%80%D1%8B%D0%B9-%D1%81%D1%82%D0%B0%D1%80%D1%82">Быстрый старт</a></li>
+<li><a href="#%D0%BF%D0%B0%D1%80%D0%B0%D0%BC%D0%B5%D1%82%D1%80%D1%8B-%D0%BF%D0%BE%D0%B4%D0%BA%D0%BB%D1%8E%D1%87%D0%B5%D0%BD%D0%B8%D1%8F">Параметры подключения</a></li>
+<li><a href="#%D1%81%D0%BE%D1%81%D1%82%D0%BE%D1%8F%D0%BD%D0%B8%D1%8F-%D0%BF%D0%BE%D0%B4%D0%BA%D0%BB%D1%8E%D1%87%D0%B5%D0%BD%D0%B8%D1%8F">Состояния подключения</a></li>
+<li><a href="#%D0%B0%D0%B2%D1%82%D0%BE%D0%BC%D0%B0%D1%82%D0%B8%D1%87%D0%B5%D1%81%D0%BA%D0%BE%D0%B5-%D0%BF%D0%B5%D1%80%D0%B5%D0%BF%D0%BE%D0%B4%D0%BA%D0%BB%D1%8E%D1%87%D0%B5%D0%BD%D0%B8%D0%B5">Автоматическое переподключение</a></li>
+<li><a href="#%D0%BF%D0%BE%D0%BB%D0%B8%D1%82%D0%B8%D0%BA%D0%B8-%D0%BE%D0%B1%D1%80%D0%B0%D0%B1%D0%BE%D1%82%D0%BA%D0%B8-%D0%B7%D0%B0%D0%BF%D1%80%D0%BE%D1%81%D0%BE%D0%B2">Политики обработки запросов</a></li>
+<li><a href="#%D0%BE%D0%B1%D1%80%D0%B0%D0%B1%D0%BE%D1%82%D0%BA%D0%B0-%D1%81%D0%BE%D0%B1%D1%8B%D1%82%D0%B8%D0%B9">Обработка событий</a></li>
+<li><a href="#%D0%BE%D0%B1%D1%80%D0%B0%D0%B1%D0%BE%D1%82%D0%BA%D0%B0-%D0%BE%D1%88%D0%B8%D0%B1%D0%BE%D0%BA">Обработка ошибок</a></li>
+<li><a href="#%D0%BF%D1%80%D0%B8%D0%BC%D0%B5%D1%80%D1%8B-%D0%B8%D1%81%D0%BF%D0%BE%D0%BB%D1%8C%D0%B7%D0%BE%D0%B2%D0%B0%D0%BD%D0%B8%D1%8F">Примеры использования</a></li>
+</ul>
+<hr>
+<h2 id="быстрый-старт">Быстрый старт</h2>
+<pre><code class="lang-csharp">using Xrpl.Client;
+
+// Создание клиента с настройками по умолчанию
+var client = new XrplClient(&quot;wss://s.altnet.rippletest.net:51233&quot;);
+
+// Подключение
+await client.Connect();
+
+// Выполнение запросов
+var response = await client.Request(new AccountInfoRequest { Account = &quot;rAddress...&quot; });
+
+// Отключение по завершении
+await client.Disconnect();
+</code></pre>
+<hr>
+<h2 id="параметры-подключения">Параметры подключения</h2>
+<p>Настройте поведение подключения, передав <code>ClientOptions</code> при создании клиента:</p>
+<pre><code class="lang-csharp">var client = new XrplClient(&quot;wss://s.altnet.rippletest.net:51233&quot;, new XrplClient.ClientOptions
+{
+    RequestTimeout = TimeSpan.FromSeconds(30),
+    MaxReconnectAttempts = 10,
+    StopAfterMaxAttempts = false
+});
+</code></pre>
+<h3 id="доступные-параметры">Доступные параметры</h3>
+<table>
+<thead>
+<tr>
+<th>Параметр</th>
+<th>Тип</th>
+<th>По умолчанию</th>
+<th>Описание</th>
+</tr>
+</thead>
+<tbody>
+<tr>
+<td><code>RequestTimeout</code></td>
+<td>TimeSpan</td>
+<td>20 секунд</td>
+<td>Таймаут для отдельных API-запросов после установки соединения</td>
+</tr>
+<tr>
+<td><code>ConnectionAttemptTimeout</code></td>
+<td>TimeSpan</td>
+<td>20 секунд</td>
+<td>Таймаут для одной попытки подключения WebSocket</td>
+</tr>
+<tr>
+<td><code>ReconnectBaseDelay</code></td>
+<td>TimeSpan</td>
+<td>2 секунды</td>
+<td>Базовая задержка между попытками автоматического переподключения</td>
+</tr>
+<tr>
+<td><code>ReconnectMaxDelay</code></td>
+<td>TimeSpan</td>
+<td>30 секунд</td>
+<td>Максимальная задержка между попытками переподключения (предел экспоненциального роста)</td>
+</tr>
+<tr>
+<td><code>MaxReconnectAttempts</code></td>
+<td>int</td>
+<td>5</td>
+<td>Максимальное количество попыток переподключения после разрыва соединения</td>
+</tr>
+<tr>
+<td><code>StopAfterMaxAttempts</code></td>
+<td>bool</td>
+<td>true</td>
+<td>Прекращать ли попытки переподключения после достижения максимума</td>
+</tr>
+<tr>
+<td><code>UseCustomPing</code></td>
+<td>bool</td>
+<td>true</td>
+<td>Включить пользовательский ping/pong для обнаружения проблем соединения</td>
+</tr>
+<tr>
+<td><code>RequestPolicy</code></td>
+<td>RequestFailurePolicy</td>
+<td>WaitForConnection</td>
+<td>Как обрабатывать запросы при отсутствии соединения</td>
+</tr>
+<tr>
+<td><code>ConnectionAcquisitionTimeout</code></td>
+<td>TimeSpan</td>
+<td>5 минут</td>
+<td>Максимальное время ожидания соединения при использовании политики WaitForConnection</td>
+</tr>
+</tbody>
+</table>
+<hr>
+<h2 id="состояния-подключения">Состояния подключения</h2>
+<p>Соединение может находиться в одном из четырёх состояний, доступных через <code>client.connection.CurrentConnectionState</code>:</p>
+<table>
+<thead>
+<tr>
+<th>Состояние</th>
+<th>Описание</th>
+</tr>
+</thead>
+<tbody>
+<tr>
+<td><code>Disconnected</code></td>
+<td>Не подключён. Начальное состояние, после отключения пользователем или после превышения максимального числа попыток</td>
+</tr>
+<tr>
+<td><code>Connecting</code></td>
+<td>Установка начального соединения</td>
+</tr>
+<tr>
+<td><code>Connected</code></td>
+<td>Успешно подключён и готов к запросам</td>
+</tr>
+<tr>
+<td><code>RestoringConnection</code></td>
+<td>Попытка восстановить соединение после неожиданного разрыва</td>
+</tr>
+</tbody>
+</table>
+<h3 id="диаграмма-состояний">Диаграмма состояний</h3>
+<pre><code>                    ┌─────────────────┐
+                    │  Disconnected   │ (начальное)
+                    └────────┬────────┘
+                             │ Connect()
+                             ▼
+                    ┌─────────────────┐
+                    │   Connecting    │
+                    └────────┬────────┘
+                             │ успех
+                             ▼
+                    ┌─────────────────┐
+         ┌─────────│    Connected    │◄────────┐
+         │         └────────┬────────┘         │
+         │                  │ потеря связи     │ успех
+         │                  ▼                  │
+         │         ┌─────────────────┐         │
+         │         │RestoringConnection│───────┘
+         │         └────────┬────────┘
+         │                  │ макс. попыток или Disconnect()
+         │                  ▼
+         │         ┌─────────────────┐
+         └────────►│  Disconnected   │
+   пользователь   └────────────────┘
+   вызвал Disconnect()
+</code></pre>
+<hr>
+<h2 id="автоматическое-переподключение">Автоматическое переподключение</h2>
+<p>При неожиданной потере соединения (перезапуск сервера, проблемы сети) клиент автоматически пытается переподключиться.</p>
+<h3 id="алгоритм-задержки">Алгоритм задержки</h3>
+<p>Задержка между попытками переподключения использует экспоненциальный рост с джиттером:</p>
+<pre><code>задержка = min(ReconnectBaseDelay * 2^(попытка-1), ReconnectMaxDelay) + случайный_джиттер
+</code></pre>
+<p>Пример с настройками по умолчанию:</p>
+<ul>
+<li>Попытка 1: ~2 секунды</li>
+<li>Попытка 2: ~4 секунды</li>
+<li>Попытка 3: ~8 секунд</li>
+<li>Попытка 4: ~16 секунд</li>
+<li>Попытка 5: ~30 секунд (достигнут предел)</li>
+</ul>
+<h3 id="поведение-переподключения">Поведение переподключения</h3>
+<table>
+<thead>
+<tr>
+<th>Сценарий</th>
+<th>Поведение</th>
+</tr>
+</thead>
+<tbody>
+<tr>
+<td>Сервер закрыл соединение</td>
+<td>Автопереподключение начинается</td>
+</tr>
+<tr>
+<td>Обнаружен таймаут сети</td>
+<td>Автопереподключение начинается</td>
+</tr>
+<tr>
+<td>Пользователь вызвал <code>Disconnect()</code></td>
+<td>Автопереподключения нет, состояние становится <code>Disconnected</code></td>
+</tr>
+<tr>
+<td>Превышено макс. попыток (<code>StopAfterMaxAttempts = true</code>)</td>
+<td>Переподключение останавливается, состояние <code>Disconnected</code></td>
+</tr>
+<tr>
+<td>Превышено макс. попыток (<code>StopAfterMaxAttempts = false</code>)</td>
+<td>Продолжает попытки с предупреждающими сообщениями</td>
+</tr>
+</tbody>
+</table>
+<h3 id="ручное-переподключение">Ручное переподключение</h3>
+<p>После исчерпания максимального числа попыток (с <code>StopAfterMaxAttempts = true</code>) вы можете переподключиться вручную:</p>
+<pre><code class="lang-csharp">// После окончательного сбоя соединения
+await client.Connect();
+</code></pre>
+<p>Это сбрасывает счётчик попыток и начинает заново.</p>
+<hr>
+<h2 id="политики-обработки-запросов">Политики обработки запросов</h2>
+<p>Параметр <code>RequestPolicy</code> определяет, как обрабатываются запросы при отсутствии соединения.</p>
+<h3 id="immediatefail">ImmediateFail</h3>
+<p>Запросы немедленно выбрасывают <code>NotConnectedException</code>, если нет соединения:</p>
+<pre><code class="lang-csharp">var client = new XrplClient(url, new XrplClient.ClientOptions
+{
+    RequestPolicy = RequestFailurePolicy.ImmediateFail
+});
+
+try
+{
+    var response = await client.Request(...);
+}
+catch (NotConnectedException)
+{
+    // Обработка отсутствия соединения
+}
+</code></pre>
+<p><strong>Когда использовать:</strong> Когда нужна немедленная обратная связь и вы сами управляете повторами.</p>
+<h3 id="waitforconnection-по-умолчанию">WaitForConnection (По умолчанию)</h3>
+<p>Запросы ожидают установки соединения (до <code>ConnectionAcquisitionTimeout</code>):</p>
+<pre><code class="lang-csharp">var client = new XrplClient(url, new XrplClient.ClientOptions
+{
+    RequestPolicy = RequestFailurePolicy.WaitForConnection,
+    ConnectionAcquisitionTimeout = TimeSpan.FromMinutes(2)
+});
+
+// Это будет ждать соединения, если отключено
+var response = await client.Request(...);
+</code></pre>
+<p><strong>Когда использовать:</strong> Для ботов и сервисов 24/7, которые должны переживать временные проблемы сети.</p>
+<hr>
+<h2 id="обработка-событий">Обработка событий</h2>
+<h3 id="события-статуса-подключения">События статуса подключения</h3>
+<p>Подпишитесь на <code>OnConnectionStatus</code> для получения обновлений состояния в реальном времени:</p>
+<pre><code class="lang-csharp">client.connection.OnConnectionStatus += (status) =&gt;
+{
+    Console.WriteLine($&quot;Состояние: {status.ConnectionState}&quot;);
+    Console.WriteLine($&quot;Сообщение: {status.Message}&quot;);
+    Console.WriteLine($&quot;Важность: {status.Severity}&quot;);
+    
+    if (status.Reconnect != null)
+    {
+        Console.WriteLine($&quot;Попытка: {status.Reconnect.CurrentAttempt}/{status.Reconnect.MaxAttempts}&quot;);
+        Console.WriteLine($&quot;Следующая попытка через: {status.Reconnect.RemainingDelay.TotalSeconds}с&quot;);
+    }
+};
+</code></pre>
+<h3 id="свойства-connectionstatusinfo">Свойства ConnectionStatusInfo</h3>
+<table>
+<thead>
+<tr>
+<th>Свойство</th>
+<th>Тип</th>
+<th>Описание</th>
+</tr>
+</thead>
+<tbody>
+<tr>
+<td><code>ConnectionState</code></td>
+<td>XrpConnectionState</td>
+<td>Текущее состояние подключения</td>
+</tr>
+<tr>
+<td><code>Message</code></td>
+<td>string</td>
+<td>Человекочитаемое сообщение о статусе</td>
+</tr>
+<tr>
+<td><code>Severity</code></td>
+<td>ConnectionCloseSeverity</td>
+<td>Info, Warning или Error</td>
+</tr>
+<tr>
+<td><code>Reconnect</code></td>
+<td>ReconnectInfo?</td>
+<td>Детали переподключения (null если не переподключается)</td>
+</tr>
+</tbody>
+</table>
+<h3 id="свойства-reconnectinfo">Свойства ReconnectInfo</h3>
+<table>
+<thead>
+<tr>
+<th>Свойство</th>
+<th>Тип</th>
+<th>Описание</th>
+</tr>
+</thead>
+<tbody>
+<tr>
+<td><code>CurrentAttempt</code></td>
+<td>int</td>
+<td>Номер текущей попытки переподключения</td>
+</tr>
+<tr>
+<td><code>MaxAttempts</code></td>
+<td>int</td>
+<td>Максимальное настроенное количество попыток</td>
+</tr>
+<tr>
+<td><code>RemainingDelay</code></td>
+<td>TimeSpan</td>
+<td>Время до следующей попытки переподключения</td>
+</tr>
+</tbody>
+</table>
+<h3 id="другие-события">Другие события</h3>
+<pre><code class="lang-csharp">// Вызывается при установке соединения
+client.connection.OnConnected += () =&gt; { ... };
+
+// Вызывается при потере соединения
+client.connection.OnDisconnect += (code, reason) =&gt; { ... };
+
+// Вызывается при ошибках
+client.connection.OnError += (errorCode, errorMessage, message, error) =&gt; { ... };
+</code></pre>
+<hr>
+<h2 id="обработка-ошибок">Обработка ошибок</h2>
+<h3 id="распространённые-исключения">Распространённые исключения</h3>
+<table>
+<thead>
+<tr>
+<th>Исключение</th>
+<th>Когда возникает</th>
+</tr>
+</thead>
+<tbody>
+<tr>
+<td><code>NotConnectedException</code></td>
+<td>Запрос при отсутствии соединения (с политикой ImmediateFail)</td>
+</tr>
+<tr>
+<td><code>TimeoutException</code></td>
+<td>Превышен таймаут запроса (<code>RequestTimeout</code>)</td>
+</tr>
+<tr>
+<td><code>DisconnectedException</code></td>
+<td>Соединение потеряно во время ожидающего запроса</td>
+</tr>
+<tr>
+<td><code>XrplException</code></td>
+<td>Ошибки протокола XRPL</td>
+</tr>
+</tbody>
+</table>
+<h3 id="обработка-отключений">Обработка отключений</h3>
+<pre><code class="lang-csharp">client.connection.OnConnectionStatus += (status) =&gt;
+{
+    switch (status.ConnectionState)
+    {
+        case XrpConnectionState.Disconnected:
+            if (status.Severity == ConnectionCloseSeverity.Error)
+            {
+                // Постоянный сбой - может потребоваться ручное вмешательство
+                LogError(status.Message);
+            }
+            break;
+            
+        case XrpConnectionState.RestoringConnection:
+            // Автопереподключение в процессе
+            LogInfo($&quot;Переподключение... попытка {status.Reconnect?.CurrentAttempt}&quot;);
+            break;
+    }
+};
+</code></pre>
+<hr>
+<h2 id="примеры-использования">Примеры использования</h2>
+<h3 id="базовое-подключение-с-мониторингом-статуса">Базовое подключение с мониторингом статуса</h3>
+<pre><code class="lang-csharp">var client = new XrplClient(&quot;wss://s.altnet.rippletest.net:51233&quot;);
+
+client.connection.OnConnectionStatus += (status) =&gt;
+{
+    Console.WriteLine($&quot;[{status.ConnectionState}] {status.Message}&quot;);
+};
+
+await client.Connect();
+// ... использование клиента ...
+await client.Disconnect();
+</code></pre>
+<h3 id="конфигурация-для-бота-247">Конфигурация для бота 24/7</h3>
+<pre><code class="lang-csharp">var client = new XrplClient(&quot;wss://s.altnet.rippletest.net:51233&quot;, new XrplClient.ClientOptions
+{
+    // Никогда не прекращать попытки переподключения
+    MaxReconnectAttempts = 100,
+    StopAfterMaxAttempts = false,
+    
+    // Ждать соединения при запросах
+    RequestPolicy = RequestFailurePolicy.WaitForConnection,
+    ConnectionAcquisitionTimeout = TimeSpan.FromMinutes(10),
+    
+    // Увеличенные таймауты для стабильности
+    RequestTimeout = TimeSpan.FromSeconds(60),
+    ConnectionAttemptTimeout = TimeSpan.FromSeconds(30)
+});
+</code></pre>
+<h3 id="конфигурация-с-быстрым-отказом">Конфигурация с быстрым отказом</h3>
+<pre><code class="lang-csharp">var client = new XrplClient(&quot;wss://s.altnet.rippletest.net:51233&quot;, new XrplClient.ClientOptions
+{
+    // Немедленный отказ, если нет соединения
+    RequestPolicy = RequestFailurePolicy.ImmediateFail,
+    
+    // Ограниченное количество попыток
+    MaxReconnectAttempts = 3,
+    StopAfterMaxAttempts = true,
+    
+    // Короткие таймауты
+    RequestTimeout = TimeSpan.FromSeconds(10),
+    ConnectionAttemptTimeout = TimeSpan.FromSeconds(5)
+});
+</code></pre>
+<h3 id="переключение-серверов">Переключение серверов</h3>
+<pre><code class="lang-csharp">// Переключение на другой сервер (отключается и переподключается)
+await client.connection.ChangeServer(&quot;wss://s1.ripple.com:443&quot;);
+</code></pre>
+<hr>
+<h2 id="лучшие-практики">Лучшие практики</h2>
+<ol>
+<li><strong>Всегда подписывайтесь на <code>OnConnectionStatus</code></strong> для мониторинга состояния соединения</li>
+<li><strong>Используйте политику <code>WaitForConnection</code></strong> для сервисов, требующих отказоустойчивости</li>
+<li><strong>Установите <code>StopAfterMaxAttempts = false</code></strong> для приложений 24/7</li>
+<li><strong>Обрабатывайте состояние <code>Disconnected</code></strong> в вашем UI для отображения статуса подключения</li>
+<li><strong>Не вызывайте <code>Connect()</code> повторно</strong> - это безопасно, но излишне (идемпотентно)</li>
+<li><strong>Используйте <code>CancellationToken</code></strong> для корректного завершения работы</li>
+</ol>
+
+</article>
+          </div>
+
+          <div class="hidden-sm col-md-2" role="complementary">
+            <div class="sideaffix">
+              <div class="contribution">
+                <ul class="nav">
+                  <li>
+                    <a href="https://github.com/Platonenkov/XrplCSharp/blob/feature/rep/DocFx/Connection-Guide.ru.md/#L1" class="contribution-link">Edit this page</a>
+                  </li>
+                </ul>
+              </div>
+              <nav class="bs-docs-sidebar hidden-print hidden-xs hidden-sm affix" id="affix">
+                <h5>In this article</h5>
+                <div></div>
+              </nav>
+            </div>
+          </div>
+        </div>
+      </div>
+
+      <footer>
+        <div class="grad-bottom"></div>
+        <div class="footer">
+          <div class="container">
+            <span class="pull-right">
+              <a href="#top">Back to top</a>
+            </span>
+      
+      <span>Generated by <strong>DocFX</strong></span>
+          </div>
+        </div>
+      </footer>
+    </div>
+
+    <script type="text/javascript" src="styles/docfx.vendor.min.js"></script>
+    <script type="text/javascript" src="styles/docfx.js"></script>
+    <script type="text/javascript" src="styles/main.js"></script>
+  </body>
+</html>

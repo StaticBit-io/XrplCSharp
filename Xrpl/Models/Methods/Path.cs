@@ -1,4 +1,4 @@
-﻿using Newtonsoft.Json;
+using System.Text.Json.Serialization;
 //https://github.com/XRPLF/xrpl.js/blob/b20c05c3680d80344006d20c44b4ae1c3b0ffcac/packages/xrpl/src/models/common/index.ts#L62
 //https://xrpl.org/paths.html#path-steps
 namespace Xrpl.Models.Methods
@@ -14,7 +14,7 @@ namespace Xrpl.Models.Methods
         /// (Optional) If present, this path step represents rippling through the specified address.<br/>
         /// MUST NOT be provided if this step specifies the currency or issuer fields.
         /// </summary>
-        [JsonProperty("account")]
+        [JsonPropertyName("account")]
         public string Account { get; set; }
 
         /// <summary>
@@ -22,7 +22,7 @@ namespace Xrpl.Models.Methods
         /// The currency specified indicates the new currency.<br/>
         /// MUST NOT be provided if this step specifies the account field.
         /// </summary>
-        [JsonProperty("currency")]
+        [JsonPropertyName("currency")]
         public string CurrencyCode { get; set; }
 
         /// <summary>
@@ -32,14 +32,20 @@ namespace Xrpl.Models.Methods
         /// MUST be omitted if the currency is XRP.<br/>
         /// MUST NOT be provided if this step specifies the account field.
         /// </summary>
-        [JsonProperty("issuer")]
+        [JsonPropertyName("issuer")]
         public string Issuer { get; set; }
-    }
 
-    //todo not found request classes
-    //https://github.com/XRPLF/xrpl.js/blob/b20c05c3680d80344006d20c44b4ae1c3b0ffcac/packages/xrpl/src/models/methods/pathFind.ts#L5
-    //BasePathFindRequest extends BaseRequest,
-    //PathFindCloseRequest extends BasePathFindRequest ,
-    //PathFindStatusRequest extends BasePathFindRequest
-    //enum type PathFindRequest 
+        /// <summary>
+        /// (Optional) An integer bitfield indicating which fields are present in this path step.<br/>
+        /// 0x01 = account, 0x10 = currency, 0x20 = issuer.
+        /// </summary>
+        [JsonPropertyName("type")]
+        public int? Type { get; set; }
+
+        /// <summary>
+        /// (Optional) Hex representation of the type field.
+        /// </summary>
+        [JsonPropertyName("type_hex")]
+        public string TypeHex { get; set; }
+    }
 }

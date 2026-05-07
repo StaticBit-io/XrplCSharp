@@ -1,4 +1,5 @@
-﻿using Microsoft.VisualStudio.TestTools.UnitTesting;
+﻿using System.Text.Json.Nodes;
+using Microsoft.VisualStudio.TestTools.UnitTesting;
 using Xrpl.BinaryCodec.Types;
 
 // https://github.com/XRPLF/xrpl-py/blob/master/tests/unit/core/binarycodec/types/test_uint.py
@@ -15,26 +16,30 @@ namespace XrplTests.BinaryCodecLib.Types
             Uint8 value1 = Uint8.FromValue(124);
             Uint8 value2 = Uint8.FromValue(123);
             Uint8 value3 = Uint8.FromValue(124);
-            Assert.AreEqual((int)value1.ToJson() > (int)value2.ToJson(), true);
-            Assert.AreEqual((int)value2.ToJson() < (int)value1.ToJson(), true);
-            Assert.AreNotEqual((int)value1.ToJson(), (int)value2.ToJson());
-            Assert.AreEqual(value1.ToJson(), value3.ToJson());
+            uint v1 = value1.ToJson().GetValue<uint>();
+            uint v2 = value2.ToJson().GetValue<uint>();
+            uint v3 = value3.ToJson().GetValue<uint>();
+            Assert.IsTrue(v2 < v1);
+            Assert.IsTrue(v1 > v2);
+            Assert.AreNotEqual(v1, v2);
+            Assert.AreEqual(v1, v3);
         }
 
         [TestMethod]
         public void TestFromValue64()
         {
             Uint64 value1 = Uint64.FromValue("10000000");
-            Assert.AreEqual(value1.ToJson(), "1000000000000000");
+            Assert.AreEqual("1000000000000000", value1.ToJson().GetValue<string>());
         }
 
         [TestMethod]
         public void TestCompare()
         {
             Uint8 value1 = Uint8.FromValue(124);
-            Assert.AreEqual((int)value1.ToJson() == 124, true);
-            Assert.AreEqual((int)value1.ToJson() < 125, true);
-            Assert.AreEqual((int)value1.ToJson() > 123, true);
+            uint v = value1.ToJson().GetValue<uint>();
+            Assert.AreEqual(124u, v);
+            Assert.IsTrue(v < 125u);
+            Assert.IsTrue(v > 123u);
         }
 
         [TestMethod]

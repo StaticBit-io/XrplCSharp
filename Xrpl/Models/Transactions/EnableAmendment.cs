@@ -1,7 +1,7 @@
 ﻿//https://xrpl.org/enableamendment.html
 namespace Xrpl.Models.Transactions
 {
-    public class EnableAmendment : TransactionCommon, IEnableAmendment
+    public class EnableAmendment : TransactionRequest, IEnableAmendment
     {
         public EnableAmendment()
         {
@@ -30,7 +30,7 @@ namespace Xrpl.Models.Transactions
         uint LedgerSequence { get; set; }
     }
 
-    public class EnableAmendmentResponse : TransactionResponseCommon, IEnableAmendment
+    public class EnableAmendmentResponse : TransactionResponse, IEnableAmendment
     {
         /// <inheritdoc />
         public string Amendment { get; set; }

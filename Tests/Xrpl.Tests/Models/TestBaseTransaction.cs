@@ -1,4 +1,4 @@
-﻿
+
 
 // https://github.com/XRPLF/xrpl.js/blob/main/packages/xrpl/test/models/baseTransaction.ts
 
@@ -20,7 +20,7 @@ namespace XrplTests.Xrpl.Models
         //[TestMethod]
         //public async Task TestVerify_Valid_all_optional_BaseTransaction()
         //{
-        //    var tx = new Dictionary<string, dynamic>
+        //    var tx = new Dictionary<string, object>
         //    {
         //        { "Account", "r97KeayHuEsDwyU1yPBVtMLLoQr79QcRFe" },
         //        { "TransactionType", "Payment" },
@@ -29,26 +29,26 @@ namespace XrplTests.Xrpl.Models
         //        {"AccountTxnID", "DEADBEEF"},
         //        {"Flags", 15u},
         //        {"LastLedgerSequence", 15u},
-        //        {"Memos", new List<dynamic>
+        //        {"Memos", new List<object>
         //        {
-        //            new Dictionary<string,dynamic>()
+        //            new Dictionary<string,object>()
         //            {
         //                {"MemoType","687474703a2f2f6578616d706c652e636f6d2f6d656d6f2f67656e65726963"},
         //                {"MemoData","72656e74"},
         //            },
-        //            new Dictionary<string,dynamic>()
+        //            new Dictionary<string,object>()
         //            {
         //                {"MemoType","687474703a2f2f6578616d706c652e636f6d2f6d656d6f2f67656e65726963"},
         //                {"MemoData","72656e74"},
         //            },
-        //            new Dictionary<string,dynamic>()
+        //            new Dictionary<string,object>()
         //            {
         //                {"MemoData","72656e74"},
         //            },
         //        }},
-        //        {"Signers",new List<dynamic>()
+        //        {"Signers",new List<object>()
         //        {
-        //            new Dictionary<string,dynamic>()
+        //            new Dictionary<string,object>()
         //            {
         //                { "Account", "r...." },
         //                { "TxnSignature", "DEADBEEF" },
@@ -67,7 +67,7 @@ namespace XrplTests.Xrpl.Models
         [TestMethod]
         public async Task TestVerify_Valid_only_required_BaseTransaction()
         {
-            var tx = new Dictionary<string, dynamic>
+            var tx = new Dictionary<string, object>
             {
                 { "Account", "r97KeayHuEsDwyU1yPBVtMLLoQr79QcRFe" },
                 {"TransactionType", "Payment"},
@@ -77,137 +77,137 @@ namespace XrplTests.Xrpl.Models
         [TestMethod]
         public async Task TestVerify_Invalid_Fee()
         {
-            var tx = new Dictionary<string, dynamic>
+            var tx = new Dictionary<string, object>
             {
                 { "Account", "r97KeayHuEsDwyU1yPBVtMLLoQr79QcRFe" },
                 {"TransactionType", "Payment"},
                 {"Fee", 1000},
             };
-            await Assert.ThrowsExceptionAsync<ValidationException>(() => Common.ValidateBaseTransaction(tx), "BaseTransaction: invalid Fee - no ERROR");
+            await Helper.ThrowsExceptionAsync<ValidationException>(() => Common.ValidateBaseTransaction(tx), "BaseTransaction: invalid Fee");
         }
         [TestMethod]
         public async Task TestVerify_Invalid_Sequence()
         {
-            var tx = new Dictionary<string, dynamic>
+            var tx = new Dictionary<string, object>
             {
                 { "Account", "r97KeayHuEsDwyU1yPBVtMLLoQr79QcRFe" },
                 {"TransactionType", "Payment"},
                 {"Sequence", "145"},
             };
-            await Assert.ThrowsExceptionAsync<ValidationException>(() => Common.ValidateBaseTransaction(tx), "BaseTransaction: invalid Sequence - no ERROR");
+            await Helper.ThrowsExceptionAsync<ValidationException>(() => Common.ValidateBaseTransaction(tx), "BaseTransaction: invalid Sequence");
         }
         [TestMethod]
         public async Task TestVerify_Invalid_AccountTxnID()
         {
-            var tx = new Dictionary<string, dynamic>
+            var tx = new Dictionary<string, object>
             {
                 { "Account", "r97KeayHuEsDwyU1yPBVtMLLoQr79QcRFe" },
                 {"TransactionType", "Payment"},
-                {"AccountTxnID",new List<dynamic>(){"WRONG"}},
+                {"AccountTxnID",new List<object>(){"WRONG"}},
             };
-            await Assert.ThrowsExceptionAsync<ValidationException>(() => Common.ValidateBaseTransaction(tx), "BaseTransaction: invalid AccountTxnID - no ERROR");
+            await Helper.ThrowsExceptionAsync<ValidationException>(() => Common.ValidateBaseTransaction(tx), "BaseTransaction: invalid AccountTxnID");
         }
         [TestMethod]
         public async Task TestVerify_Invalid_LastLedgerSequence()
         {
-            var tx = new Dictionary<string, dynamic>
+            var tx = new Dictionary<string, object>
             {
                 { "Account", "r97KeayHuEsDwyU1yPBVtMLLoQr79QcRFe" },
                 {"TransactionType", "Payment"},
                 {"LastLedgerSequence","1000"},
             };
-            await Assert.ThrowsExceptionAsync<ValidationException>(() => Common.ValidateBaseTransaction(tx), "BaseTransaction: invalid LastLedgerSequence - no ERROR");
+            await Helper.ThrowsExceptionAsync<ValidationException>(() => Common.ValidateBaseTransaction(tx), "BaseTransaction: invalid LastLedgerSequence");
         }
         [TestMethod]
         public async Task TestVerify_Invalid_SourceTag()
         {
-            var tx = new Dictionary<string, dynamic>
+            var tx = new Dictionary<string, object>
             {
                 { "Account", "r97KeayHuEsDwyU1yPBVtMLLoQr79QcRFe" },
                 {"TransactionType", "Payment"},
-                {"SourceTag",new List<dynamic>(){"ARRAY"}},
+                {"SourceTag",new List<object>(){"ARRAY"}},
             };
-            await Assert.ThrowsExceptionAsync<ValidationException>(() => Common.ValidateBaseTransaction(tx), "BaseTransaction: invalid SourceTag - no ERROR");
+            await Helper.ThrowsExceptionAsync<ValidationException>(() => Common.ValidateBaseTransaction(tx), "BaseTransaction: invalid SourceTag");
         }
         [TestMethod]
         public async Task TestVerify_Invalid_SigningPubKey()
         {
-            var tx = new Dictionary<string, dynamic>
+            var tx = new Dictionary<string, object>
             {
                 { "Account", "r97KeayHuEsDwyU1yPBVtMLLoQr79QcRFe" },
                 {"TransactionType", "Payment"},
                 {"SigningPubKey",1000},
             };
-            await Assert.ThrowsExceptionAsync<ValidationException>(() => Common.ValidateBaseTransaction(tx), "BaseTransaction: invalid SigningPubKey - no ERROR");
+            await Helper.ThrowsExceptionAsync<ValidationException>(() => Common.ValidateBaseTransaction(tx), "BaseTransaction: invalid SigningPubKey");
         }
         [TestMethod]
         public async Task TestVerify_Invalid_TicketSequence()
         {
-            var tx = new Dictionary<string, dynamic>
+            var tx = new Dictionary<string, object>
             {
                 { "Account", "r97KeayHuEsDwyU1yPBVtMLLoQr79QcRFe" },
                 {"TransactionType", "Payment"},
                 {"TicketSequence","1000"},
             };
-            await Assert.ThrowsExceptionAsync<ValidationException>(() => Common.ValidateBaseTransaction(tx), "BaseTransaction: invalid TicketSequence - no ERROR");
+            await Helper.ThrowsExceptionAsync<ValidationException>(() => Common.ValidateBaseTransaction(tx), "BaseTransaction: invalid TicketSequence");
         }
         [TestMethod]
         public async Task TestVerify_Invalid_TxnSignature()
         {
-            var tx = new Dictionary<string, dynamic>
+            var tx = new Dictionary<string, object>
             {
                 { "Account", "r97KeayHuEsDwyU1yPBVtMLLoQr79QcRFe" },
                 {"TransactionType", "Payment"},
                 {"TxnSignature",1000},
             };
-            await Assert.ThrowsExceptionAsync<ValidationException>(() => Common.ValidateBaseTransaction(tx), "BaseTransaction: invalid TxnSignature - no ERROR");
+            await Helper.ThrowsExceptionAsync<ValidationException>(() => Common.ValidateBaseTransaction(tx), "BaseTransaction: invalid TxnSignature");
         }
         [TestMethod]
         public async Task TestVerify_Invalid_Signers_1()
         {
-            var tx = new Dictionary<string, dynamic>
+            var tx = new Dictionary<string, object>
             {
                 { "Account", "r97KeayHuEsDwyU1yPBVtMLLoQr79QcRFe" },
                 {"TransactionType", "Payment"},
-                {"Signers",new List<dynamic>() { }},
+                {"Signers",new List<object>() { }},
             };
-            await Assert.ThrowsExceptionAsync<ValidationException>(() => Common.ValidateBaseTransaction(tx), "BaseTransaction: invalid Signers - no ERROR");
+            await Helper.ThrowsExceptionAsync<ValidationException>(() => Common.ValidateBaseTransaction(tx), "BaseTransaction: invalid Signers");
         }
         [TestMethod]
         public async Task TestVerify_Invalid_Signers_2()
         {
-            var tx = new Dictionary<string, dynamic>
+            var tx = new Dictionary<string, object>
             {
                 { "Account", "r97KeayHuEsDwyU1yPBVtMLLoQr79QcRFe" },
                 {"TransactionType", "Payment"},
-                {"Signers",new List<dynamic>()
+                {"Signers",new List<object>()
                 {
-                    new Dictionary<string,dynamic>()
+                    new Dictionary<string,object>()
                     {
                         { "Account", "r...." },
 
                     }
                 }},
             };
-            await Assert.ThrowsExceptionAsync<ValidationException>(() => Common.ValidateBaseTransaction(tx), "BaseTransaction: invalid Signers - no ERROR");
+            await Helper.ThrowsExceptionAsync<ValidationException>(() => Common.ValidateBaseTransaction(tx), "BaseTransaction: invalid Signers");
         }
         [TestMethod]
         public async Task TestVerify_Invalid_Memo()
         {
-            var tx = new Dictionary<string, dynamic>
+            var tx = new Dictionary<string, object>
             {
                 { "Account", "r97KeayHuEsDwyU1yPBVtMLLoQr79QcRFe" },
                 {"TransactionType", "Payment"},
-                {"Memos", new List<dynamic>
+                {"Memos", new List<object>
                 {
-                    new Dictionary<string,dynamic>()
+                    new Dictionary<string,object>()
                     {
                         {"MemoType","HI"},
                         {"MemoData","WRONG"}, //todo no memo check for hex
                     },
                 }},
             };
-            await Assert.ThrowsExceptionAsync<ValidationException>(() => Common.ValidateBaseTransaction(tx), "BaseTransaction: invalid Memos");
+            await Helper.ThrowsExceptionAsync<ValidationException>(() => Common.ValidateBaseTransaction(tx), "BaseTransaction: invalid Memos");
         }
     }
 

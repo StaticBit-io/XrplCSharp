@@ -1,4 +1,4 @@
-﻿using Newtonsoft.Json;
+using System.Text.Json.Serialization;
 using Xrpl.Models.Transactions;
 
 //https://github.com/XRPLF/xrpl.js/blob/main/packages/xrpl/src/models/methods/bookOffers.ts
@@ -15,13 +15,13 @@ namespace Xrpl.Models.Methods
         /// all uppercase and lowercase letters, digits, as well as the symbols ? ! @ # $ % ^ * ( ) { } [ ] | and symbols ampersand, less, greater<br/>
         /// Currency codes are case-sensitive.
         /// </summary>
-        [JsonProperty("currency")]
+        [JsonPropertyName("currency")]
         public string Currency { get; set; }
         /// <summary>
         /// Generally, the account that issues this token.<br/>
         /// In special cases, this can refer to the account that holds the token instead.
         /// </summary>
-        [JsonProperty("issuer")]
+        [JsonPropertyName("issuer")]
         public string Issuer { get; set; }
     }
     /// <summary>
@@ -51,25 +51,25 @@ namespace Xrpl.Models.Methods
         /// If provided, the server does not provide more than this many offers in the results.<br/>
         /// The total number of results returned may be fewer than the limit, because the server omits unfunded offers.
         /// </summary>
-        [JsonProperty("limit")]
+        [JsonPropertyName("limit")]
         public uint? Limit { get; set; }
         /// <summary>
         /// The Address of an account to use as a perspective.<br/>
         /// Unfunded offers placed by this account are always included in the response.
         /// </summary>
-        [JsonProperty("taker")]
+        [JsonPropertyName("taker")]
         public string Taker { get; set; }
         /// <summary>
         /// Specification of which currency the account taking the offer would receive,
         /// as an object with currency and issuer fields (omit issuer for XRP), like currency amounts.
         /// </summary>
-        [JsonProperty("taker_gets")]
+        [JsonPropertyName("taker_gets")]
         public TakerAmount TakerGets { get; set; }
         /// <summary>
         /// Specification of which currency the account taking the offer would pay,
         /// as an object with currency and issuer fields (omit issuer for XRP), like currency amounts.
         /// </summary>
-        [JsonProperty("taker_pays")]
+        [JsonPropertyName("taker_pays")]
         public TakerAmount TakerPays { get; set; }
     }
 }

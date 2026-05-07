@@ -1,53 +1,63 @@
 ﻿using System;
-using Newtonsoft.Json;
+using System.Text.Json;
+using System.Text.Json.Serialization;
 using Xrpl.Models.Common;
+using Xrpl.Models.Ledger;
 
 namespace Xrpl.Client.Json.Converters
 {
     /// <summary>
     /// <see cref="LedgerIndex"/> json converter
     /// </summary>
-    public class LedgerIndexConverter : JsonConverter
+    public class LedgerIndexConverter : JsonConverter<LedgerIndex>
     {
         /// <summary>
         /// write <see cref="LedgerIndex"/>  to json object
         /// </summary>
         /// <param name="writer">writer</param>
         /// <param name="value"><see cref="LedgerIndex"/> object</param>
-        /// <param name="serializer">json serializer</param>
-        /// <exception cref="NotSupportedException">Cannot write this object type</exception>
-        public override void WriteJson(JsonWriter writer, object value, JsonSerializer serializer)
+        /// <param name="options">json serializer options</param>
+        /// <exception cref="JsonException">Cannot write this object type</exception>
+        public override void Write(Utf8JsonWriter writer, LedgerIndex value, JsonSerializerOptions options)
         {
-            if (value is LedgerIndex ledger_index)
+            if (value.Index.HasValue)
             {
-                if (ledger_index.Index.HasValue)
-                {
-                    writer.WriteValue(ledger_index.Index.Value);
-                }
-                else
-                {
-                    writer.WriteValue(ledger_index.LedgerIndexType.ToString().ToLower());
-                }
+                writer.WriteNumberValue(value.Index.Value);
             }
             else
             {
-                throw new Exception("Cannot convert this object type");
+                writer.WriteStringValue(value.LedgerIndexType.ToString().ToLower());
             }
         }
 
         /// <summary> read <see cref="LedgerIndex"/> from json object </summary>
         /// <param name="reader">json reader</param>
-        /// <param name="objectType">object type</param>
-        /// <param name="existingValue">object value</param>
-        /// <param name="serializer">json serializer</param>
+        /// <param name="typeToConvert">target type</param>
+        /// <param name="options">json serializer options</param>
         /// <returns><see cref="LedgerIndex"/> </returns>
-        /// <exception cref="NotSupportedException">Cannot convert value</exception>
-        public override object ReadJson(JsonReader reader, Type objectType, object existingValue, JsonSerializer serializer)
+        /// <exception cref="JsonException">Cannot convert value</exception>
+        public override LedgerIndex Read(ref Utf8JsonReader reader, Type typeToConvert, JsonSerializerOptions options)
         {
-            throw new NotImplementedException();
-        }
+            if (reader.TokenType == JsonTokenType.Number)
+            {
+                return new LedgerIndex(reader.GetUInt32());
+            }
 
-        /// <inheritdoc />
-        public override bool CanConvert(Type objectType) => objectType == typeof(LedgerIndex);
+            if (reader.TokenType == JsonTokenType.String)
+            {
+                string str = reader.GetString();
+                if (Enum.TryParse<LedgerIndexType>(str, ignoreCase: true, out LedgerIndexType indexType))
+                {
+                    return new LedgerIndex(indexType);
+                }
+
+                if (uint.TryParse(str, out uint index))
+                {
+                    return new LedgerIndex(index);
+                }
+            }
+
+            throw new JsonException($"Cannot convert token {reader.TokenType} to LedgerIndex");
+        }
     }
 }

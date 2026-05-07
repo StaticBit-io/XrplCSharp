@@ -1,4 +1,4 @@
-﻿using System.Collections.Generic;
+using System.Collections.Generic;
 using System.Threading.Tasks;
 
 using Xrpl.Client.Exceptions;
@@ -13,7 +13,7 @@ namespace Xrpl.Models.Transactions
         /// </summary>
         /// <param name="tx"> A TrustSet Transaction.</param>
         /// <exception cref="ValidationException">When the TrustSet is malformed.</exception>
-        public static async Task Validate(Dictionary<string, dynamic> tx)
+        public static async Task Validate(Dictionary<string, object> tx)
         {
             tx.TryGetValue("TransactionType", out var type);
 
@@ -84,6 +84,9 @@ namespace Xrpl.Models.Transactions
                 case "NFTokenMint":
                     await ValidateNFTokenMint(tx);
                     break;
+                case "NFTokenModify":
+                    await ValidateNFTokenMint(tx);
+                    break;
 
                 case "OfferCancel":
                     await ValidateOfferCancel(tx);
@@ -141,6 +144,54 @@ namespace Xrpl.Models.Transactions
                     break;
                 case "AMMWithdraw":
                     await ValidateAMMWithdraw(tx);
+                    break;
+                case "Batch":
+                    await ValidateBatch(tx);
+                    break;
+                case "MPTokenIssuanceCreate":
+                    await ValidateMPTokenIssuanceCreate(tx);
+                    break;
+                case "MPTokenIssuanceDestroy":
+                    await ValidateMPTokenIssuanceDestroy(tx);
+                    break;
+                case "MPTokenIssuanceSet":
+                    await ValidateMPTokenIssuanceSet(tx);
+                    break;
+                case "MPTokenAuthorize":
+                    await ValidateMPTokenAuthorize(tx);
+                    break;
+                case "OracleSet":
+                    await ValidateOracleSet(tx);
+                    break;
+                case "OracleDelete":
+                    await ValidateOracleDelete(tx);
+                    break;
+                case "Clawback":
+                    await ValidateClawBack(tx);
+                    break;
+                case "AMMClawback":
+                    await ValidateAMMClawBack(tx);
+                    break;
+                case "DIDSet":
+                    await ValidateDIDSet(tx);
+                    break;
+                case "DIDDelete":
+                    await ValidateDIDDelete(tx);
+                    break;
+                case "PermissionedDomainSet":
+                    await ValidatePermissionedDomainSet(tx);
+                    break;
+                case "PermissionedDomainDelete":
+                    await ValidatePermissionedDomainDelete(tx);
+                    break;
+                case "CredentialCreate":
+                    await ValidateCredentialCreate(tx);
+                    break;
+                case "CredentialAccept":
+                    await ValidateCredentialAccept(tx);
+                    break;
+                case "CredentialDelete":
+                    await ValidateCredentialDelete(tx);
                     break;
                 default:
                     throw new ValidationException($"Invalid field TransactionType: {type}");

@@ -2,8 +2,6 @@
 using System.Collections.Generic;
 using System.Linq;
 
-using Newtonsoft.Json.Linq;
-
 using Xrpl.Client.Exceptions;
 using Xrpl.Models.Transactions;
 
@@ -17,7 +15,7 @@ namespace Xrpl.Models.Utils
         /// Sets a transaction's flags to its numeric representation.
         /// </summary>
         /// <param name="tx"> A transaction to set its flags to its numeric representation.</param>
-        public static void SetTransactionFlagsToNumber(Dictionary<string, dynamic> tx)
+        public static void SetTransactionFlagsToNumber(Dictionary<string, object> tx)
         {
             if (!tx.TryGetValue("Flags", out var Flags))
             {
@@ -68,65 +66,63 @@ namespace Xrpl.Models.Utils
                     break;
             }
         }
-        public static uint ConvertAMMDepositFlagsToNumber(dynamic flags)
+        public static uint ConvertAMMDepositFlagsToNumber(object flags)
         {
-            if (flags is not Dictionary<string, dynamic> flag)
+            if (flags is not Dictionary<string, object> flag)
                 return 0;
             return ReduceFlags(flag, Enum.GetValues<AMMDepositFlags>().ToDictionary(c => c.ToString(), c => (uint)c));
         }
-        public static uint ConvertAMMWithdrawFlagsToNumber(dynamic flags)
+        public static uint ConvertAMMWithdrawFlagsToNumber(object flags)
         {
-            if (flags is not Dictionary<string, dynamic> flag)
+            if (flags is not Dictionary<string, object> flag)
                 return 0;
             return ReduceFlags(flag, Enum.GetValues<AMMWithdrawFlags>().ToDictionary(c => c.ToString(), c => (uint)c));
         }
-        public static uint ConvertAccountSetFlagsToNumber(dynamic flags)
+        public static uint ConvertAccountSetFlagsToNumber(object flags)
         {
-            if (flags is not Dictionary<string, dynamic> flag)
+            if (flags is not Dictionary<string, object> flag)
                 return 0;
             return ReduceFlags(flag, Enum.GetValues<AccountSetAsfFlags>().ToDictionary(c => c.ToString(), c => (uint)c));
         }
 
-        public static uint ConvertOfferCreateFlagsToNumber(dynamic flags)
+        public static uint ConvertOfferCreateFlagsToNumber(object flags)
         {
-            if (flags is not Dictionary<string, dynamic> flag)
+            if (flags is not Dictionary<string, object> flag)
                 return 0;
             return ReduceFlags(flag, Enum.GetValues<OfferCreateFlags>().ToDictionary(c => c.ToString(), c => (uint)c) );
         }
 
-        public static uint ConvertPaymentChannelClaimFlagsToNumber(dynamic flags)
+        public static uint ConvertPaymentChannelClaimFlagsToNumber(object flags)
         {
-            if (flags is not Dictionary<string, dynamic> flag)
+            if (flags is not Dictionary<string, object> flag)
                 return 0;
             return ReduceFlags(flag, Enum.GetValues<PaymentChannelClaimFlags>().ToDictionary(c => c.ToString(), c => (uint)c));
         }
 
-        public static uint ConvertPaymentTransactionFlagsToNumber(dynamic flags)
+        public static uint ConvertPaymentTransactionFlagsToNumber(object flags)
         {
-            if (flags is not Dictionary<string, dynamic> flag)
+            if (flags is not Dictionary<string, object> flag)
                 return 0;
             return ReduceFlags(flag, Enum.GetValues<PaymentFlags>().ToDictionary(c => c.ToString(), c => (uint)c));
         }
 
-        public static uint ConvertTrustSetFlagsToNumber(dynamic flags)
+        public static uint ConvertTrustSetFlagsToNumber(object flags)
         {
-            if (flags is not Dictionary<string, dynamic> flag)
+            if (flags is not Dictionary<string, object> flag)
                 return 0;
             return ReduceFlags(flag, Enum.GetValues<TrustSetFlags>().ToDictionary(c => c.ToString(), c => (uint)c));
         }
 
-        public static uint ReduceFlags(Dictionary<string, dynamic> flags, Dictionary<string, uint> flagEnum)
+        public static uint ReduceFlags(Dictionary<string, object> flags, Dictionary<string, uint> flagEnum)
         {
             return flags.Select(p => p.Key).Aggregate(0u, (resultFlags, f) =>
             {
-                if (!flagEnum.TryGetValue(f, out var e))
+                if (!flagEnum.TryGetValue(f, out uint flag))
                 {
                     throw new ValidationException($"flag {flags} doesn't exist in flagEnum: {flagEnum}");
                 }
 
-                flagEnum.TryGetValue(f, out uint flag);
-
-                return flags[f] == true ? resultFlags | flag : resultFlags;
+                return flags[f] is true ? resultFlags | flag : resultFlags;
             });
         }
     }

@@ -1,6 +1,6 @@
-﻿using Newtonsoft.Json.Linq;
-using System.Collections.Generic;
+﻿using System.Collections.Generic;
 using System.Linq;
+using System.Text.Json.Nodes;
 using Xrpl.BinaryCodec.Binary;
 
 //https://github.com/XRPLF/xrpl.js/blob/8a9a9bcc28ace65cde46eed5010eb8927374a736/packages/ripple-binary-codec/src/types/path-set.ts
@@ -43,7 +43,7 @@ namespace Xrpl.BinaryCodec.Types
         /// <summary> Deserialize Hot </summary>
         /// <param name="json">json token</param>
         /// <returns></returns>
-        public static PathHop FromJson(JToken json)
+        public static PathHop FromJson(JsonNode json)
         {
             return new PathHop(json["account"], json["issuer"], json["currency"]);
         }
@@ -77,21 +77,21 @@ namespace Xrpl.BinaryCodec.Types
         }
         /// <summary> Serialize Hop  </summary>
         /// <returns></returns>
-        public JObject ToJson()
+        public JsonObject ToJson()
         {
-            var hop = new JObject {["type"] = Type};
+            JsonObject hop = new JsonObject { ["type"] = Type };
 
             if (HasAccount())
             {
-                hop["account"] = Account;
+                hop["account"] = JsonValue.Create(Account.ToString());
             }
             if (HasCurrency())
             {
-                hop["currency"] = Currency;
+                hop["currency"] = JsonValue.Create(Currency.ToString());
             }
             if (HasIssuer())
             {
-                hop["issuer"] = Issuer;
+                hop["issuer"] = JsonValue.Create(Issuer.ToString());
             }
             return hop;
         }
@@ -113,13 +113,13 @@ namespace Xrpl.BinaryCodec.Types
         /// <summary> Deserialize Path </summary>
         /// <param name="json">json token</param>
         /// <returns></returns>
-        public static Path FromJson(JToken json) => new Path(json.Select(PathHop.FromJson));
+        public static Path FromJson(JsonNode json) => new Path(json.AsArray().Select(n => PathHop.FromJson(n)));
         /// <summary> Serialize Path  </summary>
         /// <returns></returns>
-        public JArray ToJson()
+        public JsonArray ToJson()
         {
-            var array = new JArray();
-            foreach (var hop in this)
+            JsonArray array = new JsonArray();
+            foreach (PathHop hop in this)
             {
                 array.Add(hop.ToJson());
             }
@@ -187,10 +187,10 @@ namespace Xrpl.BinaryCodec.Types
         /// Get the JSON representation of this PathSet
         /// </summary>
         /// <returns>Array of Array of HopObjects, representing this PathSet</returns>
-        public JToken ToJson()
+        public JsonNode ToJson()
         {
-            var array = new JArray();
-            foreach (var path in this)
+            JsonArray array = new JsonArray();
+            foreach (Path path in this)
             {
                 array.Add(path.ToJson());
             }
@@ -199,9 +199,9 @@ namespace Xrpl.BinaryCodec.Types
         /// <summary> Deserialize PathSet </summary>
         /// <param name="token">json token</param>
         /// <returns></returns>
-        public static PathSet FromJson(JToken token)
+        public static PathSet FromJson(JsonNode token)
         {
-            return new PathSet(token.Select(Path.FromJson));
+            return new PathSet(token.AsArray().Select(n => Path.FromJson(n)));
         }
         /// <summary>
         /// Construct a PathSet from a BinaryParser

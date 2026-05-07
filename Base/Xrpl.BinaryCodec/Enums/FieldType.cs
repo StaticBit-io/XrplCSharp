@@ -26,7 +26,10 @@ namespace Xrpl.BinaryCodec.Enums
         public static readonly FieldType Hash160 = new FieldType(nameof(Hash160), 17);
         public static readonly FieldType PathSet = new FieldType(nameof(PathSet), 18);
         public static readonly FieldType Vector256 = new FieldType(nameof(Vector256), 19);
+        public static readonly FieldType Hash192 = new FieldType(nameof(Hash192), 21);
         public static readonly FieldType Issue = new FieldType(nameof(Issue), 24);
+        /// <summary>Currency type for Oracle price data (ordinal 26).</summary>
+        public static readonly FieldType Currency = new FieldType(nameof(Currency), 26);
         public static readonly FieldType Transaction = new FieldType(nameof(Transaction), 10001);
         public static readonly FieldType LedgerEntry = new FieldType(nameof(LedgerEntry), 10002);
         public static readonly FieldType Validation = new FieldType(nameof(Validation), 10003);

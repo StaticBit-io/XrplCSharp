@@ -1,8 +1,8 @@
-﻿using System;
+using System;
 using System.Collections.Generic;
 using System.Threading.Tasks;
 
-using Newtonsoft.Json;
+using System.Text.Json.Serialization;
 
 using Xrpl.Client.Exceptions;
 using Xrpl.Client.Json.Converters;
@@ -12,7 +12,7 @@ using Xrpl.Client.Json.Converters;
 namespace Xrpl.Models.Transactions
 {
     /// <inheritdoc cref="IPaymentChannelCreate" />
-    public class PaymentChannelCreate : TransactionCommon, IPaymentChannelCreate
+    public class PaymentChannelCreate : TransactionRequest, IPaymentChannelCreate, IDestination
     {
         public PaymentChannelCreate()
         {
@@ -46,7 +46,7 @@ namespace Xrpl.Models.Transactions
     /// Create a unidirectional channel and fund it with XRP.<br/>
     /// The address sending  this transaction becomes the "source address" of the payment channel.
     /// </summary>
-    public interface IPaymentChannelCreate : ITransactionCommon
+    public interface IPaymentChannelCreate : ITransactionCommon, IDestination
     {
         /// <summary>
         /// Amount of XRP, in drops, to deduct from the sender's balance and set aside in this channel.<br/>
@@ -86,7 +86,7 @@ namespace Xrpl.Models.Transactions
     }
 
     /// <inheritdoc cref="IPaymentChannelCreate" />
-    public class PaymentChannelCreateResponse : TransactionResponseCommon, IPaymentChannelCreate
+    public class PaymentChannelCreateResponse : TransactionResponse, IPaymentChannelCreate, IDestination
     {
         /// <inheritdoc />
         public string Amount { get; set; }
@@ -118,7 +118,7 @@ namespace Xrpl.Models.Transactions
         /// </summary>
         /// <param name="tx"> A PaymentChannelCreate Transaction.</param>
         /// <exception cref="ValidationException">When the PaymentChannelCreate is malformed.</exception>
-        public static async Task ValidatePaymentChannelCreate(Dictionary<string, dynamic> tx)
+        public static async Task ValidatePaymentChannelCreate(Dictionary<string, object> tx)
         {
             await Common.ValidateBaseTransaction(tx);
 

@@ -1,7 +1,6 @@
 ﻿using System;
 using System.Collections.Generic;
-using System.Linq;
-using Newtonsoft.Json;
+using System.Text.Json.Serialization;
 
 using Xrpl.Client.Json.Converters;
 using Xrpl.Models.Ledger;
@@ -16,6 +15,7 @@ public class LONFTokenPage : BaseLedgerEntry
         //The type of ledger object (0x0074).
         LedgerEntryType = LedgerEntryType.NFTokenPage;
     }
+    [JsonConverter(typeof(NumberOrStringConverter))]
     public string Flags { get; set; }
     /// <summary>
     /// The locator of the next page, if any. Details about this field and how it should be used are outlined below.

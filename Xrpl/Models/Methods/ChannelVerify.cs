@@ -1,5 +1,5 @@
-﻿using System;
-using Newtonsoft.Json;
+using System;
+using System.Text.Json.Serialization;
 using Xrpl.Client.Json.Converters;
 
 //https://github.com/XRPLF/xrpl.js/blob/main/packages/xrpl/src/models/methods/channelVerify.ts
@@ -30,22 +30,22 @@ namespace Xrpl.Models.Methods
         /// The Channel ID of the channel that provides the XRP.<br/>
         /// This is a 64-character hexadecimal string.
         /// </summary>
-        [JsonProperty("channel_id")]
+        [JsonPropertyName("channel_id")]
         public string ChannelId { get; set; }
         /// <summary>
         /// The signature to verify, in hexadecimal.
         /// </summary>
-        [JsonProperty("signature")]
+        [JsonPropertyName("signature")]
         public string Signature { get; set; }
         /// <summary>
         /// The public key of the channel and the key pair that was used to create the signature, in hexadecimal or the XRP Ledger's base58 format.
         /// </summary>
-        [JsonProperty("public_key")]
+        [JsonPropertyName("public_key")]
         public string PublicKey { get; set; }
         /// <summary>
         /// The amount of XRP, in drops, the provided signature authorizes.
         /// </summary>
-        [JsonProperty("amount")]
+        [JsonPropertyName("amount")]
         [JsonConverter(typeof(GenericStringConverter<ulong>))]
         public ulong Amount { get; set; }
 
@@ -53,7 +53,21 @@ namespace Xrpl.Models.Methods
         public double RippleAmount
         {
             get => (double)Amount / 1000000;
-            set => Amount = Convert.ToUInt32(value * 1000000);
+            set
+            {
+                if (value < 0)
+                    throw new ArgumentOutOfRangeException(nameof(value), value, "RippleAmount must be non-negative.");
+
+                decimal dropsDecimal = (decimal)value * 1000000m;
+                if (dropsDecimal != decimal.Truncate(dropsDecimal))
+                    throw new ArgumentException("RippleAmount must be a whole number of drops.", nameof(value));
+
+                if (dropsDecimal > ulong.MaxValue)
+                    throw new OverflowException("RippleAmount in drops exceeds ulong.MaxValue.");
+
+                ulong truncated = (ulong)decimal.Truncate(dropsDecimal);
+                Amount = truncated;
+            }
         }
     }
     //todo not found ChannelVerifyResponse https://github.com/XRPLF/xrpl.js/blob/b20c05c3680d80344006d20c44b4ae1c3b0ffcac/packages/xrpl/src/models/methods/channelVerify.ts#L33

@@ -1,15 +1,16 @@
-﻿
+
 
 // https://github.com/XRPLF/xrpl.js/blob/main/packages/xrpl/src/models/transactions/NFTokenBurn.ts
 
 using System.Collections.Generic;
 using System.Threading.Tasks;
+
 using Xrpl.Client.Exceptions;
 
 namespace Xrpl.Models.Transactions
 {
     /// <inheritdoc cref="INFTokenBurn" />
-    public class NFTokenBurn : TransactionCommon, INFTokenBurn
+    public class NFTokenBurn : TransactionRequest, INFTokenBurn
     {
         public NFTokenBurn()
         {
@@ -45,7 +46,7 @@ namespace Xrpl.Models.Transactions
     }
 
     /// <inheritdoc cref="INFTokenBurn" />
-    public class NFTokenBurnResponse : TransactionResponseCommon, INFTokenBurn
+    public class NFTokenBurnResponse : TransactionResponse, INFTokenBurn
     {
         /// <inheritdoc />
         public string NFTokenID { get; set; }
@@ -62,11 +63,11 @@ namespace Xrpl.Models.Transactions
         /// <param name="tx"> An NFTokenBurn Transaction.</param>
         /// <returns></returns>
         /// <exception cref="ValidationException">When the NFTokenBurn is Malformed.</exception>
-        public static async Task ValidateNFTokenBurn(Dictionary<string, dynamic> tx)
+        public static async Task ValidateNFTokenBurn(Dictionary<string, object> tx)
         {
             await Common.ValidateBaseTransaction(tx);
             if (!tx.TryGetValue("NFTokenID", out var NFTokenID) || NFTokenID is null)
-                throw new ValidationException("NFTokenID: missing field NFTokenID ");
+                throw new ValidationException("NFTokenBurn: missing field NFTokenID");
         }
 
     }

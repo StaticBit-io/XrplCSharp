@@ -1,4 +1,4 @@
-﻿using Newtonsoft.Json;
+using System.Text.Json.Serialization;
 using Xrpl.Models.Transactions;
 
 //https://github.com/XRPLF/xrpl.js/blob/main/packages/xrpl/src/models/methods/submit.ts
@@ -18,14 +18,14 @@ namespace Xrpl.Models.Methods
         /// <summary>
         /// The complete transaction in hex string format.
         /// </summary>
-        [JsonProperty("tx_blob")]
+        [JsonPropertyName("tx_blob")]
         public string TxBlob { get; set; }
 
         /// <summary>
         /// If true, and the transaction fails locally, do not retry or relay the transaction to other servers.<br/>
         /// The default is false.
         /// </summary>
-        [JsonProperty("fail_hard")]
+        [JsonPropertyName("fail_hard")]
         public bool? FailHard { get; set; }
     }
 }

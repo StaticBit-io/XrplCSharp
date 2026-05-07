@@ -80,6 +80,11 @@ namespace Xrpl.BinaryCodec.Types
         public static readonly TransactionType NFTokenCancelOffer = Add(nameof(NFTokenCancelOffer), 28);
         /// <summary> This transaction accepts an existing offer to buy or sell an existing  NFT. </summary>
         public static readonly TransactionType NFTokenAcceptOffer = Add(nameof(NFTokenAcceptOffer), 29);
+        /// <summary>Claw back tokens issued by your account from a holder.</summary>
+        public static readonly TransactionType Clawback = Add(nameof(Clawback), 30);
+        /// <summary>Claw back tokens from an Automated Market Maker (AMM) pool.</summary>
+        public static readonly TransactionType AMMClawback = Add(nameof(AMMClawback), 31);
+        public static readonly TransactionType NFTokenModify = Add(nameof(NFTokenModify), 61);
 
         public static readonly TransactionType AMMCreate = Add(nameof(AMMCreate), 35);
         public static readonly TransactionType AMMDeposit = Add(nameof(AMMDeposit), 36);
@@ -88,7 +93,45 @@ namespace Xrpl.BinaryCodec.Types
         public static readonly TransactionType AMMBid = Add(nameof(AMMBid), 39);
         public static readonly TransactionType AMMDelete = Add(nameof(AMMDelete), 40);
 
-        // ...
+        /// <summary>This transaction creates a new Multi-Purpose Token (MPT) issuance.</summary>
+        public static readonly TransactionType MPTokenIssuanceCreate = Add(nameof(MPTokenIssuanceCreate), 54);
+        /// <summary>This transaction destroys an existing MPT issuance.</summary>
+        public static readonly TransactionType MPTokenIssuanceDestroy = Add(nameof(MPTokenIssuanceDestroy), 55);
+        /// <summary>This transaction modifies settings of an existing MPT issuance.</summary>
+        public static readonly TransactionType MPTokenIssuanceSet = Add(nameof(MPTokenIssuanceSet), 56);
+        /// <summary>This transaction authorizes or unauthorizes a holder for an MPT.</summary>
+        public static readonly TransactionType MPTokenAuthorize = Add(nameof(MPTokenAuthorize), 57);
+
+        /// <summary>
+        /// Batch Transactions let you package multiple transactions together and execute them as a single unit.<br/>
+        /// It eliminates the risk of partial completion and unexpected outcomes,<br/>
+        /// giving you a more reliable and predictable experience for complex operations.<br/>
+        /// Up to eight transactions can be submitted in a single batch.<br/>
+        /// For details, see: https://xrpl.org/docs/concepts/transactions/batch-transactions
+        /// </summary>
+        public static readonly TransactionType Batch = Add(nameof(Batch), 71);
+
+        /// <summary>Creates or updates a Decentralized Identifier (DID) associated with the sending account.</summary>
+        public static readonly TransactionType DIDSet = Add(nameof(DIDSet), 49);
+        /// <summary>Deletes the DID associated with the sending account.</summary>
+        public static readonly TransactionType DIDDelete = Add(nameof(DIDDelete), 50);
+        /// <summary>Creates or updates a price oracle on the ledger.</summary>
+        public static readonly TransactionType OracleSet = Add(nameof(OracleSet), 51);
+        /// <summary>Deletes a price oracle from the ledger.</summary>
+        public static readonly TransactionType OracleDelete = Add(nameof(OracleDelete), 52);
+
+        /// <summary>Create a permissioned domain, or modify one that you own.</summary>
+        public static readonly TransactionType PermissionedDomainSet = Add(nameof(PermissionedDomainSet), 62);
+        /// <summary>Delete a permissioned domain that you own.</summary>
+        public static readonly TransactionType PermissionedDomainDelete = Add(nameof(PermissionedDomainDelete), 63);
+
+        /// <summary>Creates a new credential issued to a subject account.</summary>
+        public static readonly TransactionType CredentialCreate = Add(nameof(CredentialCreate), 58);
+        /// <summary>Accepts a provisionally-issued credential, making it valid.</summary>
+        public static readonly TransactionType CredentialAccept = Add(nameof(CredentialAccept), 59);
+        /// <summary>Deletes (revokes) a credential from the ledger.</summary>
+        public static readonly TransactionType CredentialDelete = Add(nameof(CredentialDelete), 60);
+
         /// <summary>
         /// This system-generated transaction type is used to update the status of the various amendments. <br/>
         /// For details, see: https://xrpl.org/amendments.html

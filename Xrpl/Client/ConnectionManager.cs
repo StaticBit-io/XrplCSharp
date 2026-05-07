@@ -1,8 +1,6 @@
 ﻿using System;
 using System.Collections.Generic;
-using System.Diagnostics;
 using System.Threading.Tasks;
-using Xrpl.Client.Exceptions;
 
 // https://github.com/XRPLF/xrpl.js/blob/main/packages/xrpl/src/client/ConnectionManager.ts
 
@@ -27,6 +25,16 @@ namespace Xrpl.Client
             foreach (var (_, reject) in PromisesAwaitingConnection)
             {
                 reject(error);
+            }
+
+            PromisesAwaitingConnection = new List<(Action resolve, Action<Exception> reject)>();
+        }
+
+        public void RejectAllAwaitingWithCancellation()
+        {
+            foreach (var (_, reject) in PromisesAwaitingConnection)
+            {
+                reject(new OperationCanceledException("Connection was intentionally closed."));
             }
 
             PromisesAwaitingConnection = new List<(Action resolve, Action<Exception> reject)>();

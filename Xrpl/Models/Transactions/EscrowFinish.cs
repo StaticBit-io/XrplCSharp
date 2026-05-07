@@ -1,15 +1,18 @@
-﻿
+
 
 //https://github.com/XRPLF/xrpl.js/blob/main/packages/xrpl/src/models/transactions/escrowFinish.ts
 
 using System.Collections.Generic;
 using System.Threading.Tasks;
+
+using System.Text.Json.Serialization;
+
 using Xrpl.Client.Exceptions;
 
 namespace Xrpl.Models.Transactions
 {
     /// <inheritdoc cref="IEscrowFinish" />
-    public class EscrowFinish : TransactionCommon, IEscrowFinish
+    public class EscrowFinish : TransactionRequest, IEscrowFinish
     {
         public EscrowFinish()
         {
@@ -35,10 +38,15 @@ namespace Xrpl.Models.Transactions
 
         /// <inheritdoc />
         public string Fulfillment { get; set; }
+
+        /// <inheritdoc />
+        [JsonPropertyName("CredentialIDs")]
+        [JsonIgnore(Condition = JsonIgnoreCondition.WhenWritingNull)]
+        public List<string> CredentialIDs { get; set; }
     }
 
     /// <summary>
-    /// Deliver XRP from a held payment to the recipient.
+    /// Deliver XRP or escrowed fungible tokens (IOUs, MPTs) from a held payment to the recipient. Requires the TokenEscrow amendment for fungible token support.
     /// </summary>
     public interface IEscrowFinish : ITransactionCommon
     {
@@ -58,13 +66,20 @@ namespace Xrpl.Models.Transactions
         /// </summary>
         uint OfferSequence { get; set; }
         /// <summary>
-        /// Address of the source account that funded the held payment.
+        /// Address of the source account that funded the escrow.
         /// </summary>
         string Owner { get; set; }
+
+        /// <summary>
+        /// (Optional) Set of Credentials (object IDs, hex 64-char each) used to authorize finishing
+        /// the escrow when the destination account requires Deposit Authorization with credential-based preauth (XLS-70).
+        /// Maximum 8 entries.
+        /// </summary>
+        List<string> CredentialIDs { get; set; }
     }
 
     /// <inheritdoc cref="IEscrowFinish" />
-    public class EscrowFinishResponse : TransactionResponseCommon, IEscrowFinish
+    public class EscrowFinishResponse : TransactionResponse, IEscrowFinish
     {
         /// <inheritdoc />
         public string Condition { get; set; }
@@ -74,6 +89,11 @@ namespace Xrpl.Models.Transactions
         public uint OfferSequence { get; set; }
         /// <inheritdoc />
         public string Owner { get; set; }
+
+        /// <inheritdoc />
+        [JsonPropertyName("CredentialIDs")]
+        [JsonIgnore(Condition = JsonIgnoreCondition.WhenWritingNull)]
+        public List<string> CredentialIDs { get; set; }
     }
 
     public partial class Validation
@@ -83,7 +103,7 @@ namespace Xrpl.Models.Transactions
         /// </summary>
         /// <param name="tx"> A EscrowFinish Transaction.</param>
         /// <exception cref="ValidationException">When the EscrowFinish is malformed.</exception>
-        public static async Task ValidateEscrowFinish(Dictionary<string, dynamic> tx)
+        public static async Task ValidateEscrowFinish(Dictionary<string, object> tx)
         {
             await Common.ValidateBaseTransaction(tx);
 
@@ -98,12 +118,17 @@ namespace Xrpl.Models.Transactions
             if (!tx.TryGetValue("OfferSequence", out var OfferSequence) || OfferSequence is null)
                 throw new ValidationException("EscrowFinish: missing field OfferSequence");
             if (OfferSequence is not uint)
-                throw new ValidationException("EscrowFinish: Destination must be a number");
+                throw new ValidationException("EscrowFinish: OfferSequence must be a number");
 
             if (tx.TryGetValue("Condition", out var Condition) && Condition is not string)
                 throw new ValidationException("EscrowFinish: Condition must be a string");
             if (tx.TryGetValue("Fulfillment", out var Fulfillment) && Fulfillment is not string)
                 throw new ValidationException("EscrowFinish: Fulfillment must be a string");
+
+            if (tx.TryGetValue("CredentialIDs", out var credentialIds) && credentialIds is not null)
+            {
+                CredentialsValidator.ValidateCredentialsList(credentialIds, "EscrowFinish", "CredentialIDs", isStringID: true);
+            }
 
         }
     }

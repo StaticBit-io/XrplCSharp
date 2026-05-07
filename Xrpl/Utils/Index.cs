@@ -1,10 +1,9 @@
-﻿using Newtonsoft.Json.Linq;
-
-using System;
+﻿using System;
+using System.Collections.Generic;
+using System.Text.Json.Nodes;
 
 using Xrpl.AddressCodec;
 using Xrpl.BinaryCodec;
-using Xrpl.BinaryCodec.Ledger;
 using Xrpl.Keypairs;
 using Xrpl.Models.Subscriptions;
 using Xrpl.Models.Transactions;
@@ -28,12 +27,12 @@ namespace Xrpl.Utils
             }
         }
     
-        public static string Encode(this TransactionCommon transactionOrLedgerEntry)
+        public static string Encode(this TransactionRequest transactionOrLedgerEntry)
         {
             return XrplBinaryCodec.Encode(transactionOrLedgerEntry);
         }
     
-        public static string EncodeForSigning(this TransactionCommon transaction)
+        public static string EncodeForSigning(this TransactionRequest transaction)
         {
             return XrplBinaryCodec.EncodeForSigning(transaction);
         }
@@ -43,12 +42,12 @@ namespace Xrpl.Utils
             return XrplBinaryCodec.EncodeForSigningClaim(paymentChannelClaim);
         }
     
-        public static string EncodeForMultiSigning(this TransactionCommon transaction, string signer)
+        public static string EncodeForMultiSigning(this TransactionRequest transaction, string signer)
         {
-            return XrplBinaryCodec.EncodeForMulitSigning(transaction, signer);
+            return XrplBinaryCodec.EncodeForMultiSigning(transaction, signer);
         }
     
-        public static JToken Decode(string hex)
+        public static JsonNode Decode(string hex)
         {
             return XrplBinaryCodec.Decode(hex);
         }
@@ -60,7 +59,7 @@ namespace Xrpl.Utils
     
         public static bool HasNextPage(this BaseResponse response)
         {
-            return response.Result.ContainsKey("marker");
+            return response.Result is Dictionary<string, object> dict && dict.ContainsKey("marker");
         }
     }
 }

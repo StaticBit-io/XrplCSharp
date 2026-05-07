@@ -1,146 +1,345 @@
 ﻿using System;
-using Newtonsoft.Json;
-using Newtonsoft.Json.Linq;
+using System.Text.Json;
+using System.Text.Json.Serialization;
+
 using Xrpl.Models;
 using Xrpl.Models.Ledger;
 using Xrpl.Models.Methods;
+using Xrpl.Models.Transactions;
 
-namespace Xrpl.Client.Json.Converters
+namespace Xrpl.Client.Json.Converters;
+
+public abstract class NodeConverterBase<TNode> : JsonConverter<TNode> where TNode : NodeBase, new()
 {
-    /// <summary>
-    /// <see cref="BaseLedgerEntry"/> json converter
-    /// </summary>
-    public class LOConverter : JsonConverter
+    protected static LedgerEntryType ReadLedgerEntryType(JsonElement root, JsonSerializerOptions options)
     {
-        /// <summary>
-        /// Convert ledger entry json object to standard type
-        /// </summary>
-        /// <param name="type">field type</param>
-        /// <param name="field">current json object</param>
-        /// <returns></returns>
-        /// <exception cref="ArgumentOutOfRangeException"></exception>
-        public static BaseLedgerEntry GetBaseRippleLO(LedgerEntryType type, object field) =>
-            type switch
-            {
-                LedgerEntryType.AccountRoot => JsonConvert.DeserializeObject<LOAccountRoot>($"{field}"),
-                LedgerEntryType.Amendments => JsonConvert.DeserializeObject<LOAmendments>($"{field}"),
-                LedgerEntryType.DirectoryNode => JsonConvert.DeserializeObject<LODirectoryNode>($"{field}"),
-                LedgerEntryType.Escrow => JsonConvert.DeserializeObject<LOEscrow>($"{field}"),
-                LedgerEntryType.FeeSettings => JsonConvert.DeserializeObject<LOFeeSettings>($"{field}"),
-                LedgerEntryType.LedgerHashes => JsonConvert.DeserializeObject<LOLedgerHashes>($"{field}"),
-                LedgerEntryType.Offer => JsonConvert.DeserializeObject<LOOffer>($"{field}"),
-                LedgerEntryType.PayChannel => JsonConvert.DeserializeObject<LOPayChannel>($"{field}"),
-                LedgerEntryType.RippleState => JsonConvert.DeserializeObject<LORippleState>($"{field}"),
-                LedgerEntryType.SignerList => JsonConvert.DeserializeObject<LOSignerList>($"{field}"),
-                LedgerEntryType.NFTokenOffer => JsonConvert.DeserializeObject<LONFTokenOffer>($"{field}"),
-                LedgerEntryType.NegativeUNL => JsonConvert.DeserializeObject<LONegativeUNL>($"{field}"),
-                //LedgerEntryType.NFTokenOffer => expr,
-                LedgerEntryType.NFTokenPage => JsonConvert.DeserializeObject<LONFTokenPage>($"{field}"),
-                LedgerEntryType.Ticket => JsonConvert.DeserializeObject<LOTicket>($"{field}"),
-                LedgerEntryType.AMM => JsonConvert.DeserializeObject<LOAmm>($"{field}"),
-                //LedgerEntryType.Check => expr,
-                //LedgerEntryType.DepositPreauth => expr,
-                _ => throw new ArgumentOutOfRangeException()
-            };
+        if (!root.TryGetProperty("LedgerEntryType", out JsonElement token))
+            return LedgerEntryType.Unknown;
 
-        /// <summary>
-        /// write <see cref="BaseLedgerEntry"/>  to json object
-        /// </summary>
-        /// <param name="writer">writer</param>
-        /// <param name="value"> <see cref="BaseLedgerEntry"/>  value</param>
-        /// <param name="serializer">json serializer</param>
-        /// <exception cref="NotSupportedException">Can't create ledger type</exception>
-        public override void WriteJson(JsonWriter writer, object value, JsonSerializer serializer)
+        string typeStr = token.GetString();
+        if (Enum.TryParse<LedgerEntryType>(typeStr, ignoreCase: true, out LedgerEntryType result))
+            return result;
+
+        return LedgerEntryType.Unknown;
+    }
+
+    protected static TNode CreateBaseNode(JsonElement root, JsonSerializerOptions options)
+    {
+        return new TNode
         {
-            throw new NotImplementedException();
+            LedgerEntryType = ReadLedgerEntryType(root, options),
+            LedgerIndex = root.TryGetProperty("LedgerIndex", out JsonElement li) ? li.GetString() ?? string.Empty : string.Empty,
+        };
+    }
+}
+
+public class ModifiedNodeConverter : NodeConverterBase<ModifiedNode>
+{
+    public override ModifiedNode Read(ref Utf8JsonReader reader, Type typeToConvert, JsonSerializerOptions options)
+    {
+        using JsonDocument doc = JsonDocument.ParseValue(ref reader);
+        JsonElement root = doc.RootElement;
+
+        ModifiedNode node = CreateBaseNode(root, options);
+
+        node.PreviousTxnID = root.TryGetProperty("PreviousTxnID", out JsonElement ptid) ? ptid.GetString() : null;
+        node.PreviousTxnLgrSeq = root.TryGetProperty("PreviousTxnLgrSeq", out JsonElement ptls) ? ptls.GetUInt32() : null;
+
+        node.FinalFields = LOConverter.GetBaseRippleLO(
+            node.LedgerEntryType,
+            root.TryGetProperty("FinalFields", out JsonElement ff) ? ff : (JsonElement?)null,
+            options);
+
+        node.PreviousFields = LOConverter.GetBaseRippleLO(
+            node.LedgerEntryType,
+            root.TryGetProperty("PreviousFields", out JsonElement pf) ? pf : (JsonElement?)null,
+            options);
+
+        return node;
+    }
+
+    public override void Write(Utf8JsonWriter writer, ModifiedNode value, JsonSerializerOptions options)
+    {
+        if (value is null) { writer.WriteNullValue(); return; }
+
+        writer.WriteStartObject();
+        writer.WriteString("LedgerEntryType", value.LedgerEntryType.ToString());
+        if (!string.IsNullOrWhiteSpace(value.LedgerIndex))
+            writer.WriteString("LedgerIndex", value.LedgerIndex);
+
+        WriteLedgerEntry(writer, "FinalFields", value.FinalFields, options);
+        WriteLedgerEntry(writer, "PreviousFields", value.PreviousFields, options);
+
+        if (!string.IsNullOrWhiteSpace(value.PreviousTxnID))
+            writer.WriteString("PreviousTxnID", value.PreviousTxnID);
+        if (value.PreviousTxnLgrSeq.HasValue)
+            writer.WriteNumber("PreviousTxnLgrSeq", value.PreviousTxnLgrSeq.Value);
+
+        writer.WriteEndObject();
+    }
+
+    private static void WriteLedgerEntry(Utf8JsonWriter writer, string propertyName, BaseLedgerEntry entry, JsonSerializerOptions options)
+    {
+        if (entry == null) return;
+        writer.WritePropertyName(propertyName);
+        JsonSerializer.Serialize(writer, entry, entry.GetType(), options);
+    }
+}
+
+public class CreatedNodeConverter : NodeConverterBase<CreatedNode>
+{
+    public override CreatedNode Read(ref Utf8JsonReader reader, Type typeToConvert, JsonSerializerOptions options)
+    {
+        using JsonDocument doc = JsonDocument.ParseValue(ref reader);
+        JsonElement root = doc.RootElement;
+
+        CreatedNode node = CreateBaseNode(root, options);
+
+        node.NewFields = LOConverter.GetBaseRippleLO(
+            node.LedgerEntryType,
+            root.TryGetProperty("NewFields", out JsonElement nf) ? nf : (JsonElement?)null,
+            options);
+
+        return node;
+    }
+
+    public override void Write(Utf8JsonWriter writer, CreatedNode value, JsonSerializerOptions options)
+    {
+        if (value is null) { writer.WriteNullValue(); return; }
+
+        writer.WriteStartObject();
+        writer.WriteString("LedgerEntryType", value.LedgerEntryType.ToString());
+        if (!string.IsNullOrWhiteSpace(value.LedgerIndex))
+            writer.WriteString("LedgerIndex", value.LedgerIndex);
+
+        if (value.NewFields != null)
+        {
+            writer.WritePropertyName("NewFields");
+            JsonSerializer.Serialize(writer, value.NewFields, value.NewFields.GetType(), options);
         }
-        /// <summary>
-        /// create <see cref="BaseLedgerEntry"/> 
-        /// </summary>
-        /// <param name="objectType"></param>
-        /// <param name="jObject">json object LedgerEntity</param>
-        /// <returns></returns>
-        public BaseLedgerEntry Create(Type objectType, JObject jObject)
+
+        writer.WriteEndObject();
+    }
+}
+
+public class DeletedNodeConverter : NodeConverterBase<DeletedNode>
+{
+    public override DeletedNode Read(ref Utf8JsonReader reader, Type typeToConvert, JsonSerializerOptions options)
+    {
+        using JsonDocument doc = JsonDocument.ParseValue(ref reader);
+        JsonElement root = doc.RootElement;
+
+        DeletedNode node = CreateBaseNode(root, options);
+
+        node.FinalFields = LOConverter.GetBaseRippleLO(
+            node.LedgerEntryType,
+            root.TryGetProperty("FinalFields", out JsonElement ff) ? ff : (JsonElement?)null,
+            options);
+
+        node.PreviousFields = LOConverter.GetBaseRippleLO(
+            node.LedgerEntryType,
+            root.TryGetProperty("PreviousFields", out JsonElement pf) ? pf : (JsonElement?)null,
+            options);
+
+        return node;
+    }
+
+    public override void Write(Utf8JsonWriter writer, DeletedNode value, JsonSerializerOptions options)
+    {
+        if (value is null) { writer.WriteNullValue(); return; }
+
+        writer.WriteStartObject();
+        writer.WriteString("LedgerEntryType", value.LedgerEntryType.ToString());
+        if (!string.IsNullOrWhiteSpace(value.LedgerIndex))
+            writer.WriteString("LedgerIndex", value.LedgerIndex);
+
+        if (value.FinalFields != null)
         {
-            switch (objectType.Name)
+            writer.WritePropertyName("FinalFields");
+            JsonSerializer.Serialize(writer, value.FinalFields, value.FinalFields.GetType(), options);
+        }
+        if (value.PreviousFields != null)
+        {
+            writer.WritePropertyName("PreviousFields");
+            JsonSerializer.Serialize(writer, value.PreviousFields, value.PreviousFields.GetType(), options);
+        }
+
+        writer.WriteEndObject();
+    }
+}
+
+/// <summary>
+/// <see cref="BaseLedgerEntry"/> json converter
+/// </summary>
+public class LOConverter : JsonConverter<BaseLedgerEntry>
+{
+    private static Type GetTypeForLedgerEntry(LedgerEntryType type) => type switch
+    {
+        LedgerEntryType.AccountRoot => typeof(LOAccountRoot),
+        LedgerEntryType.Amendments => typeof(LOAmendments),
+        LedgerEntryType.DirectoryNode => typeof(LODirectoryNode),
+        LedgerEntryType.Escrow => typeof(LOEscrow),
+        LedgerEntryType.FeeSettings => typeof(LOFeeSettings),
+        LedgerEntryType.LedgerHashes => typeof(LOLedgerHashes),
+        LedgerEntryType.Offer => typeof(LOOffer),
+        LedgerEntryType.PayChannel => typeof(LOPayChannel),
+        LedgerEntryType.RippleState => typeof(LORippleState),
+        LedgerEntryType.SignerList => typeof(LOSignerList),
+        LedgerEntryType.NFTokenOffer => typeof(LONFTokenOffer),
+        LedgerEntryType.NegativeUNL => typeof(LONegativeUNL),
+        LedgerEntryType.NFTokenPage => typeof(LONFTokenPage),
+        LedgerEntryType.Ticket => typeof(LOTicket),
+        LedgerEntryType.AMM => typeof(LOAmm),
+        LedgerEntryType.Check => typeof(LOCheck),
+        LedgerEntryType.MPToken => typeof(LOMPToken),
+        LedgerEntryType.MPTokenIssuance => typeof(LOMPTokenIssuance),
+        LedgerEntryType.Oracle => typeof(LOOracle),
+        LedgerEntryType.DID => typeof(LODID),
+        LedgerEntryType.PermissionedDomain => typeof(LOPermissionedDomain),
+        LedgerEntryType.Credential => typeof(LOCredential),
+        LedgerEntryType.DepositPreauth => typeof(LODepositPreauth),
+        _ => typeof(BaseLedgerEntry),
+    };
+
+    /// <summary>
+    /// Convert ledger entry json element to typed ledger object
+    /// </summary>
+    /// <param name="type">field type</param>
+    /// <param name="element">current json element (nullable)</param>
+    /// <param name="options">serializer options</param>
+    /// <returns></returns>
+    public static BaseLedgerEntry GetBaseRippleLO(
+        LedgerEntryType type,
+        JsonElement? element,
+        JsonSerializerOptions options)
+    {
+        if (element == null || element.Value.ValueKind == JsonValueKind.Null)
+        {
+            return null;
+        }
+
+        string rawJson = element.Value.GetRawText();
+
+        // Remove LOConverter to avoid infinite recursion
+        JsonSerializerOptions innerOptions = new JsonSerializerOptions(options);
+        for (int i = innerOptions.Converters.Count - 1; i >= 0; i--)
+        {
+            if (innerOptions.Converters[i] is LOConverter)
+                innerOptions.Converters.RemoveAt(i);
+        }
+
+        Type targetType = GetTypeForLedgerEntry(type);
+
+        BaseLedgerEntry result = (BaseLedgerEntry)JsonSerializer.Deserialize(rawJson, targetType, innerOptions);
+
+        if (result != null)
+        {
+            result.LedgerEntryType = type;
+
+            if (string.IsNullOrWhiteSpace(result.LedgerIndex) && element.Value.TryGetProperty("LedgerIndex", out JsonElement liEl))
             {
-                case "LOAccountRoot":
-                    return new LOAccountRoot();
-                case "LOAmendments":
-                    return new LOAmendments();
-                case "LODirectoryNode":
-                    return new LODirectoryNode();
-                case "LOEscrow":
-                    return new LOEscrow();
-                case "LOFeeSettings":
-                    return new LOFeeSettings();
-                case "LOLedgerHashes":
-                    return new LOLedgerHashes();
-                case "LOOffer":
-                    return new LOOffer();
-                case "LOPayChannel":
-                    return new LOPayChannel();
-                case "LORippleState":
-                    return new LORippleState();
-                case "LOSignerList":
-                    return new LOSignerList();
-                case "LONFTokenOffer":
-                    return new LONFTokenOffer();
-                case "LONFTokenPage":
-                    return new LONFTokenPage();
-                case "LOTicket":
-                    return new LOTicket();
-                case "LONegativeUNL":
-                    return new LONegativeUNL();
-                case "LOAmm":
-                    return new LOAmm();
+                result.LedgerIndex = liEl.GetString();
             }
 
-            string ledgerEntryType = jObject.Property("LedgerEntryType")?.Value.ToString();
-            return ledgerEntryType switch
+            if (string.IsNullOrWhiteSpace(result.Index) && element.Value.TryGetProperty("index", out JsonElement idxEl))
             {
-                "AccountRoot" => new LOAccountRoot(),
-                "Amendments" => new LOAmendments(),
-                "DirectoryNode" => new LODirectoryNode(),
-                "Escrow" => new LOEscrow(),
-                "FeeSettings" => new LOFeeSettings(),
-                "LedgerHashes" => new LOLedgerHashes(),
-                "Offer" => new LOOffer(),
-                "PayChannel" => new LOPayChannel(),
-                "RippleState" => new LORippleState(),
-                "SignerList" => new LOSignerList(),
-                "NegativeUNL" => new LONegativeUNL(),
-                "NFTokenOffer" => new LONFTokenOffer(),
-                "NFTokenPage" => new LONFTokenPage(),
-                "Ticket" => new LOTicket(),
-                "Check" => new LOCheck(),
-                "DepositPreauth" => new LODepositPreauth(),
-                "Amm" => new LOAmm(),
-                _ => throw new Exception("Can't create ledger type" + ledgerEntryType)
-            };
+                result.Index = idxEl.GetString();
+            }
         }
 
-
-        /// <summary> read <see cref="BaseLedgerEntry"/>  from json object </summary>
-        /// <param name="reader">json reader</param>
-        /// <param name="objectType">object type</param>
-        /// <param name="existingValue">object value</param>
-        /// <param name="serializer">json serializer</param>
-        /// <returns><see cref="BaseLedgerEntry"/> </returns>
-        /// <exception cref="NotSupportedException">Cannot convert value</exception>
-        public override object ReadJson(JsonReader reader, Type objectType, object existingValue, JsonSerializer serializer)
-        {
-            JObject jObject = JObject.Load(reader);
-            var target = Create(objectType, jObject);
-            serializer.Populate(jObject.CreateReader(), target);
-            return target;
-        }
-
-        public override bool CanConvert(Type objectType)
-        {
-            throw new NotImplementedException();
-        }
-
-        public override bool CanWrite => false;
+        return result;
     }
+
+    /// <summary>
+    /// Writes a <see cref="BaseLedgerEntry"/> to JSON.
+    /// </summary>
+    public override void Write(Utf8JsonWriter writer, BaseLedgerEntry value, JsonSerializerOptions options)
+    {
+        if (value == null)
+        {
+            writer.WriteNullValue();
+            return;
+        }
+
+        // Serialize the concrete runtime type to avoid infinite recursion
+        JsonSerializerOptions innerOptions = new JsonSerializerOptions(options);
+        for (int i = innerOptions.Converters.Count - 1; i >= 0; i--)
+        {
+            if (innerOptions.Converters[i] is LOConverter)
+                innerOptions.Converters.RemoveAt(i);
+        }
+
+        JsonSerializer.Serialize(writer, value, value.GetType(), innerOptions);
+    }
+
+    /// <summary>
+    /// create <see cref="BaseLedgerEntry"/> by LedgerEntryType or objectType
+    /// </summary>
+    private static Type DetermineType(Type objectType, JsonElement root)
+    {
+        // Try by concrete .NET type name first
+        Type byName = objectType.Name switch
+        {
+            "LOAccountRoot" => typeof(LOAccountRoot),
+            "LOAmendments" => typeof(LOAmendments),
+            "LODirectoryNode" => typeof(LODirectoryNode),
+            "LOEscrow" => typeof(LOEscrow),
+            "LOFeeSettings" => typeof(LOFeeSettings),
+            "LOLedgerHashes" => typeof(LOLedgerHashes),
+            "LOOffer" => typeof(LOOffer),
+            "LOPayChannel" => typeof(LOPayChannel),
+            "LORippleState" => typeof(LORippleState),
+            "LOSignerList" => typeof(LOSignerList),
+            "LONFTokenOffer" => typeof(LONFTokenOffer),
+            "LONFTokenPage" => typeof(LONFTokenPage),
+            "LOTicket" => typeof(LOTicket),
+            "LONegativeUNL" => typeof(LONegativeUNL),
+            "LOAmm" => typeof(LOAmm),
+            "LOCheck" => typeof(LOCheck),
+            "LOMPToken" => typeof(LOMPToken),
+            "LOMPTokenIssuance" => typeof(LOMPTokenIssuance),
+            "LOOracle" => typeof(LOOracle),
+            "LODID" => typeof(LODID),
+            "LOPermissionedDomain" => typeof(LOPermissionedDomain),
+            "LOCredential" => typeof(LOCredential),
+            "LODepositPreauth" => typeof(LODepositPreauth),
+            _ => null
+        };
+
+        if (byName != null) return byName;
+
+        // Fall back to LedgerEntryType discriminator (case-insensitive)
+        string ledgerEntryType = root.TryGetProperty("LedgerEntryType", out JsonElement letEl)
+            ? letEl.GetString()
+            : null;
+
+        LedgerEntryType entryType = LedgerEntryType.Unknown;
+        if (ledgerEntryType != null)
+            Enum.TryParse(ledgerEntryType, ignoreCase: true, out entryType);
+
+        return GetTypeForLedgerEntry(entryType);
+    }
+
+    /// <summary> read <see cref="BaseLedgerEntry"/>  from json object </summary>
+    public override BaseLedgerEntry Read(ref Utf8JsonReader reader, Type typeToConvert, JsonSerializerOptions options)
+    {
+        using JsonDocument doc = JsonDocument.ParseValue(ref reader);
+        JsonElement root = doc.RootElement;
+
+        Type targetType = DetermineType(typeToConvert, root);
+        string rawJson = root.GetRawText();
+
+        // Remove LOConverter to avoid infinite recursion
+        JsonSerializerOptions innerOptions = new JsonSerializerOptions(options);
+        for (int i = innerOptions.Converters.Count - 1; i >= 0; i--)
+        {
+            if (innerOptions.Converters[i] is LOConverter)
+                innerOptions.Converters.RemoveAt(i);
+        }
+
+        return (BaseLedgerEntry)JsonSerializer.Deserialize(rawJson, targetType, innerOptions);
+    }
+
+    /// <inheritdoc />
+    public override bool CanConvert(Type typeToConvert) => typeof(BaseLedgerEntry).IsAssignableFrom(typeToConvert);
 }

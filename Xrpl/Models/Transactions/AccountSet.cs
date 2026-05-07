@@ -1,18 +1,26 @@
-﻿// https://github.com/XRPLF/xrpl.js/blob/main/packages/xrpl/src/models/transactions/accountSet.ts
+// https://github.com/XRPLF/xrpl.js/blob/main/packages/xrpl/src/models/transactions/accountSet.ts
 
 using System;
 using System.Collections.Generic;
 using System.Linq;
 using System.Threading.Tasks;
+
 using Xrpl.Client.Exceptions;
+using Xrpl.Models.Enums;
+
 // https://github.com/XRPLF/xrpl.js/blob/b20c05c3680d80344006d20c44b4ae1c3b0ffcac/packages/xrpl/src/models/transactions/accountSet.ts#L11
 namespace Xrpl.Models.Transactions
 {
     /// <summary>
     /// Enum for AccountSet Flags.
     /// </summary>
-    public enum AccountSetAsfFlags 
+    public enum AccountSetAsfFlags : uint
     {
+        /// <summary>
+        /// batch inner transaction
+        /// </summary>
+        tfInnerBatchTxn = XrplGlobalFlags.tfInnerBatchTxn,
+
         /// <summary>
         /// Require a destination tag to send transactions to this account.
         /// </summary>
@@ -55,7 +63,39 @@ namespace Xrpl.Models.Transactions
         /// <summary>
         /// Allow another account to mint and burn tokens on behalf of this account.
         /// </summary>
-        asfAuthorizedNFTokenMinter = 10
+        asfAuthorizedNFTokenMinter = 10,
+        /// <summary>
+        /// Block incoming NFTokenOffers. (Requires the DisallowIncoming amendment.)
+        /// </summary>
+        asfDisallowIncomingNFTokenOffer = 12,
+        /// <summary>
+        /// Block incoming Checks. (Requires the DisallowIncoming amendment.)
+        /// </summary>
+        asfDisallowIncomingCheck = 13,
+        /// <summary>
+        /// Block incoming Payment Channels. (Requires the DisallowIncoming amendment.)
+        /// </summary>
+        asfDisallowIncomingPayChan = 14,
+        /// <summary>
+        /// Block incoming trust lines. (Requires the DisallowIncoming amendment.)
+        /// </summary>
+        asfDisallowIncomingTrustline = 15,
+        /// <summary>
+        /// Allow account to claw back tokens it has issued.
+        /// (Requires the Clawback amendment.)
+        /// Can only be set if the account has an empty owner directory
+        /// (no trust lines, offers, escrows, payment channels, checks, or signer lists).
+        /// After you set this flag, it cannot be reverted.
+        /// The account permanently gains the ability to claw back issued assets on trust lines.
+        /// </summary>
+        asfAllowTrustLineClawback = 16,
+
+        /// <summary>
+        /// Allow Trust Line tokens issued by this account to be held in escrow.
+        /// If not enabled, tokens issued by this account can't be escrowed.
+        /// After you enable this flag, it cannot be disabled.
+        /// </summary>
+        asfAllowTrustLineLocking = 17, // 0x00000010
     }
 
     //todo enum AccountSetTfFlags https://github.com/XRPLF/xrpl.js/blob/b20c05c3680d80344006d20c44b4ae1c3b0ffcac/packages/xrpl/src/models/transactions/accountSet.ts#L54
@@ -72,7 +112,7 @@ namespace Xrpl.Models.Transactions
     //}
 
     /// <inheritdoc cref="IAccountSet" />
-    public class AccountSet : TransactionCommon, IAccountSet
+    public class AccountSet : TransactionRequest, IAccountSet
     {
         public AccountSet()
         {
@@ -84,7 +124,7 @@ namespace Xrpl.Models.Transactions
             Account = account;
         }
         /// <inheritdoc />
-        public uint? ClearFlag { get; set; }
+        public AccountSetAsfFlags? ClearFlag { get; set; }
         /// <inheritdoc />
         public string Domain { get; set; }
         /// <inheritdoc />
@@ -92,7 +132,7 @@ namespace Xrpl.Models.Transactions
         /// <inheritdoc />
         public string MessageKey { get; set; }
         /// <inheritdoc />
-        public uint? SetFlag { get; set; }
+        public AccountSetAsfFlags? SetFlag { get; set; }
         /// <inheritdoc />
         public uint? TransferRate { get; set; }
         /// <inheritdoc />
@@ -102,14 +142,18 @@ namespace Xrpl.Models.Transactions
     }
 
     /// <summary>
-    /// An AccountSet transaction modifies the properties of an account in the XRP  Ledger.
+    /// An AccountSet transaction modifies the properties of an account in the XRP  Ledger.<br/>
+    /// The AccountSet transaction type has several "AccountSet Flags" (prefixed asf) that can enable an option when passed as the SetFlag parameter,<br/>
+    /// or disable an option when passed as the ClearFlag parameter.<br/>
+    /// Newer options have only this style of flag.<br/>
+    /// You can enable up to one asf flag per transaction, and disable up to one asf flag per transaction.
     /// </summary>
     public interface IAccountSet : ITransactionCommon
     {
         /// <summary>
         /// Unique identifier of a flag to disable for this account.
         /// </summary>
-        uint? ClearFlag { get; set; }
+        AccountSetAsfFlags? ClearFlag { get; set; }
         /// <summary>
         /// The domain that owns this account, as a string of hex representing the.<br/>
         /// ASCII for the domain in lowercase.
@@ -126,7 +170,7 @@ namespace Xrpl.Models.Transactions
         /// <summary>
         /// Integer flag to enable for this account.
         /// </summary>
-        uint? SetFlag { get; set; } //todo change to enum AccountSetAsfFlags
+        AccountSetAsfFlags? SetFlag { get; set; } //todo change to enum AccountSetAsfFlags
         /// <summary>
         /// The fee to charge when users transfer this account's issued currencies, represented as billionths of a unit.<br/>
         /// Cannot be more than 2000000000 or less than 1000000000, except for the special case 0 meaning no fee.
@@ -146,10 +190,10 @@ namespace Xrpl.Models.Transactions
     }
 
     /// <inheritdoc cref="IAccountSet" />
-    public class AccountSetResponse : TransactionResponseCommon, IAccountSet
+    public class AccountSetResponse : TransactionResponse, IAccountSet
     {
         /// <inheritdoc />
-        public uint? ClearFlag { get; set; }
+        public AccountSetAsfFlags? ClearFlag { get; set; }
         /// <inheritdoc />
         public string Domain { get; set; }
         /// <inheritdoc />
@@ -157,7 +201,7 @@ namespace Xrpl.Models.Transactions
         /// <inheritdoc />
         public string MessageKey { get; set; }
         /// <inheritdoc />
-        public uint? SetFlag { get; set; }
+        public AccountSetAsfFlags? SetFlag { get; set; }
         /// <inheritdoc />
         public uint? TransferRate { get; set; }
         /// <inheritdoc />
@@ -178,7 +222,7 @@ namespace Xrpl.Models.Transactions
         /// </summary>
         /// <param name="tx"> A AccountSet Transaction.</param>
         /// <exception cref="ValidationException">When the AccountSet is malformed.</exception>
-        public static async Task ValidateAccountSet(Dictionary<string, dynamic> tx)
+        public static async Task ValidateAccountSet(Dictionary<string, object> tx)
         {
             await Common.ValidateBaseTransaction(tx);
             if (tx.TryGetValue("ClearFlag", out var ClearFlag) && ClearFlag is not null)
@@ -203,7 +247,7 @@ namespace Xrpl.Models.Transactions
                 if (SetFlag is not uint { })
                     throw new ValidationException("AccountSet: invalid SetFlag");
 
-                if (Enum.GetValues<AccountSetAsfFlags>().All(c => (uint)c != SetFlag))
+                if (Enum.GetValues<AccountSetAsfFlags>().All(c => (uint)c != (uint)SetFlag))
                     throw new ValidationException("AccountSet: missing field Destination");
             }
 
@@ -216,7 +260,7 @@ namespace Xrpl.Models.Transactions
                     throw new ValidationException("AccountSet: invalid TickSize");
 
                 if (size is < MIN_TICK_SIZE or > MAX_TICK_SIZE)
-                    throw new ValidationException("AccountSet: invalid TickSize");
+                    throw new ValidationException("AccountSet: out of TickSize");
             }
 
         }

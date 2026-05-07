@@ -1,4 +1,4 @@
-using System;
+﻿using System;
 using Microsoft.VisualStudio.TestTools.UnitTesting;
 
 // https://github.com/XRPLF/xrpl-py/blob/master/tests/unit/core/binarycodec/test_definition_service.py
@@ -8,7 +8,7 @@ using Microsoft.VisualStudio.TestTools.UnitTesting;
 namespace Xrpl.BinaryCodec.Tests
 {
     [TestClass]
-    public class TestDefinitions
+    public class TestUDefinitions
     {
         [TestMethod]
         public void TestOne()

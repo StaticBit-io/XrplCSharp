@@ -1,0 +1,666 @@
+<!DOCTYPE html>
+<!--[if IE]><![endif]-->
+<html>
+
+  <head>
+    <meta charset="utf-8">
+    <meta http-equiv="X-UA-Compatible" content="IE=edge,chrome=1">
+    <title>Class ValidationStream </title>
+    <meta name="viewport" content="width=device-width">
+    <meta name="title" content="Class ValidationStream ">
+    <meta name="generator" content="docfx ">
+  
+    <link rel="shortcut icon" href="../favicon.ico">
+    <link rel="stylesheet" href="../styles/docfx.vendor.css">
+    <link rel="stylesheet" href="../styles/docfx.css">
+    <link rel="stylesheet" href="../styles/main.css">
+    <link href="https://fonts.googleapis.com/css?family=Roboto" rel="stylesheet"> 
+    <meta property="docfx:navrel" content="../toc.html">
+    <meta property="docfx:tocrel" content="toc.html">
+  
+  
+  
+  </head>  <body data-spy="scroll" data-target="#affix" data-offset="120">
+    <div id="wrapper">
+      <header>
+
+        <nav id="autocollapse" class="navbar navbar-inverse ng-scope" role="navigation">
+          <div class="container">
+            <div class="navbar-header">
+              <button type="button" class="navbar-toggle" data-toggle="collapse" data-target="#navbar">
+                <span class="sr-only">Toggle navigation</span>
+                <span class="icon-bar"></span>
+                <span class="icon-bar"></span>
+                <span class="icon-bar"></span>
+              </button>
+
+              <a class="navbar-brand" href="../index.html">
+                <img id="logo" class="svg" src="../logo.svg" alt="">
+              </a>
+            </div>
+            <div class="collapse navbar-collapse" id="navbar">
+              <form class="navbar-form navbar-right" role="search" id="search">
+                <div class="form-group">
+                  <input type="text" class="form-control" id="search-query" placeholder="Search" autocomplete="off">
+                </div>
+              </form>
+            </div>
+          </div>
+        </nav>
+
+        <div class="subnav navbar navbar-default">
+          <div class="container hide-when-search" id="breadcrumb">
+            <ul class="breadcrumb">
+              <li></li>
+            </ul>
+          </div>
+        </div>
+      </header>
+      <div role="main" class="container body-content hide-when-search">
+
+        <div class="sidenav hide-when-search">
+          <a class="btn toc-toggle collapse" data-toggle="collapse" href="#sidetoggle" aria-expanded="false" aria-controls="sidetoggle">Show / Hide Table of Contents</a>
+          <div class="sidetoggle collapse" id="sidetoggle">
+            <div id="sidetoc"></div>
+          </div>
+        </div>
+        <div class="article row grid-right">
+          <div class="col-md-10">
+            <article class="content wrap" id="_content" data-uid="Xrpl.Models.Methods.ValidationStream">
+
+
+
+  <h1 id="Xrpl_Models_Methods_ValidationStream" data-uid="Xrpl.Models.Methods.ValidationStream" class="text-break">Class ValidationStream</h1>
+  <div class="markdown level0 summary"><p>The validations stream sends messages whenever it receives validation messages,
+also called validation votes, regardless of whether or not the validation message is from a trusted validator.
+<a href="https://xrpl.org/subscribe.html#validations-stream">https://xrpl.org/subscribe.html#validations-stream</a></p>
+</div>
+  <div class="markdown level0 conceptual"></div>
+  <div class="inheritance">
+    <h5>Inheritance</h5>
+    <div class="level0"><span class="xref">object</span></div>
+    <div class="level1"><a class="xref" href="Xrpl.Models.Subscriptions.BaseStream.html">BaseStream</a></div>
+    <div class="level2"><span class="xref">ValidationStream</span></div>
+  </div>
+  <div class="inheritedMembers">
+    <h5>Inherited Members</h5>
+    <div>
+      <a class="xref" href="Xrpl.Models.Subscriptions.BaseStream.html#Xrpl_Models_Subscriptions_BaseStream_Type">BaseStream.Type</a>
+    </div>
+  </div>
+  <h6><strong>Namespace</strong>: <a class="xref" href="Xrpl.html">Xrpl</a>.<a class="xref" href="Xrpl.Models.html">Models</a>.<a class="xref" href="Xrpl.Models.Methods.html">Methods</a></h6>
+  <h6><strong>Assembly</strong>: Xrpl.dll</h6>
+  <h5 id="Xrpl_Models_Methods_ValidationStream_syntax">Syntax</h5>
+  <div class="codewrapper">
+    <pre><code class="lang-csharp hljs">public class ValidationStream : BaseStream</code></pre>
+  </div>
+  <h3 id="properties">Properties
+</h3>
+  <span class="small pull-right mobile-hide">
+    <span class="divider">|</span>
+    <a href="https://github.com/Platonenkov/XrplCSharp/new/feature/rep/apiSpec/new?filename=Xrpl_Models_Methods_ValidationStream_Amendments.md&amp;value=---%0Auid%3A%20Xrpl.Models.Methods.ValidationStream.Amendments%0Asummary%3A%20&#39;*You%20can%20override%20summary%20for%20the%20API%20here%20using%20*MARKDOWN*%20syntax&#39;%0A---%0A%0A*Please%20type%20below%20more%20information%20about%20this%20API%3A*%0A%0A">Edit this page</a>
+  </span>
+  <span class="small pull-right mobile-hide">
+    <a href="https://github.com/Platonenkov/XrplCSharp/blob/feature/rep/Xrpl/Models/Methods/Subscribe.cs/#L297">View Source</a>
+  </span>
+  <a id="Xrpl_Models_Methods_ValidationStream_Amendments_" data-uid="Xrpl.Models.Methods.ValidationStream.Amendments*"></a>
+  <h4 id="Xrpl_Models_Methods_ValidationStream_Amendments" data-uid="Xrpl.Models.Methods.ValidationStream.Amendments">Amendments</h4>
+  <div class="markdown level1 summary"><p>(May be omitted) The amendments this server wants to be added to the protocol.</p>
+</div>
+  <div class="markdown level1 conceptual"></div>
+  <h5 class="declaration">Declaration</h5>
+  <div class="codewrapper">
+    <pre><code class="lang-csharp hljs">[JsonProperty(&quot;amendments&quot;)]
+public List&lt;string&gt; Amendments { get; set; }</code></pre>
+  </div>
+  <h5 class="propertyValue">Property Value</h5>
+  <table class="table table-bordered table-condensed">
+    <thead>
+      <tr>
+        <th>Type</th>
+        <th>Description</th>
+      </tr>
+    </thead>
+    <tbody>
+      <tr>
+        <td><span class="xref">List</span>&lt;<span class="xref">string</span>&gt;</td>
+        <td></td>
+      </tr>
+    </tbody>
+  </table>
+  <span class="small pull-right mobile-hide">
+    <span class="divider">|</span>
+    <a href="https://github.com/Platonenkov/XrplCSharp/new/feature/rep/apiSpec/new?filename=Xrpl_Models_Methods_ValidationStream_BaseFee.md&amp;value=---%0Auid%3A%20Xrpl.Models.Methods.ValidationStream.BaseFee%0Asummary%3A%20&#39;*You%20can%20override%20summary%20for%20the%20API%20here%20using%20*MARKDOWN*%20syntax&#39;%0A---%0A%0A*Please%20type%20below%20more%20information%20about%20this%20API%3A*%0A%0A">Edit this page</a>
+  </span>
+  <span class="small pull-right mobile-hide">
+    <a href="https://github.com/Platonenkov/XrplCSharp/blob/feature/rep/Xrpl/Models/Methods/Subscribe.cs/#L302">View Source</a>
+  </span>
+  <a id="Xrpl_Models_Methods_ValidationStream_BaseFee_" data-uid="Xrpl.Models.Methods.ValidationStream.BaseFee*"></a>
+  <h4 id="Xrpl_Models_Methods_ValidationStream_BaseFee" data-uid="Xrpl.Models.Methods.ValidationStream.BaseFee">BaseFee</h4>
+  <div class="markdown level1 summary"><p>(May be omitted) The unscaled transaction cost (reference_fee value) this server wants to set by Fee Voting</p>
+</div>
+  <div class="markdown level1 conceptual"></div>
+  <h5 class="declaration">Declaration</h5>
+  <div class="codewrapper">
+    <pre><code class="lang-csharp hljs">[JsonProperty(&quot;base_fee&quot;)]
+public uint? BaseFee { get; set; }</code></pre>
+  </div>
+  <h5 class="propertyValue">Property Value</h5>
+  <table class="table table-bordered table-condensed">
+    <thead>
+      <tr>
+        <th>Type</th>
+        <th>Description</th>
+      </tr>
+    </thead>
+    <tbody>
+      <tr>
+        <td><span class="xref">uint</span>?</td>
+        <td></td>
+      </tr>
+    </tbody>
+  </table>
+  <span class="small pull-right mobile-hide">
+    <span class="divider">|</span>
+    <a href="https://github.com/Platonenkov/XrplCSharp/new/feature/rep/apiSpec/new?filename=Xrpl_Models_Methods_ValidationStream_Cookie.md&amp;value=---%0Auid%3A%20Xrpl.Models.Methods.ValidationStream.Cookie%0Asummary%3A%20&#39;*You%20can%20override%20summary%20for%20the%20API%20here%20using%20*MARKDOWN*%20syntax&#39;%0A---%0A%0A*Please%20type%20below%20more%20information%20about%20this%20API%3A*%0A%0A">Edit this page</a>
+  </span>
+  <span class="small pull-right mobile-hide">
+    <a href="https://github.com/Platonenkov/XrplCSharp/blob/feature/rep/Xrpl/Models/Methods/Subscribe.cs/#L309">View Source</a>
+  </span>
+  <a id="Xrpl_Models_Methods_ValidationStream_Cookie_" data-uid="Xrpl.Models.Methods.ValidationStream.Cookie*"></a>
+  <h4 id="Xrpl_Models_Methods_ValidationStream_Cookie" data-uid="Xrpl.Models.Methods.ValidationStream.Cookie">Cookie</h4>
+  <div class="markdown level1 summary"><p>(May be omitted) An arbitrary value chosen by the server at startup.<br>
+If the same validation key pair signs validations with different cookies concurrently,
+that usually indicates that multiple servers are incorrectly configured to use the same validation key pair.</p>
+</div>
+  <div class="markdown level1 conceptual"></div>
+  <h5 class="declaration">Declaration</h5>
+  <div class="codewrapper">
+    <pre><code class="lang-csharp hljs">[JsonProperty(&quot;cookie&quot;)]
+public string Cookie { get; set; }</code></pre>
+  </div>
+  <h5 class="propertyValue">Property Value</h5>
+  <table class="table table-bordered table-condensed">
+    <thead>
+      <tr>
+        <th>Type</th>
+        <th>Description</th>
+      </tr>
+    </thead>
+    <tbody>
+      <tr>
+        <td><span class="xref">string</span></td>
+        <td></td>
+      </tr>
+    </tbody>
+  </table>
+  <span class="small pull-right mobile-hide">
+    <span class="divider">|</span>
+    <a href="https://github.com/Platonenkov/XrplCSharp/new/feature/rep/apiSpec/new?filename=Xrpl_Models_Methods_ValidationStream_Flags.md&amp;value=---%0Auid%3A%20Xrpl.Models.Methods.ValidationStream.Flags%0Asummary%3A%20&#39;*You%20can%20override%20summary%20for%20the%20API%20here%20using%20*MARKDOWN*%20syntax&#39;%0A---%0A%0A*Please%20type%20below%20more%20information%20about%20this%20API%3A*%0A%0A">Edit this page</a>
+  </span>
+  <span class="small pull-right mobile-hide">
+    <a href="https://github.com/Platonenkov/XrplCSharp/blob/feature/rep/Xrpl/Models/Methods/Subscribe.cs/#L318">View Source</a>
+  </span>
+  <a id="Xrpl_Models_Methods_ValidationStream_Flags_" data-uid="Xrpl.Models.Methods.ValidationStream.Flags*"></a>
+  <h4 id="Xrpl_Models_Methods_ValidationStream_Flags" data-uid="Xrpl.Models.Methods.ValidationStream.Flags">Flags</h4>
+  <div class="markdown level1 summary"><p>Bit-mask of flags added to this validation message.<br>
+The flag 0x80000000 indicates that the validation signature is fully-canonical.<br>
+The flag 0x00000001 indicates that this is a full validation; otherwise it's a partial validation.<br>
+Partial validations are not meant to vote for any particular ledger.<br>
+A partial validation indicates that the validator is still online but not keeping up with consensus.</p>
+</div>
+  <div class="markdown level1 conceptual"></div>
+  <h5 class="declaration">Declaration</h5>
+  <div class="codewrapper">
+    <pre><code class="lang-csharp hljs">[JsonProperty(&quot;flags&quot;)]
+public uint Flags { get; set; }</code></pre>
+  </div>
+  <h5 class="propertyValue">Property Value</h5>
+  <table class="table table-bordered table-condensed">
+    <thead>
+      <tr>
+        <th>Type</th>
+        <th>Description</th>
+      </tr>
+    </thead>
+    <tbody>
+      <tr>
+        <td><span class="xref">uint</span></td>
+        <td></td>
+      </tr>
+    </tbody>
+  </table>
+  <span class="small pull-right mobile-hide">
+    <span class="divider">|</span>
+    <a href="https://github.com/Platonenkov/XrplCSharp/new/feature/rep/apiSpec/new?filename=Xrpl_Models_Methods_ValidationStream_Full.md&amp;value=---%0Auid%3A%20Xrpl.Models.Methods.ValidationStream.Full%0Asummary%3A%20&#39;*You%20can%20override%20summary%20for%20the%20API%20here%20using%20*MARKDOWN*%20syntax&#39;%0A---%0A%0A*Please%20type%20below%20more%20information%20about%20this%20API%3A*%0A%0A">Edit this page</a>
+  </span>
+  <span class="small pull-right mobile-hide">
+    <a href="https://github.com/Platonenkov/XrplCSharp/blob/feature/rep/Xrpl/Models/Methods/Subscribe.cs/#L325">View Source</a>
+  </span>
+  <a id="Xrpl_Models_Methods_ValidationStream_Full_" data-uid="Xrpl.Models.Methods.ValidationStream.Full*"></a>
+  <h4 id="Xrpl_Models_Methods_ValidationStream_Full" data-uid="Xrpl.Models.Methods.ValidationStream.Full">Full</h4>
+  <div class="markdown level1 summary"><p>If true, this is a full validation. Otherwise, this is a partial validation.<br>
+Partial validations are not meant to vote for any particular ledger.<br>
+A partial validation indicates that the validator is still online but not keeping up with consensus.</p>
+</div>
+  <div class="markdown level1 conceptual"></div>
+  <h5 class="declaration">Declaration</h5>
+  <div class="codewrapper">
+    <pre><code class="lang-csharp hljs">[JsonProperty(&quot;full&quot;)]
+public bool Full { get; set; }</code></pre>
+  </div>
+  <h5 class="propertyValue">Property Value</h5>
+  <table class="table table-bordered table-condensed">
+    <thead>
+      <tr>
+        <th>Type</th>
+        <th>Description</th>
+      </tr>
+    </thead>
+    <tbody>
+      <tr>
+        <td><span class="xref">bool</span></td>
+        <td></td>
+      </tr>
+    </tbody>
+  </table>
+  <span class="small pull-right mobile-hide">
+    <span class="divider">|</span>
+    <a href="https://github.com/Platonenkov/XrplCSharp/new/feature/rep/apiSpec/new?filename=Xrpl_Models_Methods_ValidationStream_LedgerHash.md&amp;value=---%0Auid%3A%20Xrpl.Models.Methods.ValidationStream.LedgerHash%0Asummary%3A%20&#39;*You%20can%20override%20summary%20for%20the%20API%20here%20using%20*MARKDOWN*%20syntax&#39;%0A---%0A%0A*Please%20type%20below%20more%20information%20about%20this%20API%3A*%0A%0A">Edit this page</a>
+  </span>
+  <span class="small pull-right mobile-hide">
+    <a href="https://github.com/Platonenkov/XrplCSharp/blob/feature/rep/Xrpl/Models/Methods/Subscribe.cs/#L330">View Source</a>
+  </span>
+  <a id="Xrpl_Models_Methods_ValidationStream_LedgerHash_" data-uid="Xrpl.Models.Methods.ValidationStream.LedgerHash*"></a>
+  <h4 id="Xrpl_Models_Methods_ValidationStream_LedgerHash" data-uid="Xrpl.Models.Methods.ValidationStream.LedgerHash">LedgerHash</h4>
+  <div class="markdown level1 summary"><p>The identifying hash of the ledger version that was closed.</p>
+</div>
+  <div class="markdown level1 conceptual"></div>
+  <h5 class="declaration">Declaration</h5>
+  <div class="codewrapper">
+    <pre><code class="lang-csharp hljs">[JsonProperty(&quot;ledger_hash&quot;)]
+public string LedgerHash { get; set; }</code></pre>
+  </div>
+  <h5 class="propertyValue">Property Value</h5>
+  <table class="table table-bordered table-condensed">
+    <thead>
+      <tr>
+        <th>Type</th>
+        <th>Description</th>
+      </tr>
+    </thead>
+    <tbody>
+      <tr>
+        <td><span class="xref">string</span></td>
+        <td></td>
+      </tr>
+    </tbody>
+  </table>
+  <span class="small pull-right mobile-hide">
+    <span class="divider">|</span>
+    <a href="https://github.com/Platonenkov/XrplCSharp/new/feature/rep/apiSpec/new?filename=Xrpl_Models_Methods_ValidationStream_LedgerIndex.md&amp;value=---%0Auid%3A%20Xrpl.Models.Methods.ValidationStream.LedgerIndex%0Asummary%3A%20&#39;*You%20can%20override%20summary%20for%20the%20API%20here%20using%20*MARKDOWN*%20syntax&#39;%0A---%0A%0A*Please%20type%20below%20more%20information%20about%20this%20API%3A*%0A%0A">Edit this page</a>
+  </span>
+  <span class="small pull-right mobile-hide">
+    <a href="https://github.com/Platonenkov/XrplCSharp/blob/feature/rep/Xrpl/Models/Methods/Subscribe.cs/#L335">View Source</a>
+  </span>
+  <a id="Xrpl_Models_Methods_ValidationStream_LedgerIndex_" data-uid="Xrpl.Models.Methods.ValidationStream.LedgerIndex*"></a>
+  <h4 id="Xrpl_Models_Methods_ValidationStream_LedgerIndex" data-uid="Xrpl.Models.Methods.ValidationStream.LedgerIndex">LedgerIndex</h4>
+  <div class="markdown level1 summary"><p>The ledger index of the ledger that was closed.</p>
+</div>
+  <div class="markdown level1 conceptual"></div>
+  <h5 class="declaration">Declaration</h5>
+  <div class="codewrapper">
+    <pre><code class="lang-csharp hljs">[JsonProperty(&quot;ledger_index&quot;)]
+public ulong LedgerIndex { get; set; }</code></pre>
+  </div>
+  <h5 class="propertyValue">Property Value</h5>
+  <table class="table table-bordered table-condensed">
+    <thead>
+      <tr>
+        <th>Type</th>
+        <th>Description</th>
+      </tr>
+    </thead>
+    <tbody>
+      <tr>
+        <td><span class="xref">ulong</span></td>
+        <td></td>
+      </tr>
+    </tbody>
+  </table>
+  <span class="small pull-right mobile-hide">
+    <span class="divider">|</span>
+    <a href="https://github.com/Platonenkov/XrplCSharp/new/feature/rep/apiSpec/new?filename=Xrpl_Models_Methods_ValidationStream_LoadFee.md&amp;value=---%0Auid%3A%20Xrpl.Models.Methods.ValidationStream.LoadFee%0Asummary%3A%20&#39;*You%20can%20override%20summary%20for%20the%20API%20here%20using%20*MARKDOWN*%20syntax&#39;%0A---%0A%0A*Please%20type%20below%20more%20information%20about%20this%20API%3A*%0A%0A">Edit this page</a>
+  </span>
+  <span class="small pull-right mobile-hide">
+    <a href="https://github.com/Platonenkov/XrplCSharp/blob/feature/rep/Xrpl/Models/Methods/Subscribe.cs/#L340">View Source</a>
+  </span>
+  <a id="Xrpl_Models_Methods_ValidationStream_LoadFee_" data-uid="Xrpl.Models.Methods.ValidationStream.LoadFee*"></a>
+  <h4 id="Xrpl_Models_Methods_ValidationStream_LoadFee" data-uid="Xrpl.Models.Methods.ValidationStream.LoadFee">LoadFee</h4>
+  <div class="markdown level1 summary"><p>(May be omitted) The local load-scaled transaction cost this validator is currently enforcing, in fee units.</p>
+</div>
+  <div class="markdown level1 conceptual"></div>
+  <h5 class="declaration">Declaration</h5>
+  <div class="codewrapper">
+    <pre><code class="lang-csharp hljs">[JsonProperty(&quot;load_fee&quot;)]
+public uint? LoadFee { get; set; }</code></pre>
+  </div>
+  <h5 class="propertyValue">Property Value</h5>
+  <table class="table table-bordered table-condensed">
+    <thead>
+      <tr>
+        <th>Type</th>
+        <th>Description</th>
+      </tr>
+    </thead>
+    <tbody>
+      <tr>
+        <td><span class="xref">uint</span>?</td>
+        <td></td>
+      </tr>
+    </tbody>
+  </table>
+  <span class="small pull-right mobile-hide">
+    <span class="divider">|</span>
+    <a href="https://github.com/Platonenkov/XrplCSharp/new/feature/rep/apiSpec/new?filename=Xrpl_Models_Methods_ValidationStream_MasterKey.md&amp;value=---%0Auid%3A%20Xrpl.Models.Methods.ValidationStream.MasterKey%0Asummary%3A%20&#39;*You%20can%20override%20summary%20for%20the%20API%20here%20using%20*MARKDOWN*%20syntax&#39;%0A---%0A%0A*Please%20type%20below%20more%20information%20about%20this%20API%3A*%0A%0A">Edit this page</a>
+  </span>
+  <span class="small pull-right mobile-hide">
+    <a href="https://github.com/Platonenkov/XrplCSharp/blob/feature/rep/Xrpl/Models/Methods/Subscribe.cs/#L345">View Source</a>
+  </span>
+  <a id="Xrpl_Models_Methods_ValidationStream_MasterKey_" data-uid="Xrpl.Models.Methods.ValidationStream.MasterKey*"></a>
+  <h4 id="Xrpl_Models_Methods_ValidationStream_MasterKey" data-uid="Xrpl.Models.Methods.ValidationStream.MasterKey">MasterKey</h4>
+  <div class="markdown level1 summary"><p>(May be omitted) The validator's master public key, if the validator is using a validator token, in the XRP Ledger's base58 format.</p>
+</div>
+  <div class="markdown level1 conceptual"></div>
+  <h5 class="declaration">Declaration</h5>
+  <div class="codewrapper">
+    <pre><code class="lang-csharp hljs">[JsonProperty(&quot;master_key&quot;)]
+public string MasterKey { get; set; }</code></pre>
+  </div>
+  <h5 class="propertyValue">Property Value</h5>
+  <table class="table table-bordered table-condensed">
+    <thead>
+      <tr>
+        <th>Type</th>
+        <th>Description</th>
+      </tr>
+    </thead>
+    <tbody>
+      <tr>
+        <td><span class="xref">string</span></td>
+        <td></td>
+      </tr>
+    </tbody>
+  </table>
+  <span class="small pull-right mobile-hide">
+    <span class="divider">|</span>
+    <a href="https://github.com/Platonenkov/XrplCSharp/new/feature/rep/apiSpec/new?filename=Xrpl_Models_Methods_ValidationStream_ReserveBase.md&amp;value=---%0Auid%3A%20Xrpl.Models.Methods.ValidationStream.ReserveBase%0Asummary%3A%20&#39;*You%20can%20override%20summary%20for%20the%20API%20here%20using%20*MARKDOWN*%20syntax&#39;%0A---%0A%0A*Please%20type%20below%20more%20information%20about%20this%20API%3A*%0A%0A">Edit this page</a>
+  </span>
+  <span class="small pull-right mobile-hide">
+    <a href="https://github.com/Platonenkov/XrplCSharp/blob/feature/rep/Xrpl/Models/Methods/Subscribe.cs/#L350">View Source</a>
+  </span>
+  <a id="Xrpl_Models_Methods_ValidationStream_ReserveBase_" data-uid="Xrpl.Models.Methods.ValidationStream.ReserveBase*"></a>
+  <h4 id="Xrpl_Models_Methods_ValidationStream_ReserveBase" data-uid="Xrpl.Models.Methods.ValidationStream.ReserveBase">ReserveBase</h4>
+  <div class="markdown level1 summary"><p>May be omitted) The minimum reserve requirement (account_reserve value) this validator wants to set by Fee Voting.</p>
+</div>
+  <div class="markdown level1 conceptual"></div>
+  <h5 class="declaration">Declaration</h5>
+  <div class="codewrapper">
+    <pre><code class="lang-csharp hljs">[JsonProperty(&quot;reserve_base&quot;)]
+public uint? ReserveBase { get; set; }</code></pre>
+  </div>
+  <h5 class="propertyValue">Property Value</h5>
+  <table class="table table-bordered table-condensed">
+    <thead>
+      <tr>
+        <th>Type</th>
+        <th>Description</th>
+      </tr>
+    </thead>
+    <tbody>
+      <tr>
+        <td><span class="xref">uint</span>?</td>
+        <td></td>
+      </tr>
+    </tbody>
+  </table>
+  <span class="small pull-right mobile-hide">
+    <span class="divider">|</span>
+    <a href="https://github.com/Platonenkov/XrplCSharp/new/feature/rep/apiSpec/new?filename=Xrpl_Models_Methods_ValidationStream_ReserveInc.md&amp;value=---%0Auid%3A%20Xrpl.Models.Methods.ValidationStream.ReserveInc%0Asummary%3A%20&#39;*You%20can%20override%20summary%20for%20the%20API%20here%20using%20*MARKDOWN*%20syntax&#39;%0A---%0A%0A*Please%20type%20below%20more%20information%20about%20this%20API%3A*%0A%0A">Edit this page</a>
+  </span>
+  <span class="small pull-right mobile-hide">
+    <a href="https://github.com/Platonenkov/XrplCSharp/blob/feature/rep/Xrpl/Models/Methods/Subscribe.cs/#L355">View Source</a>
+  </span>
+  <a id="Xrpl_Models_Methods_ValidationStream_ReserveInc_" data-uid="Xrpl.Models.Methods.ValidationStream.ReserveInc*"></a>
+  <h4 id="Xrpl_Models_Methods_ValidationStream_ReserveInc" data-uid="Xrpl.Models.Methods.ValidationStream.ReserveInc">ReserveInc</h4>
+  <div class="markdown level1 summary"><p>May be omitted) The increment in the reserve requirement (owner_reserve value) this validator wants to set by Fee Voting.</p>
+</div>
+  <div class="markdown level1 conceptual"></div>
+  <h5 class="declaration">Declaration</h5>
+  <div class="codewrapper">
+    <pre><code class="lang-csharp hljs">[JsonProperty(&quot;reserve_inc&quot;)]
+public uint? ReserveInc { get; set; }</code></pre>
+  </div>
+  <h5 class="propertyValue">Property Value</h5>
+  <table class="table table-bordered table-condensed">
+    <thead>
+      <tr>
+        <th>Type</th>
+        <th>Description</th>
+      </tr>
+    </thead>
+    <tbody>
+      <tr>
+        <td><span class="xref">uint</span>?</td>
+        <td></td>
+      </tr>
+    </tbody>
+  </table>
+  <span class="small pull-right mobile-hide">
+    <span class="divider">|</span>
+    <a href="https://github.com/Platonenkov/XrplCSharp/new/feature/rep/apiSpec/new?filename=Xrpl_Models_Methods_ValidationStream_ServerVersion.md&amp;value=---%0Auid%3A%20Xrpl.Models.Methods.ValidationStream.ServerVersion%0Asummary%3A%20&#39;*You%20can%20override%20summary%20for%20the%20API%20here%20using%20*MARKDOWN*%20syntax&#39;%0A---%0A%0A*Please%20type%20below%20more%20information%20about%20this%20API%3A*%0A%0A">Edit this page</a>
+  </span>
+  <span class="small pull-right mobile-hide">
+    <a href="https://github.com/Platonenkov/XrplCSharp/blob/feature/rep/Xrpl/Models/Methods/Subscribe.cs/#L362">View Source</a>
+  </span>
+  <a id="Xrpl_Models_Methods_ValidationStream_ServerVersion_" data-uid="Xrpl.Models.Methods.ValidationStream.ServerVersion*"></a>
+  <h4 id="Xrpl_Models_Methods_ValidationStream_ServerVersion" data-uid="Xrpl.Models.Methods.ValidationStream.ServerVersion">ServerVersion</h4>
+  <div class="markdown level1 summary"><p>(May be omitted) An 64-bit integer that encodes the version number of the validating server.<br>
+For example, &quot;1745990410175512576&quot;.<br>
+Only provided once every 256 ledgers.</p>
+</div>
+  <div class="markdown level1 conceptual"></div>
+  <h5 class="declaration">Declaration</h5>
+  <div class="codewrapper">
+    <pre><code class="lang-csharp hljs">[JsonProperty(&quot;server_version&quot;)]
+public string ServerVersion { get; set; }</code></pre>
+  </div>
+  <h5 class="propertyValue">Property Value</h5>
+  <table class="table table-bordered table-condensed">
+    <thead>
+      <tr>
+        <th>Type</th>
+        <th>Description</th>
+      </tr>
+    </thead>
+    <tbody>
+      <tr>
+        <td><span class="xref">string</span></td>
+        <td></td>
+      </tr>
+    </tbody>
+  </table>
+  <span class="small pull-right mobile-hide">
+    <span class="divider">|</span>
+    <a href="https://github.com/Platonenkov/XrplCSharp/new/feature/rep/apiSpec/new?filename=Xrpl_Models_Methods_ValidationStream_Signature.md&amp;value=---%0Auid%3A%20Xrpl.Models.Methods.ValidationStream.Signature%0Asummary%3A%20&#39;*You%20can%20override%20summary%20for%20the%20API%20here%20using%20*MARKDOWN*%20syntax&#39;%0A---%0A%0A*Please%20type%20below%20more%20information%20about%20this%20API%3A*%0A%0A">Edit this page</a>
+  </span>
+  <span class="small pull-right mobile-hide">
+    <a href="https://github.com/Platonenkov/XrplCSharp/blob/feature/rep/Xrpl/Models/Methods/Subscribe.cs/#L367">View Source</a>
+  </span>
+  <a id="Xrpl_Models_Methods_ValidationStream_Signature_" data-uid="Xrpl.Models.Methods.ValidationStream.Signature*"></a>
+  <h4 id="Xrpl_Models_Methods_ValidationStream_Signature" data-uid="Xrpl.Models.Methods.ValidationStream.Signature">Signature</h4>
+  <div class="markdown level1 summary"><p>The signature that the validator used to sign its vote for this ledger.</p>
+</div>
+  <div class="markdown level1 conceptual"></div>
+  <h5 class="declaration">Declaration</h5>
+  <div class="codewrapper">
+    <pre><code class="lang-csharp hljs">[JsonProperty(&quot;signature&quot;)]
+public string Signature { get; set; }</code></pre>
+  </div>
+  <h5 class="propertyValue">Property Value</h5>
+  <table class="table table-bordered table-condensed">
+    <thead>
+      <tr>
+        <th>Type</th>
+        <th>Description</th>
+      </tr>
+    </thead>
+    <tbody>
+      <tr>
+        <td><span class="xref">string</span></td>
+        <td></td>
+      </tr>
+    </tbody>
+  </table>
+  <span class="small pull-right mobile-hide">
+    <span class="divider">|</span>
+    <a href="https://github.com/Platonenkov/XrplCSharp/new/feature/rep/apiSpec/new?filename=Xrpl_Models_Methods_ValidationStream_SigningTime.md&amp;value=---%0Auid%3A%20Xrpl.Models.Methods.ValidationStream.SigningTime%0Asummary%3A%20&#39;*You%20can%20override%20summary%20for%20the%20API%20here%20using%20*MARKDOWN*%20syntax&#39;%0A---%0A%0A*Please%20type%20below%20more%20information%20about%20this%20API%3A*%0A%0A">Edit this page</a>
+  </span>
+  <span class="small pull-right mobile-hide">
+    <a href="https://github.com/Platonenkov/XrplCSharp/blob/feature/rep/Xrpl/Models/Methods/Subscribe.cs/#L372">View Source</a>
+  </span>
+  <a id="Xrpl_Models_Methods_ValidationStream_SigningTime_" data-uid="Xrpl.Models.Methods.ValidationStream.SigningTime*"></a>
+  <h4 id="Xrpl_Models_Methods_ValidationStream_SigningTime" data-uid="Xrpl.Models.Methods.ValidationStream.SigningTime">SigningTime</h4>
+  <div class="markdown level1 summary"><p>When this validation vote was signed, in seconds since the Ripple Epoch.</p>
+</div>
+  <div class="markdown level1 conceptual"></div>
+  <h5 class="declaration">Declaration</h5>
+  <div class="codewrapper">
+    <pre><code class="lang-csharp hljs">[JsonProperty(&quot;signing_time&quot;)]
+public ulong SigningTime { get; set; }</code></pre>
+  </div>
+  <h5 class="propertyValue">Property Value</h5>
+  <table class="table table-bordered table-condensed">
+    <thead>
+      <tr>
+        <th>Type</th>
+        <th>Description</th>
+      </tr>
+    </thead>
+    <tbody>
+      <tr>
+        <td><span class="xref">ulong</span></td>
+        <td></td>
+      </tr>
+    </tbody>
+  </table>
+  <span class="small pull-right mobile-hide">
+    <span class="divider">|</span>
+    <a href="https://github.com/Platonenkov/XrplCSharp/new/feature/rep/apiSpec/new?filename=Xrpl_Models_Methods_ValidationStream_ValidatedHash.md&amp;value=---%0Auid%3A%20Xrpl.Models.Methods.ValidationStream.ValidatedHash%0Asummary%3A%20&#39;*You%20can%20override%20summary%20for%20the%20API%20here%20using%20*MARKDOWN*%20syntax&#39;%0A---%0A%0A*Please%20type%20below%20more%20information%20about%20this%20API%3A*%0A%0A">Edit this page</a>
+  </span>
+  <span class="small pull-right mobile-hide">
+    <a href="https://github.com/Platonenkov/XrplCSharp/blob/feature/rep/Xrpl/Models/Methods/Subscribe.cs/#L377">View Source</a>
+  </span>
+  <a id="Xrpl_Models_Methods_ValidationStream_ValidatedHash_" data-uid="Xrpl.Models.Methods.ValidationStream.ValidatedHash*"></a>
+  <h4 id="Xrpl_Models_Methods_ValidationStream_ValidatedHash" data-uid="Xrpl.Models.Methods.ValidationStream.ValidatedHash">ValidatedHash</h4>
+  <div class="markdown level1 summary"><p>The unique hash of the proposed ledger this validation applies to.</p>
+</div>
+  <div class="markdown level1 conceptual"></div>
+  <h5 class="declaration">Declaration</h5>
+  <div class="codewrapper">
+    <pre><code class="lang-csharp hljs">[JsonProperty(&quot;validated_hash&quot;)]
+public string ValidatedHash { get; set; }</code></pre>
+  </div>
+  <h5 class="propertyValue">Property Value</h5>
+  <table class="table table-bordered table-condensed">
+    <thead>
+      <tr>
+        <th>Type</th>
+        <th>Description</th>
+      </tr>
+    </thead>
+    <tbody>
+      <tr>
+        <td><span class="xref">string</span></td>
+        <td></td>
+      </tr>
+    </tbody>
+  </table>
+  <span class="small pull-right mobile-hide">
+    <span class="divider">|</span>
+    <a href="https://github.com/Platonenkov/XrplCSharp/new/feature/rep/apiSpec/new?filename=Xrpl_Models_Methods_ValidationStream_ValidationPublicKey.md&amp;value=---%0Auid%3A%20Xrpl.Models.Methods.ValidationStream.ValidationPublicKey%0Asummary%3A%20&#39;*You%20can%20override%20summary%20for%20the%20API%20here%20using%20*MARKDOWN*%20syntax&#39;%0A---%0A%0A*Please%20type%20below%20more%20information%20about%20this%20API%3A*%0A%0A">Edit this page</a>
+  </span>
+  <span class="small pull-right mobile-hide">
+    <a href="https://github.com/Platonenkov/XrplCSharp/blob/feature/rep/Xrpl/Models/Methods/Subscribe.cs/#L384">View Source</a>
+  </span>
+  <a id="Xrpl_Models_Methods_ValidationStream_ValidationPublicKey_" data-uid="Xrpl.Models.Methods.ValidationStream.ValidationPublicKey*"></a>
+  <h4 id="Xrpl_Models_Methods_ValidationStream_ValidationPublicKey" data-uid="Xrpl.Models.Methods.ValidationStream.ValidationPublicKey">ValidationPublicKey</h4>
+  <div class="markdown level1 summary"><p>The public key from the key-pair that the validator used to sign the message, in the XRP Ledger's base58 format.<br>
+This identifies the validator sending the message and can also be used to verify the signature.<br>
+If the validator is using a token, this is an ephemeral public key.</p>
+</div>
+  <div class="markdown level1 conceptual"></div>
+  <h5 class="declaration">Declaration</h5>
+  <div class="codewrapper">
+    <pre><code class="lang-csharp hljs">[JsonProperty(&quot;validation_public_key&quot;)]
+public string ValidationPublicKey { get; set; }</code></pre>
+  </div>
+  <h5 class="propertyValue">Property Value</h5>
+  <table class="table table-bordered table-condensed">
+    <thead>
+      <tr>
+        <th>Type</th>
+        <th>Description</th>
+      </tr>
+    </thead>
+    <tbody>
+      <tr>
+        <td><span class="xref">string</span></td>
+        <td></td>
+      </tr>
+    </tbody>
+  </table>
+
+</article>
+          </div>
+
+          <div class="hidden-sm col-md-2" role="complementary">
+            <div class="sideaffix">
+              <div class="contribution">
+                <ul class="nav">
+                  <li>
+                    <a href="https://github.com/Platonenkov/XrplCSharp/new/feature/rep/apiSpec/new?filename=Xrpl_Models_Methods_ValidationStream.md&amp;value=---%0Auid%3A%20Xrpl.Models.Methods.ValidationStream%0Asummary%3A%20&#39;*You%20can%20override%20summary%20for%20the%20API%20here%20using%20*MARKDOWN*%20syntax&#39;%0A---%0A%0A*Please%20type%20below%20more%20information%20about%20this%20API%3A*%0A%0A" class="contribution-link">Edit this page</a>
+                  </li>
+                  <li>
+                    <a href="https://github.com/Platonenkov/XrplCSharp/blob/feature/rep/Xrpl/Models/Methods/Subscribe.cs/#L292" class="contribution-link">View Source</a>
+                  </li>
+                </ul>
+              </div>
+              <nav class="bs-docs-sidebar hidden-print hidden-xs hidden-sm affix" id="affix">
+                <h5>In this article</h5>
+                <div></div>
+              </nav>
+            </div>
+          </div>
+        </div>
+      </div>
+
+      <footer>
+        <div class="grad-bottom"></div>
+        <div class="footer">
+          <div class="container">
+            <span class="pull-right">
+              <a href="#top">Back to top</a>
+            </span>
+      
+      <span>Generated by <strong>DocFX</strong></span>
+          </div>
+        </div>
+      </footer>
+    </div>
+
+    <script type="text/javascript" src="../styles/docfx.vendor.min.js"></script>
+    <script type="text/javascript" src="../styles/docfx.js"></script>
+    <script type="text/javascript" src="../styles/main.js"></script>
+  </body>
+</html>

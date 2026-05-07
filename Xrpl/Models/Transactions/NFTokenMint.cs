@@ -1,9 +1,9 @@
-﻿using System;
+using System;
 using System.Collections.Generic;
 using System.Threading.Tasks;
 
-using Xrpl.BinaryCodec.Types;
 using Xrpl.Client.Exceptions;
+using Xrpl.Models.Enums;
 using Xrpl.Models.Utils;
 
 // https://github.com/XRPLF/xrpl.js/blob/main/packages/xrpl/src/models/transactions/NFTokenMint.ts
@@ -15,7 +15,12 @@ namespace Xrpl.Models.Transactions
     /// </summary>
     [Flags]
     public enum NFTokenMintFlags : uint
-    {
+    {    
+        /// <summary>
+        /// batch inner transaction
+        /// </summary>
+        tfInnerBatchTxn = XrplGlobalFlags.tfInnerBatchTxn,
+
         /// <summary>
         /// If set, indicates that the minted token may be burned by the issuer even if the issuer does not currently hold the token.<br/>
         /// The current holder of the token may always burn it.
@@ -33,10 +38,14 @@ namespace Xrpl.Models.Transactions
         /// If set, indicates that this NFT can be transferred.<br/>
         /// This flag has no effect if the token is being transferred from the issuer or to the issuer.
         /// </summary>
-        tfTransferable = 8
+        tfTransferable = 8,
+
+        /// <summary>
+        /// If set, indicates that this NFT's URI can be modified.
+        tfMutable = 16,
     }
     /// <inheritdoc cref="INFTokenMint" />
-    public class NFTokenMint : TransactionCommon, INFTokenMint
+    public class NFTokenMint : TransactionRequest, INFTokenMint
     {
         public NFTokenMint()
         {
@@ -44,7 +53,11 @@ namespace Xrpl.Models.Transactions
         }
 
         /// <inheritdoc />
-        public new NFTokenMintFlags? Flags { get; set; }
+        public new NFTokenMintFlags? Flags
+        {
+            get => base.Flags.HasValue ? (NFTokenMintFlags?)base.Flags.Value : null;
+            set => base.Flags = (uint?)value;
+        }
 
         /// <inheritdoc />
         public uint NFTokenTaxon { get; set; }
@@ -96,9 +109,13 @@ namespace Xrpl.Models.Transactions
     }
 
     /// <inheritdoc cref="INFTokenMint" />
-    public class NFTokenMintResponse : TransactionResponseCommon, INFTokenMint
+    public class NFTokenMintResponse : TransactionResponse, INFTokenMint
     {
-        public new NFTokenMintFlags? Flags { get; set; }
+        public new NFTokenMintFlags? Flags
+        {
+            get => base.Flags.HasValue ? (NFTokenMintFlags?)base.Flags.Value : null;
+            set => base.Flags = (uint?)value;
+        }
 
         /// <inheritdoc />
         public uint NFTokenTaxon { get; set; }
@@ -121,7 +138,7 @@ namespace Xrpl.Models.Transactions
         /// </summary>
         /// <param name="tx"> An NFTokenMint Transaction.</param>
         /// <exception cref="ValidationException">When the NFTokenMint is Malformed.</exception>
-        public static async Task ValidateNFTokenMint(Dictionary<string, dynamic> tx)
+        public static async Task ValidateNFTokenMint(Dictionary<string, object> tx)
         {
             await Common.ValidateBaseTransaction(tx);
 

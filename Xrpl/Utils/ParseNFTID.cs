@@ -1,4 +1,4 @@
-using System;
+﻿using System;
 using Xrpl.AddressCodec;
 using Xrpl.BinaryCodec.Util;
 using Xrpl.Client.Exceptions;
@@ -32,12 +32,17 @@ namespace Xrpl.Utils
         /// <param name="taxon"> The scrambled or unscrambled taxon (The XOR is both the encoding and decoding). </param>
         /// <param name="tokenSeq"> The account sequence when the token was minted. Used as a psuedorandom seed. </param>
         /// <returns> The opposite taxon. If the taxon was scrambled it becomes unscrambled, and vice versa.</returns>
-        public static uint UnscrambleTaxon(uint taxon, uint tokenSeq)
+        private static uint UnscrambleTaxon(uint taxon, uint tokenSeq)
         {
             return (uint)((taxon ^ (384160001 * tokenSeq + 2459)) % 4294967296);
         }
+        // The ScrambleTaxon () function is symmetric to UnscrambleTaxon () - the XOR operation is the same in both directions, so the same code is used.
+        private static uint ScrambleTaxon(uint taxon, uint tokenSeq)
+        {
+            return UnscrambleTaxon(taxon, tokenSeq);
+        }
 
-        public static NFTokenIDData ParseNFTokenID(this string nftokenID)
+        public static NFTokenIdData ParseNFTokenID(this string nftokenID)
         {
             const int expectedLength = 64;
             if (nftokenID.Length != expectedLength)
@@ -54,7 +59,27 @@ namespace Xrpl.Utils
 
             string issuer = XrplCodec.EncodeAccountID(nftokenID.Substring(8, 40).FromHexToBytes());
                         
-            return new NFTokenIDData(nftokenID, flags, transferFee, issuer, taxon, sequence);
+            return new NFTokenIdData(flags, transferFee, issuer, taxon, sequence);
+        }
+        public static string GenerateTokenId(uint flags, uint fee, string issuer, uint taxon, uint sequence)
+        {
+            // 1. Flags
+            var flagsHex = flags.ToString("X4");
+
+            // 2. Transfer Fee
+            var feeHex = fee.ToString("X4");
+
+            // 3. Issuer
+            var issuerBytes = XrplCodec.DecodeAccountID(issuer);
+            var issuerHex = BitConverter.ToString(issuerBytes).Replace("-", "");
+
+            // 4. Taxon (scrambled)
+            var scrambledTaxon = ScrambleTaxon(taxon, sequence).ToString("X8");
+
+            // 5. Sequence
+            var sequenceHex = sequence.ToString("X8");
+
+            return $"{flagsHex}{feeHex}{issuerHex}{scrambledTaxon}{sequenceHex}".ToUpperInvariant();
         }
 
         public static string ParseNFTOffer(string account, uint sequence)

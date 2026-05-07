@@ -1,7 +1,7 @@
 ﻿using System.Collections.Generic;
 using System.Diagnostics;
 using System.Linq;
-using Newtonsoft.Json.Linq;
+using System.Text.Json.Nodes;
 using Xrpl.BinaryCodec.Binary;
 using Xrpl.BinaryCodec.Enums;
 
@@ -38,10 +38,10 @@ namespace Xrpl.BinaryCodec.Types
         }
 
         /// <inheritdoc />
-        public JToken ToJson()
+        public JsonNode ToJson()
         {
-            var arr = new JArray();
-            foreach (var so in this)
+            JsonArray arr = new JsonArray();
+            foreach (StObject so in this)
             {
                 arr.Add(so.ToJson());
             }
@@ -50,9 +50,9 @@ namespace Xrpl.BinaryCodec.Types
         /// <summary> Deserialize StArray </summary>
         /// <param name="token">json token</param>
         /// <returns></returns>
-        public static StArray FromJson(JToken token)
+        public static StArray FromJson(JsonNode token)
         {
-            return new StArray(token.Select(StObject.FromJson));
+            return new StArray(token.AsArray().Select(n => StObject.FromJson(n)));
         }
         /// <summary>
         /// Construct a StArray from a BinaryParser

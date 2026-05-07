@@ -1,6 +1,6 @@
 ﻿using System.Diagnostics;
 
-using Newtonsoft.Json.Linq;
+using System.Text.Json.Nodes;
 using Xrpl.BinaryCodec.Binary;
 using Xrpl.BinaryCodec.Util;
 
@@ -33,14 +33,49 @@ namespace Xrpl.BinaryCodec.Types
         {
             return new Blob(value);
         }
-        public static implicit operator Blob(JToken token)
+        public static implicit operator Blob(JsonNode token)
         {
             return FromJson(token);
         }
-        /// Defines how to read a Blob from json
+        /// <summary>
+        /// Defines how to read a Blob from json.
+        /// Accepts both hex-encoded strings and ASCII strings.
+        /// If the string is valid hex (even length, all hex chars), it's decoded as hex.
+        /// Otherwise, it's treated as ASCII and converted to bytes.
+        /// </summary>
         /// <param name="token">json token</param>
         /// <returns>A Blob object</returns>
-        public static Blob FromJson(JToken token) => FromHex(token.ToString());
+        public static Blob FromJson(JsonNode token)
+        {
+            var str = token.GetValue<string>();
+            if (IsValidHexString(str))
+            {
+                return FromHex(str);
+            }
+            // Treat as ASCII string
+            return FromAscii(str);
+        }
+
+        /// <summary>
+        /// Checks if a string is a valid hex-encoded string.
+        /// </summary>
+        /// <param name="str">The string to check.</param>
+        /// <returns>True if the string is valid hex (even length, all hex chars).</returns>
+        private static bool IsValidHexString(string str)
+        {
+            if (string.IsNullOrEmpty(str) || str.Length % 2 != 0)
+            {
+                return false;
+            }
+            foreach (char c in str)
+            {
+                if (!((c >= '0' && c <= '9') || (c >= 'a' && c <= 'f') || (c >= 'A' && c <= 'F')))
+                {
+                    return false;
+                }
+            }
+            return true;
+        }
 
         /// <inheritdoc />
         public void ToBytes(IBytesSink sink)
@@ -49,7 +84,7 @@ namespace Xrpl.BinaryCodec.Types
         }
 
         /// <inheritdoc />
-        public JToken ToJson() => ToString();
+        public JsonNode ToJson() => JsonValue.Create(ToString());
 
         /// <inheritdoc />
         public override string ToString()

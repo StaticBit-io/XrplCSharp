@@ -1,9 +1,7 @@
-﻿using Newtonsoft.Json;
-
-using System;
+﻿using System;
+using System.Text.Json.Serialization;
 using Xrpl.Client.Json.Converters;
 using Xrpl.Models.Common;
-using Xrpl.Models.Methods;
 
 // https://github.com/XRPLF/xrpl.js/blob/main/packages/xrpl/src/models/ledger/AccountRoot.ts
 
@@ -72,6 +70,20 @@ namespace Xrpl.Models.Ledger
         /// </summary>
         lsfDisallowIncomingCheck = 134217728,
 
+        /// <summary>
+        /// Allow this account to claw back tokens it has issued.
+        /// Once enabled, cannot be disabled.
+        /// Requires the Clawback amendment.
+        /// </summary>
+        lsfAllowTrustLineClawback = 2147483648, // 0x80000000
+
+        /// <summary>
+        /// Allow Trust Line Tokens issued by this account to be held in escrow.
+        /// Once enabled, cannot be disabled.
+        /// Requires the TokenEscrow amendment.
+        /// </summary>
+        lsfAllowTrustLineLocking = 1073741824, // 0x40000000
+
     }
     /// <summary>
     /// The AccountRoot object type describes a single account, its settings, and XRP balance.
@@ -82,6 +94,11 @@ namespace Xrpl.Models.Ledger
         {
             LedgerEntryType = LedgerEntryType.AccountRoot;
         }
+        /// <summary>
+        /// Identifier of the associated AMM (Automated Market Maker) instance.
+        /// </summary>
+        [JsonPropertyName("AMMID")]
+        public string? AmmId { get; set; }
         /// <summary>
         /// The identifying (classic) address of this account.
         /// </summary>

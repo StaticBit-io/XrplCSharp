@@ -1,12 +1,12 @@
-﻿using System;
+using System;
 using System.Collections.Generic;
+using System.Text.Json.Serialization;
 using System.Threading.Tasks;
-
-using Newtonsoft.Json;
 
 using Xrpl.Client.Exceptions;
 using Xrpl.Client.Json.Converters;
 using Xrpl.Models.Common;
+using Xrpl.Models.Enums;
 
 // https://github.com/XRPLF/xrpl.js/blob/main/packages/xrpl/src/models/transactions/paymentChannelClaim.ts
 
@@ -17,7 +17,12 @@ namespace Xrpl.Models.Transactions
     /// </summary>
     [Flags]
     public enum NFTokenCreateOfferFlags : uint
-    {
+    {   
+        /// <summary>
+        /// batch inner transaction
+        /// </summary>
+        tfInnerBatchTxn = XrplGlobalFlags.tfInnerBatchTxn,
+
         /// <summary>
         /// If set, indicates that the offer is a sell offer.<br/>
         /// Otherwise, it is a buy offer.
@@ -25,7 +30,7 @@ namespace Xrpl.Models.Transactions
         tfSellNFToken = 1, 
     }
     /// <inheritdoc cref="INFTokenCreateOffer" />
-    public class NFTokenCreateOffer : TransactionCommon, INFTokenCreateOffer
+    public class NFTokenCreateOffer : TransactionRequest, INFTokenCreateOffer, IDestination
     {
         public NFTokenCreateOffer()
         {
@@ -37,7 +42,11 @@ namespace Xrpl.Models.Transactions
         public DateTime? Expiration { get; set; }
 
         /// <inheritdoc />
-        public new NFTokenCreateOfferFlags? Flags { get; set; }
+        public new NFTokenCreateOfferFlags? Flags
+        {
+            get => base.Flags.HasValue ? (NFTokenCreateOfferFlags?)base.Flags.Value : null;
+            set => base.Flags = (uint?)value;
+        }
 
         /// <inheritdoc />
         public string NFTokenID { get; set; }
@@ -57,7 +66,7 @@ namespace Xrpl.Models.Transactions
     /// The NFTokenCreateOffer transaction creates either an offer to buy an  NFT the submitting account does not own,
     /// or an offer to sell an NFT  the submitting account does own.
     /// </summary>
-    public interface INFTokenCreateOffer : ITransactionCommon
+    public interface INFTokenCreateOffer : ITransactionCommon, IDestination
     {
         /// <summary>
         /// Indicates the time after which the offer will no longer be valid.<br/>
@@ -93,14 +102,18 @@ namespace Xrpl.Models.Transactions
     }
 
     /// <inheritdoc cref="INFTokenCreateOffer" />
-    public class NFTokenCreateOfferResponse : TransactionResponseCommon, INFTokenCreateOffer
+    public class NFTokenCreateOfferResponse : TransactionResponse, INFTokenCreateOffer, IDestination
     {
         /// <inheritdoc />
         [JsonConverter(typeof(RippleDateTimeConverter))]
         public DateTime? Expiration { get; set; }
 
         /// <inheritdoc />
-        public new NFTokenCreateOfferFlags? Flags { get; set; }
+        public new NFTokenCreateOfferFlags? Flags
+        {
+            get => base.Flags.HasValue ? (NFTokenCreateOfferFlags?)base.Flags.Value : null;
+            set => base.Flags = (uint?)value;
+        }
 
         /// <inheritdoc />
         public string NFTokenID { get; set; }
@@ -120,16 +133,16 @@ namespace Xrpl.Models.Transactions
     public partial class Validation
     {
         //https://github.com/XRPLF/xrpl.js/blob/b40a519a0d949679a85bf442be29026b76c63a22/packages/xrpl/src/models/transactions/NFTokenCreateOffer.ts#L86
-        public static Task ValidateNFTokenSellOfferCases(Dictionary<string, dynamic> tx)
+        public static Task ValidateNFTokenSellOfferCases(Dictionary<string, object> tx)
         {
             if (tx.TryGetValue("Owner", out var Owner) && Owner is not null)
                 throw new ValidationException("NFTokenCreateOffer: Owner must not be present for sell offers");
             return Task.CompletedTask;
         }
-        public static Task ValidateNFTokenBuyOfferCases(Dictionary<string, dynamic> tx)
+        public static Task ValidateNFTokenBuyOfferCases(Dictionary<string, object> tx)
         {
             if (!tx.TryGetValue("Owner", out var Owner) || Owner is null)
-                throw new ValidationException("NFTokenCreateOffer: Owner must not be present for sell offers");
+                throw new ValidationException("NFTokenCreateOffer: Owner must be present for buy offers");
 
             if (!tx.TryGetValue("Amount", out var Amount) || Common.ParseAmountValue(Amount) <= 0)
                 throw new ValidationException("NFTokenCreateOffer: Amount must be greater than 0 for buy offers");
@@ -142,7 +155,7 @@ namespace Xrpl.Models.Transactions
         /// <param name="tx">An NFTokenCreateOffer Transaction.</param>
         /// <returns>When the NFTokenCreateOffer is Malformed.</returns>
         /// <exception cref="ValidationException"></exception>
-        public static Task ValidateNFTokenCreateOffer(Dictionary<string, dynamic> tx)
+        public static Task ValidateNFTokenCreateOffer(Dictionary<string, object> tx)
         {
             Common.ValidateBaseTransaction(tx);
 

@@ -1,15 +1,16 @@
-﻿
+
 
 // https://github.com/XRPLF/xrpl.js/blob/main/packages/xrpl/src/models/transactions/setRegularKey.ts
 
 using System.Collections.Generic;
 using System.Threading.Tasks;
+
 using Xrpl.Client.Exceptions;
 
 namespace Xrpl.Models.Transactions
 {
     /// <inheritdoc cref="ISetRegularKey" />
-    public class SetRegularKey : TransactionCommon, ISetRegularKey
+    public class SetRegularKey : TransactionRequest, ISetRegularKey
     {
         public SetRegularKey()
         {
@@ -35,7 +36,7 @@ namespace Xrpl.Models.Transactions
     }
 
     /// <inheritdoc cref="ISetRegularKey" />
-    public class SetRegularKeyResponse : TransactionResponseCommon, ISetRegularKey
+    public class SetRegularKeyResponse : TransactionResponse, ISetRegularKey
     {
         /// <inheritdoc />
         public string RegularKey { get; set; }
@@ -48,7 +49,7 @@ namespace Xrpl.Models.Transactions
         /// </summary>
         /// <param name="tx"> A SetRegularKey Transaction.</param>
         /// <exception cref="ValidationException">When the SetRegularKey is malformed.</exception>
-        public static async Task ValidateSetRegularKey(Dictionary<string, dynamic> tx)
+        public static async Task ValidateSetRegularKey(Dictionary<string, object> tx)
         {
             await Common.ValidateBaseTransaction(tx);
 

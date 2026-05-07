@@ -1,10 +1,11 @@
-﻿using Newtonsoft.Json;
+﻿using System;
 
-using System;
+using System.Text.Json.Serialization;
 
 using Xrpl.Client.Json.Converters;
 using Xrpl.Models.Common;
 using Xrpl.Models.Ledger;
+using Xrpl.Models.Transactions;
 
 namespace Xrpl.Models.Methods
 {
@@ -16,7 +17,7 @@ namespace Xrpl.Models.Methods
         /// </summary>
         lsfSellNFToken = 0x00000001
     }
-    public class LONFTokenOffer : BaseLedgerEntry
+    public class LONFTokenOffer : BaseLedgerEntry, IDestination
     {
 
         public LONFTokenOffer()
@@ -69,12 +70,12 @@ namespace Xrpl.Models.Methods
         /// <summary>
         /// Identifying hash of the transaction that most recently modified this object.
         /// </summary>
-        [JsonProperty("PreviousTxnID")]
+        [JsonPropertyName("PreviousTxnID")]
         public string PreviousTransactionId { get; set; }
         /// <summary>
         /// Index of the ledger that contains the transaction that most recently modified this object.
         /// </summary>
-        [JsonProperty("PreviousTxnLgrSeq")]
+        [JsonPropertyName("PreviousTxnLgrSeq")]
         public uint PreviousTransactionLedgerSequence { get; set; }
 
     }

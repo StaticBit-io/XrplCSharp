@@ -1,14 +1,15 @@
-﻿
+
 // https://github.com/XRPLF/xrpl.js/blob/main/packages/xrpl/src/models/transactions/escrowCancel.ts
 
 using System.Collections.Generic;
 using System.Threading.Tasks;
+
 using Xrpl.Client.Exceptions;
 
 namespace Xrpl.Models.Transactions
 {
     /// <inheritdoc cref="IEscrowCancel" />
-    public class EscrowCancel : TransactionCommon, IEscrowCancel
+    public class EscrowCancel : TransactionRequest, IEscrowCancel
     {
         public EscrowCancel()
         {
@@ -23,7 +24,7 @@ namespace Xrpl.Models.Transactions
     }
 
     /// <summary>
-    /// Return escrowed XRP to the sender.
+    /// Return escrowed XRP or fungible tokens (IOUs, MPTs) to the sender. Requires the TokenEscrow amendment for fungible token support.
     /// </summary>
     public interface IEscrowCancel : ITransactionCommon
     {
@@ -33,13 +34,13 @@ namespace Xrpl.Models.Transactions
         /// </summary>
         uint OfferSequence { get; set; }
         /// <summary>
-        /// Address of the source account that funded the escrow payment.
+        /// Address of the source account that funded the escrow.
         /// </summary>
         string Owner { get; set; }
     }
 
     /// <inheritdoc cref="IEscrowCancel" />
-    public class EscrowCancelResponse : TransactionResponseCommon, IEscrowCancel
+    public class EscrowCancelResponse : TransactionResponse, IEscrowCancel
     {
         /// <inheritdoc />
         public uint OfferSequence { get; set; }
@@ -54,7 +55,7 @@ namespace Xrpl.Models.Transactions
         /// </summary>
         /// <param name="tx"> A EscrowCancel Transaction.</param>
         /// <exception cref="ValidationException">When the EscrowCancel is malformed.</exception>
-        public static async Task ValidateEscrowCancel(Dictionary<string, dynamic> tx)
+        public static async Task ValidateEscrowCancel(Dictionary<string, object> tx)
         {
             await Common.ValidateBaseTransaction(tx);
             if (!tx.TryGetValue("Owner", out var Owner) || Owner is null)

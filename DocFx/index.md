@@ -1,38 +1,63 @@
-<!-- # **XrplCSharp**
-This package includes the xrpl library. This repository uses a monorepo layout. Please find the README for xrpl [here](http://github.com/transia-RnD/XrplCSharp/).
+# XrplCSharp
 
-READMEs for other packages in this monorepo are located at the root of their package, but since newcomers to XRPL are likely to want to use the xrpl package this README is at the root of the project. -->
+A pure C# implementation for interacting with the XRP Ledger. This library simplifies complex XRP Ledger operations including serialization, transaction signing, wallet management, and network communication.
 
-# **Xrpl APIs overview**
+## Packages
 
-Xrpl provides REST/HTTP and gRPC interfaces.
-
-We strongly recommend that you use our Xrpl client libraries instead of writing your own. Our client libraries include many important features that can be challenging to implement correctly, such as encoding and signing.
-
-If the Xrpl client library for your preferred language does not meet your needs, open a GitHub issue for it instead of writing your own client library.
-
-Supported languages include C#, C++, Java, Swift, Go, Node.js and Python. You should write your own client library only when you use a programming language that is not supported.
-
-## Address Codec
+### [Xrpl.AddressCodec](reference/Xrpl.AddressCodec.html)
 
 Functions for encoding and decoding XRP Ledger addresses and seeds.
 
-- Address Codec
-- Xrpl Codec
+- [XrplAddressCodec](reference/Xrpl.AddressCodec.XrplAddressCodec.html) - Main address encoding/decoding class
+- [XrplCodec](reference/Xrpl.AddressCodec.XrplCodec.html) - Seed and key encoding utilities
+- [B58](reference/Xrpl.AddressCodec.B58.html) - Base58 encoding implementation
 
-## Binary Codec
+### [Xrpl.BinaryCodec](reference/Xrpl.BinaryCodec.html)
 
-Functions for encoding objects into the XRP Ledger’s canonical binary format and decoding them.
+Functions for encoding objects into the XRP Ledger's canonical binary format and decoding them.
 
-- Binary Codec
-- Binary Wrapper
-- Types
+- [XrplBinaryCodec](reference/Xrpl.BinaryCodec.XrplBinaryCodec.html) - Main binary codec class
+- [Types](reference/Xrpl.BinaryCodec.Types.html) - Serializable type implementations
+- [Binary](reference/Xrpl.BinaryCodec.Binary.html) - Binary parsing and serialization
 
-## Keypairs
+### [Xrpl.Keypairs](reference/Xrpl.Keypairs.html)
 
 Low-level functions for creating and using cryptographic keys with the XRP Ledger.
 
-- Keypairs
-- ED (Algorithm)
-- SECP256K1 (Algorithm)
+- [XrplKeypairs](reference/Xrpl.Keypairs.XrplKeypairs.html) - Key generation and signing
+- [Ed25519](reference/Xrpl.Keypairs.Ed25519.html) - ED25519 algorithm implementation
+- [K256](reference/Xrpl.Keypairs.K256.html) - SECP256K1 algorithm implementation
 
+### [Xrpl.Client](reference/Xrpl.Client.html)
+
+WebSocket client for communicating with XRP Ledger nodes.
+
+- [XrplClient](reference/Xrpl.Client.XrplClient.html) - Main client class
+- [Connection](reference/Xrpl.Client.connection.html) - Connection management
+- [Models](reference/Xrpl.Models.html) - Request/Response models
+
+## Quick Start
+
+```csharp
+using Xrpl.Client;
+
+// Create and connect client
+var client = new XrplClient("wss://s.altnet.rippletest.net:51233");
+await client.Connect();
+
+// Get account info
+var response = await client.Request(new AccountInfoRequest 
+{ 
+    Account = "rHb9CJAWyB4rj91VRWn96DkukG4bwdtyTh" 
+});
+
+// Disconnect when done
+await client.Disconnect();
+```
+
+## Documentation
+
+- [Connection Guide (EN)](Connection-Guide.html) - How to configure and manage connections
+- [Connection Guide (RU)](Connection-Guide.ru.html) - Руководство по подключению
+- [Error Classifier](ErrorClassifier.html) - How to normalize exceptions and XRPL error responses with `XrplErrorClassifier`
+- [API Reference](reference/) - Full API documentation

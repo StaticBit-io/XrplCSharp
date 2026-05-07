@@ -1,5 +1,5 @@
 ﻿using System;
-using Newtonsoft.Json.Linq;
+using System.Text.Json.Nodes;
 using Xrpl.BinaryCodec.Binary;
 using Xrpl.BinaryCodec.Util;
 
@@ -34,7 +34,8 @@ namespace Xrpl.BinaryCodec.Types
             IsoCode = GetCurrencyCodeFromTlcBytes(buffer, out IsNative);
         }
         /// <summary>
-        /// get currency code from bytes
+        /// get currency code from bytes. Supports both standard XRPL format (bytes 12-14)
+        /// and Oracle XLS-47 format (left-aligned bytes 0-2).
         /// </summary>
         /// <param name="bytes">bytes</param>
         /// <param name="isNative">will true if currency is XRP</param>
@@ -56,10 +57,27 @@ namespace Xrpl.BinaryCodec.Types
                 isNative = true;
                 return "XRP";
             }
+            // Standard XRPL format: currency code at bytes 12-14
             if (zeroInNonCurrencyBytes)
             {
                 isNative = false;
                 return IsoCodeFromBytesAndOffset(bytes, 12);
+            }
+            // Oracle XLS-47 format: left-aligned currency code at bytes 0-2
+            // Check if bytes 3-19 are all zero and bytes 0-2 are valid ASCII
+            bool isOracleFormat = true;
+            for (i = 3; i < 20; i++)
+            {
+                if (bytes[i] != 0)
+                {
+                    isOracleFormat = false;
+                    break;
+                }
+            }
+            if (isOracleFormat && bytes[0] >= 0x20 && bytes[0] <= 0x7E)
+            {
+                isNative = false;
+                return IsoCodeFromBytesAndOffset(bytes, 0);
             }
             isNative = false;
             return null;
@@ -87,9 +105,19 @@ namespace Xrpl.BinaryCodec.Types
         /// </summary>
         /// <param name="token">json field</param>
         /// <returns></returns>
-        public new static Currency FromJson(JToken token)
+        public new static Currency FromJson(JsonNode token)
         {
-            return token == null ? null : FromString(token.ToString());
+            return token == null ? null : FromString(token.GetValue<string>());
+        }
+        /// <summary>
+        /// Decode currency from JSON for Oracle fields (XLS-47 format).
+        /// Uses left-aligned ASCII encoding for 3-letter codes.
+        /// </summary>
+        /// <param name="token">JSON token containing currency code.</param>
+        /// <returns>Currency with Oracle encoding.</returns>
+        public static Currency FromOracleJson(JsonNode token)
+        {
+            return token == null ? null : FromOracleString(token.GetValue<string>());
         }
         /// <summary>
         /// decode currency from string
@@ -109,6 +137,7 @@ namespace Xrpl.BinaryCodec.Types
                 case 40:
                     return new Currency(B16.Decode(str));
                 case 3:
+                    // Standard XRPL currency format: code at bytes 12-14
                     return new Currency(EncodeCurrency(str));
             }
             throw new InvalidOperationException(
@@ -118,8 +147,52 @@ namespace Xrpl.BinaryCodec.Types
         }
 
         /// <summary>
-        /// The following are static methods, legacy from when there was no
-        /// usage of Currency objects, just String with "XRP" ambiguity.
+        /// Create a Currency for Oracle PriceData fields (XLS-47 format).
+        /// Uses left-aligned ASCII encoding (bytes 0-2) for 3-letter codes,
+        /// or direct hex for 40-character non-standard currencies.
+        /// This differs from standard IOU currencies which use bytes 12-14.
+        /// </summary>
+        /// <param name="str">Currency code (XRP, 3-letter code, or 40-hex).</param>
+        /// <returns>Currency with XLS-47 Oracle encoding.</returns>
+        public static Currency FromOracleString(string str)
+        {
+            if (str == "XRP")
+            {
+                return Xrp;
+            }
+            switch (str.Length)
+            {
+                case 40:
+                    // Non-standard currency: use hex bytes directly
+                    return new Currency(B16.Decode(str));
+                case 3:
+                    // XLS-47 Oracle format: left-aligned at bytes 0-2
+                    return new Currency(EncodeOracleCurrency(str));
+            }
+            throw new InvalidOperationException(
+                "Currency must either be a 3 letter iso code " +
+                "or a 20 byte hash encoded in hexadecimal"
+            );
+        }
+
+        /// <summary>
+        /// Encode currency for Oracle XLS-47 format (left-aligned at bytes 0-2).
+        /// This format is used for BaseAsset and QuoteAsset in PriceData objects.
+        /// </summary>
+        /// <param name="currencyCode">3-letter currency code.</param>
+        /// <returns>20-byte array with currency at bytes 0-2.</returns>
+        public static byte[] EncodeOracleCurrency(string currencyCode)
+        {
+            byte[] currencyBytes = new byte[20];
+            currencyBytes[0] = (byte)char.ConvertToUtf32(currencyCode, 0);
+            currencyBytes[1] = (byte)char.ConvertToUtf32(currencyCode, 1);
+            currencyBytes[2] = (byte)char.ConvertToUtf32(currencyCode, 2);
+            return currencyBytes;
+        }
+
+        /// <summary>
+        /// Legacy method for standard XRPL currency encoding (bytes 12-14).
+        /// Used for issued currency tokens, not Oracle PriceData.
         /// </summary>
         /// <param name="currencyCode">currency code</param>
         /// <returns></returns>
@@ -136,13 +209,13 @@ namespace Xrpl.BinaryCodec.Types
         {
             return FromString(v);
         }
-        public static implicit operator Currency(JToken v)
+        public static implicit operator Currency(JsonNode v)
         {
             return FromJson(v);
         }
-        public static implicit operator JToken(Currency v)
+        public static implicit operator JsonNode(Currency v)
         {
-            return v.ToString();
+            return JsonValue.Create(v.ToString());
         }
 
         /// <inheritdoc />

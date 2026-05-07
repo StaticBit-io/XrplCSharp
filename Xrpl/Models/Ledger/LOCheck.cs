@@ -1,6 +1,10 @@
-using Newtonsoft.Json;
+﻿using System.Text.Json.Serialization;
+
+using System;
+
 using Xrpl.Client.Json.Converters;
 using Xrpl.Models.Common;
+using Xrpl.Models.Transactions;
 
 // https://github.com/XRPLF/xrpl.js/blob/main/packages/xrpl/src/models/ledger/Check.ts
 
@@ -10,7 +14,7 @@ namespace Xrpl.Models.Ledger
     /// A Check object describes a check, similar to a paper personal check,
     /// which can be cashed by its destination to get money from its sender.
     /// </summary>
-    public class LOCheck : BaseLedgerEntry
+    public class LOCheck : BaseLedgerEntry, IDestination
     {
         public LOCheck()
         {
@@ -30,6 +34,7 @@ namespace Xrpl.Models.Ledger
         /// A bit-map of boolean flags.<br/>
         /// No flags are defined for Checks, so this value is always 0.
         /// </summary>
+        [JsonConverter(typeof(NumberOrStringConverter))]
         public string Flags { get; set; }
         /// <summary>
         /// A hint indicating which page of the sender's owner directory links to this object,
@@ -68,7 +73,8 @@ namespace Xrpl.Models.Ledger
         /// <summary>
         /// Indicates the time after which this Check is considered expired.
         /// </summary>
-        public uint? Expiration { get; set; }
+        [JsonConverter(typeof(RippleDateTimeConverter))]
+        public DateTime? Expiration { get; set; }
         /// <summary>
         /// Arbitrary 256-bit hash provided by the sender as a specific reason or identifier for this Check.
         /// </summary>

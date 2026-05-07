@@ -1,4 +1,4 @@
-﻿
+
 
 // https://github.com/XRPLF/xrpl.js/blob/main/packages/xrpl/test/models/NFTokenCreateOffer.ts
 
@@ -27,7 +27,7 @@ namespace XrplTests.Xrpl.Models
         [TestMethod]
         public async Task TestVerify_Valid_NFTokenCreateOffer_buyside()
         {
-            var offer = new Dictionary<string, dynamic>
+            var offer = new Dictionary<string, object>
             {
                 { "TransactionType", "NFTokenCreateOffer" },
                 { "NFTokenID", NFTOKEN_ID },
@@ -44,7 +44,7 @@ namespace XrplTests.Xrpl.Models
         [TestMethod]
         public async Task TestVerify_Valid_NFTokenCreateOffer_sellside()
         {
-            var offer = new Dictionary<string, dynamic>
+            var offer = new Dictionary<string, object>
             {
                 { "TransactionType", "NFTokenCreateOffer" },
                 { "NFTokenID", NFTOKEN_ID },
@@ -61,7 +61,7 @@ namespace XrplTests.Xrpl.Models
         [TestMethod]
         public async Task TestVerify_Valid_0_Amount_NFTokenCreateOffer_sellside()
         {
-            var offer = new Dictionary<string, dynamic>
+            var offer = new Dictionary<string, object>
             {
                 { "TransactionType", "NFTokenCreateOffer" },
                 { "NFTokenID", NFTOKEN_ID },
@@ -78,7 +78,7 @@ namespace XrplTests.Xrpl.Models
         [TestMethod]
         public async Task TestVerify_Invalid_Account_is_Owner()
         {
-            var offer = new Dictionary<string, dynamic>
+            var offer = new Dictionary<string, object>
             {
                 { "TransactionType", "NFTokenCreateOffer" },
                 { "NFTokenID", NFTOKEN_ID },
@@ -89,12 +89,12 @@ namespace XrplTests.Xrpl.Models
                 {"Fee", "5000000"},
                 {"Sequence", 2470665u},
             };
-            await Assert.ThrowsExceptionAsync<ValidationException>(() => Validation.Validate(offer), "NFTokenCreateOffer: Owner and Account must not be equal - no ERROR");
+            await Helper.ThrowsExceptionAsync<ValidationException>(() => Validation.Validate(offer), "NFTokenCreateOffer: Owner and Account must not be equal");
         }
         [TestMethod]
         public async Task TestVerify_Invalid_Account_is_Destination()
         {
-            var offer = new Dictionary<string, dynamic>
+            var offer = new Dictionary<string, object>
             {
                 { "TransactionType", "NFTokenCreateOffer" },
                 { "NFTokenID", NFTOKEN_ID },
@@ -106,13 +106,13 @@ namespace XrplTests.Xrpl.Models
                 {"Fee", "5000000"},
                 {"Sequence", 2470665u},
             };
-            await Assert.ThrowsExceptionAsync<ValidationException>(() => Validation.Validate(offer), "NFTokenCreateOffer: Destination and Account must not be equal - no ERROR");
+            await Helper.ThrowsExceptionAsync<ValidationException>(() => Validation.Validate(offer), "NFTokenCreateOffer: Destination and Account must not be equal");
         }
 
         [TestMethod]
         public async Task TestVerify_Invalid_out_NFTokenID()
         {
-            var offer = new Dictionary<string, dynamic>
+            var offer = new Dictionary<string, object>
             {
                 { "TransactionType", "NFTokenCreateOffer" },
                 {"Amount", "1"},
@@ -123,12 +123,12 @@ namespace XrplTests.Xrpl.Models
                 {"Fee", "5000000"},
                 {"Sequence", 2470665u},
             };
-            await Assert.ThrowsExceptionAsync<ValidationException>(() => Validation.Validate(offer), "NFTokenCreateOffer:  missing field NFTokenID - no ERROR");
+            await Helper.ThrowsExceptionAsync<ValidationException>(() => Validation.Validate(offer), "NFTokenCreateOffer: missing field NFTokenID");
         }
         [TestMethod]
         public async Task TestVerify_Invalid_Amount()
         {
-            var offer = new Dictionary<string, dynamic>
+            var offer = new Dictionary<string, object>
             {
                 { "TransactionType", "NFTokenCreateOffer" },
                 { "NFTokenID", NFTOKEN_ID },
@@ -140,13 +140,13 @@ namespace XrplTests.Xrpl.Models
                 {"Fee", "5000000"},
                 {"Sequence", 2470665u},
             };
-            await Assert.ThrowsExceptionAsync<ValidationException>(() => Validation.Validate(offer), "NFTokenCreateOffer: invalid Amount - no ERROR");
+            await Helper.ThrowsExceptionAsync<ValidationException>(() => Validation.Validate(offer), "NFTokenCreateOffer: invalid Amount");
         }
 
         [TestMethod]
         public async Task TestVerify_Invalid_Missing_Amount()
         {
-            var offer = new Dictionary<string, dynamic>
+            var offer = new Dictionary<string, object>
             {
                 { "TransactionType", "NFTokenCreateOffer" },
                 { "NFTokenID", NFTOKEN_ID },
@@ -157,12 +157,12 @@ namespace XrplTests.Xrpl.Models
                 {"Fee", "5000000"},
                 {"Sequence", 2470665u},
             };
-            await Assert.ThrowsExceptionAsync<ValidationException>(() => Validation.Validate(offer), "NFTokenCreateOffer: invalid Amount - no ERROR");
+            await Helper.ThrowsExceptionAsync<ValidationException>(() => Validation.Validate(offer), "NFTokenCreateOffer: invalid Amount");
         }
         [TestMethod]
         public async Task TestVerify_Invalid_Owner_for_sell_offer()
         {
-            var offer = new Dictionary<string, dynamic>
+            var offer = new Dictionary<string, object>
             {
                 { "TransactionType", "NFTokenCreateOffer" },
                 { "NFTokenID", NFTOKEN_ID },
@@ -174,13 +174,13 @@ namespace XrplTests.Xrpl.Models
                 {"Fee", "5000000"},
                 {"Sequence", 2470665u},
             };
-            await Assert.ThrowsExceptionAsync<ValidationException>(() => Validation.Validate(offer), "NFTokenCreateOffer: Owner must not be present for sell offers - no ERROR");
+            await Helper.ThrowsExceptionAsync<ValidationException>(() => Validation.Validate(offer), "NFTokenCreateOffer: Owner must not be present for sell offers");
         }
 
         [TestMethod]
         public async Task TestVerify_Invalid_out_Owner_for_buy_offer()
         {
-            var offer = new Dictionary<string, dynamic>
+            var offer = new Dictionary<string, object>
             {
                 { "TransactionType", "NFTokenCreateOffer" },
                 { "NFTokenID", NFTOKEN_ID },
@@ -190,13 +190,13 @@ namespace XrplTests.Xrpl.Models
                 {"Fee", "5000000"},
                 {"Sequence", 2470665u},
             };
-            await Assert.ThrowsExceptionAsync<ValidationException>(() => Validation.Validate(offer), "NFTokenCreateOffer: Owner must be present for buy offers - no ERROR");
+            await Helper.ThrowsExceptionAsync<ValidationException>(() => Validation.Validate(offer), "NFTokenCreateOffer: Owner must be present for buy offers");
         }
 
         [TestMethod]
         public async Task TestVerify_Invalid_0_Amount_for_buy_offer()
         {
-            var offer = new Dictionary<string, dynamic>
+            var offer = new Dictionary<string, object>
             {
                 { "TransactionType", "NFTokenCreateOffer" },
                 { "NFTokenID", NFTOKEN_ID },
@@ -207,7 +207,7 @@ namespace XrplTests.Xrpl.Models
                 {"Fee", "5000000"},
                 {"Sequence", 2470665u},
             };
-            await Assert.ThrowsExceptionAsync<ValidationException>(() => Validation.Validate(offer), "NFTokenCreateOffer: Amount must be greater than 0 for buy offers - no ERROR");
+            await Helper.ThrowsExceptionAsync<ValidationException>(() => Validation.Validate(offer), "NFTokenCreateOffer: Amount must be greater than 0 for buy offers");
         }
 
 

@@ -1,18 +1,23 @@
-﻿using Newtonsoft.Json;
-
 using System;
+using System.Collections;
 using System.Collections.Generic;
-using System.Diagnostics;
 using System.Globalization;
+using System.Linq;
 using System.Numerics;
+using System.Text.Json;
+using System.Text.Json.Nodes;
+using System.Threading;
 using System.Threading.Tasks;
 
 using Xrpl.AddressCodec;
 using Xrpl.Client;
 using Xrpl.Client.Exceptions;
+using Xrpl.Client.Json;
 using Xrpl.Models.Common;
 using Xrpl.Models.Ledger;
 using Xrpl.Models.Methods;
+using Xrpl.Models.Transactions;
+using Xrpl.Models.Utils;
 using Xrpl.Utils;
 
 using static Xrpl.AddressCodec.XrplAddressCodec;
@@ -29,8 +34,18 @@ namespace Xrpl.Sugar
 
     public static class AutofillSugar
     {
-
         const int LEDGER_OFFSET = 20;
+        
+        /// <summary>
+        /// Devnet has minimum fee 0.0000001 instead of 0.000001 (7 digits after dot).
+        /// This multiplier corrects the base fee for devnet transactions.
+        /// </summary>
+        const int DEVNET_FEE_CORRECTION_MULTIPLIER = 12;
+        
+        /// <summary>
+        /// Batch transactions have a base fee multiplier of 3.
+        /// </summary>
+        const int BATCH_BASE_FEE_MULTIPLIER = 3;
 
 
         /// <summary>
@@ -42,41 +57,45 @@ namespace Xrpl.Sugar
         /// <param name="client">A client.</param>
         /// <param name="transaction">A {@link Transaction} in JSON format</param>
         /// <param name="signersCount">The expected number of signers for this transaction. Only used for multisigned transactions.</param>
-        // <returns>The autofilled transaction.</returns>
-        public static async Task<Dictionary<string, dynamic>> Autofill(this IXrplClient client, Dictionary<string, dynamic> transaction, int? signersCount)
+        /// <returns>The autofilled transaction.</returns>
+        public static async Task<Dictionary<string, object>> Autofill(this IXrplClient client, Dictionary<string, object> transaction, int? signersCount, CancellationToken cancellationToken = default)
         {
 
-            Dictionary<string, dynamic> tx = transaction;
+            Dictionary<string, object> tx = transaction;
 
             tx.SetValidAddresses();
 
             //Flags.SetTransactionFlagsToNumber(tx);
             List<Task> promises = new List<Task>();
             bool hasTT = tx.TryGetValue("TransactionType", out var tt);
-            if (!tx.ContainsKey("Sequence"))
+            string txType = $"{tt}";
+            if (!tx.ContainsKey("Sequence") && txType != "Batch")
             {
-                promises.Add(client.SetNextValidSequenceNumber(tx));
+                promises.Add(client.SetNextValidSequenceNumber(tx, cancellationToken));
             }
             if (!tx.ContainsKey("Fee"))
             {
-                promises.Add(client.CalculateFeePerTransactionType(tx, signersCount ?? 0));
+                promises.Add(client.CalculateFeePerTransactionType(tx, signersCount ?? 0, cancellationToken));
             }
             if (!tx.ContainsKey("LastLedgerSequence"))
             {
-                promises.Add(client.SetLatestValidatedLedgerSequence(tx));
+                promises.Add(client.SetLatestValidatedLedgerSequence(tx, cancellationToken));
             }
-            if (tt == "AccountDelete")
+            else if(tx.TryGetValue("LastLedgerSequence", out var lastLedgerValue) && lastLedgerValue is 0u or 0UL or 0L or 0)
             {
-                //todo error here
-                //promises.Add(client.CheckAccountDeleteBlockers(tx));
+                tx.Remove("LastLedgerSequence");
+            }
+            if (txType == "Batch")
+            {
+                promises.Add(client.NormalizeBatchTransaction(tx, cancellationToken));
             }
             await Task.WhenAll(promises);
-            string jsonData = JsonConvert.SerializeObject(tx);
+            //string jsonData = JsonConvert.SerializeObject(tx);
             return tx;
         }
 
 
-        public static void SetValidAddresses(this Dictionary<string, dynamic> tx)
+        public static void SetValidAddresses(this Dictionary<string, object> tx)
         {
             tx.ValidateAccountAddress("Account", "SourceTag");
             if (tx.ContainsKey("Destination"))
@@ -93,11 +112,11 @@ namespace Xrpl.Sugar
             tx.ConvertToClassicAddress("RegularKey");
         }
 
-        public static void ValidateAccountAddress(this Dictionary<string, dynamic> tx, string accountField, string tagField)
+        public static void ValidateAccountAddress(this Dictionary<string, object> tx, string accountField, string tagField)
         {
             // if X-address is given, convert it to classic address
             var ainfo = tx.TryGetValue(accountField, out var aField);
-            
+
             AddressNTag classicAccount = GetClassicAccountAndTag((string)aField, null);
             tx[accountField] = classicAccount.ClassicAddress;
 
@@ -108,7 +127,7 @@ namespace Xrpl.Sugar
             {
                 if (tField != null && (int)tField != classicAccount.Tag)
                 {
-                    throw new ValidationException($"The { tagField }, if present, must match the tag of the { accountField} X - address");
+                    throw new ValidationException($"The {tagField}, if present, must match the tag of the {accountField} X - address");
                 }
                 // eslint-disable-next-line no-param-reassign -- param reassign is safe
                 tx[tagField] = classicAccount.Tag;
@@ -117,7 +136,7 @@ namespace Xrpl.Sugar
 
         public static AddressNTag GetClassicAccountAndTag(this string account, uint? expectedTag)
         {
-            if (XrplAddressCodec.IsValidXAddress(account))
+            if (!account.StartsWith('r') && XrplAddressCodec.IsValidXAddress(account))
             {
                 CodecAddress codecAddress = XrplAddressCodec.XAddressToClassicAddress(account);
                 if (expectedTag != null && codecAddress.Tag != expectedTag)
@@ -129,7 +148,7 @@ namespace Xrpl.Sugar
             return new AddressNTag { ClassicAddress = account, Tag = expectedTag };
         }
 
-        public static void ConvertToClassicAddress(this Dictionary<string, dynamic> tx, string fieldName)
+        public static void ConvertToClassicAddress(this Dictionary<string, object> tx, string fieldName)
         {
             if (tx.ContainsKey(fieldName))
             {
@@ -142,76 +161,177 @@ namespace Xrpl.Sugar
             }
         }
 
-        public static async Task SetNextValidSequenceNumber(this IXrplClient client, Dictionary<string, dynamic> tx)
+        public static async Task<uint> SetNextValidSequenceNumber(this IXrplClient client, Dictionary<string, object> tx, CancellationToken cancellationToken = default)
         {
             LedgerIndex index = new LedgerIndex(LedgerIndexType.Current);
             AccountInfoRequest request = new AccountInfoRequest((string)tx["Account"]) { LedgerIndex = index };
-            AccountInfo data = await client.AccountInfo(request);
+            AccountInfo data = await client.AccountInfo(request, cancellationToken);
             tx.TryAdd("Sequence", data.AccountData.Sequence);
+            return data.AccountData.Sequence;
         }
 
-        public static async Task<BigInteger> FetchAccountDeleteFee(this IXrplClient client)
+        public static async Task<BigInteger> FetchReserveFee(this IXrplClient client, CancellationToken cancellationToken = default)
         {
             ServerStateRequest request = new ServerStateRequest();
-            ServerState data = await client.ServerState(request);
+            ServerState data = await client.ServerState(request, cancellationToken);
             uint? fee = data.State.ValidatedLedger.ReserveInc;
 
             if (fee == null)
             {
-                await Task.FromException(new XrplException("Could not fetch Owner Reserve."));
+                throw new XrplException("Could not fetch Owner Reserve.");
             }
-            return BigInteger.Parse(fee.ToString());
+            return BigInteger.Parse(fee.Value.ToString());
         }
 
-        public static async Task CalculateFeePerTransactionType(this IXrplClient client, Dictionary<string, dynamic> tx, int signersCount = 0)
+        public static async Task CalculateFeePerTransactionType(this IXrplClient client, Dictionary<string, object> tx, int signersCount = 0, CancellationToken cancellationToken = default)
         {
-            var netFeeXRP = await client.GetFeeXrp();
+            var netFeeXRP = await client.GetFeeXrp(cancellationToken: cancellationToken);
             var netFeeDrops = XrpConversion.XrpToDrops(netFeeXRP);
-            var baseFee = BigInteger.Parse(netFeeDrops, NumberStyles.AllowDecimalPoint | NumberStyles.AllowLeadingSign | NumberStyles.AllowExponent);
-
-            // EscrowFinish Transaction with Fulfillment
-            bool has_fulfillment = tx.TryGetValue("Fulfillment", out var Fulfillment);
-            if (tx["TransactionType"] == "EscrowFinish" && has_fulfillment)
+            var baseFee = new BigInteger(Math.Floor(decimal.Parse(netFeeDrops, NumberStyles.AllowDecimalPoint | NumberStyles.AllowLeadingSign | NumberStyles.AllowExponent, CultureInfo.InvariantCulture)));
+            
+            // Devnet returns fees ~12x lower than mainnet. Detect by checking if baseFee < 10 drops.
+            if (baseFee < 10)
             {
-                double fulfillmentBytesSize = Math.Ceiling((double)tx["Fulfillment"].Length / 2);
-                // 10 drops × (33 + (Fulfillment size in bytes / 16))
-                double resp = (33 + (fulfillmentBytesSize / 16));
-                bool product = BigInteger.TryParse(ScaleValue(netFeeDrops, 33 + (fulfillmentBytesSize / 16)), out var result);
-                baseFee = BigInteger.Parse(Math.Ceiling(((decimal)result)).ToString());
+                baseFee *= DEVNET_FEE_CORRECTION_MULTIPLIER;
             }
 
-            // AccountDelete Transaction
-            if (tx["TransactionType"] == "AccountDelete")
+            var transactionType = (string)tx["TransactionType"];
+            var calculatedFee = await CalculateBaseFeeForType(client, tx, transactionType, baseFee, netFeeDrops, cancellationToken);
+            var signerFee = CalculateMultisigFee(netFeeDrops, signersCount);
+            
+            calculatedFee += signerFee;
+            BigInteger totalFee;
+            if (!string.IsNullOrWhiteSpace(client.maxFeeXRP))
             {
-                baseFee = await FetchAccountDeleteFee(client);
+                var maxFeeDrops = XrpConversion.XrpToDrops(client.maxFeeXRP);
+                var maxFeeBI = new BigInteger(Math.Floor(decimal.Parse(maxFeeDrops, NumberStyles.AllowDecimalPoint | NumberStyles.AllowLeadingSign | NumberStyles.AllowExponent, CultureInfo.InvariantCulture)));
+                totalFee = transactionType == "AccountDelete"
+                    ? calculatedFee
+                    : BigInteger.Min(calculatedFee, maxFeeBI);
             }
-
-            /*
-            * Multi-signed Transaction
-            * 10 drops × (1 + Number of Signatures Provided)
-            */
-            if (signersCount > 0)
+            else
             {
-                baseFee = BigInteger.Add(baseFee, BigInteger.Parse(ScaleValue(netFeeDrops, 1 + signersCount)));
+                totalFee = calculatedFee;
             }
-
-            var maxFeeDrops = XrpConversion.XrpToDrops(client.maxFeeXRP);
-            var totalFee = tx["TransactionType"] == "AccountDelete" ? baseFee : BigInteger.Min(baseFee, BigInteger.Parse(maxFeeDrops));
-            tx.TryAdd("Fee", Math.Ceiling(((decimal)totalFee)).ToString());
+            tx.TryAdd("Fee", Math.Ceiling((decimal)totalFee).ToString());
         }
 
-        public static string ScaleValue(string value, double multiplier)
+        private static async Task<BigInteger> CalculateBaseFeeForType(
+            IXrplClient client, 
+            Dictionary<string, object> tx, 
+            string transactionType, 
+            BigInteger baseFee, 
+            string netFeeDrops,
+            CancellationToken cancellationToken = default)
         {
-            return (double.Parse(value)! * multiplier).ToString();
+            return transactionType switch
+            {
+                "EscrowFinish" when tx.TryGetValue("Fulfillment", out _) => CalculateEscrowFinishFee(tx, netFeeDrops),
+                "Batch" => await CalculateBatchFee(client, tx, baseFee, cancellationToken),
+                _ when IsReserveFeeTxNeed(tx) => await FetchReserveFee(client, cancellationToken),
+                _ => baseFee
+            };
         }
 
-        public static async Task SetLatestValidatedLedgerSequence(this IXrplClient client, Dictionary<string, dynamic> tx)
+        /// <summary>
+        /// Calculates fee for EscrowFinish with Fulfillment.
+        /// Formula: 10 drops × (33 + (Fulfillment size in bytes / 16))
+        /// </summary>
+        private static BigInteger CalculateEscrowFinishFee(Dictionary<string, object> tx, string netFeeDrops)
         {
-            uint ledgerSequence = await client.GetLedgerIndex();
+            decimal fulfillmentBytesSize = Math.Ceiling((decimal)((string)tx["Fulfillment"]).Length / 2);
+            decimal multiplier = 33 + (fulfillmentBytesSize / 16);
+            var scaled = ScaleValueDecimal(netFeeDrops, multiplier);
+            return new BigInteger(Math.Ceiling(scaled));
+        }
+
+        /// <summary>
+        /// Calculates fee for Batch transactions.
+        /// Base fee is multiplied by BATCH_BASE_FEE_MULTIPLIER plus fee for each inner transaction.
+        /// </summary>
+        private static async Task<BigInteger> CalculateBatchFee(IXrplClient client, Dictionary<string, object> tx, BigInteger baseFee, CancellationToken cancellationToken = default)
+        {
+            var calculatedFee = baseFee * BATCH_BASE_FEE_MULTIPLIER;
+            
+            if (!tx.TryGetValue("RawTransactions", out var rawTransactions) || rawTransactions == null)
+            {
+                throw new ValidationException("Batch transaction must have RawTransactions field.");
+            }
+
+            IEnumerable<object> items = rawTransactions switch
+            {
+                JsonArray ja => JsonSerializer.Deserialize<List<object>>(ja.ToJsonString(), XrplJsonOptions.Default)!,
+                IEnumerable<object> ie => ie,
+                _ => new List<object> { rawTransactions }
+            };
+
+            foreach (var inner in items)
+            {
+                if (!TryGetInnerFieldsAsDict(inner, out var innerTx))
+                    throw new ArgumentNullException(nameof(inner), "RawTransaction not found or invalid.");
+
+                calculatedFee += IsReserveFeeTxNeed(innerTx) 
+                    ? await FetchReserveFee(client, cancellationToken) 
+                    : baseFee;
+            }
+
+            return calculatedFee;
+        }
+
+        /// <summary>
+        /// Calculates additional fee for multi-signed transactions.
+        /// Formula: baseFeeDrops × signersCount (added to base fee already calculated elsewhere)
+        /// Total multisig fee = baseFee × (1 + signersCount)
+        /// </summary>
+        private static BigInteger CalculateMultisigFee(string netFeeDrops, int signersCount)
+        {
+            if (signersCount <= 0)
+                return BigInteger.Zero;
+
+            var scaled = ScaleValueDecimal(netFeeDrops, signersCount);
+            return new BigInteger(scaled);
+        }
+        private static bool TryGetInnerFieldsAsDict(object item, out Dictionary<string, object> dict)
+        {
+            dict = null!;
+
+            // Приводим к JsonObject максимально рано
+            JsonObject entry = item as JsonObject
+                ?? JsonNode.Parse(JsonSerializer.Serialize(item, XrplJsonOptions.Default))?.AsObject();
+            if (entry == null) return false;
+
+            // Достаём RawTransaction
+            JsonNode rawNode = entry["RawTransaction"];
+            if (rawNode == null) return false;
+            JsonObject raw = rawNode as JsonObject
+                ?? JsonNode.Parse(rawNode.ToJsonString())?.AsObject();
+            if (raw == null) return false;
+
+            // В словарь
+            var tmp = JsonSerializer.Deserialize<Dictionary<string, object>>(raw.ToJsonString(), XrplJsonOptions.Default);
+            if (tmp == null) return false;
+
+            dict = tmp;
+            return true;
+        }
+        private static bool IsReserveFeeTxNeed(Dictionary<string, object> tx)
+        {
+            string txType = $"{tx["TransactionType"]}";
+            return txType == "AccountDelete" || txType == "AMMCreate";
+        }
+
+        public static decimal ScaleValueDecimal(string value, decimal multiplier)
+        {
+            return decimal.Parse(value, CultureInfo.InvariantCulture) * multiplier;
+        }
+
+        public static async Task SetLatestValidatedLedgerSequence(this IXrplClient client, Dictionary<string, object> tx, CancellationToken cancellationToken = default)
+        {
+            uint ledgerSequence = await client.GetLedgerIndex(cancellationToken);
             tx.TryAdd("LastLedgerSequence", ledgerSequence + LEDGER_OFFSET);
         }
 
-        public static async Task CheckAccountDeleteBlockers(this IXrplClient client, Dictionary<string, dynamic> tx)
+        public static async Task CheckAccountDeleteBlockers(this IXrplClient client, Dictionary<string, object> tx, CancellationToken cancellationToken = default)
         {
             LedgerIndex index = new LedgerIndex(LedgerIndexType.Validated);
             AccountObjectsRequest request = new AccountObjectsRequest((string)tx["Account"])
@@ -219,7 +339,7 @@ namespace Xrpl.Sugar
                 LedgerIndex = index,
                 DeletionBlockersOnly = true,
             };
-            AccountObjects response = await client.AccountObjects(request);
+            AccountObjects response = await client.AccountObjects(request, cancellationToken);
             TaskCompletionSource task = new TaskCompletionSource();
             if (response.AccountObjectList.Count > 0)
             {

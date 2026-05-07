@@ -1,4 +1,4 @@
-
+﻿
 
 // https://github.com/XRPLF/xrpl.js/blob/main/packages/xrpl/test/integration/requests/accountInfo.ts
 
@@ -11,7 +11,7 @@ using Xrpl.Models.Methods;
 namespace XrplTests.Xrpl.ClientLib.Integration
 {
     [TestClass]
-    public class AccountIInfoRequests
+    public class TestIAccountInfoRequests
     {
         // private static int Timeout = 20;
         public TestContext TestContext { get; set; }

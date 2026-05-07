@@ -1,5 +1,5 @@
-﻿using System;
-using Newtonsoft.Json;
+using System;
+using System.Text.Json.Serialization;
 using Xrpl.Client.Json.Converters;
 using Xrpl.Models.Common;
 
@@ -13,12 +13,12 @@ namespace Xrpl.Models.Methods
         /// <summary>
         /// 20-byte hex string for the ledger version to use. 
         /// </summary>
-        [JsonProperty("ledger_hash")]
+        [JsonPropertyName("ledger_hash")]
         public string LedgerHash { get; set; }
         /// <summary>
         /// The ledger index of the ledger to use, or a shortcut string to choose a ledger automatically.
         /// </summary>
-        [JsonProperty("ledger_index")]
+        [JsonPropertyName("ledger_index")]
         [JsonConverter(typeof(LedgerIndexConverter))]
         public LedgerIndex LedgerIndex { get; set; }
     }

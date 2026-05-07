@@ -1,6 +1,8 @@
-﻿using Newtonsoft.Json;
+﻿using System;
+using System.Collections.Generic;
 
-using System;
+using System.Text.Json.Serialization;
+
 using Xrpl.Client.Json.Converters;
 using Xrpl.Models.Common;
 using Xrpl.Models.Transactions;
@@ -10,6 +12,37 @@ using Xrpl.Models.Transactions;
 
 namespace Xrpl.Models.Ledger
 {
+    /// <summary>
+    /// Represents a reference to an order book directory page for hybrid offers.
+    /// Used in AdditionalBooks array for offers that participate in multiple order books.
+    /// </summary>
+    public class BookReference
+    {
+        /// <summary>
+        /// The ID of the offer directory that links to this offer.
+        /// </summary>
+        [JsonPropertyName("BookDirectory")]
+        public string BookDirectory { get; set; }
+        /// <summary>
+        /// A hint indicating which page of the offer directory links to this entry.
+        /// </summary>
+        [JsonPropertyName("BookNode")]
+        public string BookNode { get; set; }
+    }
+
+    /// <summary>
+    /// Wrapper for Book reference in AdditionalBooks array.
+    /// Each element in AdditionalBooks contains a Book object.
+    /// </summary>
+    public class BookWrapper
+    {
+        /// <summary>
+        /// The inner Book object containing directory reference.
+        /// </summary>
+        [JsonPropertyName("Book")]
+        public BookReference Book { get; set; }
+    }
+
     public class LOOffer : BaseLedgerEntry
     {
         
@@ -23,6 +56,7 @@ namespace Xrpl.Models.Ledger
         public string Account { get; set; }
         /// <summary>
         /// A bit-map of boolean flags enabled for this Offer.
+        /// Uses OfferFlags enum which includes lsfPassive, lsfSell, and lsfHybrid flags.
         /// </summary>
         public OfferFlags Flags { get; set; }
         /// <summary>
@@ -56,17 +90,26 @@ namespace Xrpl.Models.Ledger
         /// <summary>
         /// The identifying hash of the transaction that most recently modified this object.
         /// </summary>
-        [JsonProperty("PreviousTxnID")]
+        [JsonPropertyName("PreviousTxnID")]
         public string PreviousTxnID { get; set; }
         /// <summary>
         /// The index of the ledger that contains the transaction that most recently modified this object.
         /// </summary>
-        [JsonProperty("PreviousTxnLgrSeq")]
+        [JsonPropertyName("PreviousTxnLgrSeq")]
         public uint PreviousTxnLgrSeq { get; set; }
         /// <summary>
         /// The time this Offer expires, in seconds since the Ripple Epoch.
         /// </summary>
         [JsonConverter(typeof(RippleDateTimeConverter))]
         public DateTime? Expiration { get; set; }
+        /// <summary>
+        /// The domain that the offer must be a part of. Only present for permissioned offers.
+        /// </summary>
+        public string DomainID { get; set; }
+        /// <summary>
+        /// An additional list of order book directories that this offer belongs to.
+        /// Currently this field is only applicable to hybrid offers.
+        /// </summary>
+        public List<BookWrapper> AdditionalBooks { get; set; }
     }
 }

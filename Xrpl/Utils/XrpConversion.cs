@@ -1,6 +1,5 @@
 ﻿using System;
 using System.Numerics;
-using System.Diagnostics;
 using System.Text;
 using System.Linq;
 using System.Globalization;
@@ -68,7 +67,7 @@ namespace Xrpl.Utils
     {
 
         private static double DROPS_PER_XRP = 1000000.0;
-        private static int MAX_FRACTION_LENGTH = 6;
+        private static int MAX_FRACTION_LENGTH = 7; //7 for dev and 6 for other
         private static int BASE_TEN = 10;
         private static string SANITY_CHECK = "/ ^-?[0 - 9.] +$/u";
 
@@ -79,7 +78,7 @@ namespace Xrpl.Utils
         /// <returns
         public static string DropsToXrp(double dropsToConvert)
         {
-            return DropsToXrp(dropsToConvert.ToString());
+            return DropsToXrp(dropsToConvert.ToString(CultureInfo.InvariantCulture));
         }
 
         /// <summary>
@@ -163,7 +162,7 @@ namespace Xrpl.Utils
                                                      | (NumberStyles.AllowLeadingSign & NumberStyles.AllowExponent & NumberStyles.AllowDecimalPoint)
                                                      | (NumberStyles.AllowExponent & NumberStyles.AllowDecimalPoint)
                                                      | NumberStyles.AllowExponent
-                                                     | NumberStyles.AllowDecimalPoint, CultureInfo.InvariantCulture).ToString();
+                                                     | NumberStyles.AllowDecimalPoint, CultureInfo.InvariantCulture).ToString(CultureInfo.InvariantCulture);
             // check that the value is valid and actually a number
             if (!(xrpToConvert is string) && xrp != null)
             {

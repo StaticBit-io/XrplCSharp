@@ -1,4 +1,4 @@
-﻿
+
 
 // https://github.com/XRPLF/xrpl.js/blob/main/packages/xrpl/src/models/transactions/NFTokenCancelOffer.ts
 
@@ -10,7 +10,7 @@ using Xrpl.Client.Exceptions;
 namespace Xrpl.Models.Transactions
 {
     /// <inheritdoc cref="INFTokenCancelOffer" />
-    public class NFTokenCancelOffer : TransactionCommon, INFTokenCancelOffer
+    public class NFTokenCancelOffer : TransactionRequest, INFTokenCancelOffer
     {
         public NFTokenCancelOffer()
         {
@@ -37,7 +37,7 @@ namespace Xrpl.Models.Transactions
     }
 
     /// <inheritdoc cref="INFTokenCancelOffer" />
-    public class NFTokenCancelOfferResponse : TransactionResponseCommon, INFTokenCancelOffer
+    public class NFTokenCancelOfferResponse : TransactionResponse, INFTokenCancelOffer
     {
         /// <inheritdoc />
         public string[] NFTokenOffers { get; set; }
@@ -51,11 +51,11 @@ namespace Xrpl.Models.Transactions
         /// <param name="tx">An NFTokenCancelOffer Transaction.</param>
         /// <returns></returns>
         /// <exception cref="ValidationException">When the NFTokenCancelOffer is Malformed.</exception>
-        public static async Task ValidateNFTokenCancelOffer(Dictionary<string, dynamic> tx)
+        public static async Task ValidateNFTokenCancelOffer(Dictionary<string, object> tx)
         {
             await Common.ValidateBaseTransaction(tx);
-            if (!tx.TryGetValue("NFTokenOffers", out var NFTokenOffers) || NFTokenOffers is not List<dynamic> { } offers)
-                throw new ValidationException("NFTokenCancelOffer : missing field NFTokenOffers ");
+            if (!tx.TryGetValue("NFTokenOffers", out var NFTokenOffers) || NFTokenOffers is not List<object> { } offers)
+                throw new ValidationException("NFTokenCancelOffer: missing field NFTokenOffers");
 
             if (offers.Count == 0)
                 throw new ValidationException("NFTokenCancelOffer: empty field NFTokenOffers");

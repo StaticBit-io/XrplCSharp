@@ -22,6 +22,11 @@ namespace Xrpl.BinaryCodec.Types
             return IouValue.FromString(value);
         }
 
+        public static AmountValue FromMpt(string value)
+        {
+            return new MptValue(value);
+        }
+
         public abstract bool IsIou { get; }
 
         public static AmountValue FromParser(BinaryParser parser)
@@ -287,6 +292,57 @@ namespace Xrpl.BinaryCodec.Types
             var mantissa = Bits.GetBytes(Mantissa);
             mantissa[0] |= (byte)(notNegative ? 0x40 : 0x00);
             return mantissa;
+        }
+    }
+
+    internal class MptValue : AmountValue
+    {
+        public bool IsNegative;
+        public ulong Mantissa;
+
+        public override bool IsIou => false;
+        public bool IsMpt => true;
+
+        public MptValue(string value)
+        {
+            var parsed = decimal.Parse(value, NumberStyles.AllowDecimalPoint | NumberStyles.AllowExponent | NumberStyles.AllowLeadingSign, CultureInfo.InvariantCulture);
+            IsNegative = parsed < 0;
+            Mantissa = (ulong)Math.Abs(parsed);
+        }
+
+        public MptValue(byte[] mantissa, int sign)
+        {
+            Mantissa = ParseMantissa(mantissa);
+            IsNegative = sign == -1;
+        }
+
+        public override string ToString()
+        {
+            var mantissa = Mantissa.ToString();
+            if (IsNegative)
+            {
+                return "-" + mantissa;
+            }
+            return mantissa;
+        }
+
+        public override byte[] ToBytes()
+        {
+            var notNegative = !IsNegative;
+            var mantissa = Bits.GetBytes(Mantissa);
+            mantissa[0] &= 0x1F;
+            mantissa[0] |= (byte)(notNegative ? 0x60 : 0x20);
+            return mantissa;
+        }
+
+        public static MptValue FromParser(BinaryParser parser)
+        {
+            var mantissa = parser.Read(8);
+            var b1 = mantissa[0];
+            var isPositive = (b1 & 0x40) != 0;
+            var sign = isPositive ? 1 : -1;
+            mantissa[0] &= 0x1F;
+            return new MptValue(mantissa, sign);
         }
     }
 

@@ -1,19 +1,25 @@
-﻿using System;
+using Microsoft.VisualStudio.TestPlatform.CommunicationUtilities;
+using Microsoft.VisualStudio.TestTools.UnitTesting;
+
+using NBitcoin.Protocol;
+
+using System;
 using System.Collections.Generic;
 using System.Diagnostics;
 using System.Net.WebSockets;
+using System.Text.Json;
 using System.Threading;
 using System.Threading.Tasks;
 using System.Timers;
-using Microsoft.VisualStudio.TestPlatform.CommunicationUtilities;
-using Microsoft.VisualStudio.TestTools.UnitTesting;
-using Newtonsoft.Json;
-using Org.BouncyCastle.Asn1.Ocsp;
+
 using Xrpl.Client;
 using Xrpl.Client.Exceptions;
+using Xrpl.Client.Json;
+using Xrpl.Models;
 using Xrpl.Models.Methods;
 using Xrpl.Models.Subscriptions;
 using Xrpl.Sugar;
+
 using Timer = System.Timers.Timer;
 
 
@@ -29,9 +35,9 @@ namespace Xrpl.Tests.ClientLib
         public void TestSome()
         {
             var message = "{\"fee_base\":10,\"fee_ref\":10,\"ledger_hash\":\"4118BC9FD82A6245BDD32092CE93A86676978D3EBD6F9A47C3ABCEFE80E2B3F5\",\"ledger_index\":75551992,\"ledger_time\":720984480,\"reserve_base\":10000000,\"reserve_inc\":2000000,\"txn_count\":54,\"type\":\"ledgerClosed\",\"validated_ledgers\":\"32570-75551992\"}";
-            var response = JsonConvert.DeserializeObject<Dictionary<string, dynamic>>(message);
-            var message1 = JsonConvert.SerializeObject(response);
-            var response1 = JsonConvert.DeserializeObject<LedgerStream>(message1);
+            var response = JsonSerializer.Deserialize<Dictionary<string, object>>(message, XrplJsonOptions.Default);
+            var message1 = JsonSerializer.Serialize(response, XrplJsonOptions.Default);
+            var response1 = JsonSerializer.Deserialize<LedgerStream>(message1, XrplJsonOptions.Default);
         }
 
         [TestMethod]
@@ -51,9 +57,9 @@ namespace Xrpl.Tests.ClientLib
                 var subscribe = await client.Subscribe(
                 new SubscribeRequest()
                 {
-                    Streams = new List<string>(new[]
+                    Streams = new List<StreamType>(new[]
                     {
-                        "ledger",
+                        StreamType.Ledger,
                     })
                 });
             };
@@ -68,9 +74,9 @@ namespace Xrpl.Tests.ClientLib
                 return Task.CompletedTask;
             };
 
-            client.connection.OnDisconnect += (code) =>
+            client.connection.OnDisconnect += (code, description) =>
             {
-                Console.WriteLine($"DISCONNECTED: {code}");
+                Console.WriteLine($"Disconnected from XRPL with code: {code}, description: {description}");
                 isFinished = true;
                 return Task.CompletedTask;
             };
@@ -82,8 +88,12 @@ namespace Xrpl.Tests.ClientLib
                 isTested = true;
                 return Task.CompletedTask;
             };
-
-            Timer timer = new Timer(7000);
+            client.connection.OnTransaction += response =>
+            {
+                Console.WriteLine($"TX: {response.Transaction.TransactionType}");
+                return Task.CompletedTask;
+            };
+            Timer timer = new Timer(20000);
             timer.Elapsed += (sender, e) =>
             {
                 Debug.WriteLine("TIMEOUT!!");
@@ -93,14 +103,20 @@ namespace Xrpl.Tests.ClientLib
             timer.Start();
 
             await client.Connect();
-
             Debug.WriteLine($"BEFORE: {DateTime.Now}");
 
-            while (!isFinished)
-            {
-                Debug.WriteLine($"WAITING: {DateTime.Now}");
-                System.Threading.Thread.Sleep(TimeSpan.FromSeconds(1));
-            }
+            var task = Task.Run( //change thread
+                async () =>
+                {
+                    while (!isFinished)
+                    {
+                        Debug.WriteLine($"WAITING: {DateTime.Now}");
+                        await Task.Delay(500);
+                    }
+                });
+
+            await task;
+            await client.Disconnect();
             Debug.WriteLine($"AFTER: {DateTime.Now}");
             Debug.WriteLine($"IS FINISHED: {isFinished}");
             Debug.WriteLine($"IS TESTER: {isTested}");

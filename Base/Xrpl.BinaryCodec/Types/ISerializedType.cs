@@ -1,6 +1,6 @@
-using System;
+﻿using System;
 using System.Linq;
-using Newtonsoft.Json.Linq;
+using System.Text.Json.Nodes;
 using Xrpl.BinaryCodec.Binary;
 using Xrpl.BinaryCodec.Util;
 
@@ -9,23 +9,6 @@ namespace Xrpl.BinaryCodec.Types
     public class SerializedType
     {
         protected byte[] Buffer;
-
-        //public SerializedType(byte[] buffer)
-        //{
-        //    this.Buffer = buffer ?? new byte[0];
-        //}
-
-        //public static SerializedType FromParser(BinaryParser parser, int? hint = null)
-        //{
-        //    throw new Exception("fromParser not implemented");
-        //    //return FromParser(parser, hint);
-        //}
-
-        //public static SerializedType From(SerializedType value)
-        //{
-        //    throw new Exception("from not implemented");
-        //    //return From(value);
-        //}
 
         public void ToBytesSink(BytesList list)
         {
@@ -48,9 +31,9 @@ namespace Xrpl.BinaryCodec.Types
             return bl.ToBytes();
         }
 
-        public object ToJson()
+        public virtual JsonNode ToJson()
         {
-            return ToHex();
+            return JsonValue.Create(ToHex())!;
         }
 
         public override string ToString()
@@ -61,8 +44,6 @@ namespace Xrpl.BinaryCodec.Types
 
     public class Comparable : SerializedType
     {
-        //public Comparable(byte[] bytes) : base(bytes) {}
-
         public bool Lt(Comparable other)
         {
             return CompareTo(other) < 0;
@@ -100,7 +81,7 @@ namespace Xrpl.BinaryCodec.Types
         /// <param name="sink"> bytes Sink container</param>
         void ToBytes(IBytesSink sink);
         /// <summary> Get the JSON representation of this type </summary>
-        JToken ToJson();
+        JsonNode ToJson();
     }
     /// <summary> extension for ISerializedType </summary>
     public static class StExtensions

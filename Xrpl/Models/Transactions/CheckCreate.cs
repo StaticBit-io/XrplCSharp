@@ -1,7 +1,11 @@
-﻿using System.Collections.Generic;
+using System;
+using System.Collections.Generic;
 using System.Threading.Tasks;
 
+using System.Text.Json.Serialization;
+
 using Xrpl.Client.Exceptions;
+using Xrpl.Client.Json.Converters;
 using Xrpl.Models.Common;
 
 // https://github.com/XRPLF/xrpl.js/blob/main/packages/xrpl/src/models/transactions/checkCreate.ts
@@ -9,7 +13,7 @@ using Xrpl.Models.Common;
 namespace Xrpl.Models.Transactions
 {
     /// <inheritdoc cref="ICheckCreate" />
-    public class CheckCreate : TransactionCommon, ICheckCreate
+    public class CheckCreate : TransactionRequest, ICheckCreate, IDestination
     {
         public CheckCreate()
         {
@@ -23,7 +27,7 @@ namespace Xrpl.Models.Transactions
         /// <inheritdoc />
         public uint? DestinationTag { get; set; }
         /// <inheritdoc />
-        public uint? Expiration { get; set; }
+        public DateTime? Expiration { get; set; }
         /// <inheritdoc />
         public uint? InvoiceID { get; set; }
     }
@@ -54,7 +58,8 @@ namespace Xrpl.Models.Transactions
         /// Time after which the Check is no longer valid, in seconds since the Ripple.<br/>
         /// Epoch.
         /// </summary>
-        uint? Expiration { get; set; }
+        [JsonConverter(typeof(RippleDateTimeConverter))]
+        DateTime? Expiration { get; set; }
         /// <summary>
         /// Arbitrary 256-bit hash representing a specific reason or identifier for.<br/>
         /// this Check.
@@ -63,7 +68,7 @@ namespace Xrpl.Models.Transactions
     }
 
     /// <inheritdoc cref="ICheckCreate" />
-    public class CheckCreateResponse : TransactionResponseCommon, ICheckCreate
+    public class CheckCreateResponse : TransactionResponse, ICheckCreate
     {
         /// <inheritdoc />
         public string Destination { get; set; }
@@ -72,7 +77,7 @@ namespace Xrpl.Models.Transactions
         /// <inheritdoc />
         public uint? DestinationTag { get; set; }
         /// <inheritdoc />
-        public uint? Expiration { get; set; }
+        public DateTime? Expiration { get; set; }
         /// <inheritdoc />
         public uint? InvoiceID { get; set; }
     }
@@ -84,7 +89,7 @@ namespace Xrpl.Models.Transactions
         /// </summary>
         /// <param name="tx"> A CheckCreate Transaction.</param>
         /// <exception cref="ValidationException">When the CheckCreate is malformed.</exception>
-        public static async Task ValidateCheckCreate(Dictionary<string, dynamic> tx)
+        public static async Task ValidateCheckCreate(Dictionary<string, object> tx)
         {
             await Common.ValidateBaseTransaction(tx);
 
@@ -100,11 +105,11 @@ namespace Xrpl.Models.Transactions
                 throw new ValidationException("CheckCreate: invalid Destination");
 
             if (tx.TryGetValue("DestinationTag", out var DestinationTag) && DestinationTag is not uint { })
-                throw new ValidationException("CheckCreate: missing field DestinationTag");
+                throw new ValidationException("CheckCreate: invalid DestinationTag");
             if (tx.TryGetValue("Expiration", out var Expiration) && Expiration is not uint { })
-                throw new ValidationException("CheckCreate: missing field Expiration");
+                throw new ValidationException("CheckCreate: invalid Expiration");
             if (tx.TryGetValue("InvoiceID", out var InvoiceID) && InvoiceID is not string { })
-                throw new ValidationException("CheckCreate: missing field InvoiceID");
+                throw new ValidationException("CheckCreate: invalid InvoiceID");
 
 
         }

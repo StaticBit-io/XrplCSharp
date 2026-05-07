@@ -1,15 +1,15 @@
-﻿using System.Collections.Generic;
+using System.Collections.Generic;
+using System.Text.Json.Serialization;
 using System.Threading.Tasks;
-using Newtonsoft.Json;
+
 using Xrpl.Client.Exceptions;
 using Xrpl.Client.Json.Converters;
-using Xrpl.Models.Common;
 
 using static Xrpl.Models.Common.Common;
 
 namespace Xrpl.Models.Transactions
 {
-    public class AMMVote : TransactionCommon, IAMMVote
+    public class AMMVote : TransactionRequest, IAMMVote
     {
         public AMMVote()
         {
@@ -45,7 +45,7 @@ namespace Xrpl.Models.Transactions
     }
 
     /// <inheritdoc cref="IAMMVote" />
-    public class AMMVoteResponse : TransactionResponseCommon, IAMMVote
+    public class AMMVoteResponse : TransactionResponse, IAMMVote
     {
         #region Implementation of IAMMVote
 
@@ -69,7 +69,7 @@ namespace Xrpl.Models.Transactions
         /// <param name="tx">An AMMVote Transaction.</param>
         /// <returns></returns>
         /// <exception cref="ValidationException"> When the AMMVote is Malformed.</exception>
-        public static async Task ValidateAMMVote(Dictionary<string, dynamic> tx)
+        public static async Task ValidateAMMVote(Dictionary<string, object> tx)
         {
             await Common.ValidateBaseTransaction(tx);
             tx.TryGetValue("Asset", out var Asset);

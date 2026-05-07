@@ -1,9 +1,7 @@
 
 // https://github.com/XRPLF/xrpl.js/blob/main/packages/xrpl/src/sugar/utils.ts
 
-using System;
 using System.Collections.Generic;
-using System.ComponentModel;
 using System.Linq;
 using System.Threading;
 using System.Threading.Tasks;
@@ -27,7 +25,7 @@ namespace Xrpl.Sugar
 
         public static async Task<(List<Xrpl.Models.Transactions.Offer> buy, List<Xrpl.Models.Transactions.Offer> sell)> GetOrderbook(this IXrplClient Client,
             TakerAmount takerPays, TakerAmount takerGets,
-            uint limit = DEFAULT_LIMIT, int ledgerIndex = -1, string ledgerHash = null, string taker = null)
+            uint limit = DEFAULT_LIMIT, int ledgerIndex = -1, string ledgerHash = null, string taker = null, CancellationToken cancellationToken = default)
         {
             var request = new BookOffersRequest
             {
@@ -39,10 +37,10 @@ namespace Xrpl.Sugar
                 Limit = limit,
                 Taker = taker
             };
-            var directOfferResults = await Client.BookOffers(request);
+            var directOfferResults = await Client.BookOffers(request, cancellationToken);
             request.TakerGets = takerPays;
             request.TakerPays = takerGets;
-            var reverseOfferResults = await Client.BookOffers(request);
+            var reverseOfferResults = await Client.BookOffers(request, cancellationToken);
             var directOffers = directOfferResults.Offers;
             var reverseOffers = reverseOfferResults.Offers;
             var orders = directOffers.Concat(reverseOffers).ToList();
@@ -64,4 +62,3 @@ namespace Xrpl.Sugar
     }
 
 }
-

@@ -1,2 +1,6 @@
-- name: Reference
+- name: Home
+  href: index.md
+- name: Error Classifier
+  href: ErrorClassifier.md
+- name: API Reference
   href: reference/

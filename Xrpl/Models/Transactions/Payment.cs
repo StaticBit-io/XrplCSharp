@@ -1,18 +1,16 @@
-﻿using System;
-using System.Collections.Generic;
-using System.Linq;
-using System.Security.Principal;
-using System.Threading.Tasks;
+﻿using System.Text.Json.Serialization;
 
-using Newtonsoft.Json;
+using System;
+using System.Collections.Generic;
+using System.Threading.Tasks;
 
 using Xrpl.Client.Exceptions;
 using Xrpl.Client.Json.Converters;
 using Xrpl.Models.Common;
+using Xrpl.Models.Enums;
 using Xrpl.Models.Methods;
 using Xrpl.Models.Utils;
 
-using static System.Net.WebRequestMethods;
 using Index = Xrpl.Models.Utils.Index;
 
 // https://github.com/XRPLF/xrpl.js/blob/main/packages/xrpl/src/models/transactions/payment.ts
@@ -25,6 +23,11 @@ namespace Xrpl.Models.Transactions
     [Flags]
     public enum PaymentFlags : uint
     {
+        /// <summary>
+        /// batch inner transaction
+        /// </summary>
+        tfInnerBatchTxn = XrplGlobalFlags.tfInnerBatchTxn,
+
         /// <summary>
         /// Do not use the default path;<br/>
         /// only use paths included in the Paths field.<br/>
@@ -45,7 +48,7 @@ namespace Xrpl.Models.Transactions
     }
 
     /// <inheritdoc cref="IPayment" />
-    public class Payment : TransactionCommon, IPayment
+    public class Payment : TransactionRequest, IPayment, IDestination
     {
         public Payment()
         {
@@ -57,14 +60,25 @@ namespace Xrpl.Models.Transactions
         public Currency Amount { get; set; }
 
         /// <inheritdoc />
+        [JsonPropertyName("DeliverMax")]
+        [JsonConverter(typeof(CurrencyConverter))]
+        private Currency? DeliverMax
+        {
+            set => Amount = value;
+        }
+
+        /// <inheritdoc />
         public string Destination { get; set; }
 
         /// <inheritdoc />
         public uint? DestinationTag { get; set; }
 
         /// <inheritdoc />
-        public new PaymentFlags? Flags { get; set; }
-
+        public new PaymentFlags? Flags
+        {
+            get => base.Flags.HasValue ? (PaymentFlags?)base.Flags.Value : null;
+            set => base.Flags = (uint?)value;
+        } 
         /// <inheritdoc />
         public string InvoiceID { get; set; }
 
@@ -78,6 +92,14 @@ namespace Xrpl.Models.Transactions
         /// <inheritdoc />
         [JsonConverter(typeof(CurrencyConverter))]
         public Currency DeliverMin { get; set; }
+
+        /// <inheritdoc />
+        public string DomainID { get; set; }
+
+        /// <inheritdoc />
+        [JsonPropertyName("CredentialIDs")]
+        [JsonIgnore(Condition = JsonIgnoreCondition.WhenWritingNull)]
+        public List<string> CredentialIDs { get; set; }
     }
 
     /// <summary>
@@ -87,34 +109,40 @@ namespace Xrpl.Models.Transactions
     /// ```typescript
     /// const partialPayment: Payment =
     /// {
-    /// 	TransactionType: 'Payment',
-    /// 	Account: 'rM9WCfJU6udpFkvKThRaFHDMsp7L8rpgN',
-    /// 	Amount:{
-    /// 	currency: 'FOO',
-    /// 	value: '4000',
-    /// 	issuer: 'rPzwM2JfCSDjhbesdTCqFjWWdK7eFtTwZz',
+    ///         TransactionType: 'Payment',
+    ///         Account: 'rM9WCfJU6udpFkvKThRaFHDMsp7L8rpgN',
+    ///         Amount:{
+    ///         currency: 'FOO',
+    ///         value: '4000',
+    ///         issuer: 'rPzwM2JfCSDjhbesdTCqFjWWdK7eFtTwZz',
     ///     },
-    /// 	Destination: 'rPzwM2JfCSDjhbesdTCqFjWWdK7eFtTwZz',
-    /// 	Flags:{
-    /// 	tfPartialPayment: true
+    ///         Destination: 'rPzwM2JfCSDjhbesdTCqFjWWdK7eFtTwZz',
+    ///         Flags:{
+    ///         tfPartialPayment: true
     ///     }
     /// }
     /// ```
     /// </code>
-    public interface IPayment : ITransactionCommon
+    public interface IPayment : ITransactionCommon, IDestination
     {
         /// <summary>
+        /// API v1
         /// The amount of currency to deliver.<br/>
         /// For non-XRP amounts, the nested field names MUST be lower-case.<br/>
         /// If the tfPartialPayment flag is set, deliver up to this amount instead.
+        /// Alias to DeliverMax <br/>
+        /// API v2: The maximum amount of currency to deliver.<br/>
+        /// Partial payments can deliver less than this amount and still succeed;<br/>
+        /// other payments fail unless they deliver the exact amount.
         /// </summary>
-        Currency Amount { get; set; }
+        Currency? Amount { get; set; }
+
         /// <summary>
         /// Minimum amount of destination currency this transaction should deliver.<br/>
         /// Only valid if this is a partial payment.<br/>
         /// For non-XRP amounts, the nested field names are lower-case.
         /// </summary>
-        Currency DeliverMin { get; set; }
+        Currency? DeliverMin { get; set; }
         /// <summary>
         /// The unique address of the account receiving the payment.
         /// </summary>
@@ -144,14 +172,34 @@ namespace Xrpl.Models.Transactions
         /// Must be omitted for XRP-to-XRP Payments.
         /// </summary>
         Currency SendMax { get; set; }
+        /// <summary>
+        /// The domain the sender intends to use for cross-currency payments through the permissioned DEX.
+        /// Both sender and destination must be part of this domain if it interacts with the DEX.
+        /// </summary>
+        string DomainID { get; set; }
+
+        /// <summary>
+        /// (Optional) Set of Credentials (object IDs, hex 64-char each) to authorize a deposit
+        /// when the destination account requires Deposit Authorization with credential-based preauth (XLS-70).
+        /// Maximum 8 entries.
+        /// </summary>
+        List<string> CredentialIDs { get; set; }
     }
 
     /// <inheritdoc cref="IPayment" />
-    public class PaymentResponse : TransactionResponseCommon, IPayment
+    public class PaymentResponse : TransactionResponse, IPayment, IDestination
     {
         /// <inheritdoc />
         [JsonConverter(typeof(CurrencyConverter))]
         public Currency Amount { get; set; }
+
+        /// <inheritdoc />
+        [JsonPropertyName("DeliverMax")]
+        [JsonConverter(typeof(CurrencyConverter))]
+        private Currency? DeliverMax
+        {
+            set => Amount = value;
+        }
 
         /// <inheritdoc />
         public string Destination { get; set; }
@@ -160,7 +208,11 @@ namespace Xrpl.Models.Transactions
         public uint? DestinationTag { get; set; }
 
         /// <inheritdoc />
-        public new PaymentFlags? Flags { get; set; }
+        public new PaymentFlags? Flags
+        {
+            get => base.Flags.HasValue ? (PaymentFlags?)base.Flags.Value : null;
+            set => base.Flags = (uint?)value;
+        }
 
         /// <inheritdoc />
         public string InvoiceID { get; set; }
@@ -175,6 +227,14 @@ namespace Xrpl.Models.Transactions
         /// <inheritdoc />
         [JsonConverter(typeof(CurrencyConverter))]
         public Currency DeliverMin { get; set; }
+
+        /// <inheritdoc />
+        public string DomainID { get; set; }
+
+        /// <inheritdoc />
+        [JsonPropertyName("CredentialIDs")]
+        [JsonIgnore(Condition = JsonIgnoreCondition.WhenWritingNull)]
+        public List<string> CredentialIDs { get; set; }
     }
 
     public partial class Validation
@@ -184,7 +244,7 @@ namespace Xrpl.Models.Transactions
         /// </summary>
         /// <param name="tx"> A Payment Transaction.</param>
         /// <exception cref="ValidationException">When the Payment is malformed.</exception>
-        public static async Task ValidatePayment(Dictionary<string, dynamic> tx)
+        public static async Task ValidatePayment(Dictionary<string, object> tx)
         {
             await Common.ValidateBaseTransaction(tx);
 
@@ -205,15 +265,28 @@ namespace Xrpl.Models.Transactions
 
             if (tx.TryGetValue("InvoiceID", out var InvoiceID) && InvoiceID is not string { })
                 throw new ValidationException("PaymentTransaction: InvoiceID must be a string");
-            if (tx.TryGetValue("Paths", out var Paths) && !IsPaths(Paths as List<List<Dictionary<string, dynamic>>>))
+            if (tx.TryGetValue("Paths", out var Paths) && !IsPaths(Paths as List<List<Dictionary<string, object>>>))
                 throw new ValidationException("PaymentTransaction: invalid Paths");
             if (tx.TryGetValue("SendMax", out var SendMax) && !Common.IsAmount(SendMax))
                 throw new ValidationException("PaymentTransaction: invalid SendMax");
 
+            if (tx.TryGetValue("DomainID", out var domainId) && domainId is not null)
+            {
+                if (domainId is not string domainIdStr)
+                    throw new ValidationException("PaymentTransaction: DomainID must be a string");
+                if (domainIdStr.Length != 64 || !System.Text.RegularExpressions.Regex.IsMatch(domainIdStr, "^[0-9A-Fa-f]{64}$"))
+                    throw new ValidationException("PaymentTransaction: DomainID must be a 64-character hexadecimal string (256-bit hash)");
+            }
+
+            if (tx.TryGetValue("CredentialIDs", out var credentialIds) && credentialIds is not null)
+            {
+                CredentialsValidator.ValidateCredentialsList(credentialIds, "PaymentTransaction", "CredentialIDs", isStringID: true);
+            }
+
             await CheckPartialPayment(tx);
         }
 
-        public static Task CheckPartialPayment(Dictionary<string, dynamic> tx)
+        public static Task CheckPartialPayment(Dictionary<string, object> tx)
         {
             if (!tx.TryGetValue("DeliverMin", out var DeliverMin)) 
                 return Task.CompletedTask;
@@ -224,12 +297,11 @@ namespace Xrpl.Models.Transactions
                     throw new ValidationException("PaymentTransaction: tfPartialPayment flag required with DeliverMin");
             }
 
-            //todo check func
-            var isTfPartialPayment = flags is uint { } flag
-                ? Index.IsFlagEnabled(flag, (uint)PaymentFlags.tfPartialPayment)
-                : flags is PaymentFlags f 
-                    ? flags == PaymentFlags.tfPartialPayment 
-                    : CheckFlag<PaymentFlags>(flags, "tfPartialPayment");
+            bool isTfPartialPayment = flags is uint uFlag
+                ? Index.IsFlagEnabled(uFlag, (uint)PaymentFlags.tfPartialPayment)
+                : flags is PaymentFlags pf 
+                    ? pf == PaymentFlags.tfPartialPayment 
+                    : flags is Dictionary<string, object> flagDict && CheckFlag<PaymentFlags>(flagDict, "tfPartialPayment");
             if (!isTfPartialPayment)
                 throw new ValidationException("PaymentTransaction: tfPartialPayment flag required with DeliverMin");
             if (!Common.IsAmount(DeliverMin))
@@ -237,9 +309,9 @@ namespace Xrpl.Models.Transactions
 
             return Task.CompletedTask;
         }
-        static bool CheckFlag<T>(Dictionary<string,dynamic> flag, string type) where T:Enum
+        static bool CheckFlag<T>(Dictionary<string, object> flag, string type) where T : Enum
         {
-            if (flag.TryGetValue(type, out var f) && f is bool == true)
+            if (flag.TryGetValue(type, out object f) && f is true)
             {
                 return true;
             }
@@ -247,7 +319,7 @@ namespace Xrpl.Models.Transactions
             return false;
 
         }
-        public static bool IsPathStep(Dictionary<string, dynamic> pathStep)
+        public static bool IsPathStep(Dictionary<string, object> pathStep)
         {
             if (pathStep.TryGetValue("account", out var acc) && acc is not string { })
                 return false;
@@ -262,7 +334,7 @@ namespace Xrpl.Models.Transactions
                 return true;
             return false;
         }
-        public static bool IsPaths(List<Dictionary<string, dynamic>> paths)
+        public static bool IsPaths(List<Dictionary<string, object>> paths)
         {
             foreach (var path in paths)
             {
@@ -273,7 +345,7 @@ namespace Xrpl.Models.Transactions
             return true;
 
         }
-        public static bool IsPaths(List<List<Dictionary<string, dynamic>>> paths)
+        public static bool IsPaths(List<List<Dictionary<string, object>>> paths)
         {
             if (paths is null || paths.Count == 0)
                 return false;

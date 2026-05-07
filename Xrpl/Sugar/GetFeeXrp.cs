@@ -1,6 +1,6 @@
-﻿using System;
+using System;
 using System.Globalization;
-using System.Runtime.CompilerServices;
+using System.Threading;
 using System.Threading.Tasks;
 
 using Xrpl.Client;
@@ -23,18 +23,18 @@ namespace Xrpl.Sugar
         /// <param name="client">The Client used to connect to the ledger.</param>
         /// <param name="cushion">The fee cushion to use</param>
         /// <returns>The transaction fee</returns>
-        public static async Task<string> GetFeeXrp(this IXrplClient client, double? cushion = null)
+        public static async Task<string> GetFeeXrp(this IXrplClient client, double? cushion = null, CancellationToken cancellationToken = default)
         {
             double feeCushion = cushion ?? client.feeCushion;
             ServerInfoRequest request = new ServerInfoRequest();
-            ServerInfo serverInfo = await client.ServerInfo(request);
-            double? baseFee = serverInfo.Info.ValidatedLedger?.BaseFeeXrp;
+            ServerInfo serverInfo = await client.ServerInfo(request, cancellationToken);
+            decimal? baseFee = serverInfo.Info.ValidatedLedger?.BaseFeeXrp;
             if (baseFee == null)
             {
                 throw new XrplException("getFeeXrp: Could not get base_fee_xrp from server_info");
             }
 
-            decimal baseFeeXrp = (decimal)baseFee;
+            decimal baseFeeXrp = baseFee.Value;
 
             if (serverInfo.Info.LoadFactor == null)
             {
@@ -45,7 +45,10 @@ namespace Xrpl.Sugar
             decimal fee = baseFeeXrp * (decimal)serverInfo.Info.LoadFactor * (decimal)feeCushion;
 
             // Cap fee to `client.maxFeeXRP`
-            fee = Math.Min(fee, decimal.Parse(client.maxFeeXRP));
+            if (!string.IsNullOrWhiteSpace(client.maxFeeXRP))
+            {
+                fee = Math.Min(fee, decimal.Parse(client.maxFeeXRP));
+            }
             // Round fee to 6 decimal places
             // TODO: Review To Fixed
             return fee.ToString(CultureInfo.InvariantCulture);

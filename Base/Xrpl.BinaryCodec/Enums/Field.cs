@@ -78,15 +78,18 @@ namespace Xrpl.BinaryCodec.Enums
         public static readonly Uint8Field CloseResolution = new Uint8Field(nameof(CloseResolution), 1);
         public static readonly Uint8Field Method = new Uint8Field(nameof(Method), 2);
         public static readonly EngineResultField TransactionResult = new EngineResultField(nameof(TransactionResult), 3);
+        /// <summary>The decimal precision level (0-10) for the asset price in Oracle PriceData.</summary>
+
+        public static readonly Uint8Field AssetScale = new Uint8Field(nameof(AssetScale), 5);
         public static readonly Uint8Field TickSize = new Uint8Field(nameof(TickSize), 16);
-        public static readonly Uint8Field UNLModifyDisabling = new Uint8Field(nameof(TickSize), 17);
+        public static readonly Uint8Field UNLModifyDisabling = new Uint8Field(nameof(UNLModifyDisabling), 17);
         public static readonly Uint8Field HookResult = new Uint8Field(nameof(HookResult), 18);
 
         public static readonly LedgerEntryTypeField LedgerEntryType = new LedgerEntryTypeField(nameof(LedgerEntryType), 1);
         public static readonly TransactionTypeField TransactionType = new TransactionTypeField(nameof(TransactionType), 2);
         public static readonly Uint16Field SignerWeight = new Uint16Field(nameof(SignerWeight), 3);
         public static readonly Uint16Field TransferFee = new Uint16Field(nameof(TransferFee), 4);
-        public static readonly Uint16Field TradingFee = new Uint16Field(nameof(TradingFee), 4); 
+        public static readonly Uint16Field TradingFee = new Uint16Field(nameof(TradingFee), 5); 
         public static readonly Uint16Field Version = new Uint16Field(nameof(Version), 16);
         public static readonly Uint16Field HookStateChangeCount = new Uint16Field(nameof(HookStateChangeCount), 17);
         public static readonly Uint16Field HookStateEmitCount = new Uint16Field(nameof(HookStateEmitCount), 18);
@@ -107,6 +110,8 @@ namespace Xrpl.BinaryCodec.Enums
         public static readonly Uint32Field WalletSize = new Uint32Field(nameof(WalletSize), 12);
         public static readonly Uint32Field OwnerCount = new Uint32Field(nameof(OwnerCount), 13);
         public static readonly Uint32Field DestinationTag = new Uint32Field(nameof(DestinationTag), 14);
+        /// <summary>The time the oracle data was last updated, as a unix timestamp.</summary>
+        public static readonly Uint32Field LastUpdateTime = new Uint32Field(nameof(LastUpdateTime), 15);
         
         public static readonly Uint32Field HighQualityIn = new Uint32Field(nameof(HighQualityIn), 16);
         public static readonly Uint32Field HighQualityOut = new Uint32Field(nameof(HighQualityOut), 17);
@@ -144,6 +149,8 @@ namespace Xrpl.BinaryCodec.Enums
         public static readonly Uint32Field EmitGeneration = new Uint32Field(nameof(EmitGeneration), 46);
         public static readonly Uint32Field VoteWeight = new Uint32Field(nameof(VoteWeight), 47);
         public static readonly Uint32Field DiscountedFee = new Uint32Field(nameof(DiscountedFee), 48);
+        /// <summary>A unique identifier of the price oracle for the Account.</summary>
+        public static readonly Uint32Field OracleDocumentID = new Uint32Field(nameof(OracleDocumentID), 51);
 
         public static readonly Uint64Field IndexNext = new Uint64Field(nameof(IndexNext), 1);
         public static readonly Uint64Field IndexPrevious = new Uint64Field(nameof(IndexPrevious), 2);
@@ -162,8 +169,15 @@ namespace Xrpl.BinaryCodec.Enums
         public static readonly Uint64Field HookInstructionCount = new Uint64Field(nameof(HookInstructionCount), 17);
         public static readonly Uint64Field HookReturnCode = new Uint64Field(nameof(HookReturnCode), 18);
         public static readonly Uint64Field ReferenceCount = new Uint64Field(nameof(ReferenceCount), 19);
+        public static readonly Uint64Field MaximumAmount = new Uint64Field(nameof(MaximumAmount), 24);
+        public static readonly Uint64Field OutstandingAmount = new Uint64Field(nameof(OutstandingAmount), 25);
+        public static readonly Uint64Field MPTAmount = new Uint64Field(nameof(MPTAmount), 26);
+        /// <summary>The asset price after applying the Scale precision level.</summary>
+        public static readonly Uint64Field AssetPrice = new Uint64Field(nameof(AssetPrice), 23);
 
         public static readonly Hash128Field EmailHash = new Hash128Field(nameof(EmailHash), 1);
+
+        public static readonly Hash192Field MPTokenIssuanceID = new Hash192Field(nameof(MPTokenIssuanceID), 1);
         
         public static readonly Hash160Field TakerPaysCurrency = new Hash160Field(nameof(TakerPaysCurrency), 1);
         public static readonly Hash160Field TakerPaysIssuer = new Hash160Field(nameof(TakerPaysIssuer), 2);
@@ -202,6 +216,8 @@ namespace Xrpl.BinaryCodec.Enums
         public static readonly Hash256Field HookHash = new Hash256Field(nameof(HookHash), 31);
         public static readonly Hash256Field HookNamespace = new Hash256Field(nameof(HookNamespace), 32);
         public static readonly Hash256Field HookSetTxnID = new Hash256Field(nameof(HookSetTxnID), 33);
+        /// <summary>The ledger entry ID of a permissioned domain.</summary>
+        public static readonly Hash256Field DomainID = new Hash256Field(nameof(DomainID), 34);
         
         public static readonly AmountField Amount = new AmountField(nameof(Amount), 1);
         public static readonly AmountField Balance = new AmountField(nameof(Balance), 2);
@@ -221,11 +237,16 @@ namespace Xrpl.BinaryCodec.Enums
         public static readonly AmountField DeliveredAmount = new AmountField(nameof(DeliveredAmount), 18);
         public static readonly AmountField NFTokenBrokerFee = new AmountField(nameof(NFTokenBrokerFee), 19);
         //public static readonly AmountField HookCallbackFee = new AmountField(nameof(HookCallbackFee), 20);
-        public static readonly AmountField LPTokenOut = new AmountField(nameof(LPTokenOut), 20);
-        public static readonly AmountField LPTokenIn = new AmountField(nameof(LPTokenIn), 21);
-        public static readonly AmountField EPrice = new AmountField(nameof(EPrice), 22);
-        public static readonly AmountField Price = new AmountField(nameof(Price), 23);
-        public static readonly AmountField LPTokenBalance = new AmountField(nameof(LPTokenBalance), 24);
+        public static readonly AmountField BaseFeeDrops = new AmountField(nameof(BaseFeeDrops), 22);
+        public static readonly AmountField ReserveBaseDrops = new AmountField(nameof(ReserveBaseDrops), 23);
+        public static readonly AmountField ReserveIncrementDrops = new AmountField(nameof(ReserveIncrementDrops), 24);
+        public static readonly AmountField LPTokenOut = new AmountField(nameof(LPTokenOut), 25);
+        public static readonly AmountField LPTokenIn = new AmountField(nameof(LPTokenIn), 26);
+        public static readonly AmountField EPrice = new AmountField(nameof(EPrice), 27);
+        public static readonly AmountField Price = new AmountField(nameof(Price), 28);
+        public static readonly AmountField SignatureReward = new AmountField(nameof(SignatureReward), 29);
+        public static readonly AmountField MinAccountCreateAmount = new AmountField(nameof(MinAccountCreateAmount), 30);
+        public static readonly AmountField LPTokenBalance = new AmountField(nameof(LPTokenBalance), 31);
 
         public static readonly BlobField PublicKey = new BlobField(nameof(PublicKey), 1);
         public static readonly BlobField MessageKey = new BlobField(nameof(MessageKey), 2);
@@ -251,6 +272,17 @@ namespace Xrpl.BinaryCodec.Enums
         public static readonly BlobField HookReturnString = new BlobField(nameof(HookReturnString), 23);
         public static readonly BlobField HookParameterName = new BlobField(nameof(HookParameterName), 24);
         public static readonly BlobField HookParameterValue = new BlobField(nameof(HookParameterValue), 25);
+        /// <summary>The DID document for the DID. This field is encoded as a hexadecimal string.</summary>
+        public static readonly BlobField DIDDocument = new BlobField(nameof(DIDDocument), 26);
+        /// <summary>The public attestations of identity credentials associated with the DID.</summary>
+        public static readonly BlobField Data = new BlobField(nameof(Data), 27);
+        /// <summary>Describes the type of asset, such as "currency", "commodity", or "index".</summary>
+        public static readonly BlobField AssetClass = new BlobField(nameof(AssetClass), 28);
+        /// <summary>An arbitrary value that identifies an oracle provider.</summary>
+        public static readonly BlobField Provider = new BlobField(nameof(Provider), 29);
+        public static readonly BlobField MPTokenMetadata = new BlobField(nameof(MPTokenMetadata), 30);
+        /// <summary>The type of credential, as hexadecimal. This is an arbitrary value from 1 to 64 bytes.</summary>
+        public static readonly BlobField CredentialType = new BlobField(nameof(CredentialType), 31);
 
         public static readonly AccountIdField Account = new AccountIdField(nameof(Account), 1);
         public static readonly AccountIdField Owner = new AccountIdField(nameof(Owner), 2);
@@ -261,19 +293,27 @@ namespace Xrpl.BinaryCodec.Enums
         public static readonly AccountIdField RegularKey = new AccountIdField(nameof(RegularKey), 8);
         public static readonly AccountIdField NFTokenMinter = new AccountIdField(nameof(NFTokenMinter), 9);
         public static readonly AccountIdField EmitCallback = new AccountIdField(nameof(EmitCallback), 10);
-        public static readonly AccountIdField AMMAccount = new AccountIdField(nameof(AMMAccount), 11);
+        public static readonly AccountIdField Holder = new AccountIdField(nameof(Holder), 11);
         public static readonly AccountIdField HookAccount = new AccountIdField(nameof(HookAccount), 16);
+        public static readonly AccountIdField Subject = new AccountIdField(nameof(Subject), 24);
 
         public static readonly Vector256Field Indexes = new Vector256Field(nameof(Indexes), 1);
         public static readonly Vector256Field Hashes = new Vector256Field(nameof(Hashes), 2);
         public static readonly Vector256Field Amendments = new Vector256Field(nameof(Amendments), 3);
         public static readonly Vector256Field NFTokenOffers = new Vector256Field(nameof(NFTokenOffers), 4);
-        public static readonly Vector256Field HookNamespaces = new Vector256Field(nameof(HookNamespaces), 5);
+        public static readonly Vector256Field CredentialIDs = new Vector256Field(nameof(CredentialIDs), 5);
+        public static readonly Vector256Field HookNamespaces = new Vector256Field(nameof(HookNamespaces), 32);
 
         public static readonly PathSetField Paths = new PathSetField(nameof(Paths), 1);
 
         public static readonly IssueField Asset = new IssueField(nameof(Asset), 3);
         public static readonly IssueField Asset2 = new IssueField(nameof(Asset2), 4);
+
+        /// <summary>The primary asset in a trading pair for Oracle price data.</summary>
+        public static readonly CurrencyField BaseAsset = new CurrencyField(nameof(BaseAsset), 1);
+        /// <summary>The quote asset in a trading pair for Oracle price data.</summary>
+        public static readonly CurrencyField QuoteAsset = new CurrencyField(nameof(QuoteAsset), 2);
+        public static readonly Uint8Field Scale = new Uint8Field(nameof(Scale), 4);
 
         public static readonly StObjectField TransactionMetaData = new StObjectField(nameof(TransactionMetaData), 2);
         public static readonly StObjectField CreatedNode = new StObjectField(nameof(CreatedNode), 3);
@@ -288,6 +328,7 @@ namespace Xrpl.BinaryCodec.Enums
         public static readonly StObjectField NFToken = new StObjectField(nameof(NFToken), 12);
         public static readonly StObjectField EmitDetails = new StObjectField(nameof(EmitDetails), 13);
         public static readonly StObjectField Hook = new StObjectField(nameof(Hook), 14);
+        public static readonly StObjectField Permission = new StObjectField(nameof(Permission), 15);
         public static readonly StObjectField Signer = new StObjectField(nameof(Signer), 16);
         public static readonly StObjectField Majority = new StObjectField(nameof(Majority), 18);
         public static readonly StObjectField DisabledValidator = new StObjectField(nameof(DisabledValidator), 19);
@@ -297,8 +338,18 @@ namespace Xrpl.BinaryCodec.Enums
         public static readonly StObjectField HookParameter = new StObjectField(nameof(HookParameter), 23);
         public static readonly StObjectField HookGrant = new StObjectField(nameof(HookGrant), 24);
         public static readonly StObjectField VoteEntry = new StObjectField(nameof(VoteEntry), 25);
-        public static readonly StObjectField AuctionSlot = new StObjectField(nameof(AuctionSlot), 27);
-        public static readonly StObjectField AuthAccount = new StObjectField(nameof(AuthAccount), 28);
+        public static readonly StObjectField AuctionSlot = new StObjectField(nameof(AuctionSlot), 26);
+        public static readonly StObjectField AuthAccount = new StObjectField(nameof(AuthAccount), 27);
+        public static readonly StObjectField XChainClaimProofSig = new StObjectField(nameof(XChainClaimProofSig), 28);
+        public static readonly StObjectField XChainCreateAccountProofSig = new StObjectField(nameof(XChainCreateAccountProofSig), 29);
+        public static readonly StObjectField XChainClaimAttestationCollectionElement = new StObjectField(nameof(XChainClaimAttestationCollectionElement), 30);
+        public static readonly StObjectField XChainCreateAccountAttestationCollectionElement = new StObjectField(nameof(XChainCreateAccountAttestationCollectionElement), 31);
+        public static readonly StObjectField PriceData = new StObjectField(nameof(PriceData), 32);
+        public static readonly StObjectField Credential = new StObjectField(nameof(Credential), 33);
+        public static readonly StObjectField RawTransaction = new StObjectField(nameof(RawTransaction), 34);
+        public static readonly StObjectField BatchSigner = new StObjectField(nameof(BatchSigner), 35);
+        public static readonly StObjectField Book = new StObjectField(nameof(Book), 36);
+
         public static readonly StArrayField Signers = new StArrayField(nameof(Signers), 3, isSigningField:false);
         public static readonly StArrayField SignerEntries = new StArrayField(nameof(SignerEntries), 4);
         public static readonly StArrayField Template = new StArrayField(nameof(Template), 5);
@@ -308,13 +359,24 @@ namespace Xrpl.BinaryCodec.Enums
         public static readonly StArrayField Memos = new StArrayField(nameof(Memos), 9);
         public static readonly StArrayField NFTokens = new StArrayField(nameof(NFTokens), 10);
         public static readonly StArrayField Hooks = new StArrayField(nameof(Hooks), 11);
-        public static readonly StArrayField VoteSlots = new StArrayField(nameof(VoteSlots), 14);
+        public static readonly StArrayField VoteSlots = new StArrayField(nameof(VoteSlots), 12);
+        public static readonly StArrayField AdditionalBooks = new StArrayField(nameof(AdditionalBooks), 13);
         public static readonly StArrayField Majorities = new StArrayField(nameof(Majorities), 16);
         public static readonly StArrayField DisabledValidators = new StArrayField(nameof(DisabledValidators), 17);
         public static readonly StArrayField HookExecutions = new StArrayField(nameof(HookExecutions), 18);
         public static readonly StArrayField HookParameters = new StArrayField(nameof(HookParameters), 19);
         public static readonly StArrayField HookGrants = new StArrayField(nameof(HookGrants), 19);
-        public static readonly StArrayField AuthAccounts = new StArrayField(nameof(AuthAccounts), 26);
+        public static readonly StArrayField XChainClaimAttestations = new StArrayField(nameof(XChainClaimAttestations), 21);
+        public static readonly StArrayField XChainCreateAccountAttestations = new StArrayField(nameof(XChainCreateAccountAttestations), 22);
+        public static readonly StArrayField PriceDataSeries = new StArrayField(nameof(PriceDataSeries), 24);
+        public static readonly StArrayField AuthAccounts = new StArrayField(nameof(AuthAccounts), 25);
+        public static readonly StArrayField AuthorizeCredentials = new StArrayField(nameof(AuthorizeCredentials), 26);
+        public static readonly StArrayField UnauthorizeCredentials = new StArrayField(nameof(UnauthorizeCredentials), 27);
+        public static readonly StArrayField AcceptedCredentials = new StArrayField(nameof(AcceptedCredentials), 28);
+        public static readonly StArrayField Permissions = new StArrayField(nameof(Permissions), 29);
+        public static readonly StArrayField RawTransactions = new StArrayField(nameof(RawTransactions), 30);
+        public static readonly StArrayField BatchSigners = new StArrayField(nameof(BatchSigners), 31, isSigningField: false);
+
         public static readonly Field Generic = new Field(nameof(Generic), 0, FieldType.Unknown, isSigningField: false);
         public static readonly Field Invalid = new Field(nameof(Invalid), -1, FieldType.Unknown, isSigningField: false);
         

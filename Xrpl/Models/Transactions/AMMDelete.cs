@@ -1,13 +1,9 @@
-﻿using System;
 using System.Collections.Generic;
-using System.Linq;
-using System.Text;
+using System.Text.Json.Serialization;
 using System.Threading.Tasks;
-using Newtonsoft.Json;
+
 using Xrpl.Client.Exceptions;
 using Xrpl.Client.Json.Converters;
-using Xrpl.Models.Common;
-using Xrpl.Models.Ledger;
 
 using static Xrpl.Models.Common.Common;
 
@@ -23,7 +19,7 @@ namespace Xrpl.Models.Transactions
     /// to fully delete the trust lines and the associated AMM.
     /// In all cases, the AMM ledger entry and AMM account are deleted by the last such transaction.
     /// </summary>
-    public class AMMDelete : TransactionCommon, IAMMDelete
+    public class AMMDelete : TransactionRequest, IAMMDelete
     {
         public AMMDelete()
         {
@@ -60,7 +56,7 @@ namespace Xrpl.Models.Transactions
     }
 
     /// <inheritdoc cref="IAMMDelete" />
-    public class AMMDeleteResponse : TransactionResponseCommon, IAMMDelete
+    public class AMMDeleteResponse : TransactionResponse, IAMMDelete
     {
         #region Implementation of IAMMDelete
 
@@ -82,7 +78,7 @@ namespace Xrpl.Models.Transactions
         /// <param name="tx">An AMMDelete Transaction.</param>
         /// <returns></returns>
         /// <exception cref="ValidationException"> When the AMMDelete is Malformed.</exception>
-        public static async Task ValidateAMMDelete(Dictionary<string, dynamic> tx)
+        public static async Task ValidateAMMDelete(Dictionary<string, object> tx)
         {
             await Common.ValidateBaseTransaction(tx);
 

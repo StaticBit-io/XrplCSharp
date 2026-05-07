@@ -1,4 +1,4 @@
-﻿using Newtonsoft.Json.Linq;
+﻿using System.Text.Json.Nodes;
 using System.Diagnostics.Contracts;
 using Xrpl.BinaryCodec.Binary;
 using Xrpl.BinaryCodec.Util;
@@ -19,7 +19,7 @@ namespace Xrpl.BinaryCodec.Types
         }
         /// <summary> create instance from json object </summary>
         /// <param name="token">json object</param>
-        public static Hash128 FromJson(JToken token) => new Hash128(B16.Decode(token.ToString()));
+        public static Hash128 FromJson(JsonNode token) => new Hash128(B16.Decode(token.GetValue<string>()));
 
         /// <summary> create instance from binary parser</summary>
         /// <param name="parser">parser</param>

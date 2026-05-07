@@ -1,63 +1,62 @@
 ﻿using System;
 using System.Globalization;
-using Newtonsoft.Json;
-using Newtonsoft.Json.Converters;
+using System.Text.Json;
+using System.Text.Json.Serialization;
 
 namespace Xrpl.Client.Json.Converters
 {
     /// <summary> Ripple datetime converter </summary>
-    public class RippleDateTimeConverter : DateTimeConverterBase
+    public class RippleDateTimeConverter : JsonConverter<DateTime?>
     {
         /// <summary> ripple start time </summary>
         private static DateTime RippleStartTime = new DateTime(2000, 1, 1, 0, 0, 0, 0, DateTimeKind.Utc);
+
         /// <summary>
         /// write  <see cref="DateTime"/>  to json object
         /// </summary>
         /// <param name="writer">writer</param>
         /// <param name="value"> <see cref="DateTime"/> value</param>
-        /// <param name="serializer">json serializer</param>
-        /// <exception cref="NotSupportedException">value  provided is not a DateTime</exception>
-        public override void WriteJson(JsonWriter writer, object value, JsonSerializer serializer)
+        /// <param name="options">json serializer options</param>
+        /// <exception cref="ArgumentException">value  provided is not a DateTime</exception>
+        public override void Write(Utf8JsonWriter writer, DateTime? value, JsonSerializerOptions options)
         {
-            if (value is DateTime date_time)
+            if (value is DateTime dateTime)
             {
-                long totalSeconds = (long)(date_time - RippleStartTime).TotalSeconds;
-                writer.WriteValue(totalSeconds);
+                long totalSeconds = (long)(dateTime - RippleStartTime).TotalSeconds;
+                writer.WriteNumberValue(totalSeconds);
             }
             else
             {
-                throw new ArgumentException("value  provided is not a DateTime", "value");
+                writer.WriteNullValue();
             }
         }
 
         /// <summary> read  <see cref="DateTime"/>  from json object </summary>
         /// <param name="reader">json reader</param>
-        /// <param name="objectType">object type</param>
-        /// <param name="existingValue">object value</param>
-        /// <param name="serializer">json serializer</param>
+        /// <param name="typeToConvert">target type</param>
+        /// <param name="options">json serializer options</param>
         /// <returns><see cref="DateTime"/></returns>
-        /// <exception cref="Exception">Invalid double value. or Invalid token. Expected string</exception>
-        public override object ReadJson(JsonReader reader, Type objectType, object existingValue, JsonSerializer serializer)
+        /// <exception cref="JsonException">Invalid double value. or Invalid token. Expected string</exception>
+        public override DateTime? Read(ref Utf8JsonReader reader, Type typeToConvert, JsonSerializerOptions options)
         {
             switch (reader.TokenType)
             {
-                case JsonToken.Null: return null;
-                case JsonToken.String or JsonToken.Integer:
+                case JsonTokenType.Null: return null;
+                case JsonTokenType.String:
                     {
-                        double totalSeconds;
-
-                        try
-                        {
-                            totalSeconds = Convert.ToDouble(reader.Value, CultureInfo.InvariantCulture);
-                        }
-                        catch
-                        {
-                            throw new Exception("Invalid double value.");
-                        }
-
+                        string str = reader.GetString();
+                        if (DateTime.TryParse(str, CultureInfo.InvariantCulture,
+                            DateTimeStyles.AdjustToUniversal | DateTimeStyles.AssumeUniversal, out DateTime parsed))
+                            return parsed;
+                        double totalSeconds = Convert.ToDouble(str, CultureInfo.InvariantCulture);
                         return RippleStartTime.AddSeconds(totalSeconds);
                     }
-                default: throw new Exception("Invalid token. Expected string");
+                case JsonTokenType.Number:
+                    {
+                        double totalSeconds = reader.GetDouble();
+                        return RippleStartTime.AddSeconds(totalSeconds);
+                    }
+                default: throw new JsonException("Invalid token. Expected string or number");
             }
         }
     }

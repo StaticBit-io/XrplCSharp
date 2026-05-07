@@ -1,10 +1,15 @@
-﻿using Newtonsoft.Json;
+﻿using System.Text.Json.Serialization;
 
 using System;
 using System.Globalization;
+using System.Linq;
+using System.Text;
 using System.Text.RegularExpressions;
 
 using Xrpl.Client.Extensions;
+using Xrpl.Models.Methods;
+using Xrpl.Models.Utils;
+using Xrpl.Utils.Hashes;
 
 //https://xrpl.org/currency-formats.html#currency-formats
 //https://github.com/XRPLF/xrpl.js/blob/main/packages/xrpl/src/models/common/index.ts
@@ -17,11 +22,27 @@ namespace Xrpl.Models.Common;
 /// </summary>
 public class Currency
 {
+    private string _mpTokenIssuanceId;
+
     /// <summary>
-    /// base constructor.<br/>
-    /// base currency code = XRP
+    /// base constructor.
     /// </summary>
     public Currency() { CurrencyCode = "XRP"; }
+
+    /// <summary>
+    /// The ID of the MPT to authorize.
+    /// </summary>
+    [JsonPropertyName("mpt_issuance_id")]
+    public string MPTokenIssuanceID
+    {
+        get => _mpTokenIssuanceId;
+
+        set
+        {
+            _mpTokenIssuanceId = value;
+            CurrencyCode = null;
+        }
+    }
 
     /// <summary>
     /// The standard format for currency codes is a three-character string such as USD.<br/>
@@ -31,7 +52,7 @@ public class Currency
     /// all uppercase and lowercase letters, digits, as well as the symbols ? ! @ # $ % ^ * ( ) { } [ ] | and symbols ampersand, less, greater<br/>
     /// Currency codes are case-sensitive.
     /// </summary>
-    [JsonProperty(propertyName: "currency")]
+    [JsonPropertyName("currency")]
     public string CurrencyCode { get; set; }
 
     /// <summary>
@@ -40,28 +61,21 @@ public class Currency
     /// Both e and E may be used.<br/>
     /// This can be negative when displaying balances, but negative values are disallowed in other contexts such as specifying how much to send.
     /// </summary>
-    [JsonProperty(propertyName: "value")]
+    [JsonPropertyName("value")]
     public string Value { get; set; }
 
     /// <summary>
     /// Generally, the account that issues this token.<br/>
     /// In special cases, this can refer to the account that holds the token instead.
     /// </summary>
-    [JsonProperty(propertyName: "issuer")]
+    [JsonPropertyName("issuer")]
     public string Issuer { get; set; }
 
     /// <summary>
     /// Readable currency name 
     /// </summary>
     [JsonIgnore]
-    public string CurrencyValidName => CurrencyCode is { Length: > 0, } row
-        ? row.Length > 3
-            ? IsHexCurrencyCode(row)
-                ? row.StartsWith(value: "03") ? $"LP {row[2..6]}.." 
-                    : row.FromHexString().Trim(trimChar: '\0')
-                : row
-            : row
-        : string.Empty;
+    public string CurrencyValidName => CurrencyCode.CurrencyReadableName();
 
     /// <summary>
     /// decimal currency amount (drops for XRP)
@@ -117,7 +131,7 @@ public class Currency
         set => Value = value.ToString(
             CurrencyCode == "XRP"
                 ? "G0"
-                : "G15",
+                : "G16",
             CultureInfo.InvariantCulture);
     }
 
@@ -151,13 +165,6 @@ public class Currency
         }
     }
 
-    /// <summary>
-    /// check currency code for HEX 
-    /// </summary>
-    /// <param name="code">currency code</param>
-    /// <returns></returns>
-    public static bool IsHexCurrencyCode(string code) { return Regex.IsMatch(code, pattern: @"[0-9a-fA-F]{40}", RegexOptions.IgnoreCase); }
-
     #region Overrides of Object
 
     public override string ToString()
@@ -167,9 +174,243 @@ public class Currency
 
     public override bool Equals(object o) { return o is Currency model && model.Issuer == Issuer && model.CurrencyCode == CurrencyCode; }
 
-    public static bool operator ==(Currency c1, Currency c2) { return c1.Equals(c2); }
+    public static bool operator ==(Currency? left, Currency? right)
+    {
+        if (ReferenceEquals(left, right))
+            return true;
 
-    public static bool operator !=(Currency c1, Currency c2) { return !c1.Equals(c2); }
+        if (left is null || right is null)
+            return false;
 
+        return left.Equals(right);
+    }
+
+
+    public static bool operator !=(Currency? left, Currency? right)
+    {
+        return !(left == right);
+    }
+
+    /// <summary>
+    /// Implicit conversion from string → Currency
+    /// </summary>
+    /// <param name="value">value</param>
+    /// <returns>currency</returns>
+    public static implicit operator Currency(string value)
+        => new Currency { Value = value };
+    /// <summary>
+    /// Implicit conversion from decimal → Currency
+    /// </summary>
+    /// <param name="value">value</param>
+    /// <returns>currency</returns>
+    public static implicit operator Currency(decimal value)
+        => new Currency { Value = value.ToString(CultureInfo.InvariantCulture) };
+    /// <summary>
+    /// Implicit conversion from double → Currency
+    /// </summary>
+    /// <param name="value">value</param>
+    /// <returns>currency</returns>
+    public static implicit operator Currency(double value)
+        => new Currency { Value = value.ToString(CultureInfo.InvariantCulture) };
+    /// <summary>
+    /// Implicit conversion from int → Currency
+    /// </summary>
+    /// <param name="value">value</param>
+    /// <returns>currency</returns>
+    public static implicit operator Currency(int value)
+        => new Currency { Value = value.ToString(CultureInfo.InvariantCulture) };
+    /// <summary>
+    /// Implicit conversion from uint → Currency
+    /// </summary>
+    /// <param name="value">value</param>
+    /// <returns>currency</returns>
+    public static implicit operator Currency(uint value)
+        => new Currency { Value = value.ToString(CultureInfo.InvariantCulture) };
     #endregion
+}
+
+public static class CurrencyExtensions
+{
+    /// <summary>
+    /// Returns the human-readable value of this currency amount.
+    /// For XRP, returns the value in XRP (drops / 1,000,000).
+    /// For tokens, returns the raw numeric value.
+    /// </summary>
+    /// <param name="currency">The currency to get the value from.</param>
+    /// <param name="round">Optional number of decimal places to round to.</param>
+    /// <returns>The decimal value, or null if the currency is null.</returns>
+    public static decimal? GetValue(this Currency currency, int? round = null)
+        => currency is null
+            ? null
+            : currency.CurrencyCode is "XRP"
+                ? round is { } r1 && currency.ValueAsXrp is { } v1 ? Math.Round(v1, r1) : currency.ValueAsXrp
+                : round is { } r2 ? Math.Round(currency.ValueAsNumber, r2) : currency.ValueAsNumber;
+
+    /// <summary>
+    /// Determines whether this currency represents XRP.
+    /// A currency is XRP if its code (case-insensitive) is "XRP" and it has no issuer.
+    /// </summary>
+    /// <param name="currency">The currency to check.</param>
+    /// <returns><c>true</c> if this currency is XRP; otherwise, <c>false</c>.</returns>
+    public static bool IsXrp(this Currency currency)
+        => currency is not null && currency.CurrencyCode?.ToUpper() is "XRP" && currency.Issuer == null;
+
+    public static Common.IssuedCurrency ToIssued(this Currency currency) =>
+        new Common.IssuedCurrency()
+        {
+            Currency = currency.CurrencyCode,
+            Issuer = currency.Issuer,
+        };
+    /// <summary>
+    /// check that currency is NFT XLS14D
+    /// </summary>
+    /// <param name="cur"></param>
+    /// <returns></returns>
+    public static bool IsNFT14D(this Currency cur) => cur is { } c && c.CurrencyCode.StartsWith("02");
+    //cur is { ValueAsNumber: 0.000000000000000000000000000000000000000000000000000000000000000000000000000000001m };
+
+    /// <summary> get readable token code </summary>
+    /// <param name="currencyCode">token code</param>
+    /// <returns>readable token code</returns>
+    public static string CurrencyReadableName(this string currencyCode)
+    {
+        if (!IsValidCurrencyCode(currencyCode))
+        {
+            return string.Empty;
+        }
+
+        return NormalizeCurrencyCode(currencyCode);
+    }
+
+    private static bool IsValidCurrencyCode(string currencyCode) =>
+        !string.IsNullOrEmpty(currencyCode) && currencyCode.Length > 0;
+
+    public static bool IsLpToken(this Currency currency)
+    {
+        return currency.CurrencyCode.IsLpToken();
+    }
+
+    public static bool IsMPTToken(this Currency currency)
+    {
+        return string.IsNullOrWhiteSpace(currency.MPTokenIssuanceID);
+    }
+    public static bool IsLpToken(this TrustLine currency)
+    {
+        return currency.Currency.IsLpToken();
+    }
+    public static bool IsLpToken(this string currencyCode)
+    {
+        return !string.IsNullOrWhiteSpace(currencyCode) && currencyCode.IsHexCurrencyCode() && currencyCode.StartsWith("03");
+    }
+
+    public static string NormalizeCurrencyCode(this string currencyCode, int maxLength = 20)
+    {
+        if (string.IsNullOrWhiteSpace(currencyCode))
+            return currencyCode;
+
+        // Стандартный 3-символьный код
+        if (currencyCode.Length == 3)
+        {
+            return currencyCode.Trim();
+        }
+
+        // Проверка на 40-символьный шестнадцатеричный код
+        if (currencyCode.IsHexCurrencyCode())
+        {
+            string hex = currencyCode;
+
+            // Устаревший код с демереджем (начинается с 01)
+            if (hex.StartsWith("01"))
+            {
+                return ConvertDemurrageToUTF8(currencyCode);
+            }
+
+            // XLS-16d NFT Metadata (начинается с 02)
+            if (hex.StartsWith("02"))
+            {
+                string xlf15d = Encoding.UTF8.GetString(HexToBytes(hex)).Substring(8, Math.Min(maxLength, hex.Length / 2 - 8)).Trim();
+                if (Regex.IsMatch(xlf15d, "[a-zA-Z0-9]{3,}") && xlf15d.ToLower() != "xrp")
+                {
+                    return xlf15d;
+                }
+            }
+
+            if (hex.StartsWith("03"))
+            {
+                return $"LP {currencyCode[2..6]}..";
+            }
+
+            // Обычный шестнадцатеричный код
+            var decodedHex = hex.FromHexString().Replace("\0", null).Trim('\0');
+            if (string.IsNullOrWhiteSpace(decodedHex))
+            {
+                return currencyCode;
+            }
+            return decodedHex;
+        }
+
+        return currencyCode;
+    }
+
+    public static bool NormalCurrency(this string currencyCode)
+    {
+        if (string.IsNullOrWhiteSpace(currencyCode))
+            return false;
+
+        // Стандартный 3-символьный код
+        if (currencyCode.Length == 3 && currencyCode.Trim().ToLower() != "xrp")
+        {
+            return true;
+        }
+
+        // Проверка на 40-символьный шестнадцатеричный код
+        if (currencyCode.IsHexCurrencyCode())
+        {
+            string hex = currencyCode;
+
+            // Устаревший код с демереджем (начинается с 01)
+            if (hex.StartsWith("01"))
+            {
+                return false;
+            }
+
+            // XLS-16d NFT Metadata (начинается с 02)
+            if (hex.StartsWith("02"))
+            {
+                return false;
+            }
+
+            if (hex.StartsWith("03"))
+            {
+                return false;
+            }
+
+            // Обычный шестнадцатеричный код
+            return true;
+        }
+
+        return false;
+    }
+    static string ConvertDemurrageToUTF8(string demurrageCode)
+    {
+        byte[] bytes = HexToBytes(demurrageCode);
+        string code = $"{(char)bytes[1]}{(char)bytes[2]}{(char)bytes[3]}";
+
+        // Вычисление процентной ставки
+        int interestStart = (bytes[4] << 24) | (bytes[5] << 16) | (bytes[6] << 8) | bytes[7];
+        double interestPeriod = BitConverter.ToDouble(bytes.Skip(8).Take(8).Reverse().ToArray(), 0);
+        const int yearSeconds = 31536000; // Фиксированное количество секунд в году
+        double interestAfterYear = Math.Pow(Math.E, (interestStart + yearSeconds - interestStart) / interestPeriod);
+        double interest = (interestAfterYear * 100) - 100;
+
+        return $"{code} ({interest:F1}% pa)";
+    }
+    static byte[] HexToBytes(string hex)
+    {
+        return Enumerable.Range(0, hex.Length)
+            .Where(x => x % 2 == 0)
+            .Select(x => Convert.ToByte(hex.Substring(x, 2), 16))
+            .ToArray();
+    }
+
 }

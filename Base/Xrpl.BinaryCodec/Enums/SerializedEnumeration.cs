@@ -1,7 +1,8 @@
 ﻿using System;
 using System.Linq;
 using System.Runtime.InteropServices;
-using Newtonsoft.Json.Linq;
+using System.Text.Json;
+using System.Text.Json.Nodes;
 using Xrpl.BinaryCodec.Binary;
 
 namespace Xrpl.BinaryCodec.Enums
@@ -22,10 +23,10 @@ namespace Xrpl.BinaryCodec.Enums
             return this[ReadOrdinal(parser)];
         }
 
-        public TEnum FromJson(JToken value)
+        public TEnum FromJson(JsonNode value)
         {
-            return value.Type == JTokenType.String ? 
-                this[value.ToString()] : this[(int) value];
+            return value.GetValueKind() == JsonValueKind.String ? 
+                this[value.GetValue<string>()] : this[value.GetValue<int>()];
         }
 
         public int ReadOrdinal(BinaryParser parser)

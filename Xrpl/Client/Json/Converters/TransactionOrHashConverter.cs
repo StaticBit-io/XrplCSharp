@@ -1,53 +1,59 @@
 ﻿using System;
-using Newtonsoft.Json;
+using System.Text.Json;
+using System.Text.Json.Serialization;
+
 using Xrpl.Models.Ledger;
-using Xrpl.Models.Transactions;
+using Xrpl.Models.Methods;
 
 namespace Xrpl.Client.Json.Converters
 {
     /// <summary> Hash Or Transaction json converter </summary>
-    public class TransactionOrHashConverter : JsonConverter
+    public class TransactionOrHashConverter : JsonConverter<HashOrTransaction>
     {
         /// <summary>
-        /// write  <see cref="HashOrTransaction"/>  to json object
+        /// Writes a <see cref="HashOrTransaction"/> to JSON.
+        /// If the transaction hash is set, writes just the hash string.
+        /// Otherwise, writes the full transaction object.
         /// </summary>
-        /// <param name="writer">writer</param>
-        /// <param name="value"> <see cref="HashOrTransaction"/> value</param>
-        /// <param name="serializer">json serializer</param>
-        /// <exception cref="NotSupportedException">Cannot write this object type</exception>
-        public override void WriteJson(JsonWriter writer, object value, JsonSerializer serializer)
+        public override void Write(Utf8JsonWriter writer, HashOrTransaction value, JsonSerializerOptions options)
         {
-            throw new NotImplementedException();
-        }
-
-        /// <summary> read  <see cref="HashOrTransaction"/>  from json object </summary>
-        /// <param name="reader">json reader</param>
-        /// <param name="objectType">object type</param>
-        /// <param name="existingValue">object value</param>
-        /// <param name="serializer">json serializer</param>
-        /// <returns><see cref="HashOrTransaction"/></returns>
-        /// <exception cref="NotSupportedException">Cannot convert value</exception>
-        public override object ReadJson(JsonReader reader, Type objectType, object existingValue, JsonSerializer serializer)
-        {
-            HashOrTransaction hashOrTransaction = new HashOrTransaction();
-
-
-            if (reader.TokenType == JsonToken.String)
+            if (value == null)
             {
-                hashOrTransaction.TransactionHash = reader.Value.ToString();
+                writer.WriteNullValue();
+                return;
+            }
+
+            if (!string.IsNullOrEmpty(value.TransactionHash))
+            {
+                writer.WriteStringValue(value.TransactionHash);
+            }
+            else if (value.Transaction != null)
+            {
+                JsonSerializer.Serialize(writer, value.Transaction, options);
             }
             else
             {
-                hashOrTransaction.Transaction = serializer.Deserialize<TransactionResponseCommon>(reader);
+                writer.WriteNullValue();
+            }
+        }
+
+        /// <summary> read  <see cref="HashOrTransaction"/>  from json object </summary>
+        public override HashOrTransaction Read(ref Utf8JsonReader reader, Type typeToConvert, JsonSerializerOptions options)
+        {
+            HashOrTransaction hashOrTransaction = new HashOrTransaction();
+
+            if (reader.TokenType == JsonTokenType.String)
+            {
+                hashOrTransaction.TransactionHash = reader.GetString();
+            }
+            else if (reader.TokenType == JsonTokenType.StartObject)
+            {
+                hashOrTransaction.Transaction = JsonSerializer.Deserialize<LedgerTransaction>(ref reader, options);
             }
 
             return hashOrTransaction;
         }
 
-        /// <inheritdoc />
-        public override bool CanConvert(Type objectType)
-        {
-            return true;
-        }
+        public override bool CanConvert(Type typeToConvert) => typeof(HashOrTransaction).IsAssignableFrom(typeToConvert);
     }
 }

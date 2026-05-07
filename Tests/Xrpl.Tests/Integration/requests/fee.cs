@@ -1,4 +1,4 @@
-
+﻿
 
 // https://github.com/XRPLF/xrpl.js/blob/main/packages/xrpl/test/integration/requests/fee.ts
 
@@ -24,8 +24,7 @@ namespace XrplTests.Xrpl.ClientLib.Integration
         [TestMethod]
         public async Task TestRequestMethod()
         {
-            FeeRequest request = new FeeRequest { };
-            Fee response = await runner.client.Fee(request);
+            Fee response = await runner.client.Fee();
             Assert.IsNotNull(response);
         }
     }

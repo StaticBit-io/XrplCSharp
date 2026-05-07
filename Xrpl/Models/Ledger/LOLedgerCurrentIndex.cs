@@ -1,5 +1,5 @@
 ﻿
-using Newtonsoft.Json;
+using System.Text.Json.Serialization;
 //https://github.com/XRPLF/xrpl.js/blob/main/packages/xrpl/src/models/methods/ledgerCurrent.ts
 namespace Xrpl.Models.Ledger
 {
@@ -11,7 +11,7 @@ namespace Xrpl.Models.Ledger
         /// <summary>
         /// The ledger index of this ledger version.
         /// </summary>
-        [JsonProperty("ledger_current_index")]
+        [JsonPropertyName("ledger_current_index")]
         public uint CurrentIndex { get; set; }
     }
 }

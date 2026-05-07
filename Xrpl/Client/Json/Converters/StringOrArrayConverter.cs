@@ -1,58 +1,64 @@
 ﻿using System;
 using System.Collections.Generic;
-using Newtonsoft.Json;
-using Newtonsoft.Json.Linq;
+using System.Text.Json;
+using System.Text.Json.Serialization;
 
 namespace Xrpl.Client.Json.Converters
 {
     /// <summary> string or array json converter </summary>
-    public class StringOrArrayConverter : JsonConverter
+    public class StringOrArrayConverter : JsonConverter<object>
     {
         /// <summary>
         /// write  string or array to json object
         /// </summary>
         /// <param name="writer">writer</param>
         /// <param name="value"> string or array value</param>
-        /// <param name="serializer">json serializer</param>
-        /// <exception cref="Exception">Cannot write value</exception>
-        public override void WriteJson(JsonWriter writer, object value, JsonSerializer serializer)
+        /// <param name="options">json serializer options</param>
+        /// <exception cref="JsonException">Cannot write value</exception>
+        public override void Write(Utf8JsonWriter writer, object value, JsonSerializerOptions options)
         {
-            JToken t = JToken.FromObject(value);
-            if (t.Type != JTokenType.Object)
-            {
-                t.WriteTo(writer);
-            }
-
             switch (value)
             {
-                case string:
-                    writer.WriteValue(value);
+                case null:
+                    writer.WriteNullValue();
                     break;
-                case List<string>: break;
-                case Array: throw new Exception("Cannot write value");
+
+                case string s:
+                    writer.WriteStringValue(s);
+                    break;
+
+                case List<string> list:
+                    JsonSerializer.Serialize(writer, list, options);
+                    break;
+
+                case string[] array:
+                    JsonSerializer.Serialize(writer, array, options);
+                    break;
+
+                default:
+                    throw new JsonException($"Cannot write value of type {value.GetType()}");
             }
         }
 
         /// <summary> read  string or array  from json object </summary>
         /// <param name="reader">json reader</param>
-        /// <param name="objectType">object type</param>
-        /// <param name="existingValue">object value</param>
-        /// <param name="serializer">json serializer</param>
+        /// <param name="typeToConvert">target type</param>
+        /// <param name="options">json serializer options</param>
         /// <returns>string or array </returns>
-        /// <exception cref="Exception">Cannot convert value</exception>
-        public override object ReadJson(JsonReader reader, Type objectType, object existingValue, JsonSerializer serializer)
+        /// <exception cref="JsonException">Cannot convert value</exception>
+        public override object Read(ref Utf8JsonReader reader, Type typeToConvert, JsonSerializerOptions options)
         {
             return reader.TokenType switch
             {
-                JsonToken.Null => null,
-                JsonToken.String => reader.Value,
-                JsonToken.StartObject => serializer.Deserialize<List<string>>(reader),
-                _ => throw new Exception("Cannot convert value")
+                JsonTokenType.Null => null,
+                JsonTokenType.String => reader.GetString(),
+                JsonTokenType.StartArray => JsonSerializer.Deserialize<List<string>>(ref reader, options),
+                _ => throw new JsonException($"Cannot convert token {reader.TokenType} to {typeToConvert}")
             };
         }
 
         /// <inheritdoc />
-        public override bool CanConvert(Type objectType)
-            => objectType == typeof(string) || objectType == typeof(List<string>) || objectType == typeof(Array);
+        public override bool CanConvert(Type typeToConvert)
+            => typeToConvert == typeof(object) || typeToConvert == typeof(string) || typeToConvert == typeof(List<string>) || typeToConvert == typeof(Array) || typeToConvert == typeof(string[]);
     }
 }

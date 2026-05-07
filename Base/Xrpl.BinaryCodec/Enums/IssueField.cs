@@ -5,7 +5,7 @@ namespace Xrpl.BinaryCodec.Enums
     {
         public IssueField(string name, int nthOfType,
             bool isSigningField = true, bool isSerialised = true) :
-                base(name, nthOfType, FieldType.Uint8,
+                base(name, nthOfType, FieldType.Issue,
                     isSigningField, isSerialised)
         { }
     }

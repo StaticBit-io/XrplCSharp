@@ -1,4 +1,5 @@
-﻿using System;
+using System;
+using System.Collections.Generic;
 using System.Diagnostics;
 using System.Threading;
 using System.Threading.Tasks;
@@ -19,24 +20,41 @@ namespace Xrpl.Tests
         public async Task<SetupUnitClient> SetupClient()
         {
             int port = TestUtils.GetFreePort();
+            mockedRippled = new CreateMockRippled(port);
+            mockedRippled.AddResponse("server_info", new Dictionary<string, object>
+            {
+                { "type", "response" },
+                { "status", "success" },
+                { "result", new Dictionary<string, object>
+                    {
+                        { "info", new Dictionary<string, object>
+                            {
+                                { "build_version", "test-mock" },
+                                { "complete_ledgers", "1-1" },
+                                { "server_state", "full" }
+                            }
+                        }
+                    }
+                }
+            });
             var tcpListenerThread = new Thread(() =>
             {
-                mockedRippled = new CreateMockRippled(port);
                 mockedRippled.Start();
                 _mockedServerPort = port;
             });
             tcpListenerThread.Start();
+
             Timer timer = new Timer(25000);
             timer.Elapsed += (sender, e) => tcpListenerThread.Abort();
-            client = new XrplClient($"ws://127.0.0.1:{port}");
+            client = new XrplClient($"ws://127.0.0.1:{port}",new XrplClient.ClientOptions(){RequestPolicy = RequestFailurePolicy.ImmediateFail});
             client.connection.OnConnected += () =>
             {
                 Debug.WriteLine("SETUP CLIENT: CONECTED");
                 return Task.CompletedTask;
             };
-            client.connection.OnDisconnect += (code) =>
+            client.connection.OnDisconnect += (code, description) =>
             {
-                Debug.WriteLine("SETUP CLIENT: DISCONECTED");
+                Console.WriteLine($"SSETUP CLIENT: DISCONECTED: {code}, description: {description}");
                 return Task.CompletedTask;
             };
             client.connection.OnError += (e, em, m, d) =>

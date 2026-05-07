@@ -1,4 +1,4 @@
-﻿
+
 
 // https://github.com/XRPLF/xrpl.js/blob/main/packages/xrpl/test/models/NFTokenBurn.ts
 
@@ -26,7 +26,7 @@ namespace XrplTests.Xrpl.Models
         [TestMethod]
         public async Task TestVerify_Valid_NFTokenBurn()
         {
-            var offer = new Dictionary<string, dynamic>
+            var offer = new Dictionary<string, object>
             {
                 { "TransactionType", "NFTokenBurn" },
                 { "NFTokenID", TOKEN_ID },
@@ -40,7 +40,7 @@ namespace XrplTests.Xrpl.Models
         [TestMethod]
         public async Task TestVerify_Invalid_missing_NFTokenID()
         {
-            var offer = new Dictionary<string, dynamic>
+            var offer = new Dictionary<string, object>
             {
                 { "TransactionType", "NFTokenBurn" },
                 {"Account", "rWYkbWkCeg8dP6rXALnjgZSjjLyih5NXm"},
@@ -48,7 +48,7 @@ namespace XrplTests.Xrpl.Models
                 {"Sequence", 2470665u},
                 {"Flags", 2147483648u},
             };
-            await Assert.ThrowsExceptionAsync<ValidationException>(() => Validation.Validate(offer), "NFTokenBurn: missing field NFTokenID - no ERROR");
+            await Helper.ThrowsExceptionAsync<ValidationException>(() => Validation.Validate(offer), "NFTokenBurn: missing field NFTokenID");
         }
     }
 }

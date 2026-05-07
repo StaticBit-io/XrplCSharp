@@ -1,106 +1,118 @@
-﻿using Newtonsoft.Json;
-using Newtonsoft.Json.Linq;
-using System;
-using System.Collections.Generic;
-using System.Diagnostics.Contracts;
-using System.Linq;
+﻿using System.Text.Json;
 using System.Text.Json.Nodes;
 using Xrpl.BinaryCodec.Binary;
-using Xrpl.BinaryCodec.Util;
 
 // https://github.com/XRPLF/xrpl.js/blob/amm/packages/ripple-binary-codec/src/types/issue.ts
 
 namespace Xrpl.BinaryCodec.Types
 {
     /// <summary>
-    /// Hash with a width of 160 bits
+    /// Represents an Issue (currency + optional issuer), similar to ripple-binary-codec/src/types/issue.ts
     /// </summary>
-    public class Issue: ISerializedType
+    public class Issue : ISerializedType
     {
-        public readonly byte[] _Bytes;
+        public readonly Currency Currency;
+        public readonly AccountId Issuer;
 
-        public class IssueObject
+        /// <summary>
+        /// XRP Issue: only currency, no issuer.
+        /// </summary>
+        public Issue()
         {
-            public string Currency { get; set; }
-            public string Issuer { get; set; }
+            Currency = Currency.Xrp;
+            Issuer = null;
         }
 
         /// <summary>
-        /// Type guard for AmountObject
+        /// IOU Issue: currency with specified issuer.
         /// </summary>
-        public static bool IsIssueObject(JObject arg)
+        public Issue(Currency currency, AccountId issuer)
         {
-            var keys = arg.Properties().Select(p => p.Name).ToList();
-            keys.Sort();
-            if (keys.Count == 1)
+            Currency = currency ?? Currency.Xrp;
+            Issuer = issuer;
+        }
+
+        /// <inheritdoc/>
+        public void ToBytes(IBytesSink sink)
+        {
+            // Always write 20 bytes for the currency code
+            Currency.ToBytes(sink);
+            // For IOU (non-XRP), write an additional 20 bytes for the issuer
+            if (!Currency.IsNative)
             {
-                return keys[0] == "currency";
+                Issuer.ToBytes(sink);
             }
-            return keys.Count == 2 && keys[0] == "currency" && keys[1] == "issuer";
         }
 
-        public static readonly Issue ZERO_ISSUED_CURRENCY = new Issue(new byte[20]);
-
-        private Issue(byte[] buffer)
+        /// <inheritdoc/>
+        public JsonNode ToJson()
         {
-            this._Bytes = buffer;
-        }
-
-        public static implicit operator Issue(byte[] buffer)
-        {
-            Contract.Assert(buffer.Length == 20, "buffer should be 20 bytes");
-            return new Issue(buffer ?? ZERO_ISSUED_CURRENCY._Bytes);
-        }
-
-        /// <summary>
-        /// Read an amount from a BinaryParser
-        /// </summary>
-        /// <param name="parser">BinaryParser to read the Amount from</param>
-        /// <returns>An Amount object</returns>
-        public static Issue FromParser(BinaryParser parser)
-        {
-            var currency = parser.Read(20);
-            if (new Currency(currency).ToString() == "XRP")
+            if (Currency.IsNative)
             {
-                return new Issue(currency);
+                // Return JSON { "currency": "XRP" }
+                return new JsonObject
+                {
+                    ["currency"] = Currency.ToString()
+                };
             }
-            var currencyAndIssuer = new byte[40];
-            Buffer.BlockCopy(currency, 0, currencyAndIssuer, 0, 20);
-            Buffer.BlockCopy(parser.Read(20), 0, currencyAndIssuer, 20, 20);
-            return new Issue(currencyAndIssuer);
-        }
-
-        /// <summary>
-        /// Get the JSON representation of this Amount
-        /// </summary>
-        /// <returns>the JSON interpretation of this.bytes</returns>
-        public IssueObject ToJson()
-        {
-            var parser = new BufferParser(this.ToString());
-            var currency = Currency.FromParser(parser) as Currency;
-
-            if (currency.ToString() == "XRP")
+            // Return JSON { "currency": "<code>", "issuer": "<address>" }
+            return new JsonObject
             {
-                return new IssueObject { Currency = currency.ToString() };
-            }
-
-            var issuer = AccountId.FromParser(parser) as AccountId;
-
-            return new IssueObject
-            {
-                Currency = currency.ToString(),
-                Issuer = issuer.ToString()
+                ["currency"] = (JsonNode)Currency,
+                ["issuer"] = (JsonNode)Issuer
             };
         }
 
-        public void ToBytes(IBytesSink sink)
+        /// <summary>
+        /// Deserialize from JSON, distinguishing XRP and IOU issues.
+        /// </summary>
+        public static Issue FromJson(JsonNode token)
         {
-            throw new NotImplementedException();
+            if (!(token is JsonObject))
+                throw new InvalidJsonException($"Issue must be a JSON object, got {token.GetValueKind()}");
+
+            JsonObject obj = token.AsObject();
+            string currencyStr = obj["currency"]?.GetValue<string>();
+            if (currencyStr is null)
+                throw new InvalidJsonException("Issue object must contain property 'currency'.");
+
+            Currency currency = Currency.FromString(currencyStr);
+
+            if (currency.IsNative)
+            {
+                // XRP case: only one property allowed
+                if (obj.Count != 1)
+                    throw new InvalidJsonException("XRP Issue object must contain only 'currency'.");
+                return new Issue();
+            }
+
+            // IOU case: expect exactly two properties
+            if (obj.Count != 2)
+                throw new InvalidJsonException("Issued currency object must contain exactly 'currency' and 'issuer'.");
+
+            string issuerStr = obj["issuer"]?.GetValue<string>();
+            if (issuerStr is null)
+                throw new InvalidJsonException("Issue object must contain property 'issuer'.");
+
+            AccountId issuer = new AccountId(issuerStr);
+            return new Issue(currency, issuer);
         }
 
-        JToken ISerializedType.ToJson()
+        /// <summary>
+        /// Read from binary parser: 20 bytes for currency, and for IOU an additional 20 bytes for issuer.
+        /// </summary>
+        public static Issue FromParser(BinaryParser parser, int? hint = null)
         {
-            throw new NotImplementedException();
+            // First read 20-byte currency code
+            var curr = Currency.FromParser(parser);
+            if (curr.IsNative)
+            {
+                // XRP case
+                return new Issue(curr, null);
+            }
+            // IOU case: read 20-byte issuer
+            var issuer = AccountId.FromParser(parser);
+            return new Issue(curr, issuer);
         }
     }
 }

@@ -11,7 +11,7 @@ using Xrpl.BinaryCodec.Types;
 namespace Xrpl.BinaryCodec.Tests
 {
     [TestClass]
-    public class TestBinaryParser
+    public class TestUBinaryParser
     {
         [TestMethod]
         public void TestPeekSkipReadMethods()

@@ -1,4 +1,4 @@
-﻿using Newtonsoft.Json.Linq;
+﻿using System.Text.Json.Nodes;
 using Xrpl.BinaryCodec.Binary;
 using Xrpl.BinaryCodec.Util;
 
@@ -30,7 +30,7 @@ namespace Xrpl.BinaryCodec.Types
         /// <summary> Deserialize Uint32 </summary>
         /// <param name="token">json token</param>
         /// <returns>Uint32 value</returns>
-        public static Uint32 FromJson(JToken token) => (uint)token;
+        public static Uint32 FromJson(JsonNode token) => token.GetValue<uint>();
 
         /// <summary>
         /// create instance of this value

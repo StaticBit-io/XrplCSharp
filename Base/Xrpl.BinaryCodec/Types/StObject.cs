@@ -2,7 +2,8 @@
 using System.Collections.Generic;
 using System.Diagnostics;
 using System.Linq;
-using Newtonsoft.Json.Linq;
+using System.Text.Json;
+using System.Text.Json.Nodes;
 using Xrpl.BinaryCodec.Binary;
 using Xrpl.BinaryCodec.Enums;
 using Xrpl.BinaryCodec.Hashing;
@@ -50,29 +51,32 @@ namespace Xrpl.BinaryCodec.Types
                 [FieldType.Uint16] = new BuildFrom(Uint16.FromJson, Uint16.FromParser),
                 [FieldType.Amount] = new BuildFrom(Amount.FromJson, Amount.FromParser),
                 [FieldType.Hash128] = new BuildFrom(Hash128.FromJson, Hash128.FromParser),
+                [FieldType.Hash192] = new BuildFrom(Hash192.FromJson, Hash192.FromParser),
                 [FieldType.Hash256] = new BuildFrom(Hash256.FromJson, Hash256.FromParser),
                 [FieldType.Hash160] = new BuildFrom(Hash160.FromJson, Hash160.FromParser),
                 [FieldType.AccountId] = new BuildFrom(AccountId.FromJson, AccountId.FromParser),
                 [FieldType.Blob] = new BuildFrom(Blob.FromJson, Blob.FromParser),
                 [FieldType.PathSet] = new BuildFrom(PathSet.FromJson, PathSet.FromParser),
                 [FieldType.Vector256] = new BuildFrom(Vector256.FromJson, Vector256.FromParser),
+                [FieldType.Issue] = new BuildFrom(Issue.FromJson, Issue.FromParser),
+                [FieldType.Currency] = new BuildFrom(Currency.FromOracleJson, Currency.FromParser),
             };
             foreach (var field in Field.Values.Where(
-                        field => d2.ContainsKey(field.Type)))
+                         field => d2.ContainsKey(field.Type)))
             {
                 var buildFrom = d2[field.Type];
                 field.FromJson = buildFrom.Json;
-                field.FromParser= buildFrom.Parser;
+                field.FromParser = buildFrom.Parser;
             }
 
             Field.TransactionType.FromJson = TransactionType.Values.FromJson;
-            Field.TransactionType.FromParser= TransactionType.Values.FromParser;
+            Field.TransactionType.FromParser = TransactionType.Values.FromParser;
             Field.TransactionResult.FromJson = EngineResult.Values.FromJson;
             Field.TransactionResult.FromParser = EngineResult.Values.FromParser;
             Field.LedgerEntryType.FromJson = LedgerEntryType.Values.FromJson;
             Field.LedgerEntryType.FromParser = LedgerEntryType.Values.FromParser;
-
         }
+
         /// <summary>
         /// Construct a STObject from a BinaryParser
         /// </summary>
@@ -83,11 +87,8 @@ namespace Xrpl.BinaryCodec.Types
         public static StObject FromParser(BinaryParser parser, int? hint = null)
         {
             var so = new StObject();
-
-            // hint, is how many bytes to parse
             if (hint != null)
             {
-                // end hint
                 hint = parser.Pos() + hint;
             }
             while (!parser.End(hint))
@@ -97,7 +98,7 @@ namespace Xrpl.BinaryCodec.Types
                 {
                     break;
                 }
-                var sizeHint = field.IsVlEncoded ? parser.ReadVlLength() : (int?) null;
+                var sizeHint = field.IsVlEncoded ? parser.ReadVlLength() : (int?)null;
                 var st = field.FromParser(parser, sizeHint);
                 so.Fields[field] = st ?? throw new InvalidOperationException("Parsed " + field + " as null");
             }
@@ -108,7 +109,7 @@ namespace Xrpl.BinaryCodec.Types
         /// </summary>
         /// <param name="token">An object to include</param>
         /// <returns></returns>
-        public static StObject FromJson(JToken token)
+        public static StObject FromJson(JsonNode token)
         {
             return FromJson(token, false);
         }
@@ -119,24 +120,18 @@ namespace Xrpl.BinaryCodec.Types
         /// <param name="strict">optional, denote which field to include in serialized object</param>
         /// <returns></returns>
         /// <exception cref="InvalidJsonException">unknown field or token is not an object</exception>
-        public static StObject FromJson(JToken token, bool signingOnly)
+        public static StObject FromJson(JsonNode token, bool signingOnly)
         {
-            if (token.Type != JTokenType.Object)
-            {
-                throw new InvalidJsonException($"{token.Type} is not an object");
-            }
+            if (!(token is JsonObject))
+                throw new InvalidJsonException($"{token.GetValueKind()} is not an object");
 
             var so = new StObject();
-
-            var sortedKeys = new List<ISerializedType>();
-            foreach (var pair in (JObject) token)
+            foreach (KeyValuePair<string, JsonNode?> pair in token.AsObject())
             {
                 if (!Field.Values.Has(pair.Key))
                 {
                     if (signingOnly)
-                    {
                         throw new InvalidJsonException($"unknown field {pair.Key}");
-                    }
                     continue;
                 }
                 var fieldForType = Field.Values[pair.Key];
@@ -146,20 +141,13 @@ namespace Xrpl.BinaryCodec.Types
                 {
                     st = fieldForType.FromJson(jsonForField);
                 }
-                catch (Exception e) when (e is InvalidOperationException ||
-                                          e is FormatException ||
-                                          e is OverflowException ||
-                                          e is PrecisionException)
+                catch (Exception e) when (e is InvalidOperationException || e is FormatException || e is OverflowException || e is PrecisionException)
                 {
-                    throw new InvalidJsonException($"Can't decode `{fieldForType}` " + $"from `{jsonForField}`", e);
+                    throw new InvalidJsonException($"Can't decode `{fieldForType}` from `{jsonForField}`", e);
                 }
                 so.Fields[fieldForType] = st;
             }
-            if (signingOnly)
-            {
-                return so.FilterIsSigning();
-            }
-            return so;
+            return signingOnly ? so.FilterIsSigning() : so;
         }
 
         /// <inheritdoc />
@@ -169,19 +157,19 @@ namespace Xrpl.BinaryCodec.Types
         }
 
         /// <inheritdoc />
-        public JToken ToJson()
+        public JsonNode ToJson()
         {
             return ToJsonObject();
         }
         /// <summary>
         /// Get the JSON interpretation of this.bytes
         /// </summary>
-        public JObject ToJsonObject()
+        public JsonObject ToJsonObject()
         {
-            var json = new JObject();
-            foreach (var pair in Fields)
+            JsonObject json = new JsonObject();
+            foreach (KeyValuePair<Field, ISerializedType> pair in Fields)
             {
-                json[pair.Key] = pair.Value.ToJson();
+                json[(string)pair.Key] = pair.Value.ToJson();
             }
             return json;
         }
@@ -191,7 +179,9 @@ namespace Xrpl.BinaryCodec.Types
         public void ToBytes(IBytesSink to, Func<Field, bool> p)
         {
             var serializer = new BinarySerializer(to);
-            foreach (var pair in Fields.Where(pair => pair.Key.IsSerialised && (p == null || p(pair.Key))))
+            foreach (var pair in Fields
+                         .OrderBy(pair => pair.Key.Ordinal)
+                         .Where(pair => pair.Key.IsSerialised && (p == null || p(pair.Key))))
             {
                 serializer.Add(pair.Key, pair.Value);
             }
@@ -200,7 +190,7 @@ namespace Xrpl.BinaryCodec.Types
         /// Construct a STObject from a JSON object
         /// </summary>
         /// <param name="token">An object to include</param>
-        public static implicit operator StObject(JToken token) => FromJson(token);
+        public static implicit operator StObject(JsonNode token) => FromJson(token);
         /// <summary>
         /// Construct a STObject from a hex string
         /// </summary>
@@ -287,6 +277,16 @@ namespace Xrpl.BinaryCodec.Types
         public Hash160 this[Hash160Field f]
         {
             get { return (Hash160)Fields[f]; }
+            set { Fields[f] = value; }
+        }
+        /// <summary>
+        /// add <see cref="Hash192Field"/> field to this object
+        /// </summary>
+        /// <param name="f"><see cref="Hash192Field"/>field</param>
+        /// <returns></returns>
+        public Hash192 this[Hash192Field f]
+        {
+            get { return (Hash192)Fields[f]; }
             set { Fields[f] = value; }
         }
         /// <summary>
@@ -432,7 +432,7 @@ namespace Xrpl.BinaryCodec.Types
             var filtered = new SortedDictionary<Field, ISerializedType>();
             foreach (var field in sto.Fields)
             {
-                if (field.Key.IsSigningField == true)
+                if (field.Key.IsSigningField)
                 {
                     filtered.Add(field.Key, field.Value);
                 }
@@ -440,6 +440,10 @@ namespace Xrpl.BinaryCodec.Types
             sto.Fields = filtered;
             return sto;
         }
-        internal static byte[] Bytes(this HashPrefix hp) => Bits.GetBytes((uint)hp);
+
+        internal static byte[] Bytes(this HashPrefix hp)
+        {
+            return Bits.GetBytes((uint)hp);
+        }
     }
 }

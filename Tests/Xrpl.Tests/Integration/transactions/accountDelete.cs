@@ -2,7 +2,6 @@ using System.Collections.Generic;
 using System.Diagnostics;
 using System.Threading.Tasks;
 using Microsoft.VisualStudio.TestTools.UnitTesting;
-using Newtonsoft.Json;
 using Xrpl.Models.Common;
 using Xrpl.Models.Ledger;
 using Xrpl.Models.Methods;
@@ -14,6 +13,7 @@ using Xrpl.Wallet;
 namespace XrplTests.Xrpl.ClientLib.Integration
 {
     [TestClass]
+    [DoNotParallelize] // requires multiple ledger skip transactions to be submitted after 256 ledgers, and may cause issues if run in parallel with other tests
     public class TestIAccountDelete
     {
         // private static int Timeout = 20;
@@ -31,12 +31,10 @@ namespace XrplTests.Xrpl.ClientLib.Integration
         {
             XrplWallet wallet2 = await Utils.GenerateFundedWallet(runner.client);
 
-            var promises = new List<Task>();
-            for (var iter = 0; iter < 256; iter++)
+            for (int iter = 0; iter < 256; iter++)
             {
-                promises.Add(Utils.LedgerAccept(runner.client));
+                await Utils.LedgerAccept(runner.client);
             }
-            await Task.WhenAll(promises);
 
             LedgerIndex index = new LedgerIndex(LedgerIndexType.Validated);
             AccountChannelsRequest request = new AccountChannelsRequest(runner.wallet.ClassicAddress) { LedgerIndex = index };
@@ -47,7 +45,7 @@ namespace XrplTests.Xrpl.ClientLib.Integration
                 Account = runner.wallet.ClassicAddress,
                 Destination = wallet2.ClassicAddress,
             };
-            Dictionary<string, dynamic> txJson = JsonConvert.DeserializeObject<Dictionary<string, dynamic>>(tx.ToJson());
+            Dictionary<string, object> txJson = tx.ToDictionary();
             await Utils.TestTransaction(runner.client, txJson, runner.wallet);
         }
     }

@@ -1,4 +1,4 @@
-﻿using System;
+using System;
 using System.Collections.Generic;
 using System.Diagnostics;
 using System.Linq;
@@ -16,7 +16,7 @@ namespace Xrpl.BinaryCodec.Tests
             return "{" + string.Join(",", dictionary.Select(kv => kv.Key + "=" + kv.Value).ToArray()) + "}";
         }
 
-        public static bool StrictDictEqual(Dictionary<string, dynamic> dic1, Dictionary<string, dynamic> dic2)
+        public static bool StrictDictEqual(Dictionary<string, object> dic1, Dictionary<string, object> dic2)
         {
             return dic1.OrderBy(r => r.Key).SequenceEqual(dic2.OrderBy(r => r.Key));
         }

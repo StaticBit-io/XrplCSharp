@@ -1,6 +1,8 @@
 ﻿using System.Security.Cryptography;
 using System.Text;
 
+using Org.BouncyCastle.Math;
+
 using Xrpl.AddressCodec;
 using Xrpl.Keypairs.Ed25519;
 using Xrpl.Keypairs.K256;
@@ -116,5 +118,25 @@ namespace Xrpl.Keypairs
 
         public static string DeriveAddress(string publicKey)
             => XrplKeypairs.DeriveAddressFromBytes(publicKey.FromHexToBytes());
+
+        public static string DerivePublicKeyFromPrivateKey(string privateKey)
+        {
+            byte[] keyBytes = privateKey.FromHex();
+
+            // ED25519: "ED" prefix (33 bytes, first byte = 0xED)
+            if (keyBytes.Length == 33 && keyBytes[0] == 0xED)
+            {
+                byte[] expanded = Chaos.NaCl.Ed25519.ExpandedPrivateKeyFromSeed(keyBytes[1..]);
+                return "ED" + expanded[32..64].FromBytesToHex();
+            }
+
+            // XRPL secp256k1: "00" prefix (33 bytes, first byte = 0x00) — BigInteger нужно без знакового байта
+            // BIP-39 secp256k1: сырые 32 байта — BigInteger напрямую
+            var privKeyBigInt = keyBytes.Length == 33 && keyBytes[0] == 0x00
+                ? new BigInteger(1, keyBytes[1..])   // убираем знаковый байт "00"
+                : new BigInteger(1, keyBytes);        // сырые 32 байта
+
+            return K256KeyGenerator.ComputePublicKey(privKeyBigInt).GetEncoded(true).ToHex();
+        }
     }
 }

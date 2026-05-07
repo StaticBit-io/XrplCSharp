@@ -1,17 +1,19 @@
-﻿using Newtonsoft.Json;
+﻿using System;
 
-using System;
+using System.Text.Json.Serialization;
+
 using Xrpl.Client.Json.Converters;
-
+using Xrpl.Models.Common;
+using Xrpl.Models.Transactions;
 
 // https://github.com/XRPLF/xrpl.js/blob/main/packages/xrpl/src/models/ledger/Escrow.ts
 
 namespace Xrpl.Models.Ledger
 {
     /// <summary>
-    /// The Escrow object type represents a held payment of XRP waiting to be executed or canceled.
+    /// The Escrow object type represents a held payment of XRP or fungible tokens (IOUs, MPTs) waiting to be executed or canceled.
     /// </summary>
-    public class LOEscrow : BaseLedgerEntry
+    public class LOEscrow : BaseLedgerEntry, IDestination
     {
         public LOEscrow()
         {
@@ -21,19 +23,20 @@ namespace Xrpl.Models.Ledger
 
         /// <summary>
         /// The address of the owner (sender) of this held payment.<br/>
-        /// This is the account that provided the XRP, and gets it back if the held payment is
+        /// This is the account that provided the funds, and gets it back if the held payment is
         /// canceled.
         /// </summary>
         public string Account { get; set; }
 
         /// <summary>
-        /// The destination address where the XRP is paid if the held payment is successful.
+        /// The destination address where the funds are paid if the held payment is successful.
         /// </summary>
         public string Destination { get; set; }
         /// <summary>
-        /// The amount of XRP, in drops, to be delivered by the held payment.
+        /// The amount to be delivered by the escrow. Can be XRP (as drops string), an IOU token, or an MPT. (The TokenEscrow amendment extends this to support fungible tokens.)
         /// </summary>
-        public string Amount { get; set; }
+        [JsonConverter(typeof(CurrencyConverter))]
+        public Currency Amount { get; set; }
 
         /// <summary>
         /// A PREIMAGE-SHA-256 crypto-condition, as hexadecimal.<br/>
@@ -78,6 +81,20 @@ namespace Xrpl.Models.Ledger
         /// in case the directory consists of multiple pages.
         /// </summary>
         public string DestinationNode { get; set; }
+
+        /// <summary>
+        /// The transfer rate or fee to charge when users finish an escrow, locked at the creation
+        /// of an escrow contract and used during settlement. Applicable to Trust Line Tokens and MPTs only.
+        /// Requires the TokenEscrow amendment.
+        /// </summary>
+        public uint? TransferRate { get; set; }
+
+        /// <summary>
+        /// A hint indicating which page of the issuer's owner directory links to this object,
+        /// in case the directory consists of multiple pages. Used when the issuer is neither the
+        /// source nor destination account. Requires the TokenEscrow amendment.
+        /// </summary>
+        public string IssuerNode { get; set; }
 
         /// <summary>
         /// The identifying hash of the transaction that most recently modified this object.

@@ -1,0 +1,986 @@
+﻿@page "/"
+@using Xrpl.Client
+@using Xrpl.Models
+@using Xrpl.Models.Methods
+@using Xrpl.Models.Subscriptions
+@using System.Collections.Generic
+@using System.Collections.Concurrent
+@using System.Linq
+@implements IAsyncDisposable
+
+<h1>XRP Ledger Connection Test</h1>
+
+<div style="margin: 20px 0;">
+    <h3>Connection Status</h3>
+    @{
+        var stateColor = CurrentConnectionState switch
+        {
+            XrpConnectionState.Connected => "#28a745",
+            XrpConnectionState.Connecting => "#17a2b8",
+            XrpConnectionState.RestoringConnection => "#ffc107",
+            XrpConnectionState.Disconnected => "#dc3545",
+            _ => "#6c757d"
+        };
+        var stateIcon = CurrentConnectionState switch
+        {
+            XrpConnectionState.Connected => "&#10003;",
+            XrpConnectionState.Connecting => "&#8635;",
+            XrpConnectionState.RestoringConnection => "&#8634;",
+            XrpConnectionState.Disconnected => "&#10007;",
+            _ => "?"
+        };
+    }
+    <div style="display: flex; align-items: center; gap: 10px; padding: 10px; background: @stateColor; color: white; border-radius: 5px; font-weight: bold;">
+        <span style="font-size: 20px;">@((MarkupString)stateIcon)</span>
+        <span>@CurrentConnectionState</span>
+    </div>
+    @if (IsConnected)
+    {
+        <p style="color: green; font-weight: bold; margin-top: 10px;">Connected to XRPL</p>
+    }
+    else
+    {
+        <p style="color: red; font-weight: bold; margin-top: 10px;">Not connected to XRPL</p>
+    }
+    <p style="color: #666; font-size: 14px; margin-top: 5px;">
+        <strong>Current Server:</strong> @CurrentServerUrl
+    </p>
+    
+    @if (CurrentReconnectInfo != null)
+    {
+        <div style="margin-top: 15px; padding: 10px; background: #fff3cd; border: 1px solid #ffc107; border-radius: 5px;">
+            <div style="margin-bottom: 5px;">
+                <strong>Reconnecting...</strong> 
+                <span style="color: #666;">Attempt @CurrentReconnectInfo.CurrentAttempt of @CurrentReconnectInfo.MaxAttempts</span>
+            </div>
+            <div style="width: 100%; background: #e0e0e0; border-radius: 3px; height: 20px; overflow: hidden;">
+                <div style="width: @(((double)CurrentReconnectInfo.CurrentAttempt / CurrentReconnectInfo.MaxAttempts) * 100)%; background: #ff9800; height: 100%; transition: width 0.3s;"></div>
+            </div>
+            <div style="margin-top: 5px; font-size: 12px; color: #666;">
+                Next attempt in @CurrentReconnectInfo.RemainingDelay.TotalSeconds.ToString("F1") seconds
+            </div>
+        </div>
+    }
+</div>
+
+<div style="margin: 20px 0;">
+    <h3>Server Selection</h3>
+    <div style="background: #f5f5f5; padding: 15px; border-radius: 5px;">
+        <div style="margin-bottom: 10px;">
+            <label style="display: block; margin-bottom: 5px; font-weight: bold;">Network:</label>
+            <select @bind="SelectedServerType" 
+                    style="width: 100%; padding: 8px; border: 1px solid #ccc; border-radius: 4px;"
+                    disabled="@IsChangingServer">
+                <option value="@ServerType.Mainnet">Mainnet (s2.ripple.com)</option>
+                <option value="@ServerType.Testnet">Testnet / Altnet (s.altnet.rippletest.net)</option>
+                <option value="@ServerType.Devnet">Devnet (s.devnet.rippletest.net)</option>
+                <option value="@ServerType.Standalone">Local Docker (ws://localhost:6006)</option>
+                <option value="@ServerType.Custom">Custom URL</option>
+            </select>
+        </div>
+        
+        @if (SelectedServerType == ServerType.Custom)
+        {
+            <div style="margin-bottom: 10px;">
+                <label style="display: block; margin-bottom: 5px; font-weight: bold;">Custom Server URL:</label>
+                <input @bind="CustomServerUrl" 
+                       placeholder="wss://your-server.com:51233" 
+                       style="width: 100%; padding: 8px; border: 1px solid #ccc; border-radius: 4px;"
+                       disabled="@IsChangingServer" />
+            </div>
+        }
+        
+        <div style="display: flex; gap: 10px; align-items: center;">
+            <button @onclick="ChangeServerAsync" 
+                    disabled="@IsChangingServer"
+                    style="background: #ff6600; color: white; padding: 10px 20px; border: none; border-radius: 4px; cursor: pointer; font-weight: bold; flex: 1; max-width: 200px;">
+                @if (IsChangingServer)
+                {
+                    <span>Changing Server...</span>
+                }
+                else
+                {
+                    <span>Change Server</span>
+                }
+            </button>
+            
+            @if (!IsSelectedServerDifferent)
+            {
+                <button @onclick="ToggleConnectionAsync" 
+                        disabled="@(IsChangingServer || IsTogglingConnection)"
+                        style="background: @(IsConnected ? "#dc3545" : "#28a745"); color: white; padding: 10px 20px; border: none; border-radius: 4px; cursor: pointer; font-weight: bold; flex: 1; max-width: 200px;">
+                    @if (IsTogglingConnection)
+                    {
+                        <span>@(IsConnected ? "Disconnecting..." : "Connecting...")</span>
+                    }
+                    else if (IsConnected)
+                    {
+                        <span>Disconnect</span>
+                    }
+                    else
+                    {
+                        <span>Connect</span>
+                    }
+                </button>
+            }
+        </div>
+    </div>
+</div>
+
+<div style="margin: 20px 0;">
+    <h3>Load Test</h3>
+    <div style="background: #f5f5f5; padding: 15px; border-radius: 5px;">
+        <div style="margin-bottom: 10px;">
+            <label style="display: block; margin-bottom: 5px; font-weight: bold;">Account Address:</label>
+            <input @bind="AccountAddress" 
+                   placeholder="e.g., rN7n7otQDd6FczFgLdlqtyMVrn3VqhBqy2" 
+                   style="width: 100%; padding: 8px; border: 1px solid #ccc; border-radius: 4px;"
+                   disabled="@IsLoading" />
+        </div>
+        <button @onclick="LoadAccountTransactions" 
+                disabled="@IsLoading"
+                style="background: #0066cc; color: white; padding: 10px 20px; border: none; border-radius: 4px; cursor: pointer; font-weight: bold;">
+            @if (IsLoading)
+            {
+                <span>Loading...</span>
+            }
+            else
+            {
+                <span>Load Transactions</span>
+            }
+        </button>
+        @if (TransactionCount > 0)
+        {
+            <div style="margin-top: 10px; padding: 10px; background: #e3f2fd; border-radius: 4px;">
+                <strong>Loaded: @TransactionCount transactions</strong>
+            </div>
+        }
+    </div>
+</div>
+
+@if (IsConnected)
+{
+    <div style="margin: 20px 0;">
+        <div style="display: flex; gap: 20px; flex-wrap: wrap;">
+            <div style="background: #e0f7fa; padding: 15px; border-radius: 8px; min-width: 200px;">
+                <div style="font-size: 12px; color: #666; text-transform: uppercase;">Session Time</div>
+                <div style="font-size: 28px; font-weight: bold; color: #00838f;">@SessionElapsedTime.ToString(@"hh\:mm\:ss")</div>
+            </div>
+        </div>
+    </div>
+}
+
+<div style="margin: 20px 0;">
+    <h3>Stream Subscriptions</h3>
+    <div style="background: #f5f5f5; padding: 15px; border-radius: 5px;">
+        <div style="display: flex; gap: 10px; margin-bottom: 15px;">
+            <button @onclick="ToggleStreamSubscription" 
+                    disabled="@(!IsConnected || IsSubscribing)"
+                    style="background: @(IsStreamSubscribed ? "#dc3545" : "#17a2b8"); color: white; padding: 10px 20px; border: none; border-radius: 4px; cursor: pointer; font-weight: bold;">
+                @if (IsSubscribing)
+                {
+                    <span>@(IsStreamSubscribed ? "Unsubscribing..." : "Subscribing...")</span>
+                }
+                else if (IsStreamSubscribed)
+                {
+                    <span>Unsubscribe from Streams</span>
+                }
+                else
+                {
+                    <span>Subscribe to Transactions + Ledger</span>
+                }
+            </button>
+            @if (IsStreamSubscribed)
+            {
+                <button @onclick="ClearStreamConsole"
+                        style="background: #6c757d; color: white; padding: 10px 20px; border: none; border-radius: 4px; cursor: pointer;">
+                    Clear Console
+                </button>
+            }
+        </div>
+        
+        @if (IsStreamSubscribed || StreamTransactionCount > 0 || StreamLedgerCount > 0)
+        {
+            <div style="display: flex; gap: 20px; margin-bottom: 15px; flex-wrap: wrap;">
+                <div style="background: #e3f2fd; padding: 15px; border-radius: 8px; min-width: 200px;">
+                    <div style="font-size: 12px; color: #666; text-transform: uppercase;">Total Transactions</div>
+                    <div style="font-size: 28px; font-weight: bold; color: #1976d2;">@StreamTransactionCount</div>
+                </div>
+                <div style="background: #fff3e0; padding: 15px; border-radius: 8px; min-width: 200px;">
+                    <div style="font-size: 12px; color: #666; text-transform: uppercase;">Ledgers</div>
+                    <div style="font-size: 28px; font-weight: bold; color: #f57c00;">@StreamLedgerCount</div>
+                </div>
+                <div style="background: #e8f5e9; padding: 15px; border-radius: 8px; min-width: 200px;">
+                    <div style="font-size: 12px; color: #666; text-transform: uppercase;">Total Time</div>
+                    <div style="font-size: 28px; font-weight: bold; color: #388e3c;">@StreamElapsedTime.ToString(@"hh\:mm\:ss")</div>
+                </div>
+                <div style="background: #e0f7fa; padding: 15px; border-radius: 8px; min-width: 200px;">
+                    <div style="font-size: 12px; color: #666; text-transform: uppercase;">Session Time</div>
+                    <div style="font-size: 28px; font-weight: bold; color: #00838f;">@SessionElapsedTime.ToString(@"hh\:mm\:ss")</div>
+                </div>
+                <div style="background: #fce4ec; padding: 15px; border-radius: 8px; min-width: 200px;">
+                    <div style="font-size: 12px; color: #666; text-transform: uppercase;">Rate (TX/sec)</div>
+                    <div style="font-size: 28px; font-weight: bold; color: #c2185b;">@StreamTransactionRate.ToString("F2")</div>
+                </div>
+            </div>
+            
+            @if (StreamTransactionTypeCounts.Any())
+            {
+                <div style="background: #f5f5f5; padding: 15px; border-radius: 8px; margin-bottom: 15px;">
+                    <div style="font-size: 12px; color: #666; text-transform: uppercase; margin-bottom: 10px;">Transaction Types</div>
+                    <div style="display: flex; gap: 10px; flex-wrap: wrap;">
+                        @foreach (var kvp in StreamTransactionTypeCounts.OrderByDescending(x => x.Value).Take(10))
+                        {
+                            <div style="background: white; padding: 8px 12px; border-radius: 5px; border: 1px solid #ddd;">
+                                <span style="font-weight: bold; color: #1976d2;">@kvp.Value</span>
+                                <span style="color: #666; margin-left: 5px;">@kvp.Key</span>
+                            </div>
+                        }
+                    </div>
+                </div>
+            }
+            
+            <div style="background: #1e1e1e; color: #d4d4d4; padding: 10px; border-radius: 5px; max-height: 300px; overflow-y: auto; font-family: 'Consolas', 'Monaco', monospace; font-size: 12px;">
+                <div style="color: #569cd6; margin-bottom: 5px; font-weight: bold;">Stream Console (throttled 500ms)</div>
+                @foreach (var log in StreamConsoleLogs)
+                {
+                    var logColor = log.Type switch
+                    {
+                        StreamLogType.Transaction => "#4ec9b0",
+                        StreamLogType.Ledger => "#dcdcaa",
+                        _ => "#d4d4d4"
+                    };
+                    <div style="margin: 2px 0; color: @logColor;">
+                        <span style="color: #6a9955;">[@log.Timestamp.ToString("HH:mm:ss.fff")]</span>
+                        <span>@log.Message</span>
+                    </div>
+                }
+                @if (!StreamConsoleLogs.Any())
+                {
+                    <div style="color: #6a9955; font-style: italic;">Waiting for events...</div>
+                }
+            </div>
+        }
+    </div>
+</div>
+
+@if (ConnectionStatusMessages.Any())
+{
+    <div style="margin: 20px 0;">
+        <h3>Connection Events</h3>
+        <div style="background: #f5f5f5; padding: 10px; border-radius: 5px; max-height: 300px; overflow-y: auto;">
+            @foreach (var message in ConnectionStatusMessages.OrderByDescending(m => m.Timestamp))
+            {
+                var color = message.Type switch
+                {
+                    MessageType.Success => "green",
+                    MessageType.Warning => "#ff9800",
+                    MessageType.Error => "red",
+                    _ => "#666"
+                };
+                <div style="margin: 5px 0; padding: 5px; border-bottom: 1px solid #ddd;">
+                    <small style="color: #666;">[@message.Timestamp.ToString("HH:mm:ss.fff")]</small>
+                    <span style="color: @color">@message.Message</span>
+                </div>
+            }
+        </div>
+    </div>
+}
+
+@code
+{
+    bool IsConnected { get; set; }
+    XrpConnectionState CurrentConnectionState { get; set; } = XrpConnectionState.Disconnected;
+    List<StatusMessage> ConnectionStatusMessages { get; set; } = new List<StatusMessage>();
+    string AccountAddress { get; set; } = "rN7n7otQDd6FczFgLdlqtyMVrn3VqhBqy2";
+    bool IsLoading { get; set; }
+    int TransactionCount { get; set; }
+    
+    ServerType SelectedServerType { get; set; } = ServerType.Mainnet;
+    string CustomServerUrl { get; set; } = "";
+    bool IsChangingServer { get; set; }
+    bool IsTogglingConnection { get; set; }
+    string CurrentServerUrl { get; set; } = "wss://s2.ripple.com";
+    string? PreviousServerUrl { get; set; }
+    ReconnectInfo? CurrentReconnectInfo { get; set; }
+    
+    bool IsStreamSubscribed { get; set; }
+    bool IsSubscribing { get; set; }
+    bool _pendingSubscriptionRestore;
+    int _streamTransactionCount;
+    int _streamLedgerCount;
+    int StreamTransactionCount => _streamTransactionCount;
+    int StreamLedgerCount => _streamLedgerCount;
+    ConcurrentDictionary<string, int> StreamTransactionTypeCounts { get; set; } = new ConcurrentDictionary<string, int>();
+    DateTime StreamStartTime { get; set; }
+    DateTime SessionStartTime { get; set; }
+    TimeSpan StreamElapsedTime { get; set; }
+    TimeSpan SessionElapsedTime { get; set; }
+    double StreamTransactionRate => StreamElapsedTime.TotalSeconds > 0 ? StreamTransactionCount / StreamElapsedTime.TotalSeconds : 0;
+    List<StreamLogEntry> StreamConsoleLogs { get; set; } = new List<StreamLogEntry>();
+    ConcurrentQueue<StreamLogEntry> PendingStreamLogs { get; set; } = new ConcurrentQueue<StreamLogEntry>();
+    System.Threading.Timer? _streamUiTimer;
+    System.Threading.Timer? _sessionTimer;
+    int _isFlushingLogs = 0;
+    const int MaxLogsPerFlush = 50;
+    const int MaxQueueSize = 500;
+    
+    public enum StreamLogType
+    {
+        Transaction,
+        Ledger,
+        Info
+    }
+    
+    public class StreamLogEntry
+    {
+        public DateTime Timestamp { get; set; }
+        public string Message { get; set; } = "";
+        public StreamLogType Type { get; set; }
+    }
+    
+    string SelectedServerUrl => SelectedServerType == ServerType.Custom 
+        ? CustomServerUrl 
+        : ServerUrls.GetValueOrDefault(SelectedServerType, "");
+    
+    bool IsSelectedServerDifferent => !string.Equals(SelectedServerUrl, CurrentServerUrl, StringComparison.OrdinalIgnoreCase);
+    
+    [Inject]
+    IXrplClient client { get; set; }
+
+    public enum ServerType
+    {
+        Mainnet,
+        Testnet,
+        Devnet,
+        Standalone,
+        Custom
+    }
+    
+    private static readonly Dictionary<ServerType, string> ServerUrls = new()
+    {
+        { ServerType.Mainnet, "wss://s2.ripple.com" },
+        { ServerType.Testnet, "wss://s.altnet.rippletest.net:51233" },
+        { ServerType.Devnet, "wss://s.devnet.rippletest.net:51233" },
+        { ServerType.Standalone, "ws://localhost:6006" }
+    };
+
+    public enum MessageType
+    {
+        Info,
+        Success,
+        Warning,
+        Error
+    }
+
+    public class StatusMessage
+    {
+        public DateTime Timestamp { get; set; }
+        public string Message { get; set; }
+        public MessageType Type { get; set; } = MessageType.Info;
+    }
+
+    private OnConnected _onConnectedHandler;
+    private OnDisconnect _onDisconnectHandler;
+    private OnPing _onPingHandler;
+    private Action<ConnectionStatusInfo> _onConnectionStatusHandler;
+    private OnError _onErrorHandler;
+    private OnWarning _onWarningHandler;
+    private OnServerWarning _onWarning2Handler;
+    private OnTransaction? _onTransactionHandler;
+    private OnLedgerClosed? _onLedgerClosedHandler;
+
+    protected override async Task OnInitializedAsync()
+    {
+        _onConnectedHandler = async () =>
+        {
+            await InvokeAsync(async () =>
+            {
+                IsConnected = true;
+                CurrentServerUrl = client.connection.GetUrl();
+                CurrentReconnectInfo = null;
+                
+                SessionStartTime = DateTime.Now;
+                SessionElapsedTime = TimeSpan.Zero;
+                Console.WriteLine($"[STABILITY DEBUG] Session started at {SessionStartTime:HH:mm:ss.fff}");
+                
+                _sessionTimer?.Dispose();
+                _sessionTimer = new System.Threading.Timer(
+                    _ => InvokeAsync(() =>
+                    {
+                        SessionElapsedTime = DateTime.Now - SessionStartTime;
+                        StateHasChanged();
+                    }),
+                    null,
+                    TimeSpan.FromSeconds(1),
+                    TimeSpan.FromSeconds(1));
+                
+                if (PreviousServerUrl != null && PreviousServerUrl != CurrentServerUrl)
+                {
+                    AddStatusMessage($"Server changed successfully to: {CurrentServerUrl}", MessageType.Success);
+                    Console.WriteLine($"Server changed successfully to: {CurrentServerUrl}");
+                    PreviousServerUrl = null;
+                }
+                else
+                {
+                    AddStatusMessage("Connected to XRPL", MessageType.Success);
+                    Console.WriteLine("Connected to XRPL");
+                }
+                
+                if (_pendingSubscriptionRestore)
+                {
+                    _pendingSubscriptionRestore = false;
+                    Console.WriteLine($"[SUBSCRIBE DEBUG] Restoring subscribe request for transactions and ledger streams...");
+                    AddStatusMessage("Restoring stream subscriptions...", MessageType.Info);
+                    try
+                    {
+                        await client.Subscribe(new SubscribeRequest
+                        {
+                            Streams = new List<StreamType> { StreamType.Transactions, StreamType.Ledger }
+                        });
+                        
+                        Console.WriteLine($"[SUBSCRIBE DEBUG] Subscribe restoration completed successfully");
+                        
+                        _streamUiTimer = new System.Threading.Timer(
+                            async _ => await FlushPendingLogsAsync(), 
+                            null, 
+                            TimeSpan.FromMilliseconds(500), 
+                            TimeSpan.FromMilliseconds(500));
+                        
+                        IsStreamSubscribed = true;
+                        AddStatusMessage("Stream subscriptions restored", MessageType.Success);
+                    }
+                    catch (Exception ex)
+                    {
+                        Console.WriteLine($"[SUBSCRIBE DEBUG] Subscribe restoration failed: {ex.Message}");
+                        AddStatusMessage($"Failed to restore subscriptions: {ex.Message}", MessageType.Error);
+                    }
+                }
+                
+                StateHasChanged();
+            });
+        };
+
+        _onDisconnectHandler = async (code, description) =>
+        {
+            await InvokeAsync(() =>
+            {
+                IsConnected = false;
+                var codeStr = code?.ToString() ?? "unknown";
+                AddStatusMessage($"Disconnected: code={codeStr}, {description}", MessageType.Warning);
+                Console.WriteLine($"Disconnected from XRPL with code: {codeStr}, description: {description}");
+                
+                if (IsStreamSubscribed)
+                {
+                    _pendingSubscriptionRestore = true;
+                    var sessionDuration = DateTime.Now - SessionStartTime;
+                    Console.WriteLine($"[STABILITY DEBUG] Session ended after {sessionDuration:hh\\:mm\\:ss\\.fff} | TX: {StreamTransactionCount} | Ledgers: {StreamLedgerCount}");
+                }
+                _streamUiTimer?.Dispose();
+                _streamUiTimer = null;
+                _sessionTimer?.Dispose();
+                _sessionTimer = null;
+                IsStreamSubscribed = false;
+                
+                StateHasChanged();
+            });
+        };
+
+        _onConnectionStatusHandler = (statusInfo) =>
+        {
+            InvokeAsync(() =>
+            {
+                var type = statusInfo.Severity switch
+                {
+                    ConnectionCloseSeverity.Error => MessageType.Error,
+                    ConnectionCloseSeverity.Warning => MessageType.Warning,
+                    ConnectionCloseSeverity.Info => MessageType.Info,
+                    _ => MessageType.Info
+                };
+                
+                if (statusInfo.ConnectionState == XrpConnectionState.RestoringConnection)
+                {
+                    var sessionDuration = DateTime.Now - SessionStartTime;
+                    Console.WriteLine($"[STABILITY DEBUG] Session interrupted after {sessionDuration:hh\\:mm\\:ss\\.fff} - reconnecting...");
+                    _sessionTimer?.Dispose();
+                    _sessionTimer = null;
+                    
+                    if (IsStreamSubscribed)
+                    {
+                        _pendingSubscriptionRestore = true;
+                        Console.WriteLine($"[SUBSCRIBE DEBUG] Will restore subscriptions on reconnect");
+                        _streamUiTimer?.Dispose();
+                        _streamUiTimer = null;
+                        IsStreamSubscribed = false;
+                    }
+                }
+                
+                CurrentReconnectInfo = statusInfo.Reconnect;
+                CurrentConnectionState = statusInfo.ConnectionState;
+                IsConnected = statusInfo.ConnectionState == XrpConnectionState.Connected;
+                
+                AddStatusMessage($"[{statusInfo.ConnectionState}] {statusInfo.Message}", type);
+                Console.WriteLine($"Connection Status: [{statusInfo.ConnectionState}] {statusInfo.Message}");
+                StateHasChanged();
+            });
+        };
+
+        _onErrorHandler = async (error, errorMessage, message, data) =>
+        {
+            await InvokeAsync(() =>
+            {
+                AddStatusMessage($"Error: {error} - {errorMessage}", MessageType.Error);
+                Console.WriteLine($"Error: {error}, {errorMessage}, {message}");
+                StateHasChanged();
+            });
+        };
+
+        _onWarningHandler = async (warning, message) =>
+        {
+            await InvokeAsync(() =>
+            {
+                AddStatusMessage($"Warning: {warning}", MessageType.Warning);
+                Console.WriteLine($"Warning: {warning}, {message}");
+                StateHasChanged();
+            });
+        };
+
+        _onWarning2Handler = async (warnings, message) =>
+        {
+            await InvokeAsync(() =>
+            {
+                var toNotify = warnings.Where(w=>w.Id != 2001).ToArray();
+                if(toNotify.Length == 0)
+                {
+                    return;
+                }
+                var warningText = string.Join(", ", toNotify.Select(w => $"{w.Id}: {w.Message}"));
+                AddStatusMessage($"Warnings: {warningText}", MessageType.Warning);
+                Console.WriteLine($"Warnings: {warningText}, {message}");
+                StateHasChanged();
+            });
+        };
+
+        _onPingHandler = async (ping) =>
+        {
+            await InvokeAsync(() =>
+            {
+                AddStatusMessage(ping, MessageType.Info);
+                Console.WriteLine(ping);
+                StateHasChanged();
+            });
+        };
+
+        _onTransactionHandler = async (tx) =>
+        {
+            System.Threading.Interlocked.Increment(ref _streamTransactionCount);
+            var txType = tx.Transaction?.TransactionType.ToString() ?? "Unknown";
+            StreamTransactionTypeCounts.AddOrUpdate(txType, 1, (_, count) => count + 1);
+            
+            if (PendingStreamLogs.Count < MaxQueueSize)
+            {
+                var hash = tx.Hash ?? "?";
+                var shortHash = hash.Length > 8 ? hash.Substring(0, 8) + "..." : hash;
+                PendingStreamLogs.Enqueue(new StreamLogEntry
+                {
+                    Timestamp = DateTime.Now,
+                    Message = $"TX: {txType} | Hash: {shortHash}",
+                    Type = StreamLogType.Transaction
+                });
+            }
+            await Task.CompletedTask;
+        };
+        
+        _onLedgerClosedHandler = async (ledger) =>
+        {
+            System.Threading.Interlocked.Increment(ref _streamLedgerCount);
+            
+            if (PendingStreamLogs.Count < MaxQueueSize)
+            {
+                PendingStreamLogs.Enqueue(new StreamLogEntry
+                {
+                    Timestamp = DateTime.Now,
+                    Message = $"LEDGER #{ledger.LedgerIndex} closed | TxCount: {ledger.TxnCount}",
+                    Type = StreamLogType.Ledger
+                });
+            }
+            await Task.CompletedTask;
+        };
+
+        client.connection.OnConnected += _onConnectedHandler;
+        client.connection.OnDisconnect += _onDisconnectHandler;
+        client.connection.OnPing += _onPingHandler;
+        client.connection.OnConnectionStatus += _onConnectionStatusHandler;
+        client.connection.OnError += _onErrorHandler;
+        client.connection.OnWarning += _onWarningHandler;
+        client.connection.OnServerWarning += _onWarning2Handler;
+        client.connection.OnTransaction += _onTransactionHandler;
+        client.connection.OnLedgerClosed += _onLedgerClosedHandler;
+        
+        CurrentServerUrl = client.connection.GetUrl();
+        CurrentConnectionState = client.connection.CurrentConnectionState;
+        
+        await base.OnInitializedAsync();
+        
+        await client.Connect(default);
+        
+        if (client.connection.IsConnected())
+        {
+            IsConnected = true;
+            CurrentServerUrl = client.connection.GetUrl();
+            CurrentConnectionState = client.connection.CurrentConnectionState;
+            StateHasChanged();
+        }
+    }
+    
+    public async ValueTask DisposeAsync()
+    {
+        _streamUiTimer?.Dispose();
+        _sessionTimer?.Dispose();
+        
+        if (client != null)
+        {
+            if (_onConnectedHandler != null)
+                client.connection.OnConnected -= _onConnectedHandler;
+            
+            if (_onDisconnectHandler != null)
+                client.connection.OnDisconnect -= _onDisconnectHandler;
+            
+            if (_onConnectionStatusHandler != null)
+                client.connection.OnConnectionStatus -= _onConnectionStatusHandler;
+            
+            if (_onErrorHandler != null)
+                client.connection.OnError -= _onErrorHandler;
+            
+            if (_onWarningHandler != null)
+                client.connection.OnWarning -= _onWarningHandler;
+            
+            if (_onWarning2Handler != null)
+                client.connection.OnServerWarning -= _onWarning2Handler;
+            
+            if (_onPingHandler != null)
+                client.connection.OnPing -= _onPingHandler;
+            
+            if (_onTransactionHandler != null)
+                client.connection.OnTransaction -= _onTransactionHandler;
+            
+            if (_onLedgerClosedHandler != null)
+                client.connection.OnLedgerClosed -= _onLedgerClosedHandler;
+        }
+        
+        await Task.CompletedTask;
+    }
+    
+    private void AddStatusMessage(string message, MessageType type = MessageType.Info)
+    {
+        ConnectionStatusMessages.Add(new StatusMessage 
+        { 
+            Timestamp = DateTime.Now, 
+            Message = message,
+            Type = type
+        });
+        
+        if (ConnectionStatusMessages.Count > 50)
+        {
+            ConnectionStatusMessages.RemoveAt(0);
+        }
+    }
+
+    private async Task ChangeServerAsync()
+    {
+        string newServerUrl;
+        
+        if (SelectedServerType == ServerType.Custom)
+        {
+            if (string.IsNullOrWhiteSpace(CustomServerUrl))
+            {
+                AddStatusMessage("Please enter a custom server URL", MessageType.Warning);
+                return;
+            }
+            newServerUrl = CustomServerUrl.Trim();
+        }
+        else
+        {
+            newServerUrl = ServerUrls[SelectedServerType];
+        }
+        
+        if (newServerUrl == CurrentServerUrl)
+        {
+            AddStatusMessage("Already connected to this server", MessageType.Info);
+            return;
+        }
+        
+        IsChangingServer = true;
+        PreviousServerUrl = CurrentServerUrl;
+        StateHasChanged();
+        
+        try
+        {
+            AddStatusMessage($"Changing server to: {newServerUrl}...", MessageType.Info);
+            
+            await client.ChangeServer(newServerUrl);
+            
+            CurrentServerUrl = client.Url();
+        }
+        catch (Exception ex)
+        {
+            AddStatusMessage($"Failed to change server: {ex.Message}", MessageType.Error);
+            Console.WriteLine($"Error changing server: {ex}");
+            PreviousServerUrl = null;
+        }
+        finally
+        {
+            IsChangingServer = false;
+            StateHasChanged();
+        }
+    }
+    
+    private async Task ToggleConnectionAsync()
+    {
+        if (IsTogglingConnection)
+            return;
+            
+        IsTogglingConnection = true;
+        StateHasChanged();
+        
+        try
+        {
+            if (IsConnected)
+            {
+                AddStatusMessage("Disconnecting from XRPL...", MessageType.Info);
+                Console.WriteLine("User-initiated disconnect");
+                
+                await client.Disconnect();
+                
+                AddStatusMessage("Disconnected successfully", MessageType.Success);
+                Console.WriteLine("Successfully disconnected");
+            }
+            else
+            {
+                AddStatusMessage("Connecting to XRPL...", MessageType.Info);
+                Console.WriteLine($"User-initiated connect to {CurrentServerUrl}");
+                
+                await client.Connect();
+                
+                AddStatusMessage("Connected successfully", MessageType.Success);
+                Console.WriteLine("Successfully connected");
+            }
+        }
+        catch (Exception ex)
+        {
+            var action = IsConnected ? "disconnect" : "connect";
+            AddStatusMessage($"Failed to {action}: {ex.Message}", MessageType.Error);
+            Console.WriteLine($"Error during {action}: {ex}");
+        }
+        finally
+        {
+            IsTogglingConnection = false;
+            StateHasChanged();
+        }
+    }
+
+    private async Task LoadAccountTransactions()
+    {
+        if (string.IsNullOrWhiteSpace(AccountAddress))
+        {
+            AddStatusMessage("Please enter an account address", MessageType.Warning);
+            return;
+        }
+
+        if (!client.connection.IsConnected())
+        {
+            AddStatusMessage("Not connected to XRPL. Please wait for connection.", MessageType.Warning);
+            return;
+        }
+
+        IsLoading = true;
+        TransactionCount = 0;
+        StateHasChanged();
+
+        try
+        {
+            AddStatusMessage($"Loading transactions for {AccountAddress}...", MessageType.Info);
+            
+            object marker = null;
+            int batchCount = 0;
+            
+            while (true)
+            {
+                var response = await client.AccountTransactions(
+                    new Xrpl.Models.Methods.AccountTransactionsRequest(AccountAddress)
+                    {
+                        Limit = 50,
+                        Marker = marker,
+                    });
+                
+                if (response == null)
+                    break;
+                
+                batchCount++;
+                TransactionCount += response.Transactions.Count;
+                
+                await InvokeAsync(() =>
+                {
+                    AddStatusMessage($"Batch {batchCount}: Loaded {response.Transactions.Count} transactions (Total: {TransactionCount})", MessageType.Info);
+                    StateHasChanged();
+                });
+                
+                Console.WriteLine($"Batch {batchCount}: {response.Transactions.Count} transactions");
+                
+                if (response.Marker == null)
+                    break;
+                
+                marker = response.Marker;
+            }
+            
+            await InvokeAsync(() =>
+            {
+                AddStatusMessage($"Completed! Total transactions loaded: {TransactionCount}", MessageType.Success);
+                StateHasChanged();
+            });
+        }
+        catch (Exception ex)
+        {
+            await InvokeAsync(() =>
+            {
+                AddStatusMessage($"Error loading transactions: {ex.Message}", MessageType.Error);
+                StateHasChanged();
+            });
+            Console.WriteLine($"Error: {ex}");
+        }
+        finally
+        {
+            IsLoading = false;
+            StateHasChanged();
+        }
+    }
+    
+    private async Task ToggleStreamSubscription()
+    {
+        if (IsSubscribing)
+            return;
+            
+        if (!client.connection.IsConnected())
+        {
+            AddStatusMessage("Cannot subscribe: not connected to XRPL", MessageType.Warning);
+            return;
+        }
+            
+        IsSubscribing = true;
+        StateHasChanged();
+        
+        try
+        {
+            if (IsStreamSubscribed)
+            {
+                await client.Unsubscribe(new UnsubscribeRequest
+                {
+                    Streams = new List<StreamType> { StreamType.Transactions, StreamType.Ledger }
+                });
+                
+                _streamUiTimer?.Dispose();
+                _streamUiTimer = null;
+                
+                IsStreamSubscribed = false;
+                AddStatusMessage("Unsubscribed from transaction and ledger streams", MessageType.Info);
+            }
+            else
+            {
+                System.Threading.Interlocked.Exchange(ref _streamTransactionCount, 0);
+                System.Threading.Interlocked.Exchange(ref _streamLedgerCount, 0);
+                StreamTransactionTypeCounts.Clear();
+                StreamStartTime = DateTime.Now;
+                StreamElapsedTime = TimeSpan.Zero;
+                StreamConsoleLogs.Clear();
+                while (PendingStreamLogs.TryDequeue(out _)) { }
+                Console.WriteLine($"[SUBSCRIBE DEBUG] Sending subscribe request for transactions and ledger streams...");
+                
+                await client.Subscribe(new SubscribeRequest
+                {
+                    Streams = new List<StreamType> { StreamType.Transactions, StreamType.Ledger }
+                });
+                
+                Console.WriteLine($"[SUBSCRIBE DEBUG] Subscribe request completed successfully");
+                
+                _streamUiTimer = new System.Threading.Timer(
+                    async _ => await FlushPendingLogsAsync(), 
+                    null, 
+                    TimeSpan.FromMilliseconds(500), 
+                    TimeSpan.FromMilliseconds(500));
+                
+                IsStreamSubscribed = true;
+                AddStatusMessage("Subscribed to transaction and ledger streams", MessageType.Success);
+            }
+        }
+        catch (Exception ex)
+        {
+            AddStatusMessage($"Stream subscription error: {ex.Message}", MessageType.Error);
+            Console.WriteLine($"Stream subscription error: {ex}");
+        }
+        finally
+        {
+            IsSubscribing = false;
+            StateHasChanged();
+        }
+    }
+    
+    private async Task FlushPendingLogsAsync()
+    {
+        if (System.Threading.Interlocked.CompareExchange(ref _isFlushingLogs, 1, 0) != 0)
+        {
+            return;
+        }
+        
+        try
+        {
+            var hasLogs = !PendingStreamLogs.IsEmpty;
+            var logsToAdd = new List<StreamLogEntry>();
+            
+            if (hasLogs)
+            {
+                int count = 0;
+                while (count < MaxLogsPerFlush && PendingStreamLogs.TryDequeue(out var log))
+                {
+                    logsToAdd.Add(log);
+                    count++;
+                }
+            }
+            
+            await InvokeAsync(() =>
+            {
+                if (IsStreamSubscribed)
+                {
+                    StreamElapsedTime = DateTime.Now - StreamStartTime;
+                    SessionElapsedTime = DateTime.Now - SessionStartTime;
+                }
+                
+                if (logsToAdd.Count > 0)
+                {
+                    StreamConsoleLogs.AddRange(logsToAdd);
+                    
+                    while (StreamConsoleLogs.Count > 100)
+                    {
+                        StreamConsoleLogs.RemoveAt(0);
+                    }
+                }
+                
+                StateHasChanged();
+            });
+        }
+        finally
+        {
+            System.Threading.Interlocked.Exchange(ref _isFlushingLogs, 0);
+        }
+    }
+    
+    private void ClearStreamConsole()
+    {
+        StreamConsoleLogs.Clear();
+        System.Threading.Interlocked.Exchange(ref _streamTransactionCount, 0);
+        System.Threading.Interlocked.Exchange(ref _streamLedgerCount, 0);
+        StreamStartTime = DateTime.Now;
+        StreamElapsedTime = TimeSpan.Zero;
+        while (PendingStreamLogs.TryDequeue(out _)) { }
+        StateHasChanged();
+    }
+}

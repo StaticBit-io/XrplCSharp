@@ -1,4 +1,4 @@
-﻿
+
 
 // https://github.com/XRPLF/xrpl.js/blob/main/packages/xrpl/test/models/checkCancel.ts
 
@@ -19,7 +19,7 @@ namespace XrplTests.Xrpl.Models
         [TestMethod]
         public async Task TestVerify_Valid_CheckCancel()
         {
-            var tx = new Dictionary<string, dynamic>
+            var tx = new Dictionary<string, object>
             {
                 { "TransactionType", "CheckCancel" },
                 {"Account", "rWYkbWkCeg8dP6rXALnjgZSjjLyih5NXm"},
@@ -31,14 +31,14 @@ namespace XrplTests.Xrpl.Models
         [TestMethod]
         public async Task TestVerify_InValid_CheckID()
         {
-            var tx = new Dictionary<string, dynamic>
+            var tx = new Dictionary<string, object>
             {
                 { "TransactionType", "CheckCancel" },
                 {"Account", "rWYkbWkCeg8dP6rXALnjgZSjjLyih5NXm" },
                 {"CheckID", 4964734566545678 }, //todo no check for CheckID size
             };
-            await Assert.ThrowsExceptionAsync<ValidationException>(() => Validation.ValidateCheckCancel(tx));
-            await Assert.ThrowsExceptionAsync<ValidationException>(() => Validation.Validate(tx));
+            await Helper.ThrowsExceptionAsync<ValidationException>(() => Validation.ValidateCheckCancel(tx));
+            await Helper.ThrowsExceptionAsync<ValidationException>(() => Validation.Validate(tx));
         }
     }
 

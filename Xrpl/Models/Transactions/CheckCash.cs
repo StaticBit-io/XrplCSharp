@@ -1,6 +1,8 @@
-﻿using System.Collections.Generic;
+using System.Collections.Generic;
 using System.Threading.Tasks;
-using Newtonsoft.Json;
+
+using System.Text.Json.Serialization;
+
 using Xrpl.Client.Exceptions;
 using Xrpl.Client.Json.Converters;
 using Xrpl.Models.Common;
@@ -11,7 +13,7 @@ using Xrpl.Models.Common;
 namespace Xrpl.Models.Transactions
 {
     /// <inheritdoc cref="ICheckCash" />
-    public class CheckCash : TransactionCommon, ICheckCash
+    public class CheckCash : TransactionRequest, ICheckCash
     {
         public CheckCash()
         {
@@ -57,7 +59,7 @@ namespace Xrpl.Models.Transactions
     }
 
     /// <inheritdoc cref="ICheckCash" />
-    public class CheckCashResponse : TransactionResponseCommon, ICheckCash
+    public class CheckCashResponse : TransactionResponse, ICheckCash
     {
         /// <inheritdoc />
         public string CheckID { get; set; }
@@ -77,7 +79,7 @@ namespace Xrpl.Models.Transactions
         /// </summary>
         /// <param name="tx"> A CheckCash Transaction.</param>
         /// <exception cref="ValidationException">When the CheckCash is malformed.</exception>
-        public static async Task ValidateCheckCash(Dictionary<string, dynamic> tx)
+        public static async Task ValidateCheckCash(Dictionary<string, object> tx)
         {
             await Common.ValidateBaseTransaction(tx);
             tx.TryGetValue("Amount", out var Amount);

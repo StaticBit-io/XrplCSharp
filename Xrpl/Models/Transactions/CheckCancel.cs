@@ -1,15 +1,16 @@
-﻿
+
 
 // https://github.com/XRPLF/xrpl.js/blob/main/packages/xrpl/src/models/transactions/checkCancel.ts
 
 using System.Collections.Generic;
 using System.Threading.Tasks;
+
 using Xrpl.Client.Exceptions;
 
 namespace Xrpl.Models.Transactions
 {
     /// <inheritdoc cref="ICheckCancel" />
-    public class CheckCancel : TransactionCommon, ICheckCancel
+    public class CheckCancel : TransactionRequest, ICheckCancel
     {
         public CheckCancel()
         {
@@ -34,7 +35,7 @@ namespace Xrpl.Models.Transactions
     }
 
     /// <inheritdoc cref="ICheckCancel" />
-    public class CheckCancelResponse : TransactionResponseCommon, ICheckCancel
+    public class CheckCancelResponse : TransactionResponse, ICheckCancel
     {
         /// <inheritdoc />
         public string CheckID { get; set; }    
@@ -47,7 +48,7 @@ namespace Xrpl.Models.Transactions
         /// </summary>
         /// <param name="tx"> A CheckCancel Transaction.</param>
         /// <exception cref="ValidationException">When the CheckCancel is malformed.</exception>
-        public static async Task ValidateCheckCancel(Dictionary<string, dynamic> tx)
+        public static async Task ValidateCheckCancel(Dictionary<string, object> tx)
         {
             await Common.ValidateBaseTransaction(tx);
             if (tx.TryGetValue("CheckID", out var CheckID) && CheckID is not string {})

@@ -1,4 +1,4 @@
-﻿
+
 
 // https://github.com/XRPLF/xrpl.js/blob/main/packages/xrpl/test/models/setRegularKey.ts
 
@@ -14,12 +14,12 @@ namespace XrplTests.Xrpl.Models
     [TestClass]
     public class TestUSetRegularKey
     {
-        public static Dictionary<string, dynamic> account;
+        public static Dictionary<string, object> account;
 
         [ClassInitialize]
         public static void MyClassInitialize(TestContext testContext)
         {
-            account = new Dictionary<string, dynamic>
+            account = new Dictionary<string, object>
             {
                 {"TransactionType", "SetRegularKey"},
                 {"Account", "rf1BiGeXwwQoi8Z2ueFYTEXSwuJYfV2Jpn"},
@@ -45,8 +45,8 @@ namespace XrplTests.Xrpl.Models
 
             // throws w/ invalid RegularKey
             account["RegularKey"] = 12369846963;
-            await Assert.ThrowsExceptionAsync<ValidationException>(() => Validation.ValidateSetRegularKey(account), "SetRegularKey: RegularKey must be a string");
-            await Assert.ThrowsExceptionAsync<ValidationException>(() => Validation.Validate(account), "SetRegularKey: RegularKey must be a string");
+            await Helper.ThrowsExceptionAsync<ValidationException>(() => Validation.ValidateSetRegularKey(account), "SetRegularKey: RegularKey must be a string");
+            await Helper.ThrowsExceptionAsync<ValidationException>(() => Validation.Validate(account), "SetRegularKey: RegularKey must be a string");
             account["RegularKey"] = "rAR8rR8sUkBoCZFawhkWzY4Y5YoyuznwD";
         }
     }

@@ -1,4 +1,4 @@
-﻿using Newtonsoft.Json.Linq;
+﻿using System.Text.Json.Nodes;
 
 //todo not found doc
 
@@ -26,7 +26,18 @@ namespace Xrpl.BinaryCodec.Enums
         public static readonly LedgerEntryType Ticket = Add(nameof(Ticket), 'T');
         public static readonly LedgerEntryType SignerList = Add(nameof(SignerList), 'S');
 
-        public static LedgerEntryType FromJson(JToken jToken)
+        /// <summary>Represents an MPT issuance object in the ledger.</summary>
+        public static readonly LedgerEntryType MPTokenIssuance = Add(nameof(MPTokenIssuance), 126);
+        /// <summary>Represents an MPT holder object in the ledger.</summary>
+        public static readonly LedgerEntryType MPToken = Add(nameof(MPToken), 127);
+        /// <summary>Represents a Decentralized Identifier (DID) object in the ledger.</summary>
+        public static readonly LedgerEntryType DID = Add(nameof(DID), 73);
+        /// <summary>Represents a price oracle object in the ledger.</summary>
+        public static readonly LedgerEntryType Oracle = Add(nameof(Oracle), 128);
+        /// <summary>Represents a permissioned domain object in the ledger.</summary>
+        public static readonly LedgerEntryType PermissionedDomain = Add(nameof(PermissionedDomain), 130);
+
+        public static LedgerEntryType FromJson(JsonNode jToken)
         {
             return Values.FromJson(jToken);
         }

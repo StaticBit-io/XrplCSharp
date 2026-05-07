@@ -1,4 +1,4 @@
-using System.Threading.Tasks;
+﻿using System.Threading.Tasks;
 using Microsoft.VisualStudio.TestTools.UnitTesting;
 using Xrpl.Models.Methods;
 
@@ -22,16 +22,14 @@ namespace XrplTests.Xrpl.ClientLib.Integration
         [TestMethod]
         public async Task TestPingRequest()
         {
-            PingRequest request = new PingRequest();
-            object response = await runner.client.Ping(request);
+            object response = await runner.client.Ping();
             Assert.IsNotNull(response);
         }
 
         [TestMethod]
         public async Task TestRandomRequest()
         {
-            RandomRequest request = new RandomRequest();
-            object response = await runner.client.Random(request);
+            object response = await runner.client.Random();
             Assert.IsNotNull(response);
         }
     }

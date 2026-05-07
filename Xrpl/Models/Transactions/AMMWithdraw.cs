@@ -1,13 +1,13 @@
-﻿using System;
 using System.Collections.Generic;
-using System.Linq;
-using System.Text;
+using System.Text.Json.Serialization;
 using System.Threading.Tasks;
-using Newtonsoft.Json;
-using static Xrpl.Models.Common.Common;
+
 using Xrpl.Client.Exceptions;
-using Xrpl.Models.Common;
 using Xrpl.Client.Json.Converters;
+using Xrpl.Models.Common;
+using Xrpl.Models.Enums;
+
+using static Xrpl.Models.Common.Common;
 
 namespace Xrpl.Models.Transactions
 {
@@ -17,6 +17,10 @@ namespace Xrpl.Models.Transactions
     /// <category>Transaction Flags</category>
     public enum AMMWithdrawFlags : uint
     {
+        /// <summary>
+        /// batch inner transaction
+        /// </summary>
+        tfInnerBatchTxn = XrplGlobalFlags.tfInnerBatchTxn,
         /// <summary>
         /// Perform a double-asset withdrawal and receive the specified amount of LP Tokens.
         /// </summary>
@@ -63,13 +67,18 @@ namespace Xrpl.Models.Transactions
     /// instance pool, thus redeeming some share of the pools that one owns in the form
     /// of LPTokenIn.
     /// </summary>
-    public class AMMWithdraw : TransactionCommon, IAMMWithdraw
+    public class AMMWithdraw : TransactionRequest, IAMMWithdraw
     {
         public AMMWithdraw()
         {
             TransactionType = TransactionType.AMMWithdraw;
         }
         #region Implementation of IAMMWithdraw
+        public new AMMWithdrawFlags? Flags
+        {
+            get => base.Flags.HasValue ? (AMMWithdrawFlags?)base.Flags.Value : null;
+            set => base.Flags = (uint?)value;
+        }
 
         /// <inheritdoc />
         [JsonConverter(typeof(IssuedCurrencyConverter))]
@@ -137,12 +146,18 @@ namespace Xrpl.Models.Transactions
         /// the transaction.
         /// </summary>
         Currency EPrice { get; set; }
+        AMMWithdrawFlags? Flags { get; set; }
     }
 
     /// <inheritdoc cref="IAMMWithdraw" />
-    public class AMMWithdrawResponse : TransactionResponseCommon, IAMMWithdraw
+    public class AMMWithdrawResponse : TransactionResponse, IAMMWithdraw
     {
         #region Implementation of IAMMWithdraw
+        public new AMMWithdrawFlags? Flags
+        {
+            get => base.Flags.HasValue ? (AMMWithdrawFlags?)base.Flags.Value : null;
+            set => base.Flags = (uint?)value;
+        }
 
         /// <inheritdoc />
         [JsonConverter(typeof(IssuedCurrencyConverter))]
@@ -174,7 +189,7 @@ namespace Xrpl.Models.Transactions
         /// </summary>
         /// <param name="tx">An AMMWithdraw Transaction.</param>
         /// <throws>When the AMMWithdraw is Malformed.</throws>
-        public static async Task ValidateAMMWithdraw(Dictionary<string, dynamic> tx)
+        public static async Task ValidateAMMWithdraw(Dictionary<string, object> tx)
         {
             await Common.ValidateBaseTransaction(tx);
 

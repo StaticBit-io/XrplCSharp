@@ -1,8 +1,7 @@
-﻿using System;
+using System;
 using System.Collections.Generic;
+using System.Text.Json.Serialization;
 using System.Threading.Tasks;
-
-using Newtonsoft.Json;
 
 using Xrpl.Client.Exceptions;
 using Xrpl.Client.Json.Converters;
@@ -12,7 +11,7 @@ using Xrpl.Client.Json.Converters;
 namespace Xrpl.Models.Transactions
 {
     /// <inheritdoc cref="IPaymentChannelFund" />
-    public class PaymentChannelFund : TransactionCommon, IPaymentChannelFund
+    public class PaymentChannelFund : TransactionRequest, IPaymentChannelFund
     {
         public PaymentChannelFund()
         {
@@ -57,7 +56,7 @@ namespace Xrpl.Models.Transactions
     }
 
     /// <inheritdoc cref="IPaymentChannelFund" />
-    public class PaymentChannelFundResponse : TransactionResponseCommon, IPaymentChannelFund
+    public class PaymentChannelFundResponse : TransactionResponse, IPaymentChannelFund
     {
         /// <inheritdoc />
         public string Amount { get; set; }
@@ -77,7 +76,7 @@ namespace Xrpl.Models.Transactions
         /// </summary>
         /// <param name="tx"> A PaymentChannelFund Transaction.</param>
         /// <exception cref="ValidationException">When the PaymentChannelFund is malformed.</exception>
-        public static async Task ValidatePaymentChannelFund(Dictionary<string, dynamic> tx)
+        public static async Task ValidatePaymentChannelFund(Dictionary<string, object> tx)
         {
             await Common.ValidateBaseTransaction(tx);
 
@@ -87,7 +86,7 @@ namespace Xrpl.Models.Transactions
             if (Channel is not string)
                 throw new ValidationException("PaymentChannelFund: Channel must be a string");
             if (!tx.TryGetValue("Amount", out var Amount) || Amount is null)
-                throw new ValidationException("PaymentChannelFund: missing Amount");
+                throw new ValidationException("PaymentChannelFund: missing field Amount");
             if (Amount is not string)
                 throw new ValidationException("PaymentChannelFund: Amount must be a string");
             if (tx.TryGetValue("Expiration", out var Expiration) && Expiration is not uint)

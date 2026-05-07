@@ -1,18 +1,12 @@
-﻿using Newtonsoft.Json.Linq;
-
-using System;
 using System.Collections.Generic;
-using System.Linq;
-using System.Text;
+using System.Text.Json;
+using System.Text.Json.Nodes;
 
 using Xrpl.BinaryCodec;
 using Xrpl.BinaryCodec.Hashing;
-using Xrpl.BinaryCodec.ShaMapTree;
 using Xrpl.BinaryCodec.Util;
 using Xrpl.Client.Exceptions;
-using Xrpl.Models.Ledger;
-using Xrpl.Models.Transactions;
-using Xrpl.Utils.Hashes.ShaMap;
+using Xrpl.Client.Json;
 
 using static Xrpl.AddressCodec.Utils;
 
@@ -31,7 +25,7 @@ namespace Xrpl.Utils.Hashes
         public static string HashSignedTx(string tx)
         {
             string txBlob = tx;
-            Dictionary<string, dynamic> txObject = XrplBinaryCodec.Decode(tx).ToObject<Dictionary<string, dynamic>>();
+            Dictionary<string, object> txObject = JsonSerializer.Deserialize<Dictionary<string, object>>(XrplBinaryCodec.Decode(tx).ToJsonString(), XrplJsonOptions.Default);
             if (!txObject.ContainsKey("TxnSignature") && !txObject.ContainsKey("Signers"))
             {
                 new ValidationException("The transaction must be signed to hash it.");
@@ -40,10 +34,10 @@ namespace Xrpl.Utils.Hashes
             return B16.Encode(Sha512.Half(input: txBlob.FromHexToBytes(), prefix: (uint)Xrpl.BinaryCodec.Hashing.HashPrefix.TransactionId));
         }
 
-        public static string HashSignedTx(JToken tx)
+        public static string HashSignedTx(JsonNode tx)
         {
             string txBlob = XrplBinaryCodec.Encode(tx);
-            Dictionary<string, dynamic> txObject = tx.ToObject<Dictionary<string, dynamic>>();
+            Dictionary<string, object> txObject = JsonSerializer.Deserialize<Dictionary<string, object>>(tx.ToJsonString(), XrplJsonOptions.Default);
             if (!txObject.ContainsKey("TxnSignature") && !txObject.ContainsKey("Signers"))
             {
                 new ValidationException("The transaction must be signed to hash it.");

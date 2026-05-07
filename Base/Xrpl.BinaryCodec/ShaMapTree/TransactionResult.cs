@@ -1,4 +1,4 @@
-﻿using Newtonsoft.Json.Linq;
+﻿using System.Text.Json.Nodes;
 using Xrpl.BinaryCodec.Binary;
 using Xrpl.BinaryCodec.Enums;
 using Xrpl.BinaryCodec.Hashing;
@@ -41,7 +41,7 @@ namespace Xrpl.BinaryCodec.ShaMapTree
             return HashPrefix.Transaction;
         }
 
-        public static TransactionResult FromJson(JToken obj)
+        public static TransactionResult FromJson(JsonNode obj)
         {
             return new TransactionResult(obj, obj["meta"]);
         }
