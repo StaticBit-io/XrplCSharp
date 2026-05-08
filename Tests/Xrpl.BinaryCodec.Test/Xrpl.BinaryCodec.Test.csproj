@@ -26,9 +26,6 @@
 		</Compile>
 	</ItemGroup>
 	<ItemGroup>
-		<Folder Include="Types\" />
-	</ItemGroup>
-	<ItemGroup>
 		<ProjectReference Include="..\..\Base\Xrpl.BinaryCodec\Xrpl.BinaryCodec.csproj" />
 	</ItemGroup>
 </Project>
