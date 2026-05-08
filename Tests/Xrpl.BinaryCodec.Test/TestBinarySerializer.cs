@@ -17,7 +17,7 @@ namespace Xrpl.BinaryCodec.Tests
             BinarySerializer serializer = new BinarySerializer(list);
             string byteString = "A2".Repeat(length);
             Blob blob = Blob.FromHex(byteString);
-            Assert.AreEqual(length, blob.Buffer.Length);
+            Assert.HasCount(length, blob.Buffer);
 
             serializer.AddLengthEncoded(blob);
 
@@ -26,7 +26,7 @@ namespace Xrpl.BinaryCodec.Tests
             Assert.AreEqual(length, decodedLength);
 
             byte[] data = parser.Read(decodedLength);
-            Assert.AreEqual(length, data.Length);
+            Assert.HasCount(length, data);
             Assert.AreEqual(0xA2, data[0]);
         }
 
@@ -38,7 +38,7 @@ namespace Xrpl.BinaryCodec.Tests
             BinarySerializer serializer = new BinarySerializer(list);
             string byteString = "B5".Repeat(length);
             Blob blob = Blob.FromHex(byteString);
-            Assert.AreEqual(length, blob.Buffer.Length);
+            Assert.HasCount(length, blob.Buffer);
 
             serializer.AddLengthEncoded(blob);
 

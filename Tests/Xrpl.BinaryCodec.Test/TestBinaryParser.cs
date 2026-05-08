@@ -52,7 +52,7 @@ namespace Xrpl.BinaryCodec.Tests
             BinarySerializer serializer = new BinarySerializer(list);
             string byteString = "A2".Repeat(100);
             Blob blob = Blob.FromHex(byteString);
-            Assert.AreEqual(100, blob.Buffer.Length);
+            Assert.HasCount(100, blob.Buffer);
 
             serializer.AddLengthEncoded(blob);
             string encoded = list.BytesHex();
@@ -70,7 +70,7 @@ namespace Xrpl.BinaryCodec.Tests
             BinarySerializer serializer = new BinarySerializer(list);
             string byteString = "B3".Repeat(250);
             Blob blob = Blob.FromHex(byteString);
-            Assert.AreEqual(250, blob.Buffer.Length);
+            Assert.HasCount(250, blob.Buffer);
 
             serializer.AddLengthEncoded(blob);
             string encoded = list.BytesHex();

@@ -1,5 +1,4 @@
 ﻿using System.Linq;
-using System.Text.Json.Nodes;
 using Microsoft.VisualStudio.TestTools.UnitTesting;
 using Xrpl.BinaryCodec.Enums;
 using Xrpl.BinaryCodec.Types;
@@ -13,11 +12,6 @@ namespace Xrpl.BinaryCodec.Tests
     {
         private const string TestFieldName = "Sequence";
 
-        [ClassInitialize]
-        public static void Init(TestContext _)
-        {
-            StObject.FromJson(new JsonObject());
-        }
 
         [TestMethod]
         public void TestFieldExists()

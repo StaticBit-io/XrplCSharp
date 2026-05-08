@@ -110,7 +110,7 @@ namespace XrplTests.BinaryCodecLib.Types
             string hex = sink.BytesHex();
 
             // Zero IOU first byte should be 0x80
-            Assert.IsTrue(hex.StartsWith("80"));
+            Assert.StartsWith("80", hex);
         }
 
         [TestMethod]

@@ -27,11 +27,6 @@ namespace Xrpl.BinaryCodec.Tests
             return JsonNode.Parse(jsonString);
         }
 
-        [ClassInitialize]
-        public static void Init(TestContext _)
-        {
-            StObject.FromJson(new JsonObject());
-        }
 
         [TestMethod]
         public void TestFieldHeaderEncode()

@@ -11,12 +11,6 @@ namespace XrplTests.BinaryCodecLib
     [TestClass]
     public class TestFieldDispatch
     {
-        [ClassInitialize]
-        public static void Init(TestContext _)
-        {
-            // Force StObject static constructor which assigns dispatch delegates to Field instances
-            StObject.FromJson(new JsonObject());
-        }
 
         [TestMethod]
         public void TestCoreFieldTypesHaveDispatch()
@@ -97,7 +91,7 @@ namespace XrplTests.BinaryCodecLib
         public void TestFieldTotalCount()
         {
             int count = Field.Values.Count();
-            Assert.IsTrue(count > 200,
+            Assert.IsGreaterThan(200, count,
                 $"Expected more than 200 registered fields, got {count}.");
         }
 
@@ -108,7 +102,7 @@ namespace XrplTests.BinaryCodecLib
                 .Where(f => f.Type == FieldType.Int32)
                 .ToArray();
 
-            Assert.IsTrue(int32Fields.Length > 0,
+            Assert.IsNotEmpty(int32Fields,
                 "No Int32 fields found in Field.Values.");
         }
 
@@ -121,7 +115,7 @@ namespace XrplTests.BinaryCodecLib
 
             // Int64 fields exist only if definitions.json has them;
             // currently there are none, so just ensure no crash
-            Assert.IsTrue(int64Fields.Length >= 0);
+            Assert.IsGreaterThanOrEqualTo(0, int64Fields.Length);
         }
 
         [TestMethod]
@@ -139,7 +133,7 @@ namespace XrplTests.BinaryCodecLib
             JsonObject obj = JsonNode.Parse(txJson).AsObject();
             string encoded = XrplBinaryCodec.Encode(obj);
             Assert.IsNotNull(encoded);
-            Assert.IsTrue(encoded.Length > 0);
+            Assert.IsGreaterThan(0, encoded.Length);
 
             JsonNode decoded = XrplBinaryCodec.Decode(encoded);
             Assert.AreEqual("OracleSet", decoded["TransactionType"].GetValue<string>());
@@ -168,7 +162,7 @@ namespace XrplTests.BinaryCodecLib
             JsonObject obj = JsonNode.Parse(txJson).AsObject();
             string encoded = XrplBinaryCodec.Encode(obj);
             Assert.IsNotNull(encoded);
-            Assert.IsTrue(encoded.Length > 0);
+            Assert.IsGreaterThan(0, encoded.Length);
 
             JsonNode decoded = XrplBinaryCodec.Decode(encoded);
             Assert.AreEqual("XChainCreateBridge", decoded["TransactionType"].GetValue<string>());

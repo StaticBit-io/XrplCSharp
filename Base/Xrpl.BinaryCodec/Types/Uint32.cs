@@ -1,4 +1,6 @@
-﻿using System.Text.Json.Nodes;
+﻿using System;
+using System.Text.Json;
+using System.Text.Json.Nodes;
 using Xrpl.BinaryCodec.Binary;
 using Xrpl.BinaryCodec.Util;
 
@@ -30,7 +32,18 @@ namespace Xrpl.BinaryCodec.Types
         /// <summary> Deserialize Uint32 </summary>
         /// <param name="token">json token</param>
         /// <returns>Uint32 value</returns>
-        public static Uint32 FromJson(JsonNode token) => token.GetValue<uint>();
+        public static Uint32 FromJson(JsonNode token)
+        {
+            if (token.GetValueKind() == JsonValueKind.Number)
+            {
+                try { return token.GetValue<uint>(); }
+                catch (InvalidOperationException)
+                {
+                    return (uint)token.GetValue<long>();
+                }
+            }
+            return uint.Parse(token.GetValue<string>());
+        }
 
         /// <summary>
         /// create instance of this value

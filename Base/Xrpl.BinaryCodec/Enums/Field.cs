@@ -13,8 +13,30 @@ namespace Xrpl.BinaryCodec.Enums
         public readonly FieldType Type;
         public readonly byte[] Header;
 
-        public FromJson FromJson;
-        public FromParser FromParser;
+        private FromJson _fromJson;
+        private FromParser _fromParser;
+
+        public FromJson FromJson
+        {
+            get
+            {
+                if (_fromJson == null)
+                    StObject.EnsureDispatch(this);
+                return _fromJson;
+            }
+            set => _fromJson = value;
+        }
+
+        public FromParser FromParser
+        {
+            get
+            {
+                if (_fromParser == null)
+                    StObject.EnsureDispatch(this);
+                return _fromParser;
+            }
+            set => _fromParser = value;
+        }
 
         #endregion
 

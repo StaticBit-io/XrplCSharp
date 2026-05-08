@@ -67,6 +67,32 @@ namespace Xrpl.BinaryCodec.Tests
             JsonNode decoded = XrplBinaryCodec.Decode(encoded);
             Assert.AreEqual(2147483648u, decoded["Flags"].GetValue<uint>());
         }
+
+        [TestMethod]
+        public void TestInvalidAmountDecimal()
+        {
+            JsonObject txJson = CreatePaymentTx();
+            txJson["Amount"] = "1000.789";
+            txJson["Fee"] = "10";
+
+            bool threw = false;
+            try { XrplBinaryCodec.Encode(txJson); }
+            catch (Exception) { threw = true; }
+            Assert.IsTrue(threw, "Expected exception for decimal XRP amount.");
+        }
+
+        [TestMethod]
+        public void TestInvalidFeeDecimal()
+        {
+            JsonObject txJson = CreatePaymentTx();
+            txJson["Amount"] = "1000";
+            txJson["Fee"] = "10.123";
+
+            bool threw = false;
+            try { XrplBinaryCodec.Encode(txJson); }
+            catch (Exception) { threw = true; }
+            Assert.IsTrue(threw, "Expected exception for decimal fee.");
+        }
     }
 
     [TestClass]
