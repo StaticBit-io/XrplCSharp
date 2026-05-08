@@ -1,4 +1,5 @@
-﻿using Xrpl.BinaryCodec.Enums;
+﻿using System;
+using Xrpl.BinaryCodec.Enums;
 
 namespace Xrpl.BinaryCodec.Types
 {
@@ -68,7 +69,8 @@ namespace Xrpl.BinaryCodec.Types
         public static readonly TransactionType TrustSet = Add(nameof(TrustSet), 20);
         /// <summary> This transaction type deletes an existing account. </summary>
         public static readonly TransactionType AccountDelete = Add(nameof(AccountDelete), 21);
-        /// <summary> This transaction type installs a hook.   <br/>NOTE*: maybe_unused</summary>
+        /// <summary> This transaction type installs a hook. <br/>NOTE*: maybe_unused</summary>
+        [Obsolete("HookSet is not in the current protocol definitions.")]
         public static readonly TransactionType HookSet = Add(nameof(HookSet), 22);
         /// <summary> This transaction mints a new NFT </summary>
         public static readonly TransactionType NFTokenMint = Add(nameof(NFTokenMint), 25);
@@ -131,6 +133,46 @@ namespace Xrpl.BinaryCodec.Types
         public static readonly TransactionType CredentialAccept = Add(nameof(CredentialAccept), 59);
         /// <summary>Deletes (revokes) a credential from the ledger.</summary>
         public static readonly TransactionType CredentialDelete = Add(nameof(CredentialDelete), 60);
+
+        // ─── XChain ────────────────────────────────────────────────────────────
+
+        public static readonly TransactionType XChainCreateClaimID = Add(nameof(XChainCreateClaimID), 41);
+        public static readonly TransactionType XChainCommit = Add(nameof(XChainCommit), 42);
+        public static readonly TransactionType XChainClaim = Add(nameof(XChainClaim), 43);
+        public static readonly TransactionType XChainAccountCreateCommit = Add(nameof(XChainAccountCreateCommit), 44);
+        public static readonly TransactionType XChainAddClaimAttestation = Add(nameof(XChainAddClaimAttestation), 45);
+        public static readonly TransactionType XChainAddAccountCreateAttestation = Add(nameof(XChainAddAccountCreateAttestation), 46);
+        public static readonly TransactionType XChainModifyBridge = Add(nameof(XChainModifyBridge), 47);
+        public static readonly TransactionType XChainCreateBridge = Add(nameof(XChainCreateBridge), 48);
+
+        /// <summary>Fix a specific ledger state issue identified by LedgerFixType.</summary>
+        public static readonly TransactionType LedgerStateFix = Add(nameof(LedgerStateFix), 53);
+
+        /// <summary>Set delegate permissions for an account.</summary>
+        public static readonly TransactionType DelegateSet = Add(nameof(DelegateSet), 64);
+
+        // ─── Vault ───────────────────────────────────────────────────────────
+
+        public static readonly TransactionType VaultCreate = Add(nameof(VaultCreate), 65);
+        public static readonly TransactionType VaultSet = Add(nameof(VaultSet), 66);
+        public static readonly TransactionType VaultDelete = Add(nameof(VaultDelete), 67);
+        public static readonly TransactionType VaultDeposit = Add(nameof(VaultDeposit), 68);
+        public static readonly TransactionType VaultWithdraw = Add(nameof(VaultWithdraw), 69);
+        public static readonly TransactionType VaultClawback = Add(nameof(VaultClawback), 70);
+
+        // ─── Loan ────────────────────────────────────────────────────────────
+
+        public static readonly TransactionType LoanBrokerSet = Add(nameof(LoanBrokerSet), 74);
+        public static readonly TransactionType LoanBrokerDelete = Add(nameof(LoanBrokerDelete), 75);
+        public static readonly TransactionType LoanBrokerCoverDeposit = Add(nameof(LoanBrokerCoverDeposit), 76);
+        public static readonly TransactionType LoanBrokerCoverWithdraw = Add(nameof(LoanBrokerCoverWithdraw), 77);
+        public static readonly TransactionType LoanBrokerCoverClawback = Add(nameof(LoanBrokerCoverClawback), 78);
+        public static readonly TransactionType LoanSet = Add(nameof(LoanSet), 80);
+        public static readonly TransactionType LoanDelete = Add(nameof(LoanDelete), 81);
+        public static readonly TransactionType LoanManage = Add(nameof(LoanManage), 82);
+        public static readonly TransactionType LoanPay = Add(nameof(LoanPay), 84);
+
+        // ─── System (pseudo-transactions) ────────────────────────────────────
 
         /// <summary>
         /// This system-generated transaction type is used to update the status of the various amendments. <br/>
