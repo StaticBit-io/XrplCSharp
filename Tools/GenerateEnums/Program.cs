@@ -1,16 +1,18 @@
 using System;
 using System.Collections.Generic;
 using System.IO;
+using System.Linq;
 using System.Text;
 using System.Text.Json;
 
 namespace GenerateEnums;
 
 /// <summary>
-/// Reads definitions.json and generates partial C# enum source files for:
+/// Reads definitions.json and generates partial C# source files for:
 /// - EngineResult.Generated.cs (TRANSACTION_RESULTS)
 /// - TransactionType.Generated.cs (TRANSACTION_TYPES)
 /// - LedgerEntryType.Generated.cs (LEDGER_ENTRY_TYPES)
+/// - Field.{TypeName}.Generated.cs (FIELDS, one per type group)
 ///
 /// Each generated file contains only the static readonly field declarations.
 /// Infrastructure (Values, constructor, Add method) lives in the hand-written partial file.
@@ -20,6 +22,74 @@ namespace GenerateEnums;
 /// </summary>
 internal static class Program
 {
+    private static readonly HashSet<string> SkippedFields = new(StringComparer.Ordinal)
+    {
+        "Transaction", "LedgerEntry", "Validation", "Metadata",
+        "TransactionType", "LedgerEntryType", "TransactionResult",
+        "Generic", "Invalid",
+        "hash", "index",
+        "taker_gets_funded", "taker_pays_funded",
+        "ObjectEndMarker", "ArrayEndMarker"
+    };
+
+    private static readonly Dictionary<string, string> TypeToFieldClass = new(StringComparer.Ordinal)
+    {
+        ["Uint8"] = "Uint8Field",
+        ["UInt8"] = "Uint8Field",
+        ["Uint16"] = "Uint16Field",
+        ["UInt16"] = "Uint16Field",
+        ["Uint32"] = "Uint32Field",
+        ["UInt32"] = "Uint32Field",
+        ["Uint64"] = "Uint64Field",
+        ["UInt64"] = "Uint64Field",
+        ["Hash128"] = "Hash128Field",
+        ["Hash160"] = "Hash160Field",
+        ["Hash192"] = "Hash192Field",
+        ["Hash256"] = "Hash256Field",
+        ["Amount"] = "AmountField",
+        ["Blob"] = "BlobField",
+        ["AccountID"] = "AccountIdField",
+        ["STObject"] = "StObjectField",
+        ["STArray"] = "StArrayField",
+        ["PathSet"] = "PathSetField",
+        ["Vector256"] = "Vector256Field",
+        ["Issue"] = "IssueField",
+        ["Currency"] = "CurrencyField",
+        ["Number"] = "NumberField",
+        ["Int32"] = "Int32Field",
+        ["Int64"] = "Int64Field",
+        ["XChainBridge"] = "XChainBridgeField",
+    };
+
+    private static readonly Dictionary<string, string> TypeToFileName = new(StringComparer.Ordinal)
+    {
+        ["Uint8"] = "Uint8",
+        ["UInt8"] = "Uint8",
+        ["Uint16"] = "Uint16",
+        ["UInt16"] = "Uint16",
+        ["Uint32"] = "Uint32",
+        ["UInt32"] = "Uint32",
+        ["Uint64"] = "Uint64",
+        ["UInt64"] = "Uint64",
+        ["Hash128"] = "Hash128",
+        ["Hash160"] = "Hash160",
+        ["Hash192"] = "Hash192",
+        ["Hash256"] = "Hash256",
+        ["Amount"] = "Amount",
+        ["Blob"] = "Blob",
+        ["AccountID"] = "AccountId",
+        ["STObject"] = "StObject",
+        ["STArray"] = "StArray",
+        ["PathSet"] = "PathSet",
+        ["Vector256"] = "Vector256",
+        ["Issue"] = "Issue",
+        ["Currency"] = "Currency",
+        ["Number"] = "Number",
+        ["Int32"] = "Int32",
+        ["Int64"] = "Int64",
+        ["XChainBridge"] = "XChainBridge",
+    };
+
     private static void Main(string[] args)
     {
         string repoRoot = FindRepoRoot();
@@ -41,6 +111,7 @@ internal static class Program
         GenerateEngineResult(root.GetProperty("TRANSACTION_RESULTS"), outputDir);
         GenerateTransactionType(root.GetProperty("TRANSACTION_TYPES"), outputDir);
         GenerateLedgerEntryType(root.GetProperty("LEDGER_ENTRY_TYPES"), outputDir);
+        GenerateFields(root.GetProperty("FIELDS"), outputDir);
 
         Console.WriteLine("Done. Generated files in: " + outputDir);
     }
@@ -137,6 +208,85 @@ internal static class Program
         string path = Path.Combine(outputDir, "LedgerEntryType.Generated.cs");
         File.WriteAllText(path, sb.ToString(), Encoding.UTF8);
         Console.WriteLine($"  Written: {path} ({entries.Count} entries)");
+    }
+
+    private static void GenerateFields(JsonElement fields, string outputDir)
+    {
+        var grouped = new Dictionary<string, List<(string Name, int Nth, bool IsSigningField, bool IsSerialized)>>();
+
+        foreach (JsonElement entry in fields.EnumerateArray())
+        {
+            string name = entry[0].GetString()!;
+            JsonElement props = entry[1];
+
+            if (SkippedFields.Contains(name))
+                continue;
+
+            string typeName = props.GetProperty("type").GetString()!;
+
+            if (!TypeToFieldClass.ContainsKey(typeName))
+            {
+                Console.Error.WriteLine($"  WARNING: Unknown field type '{typeName}' for field '{name}', skipping.");
+                continue;
+            }
+
+            int nth = props.GetProperty("nth").GetInt32();
+            bool isSigningField = props.GetProperty("isSigningField").GetBoolean();
+            bool isSerialized = props.GetProperty("isSerialized").GetBoolean();
+
+            if (!grouped.ContainsKey(typeName))
+                grouped[typeName] = new();
+
+            grouped[typeName].Add((name, nth, isSigningField, isSerialized));
+        }
+
+        int totalFields = 0;
+        foreach (var (typeName, fieldList) in grouped.OrderBy(kv => kv.Key))
+        {
+            string fieldClassName = TypeToFieldClass[typeName];
+            string fileName = TypeToFileName[typeName];
+
+            fieldList.Sort((a, b) => a.Nth.CompareTo(b.Nth));
+
+            StringBuilder sb = new();
+            sb.AppendLine("// <auto-generated/>");
+            sb.AppendLine("// Generated from definitions.json by Tools/GenerateEnums");
+            sb.AppendLine("#pragma warning disable CS1591");
+            sb.AppendLine("namespace Xrpl.BinaryCodec.Enums");
+            sb.AppendLine("{");
+            sb.AppendLine("    public partial class Field");
+            sb.AppendLine("    {");
+
+            foreach (var (name, nth, isSigningField, isSerialized) in fieldList)
+            {
+                string ctorArgs = BuildCtorArgs(name, nth, isSigningField, isSerialized);
+                sb.AppendLine($"        public static readonly {fieldClassName} {name} = new {fieldClassName}({ctorArgs});");
+            }
+
+            sb.AppendLine("    }");
+            sb.AppendLine("}");
+
+            string path = Path.Combine(outputDir, $"Field.{fileName}.Generated.cs");
+            File.WriteAllText(path, sb.ToString(), Encoding.UTF8);
+            Console.WriteLine($"  Written: {path} ({fieldList.Count} fields)");
+            totalFields += fieldList.Count;
+        }
+
+        Console.WriteLine($"  Total fields generated: {totalFields} across {grouped.Count} type files");
+    }
+
+    private static string BuildCtorArgs(string name, int nth, bool isSigningField, bool isSerialized)
+    {
+        string args = $"nameof({name}), {nth}";
+
+        if (!isSigningField && !isSerialized)
+            args += ", isSigningField: false, isSerialised: false";
+        else if (!isSigningField)
+            args += ", isSigningField: false";
+        else if (!isSerialized)
+            args += ", isSerialised: false";
+
+        return args;
     }
 
     private static string GetPrefix(string name)
