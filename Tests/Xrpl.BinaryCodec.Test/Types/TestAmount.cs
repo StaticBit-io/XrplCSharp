@@ -1,100 +1,156 @@
-﻿//using System;
-//using Microsoft.VisualStudio.TestTools.UnitTesting;
-//using Xrpl.BinaryCodecLib.Types;
-//using Xrpl.BinaryCodecLib;
-//using Xrpl.AddressCodecLib;
-//using System.Collections.Generic;
-//using System.Security.Cryptography.X509Certificates;
-//using System.Diagnostics;
+﻿using System;
+using System.Text.Json.Nodes;
+using Microsoft.VisualStudio.TestTools.UnitTesting;
+using Xrpl.BinaryCodec;
+using Xrpl.BinaryCodec.Binary;
+using Xrpl.BinaryCodec.Types;
 
-//// https://github.com/XRPLF/xrpl-py/blob/master/tests/unit/core/binarycodec/types/test_amount.py
+// https://github.com/XRPLF/xrpl-py/blob/master/tests/unit/core/binarycodec/types/test_amount.py
 
-//namespace XrplTests.BinaryCodecLib.Types
-//{
-//    [TestClass]
-//    public class TestAmount
-//    {
-//        static JObject IouCases;
-//        static Dictionary<string, string> XrpCases = new Dictionary<string, string>
-//        {
-//            { "100", "4000000000000064" },
-//            { "100000000000000000", "416345785D8A0000" },
-//        };
-//        private static void GetTestsJson()
-//        {
-//            string jsonString = "[[{\"value\":\"0\",\"currency\":\"USD\",\"issuer\":\"rDgZZ3wyprx4ZqrGQUkquE9Fs2Xs8XBcdw\",},\"80000000000000000000000000000000000000005553440000\"\"0000008B1CE810C13D6F337DAC85863B3D70265A24DF44\",],[{\"value\":\"1\",\"currency\":\"USD\",\"issuer\":\"rDgZZ3wyprx4ZqrGQUkquE9Fs2Xs8XBcdw\",},\"D4838D7EA4C680000000000000000000000000005553440000\"\"0000008B1CE810C13D6F337DAC85863B3D70265A24DF44\",],[{\"value\":\"2\",\"currency\":\"USD\",\"issuer\":\"rDgZZ3wyprx4ZqrGQUkquE9Fs2Xs8XBcdw\",},\"D4871AFD498D00000000000000000000000000005553440000\"\"0000008B1CE810C13D6F337DAC85863B3D70265A24DF44\",],[{\"value\":\"-2\",\"currency\":\"USD\",\"issuer\":\"rDgZZ3wyprx4ZqrGQUkquE9Fs2Xs8XBcdw\",},\"94871AFD498D00000000000000000000000000005553440000\"\"0000008B1CE810C13D6F337DAC85863B3D70265A24DF44\",],[{\"value\":\"2.1\",\"currency\":\"USD\",\"issuer\":\"rDgZZ3wyprx4ZqrGQUkquE9Fs2Xs8XBcdw\",},\"D48775F05A0740000000000000000000000000005553440000\"\"0000008B1CE810C13D6F337DAC85863B3D70265A24DF44\",],[{\"currency\":\"XRP\",\"value\":\"2.1\",\"issuer\":\"rrrrrrrrrrrrrrrrrrrrrhoLvTp\",},\"D48775F05A07400000000000000000000000000000000000\"\"000000000000000000000000000000000000000000000000\",],[{\"currency\":\"USD\",\"value\":\"1111111111111111\",\"issuer\":\"rrrrrrrrrrrrrrrrrrrrBZbvji\",},\"D843F28CB71571C700000000000000000000000055534400\"\"000000000000000000000000000000000000000000000001\",],]";
-//            IouCases = (JObject)JToken.Parse(jsonString);
-//        }
+namespace XrplTests.BinaryCodecLib.Types
+{
+    [TestClass]
+    public class TestAmount
+    {
+        [TestMethod]
+        public void TestXrpFromJsonString()
+        {
+            JsonNode json = JsonValue.Create("1000");
+            Amount amount = Amount.FromJson(json);
+            Assert.IsTrue(amount.IsNative());
+        }
 
-//        [TestMethod]
-//        public void TestAssertXrpIsValidPasses()
-//        {
-//            string validZero = "0";
-//            string validAmount = "1000";
+        [TestMethod]
+        public void TestXrpRoundtrip()
+        {
+            string[] xrpValues = { "0", "1", "1000000", "100000000000" };
+            foreach (string val in xrpValues)
+            {
+                JsonNode json = JsonValue.Create(val);
+                Amount original = Amount.FromJson(json);
+                Assert.IsTrue(original.IsNative());
 
-//            Amount.VerifyXrpValue(validZero);
-//            Amount.VerifyXrpValue(validAmount);
-//        }
+                BytesList sink = new BytesList();
+                original.ToBytes(sink);
+                string hex = sink.BytesHex();
 
-//        [TestMethod]
-//        public void TestAssertXrpIsValidRaises()
-//        {
-//            string validLarge = "01e20";
-//            string validSmall = "1e-7";
-//            string valueDecimal = "1.234";
+                BufferParser parser = new BufferParser(hex);
+                Amount deserialized = Amount.FromParser(parser);
+                Assert.IsTrue(deserialized.IsNative());
+                Assert.AreEqual(val, deserialized.ToJson().GetValue<string>());
+            }
+        }
 
-//            Helper.ThrowsException<TypeInitializationException>(() => Amount.VerifyXrpValue(validLarge));
-//            Helper.ThrowsException<TypeInitializationException>(() => Amount.VerifyXrpValue(validSmall));
-//            Helper.ThrowsException<BinaryCodecException>(() => Amount.VerifyXrpValue(valueDecimal));
-//        }
+        [TestMethod]
+        public void TestXrpKnownEncoding()
+        {
+            // "100" XRP drops = 0x4000000000000064
+            JsonNode json = JsonValue.Create("100");
+            Amount amount = Amount.FromJson(json);
+            BytesList sink = new BytesList();
+            amount.ToBytes(sink);
+            Assert.AreEqual("4000000000000064", sink.BytesHex());
+        }
 
-//        [TestMethod]
-//        public void TestIOUIsValid()
-//        {
-//            string[] variables = {
-//                "0",
-//                "0.0",
-//                "1",
-//                "1.1111",
-//                "-1",
-//                "-1.1",
-//                "1111111111111111.0",
-//                "-1111111111111111.0",
-//                "0.00000000001",
-//                "0.00000000001",
-//                "-0.00000000001",
-//                "1.111111111111111e-3",
-//                "-1.111111111111111e-3",
-//                "2E+2"
-//            };
-//            for (var i = 0; i < variables.Length; i++)
-//            {
-//                Amount.VerifyIouValue(variables[i]);
-//            }
-//        }
+        [TestMethod]
+        public void TestIouFromJson()
+        {
+            JsonObject json = new JsonObject
+            {
+                ["value"] = "1",
+                ["currency"] = "USD",
+                ["issuer"] = "rHb9CJAWyB4rj91VRWn96DkukG4bwdtyTh"
+            };
+            Amount amount = Amount.FromJson(json);
+            Assert.IsFalse(amount.IsNative());
+        }
 
-//        [TestMethod]
-//        public void TestFromValueIssuedCurrency()
-//        {
-//            GetTestsJson();
-//            for (var i = 0; i < IouCases.Count; i++)
-//            {
-//                dynamic json = IouCases[i][0];
-//                string binary = (string)IouCases[i][1];
-//                Amount amount = Amount.FromValue(json);
-//                Assert.AreEqual(amount, binary);
-//            }
-//        }
+        [TestMethod]
+        public void TestIouRoundtrip()
+        {
+            JsonObject json = new JsonObject
+            {
+                ["value"] = "4.2",
+                ["currency"] = "CNY",
+                ["issuer"] = "rKiCet8SdvWxPXnAgYarFUXMh1zCPz432Y"
+            };
+            Amount original = Amount.FromJson(json);
+            Assert.IsFalse(original.IsNative());
 
-//        [TestMethod]
-//        public void TestFromValueXrp()
-//        {
-//            foreach (var item in XrpCases)
-//            {
-//                Amount amount = Amount.FromValue(item.Key);
-//                Assert.AreEqual(amount.ToString(), item.Value);
-//            }
-//        }
-//    }
-//}
+            BytesList sink = new BytesList();
+            original.ToBytes(sink);
+            string hex = sink.BytesHex();
 
+            // IOU is always 48 bytes = 96 hex chars
+            Assert.AreEqual(96, hex.Length);
+
+            BufferParser parser = new BufferParser(hex);
+            Amount deserialized = Amount.FromParser(parser);
+            Assert.IsFalse(deserialized.IsNative());
+
+            JsonNode resultJson = deserialized.ToJson();
+            Assert.AreEqual("4.2", resultJson["value"].GetValue<string>());
+            Assert.AreEqual("CNY", resultJson["currency"].GetValue<string>());
+        }
+
+        [TestMethod]
+        public void TestZeroIou()
+        {
+            JsonObject json = new JsonObject
+            {
+                ["value"] = "0",
+                ["currency"] = "USD",
+                ["issuer"] = "rHb9CJAWyB4rj91VRWn96DkukG4bwdtyTh"
+            };
+            Amount amount = Amount.FromJson(json);
+            Assert.IsFalse(amount.IsNative());
+
+            BytesList sink = new BytesList();
+            amount.ToBytes(sink);
+            string hex = sink.BytesHex();
+
+            // Zero IOU first byte should be 0x80
+            Assert.IsTrue(hex.StartsWith("80"));
+        }
+
+        [TestMethod]
+        public void TestNegativeIou()
+        {
+            JsonObject json = new JsonObject
+            {
+                ["value"] = "-1",
+                ["currency"] = "USD",
+                ["issuer"] = "rHb9CJAWyB4rj91VRWn96DkukG4bwdtyTh"
+            };
+            Amount amount = Amount.FromJson(json);
+            Assert.IsFalse(amount.IsNative());
+
+            BytesList sink = new BytesList();
+            amount.ToBytes(sink);
+            string hex = sink.BytesHex();
+
+            BufferParser parser = new BufferParser(hex);
+            Amount deserialized = Amount.FromParser(parser);
+            JsonNode resultJson = deserialized.ToJson();
+            Assert.AreEqual("-1", resultJson["value"].GetValue<string>());
+        }
+
+        [TestMethod]
+        public void TestFromJson_NullThrows()
+        {
+            bool threw = false;
+            try { Amount.FromJson(null); }
+            catch (InvalidJsonException) { threw = true; }
+            Assert.IsTrue(threw, "Expected InvalidJsonException for null JSON.");
+        }
+
+        [TestMethod]
+        public void TestFromJson_NumericDrops()
+        {
+            JsonNode json = JsonValue.Create(1000000UL);
+            Amount amount = Amount.FromJson(json);
+            Assert.IsTrue(amount.IsNative());
+            Assert.AreEqual("1000000", amount.ToJson().GetValue<string>());
+        }
+    }
+}

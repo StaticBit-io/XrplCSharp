@@ -1,8 +1,5 @@
 ﻿using System;
-using System.Diagnostics;
-using System.Text;
 using Microsoft.VisualStudio.TestTools.UnitTesting;
-using Org.BouncyCastle.Utilities;
 using Xrpl.BinaryCodec.Binary;
 using Xrpl.BinaryCodec.Types;
 
@@ -21,48 +18,100 @@ namespace Xrpl.BinaryCodec.Tests
             BufferParser binaryParser = new BufferParser(test_hex);
 
             byte firstByte = binaryParser.Peek();
-            Assert.AreEqual(firstByte, testBytes[0]);
+            Assert.AreEqual(testBytes[0], firstByte);
 
             binaryParser.Skip(3);
-            //Assert.AreEqual(testBytes[3:], binaryParser.ToBytes());
+            Assert.AreEqual(3, binaryParser.Pos());
 
-            var nextNBytes = binaryParser.Read(2);
-            //Assert.AreEqual(testBytes[3:5], nextNBytes);
+            byte[] nextTwoBytes = binaryParser.Read(2);
+            Assert.AreEqual(testBytes[3], nextTwoBytes[0]);
+            Assert.AreEqual(testBytes[4], nextTwoBytes[1]);
         }
 
-        //[TestMethod]
-        //public void TestIntReadMethods()
-        //{
-        //    string test_hex = "01000200000003";
-        //    BufferParser binaryParser = new BufferParser(test_hex);
+        [TestMethod]
+        public void TestReadUInt8()
+        {
+            string test_hex = "01FF7F";
+            BufferParser parser = new BufferParser(test_hex);
 
-        //    var int8 = binaryParser.ReadUInt8();
-        //    var int16 = binaryParser.ReadUInt16();
-        //    var int32 = binaryParser.ReadUInt32();
-        //    Assert.AreEqual(int8, 1);
-        //    Assert.AreEqual(int16, 2);
-        //    Assert.AreEqual(int32, 3);
-        //}
+            byte val1 = parser.ReadUInt8();
+            Assert.AreEqual((byte)1, val1);
 
-        //[TestMethod]
-        //public void TestReadVariableLength()
-        //{
-        //    int[] cases = { 100 };
-        //    for (var i = 0; i < cases.Length; i++)
-        //    {
-        //        int _case = cases[i];
-        //        BytesList list = new BytesList();
-        //        BinarySerializer binarySerializer = new BinarySerializer(list);
-        //        string byteString = "A2".Repeat(_case);
-        //        Blob blob = Blob.FromHex(byteString);
+            byte val2 = parser.ReadUInt8();
+            Assert.AreEqual((byte)255, val2);
 
-        //        binarySerializer.AddLengthEncoded(blob);
-        //        // hex string representation of encoded length prefix
-        //        string encodedLength = binarySerializer._sink.ToString();
-        //        BufferParser binaryParser = new BufferParser(encodedLength);
-        //        int decodedLength = binaryParser.ReadVlLength();
-        //        Assert.AreEqual(_case, decodedLength);
-        //    }
-        //}
+            byte val3 = parser.ReadUInt8();
+            Assert.AreEqual((byte)127, val3);
+        }
+
+        [TestMethod]
+        public void TestReadVlLength_Short()
+        {
+            // VL length <= 192: single byte encodes the length directly
+            BytesList list = new BytesList();
+            BinarySerializer serializer = new BinarySerializer(list);
+            string byteString = "A2".Repeat(100);
+            Blob blob = Blob.FromHex(byteString);
+            Assert.AreEqual(100, blob.Buffer.Length);
+
+            serializer.AddLengthEncoded(blob);
+            string encoded = list.BytesHex();
+
+            BufferParser parser = new BufferParser(encoded);
+            int decodedLength = parser.ReadVlLength();
+            Assert.AreEqual(100, decodedLength);
+        }
+
+        [TestMethod]
+        public void TestReadVlLength_Medium()
+        {
+            // VL length 193..12480: two bytes
+            BytesList list = new BytesList();
+            BinarySerializer serializer = new BinarySerializer(list);
+            string byteString = "B3".Repeat(250);
+            Blob blob = Blob.FromHex(byteString);
+            Assert.AreEqual(250, blob.Buffer.Length);
+
+            serializer.AddLengthEncoded(blob);
+            string encoded = list.BytesHex();
+
+            BufferParser parser = new BufferParser(encoded);
+            int decodedLength = parser.ReadVlLength();
+            Assert.AreEqual(250, decodedLength);
+        }
+
+        [TestMethod]
+        public void TestReadVlLength_Various()
+        {
+            int[] cases = { 1, 50, 100, 192, 193, 500, 1000 };
+            foreach (int length in cases)
+            {
+                BytesList list = new BytesList();
+                BinarySerializer serializer = new BinarySerializer(list);
+                string byteString = "AA".Repeat(length);
+                Blob blob = Blob.FromHex(byteString);
+
+                serializer.AddLengthEncoded(blob);
+                string encoded = list.BytesHex();
+
+                BufferParser parser = new BufferParser(encoded);
+                int decodedLength = parser.ReadVlLength();
+                Assert.AreEqual(length, decodedLength, $"VL decode failed for length {length}");
+            }
+        }
+
+        [TestMethod]
+        public void TestEndAndPos()
+        {
+            string test_hex = "AABBCCDD";
+            BufferParser parser = new BufferParser(test_hex);
+
+            Assert.AreEqual(0, parser.Pos());
+            Assert.IsFalse(parser.End());
+
+            parser.Read(4);
+            Assert.AreEqual(4, parser.Pos());
+            Assert.IsTrue(parser.End());
+        }
     }
 }
