@@ -1,7 +1,3 @@
-using System.Collections.Generic;
-using System.Linq;
-using System.Text.Json;
-using System.Text.Json.Nodes;
 using Microsoft.VisualStudio.TestTools.UnitTesting;
 using Xrpl.BinaryCodec.Enums;
 using Xrpl.BinaryCodec.Types;
@@ -11,23 +7,6 @@ namespace XrplTests.BinaryCodecLib
     [TestClass]
     public class TestEnumParity
     {
-        private static JsonObject LoadDefinitions()
-        {
-            string path = System.IO.Path.Combine(
-                System.IO.Path.GetDirectoryName(typeof(Field).Assembly.Location),
-                "definitions.json");
-
-            if (!System.IO.File.Exists(path))
-            {
-                path = System.IO.Path.GetFullPath(
-                    System.IO.Path.Combine(
-                        System.IO.Path.GetDirectoryName(typeof(Field).Assembly.Location),
-                        "..", "..", "..", "..", "..", "Base", "Xrpl.BinaryCodec", "Enums", "definitions.json"));
-            }
-
-            string json = System.IO.File.ReadAllText(path);
-            return JsonNode.Parse(json).AsObject();
-        }
 
         [TestMethod]
         public void TestTransactionType_AllNamesResolvable()

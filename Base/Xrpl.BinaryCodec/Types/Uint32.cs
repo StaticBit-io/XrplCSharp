@@ -1,4 +1,5 @@
 ﻿using System;
+using System.Globalization;
 using System.Text.Json;
 using System.Text.Json.Nodes;
 using Xrpl.BinaryCodec.Binary;
@@ -39,10 +40,14 @@ namespace Xrpl.BinaryCodec.Types
                 try { return token.GetValue<uint>(); }
                 catch (InvalidOperationException)
                 {
-                    return (uint)token.GetValue<long>();
+                    long val = token.GetValue<long>();
+                    if (val < 0 || val > uint.MaxValue)
+                        throw new OverflowException(
+                            $"Value {val} is out of range for Uint32 (0..{uint.MaxValue}).");
+                    return (uint)val;
                 }
             }
-            return uint.Parse(token.GetValue<string>());
+            return uint.Parse(token.GetValue<string>(), CultureInfo.InvariantCulture);
         }
 
         /// <summary>

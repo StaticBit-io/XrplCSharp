@@ -138,6 +138,7 @@ namespace XrplTests.BinaryCodecLib
             JsonNode decoded = XrplBinaryCodec.Decode(encoded);
             Assert.AreEqual("OracleSet", decoded["TransactionType"].GetValue<string>());
             Assert.AreEqual("rHb9CJAWyB4rj91VRWn96DkukG4bwdtyTh", decoded["Account"].GetValue<string>());
+            Assert.AreEqual(1u, decoded["OracleDocumentID"].GetValue<uint>());
         }
 
         [TestMethod]

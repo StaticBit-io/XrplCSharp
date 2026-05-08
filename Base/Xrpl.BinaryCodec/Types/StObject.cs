@@ -86,6 +86,11 @@ namespace Xrpl.BinaryCodec.Types
                 field.FromJson = buildFrom.Json;
                 field.FromParser = buildFrom.Parser;
             }
+            else
+            {
+                throw new InvalidOperationException(
+                    $"No FromJson/FromParser dispatch registered for field '{field.Name}' (type: {field.Type.Name}).");
+            }
         }
 
         /// <summary>

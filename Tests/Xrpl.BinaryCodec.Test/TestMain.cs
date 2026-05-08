@@ -75,10 +75,8 @@ namespace Xrpl.BinaryCodec.Tests
             txJson["Amount"] = "1000.789";
             txJson["Fee"] = "10";
 
-            bool threw = false;
-            try { XrplBinaryCodec.Encode(txJson); }
-            catch (Exception) { threw = true; }
-            Assert.IsTrue(threw, "Expected exception for decimal XRP amount.");
+            Assert.ThrowsExactly<BinaryCodecException>(() => XrplBinaryCodec.Encode(txJson),
+                "Expected BinaryCodecException for decimal XRP amount.");
         }
 
         [TestMethod]
@@ -88,10 +86,8 @@ namespace Xrpl.BinaryCodec.Tests
             txJson["Amount"] = "1000";
             txJson["Fee"] = "10.123";
 
-            bool threw = false;
-            try { XrplBinaryCodec.Encode(txJson); }
-            catch (Exception) { threw = true; }
-            Assert.IsTrue(threw, "Expected exception for decimal fee.");
+            Assert.ThrowsExactly<BinaryCodecException>(() => XrplBinaryCodec.Encode(txJson),
+                "Expected BinaryCodecException for decimal fee.");
         }
     }
 

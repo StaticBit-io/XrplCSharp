@@ -91,6 +91,7 @@ namespace XrplTests.BinaryCodecLib.Types
             JsonNode resultJson = deserialized.ToJson();
             Assert.AreEqual("4.2", resultJson["value"].GetValue<string>());
             Assert.AreEqual("CNY", resultJson["currency"].GetValue<string>());
+            Assert.AreEqual("rKiCet8SdvWxPXnAgYarFUXMh1zCPz432Y", resultJson["issuer"].GetValue<string>());
         }
 
         [TestMethod]

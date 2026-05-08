@@ -40,7 +40,8 @@ namespace Xrpl.BinaryCodec.Enums
 
         #endregion
 
-        public static Enumeration<Field> Values;
+        private static Enumeration<Field> _values;
+        public static Enumeration<Field> Values => _values ??= new Enumeration<Field>();
 
         public Field(string name,
             int nthOfType,
@@ -50,7 +51,6 @@ namespace Xrpl.BinaryCodec.Enums
                 base(name,
                     (type.Ordinal << 16 | nthOfType))
         {
-            Values ??= new Enumeration<Field>();
             var valid = (nthOfType > 0) && nthOfType < 256 &&
                         type.Ordinal > 0 && type.Ordinal < 256;
             Type = type;

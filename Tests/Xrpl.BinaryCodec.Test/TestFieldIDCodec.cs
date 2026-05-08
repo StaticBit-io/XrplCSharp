@@ -36,8 +36,8 @@ namespace Xrpl.BinaryCodec.Tests
 
             foreach (TestData test in tests)
             {
-                if (!Field.Values.Has(test.name))
-                    continue;
+                Assert.IsTrue(Field.Values.Has(test.name),
+                    $"Missing field definition for '{test.name}'");
 
                 Field field = Field.Values[test.name];
                 string actualHex = BitConverter.ToString(field.Header).Replace("-", "");
@@ -56,11 +56,10 @@ namespace Xrpl.BinaryCodec.Tests
 
             foreach (TestData test in tests)
             {
-                if (!Field.Values.Has(test.name))
-                    continue;
+                Assert.IsTrue(Field.Values.Has(test.name),
+                    $"Missing field definition for '{test.name}'");
 
                 Field field = Field.Values[test.name];
-                // Verify that looking up by ordinal gives back the same field
                 int ordinal = (field.Type.Ordinal << 16) | field.NthOfType;
                 Field resolved = Field.Values[ordinal];
                 Assert.AreEqual(test.name, resolved.Name,
@@ -76,8 +75,8 @@ namespace Xrpl.BinaryCodec.Tests
 
             foreach (TestData test in tests)
             {
-                if (!Field.Values.Has(test.name))
-                    continue;
+                Assert.IsTrue(Field.Values.Has(test.name),
+                    $"Missing field definition for '{test.name}'");
 
                 Field field = Field.Values[test.name];
                 Assert.AreEqual(test.type, field.Type.Ordinal,

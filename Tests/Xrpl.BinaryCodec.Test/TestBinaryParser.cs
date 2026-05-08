@@ -83,7 +83,7 @@ namespace Xrpl.BinaryCodec.Tests
         [TestMethod]
         public void TestReadVlLength_Various()
         {
-            int[] cases = { 1, 50, 100, 192, 193, 500, 1000 };
+            int[] cases = { 1, 50, 100, 192, 193, 500, 1000, 12480, 12481 };
             foreach (int length in cases)
             {
                 BytesList list = new BytesList();
