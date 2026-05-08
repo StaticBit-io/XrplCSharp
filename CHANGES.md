@@ -1,5 +1,17 @@
 # Changes
 
+### 10.4.0.0 (unreleased)
+* Sync `Xrpl.BinaryCodec` enums with upstream `definitions.json` from [xrpl.js](https://github.com/XRPLF/xrpl.js)
+* Add 24 missing `TransactionType` entries: XChain (8), Vault (6), Loan (9), LedgerStateFix, DelegateSet, Batch, NFTokenModify, PermissionedDomainSet/Delete, CredentialCreate/Accept/Delete, MPToken (4), DID (2), Oracle (2), AMMClawback
+* Add 16 missing `LedgerEntryType` entries: Bridge, XChainOwnedClaimID, XChainOwnedCreateAccountClaimID, MPTokenIssuance, MPToken, Oracle, Credential, PermissionedDomain, Delegate, Vault, LoanBroker, Loan, DID, NegativeUNL, NFTokenOffer, NFTokenPage
+* Add 7 missing `FieldType` entries: Number, Int32, Int64, UInt96, UInt384, UInt512, XChainBridge
+* Add ~40 missing `Field` entries across all types; fix incorrect ordinals for DiscountedFee, VoteWeight, HookGrants
+* Regenerate `EngineResult` with all 189 transaction result codes from protocol spec
+* Add `terNO_DELEGATE_PERMISSION` (-85) to `definitions.json`
+* Mark deprecated entries with `[Obsolete]`: HookSet, GeneratorMap, Contract, EnabledAmendments
+* Refactor `EngineResult`, `TransactionType`, `LedgerEntryType` to partial-class architecture — hand-written infrastructure + auto-generated fields from `definitions.json`
+* Add `Tools/GenerateEnums` — .NET console tool for regenerating enum files from `definitions.json` (`dotnet run --project Tools/GenerateEnums`)
+
 ### 10.3.0.0 05/05/2026
 * **BREAKING**: Migrate entire solution from `Newtonsoft.Json` to `System.Text.Json` — all models, converters, client infrastructure, wallet signing, binary codec
 * **BREAKING**: Remove `dynamic` keyword from all production code — replace with `object`, `JsonNode`, `JsonElement` for iOS Full AOT compatibility
