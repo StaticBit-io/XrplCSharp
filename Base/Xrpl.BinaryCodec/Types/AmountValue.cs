@@ -264,11 +264,19 @@ namespace Xrpl.BinaryCodec.Types
 
         public override bool IsIou => false;
 
+        private const ulong MaxNativeDrops = 100_000_000_000_000_000UL; // 1e17
+
         public NativeValue(string value)
         {
-            var parsed = decimal.Parse(value, NumberStyles.AllowDecimalPoint | NumberStyles.AllowExponent | NumberStyles.AllowLeadingSign, CultureInfo.InvariantCulture);
+            decimal parsed = decimal.Parse(value,
+                NumberStyles.AllowDecimalPoint | NumberStyles.AllowExponent | NumberStyles.AllowLeadingSign,
+                CultureInfo.InvariantCulture);
+            if (parsed != Math.Truncate(parsed))
+                throw new BinaryCodecException($"Native (XRP) amounts must be integer drops, got: {value}");
             IsNegative = parsed < 0;
             Mantissa = (ulong)Math.Abs(parsed);
+            if (Mantissa > MaxNativeDrops)
+                throw new BinaryCodecException($"Native (XRP) amount {value} exceeds maximum ({MaxNativeDrops} drops).");
         }
         public NativeValue(byte[] mantissa, int sign)
         {

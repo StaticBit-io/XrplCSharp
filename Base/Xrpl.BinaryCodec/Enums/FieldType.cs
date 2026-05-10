@@ -16,6 +16,9 @@ namespace Xrpl.BinaryCodec.Enums
         public static readonly FieldType Uint32 = new FieldType(nameof(Uint32), 2);
         public static readonly FieldType Uint64 = new FieldType(nameof(Uint64), 3);
         public static readonly FieldType Hash128 = new FieldType(nameof(Hash128), 4);
+        public static readonly FieldType Number = new FieldType(nameof(Number), 9);
+        public static readonly FieldType Int32 = new FieldType(nameof(Int32), 10);
+        public static readonly FieldType Int64 = new FieldType(nameof(Int64), 11);
         public static readonly FieldType Hash256 = new FieldType(nameof(Hash256), 5);
         public static readonly FieldType Amount = new FieldType(nameof(Amount), 6);
         public static readonly FieldType Blob = new FieldType(nameof(Blob), 7);
@@ -26,8 +29,12 @@ namespace Xrpl.BinaryCodec.Enums
         public static readonly FieldType Hash160 = new FieldType(nameof(Hash160), 17);
         public static readonly FieldType PathSet = new FieldType(nameof(PathSet), 18);
         public static readonly FieldType Vector256 = new FieldType(nameof(Vector256), 19);
+        public static readonly FieldType UInt96 = new FieldType(nameof(UInt96), 20);
         public static readonly FieldType Hash192 = new FieldType(nameof(Hash192), 21);
+        public static readonly FieldType UInt384 = new FieldType(nameof(UInt384), 22);
+        public static readonly FieldType UInt512 = new FieldType(nameof(UInt512), 23);
         public static readonly FieldType Issue = new FieldType(nameof(Issue), 24);
+        public static readonly FieldType XChainBridge = new FieldType(nameof(XChainBridge), 25);
         /// <summary>Currency type for Oracle price data (ordinal 26).</summary>
         public static readonly FieldType Currency = new FieldType(nameof(Currency), 26);
         public static readonly FieldType Transaction = new FieldType(nameof(Transaction), 10001);

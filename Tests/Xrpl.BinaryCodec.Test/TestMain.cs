@@ -1,3 +1,4 @@
+using System;
 using System.Collections.Generic;
 using System.Diagnostics;
 using System.Linq;
@@ -14,75 +15,81 @@ using static Xrpl.AddressCodec.B58;
 namespace Xrpl.BinaryCodec.Tests
 {
 
-    //[TestClass]
-    //public class TestUBinarySimple
-    //{
-    //static Dictionary<string, object> TX_JSON = new Dictionary<string, object>
-    //    {
-    //        { "Account", "r9LqNeG6qHxjeUocjvVki2XR35weJ9mZgQ" },
-    //        { "Destination", "rHb9CJAWyB4rj91VRWn96DkukG4bwdtyTh" },
-    //        //{ "Flags", (1 << 31) },
-    //        { "Flags", 2147483648 },
-    //        { "Sequence", 1 },
-    //        { "TransactionType", "Payment" },
-    //    };
+    [TestClass]
+    public class TestUBinarySimple
+    {
+        private static JsonObject CreatePaymentTx()
+        {
+            return new JsonObject
+            {
+                ["Account"] = "r9LqNeG6qHxjeUocjvVki2XR35weJ9mZgQ",
+                ["Destination"] = "rHb9CJAWyB4rj91VRWn96DkukG4bwdtyTh",
+                ["Flags"] = 2147483648u,
+                ["Sequence"] = 1u,
+                ["TransactionType"] = "Payment",
+            };
+        }
 
-    //    [TestMethod]
-    //    public void TestSimple()
-    //    {
-    //        string encoded = XrplBinaryCodec.Encode(TX_JSON);
-    //        JToken decoded = XrplBinaryCodec.Decode(encoded);
-    //        Dictionary<string, object> result = decoded.ToObject<Dictionary<string, object>>();
-    //        Assert.IsTrue(TX_JSON.ContentEquals(result));
-    //    }
+        [TestMethod]
+        public void TestSimple()
+        {
+            JsonObject txJson = CreatePaymentTx();
+            string encoded = XrplBinaryCodec.Encode(txJson);
+            JsonNode decoded = XrplBinaryCodec.Decode(encoded);
 
-    //    [TestMethod]
-    //    public void TestAmountFee()
-    //    {
-    //        var clone = TX_JSON;
-    //        clone["Amount"] = "1000";
-    //        clone["Fee"] = "10";
-    //        Assert.IsTrue(XrplBinaryCodec.Decode(XrplBinaryCodec.Encode(clone)).ToObject<Dictionary<string, object>>() == clone);
-    //    }
+            Assert.AreEqual("r9LqNeG6qHxjeUocjvVki2XR35weJ9mZgQ", decoded["Account"].GetValue<string>());
+            Assert.AreEqual("rHb9CJAWyB4rj91VRWn96DkukG4bwdtyTh", decoded["Destination"].GetValue<string>());
+            Assert.AreEqual("Payment", decoded["TransactionType"].GetValue<string>());
+        }
 
-    //    [TestMethod]
-    //    [ExpectedException(typeof(BinaryCodecException))]
-    //    public void TestInvalidAmount()
-    //    {
-    //        var clone = TX_JSON;
-    //        clone["Amount"] = "1000.789";
-    //        clone["Fee"] = "10.123";
-    //        XrplBinaryCodec.Encode(clone);
-    //    }
+        [TestMethod]
+        public void TestAmountFee()
+        {
+            JsonObject txJson = CreatePaymentTx();
+            txJson["Amount"] = "1000";
+            txJson["Fee"] = "10";
 
-    //    [TestMethod]
-    //    [ExpectedException(typeof(BinaryCodecException))]
-    //    public void TestInvalidAmountInvalidFee()
-    //    {
-    //        var clone = TX_JSON;
-    //        clone["Amount"] = "1000.001";
-    //        clone["Fee"] = "10";
-    //        XrplBinaryCodec.Encode(clone);
-    //    }
+            string encoded = XrplBinaryCodec.Encode(txJson);
+            JsonNode decoded = XrplBinaryCodec.Decode(encoded);
+            Assert.AreEqual("1000", decoded["Amount"].GetValue<string>());
+            Assert.AreEqual("10", decoded["Fee"].GetValue<string>());
+        }
 
-    //    [TestMethod]
-    //    [ExpectedException(typeof(BinaryCodecException))]
-    //    public void TestInvalidAmountType()
-    //    {
-    //        var clone = TX_JSON;
-    //        clone["Amount"] = 1000;
-    //        XrplBinaryCodec.Encode(clone);
-    //    }
+        [TestMethod]
+        public void TestLargeFlags()
+        {
+            JsonObject txJson = CreatePaymentTx();
+            txJson["Amount"] = "1000";
+            txJson["Fee"] = "10";
+            txJson["Flags"] = 2147483648u;
 
-    //    [TestMethod]
-    //    [ExpectedException(typeof(BinaryCodecException))]
-    //    public void TestInvalidFeeType()
-    //    {
-    //        var clone = TX_JSON;
-    //        clone["Fee"] = 10;
-    //        XrplBinaryCodec.Encode(clone);
-    //    }
-    //}
+            string encoded = XrplBinaryCodec.Encode(txJson);
+            JsonNode decoded = XrplBinaryCodec.Decode(encoded);
+            Assert.AreEqual(2147483648u, decoded["Flags"].GetValue<uint>());
+        }
+
+        [TestMethod]
+        public void TestInvalidAmountDecimal()
+        {
+            JsonObject txJson = CreatePaymentTx();
+            txJson["Amount"] = "1000.789";
+            txJson["Fee"] = "10";
+
+            Assert.ThrowsExactly<BinaryCodecException>(() => XrplBinaryCodec.Encode(txJson),
+                "Expected BinaryCodecException for decimal XRP amount.");
+        }
+
+        [TestMethod]
+        public void TestInvalidFeeDecimal()
+        {
+            JsonObject txJson = CreatePaymentTx();
+            txJson["Amount"] = "1000";
+            txJson["Fee"] = "10.123";
+
+            Assert.ThrowsExactly<BinaryCodecException>(() => XrplBinaryCodec.Encode(txJson),
+                "Expected BinaryCodecException for decimal fee.");
+        }
+    }
 
     [TestClass]
     public class TestUBinaryXAddress
@@ -166,30 +173,14 @@ namespace Xrpl.BinaryCodec.Tests
             MakeSuite("accountState", accountStateData);
         }
 
+        // X-address encoding is not currently supported by AccountId.FromJson
         //[TestMethod]
         //public void RunXFixturesTest()
         //{
         //    var obj = GetXTestsJson();
-        //    string transactionsString = obj["transactions"].ToString();
-        //    var transactionsData = JsonConvert.DeserializeObject<TestXData[]>(transactionsString);
+        //    string transactionsString = obj["transactions"].ToJsonString();
+        //    var transactionsData = JsonSerializer.Deserialize<TestXData[]>(transactionsString);
         //    MakeXSuite("transactions", transactionsData);
-        //}
-
-        //[TestMethod]
-        //public void TestLedgerData()
-        //{
-        //    var obj = GetTestsJson();
-        //    string ledgerDataString = obj["ledgerData"].ToString();
-        //    var ledgerData = JsonConvert.DeserializeObject<TestData[]>(ledgerDataString);
-        //    for (int i = 0; i < ledgerData.Length; i++)
-        //    {
-        //        TestData data = ledgerData[i];
-        //        string binary = data.binary;
-        //        JObject jsonData = data.json;
-        //        StReader reader = StReader.FromHex(binary);
-        //        var decoded = LedgerHeader.FromReader(reader);
-        //        Assert.AreEqual(jsonData, decoded.ToJson());
-        //    }
         //}
     }
 

@@ -39,42 +39,58 @@ namespace Xrpl.BinaryCodec.Types
             }
         }
 
-        static StObject()
+        private static readonly Dictionary<FieldType, BuildFrom> DispatchTable = new Dictionary<FieldType, BuildFrom>
         {
-            var d2 = new Dictionary<FieldType, BuildFrom>
+            [FieldType.StObject] = new BuildFrom(FromJson, FromParser),
+            [FieldType.StArray] = new BuildFrom(StArray.FromJson, StArray.FromParser),
+            [FieldType.Uint8] = new BuildFrom(Uint8.FromJson, Uint8.FromParser),
+            [FieldType.Uint32] = new BuildFrom(Uint32.FromJson, Uint32.FromParser),
+            [FieldType.Uint64] = new BuildFrom(Uint64.FromJson, Uint64.FromParser),
+            [FieldType.Uint16] = new BuildFrom(Uint16.FromJson, Uint16.FromParser),
+            [FieldType.Amount] = new BuildFrom(Amount.FromJson, Amount.FromParser),
+            [FieldType.Hash128] = new BuildFrom(Hash128.FromJson, Hash128.FromParser),
+            [FieldType.Hash192] = new BuildFrom(Hash192.FromJson, Hash192.FromParser),
+            [FieldType.Hash256] = new BuildFrom(Hash256.FromJson, Hash256.FromParser),
+            [FieldType.Hash160] = new BuildFrom(Hash160.FromJson, Hash160.FromParser),
+            [FieldType.AccountId] = new BuildFrom(AccountId.FromJson, AccountId.FromParser),
+            [FieldType.Blob] = new BuildFrom(Blob.FromJson, Blob.FromParser),
+            [FieldType.PathSet] = new BuildFrom(PathSet.FromJson, PathSet.FromParser),
+            [FieldType.Vector256] = new BuildFrom(Vector256.FromJson, Vector256.FromParser),
+            [FieldType.Issue] = new BuildFrom(Issue.FromJson, Issue.FromParser),
+            [FieldType.Currency] = new BuildFrom(Currency.FromOracleJson, Currency.FromParser),
+            [FieldType.Number] = new BuildFrom(NumberType.FromJson, NumberType.FromParser),
+            [FieldType.Int32] = new BuildFrom(Int32Type.FromJson, Int32Type.FromParser),
+            [FieldType.Int64] = new BuildFrom(Int64Type.FromJson, Int64Type.FromParser),
+            [FieldType.XChainBridge] = new BuildFrom(XChainBridgeType.FromJson, XChainBridgeType.FromParser),
+        };
+
+        internal static void EnsureDispatch(Field field)
+        {
+            if (field is TransactionTypeField)
             {
-                [FieldType.StObject] = new BuildFrom(FromJson, FromParser),
-                [FieldType.StArray] = new BuildFrom(StArray.FromJson, StArray.FromParser),
-                [FieldType.Uint8] = new BuildFrom(Uint8.FromJson, Uint8.FromParser),
-                [FieldType.Uint32] = new BuildFrom(Uint32.FromJson, Uint32.FromParser),
-                [FieldType.Uint64] = new BuildFrom(Uint64.FromJson, Uint64.FromParser),
-                [FieldType.Uint16] = new BuildFrom(Uint16.FromJson, Uint16.FromParser),
-                [FieldType.Amount] = new BuildFrom(Amount.FromJson, Amount.FromParser),
-                [FieldType.Hash128] = new BuildFrom(Hash128.FromJson, Hash128.FromParser),
-                [FieldType.Hash192] = new BuildFrom(Hash192.FromJson, Hash192.FromParser),
-                [FieldType.Hash256] = new BuildFrom(Hash256.FromJson, Hash256.FromParser),
-                [FieldType.Hash160] = new BuildFrom(Hash160.FromJson, Hash160.FromParser),
-                [FieldType.AccountId] = new BuildFrom(AccountId.FromJson, AccountId.FromParser),
-                [FieldType.Blob] = new BuildFrom(Blob.FromJson, Blob.FromParser),
-                [FieldType.PathSet] = new BuildFrom(PathSet.FromJson, PathSet.FromParser),
-                [FieldType.Vector256] = new BuildFrom(Vector256.FromJson, Vector256.FromParser),
-                [FieldType.Issue] = new BuildFrom(Issue.FromJson, Issue.FromParser),
-                [FieldType.Currency] = new BuildFrom(Currency.FromOracleJson, Currency.FromParser),
-            };
-            foreach (var field in Field.Values.Where(
-                         field => d2.ContainsKey(field.Type)))
+                field.FromJson = TransactionType.Values.FromJson;
+                field.FromParser = TransactionType.Values.FromParser;
+            }
+            else if (field is EngineResultField)
             {
-                var buildFrom = d2[field.Type];
+                field.FromJson = EngineResult.Values.FromJson;
+                field.FromParser = EngineResult.Values.FromParser;
+            }
+            else if (field is LedgerEntryTypeField)
+            {
+                field.FromJson = LedgerEntryType.Values.FromJson;
+                field.FromParser = LedgerEntryType.Values.FromParser;
+            }
+            else if (DispatchTable.TryGetValue(field.Type, out BuildFrom buildFrom))
+            {
                 field.FromJson = buildFrom.Json;
                 field.FromParser = buildFrom.Parser;
             }
-
-            Field.TransactionType.FromJson = TransactionType.Values.FromJson;
-            Field.TransactionType.FromParser = TransactionType.Values.FromParser;
-            Field.TransactionResult.FromJson = EngineResult.Values.FromJson;
-            Field.TransactionResult.FromParser = EngineResult.Values.FromParser;
-            Field.LedgerEntryType.FromJson = LedgerEntryType.Values.FromJson;
-            Field.LedgerEntryType.FromParser = LedgerEntryType.Values.FromParser;
+            else
+            {
+                throw new InvalidOperationException(
+                    $"No FromJson/FromParser dispatch registered for field '{field.Name}' (type: {field.Type.Name}).");
+            }
         }
 
         /// <summary>
