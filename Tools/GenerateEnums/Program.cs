@@ -128,10 +128,23 @@ internal static class Program
             Console.WriteLine("    (--force: all files will be rewritten)");
         Console.WriteLine();
 
-        GenerateEngineResult(root.GetProperty("TRANSACTION_RESULTS"), outputDir);
-        GenerateTransactionType(root.GetProperty("TRANSACTION_TYPES"), outputDir);
-        GenerateLedgerEntryType(root.GetProperty("LEDGER_ENTRY_TYPES"), outputDir);
-        GenerateFields(root.GetProperty("FIELDS"), outputDir);
+        if (!root.TryGetProperty("TRANSACTION_RESULTS", out JsonElement transactionResults))
+            throw new InvalidOperationException(
+                "Missing 'TRANSACTION_RESULTS' property in definitions.json — unexpected file structure.");
+        if (!root.TryGetProperty("TRANSACTION_TYPES", out JsonElement transactionTypes))
+            throw new InvalidOperationException(
+                "Missing 'TRANSACTION_TYPES' property in definitions.json — unexpected file structure.");
+        if (!root.TryGetProperty("LEDGER_ENTRY_TYPES", out JsonElement ledgerEntryTypes))
+            throw new InvalidOperationException(
+                "Missing 'LEDGER_ENTRY_TYPES' property in definitions.json — unexpected file structure.");
+        if (!root.TryGetProperty("FIELDS", out JsonElement fields))
+            throw new InvalidOperationException(
+                "Missing 'FIELDS' property in definitions.json — unexpected file structure.");
+
+        GenerateEngineResult(transactionResults, outputDir);
+        GenerateTransactionType(transactionTypes, outputDir);
+        GenerateLedgerEntryType(ledgerEntryTypes, outputDir);
+        GenerateFields(fields, outputDir);
 
         Console.WriteLine();
         Console.WriteLine($"Done. Written: {_filesWritten}, Unchanged: {_filesUnchanged}");

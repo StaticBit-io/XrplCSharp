@@ -16,6 +16,7 @@ namespace Xrpl.BinaryCodec.Enums
         private FromJson _fromJson;
         private FromParser _fromParser;
 
+        // Racy but idempotent: EnsureDispatch always sets the same delegates for a given field.
         public FromJson FromJson
         {
             get
@@ -27,6 +28,7 @@ namespace Xrpl.BinaryCodec.Enums
             set => _fromJson = value;
         }
 
+        // Racy but idempotent: EnsureDispatch always sets the same delegates for a given field.
         public FromParser FromParser
         {
             get
@@ -40,6 +42,9 @@ namespace Xrpl.BinaryCodec.Enums
 
         #endregion
 
+        // Thread-safe in practice: ??= runs only during CLR type initialization which is serialized.
+        // Lazy<T> / static ctor cannot be used here because partial class field initializer ordering
+        // across files (Field.cs vs Field.*.Generated.cs) is implementation-defined.
         private static Enumeration<Field> _values;
         public static Enumeration<Field> Values => _values ??= new Enumeration<Field>();
 
