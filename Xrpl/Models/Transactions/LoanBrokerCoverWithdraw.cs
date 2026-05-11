@@ -3,6 +3,7 @@ using System.Text.Json.Serialization;
 using System.Threading.Tasks;
 
 using Xrpl.Client.Exceptions;
+using Xrpl.Client.Json.Converters;
 using Xrpl.Models.Common;
 
 namespace Xrpl.Models.Transactions
@@ -38,6 +39,7 @@ namespace Xrpl.Models.Transactions
 
         /// <inheritdoc />
         [JsonPropertyName("Amount")]
+        [JsonConverter(typeof(CurrencyConverter))]
         public Currency Amount { get; set; }
     }
 
@@ -50,6 +52,7 @@ namespace Xrpl.Models.Transactions
 
         /// <inheritdoc />
         [JsonPropertyName("Amount")]
+        [JsonConverter(typeof(CurrencyConverter))]
         public Currency Amount { get; set; }
     }
 

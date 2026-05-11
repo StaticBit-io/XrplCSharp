@@ -3,6 +3,7 @@ using System.Text.Json.Serialization;
 using System.Threading.Tasks;
 
 using Xrpl.Client.Exceptions;
+using Xrpl.Client.Json.Converters;
 using Xrpl.Models.Common;
 
 // https://xrpl.org/docs/references/protocol/transactions/types/xchainaccountcreatecommit
@@ -57,10 +58,12 @@ namespace Xrpl.Models.Transactions
 
         /// <inheritdoc />
         [JsonPropertyName("Amount")]
+        [JsonConverter(typeof(CurrencyConverter))]
         public Currency Amount { get; set; }
 
         /// <inheritdoc />
         [JsonPropertyName("SignatureReward")]
+        [JsonConverter(typeof(CurrencyConverter))]
         public Currency SignatureReward { get; set; }
     }
 
@@ -77,10 +80,12 @@ namespace Xrpl.Models.Transactions
 
         /// <inheritdoc />
         [JsonPropertyName("Amount")]
+        [JsonConverter(typeof(CurrencyConverter))]
         public Currency Amount { get; set; }
 
         /// <inheritdoc />
         [JsonPropertyName("SignatureReward")]
+        [JsonConverter(typeof(CurrencyConverter))]
         public Currency SignatureReward { get; set; }
     }
 

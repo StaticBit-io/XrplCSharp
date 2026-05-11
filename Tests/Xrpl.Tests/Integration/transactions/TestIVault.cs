@@ -220,6 +220,15 @@ public class TestIVault : TestIVaultBase
         XrplWallet walletHolder = XrplWallet.Generate();
         await IntegrationTestConfig.TryFundWalletsAsync(client, nodeType, walletOwner, walletHolder);
 
+        AccountSet accountSetTx = new AccountSet
+        {
+            Account = walletOwner.ClassicAddress,
+            SetFlag = AccountSetAsfFlags.asfAllowTrustLineClawback,
+        };
+        accountSetTx = await client.Autofill(accountSetTx);
+        TransactionSummary accountSetResult = await client.SubmitAndWait(accountSetTx, walletOwner, true);
+        ValidateResult(accountSetResult);
+
         VaultCreate createTx = new VaultCreate
         {
             Account = walletOwner.ClassicAddress,
@@ -231,6 +240,16 @@ public class TestIVault : TestIVaultBase
 
         string vaultId = GetCreatedObjectId(createResult);
         Assert.IsNotNull(vaultId, "VaultID should be present in metadata");
+
+        VaultDeposit depositTx = new VaultDeposit
+        {
+            Account = walletHolder.ClassicAddress,
+            VaultID = vaultId,
+            Amount = new Currency { Value = "1000000", CurrencyCode = "XRP" },
+        };
+        depositTx = await client.Autofill(depositTx);
+        TransactionSummary depositResult = await client.SubmitAndWait(depositTx, walletHolder, true);
+        ValidateResult(depositResult);
 
         VaultClawback clawbackTx = new VaultClawback
         {

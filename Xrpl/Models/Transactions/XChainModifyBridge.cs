@@ -4,6 +4,7 @@ using System.Text.Json.Serialization;
 using System.Threading.Tasks;
 
 using Xrpl.Client.Exceptions;
+using Xrpl.Client.Json.Converters;
 using Xrpl.Models.Common;
 
 // https://xrpl.org/docs/references/protocol/transactions/types/xchainmodifybridge
@@ -57,10 +58,12 @@ namespace Xrpl.Models.Transactions
 
         /// <inheritdoc />
         [JsonPropertyName("SignatureReward")]
+        [JsonConverter(typeof(CurrencyConverter))]
         public Currency SignatureReward { get; set; }
 
         /// <inheritdoc />
         [JsonPropertyName("MinAccountCreateAmount")]
+        [JsonConverter(typeof(CurrencyConverter))]
         public Currency MinAccountCreateAmount { get; set; }
 
         public new XChainModifyBridgeFlags? Flags
@@ -79,10 +82,12 @@ namespace Xrpl.Models.Transactions
 
         /// <inheritdoc />
         [JsonPropertyName("SignatureReward")]
+        [JsonConverter(typeof(CurrencyConverter))]
         public Currency SignatureReward { get; set; }
 
         /// <inheritdoc />
         [JsonPropertyName("MinAccountCreateAmount")]
+        [JsonConverter(typeof(CurrencyConverter))]
         public Currency MinAccountCreateAmount { get; set; }
 
         public new XChainModifyBridgeFlags? Flags
