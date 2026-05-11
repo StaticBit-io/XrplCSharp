@@ -1,0 +1,198 @@
+using System.Collections.Generic;
+using System.Text.Json.Serialization;
+using System.Threading.Tasks;
+
+using Xrpl.Client.Exceptions;
+using Xrpl.Models.Common;
+
+// https://xrpl.org/docs/references/protocol/transactions/types/xchainaddaccountcreateattestation
+
+namespace Xrpl.Models.Transactions
+{
+    /// <summary>
+    /// The XChainAddAccountCreateAttestation transaction provides an attestation
+    /// from a witness server that an XChainAccountCreateCommit transaction occurred
+    /// on the other chain.
+    /// </summary>
+    public interface IXChainAddAccountCreateAttestation : ITransactionCommon
+    {
+        /// <summary>
+        /// The bridge associated with the attestation.
+        /// </summary>
+        XChainBridgeModel XChainBridge { get; set; }
+
+        /// <summary>
+        /// An integer that represents the order that the claim must be processed in.
+        /// </summary>
+        string XChainAccountCreateCount { get; set; }
+
+        /// <summary>
+        /// The amount committed by the XChainAccountCreateCommit transaction on the source chain.
+        /// </summary>
+        Currency Amount { get; set; }
+
+        /// <summary>
+        /// The amount, in XRP, to be used to reward the witness servers for providing signatures.
+        /// </summary>
+        Currency SignatureReward { get; set; }
+
+        /// <summary>
+        /// The destination account for the funds on the destination chain.
+        /// </summary>
+        string Destination { get; set; }
+
+        /// <summary>
+        /// The account that should receive this signer's share of the SignatureReward.
+        /// </summary>
+        string AttestationRewardAccount { get; set; }
+
+        /// <summary>
+        /// The account on the door account's signer list that is signing the transaction.
+        /// </summary>
+        string AttestationSignerAccount { get; set; }
+
+        /// <summary>
+        /// The public key used to verify the signature.
+        /// </summary>
+        string PublicKey { get; set; }
+
+        /// <summary>
+        /// The signature attesting to the event on the other chain.
+        /// </summary>
+        string Signature { get; set; }
+
+        /// <summary>
+        /// A boolean representing the chain where the event occurred.
+        /// 0 represents the issuing chain, 1 represents the locking chain.
+        /// </summary>
+        byte WasLockingChainSend { get; set; }
+    }
+
+    /// <inheritdoc cref="IXChainAddAccountCreateAttestation" />
+    public class XChainAddAccountCreateAttestation : TransactionRequest, IXChainAddAccountCreateAttestation
+    {
+        public XChainAddAccountCreateAttestation()
+        {
+            TransactionType = TransactionType.XChainAddAccountCreateAttestation;
+        }
+
+        /// <inheritdoc />
+        [JsonPropertyName("XChainBridge")]
+        public XChainBridgeModel XChainBridge { get; set; }
+
+        /// <inheritdoc />
+        [JsonPropertyName("XChainAccountCreateCount")]
+        public string XChainAccountCreateCount { get; set; }
+
+        /// <inheritdoc />
+        [JsonPropertyName("Amount")]
+        public Currency Amount { get; set; }
+
+        /// <inheritdoc />
+        [JsonPropertyName("SignatureReward")]
+        public Currency SignatureReward { get; set; }
+
+        /// <inheritdoc />
+        [JsonPropertyName("Destination")]
+        public string Destination { get; set; }
+
+        /// <inheritdoc />
+        [JsonPropertyName("AttestationRewardAccount")]
+        public string AttestationRewardAccount { get; set; }
+
+        /// <inheritdoc />
+        [JsonPropertyName("AttestationSignerAccount")]
+        public string AttestationSignerAccount { get; set; }
+
+        /// <inheritdoc />
+        [JsonPropertyName("PublicKey")]
+        public string PublicKey { get; set; }
+
+        /// <inheritdoc />
+        [JsonPropertyName("Signature")]
+        public string Signature { get; set; }
+
+        /// <inheritdoc />
+        [JsonPropertyName("WasLockingChainSend")]
+        public byte WasLockingChainSend { get; set; }
+    }
+
+    /// <inheritdoc cref="IXChainAddAccountCreateAttestation" />
+    public class XChainAddAccountCreateAttestationResponse : TransactionResponse, IXChainAddAccountCreateAttestation
+    {
+        /// <inheritdoc />
+        [JsonPropertyName("XChainBridge")]
+        public XChainBridgeModel XChainBridge { get; set; }
+
+        /// <inheritdoc />
+        [JsonPropertyName("XChainAccountCreateCount")]
+        public string XChainAccountCreateCount { get; set; }
+
+        /// <inheritdoc />
+        [JsonPropertyName("Amount")]
+        public Currency Amount { get; set; }
+
+        /// <inheritdoc />
+        [JsonPropertyName("SignatureReward")]
+        public Currency SignatureReward { get; set; }
+
+        /// <inheritdoc />
+        [JsonPropertyName("Destination")]
+        public string Destination { get; set; }
+
+        /// <inheritdoc />
+        [JsonPropertyName("AttestationRewardAccount")]
+        public string AttestationRewardAccount { get; set; }
+
+        /// <inheritdoc />
+        [JsonPropertyName("AttestationSignerAccount")]
+        public string AttestationSignerAccount { get; set; }
+
+        /// <inheritdoc />
+        [JsonPropertyName("PublicKey")]
+        public string PublicKey { get; set; }
+
+        /// <inheritdoc />
+        [JsonPropertyName("Signature")]
+        public string Signature { get; set; }
+
+        /// <inheritdoc />
+        [JsonPropertyName("WasLockingChainSend")]
+        public byte WasLockingChainSend { get; set; }
+    }
+
+    public partial class Validation
+    {
+        public static async Task ValidateXChainAddAccountCreateAttestation(Dictionary<string, object> tx)
+        {
+            await Common.ValidateBaseTransaction(tx);
+
+            if (!tx.TryGetValue("XChainBridge", out var bridge) || bridge is null)
+                throw new ValidationException("XChainAddAccountCreateAttestation: missing field XChainBridge");
+
+            if (!tx.TryGetValue("XChainAccountCreateCount", out var count) || count is null)
+                throw new ValidationException("XChainAddAccountCreateAttestation: missing field XChainAccountCreateCount");
+
+            if (!tx.TryGetValue("Amount", out var amount) || amount is null)
+                throw new ValidationException("XChainAddAccountCreateAttestation: missing field Amount");
+
+            if (!tx.TryGetValue("SignatureReward", out var reward) || reward is null)
+                throw new ValidationException("XChainAddAccountCreateAttestation: missing field SignatureReward");
+
+            if (!tx.TryGetValue("Destination", out var dest) || dest is not string)
+                throw new ValidationException("XChainAddAccountCreateAttestation: missing field Destination");
+
+            if (!tx.TryGetValue("AttestationRewardAccount", out var rewardAccount) || rewardAccount is not string)
+                throw new ValidationException("XChainAddAccountCreateAttestation: missing field AttestationRewardAccount");
+
+            if (!tx.TryGetValue("AttestationSignerAccount", out var signerAccount) || signerAccount is not string)
+                throw new ValidationException("XChainAddAccountCreateAttestation: missing field AttestationSignerAccount");
+
+            if (!tx.TryGetValue("PublicKey", out var pk) || pk is not string)
+                throw new ValidationException("XChainAddAccountCreateAttestation: missing field PublicKey");
+
+            if (!tx.TryGetValue("Signature", out var sig) || sig is not string)
+                throw new ValidationException("XChainAddAccountCreateAttestation: missing field Signature");
+        }
+    }
+}

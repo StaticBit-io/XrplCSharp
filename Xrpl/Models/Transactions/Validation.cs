@@ -193,6 +193,86 @@ namespace Xrpl.Models.Transactions
                 case "CredentialDelete":
                     await ValidateCredentialDelete(tx);
                     break;
+
+                case "XChainCreateBridge":
+                    await ValidateXChainCreateBridge(tx);
+                    break;
+                case "XChainModifyBridge":
+                    await ValidateXChainModifyBridge(tx);
+                    break;
+                case "XChainCreateClaimID":
+                    await ValidateXChainCreateClaimID(tx);
+                    break;
+                case "XChainCommit":
+                    await ValidateXChainCommit(tx);
+                    break;
+                case "XChainClaim":
+                    await ValidateXChainClaim(tx);
+                    break;
+                case "XChainAccountCreateCommit":
+                    await ValidateXChainAccountCreateCommit(tx);
+                    break;
+                case "XChainAddClaimAttestation":
+                    await ValidateXChainAddClaimAttestation(tx);
+                    break;
+                case "XChainAddAccountCreateAttestation":
+                    await ValidateXChainAddAccountCreateAttestation(tx);
+                    break;
+
+                case "VaultCreate":
+                    await ValidateVaultCreate(tx);
+                    break;
+                case "VaultSet":
+                    await ValidateVaultSet(tx);
+                    break;
+                case "VaultDelete":
+                    await ValidateVaultDelete(tx);
+                    break;
+                case "VaultDeposit":
+                    await ValidateVaultDeposit(tx);
+                    break;
+                case "VaultWithdraw":
+                    await ValidateVaultWithdraw(tx);
+                    break;
+                case "VaultClawback":
+                    await ValidateVaultClawback(tx);
+                    break;
+
+                case "LoanBrokerSet":
+                    await ValidateLoanBrokerSet(tx);
+                    break;
+                case "LoanBrokerDelete":
+                    await ValidateLoanBrokerDelete(tx);
+                    break;
+                case "LoanBrokerCoverDeposit":
+                    await ValidateLoanBrokerCoverDeposit(tx);
+                    break;
+                case "LoanBrokerCoverWithdraw":
+                    await ValidateLoanBrokerCoverWithdraw(tx);
+                    break;
+                case "LoanBrokerCoverClawback":
+                    await ValidateLoanBrokerCoverClawback(tx);
+                    break;
+                case "LoanSet":
+                    await ValidateLoanSet(tx);
+                    break;
+                case "LoanDelete":
+                    await ValidateLoanDelete(tx);
+                    break;
+                case "LoanManage":
+                    await ValidateLoanManage(tx);
+                    break;
+                case "LoanPay":
+                    await ValidateLoanPay(tx);
+                    break;
+
+                case "DelegateSet":
+                    await ValidateDelegateSet(tx);
+                    break;
+                case "LedgerStateFix":
+                    await ValidateLedgerStateFix(tx);
+                    break;
+
                 default:
                     throw new ValidationException($"Invalid field TransactionType: {type}");
             }

@@ -198,6 +198,13 @@ public class LOConverter : JsonConverter<BaseLedgerEntry>
         LedgerEntryType.PermissionedDomain => typeof(LOPermissionedDomain),
         LedgerEntryType.Credential => typeof(LOCredential),
         LedgerEntryType.DepositPreauth => typeof(LODepositPreauth),
+        LedgerEntryType.Bridge => typeof(LOBridge),
+        LedgerEntryType.XChainOwnedClaimID => typeof(LOXChainOwnedClaimID),
+        LedgerEntryType.XChainOwnedCreateAccountClaimID => typeof(LOXChainOwnedCreateAccountClaimID),
+        LedgerEntryType.Delegate => typeof(LODelegate),
+        LedgerEntryType.Vault => typeof(LOVault),
+        LedgerEntryType.LoanBroker => typeof(LOLoanBroker),
+        LedgerEntryType.Loan => typeof(LOLoan),
         _ => typeof(BaseLedgerEntry),
     };
 
@@ -303,6 +310,13 @@ public class LOConverter : JsonConverter<BaseLedgerEntry>
             "LOPermissionedDomain" => typeof(LOPermissionedDomain),
             "LOCredential" => typeof(LOCredential),
             "LODepositPreauth" => typeof(LODepositPreauth),
+            "LOBridge" => typeof(LOBridge),
+            "LOXChainOwnedClaimID" => typeof(LOXChainOwnedClaimID),
+            "LOXChainOwnedCreateAccountClaimID" => typeof(LOXChainOwnedCreateAccountClaimID),
+            "LODelegate" => typeof(LODelegate),
+            "LOVault" => typeof(LOVault),
+            "LOLoanBroker" => typeof(LOLoanBroker),
+            "LOLoan" => typeof(LOLoan),
             _ => null
         };
 

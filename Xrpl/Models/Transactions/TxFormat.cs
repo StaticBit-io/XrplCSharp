@@ -407,6 +407,187 @@ namespace Xrpl.Models.Transaction
                     [Field.CredentialType] = Requirement.Required,
                 },
 
+                // XChain Bridge (XLS-38d)
+                [BinaryCodec.Types.TransactionType.XChainCreateBridge] = new TxFormat
+                {
+                    [Field.XChainBridge] = Requirement.Required,
+                    [Field.SignatureReward] = Requirement.Required,
+                    [Field.MinAccountCreateAmount] = Requirement.Optional,
+                },
+                [BinaryCodec.Types.TransactionType.XChainModifyBridge] = new TxFormat
+                {
+                    [Field.XChainBridge] = Requirement.Required,
+                    [Field.SignatureReward] = Requirement.Optional,
+                    [Field.MinAccountCreateAmount] = Requirement.Optional,
+                },
+                [BinaryCodec.Types.TransactionType.XChainCreateClaimID] = new TxFormat
+                {
+                    [Field.XChainBridge] = Requirement.Required,
+                    [Field.SignatureReward] = Requirement.Required,
+                    [Field.OtherChainSource] = Requirement.Required,
+                },
+                [BinaryCodec.Types.TransactionType.XChainCommit] = new TxFormat
+                {
+                    [Field.XChainBridge] = Requirement.Required,
+                    [Field.XChainClaimID] = Requirement.Required,
+                    [Field.Amount] = Requirement.Required,
+                    [Field.OtherChainDestination] = Requirement.Optional,
+                },
+                [BinaryCodec.Types.TransactionType.XChainClaim] = new TxFormat
+                {
+                    [Field.XChainBridge] = Requirement.Required,
+                    [Field.XChainClaimID] = Requirement.Required,
+                    [Field.Destination] = Requirement.Required,
+                    [Field.DestinationTag] = Requirement.Optional,
+                    [Field.Amount] = Requirement.Required,
+                },
+                [BinaryCodec.Types.TransactionType.XChainAccountCreateCommit] = new TxFormat
+                {
+                    [Field.XChainBridge] = Requirement.Required,
+                    [Field.Destination] = Requirement.Required,
+                    [Field.Amount] = Requirement.Required,
+                    [Field.SignatureReward] = Requirement.Required,
+                },
+                [BinaryCodec.Types.TransactionType.XChainAddClaimAttestation] = new TxFormat
+                {
+                    [Field.XChainBridge] = Requirement.Required,
+                    [Field.XChainClaimID] = Requirement.Required,
+                    [Field.Amount] = Requirement.Required,
+                    [Field.AttestationRewardAccount] = Requirement.Required,
+                    [Field.AttestationSignerAccount] = Requirement.Required,
+                    [Field.Destination] = Requirement.Optional,
+                    [Field.OtherChainSource] = Requirement.Required,
+                    [Field.PublicKey] = Requirement.Required,
+                    [Field.Signature] = Requirement.Required,
+                    [Field.WasLockingChainSend] = Requirement.Required,
+                },
+                [BinaryCodec.Types.TransactionType.XChainAddAccountCreateAttestation] = new TxFormat
+                {
+                    [Field.XChainBridge] = Requirement.Required,
+                    [Field.XChainAccountCreateCount] = Requirement.Required,
+                    [Field.Amount] = Requirement.Required,
+                    [Field.SignatureReward] = Requirement.Required,
+                    [Field.Destination] = Requirement.Required,
+                    [Field.AttestationRewardAccount] = Requirement.Required,
+                    [Field.AttestationSignerAccount] = Requirement.Required,
+                    [Field.PublicKey] = Requirement.Required,
+                    [Field.Signature] = Requirement.Required,
+                    [Field.WasLockingChainSend] = Requirement.Required,
+                },
+
+                // Vault (XLS-65d)
+                [BinaryCodec.Types.TransactionType.VaultCreate] = new TxFormat
+                {
+                    [Field.Asset] = Requirement.Required,
+                    [Field.Asset2] = Requirement.Optional,
+                    [Field.Amount] = Requirement.Optional,
+                    [Field.WithdrawalPolicy] = Requirement.Optional,
+                    [Field.MutableFlags] = Requirement.Optional,
+                    [Field.Data] = Requirement.Optional,
+                    [Field.DomainID] = Requirement.Optional,
+                },
+                [BinaryCodec.Types.TransactionType.VaultSet] = new TxFormat
+                {
+                    [Field.VaultID] = Requirement.Required,
+                    [Field.Data] = Requirement.Optional,
+                    [Field.MutableFlags] = Requirement.Optional,
+                    [Field.DomainID] = Requirement.Optional,
+                },
+                [BinaryCodec.Types.TransactionType.VaultDelete] = new TxFormat
+                {
+                    [Field.VaultID] = Requirement.Required,
+                },
+                [BinaryCodec.Types.TransactionType.VaultDeposit] = new TxFormat
+                {
+                    [Field.VaultID] = Requirement.Required,
+                    [Field.Amount] = Requirement.Required,
+                },
+                [BinaryCodec.Types.TransactionType.VaultWithdraw] = new TxFormat
+                {
+                    [Field.VaultID] = Requirement.Required,
+                    [Field.Amount] = Requirement.Required,
+                },
+                [BinaryCodec.Types.TransactionType.VaultClawback] = new TxFormat
+                {
+                    [Field.VaultID] = Requirement.Required,
+                    [Field.Amount] = Requirement.Optional,
+                    [Field.Holder] = Requirement.Optional,
+                },
+
+                // Loan/LoanBroker (XLS-66d)
+                [BinaryCodec.Types.TransactionType.LoanBrokerSet] = new TxFormat
+                {
+                    [Field.Asset] = Requirement.Required,
+                    [Field.Asset2] = Requirement.Required,
+                    [Field.CoverRateMinimum] = Requirement.Optional,
+                    [Field.CoverRateLiquidation] = Requirement.Optional,
+                    [Field.ManagementFeeRate] = Requirement.Optional,
+                    [Field.DomainID] = Requirement.Optional,
+                },
+                [BinaryCodec.Types.TransactionType.LoanBrokerDelete] = new TxFormat
+                {
+                    [Field.LoanBrokerID] = Requirement.Required,
+                },
+                [BinaryCodec.Types.TransactionType.LoanBrokerCoverDeposit] = new TxFormat
+                {
+                    [Field.LoanBrokerID] = Requirement.Required,
+                    [Field.Amount] = Requirement.Required,
+                },
+                [BinaryCodec.Types.TransactionType.LoanBrokerCoverWithdraw] = new TxFormat
+                {
+                    [Field.LoanBrokerID] = Requirement.Required,
+                    [Field.Amount] = Requirement.Required,
+                },
+                [BinaryCodec.Types.TransactionType.LoanBrokerCoverClawback] = new TxFormat
+                {
+                    [Field.LoanBrokerID] = Requirement.Required,
+                    [Field.Holder] = Requirement.Required,
+                    [Field.Amount] = Requirement.Optional,
+                },
+                [BinaryCodec.Types.TransactionType.LoanSet] = new TxFormat
+                {
+                    [Field.LoanBrokerID] = Requirement.Required,
+                    [Field.Borrower] = Requirement.Required,
+                    [Field.Asset] = Requirement.Required,
+                    [Field.InterestRate] = Requirement.Optional,
+                    [Field.LateInterestRate] = Requirement.Optional,
+                    [Field.CloseInterestRate] = Requirement.Optional,
+                    [Field.OverpaymentInterestRate] = Requirement.Optional,
+                    [Field.OverpaymentFee] = Requirement.Optional,
+                    [Field.StartDate] = Requirement.Optional,
+                    [Field.PaymentInterval] = Requirement.Optional,
+                    [Field.GracePeriod] = Requirement.Optional,
+                    [Field.PaymentTotal] = Requirement.Optional,
+                    [Field.LoanScale] = Requirement.Optional,
+                },
+                [BinaryCodec.Types.TransactionType.LoanDelete] = new TxFormat
+                {
+                    [Field.LoanID] = Requirement.Required,
+                },
+                [BinaryCodec.Types.TransactionType.LoanManage] = new TxFormat
+                {
+                    [Field.LoanID] = Requirement.Required,
+                },
+                [BinaryCodec.Types.TransactionType.LoanPay] = new TxFormat
+                {
+                    [Field.LoanID] = Requirement.Required,
+                    [Field.Amount] = Requirement.Required,
+                },
+
+                // DelegateSet (XLS-74d)
+                [BinaryCodec.Types.TransactionType.DelegateSet] = new TxFormat
+                {
+                    [Field.Delegate] = Requirement.Required,
+                    [Field.Permissions] = Requirement.Required,
+                },
+
+                // LedgerStateFix
+                [BinaryCodec.Types.TransactionType.LedgerStateFix] = new TxFormat
+                {
+                    [Field.LedgerFixType] = Requirement.Required,
+                    [Field.Owner] = Requirement.Optional,
+                },
+
             };
         }
     }

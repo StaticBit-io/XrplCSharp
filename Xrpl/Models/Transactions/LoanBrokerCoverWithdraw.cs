@@ -1,0 +1,69 @@
+using System.Collections.Generic;
+using System.Text.Json.Serialization;
+using System.Threading.Tasks;
+
+using Xrpl.Client.Exceptions;
+using Xrpl.Models.Common;
+
+namespace Xrpl.Models.Transactions
+{
+    /// <summary>
+    /// The LoanBrokerCoverWithdraw transaction withdraws cover assets from a loan broker.
+    /// </summary>
+    /// <remarks>Requires the Loan amendment (XLS-66d). This feature is in draft and subject to change.</remarks>
+    public interface ILoanBrokerCoverWithdraw : ITransactionCommon
+    {
+        /// <summary>
+        /// The ID of the loan broker to withdraw cover assets from.
+        /// </summary>
+        string LoanBrokerID { get; set; }
+
+        /// <summary>
+        /// The amount of cover assets to withdraw.
+        /// </summary>
+        Currency Amount { get; set; }
+    }
+
+    /// <inheritdoc cref="ILoanBrokerCoverWithdraw" />
+    public class LoanBrokerCoverWithdraw : TransactionRequest, ILoanBrokerCoverWithdraw
+    {
+        public LoanBrokerCoverWithdraw()
+        {
+            TransactionType = TransactionType.LoanBrokerCoverWithdraw;
+        }
+
+        /// <inheritdoc />
+        [JsonPropertyName("LoanBrokerID")]
+        public string LoanBrokerID { get; set; }
+
+        /// <inheritdoc />
+        [JsonPropertyName("Amount")]
+        public Currency Amount { get; set; }
+    }
+
+    /// <inheritdoc cref="ILoanBrokerCoverWithdraw" />
+    public class LoanBrokerCoverWithdrawResponse : TransactionResponse, ILoanBrokerCoverWithdraw
+    {
+        /// <inheritdoc />
+        [JsonPropertyName("LoanBrokerID")]
+        public string LoanBrokerID { get; set; }
+
+        /// <inheritdoc />
+        [JsonPropertyName("Amount")]
+        public Currency Amount { get; set; }
+    }
+
+    public partial class Validation
+    {
+        public static async Task ValidateLoanBrokerCoverWithdraw(Dictionary<string, object> tx)
+        {
+            await Common.ValidateBaseTransaction(tx);
+
+            if (!tx.TryGetValue("LoanBrokerID", out var id) || id is not string)
+                throw new ValidationException("LoanBrokerCoverWithdraw: missing field LoanBrokerID");
+
+            if (!tx.TryGetValue("Amount", out var amount) || amount is null)
+                throw new ValidationException("LoanBrokerCoverWithdraw: missing field Amount");
+        }
+    }
+}
