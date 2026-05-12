@@ -3,11 +3,12 @@ using System.Threading.Tasks;
 using Microsoft.VisualStudio.TestTools.UnitTesting;
 
 using Xrpl.Client;
+using Xrpl.Client.Exceptions;
+using Xrpl.Models;
 using Xrpl.Models.Common;
 using Xrpl.Models.Methods;
 using Xrpl.Models.Transactions;
 
-using static Xrpl.Models.Common.Common;
 using Xrpl.Sugar;
 using Xrpl.Wallet;
 
@@ -15,7 +16,7 @@ namespace XrplTests.Xrpl.ClientLib.Integration;
 
 [TestClass]
 [TestCategory("Loan")]
-[Ignore("LendingProtocol amendment requires rippled 3.1.0+; Open for Voting on mainnet (XLS-66)")]
+//[Ignore("LendingProtocol amendment requires rippled 3.1.0+; Open for Voting on mainnet (XLS-66)")]
 public class TestILoan : TestILoanBase
 {
     private static IXrplClient client;
@@ -34,14 +35,14 @@ public class TestILoan : TestILoanBase
     public async Task TestLoanBrokerSet_Basic()
     {
         XrplWallet wallet = XrplWallet.Generate();
-        XrplWallet walletIssuer = XrplWallet.Generate();
-        await IntegrationTestConfig.TryFundWalletsAsync(client, nodeType, wallet, walletIssuer);
+        await IntegrationTestConfig.TryFundWalletAsync(client, wallet, nodeType);
+
+        string vaultId = await CreateVaultForBroker(client, wallet);
 
         LoanBrokerSet tx = new LoanBrokerSet
         {
             Account = wallet.ClassicAddress,
-            Asset = new IssuedCurrency { Currency = "XRP" },
-            Asset2 = new IssuedCurrency { Currency = "USD", Issuer = walletIssuer.ClassicAddress },
+            VaultID = vaultId,
         };
         tx = await client.Autofill(tx);
 
@@ -53,14 +54,14 @@ public class TestILoan : TestILoanBase
     public async Task TestLoanBrokerSet_WithRates()
     {
         XrplWallet wallet = XrplWallet.Generate();
-        XrplWallet walletIssuer = XrplWallet.Generate();
-        await IntegrationTestConfig.TryFundWalletsAsync(client, nodeType, wallet, walletIssuer);
+        await IntegrationTestConfig.TryFundWalletAsync(client, wallet, nodeType);
+
+        string vaultId = await CreateVaultForBroker(client, wallet);
 
         LoanBrokerSet tx = new LoanBrokerSet
         {
             Account = wallet.ClassicAddress,
-            Asset = new IssuedCurrency { Currency = "XRP" },
-            Asset2 = new IssuedCurrency { Currency = "USD", Issuer = walletIssuer.ClassicAddress },
+            VaultID = vaultId,
             CoverRateMinimum = 15000,
             CoverRateLiquidation = 12000,
             ManagementFeeRate = 100,
@@ -75,21 +76,9 @@ public class TestILoan : TestILoanBase
     public async Task TestLoanBrokerCoverDeposit_Basic()
     {
         XrplWallet wallet = XrplWallet.Generate();
-        XrplWallet walletIssuer = XrplWallet.Generate();
-        await IntegrationTestConfig.TryFundWalletsAsync(client, nodeType, wallet, walletIssuer);
+        await IntegrationTestConfig.TryFundWalletAsync(client, wallet, nodeType);
 
-        LoanBrokerSet createTx = new LoanBrokerSet
-        {
-            Account = wallet.ClassicAddress,
-            Asset = new IssuedCurrency { Currency = "XRP" },
-            Asset2 = new IssuedCurrency { Currency = "USD", Issuer = walletIssuer.ClassicAddress },
-        };
-        createTx = await client.Autofill(createTx);
-        TransactionSummary createResult = await client.SubmitAndWait(createTx, wallet, true);
-        ValidateResult(createResult);
-
-        string brokerId = GetCreatedObjectId(createResult);
-        Assert.IsNotNull(brokerId, "LoanBrokerID should be present in metadata");
+        string brokerId = await CreateBroker(client, wallet);
 
         LoanBrokerCoverDeposit depositTx = new LoanBrokerCoverDeposit
         {
@@ -108,32 +97,19 @@ public class TestILoan : TestILoanBase
     {
         XrplWallet walletBroker = XrplWallet.Generate();
         XrplWallet walletBorrower = XrplWallet.Generate();
-        XrplWallet walletIssuer = XrplWallet.Generate();
-        await IntegrationTestConfig.TryFundWalletsAsync(client, nodeType, walletBroker, walletBorrower, walletIssuer);
+        await IntegrationTestConfig.TryFundWalletsAsync(client, nodeType, walletBroker, walletBorrower);
 
-        LoanBrokerSet brokerTx = new LoanBrokerSet
-        {
-            Account = walletBroker.ClassicAddress,
-            Asset = new IssuedCurrency { Currency = "XRP" },
-            Asset2 = new IssuedCurrency { Currency = "USD", Issuer = walletIssuer.ClassicAddress },
-        };
-        brokerTx = await client.Autofill(brokerTx);
-        TransactionSummary brokerResult = await client.SubmitAndWait(brokerTx, walletBroker, true);
-        ValidateResult(brokerResult);
-
-        string brokerId = GetCreatedObjectId(brokerResult);
-        Assert.IsNotNull(brokerId, "LoanBrokerID should be present in metadata");
+        string brokerId = await CreateBroker(client, walletBroker);
 
         LoanSet loanTx = new LoanSet
         {
             Account = walletBroker.ClassicAddress,
             LoanBrokerID = brokerId,
-            Borrower = walletBorrower.ClassicAddress,
-            Asset = new IssuedCurrency { Currency = "USD", Issuer = walletIssuer.ClassicAddress },
+            Counterparty = walletBorrower.ClassicAddress,
+            PrincipalRequested = "10000000",
         };
-        loanTx = await client.Autofill(loanTx);
 
-        TransactionSummary result = await client.SubmitAndWait(loanTx, walletBroker, true);
+        TransactionSummary result = await SubmitLoanSetWithCounterpartySig(client, loanTx, walletBroker, walletBorrower);
         ValidateResult(result);
     }
 
@@ -142,34 +118,33 @@ public class TestILoan : TestILoanBase
     {
         XrplWallet walletBroker = XrplWallet.Generate();
         XrplWallet walletBorrower = XrplWallet.Generate();
-        XrplWallet walletIssuer = XrplWallet.Generate();
-        await IntegrationTestConfig.TryFundWalletsAsync(client, nodeType, walletBroker, walletBorrower, walletIssuer);
+        await IntegrationTestConfig.TryFundWalletsAsync(client, nodeType, walletBroker, walletBorrower);
 
-        LoanBrokerSet brokerTx = new LoanBrokerSet
-        {
-            Account = walletBroker.ClassicAddress,
-            Asset = new IssuedCurrency { Currency = "XRP" },
-            Asset2 = new IssuedCurrency { Currency = "USD", Issuer = walletIssuer.ClassicAddress },
-        };
-        brokerTx = await client.Autofill(brokerTx);
-        TransactionSummary brokerResult = await client.SubmitAndWait(brokerTx, walletBroker, true);
-        ValidateResult(brokerResult);
-
-        string brokerId = GetCreatedObjectId(brokerResult);
-        Assert.IsNotNull(brokerId, "LoanBrokerID should be present in metadata");
+        string brokerId = await CreateBroker(client, walletBroker);
 
         LoanSet loanTx = new LoanSet
         {
             Account = walletBroker.ClassicAddress,
             LoanBrokerID = brokerId,
-            Borrower = walletBorrower.ClassicAddress,
-            Asset = new IssuedCurrency { Currency = "USD", Issuer = walletIssuer.ClassicAddress },
+            Counterparty = walletBorrower.ClassicAddress,
+            PrincipalRequested = "10000000",
         };
-        loanTx = await client.Autofill(loanTx);
-        TransactionSummary loanResult = await client.SubmitAndWait(loanTx, walletBroker, true);
+        TransactionSummary loanResult = await SubmitLoanSetWithCounterpartySig(client, loanTx, walletBroker, walletBorrower);
         ValidateResult(loanResult);
 
-        string loanId = GetCreatedObjectId(loanResult);
+        string loanId = GetCreatedObjectId(loanResult, LedgerEntryType.Loan);
+        Assert.IsNotNull(loanId, "LoanID should be present in metadata");
+
+        // Repay the loan fully before deleting (tecHAS_OBLIGATIONS otherwise)
+        LoanPay payTx = new LoanPay
+        {
+            Account = walletBorrower.ClassicAddress,
+            LoanID = loanId,
+            Amount = new Currency { Value = "10000000", CurrencyCode = "XRP" },
+        };
+        payTx = await client.Autofill(payTx);
+        TransactionSummary payResult = await client.SubmitAndWait(payTx, walletBorrower, true);
+        ValidateResult(payResult);
 
         LoanDelete deleteTx = new LoanDelete
         {
@@ -186,21 +161,9 @@ public class TestILoan : TestILoanBase
     public async Task TestLoanBrokerDelete_Basic()
     {
         XrplWallet wallet = XrplWallet.Generate();
-        XrplWallet walletIssuer = XrplWallet.Generate();
-        await IntegrationTestConfig.TryFundWalletsAsync(client, nodeType, wallet, walletIssuer);
+        await IntegrationTestConfig.TryFundWalletAsync(client, wallet, nodeType);
 
-        LoanBrokerSet createTx = new LoanBrokerSet
-        {
-            Account = wallet.ClassicAddress,
-            Asset = new IssuedCurrency { Currency = "XRP" },
-            Asset2 = new IssuedCurrency { Currency = "USD", Issuer = walletIssuer.ClassicAddress },
-        };
-        createTx = await client.Autofill(createTx);
-        TransactionSummary createResult = await client.SubmitAndWait(createTx, wallet, true);
-        ValidateResult(createResult);
-
-        string brokerId = GetCreatedObjectId(createResult);
-        Assert.IsNotNull(brokerId, "LoanBrokerID should be present in metadata");
+        string brokerId = await CreateBroker(client, wallet);
 
         LoanBrokerDelete deleteTx = new LoanBrokerDelete
         {
@@ -218,43 +181,78 @@ public class TestILoan : TestILoanBase
     {
         XrplWallet walletBroker = XrplWallet.Generate();
         XrplWallet walletBorrower = XrplWallet.Generate();
-        XrplWallet walletIssuer = XrplWallet.Generate();
-        await IntegrationTestConfig.TryFundWalletsAsync(client, nodeType, walletBroker, walletBorrower, walletIssuer);
+        await IntegrationTestConfig.TryFundWalletsAsync(client, nodeType, walletBroker, walletBorrower);
 
-        LoanBrokerSet brokerTx = new LoanBrokerSet
-        {
-            Account = walletBroker.ClassicAddress,
-            Asset = new IssuedCurrency { Currency = "XRP" },
-            Asset2 = new IssuedCurrency { Currency = "USD", Issuer = walletIssuer.ClassicAddress },
-        };
-        brokerTx = await client.Autofill(brokerTx);
-        TransactionSummary brokerResult = await client.SubmitAndWait(brokerTx, walletBroker, true);
-        ValidateResult(brokerResult);
-
-        string brokerId = GetCreatedObjectId(brokerResult);
+        string brokerId = await CreateBroker(client, walletBroker);
 
         LoanSet loanTx = new LoanSet
         {
             Account = walletBroker.ClassicAddress,
             LoanBrokerID = brokerId,
-            Borrower = walletBorrower.ClassicAddress,
-            Asset = new IssuedCurrency { Currency = "USD", Issuer = walletIssuer.ClassicAddress },
+            Counterparty = walletBorrower.ClassicAddress,
+            PrincipalRequested = "10000000",
         };
-        loanTx = await client.Autofill(loanTx);
-        TransactionSummary loanResult = await client.SubmitAndWait(loanTx, walletBroker, true);
+        TransactionSummary loanResult = await SubmitLoanSetWithCounterpartySig(client, loanTx, walletBroker, walletBorrower);
         ValidateResult(loanResult);
 
-        string loanId = GetCreatedObjectId(loanResult);
+        string loanId = GetCreatedObjectId(loanResult, LedgerEntryType.Loan);
 
         LoanPay payTx = new LoanPay
         {
             Account = walletBorrower.ClassicAddress,
             LoanID = loanId,
-            Amount = new Currency { Value = "100", CurrencyCode = "USD", Issuer = walletIssuer.ClassicAddress },
+            Amount = new Currency { Value = "10000000", CurrencyCode = "XRP" }, // full principal
         };
         payTx = await client.Autofill(payTx);
 
         TransactionSummary result = await client.SubmitAndWait(payTx, walletBorrower, true);
         ValidateResult(result);
+    }
+
+    [TestMethod]
+    public async Task TestLoanPay_WithOverpaymentFlag_Rejected()
+    {
+        // tfLoanOverpayment requires specific loan configuration to be permitted.
+        // Without it, the protocol correctly rejects with tecNO_PERMISSION.
+        XrplWallet walletBroker = XrplWallet.Generate();
+        XrplWallet walletBorrower = XrplWallet.Generate();
+        await IntegrationTestConfig.TryFundWalletsAsync(client, nodeType, walletBroker, walletBorrower);
+
+        string brokerId = await CreateBroker(client, walletBroker);
+
+        LoanSet loanTx = new LoanSet
+        {
+            Account = walletBroker.ClassicAddress,
+            LoanBrokerID = brokerId,
+            Counterparty = walletBorrower.ClassicAddress,
+            PrincipalRequested = "10000000",
+        };
+        TransactionSummary loanResult = await SubmitLoanSetWithCounterpartySig(client, loanTx, walletBroker, walletBorrower);
+        ValidateResult(loanResult);
+
+        string loanId = GetCreatedObjectId(loanResult, LedgerEntryType.Loan);
+
+        // Pay with overpayment flag — should be rejected with tecNO_PERMISSION
+        // because the loan was not configured to allow overpayment
+        LoanPay payTx = new LoanPay
+        {
+            Account = walletBorrower.ClassicAddress,
+            LoanID = loanId,
+            Amount = new Currency { Value = "15000000", CurrencyCode = "XRP" },
+            Flags = LoanPayFlags.tfLoanOverpayment,
+        };
+        payTx = await client.Autofill(payTx);
+
+        // SubmitAndWait throws RippleException for tec codes
+        try
+        {
+            await client.SubmitAndWait(payTx, walletBorrower, true);
+            Assert.Fail("Expected RippleException for tecNO_PERMISSION");
+        }
+        catch (RippleException ex)
+        {
+            Assert.IsTrue(ex.Message.Contains("tecNO_PERMISSION"),
+                $"Expected tecNO_PERMISSION but got: {ex.Message}");
+        }
     }
 }

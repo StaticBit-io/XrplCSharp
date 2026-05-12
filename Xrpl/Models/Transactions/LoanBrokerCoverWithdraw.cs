@@ -23,6 +23,16 @@ namespace Xrpl.Models.Transactions
         /// The amount of cover assets to withdraw.
         /// </summary>
         Currency Amount { get; set; }
+
+        /// <summary>
+        /// The destination account for the withdrawn assets. Optional.
+        /// </summary>
+        string Destination { get; set; }
+
+        /// <summary>
+        /// An arbitrary tag to identify the destination. Optional.
+        /// </summary>
+        uint? DestinationTag { get; set; }
     }
 
     /// <inheritdoc cref="ILoanBrokerCoverWithdraw" />
@@ -41,6 +51,14 @@ namespace Xrpl.Models.Transactions
         [JsonPropertyName("Amount")]
         [JsonConverter(typeof(CurrencyConverter))]
         public Currency Amount { get; set; }
+
+        /// <inheritdoc />
+        [JsonPropertyName("Destination")]
+        public string Destination { get; set; }
+
+        /// <inheritdoc />
+        [JsonPropertyName("DestinationTag")]
+        public uint? DestinationTag { get; set; }
     }
 
     /// <inheritdoc cref="ILoanBrokerCoverWithdraw" />
@@ -54,6 +72,14 @@ namespace Xrpl.Models.Transactions
         [JsonPropertyName("Amount")]
         [JsonConverter(typeof(CurrencyConverter))]
         public Currency Amount { get; set; }
+
+        /// <inheritdoc />
+        [JsonPropertyName("Destination")]
+        public string Destination { get; set; }
+
+        /// <inheritdoc />
+        [JsonPropertyName("DestinationTag")]
+        public uint? DestinationTag { get; set; }
     }
 
     public partial class Validation

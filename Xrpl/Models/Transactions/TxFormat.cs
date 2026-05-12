@@ -517,12 +517,13 @@ namespace Xrpl.Models.Transaction
                 // Loan/LoanBroker (XLS-66d)
                 [BinaryCodec.Types.TransactionType.LoanBrokerSet] = new TxFormat
                 {
-                    [Field.Asset] = Requirement.Required,
-                    [Field.Asset2] = Requirement.Required,
+                    [Field.VaultID] = Requirement.Required,
+                    [Field.LoanBrokerID] = Requirement.Optional,
                     [Field.CoverRateMinimum] = Requirement.Optional,
                     [Field.CoverRateLiquidation] = Requirement.Optional,
                     [Field.ManagementFeeRate] = Requirement.Optional,
-                    [Field.DomainID] = Requirement.Optional,
+                    [Field.DebtMaximum] = Requirement.Optional,
+                    [Field.Data] = Requirement.Optional,
                 },
                 [BinaryCodec.Types.TransactionType.LoanBrokerDelete] = new TxFormat
                 {
@@ -537,28 +538,32 @@ namespace Xrpl.Models.Transaction
                 {
                     [Field.LoanBrokerID] = Requirement.Required,
                     [Field.Amount] = Requirement.Required,
+                    [Field.Destination] = Requirement.Optional,
+                    [Field.DestinationTag] = Requirement.Optional,
                 },
                 [BinaryCodec.Types.TransactionType.LoanBrokerCoverClawback] = new TxFormat
                 {
-                    [Field.LoanBrokerID] = Requirement.Required,
-                    [Field.Holder] = Requirement.Required,
+                    [Field.LoanBrokerID] = Requirement.Optional,
                     [Field.Amount] = Requirement.Optional,
                 },
                 [BinaryCodec.Types.TransactionType.LoanSet] = new TxFormat
                 {
                     [Field.LoanBrokerID] = Requirement.Required,
-                    [Field.Borrower] = Requirement.Required,
-                    [Field.Asset] = Requirement.Required,
+                    [Field.PrincipalRequested] = Requirement.Required,
+                    [Field.Counterparty] = Requirement.Optional,
                     [Field.InterestRate] = Requirement.Optional,
                     [Field.LateInterestRate] = Requirement.Optional,
                     [Field.CloseInterestRate] = Requirement.Optional,
                     [Field.OverpaymentInterestRate] = Requirement.Optional,
                     [Field.OverpaymentFee] = Requirement.Optional,
-                    [Field.StartDate] = Requirement.Optional,
+                    [Field.LoanOriginationFee] = Requirement.Optional,
+                    [Field.LoanServiceFee] = Requirement.Optional,
+                    [Field.LatePaymentFee] = Requirement.Optional,
+                    [Field.ClosePaymentFee] = Requirement.Optional,
                     [Field.PaymentInterval] = Requirement.Optional,
                     [Field.GracePeriod] = Requirement.Optional,
                     [Field.PaymentTotal] = Requirement.Optional,
-                    [Field.LoanScale] = Requirement.Optional,
+                    [Field.Data] = Requirement.Optional,
                 },
                 [BinaryCodec.Types.TransactionType.LoanDelete] = new TxFormat
                 {

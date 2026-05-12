@@ -3,8 +3,6 @@ using System.Text.Json.Serialization;
 using System.Threading.Tasks;
 
 using Xrpl.Client.Exceptions;
-using Xrpl.Client.Json.Converters;
-using Xrpl.Models.Common;
 
 using static Xrpl.Models.Common.Common;
 
@@ -12,39 +10,53 @@ namespace Xrpl.Models.Transactions
 {
     /// <summary>
     /// The LoanBrokerSet transaction creates or modifies a loan broker that manages lending pools.
+    /// The submitting account must own the Vault specified by VaultID.
     /// </summary>
     /// <remarks>Requires the Loan amendment (XLS-66d). This feature is in draft and subject to change.</remarks>
     public interface ILoanBrokerSet : ITransactionCommon
     {
         /// <summary>
-        /// The primary asset managed by the loan broker.
+        /// The ID of the Vault ledger object that this loan broker is associated with.
+        /// The account submitting this transaction must own the vault.
+        /// Required when creating a new loan broker.
         /// </summary>
-        IssuedCurrency Asset { get; set; }
+        string VaultID { get; set; }
 
         /// <summary>
-        /// The secondary asset (collateral) managed by the loan broker.
+        /// The ID of an existing LoanBroker object to modify.
+        /// Optional — omit when creating a new loan broker.
         /// </summary>
-        IssuedCurrency Asset2 { get; set; }
+        string LoanBrokerID { get; set; }
 
         /// <summary>
-        /// The minimum cover rate required for loans, as a percentage multiplied by 1000.
+        /// The minimum cover rate required for loans (1/100th of a basis point).
+        /// Valid range: 0–100000.
         /// </summary>
         uint? CoverRateMinimum { get; set; }
 
         /// <summary>
-        /// The cover rate at which liquidation occurs, as a percentage multiplied by 1000.
+        /// The cover rate at which liquidation occurs (1/100th of a basis point).
+        /// Valid range: 0–100000.
         /// </summary>
         uint? CoverRateLiquidation { get; set; }
 
         /// <summary>
-        /// The management fee rate charged by the broker.
+        /// The management fee rate charged by the broker (1/10th of a basis point).
+        /// Valid range: 0–10000.
         /// </summary>
         ushort? ManagementFeeRate { get; set; }
 
         /// <summary>
-        /// The ID of a permissioned domain to associate with the loan broker.
+        /// The maximum amount the protocol can owe the Vault.
+        /// Default 0 means no limit. Must not be negative.
+        /// (Number type, string representation.)
         /// </summary>
-        string DomainID { get; set; }
+        string DebtMaximum { get; set; }
+
+        /// <summary>
+        /// Arbitrary hex-encoded metadata, limited to 256 bytes.
+        /// </summary>
+        string Data { get; set; }
     }
 
     /// <inheritdoc cref="ILoanBrokerSet" />
@@ -56,14 +68,12 @@ namespace Xrpl.Models.Transactions
         }
 
         /// <inheritdoc />
-        [JsonPropertyName("Asset")]
-        [JsonConverter(typeof(IssuedCurrencyConverter))]
-        public IssuedCurrency Asset { get; set; }
+        [JsonPropertyName("VaultID")]
+        public string VaultID { get; set; }
 
         /// <inheritdoc />
-        [JsonPropertyName("Asset2")]
-        [JsonConverter(typeof(IssuedCurrencyConverter))]
-        public IssuedCurrency Asset2 { get; set; }
+        [JsonPropertyName("LoanBrokerID")]
+        public string LoanBrokerID { get; set; }
 
         /// <inheritdoc />
         [JsonPropertyName("CoverRateMinimum")]
@@ -78,22 +88,24 @@ namespace Xrpl.Models.Transactions
         public ushort? ManagementFeeRate { get; set; }
 
         /// <inheritdoc />
-        [JsonPropertyName("DomainID")]
-        public string DomainID { get; set; }
+        [JsonPropertyName("DebtMaximum")]
+        public string DebtMaximum { get; set; }
+
+        /// <inheritdoc />
+        [JsonPropertyName("Data")]
+        public string Data { get; set; }
     }
 
     /// <inheritdoc cref="ILoanBrokerSet" />
     public class LoanBrokerSetResponse : TransactionResponse, ILoanBrokerSet
     {
         /// <inheritdoc />
-        [JsonPropertyName("Asset")]
-        [JsonConverter(typeof(IssuedCurrencyConverter))]
-        public IssuedCurrency Asset { get; set; }
+        [JsonPropertyName("VaultID")]
+        public string VaultID { get; set; }
 
         /// <inheritdoc />
-        [JsonPropertyName("Asset2")]
-        [JsonConverter(typeof(IssuedCurrencyConverter))]
-        public IssuedCurrency Asset2 { get; set; }
+        [JsonPropertyName("LoanBrokerID")]
+        public string LoanBrokerID { get; set; }
 
         /// <inheritdoc />
         [JsonPropertyName("CoverRateMinimum")]
@@ -108,8 +120,12 @@ namespace Xrpl.Models.Transactions
         public ushort? ManagementFeeRate { get; set; }
 
         /// <inheritdoc />
-        [JsonPropertyName("DomainID")]
-        public string DomainID { get; set; }
+        [JsonPropertyName("DebtMaximum")]
+        public string DebtMaximum { get; set; }
+
+        /// <inheritdoc />
+        [JsonPropertyName("Data")]
+        public string Data { get; set; }
     }
 
     public partial class Validation
@@ -118,11 +134,8 @@ namespace Xrpl.Models.Transactions
         {
             await Common.ValidateBaseTransaction(tx);
 
-            if (!tx.TryGetValue("Asset", out var asset) || asset is null)
-                throw new ValidationException("LoanBrokerSet: missing field Asset");
-
-            if (!tx.TryGetValue("Asset2", out var asset2) || asset2 is null)
-                throw new ValidationException("LoanBrokerSet: missing field Asset2");
+            if (!tx.TryGetValue("VaultID", out var vaultId) || vaultId is not string)
+                throw new ValidationException("LoanBrokerSet: missing field VaultID");
         }
     }
 }

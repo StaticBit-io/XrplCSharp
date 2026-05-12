@@ -10,22 +10,18 @@ namespace Xrpl.Models.Transactions
 {
     /// <summary>
     /// The LoanBrokerCoverClawback transaction claws back cover assets from a loan broker.
+    /// At least one of LoanBrokerID or Amount must be specified.
     /// </summary>
     /// <remarks>Requires the Loan amendment (XLS-66d). This feature is in draft and subject to change.</remarks>
     public interface ILoanBrokerCoverClawback : ITransactionCommon
     {
         /// <summary>
-        /// The ID of the loan broker to claw back from.
+        /// The ID of the loan broker to claw back from. Optional.
         /// </summary>
         string LoanBrokerID { get; set; }
 
         /// <summary>
-        /// The holder account to claw back from.
-        /// </summary>
-        string Holder { get; set; }
-
-        /// <summary>
-        /// The amount to claw back.
+        /// The amount to claw back. Optional.
         /// </summary>
         Currency Amount { get; set; }
     }
@@ -43,10 +39,6 @@ namespace Xrpl.Models.Transactions
         public string LoanBrokerID { get; set; }
 
         /// <inheritdoc />
-        [JsonPropertyName("Holder")]
-        public string Holder { get; set; }
-
-        /// <inheritdoc />
         [JsonPropertyName("Amount")]
         [JsonConverter(typeof(CurrencyConverter))]
         public Currency Amount { get; set; }
@@ -60,10 +52,6 @@ namespace Xrpl.Models.Transactions
         public string LoanBrokerID { get; set; }
 
         /// <inheritdoc />
-        [JsonPropertyName("Holder")]
-        public string Holder { get; set; }
-
-        /// <inheritdoc />
         [JsonPropertyName("Amount")]
         [JsonConverter(typeof(CurrencyConverter))]
         public Currency Amount { get; set; }
@@ -74,12 +62,6 @@ namespace Xrpl.Models.Transactions
         public static async Task ValidateLoanBrokerCoverClawback(Dictionary<string, object> tx)
         {
             await Common.ValidateBaseTransaction(tx);
-
-            if (!tx.TryGetValue("LoanBrokerID", out var id) || id is not string)
-                throw new ValidationException("LoanBrokerCoverClawback: missing field LoanBrokerID");
-
-            if (!tx.TryGetValue("Holder", out var holder) || holder is not string)
-                throw new ValidationException("LoanBrokerCoverClawback: missing field Holder");
         }
     }
 }
