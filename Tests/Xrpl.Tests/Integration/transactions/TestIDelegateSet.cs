@@ -1,11 +1,14 @@
 using System.Collections.Generic;
+using System.Linq;
 using System.Threading.Tasks;
 
 using Microsoft.VisualStudio.TestTools.UnitTesting;
 
 using Xrpl.Client;
 using Xrpl.Client.Exceptions;
+using Xrpl.Models;
 using Xrpl.Models.Common;
+using Xrpl.Models.Ledger;
 using Xrpl.Models.Methods;
 using Xrpl.Models.Transactions;
 using Xrpl.Sugar;
@@ -37,6 +40,23 @@ public class TestIDelegateSet
             throw new RippleException($"Transaction failed: {res.Meta?.TransactionResult}");
     }
 
+    /// <summary>
+    /// Retrieves the LODelegate ledger object for the given owner, filtering by Delegate type.
+    /// Returns null if no Delegate object is found.
+    /// </summary>
+    private static async Task<LODelegate> GetDelegateObject(string ownerAddress)
+    {
+        AccountObjectsRequest request = new AccountObjectsRequest(ownerAddress)
+        {
+            Type = LedgerEntryType.Delegate,
+        };
+        AccountObjects response = await client.AccountObjects(request);
+
+        return response?.AccountObjectList?
+            .OfType<LODelegate>()
+            .FirstOrDefault();
+    }
+
     [TestMethod]
     public async Task TestDelegateSet_Basic()
     {
@@ -47,7 +67,7 @@ public class TestIDelegateSet
         DelegateSet tx = new DelegateSet
         {
             Account = walletOwner.ClassicAddress,
-            Delegate = walletDelegate.ClassicAddress,
+            Authorize = walletDelegate.ClassicAddress,
             Permissions = new List<PermissionWrapper>
             {
                 new PermissionWrapper { Permission = new PermissionEntry { PermissionValue = 1 } },
@@ -57,6 +77,15 @@ public class TestIDelegateSet
 
         TransactionSummary result = await client.SubmitAndWait(tx, walletOwner, true);
         ValidateResult(result);
+
+        // Verify the LODelegate ledger object was created with correct fields
+        LODelegate delegateObj = await GetDelegateObject(walletOwner.ClassicAddress);
+        Assert.IsNotNull(delegateObj, "LODelegate object should exist after DelegateSet");
+        Assert.AreEqual(walletOwner.ClassicAddress, delegateObj.Account);
+        Assert.AreEqual(walletDelegate.ClassicAddress, delegateObj.Delegate);
+        Assert.IsNotNull(delegateObj.Permissions);
+        Assert.HasCount(1, delegateObj.Permissions);
+        Assert.AreEqual((uint)1, delegateObj.Permissions[0].Permission.PermissionValue);
     }
 
     [TestMethod]
@@ -69,7 +98,7 @@ public class TestIDelegateSet
         DelegateSet tx = new DelegateSet
         {
             Account = walletOwner.ClassicAddress,
-            Delegate = walletDelegate.ClassicAddress,
+            Authorize = walletDelegate.ClassicAddress,
             Permissions = new List<PermissionWrapper>
             {
                 new PermissionWrapper { Permission = new PermissionEntry { PermissionValue = 1 } },
@@ -81,5 +110,20 @@ public class TestIDelegateSet
 
         TransactionSummary result = await client.SubmitAndWait(tx, walletOwner, true);
         ValidateResult(result);
+
+        // Verify the LODelegate ledger object has all 3 permissions
+        LODelegate delegateObj = await GetDelegateObject(walletOwner.ClassicAddress);
+        Assert.IsNotNull(delegateObj, "LODelegate object should exist after DelegateSet");
+        Assert.AreEqual(walletOwner.ClassicAddress, delegateObj.Account);
+        Assert.AreEqual(walletDelegate.ClassicAddress, delegateObj.Delegate);
+        Assert.IsNotNull(delegateObj.Permissions);
+        Assert.HasCount(3, delegateObj.Permissions);
+
+        List<uint> expectedValues = [1, 2, 3,];
+        List<uint> actualValues = delegateObj.Permissions
+            .Select(p => p.Permission.PermissionValue)
+            .OrderBy(v => v)
+            .ToList();
+        CollectionAssert.AreEqual(expectedValues, actualValues);
     }
 }

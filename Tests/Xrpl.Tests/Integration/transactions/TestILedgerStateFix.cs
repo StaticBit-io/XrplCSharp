@@ -13,7 +13,7 @@ namespace XrplTests.Xrpl.ClientLib.Integration;
 
 [TestClass]
 [TestCategory("LedgerStateFix")]
-[Ignore("LedgerStateFix is an admin-only transaction; no standalone amendment available")]
+//[Ignore("LedgerStateFix is an admin-only transaction; no standalone amendment available")]
 public class TestILedgerStateFix
 {
     public TestContext TestContext { get; set; }
