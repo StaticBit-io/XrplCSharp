@@ -981,6 +981,72 @@ namespace Xrpl.Wallet
             string encoded = XrplBinaryCodec.EncodeForSigning(transaction);
             return XrplKeypairs.Sign(AddressCodec.Utils.FromHexToBytes(encoded), privateKey);
         }
+
+        /// <summary>
+        /// Signs a LoanSet transaction as the borrower (Counterparty).
+        /// Computes the signing preimage and adds CounterpartySignature (inner STObject
+        /// with this wallet's SigningPubKey and TxnSignature).
+        ///
+        /// Used in V2 (parallel) and V3 (sequential) signing flows:
+        ///
+        /// <b>V3 (sequential) — borrower signs first, passes to broker:</b>
+        /// <code>
+        /// var withCounterparty = borrowerWallet.SignAsLoanCounterparty(preparedTx);
+        /// var final = brokerWallet.Sign(withCounterparty.GetTx());
+        /// await client.SubmitRequest(final.TxBlob);
+        /// </code>
+        ///
+        /// <b>V2 (parallel) — both sign independently, then combine:</b>
+        /// <code>
+        /// var counterpartySig = borrowerWallet.SignAsLoanCounterparty(preparedTx);
+        /// var brokerSig = brokerWallet.Sign(preparedTx);
+        /// var combined = LoanSigningHelper.CombineLoanSignatures(brokerSig.TxBlob, counterpartySig.TxBlob);
+        /// </code>
+        /// </summary>
+        /// <param name="transaction">Prepared LoanSet transaction (must have SigningPubKey set to broker's key).</param>
+        /// <returns>SignatureResult with CounterpartySignature added (no TxnSignature yet).</returns>
+        public SignatureResult SignAsLoanCounterparty(ITransactionRequest transaction)
+        {
+            Dictionary<string, object> txDict = JsonSerializer.Deserialize<Dictionary<string, object>>(
+                transaction.ToJson(), XrplJsonOptions.Default);
+            return SignAsLoanCounterparty(txDict);
+        }
+
+        /// <summary>
+        /// Signs a LoanSet transaction as the borrower (Counterparty).
+        /// </summary>
+        public SignatureResult SignAsLoanCounterparty(Dictionary<string, object> transaction)
+        {
+            JsonObject tx = JsonNode.Parse(JsonSerializer.Serialize(transaction, XrplJsonOptions.Default))?.AsObject()
+                ?? throw new ValidationException("Failed to serialize transaction to JSON");
+
+            string txType = tx["TransactionType"]?.GetValue<string>();
+            if (!string.Equals(txType, "LoanSet", StringComparison.OrdinalIgnoreCase))
+                throw new ValidationException($"SignAsLoanCounterparty requires TransactionType=LoanSet, got: {txType}");
+
+            // Remove existing signatures but keep SigningPubKey (broker's)
+            tx.Remove("CounterpartySignature");
+            tx.Remove("TxnSignature");
+
+            // Compute signing preimage (same preimage broker will sign)
+            byte[] signingBytes = LoanSigningHelper.GetSigningPreimage(tx);
+
+            // Sign the preimage with this wallet's key
+            string sig = XrplKeypairs.Sign(signingBytes, this.PrivateKey);
+
+            // Add CounterpartySignature
+            tx["CounterpartySignature"] = new JsonObject
+            {
+                ["SigningPubKey"] = this.PublicKey,
+                ["TxnSignature"] = sig,
+            };
+
+            // Encode (without broker's TxnSignature — partially signed)
+            string txBlob = XrplBinaryCodec.Encode(tx);
+            string txHash = HashLedger.HashSignedTx(txBlob);
+            return new SignatureResult(txBlob, txHash);
+        }
+
         /// <summary>
         /// Объединяет несколько частично подписанных Batch-транзакций (txBlob в hex) в один финальный blob.
         /// Условия:

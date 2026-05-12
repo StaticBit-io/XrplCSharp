@@ -210,6 +210,56 @@ public class TestILoan : TestILoanBase
     }
 
     [TestMethod]
+    public async Task TestLoanSet_V2_ParallelSigning()
+    {
+        // V2: broker and borrower sign independently on separate devices, then combine
+        XrplWallet walletBroker = XrplWallet.Generate();
+        XrplWallet walletBorrower = XrplWallet.Generate();
+        await IntegrationTestConfig.TryFundWalletsAsync(client, nodeType, walletBroker, walletBorrower);
+
+        string brokerId = await CreateBroker(client, walletBroker);
+
+        LoanSet loanTx = new LoanSet
+        {
+            Account = walletBroker.ClassicAddress,
+            LoanBrokerID = brokerId,
+            Counterparty = walletBorrower.ClassicAddress,
+            PrincipalRequested = "10000000",
+        };
+
+        TransactionSummary result = await SubmitLoanSetV2(client, loanTx, walletBroker, walletBorrower);
+        ValidateResult(result);
+
+        string loanId = GetCreatedObjectId(result, LedgerEntryType.Loan);
+        Assert.IsNotNull(loanId, "LoanID should be present in metadata (V2 parallel signing)");
+    }
+
+    [TestMethod]
+    public async Task TestLoanSet_V3_SequentialSigning()
+    {
+        // V3: borrower signs first (adds CounterpartySignature), passes to broker who adds TxnSignature
+        XrplWallet walletBroker = XrplWallet.Generate();
+        XrplWallet walletBorrower = XrplWallet.Generate();
+        await IntegrationTestConfig.TryFundWalletsAsync(client, nodeType, walletBroker, walletBorrower);
+
+        string brokerId = await CreateBroker(client, walletBroker);
+
+        LoanSet loanTx = new LoanSet
+        {
+            Account = walletBroker.ClassicAddress,
+            LoanBrokerID = brokerId,
+            Counterparty = walletBorrower.ClassicAddress,
+            PrincipalRequested = "10000000",
+        };
+
+        TransactionSummary result = await SubmitLoanSetV3(client, loanTx, walletBroker, walletBorrower);
+        ValidateResult(result);
+
+        string loanId = GetCreatedObjectId(result, LedgerEntryType.Loan);
+        Assert.IsNotNull(loanId, "LoanID should be present in metadata (V3 sequential signing)");
+    }
+
+    [TestMethod]
     public async Task TestLoanPay_WithOverpaymentFlag_Rejected()
     {
         // tfLoanOverpayment requires specific loan configuration to be permitted.

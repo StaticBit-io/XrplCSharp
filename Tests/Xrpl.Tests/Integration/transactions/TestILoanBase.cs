@@ -134,68 +134,96 @@ public abstract class TestILoanBase
     }
 
     /// <summary>
-    /// Signs and submits a LoanSet transaction with CounterpartySignature.
-    /// LoanSet requires the borrower (Counterparty) to co-sign via CounterpartySignature.
-    /// Flow:
-    ///   1. Autofill the transaction
-    ///   2. Compute the signing preimage
-    ///   3. Borrower signs the preimage → CounterpartySignature
-    ///   4. Broker signs the preimage → TxnSignature
-    ///   5. Submit and wait
+    /// Autofills and prepares a LoanSet transaction for co-signing.
+    /// Returns the prepared JsonObject with fee adjusted and SigningPubKey set.
     /// </summary>
-    protected static async Task<TransactionSummary> SubmitLoanSetWithCounterpartySig(
+    protected static async Task<JsonObject> PrepareLoanSet(
+        IXrplClient client,
+        LoanSet loanTx,
+        XrplWallet brokerWallet)
+    {
+        loanTx = await client.Autofill(loanTx);
+        return LoanSigningHelper.PrepareForSigning(loanTx, brokerWallet, adjustFee: true);
+    }
+
+    /// <summary>
+    /// V1 — Automatic: both keys available locally.
+    /// Signs and submits a LoanSet transaction using LoanSigningHelper.
+    /// </summary>
+    protected static async Task<TransactionSummary> SubmitLoanSetV1(
         IXrplClient client,
         LoanSet loanTx,
         XrplWallet brokerWallet,
         XrplWallet borrowerWallet)
     {
-        // Autofill sequence, fee, lastLedgerSequence
-        loanTx = await client.Autofill(loanTx);
+        JsonObject prepared = await PrepareLoanSet(client, loanTx, brokerWallet);
+        SignatureResult result = LoanSigningHelper.SignLoanSet(prepared, brokerWallet, borrowerWallet);
+        return await SubmitSignedLoanSet(client, result.TxBlob);
+    }
 
-        // Increase Fee to account for CounterpartySignature overhead (~150 bytes extra)
-        // Autofill calculates fee based on the tx WITHOUT CounterpartySignature
-        if (loanTx.Fee != null)
-        {
-            ulong feeDrops = ulong.Parse(loanTx.Fee.Value);
-            feeDrops = feeDrops * 3; // triple the fee to be safe
-            if (feeDrops < 20)
-                feeDrops = 20;
-            loanTx.Fee = new Currency { Value = feeDrops.ToString(), CurrencyCode = "XRP" };
-        }
+    /// <summary>
+    /// V2 — Parallel: broker and borrower sign independently, then combine.
+    /// Simulates keys on separate devices.
+    /// </summary>
+    protected static async Task<TransactionSummary> SubmitLoanSetV2(
+        IXrplClient client,
+        LoanSet loanTx,
+        XrplWallet brokerWallet,
+        XrplWallet borrowerWallet)
+    {
+        JsonObject prepared = await PrepareLoanSet(client, loanTx, brokerWallet);
 
-        // Convert model → JSON for the codec
-        string txJsonStr = JsonSerializer.Serialize(loanTx, XrplJsonOptions.Default);
-        JsonObject txJson = JsonNode.Parse(txJsonStr)?.AsObject();
+        // Device A (broker): signs the transaction normally (adds TxnSignature)
+        Dictionary<string, object> brokerDict = JsonSerializer.Deserialize<Dictionary<string, object>>(
+            prepared.ToJsonString(), XrplJsonOptions.Default);
+        SignatureResult brokerSig = brokerWallet.Sign(brokerDict);
 
-        // Set broker's signing pub key
-        txJson["SigningPubKey"] = brokerWallet.PublicKey;
+        // Device B (borrower): signs as counterparty (adds CounterpartySignature)
+        SignatureResult counterpartySig = borrowerWallet.SignAsLoanCounterparty(brokerDict);
 
-        // Remove fields not part of signing preimage
-        txJson.Remove("CounterpartySignature");
-        txJson.Remove("TxnSignature");
+        // Combiner: merge both signatures
+        SignatureResult combined = LoanSigningHelper.CombineLoanSignatures(brokerSig.TxBlob, counterpartySig.TxBlob);
+        return await SubmitSignedLoanSet(client, combined.TxBlob);
+    }
 
-        // Compute signing preimage (same for both broker and borrower)
-        string signingHex = XrplBinaryCodec.EncodeForSigning(txJson);
-        byte[] signingBytes = global::Xrpl.AddressCodec.Utils.FromHexToBytes(signingHex);
+    /// <summary>
+    /// V3 — Sequential: borrower signs first, passes to broker who signs and submits.
+    /// Simulates real-world flow where keys never leave their respective devices.
+    /// </summary>
+    protected static async Task<TransactionSummary> SubmitLoanSetV3(
+        IXrplClient client,
+        LoanSet loanTx,
+        XrplWallet brokerWallet,
+        XrplWallet borrowerWallet)
+    {
+        JsonObject prepared = await PrepareLoanSet(client, loanTx, brokerWallet);
 
-        // Borrower signs the preimage
-        string counterpartySig = global::Xrpl.Keypairs.XrplKeypairs.Sign(signingBytes, borrowerWallet.PrivateKey);
+        // Step 1: Borrower receives prepared tx, signs as counterparty (adds CounterpartySignature)
+        Dictionary<string, object> txDict = JsonSerializer.Deserialize<Dictionary<string, object>>(
+            prepared.ToJsonString(), XrplJsonOptions.Default);
+        SignatureResult withCounterparty = borrowerWallet.SignAsLoanCounterparty(txDict);
 
-        // Add CounterpartySignature
-        txJson["CounterpartySignature"] = new JsonObject
-        {
-            ["SigningPubKey"] = borrowerWallet.PublicKey,
-            ["TxnSignature"] = counterpartySig,
-        };
+        // Step 2: Broker receives the partially signed blob, adds TxnSignature via BrokerSign
+        SignatureResult fullySigned = LoanSigningHelper.BrokerSign(withCounterparty.TxBlob, brokerWallet);
 
-        // Broker signs the preimage
-        string brokerSig = global::Xrpl.Keypairs.XrplKeypairs.Sign(signingBytes, brokerWallet.PrivateKey);
-        txJson["TxnSignature"] = brokerSig;
+        return await SubmitSignedLoanSet(client, fullySigned.TxBlob);
+    }
 
-        // Encode the complete signed transaction
-        string txBlob = XrplBinaryCodec.Encode(txJson);
+    /// <summary>
+    /// Default method (backward compatible) — uses V1 (automatic) signing.
+    /// </summary>
+    protected static Task<TransactionSummary> SubmitLoanSetWithCounterpartySig(
+        IXrplClient client,
+        LoanSet loanTx,
+        XrplWallet brokerWallet,
+        XrplWallet borrowerWallet)
+        => SubmitLoanSetV1(client, loanTx, brokerWallet, borrowerWallet);
 
-        // Submit
+    /// <summary>
+    /// Submits a signed LoanSet blob and waits for the result.
+    /// </summary>
+    protected static async Task<TransactionSummary> SubmitSignedLoanSet(IXrplClient client, string txBlob)
+    {
         Submit submitResult = await client.SubmitRequest(txBlob, failHard: false);
         if (submitResult is not { EngineResult: "tesSUCCESS" or "terQUEUED" })
             throw new RippleException($"LoanSet submit failed: {submitResult.EngineResult} - {submitResult.EngineResultMessage}");
@@ -207,8 +235,6 @@ public abstract class TestILoanBase
         TxRequest txReq = new TxRequest(txHash);
         TransactionResponse txResponse = await client.Tx(txReq);
 
-        // Convert TransactionResponse to TransactionSummary-like result for consistency
-        // We just need Meta for extracting created object IDs
         return new TransactionSummary { Meta = txResponse?.Meta };
     }
 

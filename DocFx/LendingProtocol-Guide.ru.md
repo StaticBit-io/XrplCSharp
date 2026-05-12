@@ -264,69 +264,72 @@ await client.SubmitAndWait(deleteBrokerTx, walletBroker, true);
 
 `LoanSet` уникальна среди транзакций XRPL — требует **двух подписей**. Брокер подписывает транзакцию обычным способом (`TxnSignature`), а заёмщик предоставляет `CounterpartySignature` — внутренний STObject, содержащий `SigningPubKey` и `TxnSignature` заёмщика.
 
-### Процесс подписания
+SDK предоставляет `LoanSigningHelper` и `XrplWallet.SignAsLoanCounterparty()` с тремя паттернами подписи, аналогичными Batch signing (V1/V2/V3).
 
-Обе стороны подписывают **одинаковый прообраз подписи** (сериализованная транзакция без полей подписей):
+### Подготовка (общая для всех паттернов)
 
 ```csharp
-using System.Text.Json;
-using System.Text.Json.Nodes;
-using Xrpl.BinaryCodec;
-using Xrpl.Client.Json;
+using Xrpl.Wallet;
 
-// 1. Автозаполнение транзакции
+// Автозаполнение, установка SigningPubKey, корректировка комиссии (утроение для overhead CounterpartySignature)
 loanTx = await client.Autofill(loanTx);
-
-// 2. Увеличение комиссии для учёта overhead CounterpartySignature
-//    Autofill рассчитывает комиссию БЕЗ CounterpartySignature (~150 байт дополнительно)
-if (loanTx.Fee != null)
-{
-    ulong feeDrops = ulong.Parse(loanTx.Fee.Value);
-    feeDrops = feeDrops * 3; // утроить комиссию для надёжности
-    if (feeDrops < 20) feeDrops = 20;
-    loanTx.Fee = new Currency { Value = feeDrops.ToString(), CurrencyCode = "XRP" };
-}
-
-// 3. Конвертация в JSON для кодека
-string txJsonStr = JsonSerializer.Serialize(loanTx, XrplJsonOptions.Default);
-JsonObject txJson = JsonNode.Parse(txJsonStr)?.AsObject();
-
-// 4. Установка публичного ключа брокера
-txJson["SigningPubKey"] = brokerWallet.PublicKey;
-
-// 5. Удаление полей подписей
-txJson.Remove("CounterpartySignature");
-txJson.Remove("TxnSignature");
-
-// 6. Вычисление прообраза подписи
-string signingHex = XrplBinaryCodec.EncodeForSigning(txJson);
-byte[] signingBytes = Xrpl.AddressCodec.Utils.FromHexToBytes(signingHex);
-
-// 7. Заёмщик подписывает прообраз
-string counterpartySig = Xrpl.Keypairs.XrplKeypairs.Sign(signingBytes, borrowerWallet.PrivateKey);
-
-// 8. Добавление CounterpartySignature
-txJson["CounterpartySignature"] = new JsonObject
-{
-    ["SigningPubKey"] = borrowerWallet.PublicKey,
-    ["TxnSignature"] = counterpartySig,
-};
-
-// 9. Брокер подписывает прообраз
-string brokerSig = Xrpl.Keypairs.XrplKeypairs.Sign(signingBytes, brokerWallet.PrivateKey);
-txJson["TxnSignature"] = brokerSig;
-
-// 10. Кодирование и отправка
-string txBlob = XrplBinaryCodec.Encode(txJson);
-Submit submitResult = await client.SubmitRequest(txBlob, failHard: false);
+JsonObject prepared = LoanSigningHelper.PrepareForSigning(loanTx, brokerWallet, adjustFee: true);
 ```
+
+### V1 — Автоматический (оба ключа доступны локально)
+
+Используйте, когда кошельки брокера и заёмщика доступны на одном устройстве:
+
+```csharp
+SignatureResult result = LoanSigningHelper.SignLoanSet(prepared, brokerWallet, borrowerWallet);
+await client.SubmitRequest(result.TxBlob);
+```
+
+### V2 — Параллельный (ключи на разных устройствах, подпись независимо)
+
+Используйте, когда брокер и заёмщик подписывают независимо, а третья сторона объединяет подписи:
+
+```csharp
+// Устройство A (брокер): подписывает транзакцию обычным способом
+var brokerDict = JsonSerializer.Deserialize<Dictionary<string, object>>(
+    prepared.ToJsonString(), XrplJsonOptions.Default);
+SignatureResult brokerSig = brokerWallet.Sign(brokerDict);
+
+// Устройство B (заёмщик): подписывает как контрагент
+SignatureResult counterpartySig = borrowerWallet.SignAsLoanCounterparty(brokerDict);
+
+// Комбинатор: объединяет обе подписи в один blob
+SignatureResult combined = LoanSigningHelper.CombineLoanSignatures(
+    brokerSig.TxBlob, counterpartySig.TxBlob);
+await client.SubmitRequest(combined.TxBlob);
+```
+
+### V3 — Последовательный (заёмщик подписывает первым, передаёт брокеру)
+
+Используйте в реальном сценарии, когда заёмщик подписывает первым и отправляет частично подписанный blob брокеру:
+
+```csharp
+// Шаг 1: Заёмщик получает подготовленный JSON транзакции, подписывает как контрагент
+var txDict = JsonSerializer.Deserialize<Dictionary<string, object>>(
+    prepared.ToJsonString(), XrplJsonOptions.Default);
+SignatureResult withCounterparty = borrowerWallet.SignAsLoanCounterparty(txDict);
+// withCounterparty.TxBlob передаётся брокеру (через API, QR-код и т.д.)
+
+// Шаг 2: Брокер получает частично подписанный blob, добавляет TxnSignature
+SignatureResult fullySigned = LoanSigningHelper.BrokerSign(
+    withCounterparty.TxBlob, brokerWallet);
+await client.SubmitRequest(fullySigned.TxBlob);
+```
+
+> **Важно:** Не используйте `brokerWallet.Sign()` для частично подписанного LoanSet blob — он не обрабатывает `CounterpartySignature` корректно. Всегда используйте `LoanSigningHelper.BrokerSign()` для паттерна V3.
 
 ### Ключевые моменты
 
 - Обе стороны подписывают **одинаковый** прообраз (транзакция, сериализованная для подписи, без полей подписей)
 - Прообраз подписи использует `SigningPubKey` **брокера** (отправляющий аккаунт)
 - `CounterpartySignature` — это STObject с `isSigningField = false` — он исключён из прообраза подписи
-- Комиссию необходимо увеличить после автозаполнения, т.к. добавление `CounterpartySignature` увеличивает размер транзакции
+- Комиссию необходимо увеличить после автозаполнения, т.к. добавление `CounterpartySignature` увеличивает размер транзакции (~150 байт)
+- `LoanSigningHelper.PrepareForSigning()` утраивает комиссию по умолчанию
 
 ---
 

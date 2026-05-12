@@ -264,69 +264,72 @@ await client.SubmitAndWait(deletebrokerTx, walletBroker, true);
 
 `LoanSet` is unique among XRPL transactions — it requires **two signatures**. The broker signs the transaction as normal (`TxnSignature`), and the borrower provides a `CounterpartySignature` — an inner STObject containing the borrower's `SigningPubKey` and `TxnSignature`.
 
-### Signing Flow
+The SDK provides `LoanSigningHelper` and `XrplWallet.SignAsLoanCounterparty()` with three signing patterns, analogous to Batch signing (V1/V2/V3).
 
-Both parties sign the **same signing preimage** (the serialized transaction without signatures):
+### Preparation (Common to All Patterns)
 
 ```csharp
-using System.Text.Json;
-using System.Text.Json.Nodes;
-using Xrpl.BinaryCodec;
-using Xrpl.Client.Json;
+using Xrpl.Wallet;
 
-// 1. Autofill the transaction
+// Autofill, set SigningPubKey, adjust fee (triples it for CounterpartySignature overhead)
 loanTx = await client.Autofill(loanTx);
-
-// 2. Increase fee to account for CounterpartySignature overhead
-//    Autofill calculates fee WITHOUT CounterpartySignature (~150 bytes extra)
-if (loanTx.Fee != null)
-{
-    ulong feeDrops = ulong.Parse(loanTx.Fee.Value);
-    feeDrops = feeDrops * 3; // triple the fee to be safe
-    if (feeDrops < 20) feeDrops = 20;
-    loanTx.Fee = new Currency { Value = feeDrops.ToString(), CurrencyCode = "XRP" };
-}
-
-// 3. Convert to JSON for the codec
-string txJsonStr = JsonSerializer.Serialize(loanTx, XrplJsonOptions.Default);
-JsonObject txJson = JsonNode.Parse(txJsonStr)?.AsObject();
-
-// 4. Set broker's signing pub key
-txJson["SigningPubKey"] = brokerWallet.PublicKey;
-
-// 5. Remove signature fields
-txJson.Remove("CounterpartySignature");
-txJson.Remove("TxnSignature");
-
-// 6. Compute signing preimage
-string signingHex = XrplBinaryCodec.EncodeForSigning(txJson);
-byte[] signingBytes = Xrpl.AddressCodec.Utils.FromHexToBytes(signingHex);
-
-// 7. Borrower signs the preimage
-string counterpartySig = Xrpl.Keypairs.XrplKeypairs.Sign(signingBytes, borrowerWallet.PrivateKey);
-
-// 8. Add CounterpartySignature
-txJson["CounterpartySignature"] = new JsonObject
-{
-    ["SigningPubKey"] = borrowerWallet.PublicKey,
-    ["TxnSignature"] = counterpartySig,
-};
-
-// 9. Broker signs the preimage
-string brokerSig = Xrpl.Keypairs.XrplKeypairs.Sign(signingBytes, brokerWallet.PrivateKey);
-txJson["TxnSignature"] = brokerSig;
-
-// 10. Encode and submit
-string txBlob = XrplBinaryCodec.Encode(txJson);
-Submit submitResult = await client.SubmitRequest(txBlob, failHard: false);
+JsonObject prepared = LoanSigningHelper.PrepareForSigning(loanTx, brokerWallet.PublicKey, adjustFee: true);
 ```
+
+### V1 — Automatic (Both Keys Available Locally)
+
+Use when both broker and borrower wallets are available on the same device:
+
+```csharp
+SignatureResult result = LoanSigningHelper.SignLoanSet(prepared, brokerWallet, borrowerWallet);
+await client.SubmitRequest(result.TxBlob);
+```
+
+### V2 — Parallel (Keys on Separate Devices, Sign Independently)
+
+Use when broker and borrower sign independently and a third party combines the signatures:
+
+```csharp
+// Device A (broker): signs the transaction normally
+var brokerDict = JsonSerializer.Deserialize<Dictionary<string, object>>(
+    prepared.ToJsonString(), XrplJsonOptions.Default);
+SignatureResult brokerSig = brokerWallet.Sign(brokerDict);
+
+// Device B (borrower): signs as counterparty
+SignatureResult counterpartySig = borrowerWallet.SignAsLoanCounterparty(brokerDict);
+
+// Combiner: merge both signatures into a single blob
+SignatureResult combined = LoanSigningHelper.CombineLoanSignatures(
+    brokerSig.TxBlob, counterpartySig.TxBlob);
+await client.SubmitRequest(combined.TxBlob);
+```
+
+### V3 — Sequential (Borrower Signs First, Passes to Broker)
+
+Use in the real-world scenario where the borrower signs first and sends the partially signed blob to the broker:
+
+```csharp
+// Step 1: Borrower receives prepared tx JSON, signs as counterparty
+var txDict = JsonSerializer.Deserialize<Dictionary<string, object>>(
+    prepared.ToJsonString(), XrplJsonOptions.Default);
+SignatureResult withCounterparty = borrowerWallet.SignAsLoanCounterparty(txDict);
+// withCounterparty.TxBlob is sent to the broker (e.g. via API, QR code, etc.)
+
+// Step 2: Broker receives the partially signed blob, adds TxnSignature
+SignatureResult fullySigned = LoanSigningHelper.BrokerSign(
+    withCounterparty.TxBlob, brokerWallet);
+await client.SubmitRequest(fullySigned.TxBlob);
+```
+
+> **Important:** Do not use `brokerWallet.Sign()` on a partially signed LoanSet blob — it does not handle `CounterpartySignature` correctly. Always use `LoanSigningHelper.BrokerSign()` for the V3 pattern.
 
 ### Key Points
 
 - Both parties sign the **same** preimage (the transaction serialized for signing, without any signature fields)
 - The signing preimage uses the **broker's** `SigningPubKey` (the submitting account)
 - `CounterpartySignature` is an STObject with `isSigningField = false` — it is excluded from the signing preimage
-- The fee must be increased after autofill because adding `CounterpartySignature` increases the transaction size
+- The fee must be increased after autofill because adding `CounterpartySignature` increases the transaction size (~150 bytes)
+- `LoanSigningHelper.PrepareForSigning()` triples the fee by default
 
 ---
 
