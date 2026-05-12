@@ -48,22 +48,29 @@ public class TestIVault : TestIVaultBase
     }
 
     [TestMethod]
-    [Ignore("Asset2 field not supported in VaultCreate on rippled 3.0.0")]
-    public async Task TestVaultCreate_WithAsset2()
+    public async Task TestVaultCreate_WithIOU()
     {
-        XrplWallet wallet = XrplWallet.Generate();
         XrplWallet walletIssuer = XrplWallet.Generate();
-        await IntegrationTestConfig.TryFundWalletsAsync(client, nodeType, wallet, walletIssuer);
+        await IntegrationTestConfig.TryFundWalletAsync(client, walletIssuer, nodeType);
+
+        // IOU vault requires DefaultRipple on issuer account
+        AccountSet accountSetTx = new AccountSet
+        {
+            Account = walletIssuer.ClassicAddress,
+            SetFlag = AccountSetAsfFlags.asfDefaultRipple,
+        };
+        accountSetTx = await client.Autofill(accountSetTx);
+        TransactionSummary setResult = await client.SubmitAndWait(accountSetTx, walletIssuer, true);
+        ValidateResult(setResult);
 
         VaultCreate tx = new VaultCreate
         {
-            Account = wallet.ClassicAddress,
-            Asset = new IssuedCurrency { Currency = "XRP" },
-            Asset2 = new IssuedCurrency { Currency = "USD", Issuer = walletIssuer.ClassicAddress },
+            Account = walletIssuer.ClassicAddress,
+            Asset = new IssuedCurrency { Currency = "USD", Issuer = walletIssuer.ClassicAddress },
         };
         tx = await client.Autofill(tx);
 
-        TransactionSummary result = await client.SubmitAndWait(tx, wallet, true);
+        TransactionSummary result = await client.SubmitAndWait(tx, walletIssuer, true);
         ValidateResult(result);
     }
 
@@ -215,53 +222,109 @@ public class TestIVault : TestIVaultBase
     }
 
     [TestMethod]
-    [Ignore("VaultClawback requires IOU vault; XRP vaults cannot be clawed back")]
     public async Task TestVaultClawback_Basic()
     {
-        XrplWallet walletOwner = XrplWallet.Generate();
+        // VaultClawback requires an IOU vault (XRP vaults cannot be clawed back)
+        XrplWallet walletIssuer = XrplWallet.Generate();
         XrplWallet walletHolder = XrplWallet.Generate();
-        await IntegrationTestConfig.TryFundWalletsAsync(client, nodeType, walletOwner, walletHolder);
+        await IntegrationTestConfig.TryFundWalletsAsync(client, nodeType, walletIssuer, walletHolder);
 
-        AccountSet accountSetTx = new AccountSet
+        // 1a. Enable DefaultRipple (required for IOU vault)
+        AccountSet defaultRippleTx = new AccountSet
         {
-            Account = walletOwner.ClassicAddress,
+            Account = walletIssuer.ClassicAddress,
+            SetFlag = AccountSetAsfFlags.asfDefaultRipple,
+        };
+        defaultRippleTx = await client.Autofill(defaultRippleTx);
+        TransactionSummary defaultRippleResult = await client.SubmitAndWait(defaultRippleTx, walletIssuer, true);
+        ValidateResult(defaultRippleResult);
+
+        // 1b. Enable clawback on issuer account (must be done before any trust lines)
+        AccountSet clawbackTx2 = new AccountSet
+        {
+            Account = walletIssuer.ClassicAddress,
             SetFlag = AccountSetAsfFlags.asfAllowTrustLineClawback,
         };
-        accountSetTx = await client.Autofill(accountSetTx);
-        TransactionSummary accountSetResult = await client.SubmitAndWait(accountSetTx, walletOwner, true);
-        ValidateResult(accountSetResult);
+        clawbackTx2 = await client.Autofill(clawbackTx2);
+        TransactionSummary clawbackSetResult = await client.SubmitAndWait(clawbackTx2, walletIssuer, true);
+        ValidateResult(clawbackSetResult);
 
+        // 2. Create IOU vault
         VaultCreate createTx = new VaultCreate
         {
-            Account = walletOwner.ClassicAddress,
-            Asset = new IssuedCurrency { Currency = "XRP" },
+            Account = walletIssuer.ClassicAddress,
+            Asset = new IssuedCurrency { Currency = "USD", Issuer = walletIssuer.ClassicAddress },
         };
         createTx = await client.Autofill(createTx);
-        TransactionSummary createResult = await client.SubmitAndWait(createTx, walletOwner, true);
+        TransactionSummary createResult = await client.SubmitAndWait(createTx, walletIssuer, true);
         ValidateResult(createResult);
 
         string vaultId = GetCreatedObjectId(createResult);
         Assert.IsNotNull(vaultId, "VaultID should be present in metadata");
 
+        // 3. Holder sets TrustLine to issuer for USD
+        TrustSet trustTx = new TrustSet
+        {
+            Account = walletHolder.ClassicAddress,
+            LimitAmount = new Currency
+            {
+                Value = "1000",
+                CurrencyCode = "USD",
+                Issuer = walletIssuer.ClassicAddress,
+            },
+        };
+        trustTx = await client.Autofill(trustTx);
+        TransactionSummary trustResult = await client.SubmitAndWait(trustTx, walletHolder, true);
+        ValidateResult(trustResult);
+
+        // 4. Issuer sends USD to holder
+        Payment paymentTx = new Payment
+        {
+            Account = walletIssuer.ClassicAddress,
+            Destination = walletHolder.ClassicAddress,
+            Amount = new Currency
+            {
+                Value = "100",
+                CurrencyCode = "USD",
+                Issuer = walletIssuer.ClassicAddress,
+            },
+        };
+        paymentTx = await client.Autofill(paymentTx);
+        TransactionSummary payResult = await client.SubmitAndWait(paymentTx, walletIssuer, true);
+        ValidateResult(payResult);
+
+        // 5. Holder deposits USD into vault
         VaultDeposit depositTx = new VaultDeposit
         {
             Account = walletHolder.ClassicAddress,
             VaultID = vaultId,
-            Amount = new Currency { Value = "1000000", CurrencyCode = "XRP" },
+            Amount = new Currency
+            {
+                Value = "50",
+                CurrencyCode = "USD",
+                Issuer = walletIssuer.ClassicAddress,
+            },
         };
         depositTx = await client.Autofill(depositTx);
         TransactionSummary depositResult = await client.SubmitAndWait(depositTx, walletHolder, true);
         ValidateResult(depositResult);
 
+        // 6. Issuer claws back from holder's vault shares
         VaultClawback clawbackTx = new VaultClawback
         {
-            Account = walletOwner.ClassicAddress,
+            Account = walletIssuer.ClassicAddress,
             VaultID = vaultId,
             Holder = walletHolder.ClassicAddress,
+            Amount = new Currency
+            {
+                Value = "50",
+                CurrencyCode = "USD",
+                Issuer = walletIssuer.ClassicAddress,
+            },
         };
         clawbackTx = await client.Autofill(clawbackTx);
 
-        TransactionSummary result = await client.SubmitAndWait(clawbackTx, walletOwner, true);
+        TransactionSummary result = await client.SubmitAndWait(clawbackTx, walletIssuer, true);
         ValidateResult(result);
     }
 

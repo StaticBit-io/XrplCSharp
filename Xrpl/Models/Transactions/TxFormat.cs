@@ -479,7 +479,6 @@ namespace Xrpl.Models.Transaction
                 [BinaryCodec.Types.TransactionType.VaultCreate] = new TxFormat
                 {
                     [Field.Asset] = Requirement.Required,
-                    [Field.Asset2] = Requirement.Optional,
                     [Field.Amount] = Requirement.Optional,
                     [Field.WithdrawalPolicy] = Requirement.Optional,
                     [Field.MutableFlags] = Requirement.Optional,
