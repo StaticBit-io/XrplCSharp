@@ -13,6 +13,7 @@ using Xrpl.AddressCodec;
 using Xrpl.Client;
 using Xrpl.Client.Exceptions;
 using Xrpl.Client.Json;
+using Xrpl.Models;
 using Xrpl.Models.Common;
 using Xrpl.Models.Ledger;
 using Xrpl.Models.Methods;
@@ -317,7 +318,10 @@ namespace Xrpl.Sugar
         private static bool IsReserveFeeTxNeed(Dictionary<string, object> tx)
         {
             string txType = $"{tx["TransactionType"]}";
-            return txType == "AccountDelete" || txType == "AMMCreate";
+            return txType 
+                is nameof(TransactionType.AccountDelete) 
+                or nameof(TransactionType.AMMCreate) 
+                or nameof(TransactionType.LedgerStateFix);
         }
 
         public static decimal ScaleValueDecimal(string value, decimal multiplier)
