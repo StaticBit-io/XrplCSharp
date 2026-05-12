@@ -271,9 +271,10 @@ SDK предоставляет `LoanSigningHelper` и `XrplWallet.SignAsLoanCoun
 ```csharp
 using Xrpl.Wallet;
 
-// Автозаполнение, установка SigningPubKey, корректировка комиссии (утроение для overhead CounterpartySignature)
+// Autofill рассчитывает комиссию (включая overhead CounterpartySignature)
 loanTx = await client.Autofill(loanTx);
-JsonObject prepared = LoanSigningHelper.PrepareForSigning(loanTx, brokerWallet, adjustFee: true);
+// PrepareForSigning устанавливает SigningPubKey брокера и удаляет поля подписей
+JsonObject prepared = LoanSigningHelper.PrepareForSigning(loanTx, brokerWallet);
 ```
 
 ### V1 — Автоматический (оба ключа доступны локально)
@@ -329,7 +330,7 @@ await client.SubmitRequest(fullySigned.TxBlob);
 - Прообраз подписи использует `SigningPubKey` **брокера** (отправляющий аккаунт)
 - `CounterpartySignature` — это STObject с `isSigningField = false` — он исключён из прообраза подписи
 - Комиссию необходимо увеличить после автозаполнения, т.к. добавление `CounterpartySignature` увеличивает размер транзакции (~150 байт)
-- `LoanSigningHelper.PrepareForSigning()` утраивает комиссию по умолчанию
+- `Autofill` автоматически рассчитывает корректную комиссию для LoanSet (включая overhead CounterpartySignature)
 
 ---
 

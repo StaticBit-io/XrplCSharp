@@ -135,7 +135,8 @@ public abstract class TestILoanBase
 
     /// <summary>
     /// Autofills and prepares a LoanSet transaction for co-signing.
-    /// Returns the prepared JsonObject with fee adjusted and SigningPubKey set.
+    /// Returns the prepared JsonObject with SigningPubKey set.
+    /// Fee for CounterpartySignature overhead is handled by Autofill.
     /// </summary>
     protected static async Task<JsonObject> PrepareLoanSet(
         IXrplClient client,
@@ -143,7 +144,7 @@ public abstract class TestILoanBase
         XrplWallet brokerWallet)
     {
         loanTx = await client.Autofill(loanTx);
-        return LoanSigningHelper.PrepareForSigning(loanTx, brokerWallet, adjustFee: true);
+        return LoanSigningHelper.PrepareForSigning(loanTx, brokerWallet);
     }
 
     /// <summary>

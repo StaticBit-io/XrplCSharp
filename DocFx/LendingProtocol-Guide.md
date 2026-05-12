@@ -271,9 +271,10 @@ The SDK provides `LoanSigningHelper` and `XrplWallet.SignAsLoanCounterparty()` w
 ```csharp
 using Xrpl.Wallet;
 
-// Autofill, set SigningPubKey, adjust fee (triples it for CounterpartySignature overhead)
+// Autofill handles fee calculation (including CounterpartySignature overhead)
 loanTx = await client.Autofill(loanTx);
-JsonObject prepared = LoanSigningHelper.PrepareForSigning(loanTx, brokerWallet.PublicKey, adjustFee: true);
+// PrepareForSigning sets broker's SigningPubKey and removes signature fields
+JsonObject prepared = LoanSigningHelper.PrepareForSigning(loanTx, brokerWallet);
 ```
 
 ### V1 — Automatic (Both Keys Available Locally)
@@ -328,8 +329,7 @@ await client.SubmitRequest(fullySigned.TxBlob);
 - Both parties sign the **same** preimage (the transaction serialized for signing, without any signature fields)
 - The signing preimage uses the **broker's** `SigningPubKey` (the submitting account)
 - `CounterpartySignature` is an STObject with `isSigningField = false` — it is excluded from the signing preimage
-- The fee must be increased after autofill because adding `CounterpartySignature` increases the transaction size (~150 bytes)
-- `LoanSigningHelper.PrepareForSigning()` triples the fee by default
+- `Autofill` automatically calculates the correct fee for LoanSet (includes CounterpartySignature overhead)
 
 ---
 

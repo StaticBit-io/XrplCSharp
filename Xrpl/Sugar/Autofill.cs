@@ -229,6 +229,9 @@ namespace Xrpl.Sugar
             {
                 "EscrowFinish" when tx.TryGetValue("Fulfillment", out _) => CalculateEscrowFinishFee(tx, netFeeDrops),
                 "Batch" => await CalculateBatchFee(client, tx, baseFee, cancellationToken),
+                // LoanSet requires CounterpartySignature (~150 bytes extra).
+                // Fee formula: baseFee * (1 + 1 counterparty signer) = baseFee * 2
+                "LoanSet" => baseFee * 2,
                 _ when IsReserveFeeTxNeed(tx) => await FetchReserveFee(client, cancellationToken),
                 _ => baseFee
             };

@@ -50,24 +50,25 @@ namespace Xrpl.Wallet
     {
         /// <summary>
         /// Prepares a LoanSet transaction JSON for signing.
-        /// Sets SigningPubKey to the broker's public key, removes signature fields,
-        /// and optionally adjusts the fee to account for CounterpartySignature overhead.
+        /// Sets SigningPubKey to the broker's public key and removes signature fields.
         /// Returns a JsonObject ready for both parties to sign.
         /// </summary>
+        /// <remarks>
+        /// Fee for CounterpartySignature overhead is handled by Autofill
+        /// (see <c>CalculateBaseFeeForType</c> in <c>Autofill.cs</c>).
+        /// </remarks>
         /// <param name="loanSetTx">The LoanSet transaction (autofilled with Sequence, Fee, LastLedgerSequence).</param>
-        /// <param name="brokerWallet">The broker's (submitting account's) public key hex.</param>
-        /// <param name="adjustFee">If true, triples the fee to account for CounterpartySignature overhead (~150 bytes).</param>
+        /// <param name="brokerWallet">The broker's wallet (submitting account).</param>
         /// <returns>JsonObject ready for signing by both parties.</returns>
         public static JsonObject PrepareForSigning(
             ITransactionRequest loanSetTx,
-            XrplWallet brokerWallet,
-            bool adjustFee = true)
+            XrplWallet brokerWallet)
         {
             string txJsonStr = JsonSerializer.Serialize(loanSetTx, XrplJsonOptions.Default);
             JsonObject txJson = JsonNode.Parse(txJsonStr)?.AsObject()
                 ?? throw new ValidationException("Failed to serialize LoanSet to JSON");
 
-            return PrepareForSigning(txJson, brokerWallet, adjustFee);
+            return PrepareForSigning(txJson, brokerWallet);
         }
 
         /// <summary>
@@ -75,25 +76,11 @@ namespace Xrpl.Wallet
         /// </summary>
         public static JsonObject PrepareForSigning(
             JsonObject txJson,
-            XrplWallet brokerWallet,
-            bool adjustFee = true)
+            XrplWallet brokerWallet)
         {
             string txType = txJson["TransactionType"]?.GetValue<string>();
             if (!string.Equals(txType, "LoanSet", StringComparison.OrdinalIgnoreCase))
                 throw new ValidationException($"TransactionType must be LoanSet, got: {txType}");
-
-            // Adjust fee for CounterpartySignature overhead
-            if (adjustFee)
-            {
-                string feeStr = txJson["Fee"]?.GetValue<string>();
-                if (!string.IsNullOrEmpty(feeStr) && ulong.TryParse(feeStr, out ulong feeDrops))
-                {
-                    feeDrops *= 3; // triple the fee
-                    if (feeDrops < 20)
-                        feeDrops = 20;
-                    txJson["Fee"] = feeDrops.ToString();
-                }
-            }
 
             // Set broker's signing pub key
             txJson["SigningPubKey"] = brokerWallet.PublicKey;
