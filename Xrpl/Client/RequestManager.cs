@@ -351,9 +351,10 @@ namespace Xrpl.Client
             {
                 if (response.Error is not null || response.ErrorMessage is not null)
                 {
+                    string detail = response.ErrorMessage ?? response.ErrorException;
                     var errMessage = response.Error is null
-                        ? response.ErrorMessage
-                        : $"{response.Error} - {response.ErrorMessage}";
+                        ? detail
+                        : $"{response.Error} - {detail}";
                     XrplException error = new XrplException(errMessage);
                     this.Reject(id, error);
                     return (response, true);
@@ -376,9 +377,10 @@ namespace Xrpl.Client
                 {
                     
                 }
+                string detail = response.ErrorMessage ?? response.ErrorException;
                 var errMessage = response.Error is null
-                    ? response.ErrorMessage
-                    : $"{response.Error} - {response.ErrorMessage}";
+                    ? detail
+                    : $"{response.Error} - {detail}";
                 var error = new RippledException(errMessage, errorResponse);
                 this.Reject(id, error);
                 return (response, true);

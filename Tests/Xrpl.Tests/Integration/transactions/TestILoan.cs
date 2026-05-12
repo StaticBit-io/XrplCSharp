@@ -15,7 +15,7 @@ namespace XrplTests.Xrpl.ClientLib.Integration;
 
 [TestClass]
 [TestCategory("Loan")]
-[Ignore("Loan amendment does not exist in rippled 3.0.0")]
+[Ignore("LendingProtocol amendment requires rippled 3.1.0+; Open for Voting on mainnet (XLS-66)")]
 public class TestILoan : TestILoanBase
 {
     private static IXrplClient client;

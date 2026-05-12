@@ -15,7 +15,7 @@ namespace XrplTests.Xrpl.ClientLib.Integration;
 
 [TestClass]
 [TestCategory("Delegate")]
-[Ignore("DelegateKeys amendment does not exist in rippled 3.0.0")]
+[Ignore("PermissionDelegation amendment removed in v2.6.1 due to a bug; replacement PermissionDelegationV1_1 not yet released (XLS-75)")]
 public class TestIDelegateSet
 {
     public TestContext TestContext { get; set; }
