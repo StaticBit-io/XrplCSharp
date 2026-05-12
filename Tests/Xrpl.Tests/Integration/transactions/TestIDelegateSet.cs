@@ -15,6 +15,7 @@ namespace XrplTests.Xrpl.ClientLib.Integration;
 
 [TestClass]
 [TestCategory("Delegate")]
+[Ignore("DelegateKeys amendment does not exist in rippled 3.0.0")]
 public class TestIDelegateSet
 {
     public TestContext TestContext { get; set; }

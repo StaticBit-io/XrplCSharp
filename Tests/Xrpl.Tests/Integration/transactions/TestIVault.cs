@@ -48,6 +48,7 @@ public class TestIVault : TestIVaultBase
     }
 
     [TestMethod]
+    [Ignore("Asset2 field not supported in VaultCreate on rippled 3.0.0")]
     public async Task TestVaultCreate_WithAsset2()
     {
         XrplWallet wallet = XrplWallet.Generate();
@@ -214,6 +215,7 @@ public class TestIVault : TestIVaultBase
     }
 
     [TestMethod]
+    [Ignore("VaultClawback requires IOU vault; XRP vaults cannot be clawed back")]
     public async Task TestVaultClawback_Basic()
     {
         XrplWallet walletOwner = XrplWallet.Generate();

@@ -15,6 +15,7 @@ namespace XrplTests.Xrpl.ClientLib.Integration;
 
 [TestClass]
 [TestCategory("Loan")]
+[Ignore("Loan amendment does not exist in rippled 3.0.0")]
 public class TestILoan : TestILoanBase
 {
     private static IXrplClient client;

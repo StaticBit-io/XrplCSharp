@@ -7,13 +7,13 @@ using Xrpl.Client.Exceptions;
 using Xrpl.Models.Methods;
 using Xrpl.Models.Transactions;
 using Xrpl.Sugar;
-using Xrpl.Sugar;
 using Xrpl.Wallet;
 
 namespace XrplTests.Xrpl.ClientLib.Integration;
 
 [TestClass]
 [TestCategory("LedgerStateFix")]
+[Ignore("LedgerStateFix amendment does not exist in rippled 3.0.0")]
 public class TestILedgerStateFix
 {
     public TestContext TestContext { get; set; }
