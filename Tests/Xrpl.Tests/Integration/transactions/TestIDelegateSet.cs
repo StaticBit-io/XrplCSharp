@@ -67,7 +67,7 @@ public class TestIDelegateSet
         DelegateSet tx = new DelegateSet
         {
             Account = walletOwner.ClassicAddress,
-            Authorize = walletDelegate.ClassicAddress,
+            Delegate = walletDelegate.ClassicAddress,
             Permissions = new List<PermissionWrapper>
             {
                 new PermissionWrapper { Permission = new PermissionEntry { PermissionValue = 1 } },
@@ -98,7 +98,7 @@ public class TestIDelegateSet
         DelegateSet tx = new DelegateSet
         {
             Account = walletOwner.ClassicAddress,
-            Authorize = walletDelegate.ClassicAddress,
+            Delegate = walletDelegate.ClassicAddress,
             Permissions = new List<PermissionWrapper>
             {
                 new PermissionWrapper { Permission = new PermissionEntry { PermissionValue = 1 } },

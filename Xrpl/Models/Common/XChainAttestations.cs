@@ -20,19 +20,19 @@ public class XChainClaimAttestationCollectionElement
 public class XChainClaimProofSig
 {
     /// <summary>
-    /// The amount to claim in the destination chain.
+    /// The amount to claim in the XChainCommit transaction on the destination chain.
     /// </summary>
     [JsonPropertyName("Amount")]
     public Currency Amount { get; set; }
 
     /// <summary>
-    /// The account that signed the attestation.
+    /// The account that should receive this signer's share of the SignatureReward.
     /// </summary>
     [JsonPropertyName("AttestationRewardAccount")]
     public string AttestationRewardAccount { get; set; }
 
     /// <summary>
-    /// The account on the door's signer list that signed the attestation.
+    /// The account on the door account's signer list that is signing the transaction.
     /// </summary>
     [JsonPropertyName("AttestationSignerAccount")]
     public string AttestationSignerAccount { get; set; }
@@ -44,13 +44,13 @@ public class XChainClaimProofSig
     public string Destination { get; set; }
 
     /// <summary>
-    /// The public key used to verify the attestation signature.
+    /// The public key used to verify the signature.
     /// </summary>
     [JsonPropertyName("PublicKey")]
     public string PublicKey { get; set; }
 
     /// <summary>
-    /// Whether the transfer was initiated on the locking chain (1) or issuing chain (0).
+    /// A boolean representing the chain where the event occurred (1 = locking chain, 0 = issuing chain).
     /// </summary>
     [JsonPropertyName("WasLockingChainSend")]
     public byte WasLockingChainSend { get; set; }
@@ -86,13 +86,13 @@ public class XChainCreateAccountProofSig
     public Currency SignatureReward { get; set; }
 
     /// <summary>
-    /// The account that signed the attestation.
+    /// The account that should receive this signer's share of the SignatureReward.
     /// </summary>
     [JsonPropertyName("AttestationRewardAccount")]
     public string AttestationRewardAccount { get; set; }
 
     /// <summary>
-    /// The account on the door's signer list that signed the attestation.
+    /// The account on the door account's signer list that is signing the transaction.
     /// </summary>
     [JsonPropertyName("AttestationSignerAccount")]
     public string AttestationSignerAccount { get; set; }
@@ -104,13 +104,13 @@ public class XChainCreateAccountProofSig
     public string Destination { get; set; }
 
     /// <summary>
-    /// The public key used to verify the attestation signature.
+    /// The public key used to verify the signature.
     /// </summary>
     [JsonPropertyName("PublicKey")]
     public string PublicKey { get; set; }
 
     /// <summary>
-    /// Whether the transfer was initiated on the locking chain (1) or issuing chain (0).
+    /// A boolean representing the chain where the event occurred (1 = locking chain, 0 = issuing chain).
     /// </summary>
     [JsonPropertyName("WasLockingChainSend")]
     public byte WasLockingChainSend { get; set; }

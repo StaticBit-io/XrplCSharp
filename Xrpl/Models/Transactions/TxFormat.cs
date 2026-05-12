@@ -467,6 +467,7 @@ namespace Xrpl.Models.Transaction
                     [Field.XChainAccountCreateCount] = Requirement.Required,
                     [Field.Amount] = Requirement.Required,
                     [Field.SignatureReward] = Requirement.Required,
+                    [Field.OtherChainSource] = Requirement.Required,
                     [Field.Destination] = Requirement.Required,
                     [Field.AttestationRewardAccount] = Requirement.Required,
                     [Field.AttestationSignerAccount] = Requirement.Required,
@@ -480,8 +481,10 @@ namespace Xrpl.Models.Transaction
                 {
                     [Field.Asset] = Requirement.Required,
                     [Field.Amount] = Requirement.Optional,
+                    [Field.AssetsMaximum] = Requirement.Optional,
+                    [Field.MPTokenMetadata] = Requirement.Optional,
                     [Field.WithdrawalPolicy] = Requirement.Optional,
-                    [Field.MutableFlags] = Requirement.Optional,
+                    [Field.Scale] = Requirement.Optional,
                     [Field.Data] = Requirement.Optional,
                     [Field.DomainID] = Requirement.Optional,
                 },
@@ -489,7 +492,7 @@ namespace Xrpl.Models.Transaction
                 {
                     [Field.VaultID] = Requirement.Required,
                     [Field.Data] = Requirement.Optional,
-                    [Field.MutableFlags] = Requirement.Optional,
+                    [Field.AssetsMaximum] = Requirement.Optional,
                     [Field.DomainID] = Requirement.Optional,
                 },
                 [BinaryCodec.Types.TransactionType.VaultDelete] = new TxFormat
@@ -505,12 +508,14 @@ namespace Xrpl.Models.Transaction
                 {
                     [Field.VaultID] = Requirement.Required,
                     [Field.Amount] = Requirement.Required,
+                    [Field.Destination] = Requirement.Optional,
+                    [Field.DestinationTag] = Requirement.Optional,
                 },
                 [BinaryCodec.Types.TransactionType.VaultClawback] = new TxFormat
                 {
                     [Field.VaultID] = Requirement.Required,
+                    [Field.Holder] = Requirement.Required,
                     [Field.Amount] = Requirement.Optional,
-                    [Field.Holder] = Requirement.Optional,
                 },
 
                 // Loan/LoanBroker (XLS-66d)

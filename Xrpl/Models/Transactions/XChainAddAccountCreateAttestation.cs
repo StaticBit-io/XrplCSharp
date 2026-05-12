@@ -38,6 +38,12 @@ namespace Xrpl.Models.Transactions
         Currency SignatureReward { get; set; }
 
         /// <summary>
+        /// The account on the source chain that submitted the XChainAccountCreateCommit transaction
+        /// that triggered the event associated with the attestation.
+        /// </summary>
+        string OtherChainSource { get; set; }
+
+        /// <summary>
         /// The destination account for the funds on the destination chain.
         /// </summary>
         string Destination { get; set; }
@@ -96,6 +102,10 @@ namespace Xrpl.Models.Transactions
         public Currency SignatureReward { get; set; }
 
         /// <inheritdoc />
+        [JsonPropertyName("OtherChainSource")]
+        public string OtherChainSource { get; set; }
+
+        /// <inheritdoc />
         [JsonPropertyName("Destination")]
         public string Destination { get; set; }
 
@@ -140,6 +150,10 @@ namespace Xrpl.Models.Transactions
         [JsonPropertyName("SignatureReward")]
         [JsonConverter(typeof(CurrencyConverter))]
         public Currency SignatureReward { get; set; }
+
+        /// <inheritdoc />
+        [JsonPropertyName("OtherChainSource")]
+        public string OtherChainSource { get; set; }
 
         /// <inheritdoc />
         [JsonPropertyName("Destination")]
@@ -196,8 +210,14 @@ namespace Xrpl.Models.Transactions
             if (!tx.TryGetValue("PublicKey", out var pk) || pk is not string)
                 throw new ValidationException("XChainAddAccountCreateAttestation: missing field PublicKey");
 
+            if (!tx.TryGetValue("OtherChainSource", out var source) || source is not string)
+                throw new ValidationException("XChainAddAccountCreateAttestation: missing field OtherChainSource");
+
             if (!tx.TryGetValue("Signature", out var sig) || sig is not string)
                 throw new ValidationException("XChainAddAccountCreateAttestation: missing field Signature");
+
+            if (!tx.TryGetValue("WasLockingChainSend", out var wasLocking) || wasLocking is null)
+                throw new ValidationException("XChainAddAccountCreateAttestation: missing field WasLockingChainSend");
         }
     }
 }

@@ -1,8 +1,5 @@
 using System.Text.Json.Serialization;
 
-using Xrpl.Client.Json.Converters;
-using Xrpl.Models.Common;
-
 using static Xrpl.Models.Common.Common;
 
 namespace Xrpl.Models.Ledger;
@@ -19,90 +16,94 @@ public class LOLoanBroker : BaseLedgerEntry
     }
 
     /// <summary>
-    /// The account that owns this loan broker.
+    /// The address of the LoanBroker pseudo-account.
     /// </summary>
     [JsonPropertyName("Account")]
     public string Account { get; init; }
 
     /// <summary>
-    /// The primary asset managed by the loan broker.
+    /// The account address of the vault owner.
     /// </summary>
-    [JsonPropertyName("Asset")]
-    [JsonConverter(typeof(IssuedCurrencyConverter))]
-    public IssuedCurrency Asset { get; init; }
+    [JsonPropertyName("Owner")]
+    public string Owner { get; init; }
 
     /// <summary>
-    /// The secondary asset (collateral) managed by the loan broker.
+    /// The associated vault identifier.
     /// </summary>
-    [JsonPropertyName("Asset2")]
-    [JsonConverter(typeof(IssuedCurrencyConverter))]
-    public IssuedCurrency Asset2 { get; init; }
+    [JsonPropertyName("VaultID")]
+    public string VaultID { get; init; }
 
     /// <summary>
-    /// The total cover assets available (Number type, string representation).
+    /// The transaction sequence number that created the LoanBroker.
     /// </summary>
-    [JsonPropertyName("CoverAvailable")]
-    public string CoverAvailable { get; init; }
+    [JsonPropertyName("Sequence")]
+    public uint? Sequence { get; init; }
 
     /// <summary>
-    /// The total assets available for lending (Number type, string representation).
+    /// Sequential identifier for Loan ledger entries, incremented each time a new loan is created.
     /// </summary>
-    [JsonPropertyName("AssetsAvailable")]
-    public string AssetsAvailable { get; init; }
+    [JsonPropertyName("LoanSequence")]
+    public uint? LoanSequence { get; init; }
 
     /// <summary>
-    /// The total assets in the broker (Number type, string representation).
+    /// The number of active loans issued by the LoanBroker.
     /// </summary>
-    [JsonPropertyName("AssetsTotal")]
-    public string AssetsTotal { get; init; }
+    [JsonPropertyName("OwnerCount")]
+    public uint? OwnerCount { get; init; }
 
     /// <summary>
-    /// The total outstanding debt (Number type, string representation).
+    /// Total asset amount the protocol owes the vault, including interest (Number type, string representation).
     /// </summary>
     [JsonPropertyName("DebtTotal")]
     public string DebtTotal { get; init; }
 
     /// <summary>
-    /// The maximum debt capacity (Number type, string representation).
+    /// Protocol debt ceiling; 0 indicates unlimited (Number type, string representation).
     /// </summary>
     [JsonPropertyName("DebtMaximum")]
     public string DebtMaximum { get; init; }
 
     /// <summary>
-    /// The minimum cover rate required for loans.
+    /// Total amount of first-loss capital deposited (Number type, string representation).
+    /// </summary>
+    [JsonPropertyName("CoverAvailable")]
+    public string CoverAvailable { get; init; }
+
+    /// <summary>
+    /// Minimum first-loss capital coverage ratio, in 1/10th basis points.
     /// </summary>
     [JsonPropertyName("CoverRateMinimum")]
     public uint? CoverRateMinimum { get; init; }
 
     /// <summary>
-    /// The cover rate at which liquidation occurs.
+    /// Minimum required first-loss capital moved to cover loan default.
     /// </summary>
     [JsonPropertyName("CoverRateLiquidation")]
     public uint? CoverRateLiquidation { get; init; }
 
     /// <summary>
-    /// The management fee rate charged by the broker.
+    /// Protocol fee in 1/10th basis points (0-100000).
     /// </summary>
     [JsonPropertyName("ManagementFeeRate")]
     public ushort? ManagementFeeRate { get; init; }
 
     /// <summary>
-    /// A hint linking to the loan broker's directory node.
+    /// Arbitrary metadata about the loan broker, limited to 256 bytes. Hex-encoded string.
     /// </summary>
-    [JsonPropertyName("LoanBrokerNode")]
-    public string LoanBrokerNode { get; init; }
+    [JsonPropertyName("Data")]
+    public string Data { get; init; }
 
     /// <summary>
-    /// The ID of a permissioned domain associated with the broker.
-    /// </summary>
-    [JsonPropertyName("DomainID")]
-    public string DomainID { get; init; }
-
-    /// <summary>
-    /// A hint indicating which page of the owner's directory links to this object.
+    /// A hint indicating which page of the owner's directory links to this object (UInt64).
     /// </summary>
     [JsonPropertyName("OwnerNode")]
     public string OwnerNode { get; init; }
+
+    /// <summary>
+    /// Reference page in vault's pseudo-account directory (UInt64).
+    /// </summary>
+    [JsonPropertyName("VaultNode")]
+    public string VaultNode { get; init; }
 
     /// <summary>
     /// The identifying hash of the transaction that most recently modified this object.

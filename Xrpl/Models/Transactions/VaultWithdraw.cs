@@ -21,9 +21,20 @@ namespace Xrpl.Models.Transactions
         string VaultID { get; set; }
 
         /// <summary>
-        /// The amount to withdraw.
+        /// The exact amount of vault asset to withdraw or vault share to redeem.
         /// </summary>
         Currency Amount { get; set; }
+
+        /// <summary>
+        /// An account to receive the assets. This account must be able to receive the vault asset
+        /// or the transaction fails.
+        /// </summary>
+        string Destination { get; set; }
+
+        /// <summary>
+        /// Arbitrary tag identifying the reason for the withdrawal to the destination.
+        /// </summary>
+        uint? DestinationTag { get; set; }
     }
 
     /// <inheritdoc cref="IVaultWithdraw" />
@@ -41,6 +52,14 @@ namespace Xrpl.Models.Transactions
         /// <inheritdoc />
         [JsonPropertyName("Amount")]
         public Currency Amount { get; set; }
+
+        /// <inheritdoc />
+        [JsonPropertyName("Destination")]
+        public string Destination { get; set; }
+
+        /// <inheritdoc />
+        [JsonPropertyName("DestinationTag")]
+        public uint? DestinationTag { get; set; }
     }
 
     /// <inheritdoc cref="IVaultWithdraw" />
@@ -53,6 +72,14 @@ namespace Xrpl.Models.Transactions
         /// <inheritdoc />
         [JsonPropertyName("Amount")]
         public Currency Amount { get; set; }
+
+        /// <inheritdoc />
+        [JsonPropertyName("Destination")]
+        public string Destination { get; set; }
+
+        /// <inheritdoc />
+        [JsonPropertyName("DestinationTag")]
+        public uint? DestinationTag { get; set; }
     }
 
     public partial class Validation

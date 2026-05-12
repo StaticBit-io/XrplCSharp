@@ -5,6 +5,7 @@ using Microsoft.VisualStudio.TestTools.UnitTesting;
 using Xrpl.Client;
 using Xrpl.Models;
 using Xrpl.Models.Common;
+using Xrpl.Models.Ledger;
 using Xrpl.Models.Methods;
 using Xrpl.Models.Transactions;
 
@@ -93,6 +94,27 @@ public class TestIVault : TestIVaultBase
     }
 
     [TestMethod]
+    public async Task TestVaultCreate_WithOptionalFields()
+    {
+        XrplWallet wallet = XrplWallet.Generate();
+        await IntegrationTestConfig.TryFundWalletAsync(client, wallet, nodeType);
+
+        VaultCreate tx = new VaultCreate
+        {
+            Account = wallet.ClassicAddress,
+            Asset = new IssuedCurrency { Currency = "XRP" },
+            AssetsMaximum = "10000000000",
+            MPTokenMetadata = "48656C6C6F",
+            Data = "DEADBEEF",
+            Flags = (uint)VaultCreateFlags.tfVaultShareNonTransferable,
+        };
+        tx = await client.Autofill(tx);
+
+        TransactionSummary result = await client.SubmitAndWait(tx, wallet, true);
+        ValidateResult(result);
+    }
+
+    [TestMethod]
     public async Task TestVaultDeposit_Basic()
     {
         XrplWallet wallet = XrplWallet.Generate();
@@ -163,6 +185,49 @@ public class TestIVault : TestIVaultBase
     }
 
     [TestMethod]
+    public async Task TestVaultWithdraw_WithDestination()
+    {
+        XrplWallet wallet = XrplWallet.Generate();
+        XrplWallet walletDest = XrplWallet.Generate();
+        await IntegrationTestConfig.TryFundWalletsAsync(client, nodeType, wallet, walletDest);
+
+        VaultCreate createTx = new VaultCreate
+        {
+            Account = wallet.ClassicAddress,
+            Asset = new IssuedCurrency { Currency = "XRP" },
+        };
+        createTx = await client.Autofill(createTx);
+        TransactionSummary createResult = await client.SubmitAndWait(createTx, wallet, true);
+        ValidateResult(createResult);
+
+        string vaultId = GetCreatedObjectId(createResult);
+        Assert.IsNotNull(vaultId, "VaultID should be present in metadata");
+
+        VaultDeposit depositTx = new VaultDeposit
+        {
+            Account = wallet.ClassicAddress,
+            VaultID = vaultId,
+            Amount = new Currency { Value = "1000000", CurrencyCode = "XRP" },
+        };
+        depositTx = await client.Autofill(depositTx);
+        TransactionSummary depositResult = await client.SubmitAndWait(depositTx, wallet, true);
+        ValidateResult(depositResult);
+
+        VaultWithdraw withdrawTx = new VaultWithdraw
+        {
+            Account = wallet.ClassicAddress,
+            VaultID = vaultId,
+            Amount = new Currency { Value = "500000", CurrencyCode = "XRP" },
+            Destination = walletDest.ClassicAddress,
+            DestinationTag = 42,
+        };
+        withdrawTx = await client.Autofill(withdrawTx);
+
+        TransactionSummary result = await client.SubmitAndWait(withdrawTx, wallet, true);
+        ValidateResult(result);
+    }
+
+    [TestMethod]
     public async Task TestVaultSet_UpdateData()
     {
         XrplWallet wallet = XrplWallet.Generate();
@@ -185,6 +250,36 @@ public class TestIVault : TestIVaultBase
             Account = wallet.ClassicAddress,
             VaultID = vaultId,
             Data = "55706461746564",
+        };
+        setTx = await client.Autofill(setTx);
+
+        TransactionSummary result = await client.SubmitAndWait(setTx, wallet, true);
+        ValidateResult(result);
+    }
+
+    [TestMethod]
+    public async Task TestVaultSet_UpdateAssetsMaximum()
+    {
+        XrplWallet wallet = XrplWallet.Generate();
+        await IntegrationTestConfig.TryFundWalletAsync(client, wallet, nodeType);
+
+        VaultCreate createTx = new VaultCreate
+        {
+            Account = wallet.ClassicAddress,
+            Asset = new IssuedCurrency { Currency = "XRP" },
+        };
+        createTx = await client.Autofill(createTx);
+        TransactionSummary createResult = await client.SubmitAndWait(createTx, wallet, true);
+        ValidateResult(createResult);
+
+        string vaultId = GetCreatedObjectId(createResult);
+        Assert.IsNotNull(vaultId, "VaultID should be present in metadata");
+
+        VaultSet setTx = new VaultSet
+        {
+            Account = wallet.ClassicAddress,
+            VaultID = vaultId,
+            AssetsMaximum = "50000000000",
         };
         setTx = await client.Autofill(setTx);
 
@@ -326,6 +421,76 @@ public class TestIVault : TestIVaultBase
 
         TransactionSummary result = await client.SubmitAndWait(clawbackTx, walletIssuer, true);
         ValidateResult(result);
+    }
+
+    [TestMethod]
+    public async Task TestVaultLedgerEntry_VerifyFields()
+    {
+        XrplWallet wallet = XrplWallet.Generate();
+        await IntegrationTestConfig.TryFundWalletAsync(client, wallet, nodeType);
+
+        // Create vault with optional fields to verify deserialization
+        VaultCreate createTx = new VaultCreate
+        {
+            Account = wallet.ClassicAddress,
+            Asset = new IssuedCurrency { Currency = "XRP" },
+            AssetsMaximum = "50000000000",
+            Data = "7B226E223A2254657374205661756C74222C2277223A226578616D706C652E636F6D227D",
+            Flags = (uint)VaultCreateFlags.tfVaultShareNonTransferable,
+        };
+        createTx = await client.Autofill(createTx);
+        TransactionSummary createResult = await client.SubmitAndWait(createTx, wallet, true);
+        ValidateResult(createResult);
+
+        string vaultId = GetCreatedObjectId(createResult);
+        Assert.IsNotNull(vaultId, "VaultID should be present in metadata");
+
+        // Deposit to set AssetsTotal/AssetsAvailable
+        VaultDeposit depositTx = new VaultDeposit
+        {
+            Account = wallet.ClassicAddress,
+            VaultID = vaultId,
+            Amount = new Currency { Value = "1000000", CurrencyCode = "XRP" },
+        };
+        depositTx = await client.Autofill(depositTx);
+        TransactionSummary depositResult = await client.SubmitAndWait(depositTx, wallet, true);
+        ValidateResult(depositResult);
+
+        // Fetch the Vault LO via ledger_entry
+        LedgerEntryRequest entryRequest = new LedgerEntryRequest { Index = vaultId };
+        LedgerEntryResponse entryResponse = await client.LedgerEntry(entryRequest);
+
+        Assert.IsNotNull(entryResponse?.Node, "LedgerEntry node should not be null");
+        Assert.IsInstanceOfType(entryResponse.Node, typeof(LOVault), "Node should deserialize to LOVault");
+
+        LOVault vault = (LOVault)entryResponse.Node;
+
+        // Verify core fields
+        Assert.IsNotNull(vault.Account, "Account (pseudo-account) should be set");
+        Assert.AreEqual(wallet.ClassicAddress, vault.Owner, "Owner should match the wallet address");
+        Assert.IsNotNull(vault.Asset, "Asset should be set");
+        Assert.AreEqual("XRP", vault.Asset.Currency, "Asset currency should be XRP");
+
+        // Verify Number fields
+        Assert.IsNotNull(vault.AssetsTotal, "AssetsTotal should be set after deposit");
+        Assert.IsNotNull(vault.AssetsAvailable, "AssetsAvailable should be set after deposit");
+        Assert.AreEqual("50000000000", vault.AssetsMaximum, "AssetsMaximum should match creation value");
+
+        // Verify ShareMPTID
+        Assert.IsNotNull(vault.ShareMPTID, "ShareMPTID should be set");
+
+        // Verify Data parsing
+        Assert.IsNotNull(vault.Data, "Data should be set");
+        Assert.IsNotNull(vault.DataParsed, "DataParsed should parse successfully");
+        Assert.AreEqual("Test Vault", vault.DataParsed.Name, "DataParsed.Name should match");
+        Assert.AreEqual("example.com", vault.DataParsed.Website, "DataParsed.Website should match");
+        Assert.IsNotNull(vault.DataRaw, "DataRaw should decode successfully");
+
+        // Verify infrastructure fields
+        Assert.IsNotNull(vault.Sequence, "Sequence should be set");
+        Assert.IsNotNull(vault.OwnerNode, "OwnerNode should be set");
+        Assert.IsNotNull(vault.PreviousTxnID, "PreviousTxnID should be set");
+        Assert.IsNotNull(vault.PreviousTxnLgrSeq, "PreviousTxnLgrSeq should be set");
     }
 
     private static string GetCreatedObjectId(TransactionSummary result, LedgerEntryType entryType = LedgerEntryType.Vault)

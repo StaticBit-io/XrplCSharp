@@ -76,6 +76,9 @@ namespace Xrpl.Models.Transactions
 
             if (!tx.TryGetValue("VaultID", out var vaultId) || vaultId is not string)
                 throw new ValidationException("VaultClawback: missing field VaultID");
+
+            if (!tx.TryGetValue("Holder", out var holder) || holder is not string)
+                throw new ValidationException("VaultClawback: missing field Holder");
         }
     }
 }

@@ -193,6 +193,9 @@ namespace Xrpl.Models.Transactions
 
             if (!tx.TryGetValue("Signature", out var sig) || sig is not string)
                 throw new ValidationException("XChainAddClaimAttestation: missing field Signature");
+
+            if (!tx.TryGetValue("WasLockingChainSend", out var wasLocking) || wasLocking is null)
+                throw new ValidationException("XChainAddClaimAttestation: missing field WasLockingChainSend");
         }
     }
 }

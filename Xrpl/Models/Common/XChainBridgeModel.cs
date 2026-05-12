@@ -13,26 +13,29 @@ namespace Xrpl.Models.Common;
 public class XChainBridgeModel
 {
     /// <summary>
-    /// The door account on the locking chain.
+    /// The door account on the issuing chain.
+    /// For an XRP-XRP bridge, this must be the genesis account
+    /// (the account that is created when the network is first started, which contains all of the XRP).
     /// </summary>
     [JsonPropertyName("LockingChainDoor")]
     public string LockingChainDoor { get; set; }
 
     /// <summary>
-    /// The asset that is locked on the locking chain.
+    /// The asset that is minted and burned on the issuing chain.
+    /// For an IOU-IOU bridge, the issuer of the asset must be the door account on the issuing chain, to avoid supply issues.
     /// </summary>
     [JsonPropertyName("LockingChainIssue")]
     [JsonConverter(typeof(IssuedCurrencyConverter))]
     public IssuedCurrency LockingChainIssue { get; set; }
 
     /// <summary>
-    /// The door account on the issuing chain.
+    /// The door account on the locking chain.
     /// </summary>
     [JsonPropertyName("IssuingChainDoor")]
     public string IssuingChainDoor { get; set; }
 
     /// <summary>
-    /// The asset that is issued on the issuing chain.
+    /// The asset that is locked and unlocked on the locking chain.
     /// </summary>
     [JsonPropertyName("IssuingChainIssue")]
     [JsonConverter(typeof(IssuedCurrencyConverter))]

@@ -1,3 +1,4 @@
+using System;
 using System.Collections.Generic;
 using System.Text.Json.Serialization;
 using System.Threading.Tasks;
@@ -13,6 +14,24 @@ using static Xrpl.Models.Common.Common;
 namespace Xrpl.Models.Transactions
 {
     /// <summary>
+    /// Flags for VaultCreate transactions.
+    /// </summary>
+    [Flags]
+    public enum VaultCreateFlags : uint
+    {
+        /// <summary>
+        /// Designates the vault as private, restricting access to credentialed accounts
+        /// within a specified Permissioned Domain. Set only at vault creation.
+        /// </summary>
+        tfVaultPrivate = 0x00010000,
+
+        /// <summary>
+        /// Makes vault shares non-transferable between accounts. Set only at vault creation.
+        /// </summary>
+        tfVaultShareNonTransferable = 0x00020000,
+    }
+
+    /// <summary>
     /// The VaultCreate transaction creates a new Vault ledger object for holding pooled assets.
     /// </summary>
     /// <remarks>Requires the Vault amendment (XLS-65d). This feature is in draft and subject to change.</remarks>
@@ -24,27 +43,33 @@ namespace Xrpl.Models.Transactions
         IssuedCurrency Asset { get; set; }
 
         /// <summary>
-        /// A secondary asset associated with the vault.
-        /// </summary>
-        IssuedCurrency Asset2 { get; set; }
-
-        /// <summary>
         /// The initial deposit amount.
         /// </summary>
         Currency Amount { get; set; }
 
         /// <summary>
+        /// The maximum asset amount that can be held in the vault.
+        /// STNumber type (12 bytes: int64 mantissa + int32 exponent), serialized as string in JSON.
+        /// </summary>
+        string AssetsMaximum { get; set; }
+
+        /// <summary>
+        /// Arbitrary metadata for the vault shares (MPToken), limited in size. Hex-encoded string.
+        /// </summary>
+        string MPTokenMetadata { get; set; }
+
+        /// <summary>
         /// The withdrawal policy for the vault. Defines how withdrawals are handled.
         /// </summary>
-        byte? WithdrawalPolicy { get; set; }
+        uint? WithdrawalPolicy { get; set; }
 
         /// <summary>
-        /// Flags that can be modified after creation.
+        /// The scale (decimal precision) for the vault shares.
         /// </summary>
-        uint? MutableFlags { get; set; }
+        uint? Scale { get; set; }
 
         /// <summary>
-        /// Arbitrary hex-encoded data associated with the vault.
+        /// Arbitrary hex-encoded data associated with the vault, limited to 256 bytes.
         /// </summary>
         string Data { get; set; }
 
@@ -68,21 +93,24 @@ namespace Xrpl.Models.Transactions
         public IssuedCurrency Asset { get; set; }
 
         /// <inheritdoc />
-        [JsonPropertyName("Asset2")]
-        [JsonConverter(typeof(IssuedCurrencyConverter))]
-        public IssuedCurrency Asset2 { get; set; }
-
-        /// <inheritdoc />
         [JsonPropertyName("Amount")]
         public Currency Amount { get; set; }
 
         /// <inheritdoc />
-        [JsonPropertyName("WithdrawalPolicy")]
-        public byte? WithdrawalPolicy { get; set; }
+        [JsonPropertyName("AssetsMaximum")]
+        public string AssetsMaximum { get; set; }
 
         /// <inheritdoc />
-        [JsonPropertyName("MutableFlags")]
-        public uint? MutableFlags { get; set; }
+        [JsonPropertyName("MPTokenMetadata")]
+        public string MPTokenMetadata { get; set; }
+
+        /// <inheritdoc />
+        [JsonPropertyName("WithdrawalPolicy")]
+        public uint? WithdrawalPolicy { get; set; }
+
+        /// <inheritdoc />
+        [JsonPropertyName("Scale")]
+        public uint? Scale { get; set; }
 
         /// <inheritdoc />
         [JsonPropertyName("Data")]
@@ -102,21 +130,24 @@ namespace Xrpl.Models.Transactions
         public IssuedCurrency Asset { get; set; }
 
         /// <inheritdoc />
-        [JsonPropertyName("Asset2")]
-        [JsonConverter(typeof(IssuedCurrencyConverter))]
-        public IssuedCurrency Asset2 { get; set; }
-
-        /// <inheritdoc />
         [JsonPropertyName("Amount")]
         public Currency Amount { get; set; }
 
         /// <inheritdoc />
-        [JsonPropertyName("WithdrawalPolicy")]
-        public byte? WithdrawalPolicy { get; set; }
+        [JsonPropertyName("AssetsMaximum")]
+        public string AssetsMaximum { get; set; }
 
         /// <inheritdoc />
-        [JsonPropertyName("MutableFlags")]
-        public uint? MutableFlags { get; set; }
+        [JsonPropertyName("MPTokenMetadata")]
+        public string MPTokenMetadata { get; set; }
+
+        /// <inheritdoc />
+        [JsonPropertyName("WithdrawalPolicy")]
+        public uint? WithdrawalPolicy { get; set; }
+
+        /// <inheritdoc />
+        [JsonPropertyName("Scale")]
+        public uint? Scale { get; set; }
 
         /// <inheritdoc />
         [JsonPropertyName("Data")]

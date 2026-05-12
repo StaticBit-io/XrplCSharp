@@ -20,14 +20,15 @@ namespace Xrpl.Models.Transactions
         string VaultID { get; set; }
 
         /// <summary>
-        /// Arbitrary hex-encoded data associated with the vault.
+        /// Arbitrary hex-encoded data associated with the vault, limited to 256 bytes.
         /// </summary>
         string Data { get; set; }
 
         /// <summary>
-        /// Flags that can be modified after creation.
+        /// The maximum asset amount that can be held in the vault.
+        /// STNumber type (12 bytes: int64 mantissa + int32 exponent), serialized as string in JSON.
         /// </summary>
-        uint? MutableFlags { get; set; }
+        string AssetsMaximum { get; set; }
 
         /// <summary>
         /// The ID of a permissioned domain to associate with the vault.
@@ -52,8 +53,8 @@ namespace Xrpl.Models.Transactions
         public string Data { get; set; }
 
         /// <inheritdoc />
-        [JsonPropertyName("MutableFlags")]
-        public uint? MutableFlags { get; set; }
+        [JsonPropertyName("AssetsMaximum")]
+        public string AssetsMaximum { get; set; }
 
         /// <inheritdoc />
         [JsonPropertyName("DomainID")]
@@ -72,8 +73,8 @@ namespace Xrpl.Models.Transactions
         public string Data { get; set; }
 
         /// <inheritdoc />
-        [JsonPropertyName("MutableFlags")]
-        public uint? MutableFlags { get; set; }
+        [JsonPropertyName("AssetsMaximum")]
+        public string AssetsMaximum { get; set; }
 
         /// <inheritdoc />
         [JsonPropertyName("DomainID")]

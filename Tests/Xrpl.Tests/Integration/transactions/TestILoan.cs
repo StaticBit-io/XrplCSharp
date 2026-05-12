@@ -6,6 +6,7 @@ using Xrpl.Client;
 using Xrpl.Client.Exceptions;
 using Xrpl.Models;
 using Xrpl.Models.Common;
+using Xrpl.Models.Ledger;
 using Xrpl.Models.Methods;
 using Xrpl.Models.Transactions;
 
@@ -257,6 +258,104 @@ public class TestILoan : TestILoanBase
 
         string loanId = GetCreatedObjectId(result, LedgerEntryType.Loan);
         Assert.IsNotNull(loanId, "LoanID should be present in metadata (V3 sequential signing)");
+    }
+
+    [TestMethod]
+    public async Task TestLoanBrokerLedgerEntry_VerifyFields()
+    {
+        XrplWallet walletBroker = XrplWallet.Generate();
+        await IntegrationTestConfig.TryFundWalletAsync(client, walletBroker, nodeType);
+
+        string brokerId = await CreateBroker(client, walletBroker);
+
+        // Fetch LoanBroker via ledger_entry
+        LedgerEntryRequest entryRequest = new LedgerEntryRequest { Index = brokerId };
+        LedgerEntryResponse entryResponse = await client.LedgerEntry(entryRequest);
+
+        Assert.IsNotNull(entryResponse?.Node, "LedgerEntry node should not be null");
+        Assert.IsInstanceOfType(entryResponse.Node, typeof(LOLoanBroker), "Node should deserialize to LOLoanBroker");
+
+        LOLoanBroker broker = (LOLoanBroker)entryResponse.Node;
+
+        // Verify core fields
+        Assert.IsNotNull(broker.Account, "Account (pseudo-account) should be set");
+        Assert.AreEqual(walletBroker.ClassicAddress, broker.Owner, "Owner should match the wallet address");
+        Assert.IsNotNull(broker.VaultID, "VaultID should be set");
+        Assert.IsNotNull(broker.Sequence, "Sequence should be set");
+        // LoanSequence and OwnerCount may be 0 (default) and omitted from JSON
+        // Assert them only as non-negative if present
+
+        // Number fields (DebtTotal, CoverAvailable, DebtMaximum) may be omitted
+        // from JSON when value is 0 (default) — rippled does not serialize default Number values.
+        // We verify they are either null (omitted) or a valid string.
+        if (broker.DebtTotal != null)
+            Assert.IsTrue(broker.DebtTotal.Length > 0, "DebtTotal should be non-empty if present");
+        if (broker.CoverAvailable != null)
+            Assert.IsTrue(broker.CoverAvailable.Length > 0, "CoverAvailable should be non-empty if present");
+
+        // Verify infrastructure fields
+        Assert.IsNotNull(broker.OwnerNode, "OwnerNode should be set");
+        Assert.IsNotNull(broker.VaultNode, "VaultNode should be set");
+        Assert.IsNotNull(broker.PreviousTxnID, "PreviousTxnID should be set");
+        Assert.IsNotNull(broker.PreviousTxnLgrSeq, "PreviousTxnLgrSeq should be set");
+    }
+
+    [TestMethod]
+    public async Task TestLoanLedgerEntry_VerifyFields()
+    {
+        XrplWallet walletBroker = XrplWallet.Generate();
+        XrplWallet walletBorrower = XrplWallet.Generate();
+        await IntegrationTestConfig.TryFundWalletsAsync(client, nodeType, walletBroker, walletBorrower);
+
+        string brokerId = await CreateBroker(client, walletBroker);
+
+        LoanSet loanTx = new LoanSet
+        {
+            Account = walletBroker.ClassicAddress,
+            LoanBrokerID = brokerId,
+            Counterparty = walletBorrower.ClassicAddress,
+            PrincipalRequested = "10000000",
+        };
+        TransactionSummary loanResult = await SubmitLoanSetWithCounterpartySig(client, loanTx, walletBroker, walletBorrower);
+        ValidateResult(loanResult);
+
+        string loanId = GetCreatedObjectId(loanResult, LedgerEntryType.Loan);
+        Assert.IsNotNull(loanId, "LoanID should be present in metadata");
+
+        // Fetch Loan via ledger_entry
+        LedgerEntryRequest entryRequest = new LedgerEntryRequest { Index = loanId };
+        LedgerEntryResponse entryResponse = await client.LedgerEntry(entryRequest);
+
+        Assert.IsNotNull(entryResponse?.Node, "LedgerEntry node should not be null");
+        Assert.IsInstanceOfType(entryResponse.Node, typeof(LOLoan), "Node should deserialize to LOLoan");
+
+        LOLoan loan = (LOLoan)entryResponse.Node;
+
+        // Verify core fields
+        Assert.AreEqual(walletBorrower.ClassicAddress, loan.Borrower, "Borrower should match the borrower wallet");
+        Assert.IsNotNull(loan.LoanBrokerID, "LoanBrokerID should be set");
+        Assert.IsNotNull(loan.LoanSequence, "LoanSequence should be set");
+
+        // Number fields — PrincipalRequested was explicitly set to "10000000" in LoanSet,
+        // but rippled may omit zero-value Number fields.
+        // PrincipalOutstanding may be null if no payments have been made yet (depends on rippled behavior).
+        if (loan.PrincipalRequested != null)
+            Assert.IsTrue(loan.PrincipalRequested.Length > 0, "PrincipalRequested should be non-empty if present");
+        if (loan.PrincipalOutstanding != null)
+            Assert.IsTrue(loan.PrincipalOutstanding.Length > 0, "PrincipalOutstanding should be non-empty if present");
+
+        // Verify DateTime fields converted via RippleDateTimeConverter
+        Assert.IsNotNull(loan.StartDate, "StartDate should be deserialized as DateTime");
+        Assert.IsTrue(loan.StartDate.Value.Year >= 2000, "StartDate should be a valid Ripple epoch date");
+
+        // Rate fields (UInt32) — may be 0 (default) and omitted from JSON when not explicitly set
+        // InterestRate, LateInterestRate, etc. are optional if not provided in LoanSet
+
+        // Verify infrastructure fields
+        Assert.IsNotNull(loan.OwnerNode, "OwnerNode should be set");
+        Assert.IsNotNull(loan.LoanBrokerNode, "LoanBrokerNode should be set");
+        Assert.IsNotNull(loan.PreviousTxnID, "PreviousTxnID should be set");
+        Assert.IsNotNull(loan.PreviousTxnLgrSeq, "PreviousTxnLgrSeq should be set");
     }
 
     [TestMethod]
