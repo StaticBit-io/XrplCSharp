@@ -1,3 +1,4 @@
+using System;
 using System.Text.Json.Nodes;
 using Xrpl.BinaryCodec.Binary;
 
@@ -63,9 +64,13 @@ namespace Xrpl.BinaryCodec.Types
         public static XChainBridgeType FromParser(BinaryParser parser, int? hint = null)
         {
             int lockingDoorLen = parser.ReadVlLength();
+            if (lockingDoorLen != 20)
+                throw new FormatException($"Invalid LockingChainDoor length: {lockingDoorLen}. Expected 20.");
             AccountId lockingDoor = new AccountId(parser.Read(lockingDoorLen));
             Issue lockingIssue = Issue.FromParser(parser);
             int issuingDoorLen = parser.ReadVlLength();
+            if (issuingDoorLen != 20)
+                throw new FormatException($"Invalid IssuingChainDoor length: {issuingDoorLen}. Expected 20.");
             AccountId issuingDoor = new AccountId(parser.Read(issuingDoorLen));
             Issue issuingIssue = Issue.FromParser(parser);
 

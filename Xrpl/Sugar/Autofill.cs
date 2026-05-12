@@ -206,7 +206,7 @@ namespace Xrpl.Sugar
             {
                 var maxFeeDrops = XrpConversion.XrpToDrops(client.maxFeeXRP);
                 var maxFeeBI = new BigInteger(Math.Floor(decimal.Parse(maxFeeDrops, NumberStyles.AllowDecimalPoint | NumberStyles.AllowLeadingSign | NumberStyles.AllowExponent, CultureInfo.InvariantCulture)));
-                totalFee = transactionType == "AccountDelete"
+                totalFee = IsReserveFeeTxNeed(tx)
                     ? calculatedFee
                     : BigInteger.Min(calculatedFee, maxFeeBI);
             }

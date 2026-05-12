@@ -159,6 +159,12 @@ namespace Xrpl.Wallet
             if (!string.Equals(counterpartyType, "LoanSet", StringComparison.OrdinalIgnoreCase))
                 throw new ValidationException($"Counterparty blob TransactionType must be LoanSet, got: {counterpartyType}");
 
+            // Verify SigningPubKey matches (both must sign the same preimage)
+            string brokerSigningPubKey = brokerTx["SigningPubKey"]?.GetValue<string>();
+            string counterpartySigningPubKey = counterpartyTx["SigningPubKey"]?.GetValue<string>();
+            if (!string.Equals(brokerSigningPubKey, counterpartySigningPubKey, StringComparison.Ordinal))
+                throw new ValidationException("Incompatible LoanSet SigningPubKey values. Both blobs must use the same broker SigningPubKey.");
+
             // Verify bodies match (excluding signatures)
             JsonObject brokerCanon = Canonicalize(brokerTx);
             JsonObject counterpartyCanon = Canonicalize(counterpartyTx);
@@ -207,6 +213,14 @@ namespace Xrpl.Wallet
             // Strip signatures for preimage computation
             tx.Remove("CounterpartySignature");
             tx.Remove("TxnSignature");
+
+            // Verify SigningPubKey matches broker wallet (don't silently overwrite — would invalidate CounterpartySignature)
+            string existingSigningPubKey = tx["SigningPubKey"]?.GetValue<string>();
+            if (!string.IsNullOrEmpty(existingSigningPubKey) &&
+                !string.Equals(existingSigningPubKey, brokerWallet.PublicKey, StringComparison.Ordinal))
+            {
+                throw new ValidationException("Partially signed blob SigningPubKey does not match broker wallet.");
+            }
             tx["SigningPubKey"] = brokerWallet.PublicKey;
 
             // Compute the same preimage the borrower signed

@@ -1,5 +1,6 @@
 using System;
 using System.Collections.Generic;
+using System.Text.Json;
 using System.Text.Json.Serialization;
 using System.Threading.Tasks;
 
@@ -96,6 +97,28 @@ namespace Xrpl.Models.Transactions
 
             if (!tx.TryGetValue("LoanID", out var id) || id is not string)
                 throw new ValidationException("LoanManage: missing field LoanID");
+
+            // tfLoanImpair and tfLoanUnimpair are mutually exclusive (per xrpl.js)
+            if (tx.TryGetValue("Flags", out var flagsObj) && flagsObj is not null)
+            {
+                uint rawFlags = ParseFlags(flagsObj);
+                bool hasImpair = (rawFlags & (uint)LoanManageFlags.tfLoanImpair) != 0;
+                bool hasUnimpair = (rawFlags & (uint)LoanManageFlags.tfLoanUnimpair) != 0;
+                if (hasImpair && hasUnimpair)
+                    throw new ValidationException("LoanManage: tfLoanImpair and tfLoanUnimpair are mutually exclusive");
+            }
+        }
+
+        private static uint ParseFlags(object flagsObj)
+        {
+            return flagsObj switch
+            {
+                uint u => u,
+                int i when i >= 0 => (uint)i,
+                long l when l is >= 0 and <= uint.MaxValue => (uint)l,
+                JsonElement je when je.ValueKind == JsonValueKind.Number && je.TryGetUInt32(out uint u) => u,
+                _ => 0
+            };
         }
     }
 }

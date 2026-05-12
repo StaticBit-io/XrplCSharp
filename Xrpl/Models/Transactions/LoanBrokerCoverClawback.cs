@@ -62,6 +62,12 @@ namespace Xrpl.Models.Transactions
         public static async Task ValidateLoanBrokerCoverClawback(Dictionary<string, object> tx)
         {
             await Common.ValidateBaseTransaction(tx);
+
+            bool hasLoanBrokerId = tx.TryGetValue("LoanBrokerID", out var loanBrokerId) && loanBrokerId is string;
+            bool hasAmount = tx.TryGetValue("Amount", out var amount) && amount is not null;
+
+            if (!hasLoanBrokerId && !hasAmount)
+                throw new ValidationException("LoanBrokerCoverClawback: at least one of LoanBrokerID or Amount is required");
         }
     }
 }

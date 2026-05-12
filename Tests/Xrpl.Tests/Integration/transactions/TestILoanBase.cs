@@ -173,14 +173,17 @@ public abstract class TestILoanBase
         XrplWallet borrowerWallet)
     {
         JsonObject prepared = await PrepareLoanSet(client, loanTx, brokerWallet);
+        string preparedJson = prepared.ToJsonString();
 
         // Device A (broker): signs the transaction normally (adds TxnSignature)
         Dictionary<string, object> brokerDict = JsonSerializer.Deserialize<Dictionary<string, object>>(
-            prepared.ToJsonString(), XrplJsonOptions.Default);
+            preparedJson, XrplJsonOptions.Default);
         SignatureResult brokerSig = brokerWallet.Sign(brokerDict);
 
-        // Device B (borrower): signs as counterparty (adds CounterpartySignature)
-        SignatureResult counterpartySig = borrowerWallet.SignAsLoanCounterparty(brokerDict);
+        // Device B (borrower): signs as counterparty (adds CounterpartySignature) — independent copy
+        Dictionary<string, object> borrowerDict = JsonSerializer.Deserialize<Dictionary<string, object>>(
+            preparedJson, XrplJsonOptions.Default);
+        SignatureResult counterpartySig = borrowerWallet.SignAsLoanCounterparty(borrowerDict);
 
         // Combiner: merge both signatures
         SignatureResult combined = LoanSigningHelper.CombineLoanSignatures(brokerSig.TxBlob, counterpartySig.TxBlob);
@@ -229,14 +232,27 @@ public abstract class TestILoanBase
         if (submitResult is not { EngineResult: "tesSUCCESS" or "terQUEUED" })
             throw new RippleException($"LoanSet submit failed: {submitResult.EngineResult} - {submitResult.EngineResultMessage}");
 
-        // Wait for ledger to close and get the result via tx lookup
+        // Poll tx lookup until metadata is available (ledger_accept runs every 4s in CI)
         string txHash = global::Xrpl.Utils.Hashes.HashLedger.HashSignedTx(txBlob);
-        await Task.Delay(5000);
-
         TxRequest txReq = new TxRequest(txHash);
-        TransactionResponse txResponse = await client.Tx(txReq);
+        TransactionResponse txResponse = null;
+        for (int i = 0; i < 15; i++)
+        {
+            await Task.Delay(1000);
+            try
+            {
+                txResponse = await client.Tx(txReq);
+                if (txResponse?.Meta != null) break;
+            }
+            catch
+            {
+                // tx may not be found yet — retry
+            }
+        }
+        if (txResponse?.Meta == null)
+            throw new RippleException($"LoanSet tx not validated in time: {txHash}");
 
-        return new TransactionSummary { Meta = txResponse?.Meta };
+        return new TransactionSummary { Meta = txResponse.Meta };
     }
 
     protected static async Task<IXrplClient> CreateStandaloneClient()

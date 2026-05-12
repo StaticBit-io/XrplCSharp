@@ -1,5 +1,6 @@
 using System;
 using System.Globalization;
+using System.Numerics;
 using System.Text.Json;
 using System.Text.Json.Nodes;
 using Xrpl.BinaryCodec.Binary;
@@ -53,23 +54,43 @@ namespace Xrpl.BinaryCodec.Types
             if (Mantissa == 0)
                 return JsonValue.Create("0");
 
-            // Reconstruct decimal value from mantissa × 10^exponent
-            decimal value = Mantissa;
+            // Use BigInteger to avoid decimal overflow for large exponents.
+            // The protocol allows exponents up to ±32768 which far exceeds System.Decimal range.
+            BigInteger abs = BigInteger.Abs(new BigInteger(Mantissa));
+            bool negative = Mantissa < 0;
             int exp = Exponent;
 
-            if (exp > 0)
+            if (exp >= 0)
             {
-                for (int i = 0; i < exp; i++)
-                    value *= 10m;
+                // mantissa × 10^exp — always integer
+                BigInteger result = abs * BigInteger.Pow(10, exp);
+                string str = result.ToString(CultureInfo.InvariantCulture);
+                return JsonValue.Create(negative ? "-" + str : str);
             }
-            else if (exp < 0)
+            else
             {
-                for (int i = 0; i < -exp; i++)
-                    value /= 10m;
-            }
+                // exp < 0: mantissa / 10^|exp| — may have fractional part
+                int absExp = -exp;
+                string digits = abs.ToString(CultureInfo.InvariantCulture);
 
-            // Return as string to preserve precision
-            return JsonValue.Create(value.ToString(CultureInfo.InvariantCulture));
+                string result;
+                if (digits.Length > absExp)
+                {
+                    // Insert decimal point: e.g. "12345" with exp=-2 → "123.45"
+                    int pointPos = digits.Length - absExp;
+                    string intPart = digits.Substring(0, pointPos);
+                    string fracPart = digits.Substring(pointPos).TrimEnd('0');
+                    result = fracPart.Length > 0 ? intPart + "." + fracPart : intPart;
+                }
+                else
+                {
+                    // Leading zeros: e.g. "5" with exp=-3 → "0.005"
+                    string fracPart = (new string('0', absExp - digits.Length) + digits).TrimEnd('0');
+                    result = fracPart.Length > 0 ? "0." + fracPart : "0";
+                }
+
+                return JsonValue.Create(negative ? "-" + result : result);
+            }
         }
 
         public override string ToString() => ToJson()?.ToString() ?? "0";

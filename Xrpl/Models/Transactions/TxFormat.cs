@@ -555,6 +555,7 @@ namespace Xrpl.Models.Transaction
                     [Field.LoanBrokerID] = Requirement.Required,
                     [Field.PrincipalRequested] = Requirement.Required,
                     [Field.Counterparty] = Requirement.Optional,
+                    [Field.CounterpartySignature] = Requirement.Optional,
                     [Field.InterestRate] = Requirement.Optional,
                     [Field.LateInterestRate] = Requirement.Optional,
                     [Field.CloseInterestRate] = Requirement.Optional,

@@ -1024,6 +1024,11 @@ namespace Xrpl.Wallet
             if (!string.Equals(txType, "LoanSet", StringComparison.OrdinalIgnoreCase))
                 throw new ValidationException($"SignAsLoanCounterparty requires TransactionType=LoanSet, got: {txType}");
 
+            // Verify broker's SigningPubKey is present — counterparty must sign the same preimage
+            string brokerSigningPubKey = tx["SigningPubKey"]?.GetValue<string>();
+            if (string.IsNullOrWhiteSpace(brokerSigningPubKey))
+                throw new ValidationException("LoanSet must include broker SigningPubKey before counterparty signing.");
+
             // Remove existing signatures but keep SigningPubKey (broker's)
             tx.Remove("CounterpartySignature");
             tx.Remove("TxnSignature");

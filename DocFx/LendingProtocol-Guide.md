@@ -432,7 +432,7 @@ Number fields are represented as `string` in C# models (e.g., `PrincipalRequeste
 | `tecNO_PERMISSION` | Action not allowed (e.g., overpayment without flag) | Check that the account has the required permissions |
 | `tecINSUFFICIENT_PAYMENT` | Payment amount too small | Increase the payment amount |
 | `temBAD_SIGNER` | Missing or invalid CounterpartySignature | Ensure borrower co-signs the LoanSet (see co-signing section) |
-| `telINSUF_FEE_P` | Fee too low after adding CounterpartySignature | Triple the fee after autofill to account for extra signature bytes |
+| `telINSUF_FEE_P` | Fee too low after adding CounterpartySignature | Re-run Autofill or increase the fee before submit |
 | `invalid SerialIter geti32` | Number type encoding error | Ensure Number fields are 12 bytes (8 mantissa + 4 exponent) |
 
 ---
@@ -441,11 +441,7 @@ Number fields are represented as `string` in C# models (e.g., `PrincipalRequeste
 
 1. **Fund the vault before creating loans** — create the vault, deposit assets (`VaultDeposit`), create the broker (`LoanBrokerSet`), deposit cover (`LoanBrokerCoverDeposit`), then create loans.
 
-2. **Triple the fee for LoanSet** — after autofilling, multiply the fee by 3 to account for the `CounterpartySignature` overhead:
-   ```csharp
-   ulong feeDrops = ulong.Parse(loanTx.Fee.Value);
-   loanTx.Fee = new Currency { Value = (feeDrops * 3).ToString(), CurrencyCode = "XRP" };
-   ```
+2. **Autofill handles LoanSet fee** — `Autofill` automatically calculates the correct fee including `CounterpartySignature` overhead. No manual fee adjustment is needed.
 
 3. **Filter by LedgerEntryType when extracting IDs** — `GetCreatedObjectId` should filter by specific type (`LedgerEntryType.Vault`, `LedgerEntryType.LoanBroker`, `LedgerEntryType.Loan`) to avoid picking up `DirectoryNode` or other created entries.
 

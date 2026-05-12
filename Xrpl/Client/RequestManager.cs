@@ -349,9 +349,9 @@ namespace Xrpl.Client
 
             if (response.Status == null)
             {
-                if (response.Error is not null || response.ErrorMessage is not null)
+                if (response.Error is not null || response.ErrorMessage is not null || response.ErrorException is not null)
                 {
-                    string detail = response.ErrorMessage ?? response.ErrorException;
+                    string detail = response.ErrorMessage ?? response.ErrorException ?? "Unknown error";
                     var errMessage = response.Error is null
                         ? detail
                         : $"{response.Error} - {detail}";

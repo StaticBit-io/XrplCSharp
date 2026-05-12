@@ -433,7 +433,7 @@ foreach (var obj in response.AccountObjectList)
 | `tecNO_PERMISSION` | Действие не разрешено (например, переплата без флага) | Проверьте права аккаунта |
 | `tecINSUFFICIENT_PAYMENT` | Сумма платежа слишком мала | Увеличьте сумму платежа |
 | `temBAD_SIGNER` | Отсутствует или некорректна CounterpartySignature | Убедитесь, что заёмщик совместно подписал LoanSet |
-| `telINSUF_FEE_P` | Комиссия слишком низкая после добавления CounterpartySignature | Утройте комиссию после автозаполнения |
+| `telINSUF_FEE_P` | Комиссия слишком низкая после добавления CounterpartySignature | Повторно вызовите Autofill или увеличьте комиссию перед отправкой |
 | `invalid SerialIter geti32` | Ошибка кодирования типа Number | Убедитесь, что поля Number — 12 байт (8 мантисса + 4 экспонента) |
 
 ---
@@ -442,11 +442,7 @@ foreach (var obj in response.AccountObjectList)
 
 1. **Пополните хранилище перед выдачей кредитов** — создайте хранилище, внесите активы (`VaultDeposit`), создайте брокера (`LoanBrokerSet`), внесите покрытие (`LoanBrokerCoverDeposit`), затем создавайте кредиты.
 
-2. **Утройте комиссию для LoanSet** — после автозаполнения умножьте комиссию на 3 для учёта overhead `CounterpartySignature`:
-   ```csharp
-   ulong feeDrops = ulong.Parse(loanTx.Fee.Value);
-   loanTx.Fee = new Currency { Value = (feeDrops * 3).ToString(), CurrencyCode = "XRP" };
-   ```
+2. **Autofill учитывает LoanSet fee** — `Autofill` автоматически рассчитывает корректную комиссию, включая overhead `CounterpartySignature`. Ручная корректировка комиссии не требуется.
 
 3. **Фильтруйте по LedgerEntryType при извлечении ID** — `GetCreatedObjectId` должен фильтровать по конкретному типу (`LedgerEntryType.Vault`, `LedgerEntryType.LoanBroker`, `LedgerEntryType.Loan`), чтобы не захватить `DirectoryNode`.
 

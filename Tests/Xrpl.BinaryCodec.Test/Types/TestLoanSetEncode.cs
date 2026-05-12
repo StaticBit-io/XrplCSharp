@@ -26,18 +26,18 @@ public class TestLoanSetEncode
         JsonNode node = JsonNode.Parse(json);
 
         string encoded = XrplBinaryCodec.Encode(node);
-        Console.WriteLine("Encoded hex: " + encoded);
-        Console.WriteLine("Encoded length: " + encoded.Length / 2 + " bytes");
+        Assert.IsFalse(string.IsNullOrWhiteSpace(encoded), "Encoded hex should not be empty");
 
         JsonNode decodedNode = XrplBinaryCodec.Decode(encoded);
-        string decoded = decodedNode.ToJsonString(new JsonSerializerOptions { WriteIndented = true });
-        Console.WriteLine("Decoded JSON: " + decoded);
+        Assert.IsNotNull(decodedNode, "Decoded node should not be null");
+        Assert.AreEqual("LoanSet", decodedNode["TransactionType"]?.ToString());
+        Assert.AreEqual("10000000000000", decodedNode["PrincipalRequested"]?.ToString());
 
         string principalDecoded = decodedNode["PrincipalRequested"]?.ToString();
-        Console.WriteLine("PrincipalRequested decoded: " + principalDecoded);
+        Assert.AreEqual("10000000000000", principalDecoded, "PrincipalRequested round-trip mismatch");
 
-        // Also encode for signing
         string forSigning = XrplBinaryCodec.EncodeForSigning(node);
-        Console.WriteLine("ForSigning hex: " + forSigning);
+        Assert.IsFalse(string.IsNullOrWhiteSpace(forSigning), "Signing payload should not be empty");
+        Assert.AreNotEqual(encoded, forSigning, "Signing payload should differ from regular encoding");
     }
 }

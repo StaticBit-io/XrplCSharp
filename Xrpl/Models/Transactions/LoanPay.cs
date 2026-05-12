@@ -1,5 +1,6 @@
 using System;
 using System.Collections.Generic;
+using System.Text.Json;
 using System.Text.Json.Serialization;
 using System.Threading.Tasks;
 
@@ -116,6 +117,17 @@ namespace Xrpl.Models.Transactions
 
             if (!tx.TryGetValue("Amount", out var amount) || amount is null)
                 throw new ValidationException("LoanPay: missing field Amount");
+
+            // Only one of tfLoanOverpayment, tfLoanFullPayment, tfLoanLatePayment can be set (per xrpl.js)
+            if (tx.TryGetValue("Flags", out var flagsObj) && flagsObj is not null)
+            {
+                uint rawFlags = ParseFlags(flagsObj);
+                uint exclusive = (uint)(LoanPayFlags.tfLoanOverpayment | LoanPayFlags.tfLoanFullPayment | LoanPayFlags.tfLoanLatePayment);
+                uint selected = rawFlags & exclusive;
+                // Check if more than one bit is set among the exclusive flags
+                if (selected != 0 && (selected & (selected - 1)) != 0)
+                    throw new ValidationException("LoanPay: only one of tfLoanOverpayment, tfLoanFullPayment, or tfLoanLatePayment can be set");
+            }
         }
     }
 }
