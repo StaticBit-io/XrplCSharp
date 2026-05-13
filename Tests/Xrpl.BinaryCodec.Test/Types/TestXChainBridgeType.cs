@@ -134,8 +134,8 @@ public class TestXChainBridgeType
         BytesList sink = new BytesList();
         bridge.ToBytes(sink);
 
-        // XRP bridge: AccountID(20) + Issue_XRP(20) + AccountID(20) + Issue_XRP(20) = 80 bytes
-        Assert.AreEqual(80, sink.BytesLength());
+        // XRP bridge: VL(1) + AccountID(20) + Issue_XRP(20) + VL(1) + AccountID(20) + Issue_XRP(20) = 82 bytes
+        Assert.AreEqual(82, sink.BytesLength());
     }
 
     [TestMethod]
@@ -146,8 +146,8 @@ public class TestXChainBridgeType
         BytesList sink = new BytesList();
         bridge.ToBytes(sink);
 
-        // IOU bridge: AccountID(20) + Issue_IOU(20+20) + AccountID(20) + Issue_IOU(20+20) = 120 bytes
-        Assert.AreEqual(120, sink.BytesLength());
+        // IOU bridge: VL(1) + AccountID(20) + Issue_IOU(20+20) + VL(1) + AccountID(20) + Issue_IOU(20+20) = 122 bytes
+        Assert.AreEqual(122, sink.BytesLength());
     }
 
     [TestMethod]

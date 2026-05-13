@@ -19,6 +19,7 @@ namespace XrplTests.Xrpl.ClientLib.Integration;
 
 [TestClass]
 [DoNotParallelize]
+[Ignore("Batch amendment removed in v3.1.1 due to a bug; will be replaced by BatchV1_1")]
 public class TestIBatch
 {
     // private static int Timeout = 20;

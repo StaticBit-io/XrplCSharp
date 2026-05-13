@@ -104,4 +104,19 @@ namespace Xrpl.Models.Methods
             }
         }
     }
+
+    /// <summary>
+    /// Response expected from a <see cref="ChannelAuthorizeRequest"/>.
+    /// </summary>
+    public class ChannelAuthorizeResponse
+    {
+        /// <summary>
+        /// The signature for this claim, as a hexadecimal value.
+        /// To process the claim, the destination account of the payment channel
+        /// must submit a PaymentChannelClaim transaction with this signature,
+        /// the exact Channel ID, XRP amount, and public key of the channel.
+        /// </summary>
+        [JsonPropertyName("signature")]
+        public string Signature { get; set; }
+    }
 }

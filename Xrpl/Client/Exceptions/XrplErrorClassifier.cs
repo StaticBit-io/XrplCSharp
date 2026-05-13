@@ -58,6 +58,7 @@ public static class XrplErrorClassifier
         if (response == null) throw new ArgumentNullException(nameof(response));
 
         var error = response.Error?.Trim() ?? string.Empty;
+        var rawMessage = response.ErrorMessage ?? response.ErrorException;
         var request = ToJsonObjectSafe(response.Request);
 
         var command = GetString(request, "command");
@@ -71,7 +72,7 @@ public static class XrplErrorClassifier
             {
                 RawError = error,
                 RawErrorCode = response.ErrorCode,
-                RawErrorMessage = response.ErrorMessage,
+                RawErrorMessage = rawMessage,
                 Category = XrplErrorCategory.InvalidInput,
                 Subject = XrplErrorSubject.Request,
                 Title = "Incorrect document id",
@@ -90,7 +91,7 @@ public static class XrplErrorClassifier
             {
                 RawError = error,
                 RawErrorCode = response.ErrorCode,
-                RawErrorMessage = response.ErrorMessage,
+                RawErrorMessage = rawMessage,
                 Category = XrplErrorCategory.InvalidInput,
                 Subject = XrplErrorSubject.Request,
                 Title = "Incorrect request value",
@@ -127,7 +128,7 @@ public static class XrplErrorClassifier
             {
                 RawError = error,
                 RawErrorCode = response.ErrorCode,
-                RawErrorMessage = response.ErrorMessage,
+                RawErrorMessage = rawMessage,
                 Category = XrplErrorCategory.InvalidInput,
                 Subject = XrplErrorSubject.Address,
                 Title = "Incorrect address",
@@ -146,7 +147,7 @@ public static class XrplErrorClassifier
             {
                 RawError = error,
                 RawErrorCode = response.ErrorCode,
-                RawErrorMessage = response.ErrorMessage,
+                RawErrorMessage = rawMessage,
                 Category = XrplErrorCategory.InvalidInput,
                 Subject = XrplErrorSubject.Ledger,
                 Title = "Unexpected ledger entry type",
@@ -161,7 +162,7 @@ public static class XrplErrorClassifier
             {
                 RawError = error,
                 RawErrorCode = response.ErrorCode,
-                RawErrorMessage = response.ErrorMessage,
+                RawErrorMessage = rawMessage,
                 Category = XrplErrorCategory.NotFound,
                 Subject = XrplErrorSubject.Account,
                 Title = "Account not found",
@@ -216,7 +217,7 @@ public static class XrplErrorClassifier
             {
                 RawError = error,
                 RawErrorCode = response.ErrorCode,
-                RawErrorMessage = response.ErrorMessage,
+                RawErrorMessage = rawMessage,
                 Category = XrplErrorCategory.NotFound,
                 Subject = XrplErrorSubject.Transaction,
                 Title = "Transaction not found",
@@ -236,7 +237,7 @@ public static class XrplErrorClassifier
             {
                 RawError = error,
                 RawErrorCode = response.ErrorCode,
-                RawErrorMessage = response.ErrorMessage,
+                RawErrorMessage = rawMessage,
                 Category = XrplErrorCategory.BadRequest,
                 Subject = XrplErrorSubject.Request,
                 Title = "Incorrect request",
@@ -260,7 +261,7 @@ public static class XrplErrorClassifier
             {
                 RawError = error,
                 RawErrorCode = response.ErrorCode,
-                RawErrorMessage = response.ErrorMessage,
+                RawErrorMessage = rawMessage,
                 Category = XrplErrorCategory.BadRequest,
                 Subject = XrplErrorSubject.Ledger,
                 Title = "Incorrect ledger selector",
@@ -279,7 +280,7 @@ public static class XrplErrorClassifier
             {
                 RawError = error,
                 RawErrorCode = response.ErrorCode,
-                RawErrorMessage = response.ErrorMessage,
+                RawErrorMessage = rawMessage,
                 Category = XrplErrorCategory.BadRequest,
                 Subject = XrplErrorSubject.Request,
                 Title = error == XrplErrorCodes.LedgerIndicesInvalid
@@ -300,7 +301,7 @@ public static class XrplErrorClassifier
             {
                 RawError = error,
                 RawErrorCode = response.ErrorCode,
-                RawErrorMessage = response.ErrorMessage,
+                RawErrorMessage = rawMessage,
                 Category = XrplErrorCategory.LedgerUnavailable,
                 Subject = XrplErrorSubject.Ledger,
                 Title = "Ledger not found",
@@ -315,7 +316,7 @@ public static class XrplErrorClassifier
             {
                 RawError = error,
                 RawErrorCode = response.ErrorCode,
-                RawErrorMessage = response.ErrorMessage,
+                RawErrorMessage = rawMessage,
                 Category = XrplErrorCategory.LedgerUnavailable,
                 Subject = XrplErrorSubject.Ledger,
                 Title = "Ledger not validated",
@@ -336,7 +337,7 @@ public static class XrplErrorClassifier
             {
                 RawError = error,
                 RawErrorCode = response.ErrorCode,
-                RawErrorMessage = response.ErrorMessage,
+                RawErrorMessage = rawMessage,
                 Category = XrplErrorCategory.TemporaryServerProblem,
                 Subject = XrplErrorSubject.Server,
                 Title = "Temporary server problem",
@@ -351,7 +352,7 @@ public static class XrplErrorClassifier
             {
                 RawError = error,
                 RawErrorCode = response.ErrorCode,
-                RawErrorMessage = response.ErrorMessage,
+                RawErrorMessage = rawMessage,
                 Category = XrplErrorCategory.UnsupportedRequest,
                 Subject = XrplErrorSubject.Request,
                 Title = "Streaming not supported",
@@ -366,7 +367,7 @@ public static class XrplErrorClassifier
             {
                 RawError = error,
                 RawErrorCode = response.ErrorCode,
-                RawErrorMessage = response.ErrorMessage,
+                RawErrorMessage = rawMessage,
                 Category = XrplErrorCategory.UnsupportedRequest,
                 Subject = XrplErrorSubject.Request,
                 Title = "Permission required",
@@ -386,7 +387,7 @@ public static class XrplErrorClassifier
             {
                 RawError = error,
                 RawErrorCode = response.ErrorCode,
-                RawErrorMessage = response.ErrorMessage,
+                RawErrorMessage = rawMessage,
                 Category = XrplErrorCategory.UnsupportedRequest,
                 Subject = XrplErrorSubject.Request,
                 Title = "Command not supported",
@@ -401,7 +402,7 @@ public static class XrplErrorClassifier
             {
                 RawError = error,
                 RawErrorCode = response.ErrorCode,
-                RawErrorMessage = response.ErrorMessage,
+                RawErrorMessage = rawMessage,
                 Category = XrplErrorCategory.InvalidInput,
                 Subject = XrplErrorSubject.Address,
                 Title = "Incorrect hot wallet",
@@ -418,7 +419,7 @@ public static class XrplErrorClassifier
             {
                 RawError = error,
                 RawErrorCode = response.ErrorCode,
-                RawErrorMessage = response.ErrorMessage,
+                RawErrorMessage = rawMessage,
                 Category = XrplErrorCategory.InvalidInput,
                 Subject = XrplErrorSubject.Request,
                 Title = "Incorrect public key",
@@ -435,7 +436,7 @@ public static class XrplErrorClassifier
             {
                 RawError = error,
                 RawErrorCode = response.ErrorCode,
-                RawErrorMessage = response.ErrorMessage,
+                RawErrorMessage = rawMessage,
                 Category = XrplErrorCategory.InvalidInput,
                 Subject = XrplErrorSubject.Request,
                 Title = "Incorrect SendMax amount",
@@ -452,7 +453,7 @@ public static class XrplErrorClassifier
             {
                 RawError = error,
                 RawErrorCode = response.ErrorCode,
-                RawErrorMessage = response.ErrorMessage,
+                RawErrorMessage = rawMessage,
                 Category = XrplErrorCategory.InvalidInput,
                 Subject = XrplErrorSubject.Request,
                 Title = "Incorrect issue",
@@ -469,7 +470,7 @@ public static class XrplErrorClassifier
             {
                 RawError = error,
                 RawErrorCode = response.ErrorCode,
-                RawErrorMessage = response.ErrorMessage,
+                RawErrorMessage = rawMessage,
                 Category = XrplErrorCategory.InvalidInput,
                 Subject = XrplErrorSubject.Request,
                 Title = "Incorrect order book asset",
@@ -488,7 +489,7 @@ public static class XrplErrorClassifier
             {
                 RawError = error,
                 RawErrorCode = response.ErrorCode,
-                RawErrorMessage = response.ErrorMessage,
+                RawErrorMessage = rawMessage,
                 Category = XrplErrorCategory.InvalidInput,
                 Subject = XrplErrorSubject.Address,
                 Title = "Incorrect issuer address",
@@ -507,7 +508,7 @@ public static class XrplErrorClassifier
             {
                 RawError = error,
                 RawErrorCode = response.ErrorCode,
-                RawErrorMessage = response.ErrorMessage,
+                RawErrorMessage = rawMessage,
                 Category = XrplErrorCategory.NotFound,
                 Subject = XrplErrorSubject.Request,
                 Title = "Market not found",
@@ -522,7 +523,7 @@ public static class XrplErrorClassifier
             {
                 RawError = error,
                 RawErrorCode = response.ErrorCode,
-                RawErrorMessage = response.ErrorMessage,
+                RawErrorMessage = rawMessage,
                 Category = XrplErrorCategory.ServerState,
                 Subject = XrplErrorSubject.Server,
                 Title = "Server requires upgrade",
@@ -543,6 +544,7 @@ public static class XrplErrorClassifier
         string? command,
         IReadOnlyList<string> warnings)
     {
+        string? rawMessage = response.ErrorMessage ?? response.ErrorException;
         var currency = GetString(request, "currency")
                        ?? GetString(request, "ripple_state", "currency");
 
@@ -550,7 +552,7 @@ public static class XrplErrorClassifier
         {
             RawError = response.Error ?? string.Empty,
             RawErrorCode = response.ErrorCode,
-            RawErrorMessage = response.ErrorMessage,
+            RawErrorMessage = rawMessage,
             Category = XrplErrorCategory.InvalidInput,
             Subject = XrplErrorSubject.Currency,
             Title = "Incorrect currency code",
@@ -576,13 +578,14 @@ public static class XrplErrorClassifier
         string fallbackMessage,
         params string[] fieldNames)
     {
+        string? rawMessage = response.ErrorMessage ?? response.ErrorException;
         string? account = GetFirstString(request, fieldNames);
 
         return new XrplErrorInfo
         {
             RawError = response.Error ?? string.Empty,
             RawErrorCode = response.ErrorCode,
-            RawErrorMessage = response.ErrorMessage,
+            RawErrorMessage = rawMessage,
             Category = XrplErrorCategory.InvalidInput,
             Subject = XrplErrorSubject.Account,
             Title = title,
@@ -607,11 +610,12 @@ public static class XrplErrorClassifier
         string userMessage,
         string fieldName)
     {
+        string? rawMessage = response.ErrorMessage ?? response.ErrorException;
         return new XrplErrorInfo
         {
             RawError = response.Error ?? string.Empty,
             RawErrorCode = response.ErrorCode,
-            RawErrorMessage = response.ErrorMessage,
+            RawErrorMessage = rawMessage,
             Category = XrplErrorCategory.BadRequest,
             Subject = subject,
             Title = title,
@@ -633,11 +637,12 @@ public static class XrplErrorClassifier
         string userMessage,
         params string[] fieldNames)
     {
+        string? rawMessage = response.ErrorMessage ?? response.ErrorException;
         return new XrplErrorInfo
         {
             RawError = response.Error ?? string.Empty,
             RawErrorCode = response.ErrorCode,
-            RawErrorMessage = response.ErrorMessage,
+            RawErrorMessage = rawMessage,
             Category = XrplErrorCategory.NotFound,
             Subject = XrplErrorSubject.Account,
             Title = title,
@@ -657,13 +662,14 @@ public static class XrplErrorClassifier
         string? command,
         IReadOnlyList<string> warnings)
     {
+        string? rawMessage = response.ErrorMessage ?? response.ErrorException;
         if (request?["vault_id"] != null)
         {
             return new XrplErrorInfo
             {
                 RawError = response.Error ?? string.Empty,
                 RawErrorCode = response.ErrorCode,
-                RawErrorMessage = response.ErrorMessage,
+                RawErrorMessage = rawMessage,
                 Category = XrplErrorCategory.NotFound,
                 Subject = XrplErrorSubject.Vault,
                 Title = "Vault not found",
@@ -685,7 +691,7 @@ public static class XrplErrorClassifier
             {
                 RawError = response.Error ?? string.Empty,
                 RawErrorCode = response.ErrorCode,
-                RawErrorMessage = response.ErrorMessage,
+                RawErrorMessage = rawMessage,
                 Category = XrplErrorCategory.NotFound,
                 Subject = XrplErrorSubject.TrustLine,
                 Title = "Trustline not found",
@@ -709,15 +715,16 @@ public static class XrplErrorClassifier
         string? command,
         IReadOnlyList<string> warnings)
     {
+        string rawMessage = response.ErrorMessage ?? response.ErrorException;
         return new XrplErrorInfo
         {
             RawError = response.Error ?? string.Empty,
             RawErrorCode = response.ErrorCode,
-            RawErrorMessage = response.ErrorMessage,
+            RawErrorMessage = rawMessage,
             Category = XrplErrorCategory.NotFound,
             Subject = XrplErrorSubject.Unknown,
             Title = "Object not found",
-            UserMessage = response.ErrorMessage ?? "The requested object was not found.",
+            UserMessage = rawMessage ?? "The requested object was not found.",
             IsRetryable = false,
             IsUserFixable = true,
             Command = command,
@@ -731,15 +738,16 @@ public static class XrplErrorClassifier
         string? command,
         IReadOnlyList<string> warnings)
     {
+        string rawMessage = response.ErrorMessage ?? response.ErrorException;
         return new XrplErrorInfo
         {
             RawError = response.Error ?? string.Empty,
             RawErrorCode = response.ErrorCode,
-            RawErrorMessage = response.ErrorMessage,
+            RawErrorMessage = rawMessage,
             Category = XrplErrorCategory.Unknown,
             Subject = XrplErrorSubject.Unknown,
             Title = "Unknown XRPL error",
-            UserMessage = response.ErrorMessage ?? "The XRPL server returned an unknown error.",
+            UserMessage = rawMessage ?? "The XRPL server returned an unknown error.",
             IsRetryable = false,
             IsUserFixable = false,
             Command = command,

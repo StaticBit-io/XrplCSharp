@@ -95,6 +95,36 @@ public class TransactionRequestConverter : JsonConverter<ITransactionRequest>
             "CredentialCreate" => new CredentialCreate(),
             "CredentialAccept" => new CredentialAccept(),
             "CredentialDelete" => new CredentialDelete(),
+
+            "XChainCreateBridge" => new XChainCreateBridge(),
+            "XChainModifyBridge" => new XChainModifyBridge(),
+            "XChainCreateClaimID" => new XChainCreateClaimID(),
+            "XChainCommit" => new XChainCommit(),
+            "XChainClaim" => new XChainClaim(),
+            "XChainAccountCreateCommit" => new XChainAccountCreateCommit(),
+            "XChainAddClaimAttestation" => new XChainAddClaimAttestation(),
+            "XChainAddAccountCreateAttestation" => new XChainAddAccountCreateAttestation(),
+
+            "VaultCreate" => new VaultCreate(),
+            "VaultSet" => new VaultSet(),
+            "VaultDelete" => new VaultDelete(),
+            "VaultDeposit" => new VaultDeposit(),
+            "VaultWithdraw" => new VaultWithdraw(),
+            "VaultClawback" => new VaultClawback(),
+
+            "LoanBrokerSet" => new LoanBrokerSet(),
+            "LoanBrokerDelete" => new LoanBrokerDelete(),
+            "LoanBrokerCoverDeposit" => new LoanBrokerCoverDeposit(),
+            "LoanBrokerCoverWithdraw" => new LoanBrokerCoverWithdraw(),
+            "LoanBrokerCoverClawback" => new LoanBrokerCoverClawback(),
+            "LoanSet" => new LoanSet(),
+            "LoanDelete" => new LoanDelete(),
+            "LoanManage" => new LoanManage(),
+            "LoanPay" => new LoanPay(),
+
+            "DelegateSet" => new DelegateSet(),
+            "LedgerStateFix" => new LedgerStateFix(),
+
             //_ => throw new Exception("Can't create transaction type" + transactionType)
             _ => new TransactionUnknown(),
         };

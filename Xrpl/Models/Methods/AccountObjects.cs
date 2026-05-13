@@ -99,7 +99,7 @@ namespace Xrpl.Models.Methods
         /// The default is 200.
         /// </summary>
         [JsonPropertyName("limit")]
-        public int Limit { get; set; }
+        public int? Limit { get; set; }
         /// <summary>
         /// Value from a previous paginated response.<br/>
         /// Resume retrieving data where that response left off.
@@ -110,6 +110,6 @@ namespace Xrpl.Models.Methods
         /// A 20-byte hex string for the ledger version to use.
         /// </summary>
         [JsonPropertyName("deletion_blockers_only")]
-        public bool DeletionBlockersOnly { get; set; }
+        public bool? DeletionBlockersOnly { get; set; }
     }
 }

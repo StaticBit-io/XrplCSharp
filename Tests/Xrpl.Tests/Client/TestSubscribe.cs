@@ -154,29 +154,139 @@ namespace Xrpl.Tests.ClientLib
         }
 
         [TestMethod]
-        public void TestEmitsValidationReceived()
+        public async Task TestEmitsValidationReceived()
         {
-            runner.client.connection.OnManifestReceived += r =>
+            var tcs = new TaskCompletionSource<ValidationStream>();
+
+            runner.client.connection.OnValidationReceived += r =>
             {
-                Assert.AreEqual(ResponseStreamType.validationReceived, r.Type);
+                tcs.TrySetResult(r);
                 return Task.CompletedTask;
             };
 
             string jsonString = "{\"type\":\"validationReceived\",\"amendments\":[\"42426C4D4F1009EE67080A9B7965B44656D7714D104A72F9B4369F97ABF044EE\",\"4C97EBA926031A7CF7D7B36FDE3ED66DDA5421192D63DE53FFB46E43B9DC8373\",\"6781F8368C4771B83E8B821D88F580202BCB4228075297B19E4FDC5233F1EFDC\",\"C1B8D934087225F509BEB5A8EC24447854713EE447D277F69545ABFA0E0FD490\",\"DA1BD556B42D85EA9C84066D028D355B52416734D3283F85E216EA5DA6DB7E13\"],\"base_fee\":10,\"flags\":2147483649,\"full\":true,\"ledger_hash\":\"EC02890710AAA2B71221B0D560CFB22D64317C07B7406B02959AD84BAD33E602\",\"ledger_index\":\"6\",\"load_fee\":256000,\"master_key\":\"nHUon2tpyJEHHYGmxqeGu37cvPYHzrMtUNQFVdCgGNvEkjmCpTqK\",\"reserve_base\":20000000,\"reserve_inc\":5000000,\"signature\":\"3045022100E199B55643F66BC6B37DBC5E185321CF952FD35D13D9E8001EB2564FFB94A07602201746C9A4F7A93647131A2DEB03B76F05E426EC67A5A27D77F4FF2603B9A528E6\",\"signing_time\":515115322,\"validation_public_key\":\"n94Gnc6svmaPPRHUAyyib1gQUov8sYbjLoEwUBYPH39qHZXuo8ZT\"}";
-            runner.client.connection.OnMessage(jsonString);
+            await runner.client.connection.OnMessage(jsonString);
+
+            var completed = await Task.WhenAny(tcs.Task, Task.Delay(5000));
+            Assert.AreEqual(tcs.Task, completed, "OnValidationReceived was not invoked within timeout");
+
+            ValidationStream result = tcs.Task.Result;
+            Assert.AreEqual(ResponseStreamType.validationReceived, result.Type);
+            Assert.AreEqual("nHUon2tpyJEHHYGmxqeGu37cvPYHzrMtUNQFVdCgGNvEkjmCpTqK", result.MasterKey);
+            Assert.AreEqual("EC02890710AAA2B71221B0D560CFB22D64317C07B7406B02959AD84BAD33E602", result.LedgerHash);
+            Assert.AreEqual("n94Gnc6svmaPPRHUAyyib1gQUov8sYbjLoEwUBYPH39qHZXuo8ZT", result.ValidationPublicKey);
+            Assert.IsTrue(result.Full);
         }
 
-        //[TestMethod]
-        //public void TestEmitsManifest()
-        //{
-        //    runner.client.OnManifestReceived += r =>
-        //    {
-        //        Assert.IsTrue(r.Type == ResponseStreamType.manifest);
-        //    };
+        [TestMethod]
+        public async Task TestEmitsManifestReceived()
+        {
+            var tcs = new TaskCompletionSource<ManifestStream>();
 
-        //    string jsonString = "{\"type\":\"manifestReceived\"}";
-        //    runner.client.connection.OnMessage(jsonString);
-        //}
+            runner.client.connection.OnManifestReceived += r =>
+            {
+                tcs.TrySetResult(r);
+                return Task.CompletedTask;
+            };
+
+            string jsonString = "{\"type\":\"manifestReceived\",\"master_key\":\"nHUon2tpyJEHHYGmxqeGu37cvPYHzrMtUNQFVdCgGNvEkjmCpTqK\",\"master_signature\":\"3045022100AABBCCDD\",\"seq\":42,\"signing_key\":\"n94Gnc6svmaPPRHUAyyib1gQUov8sYbjLoEwUBYPH39qHZXuo8ZT\",\"signature\":\"3045022100EEFF0011\",\"domain\":\"example.com\"}";
+            await runner.client.connection.OnMessage(jsonString);
+
+            var completed = await Task.WhenAny(tcs.Task, Task.Delay(5000));
+            Assert.AreEqual(tcs.Task, completed, "OnManifestReceived was not invoked within timeout");
+
+            ManifestStream result = tcs.Task.Result;
+            Assert.AreEqual(ResponseStreamType.manifestReceived, result.Type);
+            Assert.AreEqual("nHUon2tpyJEHHYGmxqeGu37cvPYHzrMtUNQFVdCgGNvEkjmCpTqK", result.MasterKey);
+            Assert.AreEqual("3045022100AABBCCDD", result.MasterSignature);
+            Assert.AreEqual(42u, result.Seq);
+            Assert.AreEqual("n94Gnc6svmaPPRHUAyyib1gQUov8sYbjLoEwUBYPH39qHZXuo8ZT", result.SigningKey);
+            Assert.AreEqual("3045022100EEFF0011", result.Signature);
+            Assert.AreEqual("example.com", result.Domain);
+        }
+
+        [TestMethod]
+        public async Task TestEmitsBookChanges()
+        {
+            var tcs = new TaskCompletionSource<BookChangesStream>();
+
+            runner.client.connection.OnBookChanges += r =>
+            {
+                tcs.TrySetResult(r);
+                return Task.CompletedTask;
+            };
+
+            string jsonString = "{\"type\":\"bookChanges\",\"ledger_index\":104205117,\"ledger_hash\":\"A54D8DFCE7DD4770116B3EA2CC5B78DB3B1FC1CE01541C0DD691DCBA0673F6C6\",\"ledger_time\":832003272,\"validated\":true,\"changes\":[{\"currency_a\":\"XRP_drops\",\"currency_b\":\"rDSkXt9C1fdGrgMoajRgM1SkGwHLy6Ckme/4C45535300000000000000000000000000000000\",\"volume_a\":\"636084\",\"volume_b\":\"2148.917370490562\",\"high\":\"296.0020746887967\",\"low\":\"296.0020746887967\",\"open\":\"296.0020746887967\",\"close\":\"296.0020746887967\"}]}";
+            await runner.client.connection.OnMessage(jsonString);
+
+            var completed = await Task.WhenAny(tcs.Task, Task.Delay(5000));
+            Assert.AreEqual(tcs.Task, completed, "OnBookChanges was not invoked within timeout");
+
+            BookChangesStream result = tcs.Task.Result;
+            Assert.AreEqual(ResponseStreamType.bookChanges, result.Type);
+            Assert.AreEqual(104205117u, result.LedgerIndex);
+            Assert.AreEqual("A54D8DFCE7DD4770116B3EA2CC5B78DB3B1FC1CE01541C0DD691DCBA0673F6C6", result.LedgerHash);
+            Assert.IsNotNull(result.LedgerTime);
+            // 832003272 seconds since Ripple Epoch (2000-01-01) = 2026-05-13T...
+            Assert.IsTrue(result.LedgerTime.Value.Year == 2026);
+            Assert.AreEqual(true, result.Validated);
+            Assert.IsNotNull(result.Changes);
+            Assert.AreEqual(1, result.Changes.Count);
+
+            BookChange change = result.Changes[0];
+            Assert.AreEqual("XRP_drops", change.CurrencyA);
+            Assert.AreEqual("rDSkXt9C1fdGrgMoajRgM1SkGwHLy6Ckme/4C45535300000000000000000000000000000000", change.CurrencyB);
+            Assert.AreEqual("636084", change.VolumeA);
+            Assert.AreEqual("2148.917370490562", change.VolumeB);
+            Assert.AreEqual("296.0020746887967", change.High);
+            Assert.AreEqual("296.0020746887967", change.Low);
+            Assert.AreEqual("296.0020746887967", change.Open);
+            Assert.AreEqual("296.0020746887967", change.Close);
+
+            // Verify parsed IssuedCurrency objects
+            Assert.IsNotNull(change.AssetA);
+            Assert.AreEqual("XRP", change.AssetA.Currency);
+            Assert.IsTrue(change.AssetA.IsXrp());
+            Assert.IsTrue(change.IsXrpA);
+            Assert.IsFalse(change.IsXrpB);
+
+            Assert.IsNotNull(change.AssetB);
+            Assert.AreEqual("rDSkXt9C1fdGrgMoajRgM1SkGwHLy6Ckme", change.AssetB.Issuer);
+            Assert.AreEqual("4C45535300000000000000000000000000000000", change.AssetB.Currency);
+            // ToString() decodes hex → readable name ("LESS")
+            Assert.AreEqual("LESS", change.AssetB.ToString());
+        }
+
+        [TestMethod]
+        public async Task TestEmitsServerStatus()
+        {
+            var tcs = new TaskCompletionSource<ServerStatusStream>();
+
+            runner.client.connection.OnServerStatus += r =>
+            {
+                tcs.TrySetResult(r);
+                return Task.CompletedTask;
+            };
+
+            string jsonString = "{\"type\":\"serverStatus\",\"load_base\":256,\"load_factor\":256,\"load_factor_fee_escalation\":512,\"load_factor_fee_queue\":256,\"load_factor_fee_reference\":256,\"load_factor_server\":256,\"server_status\":\"full\",\"base_fee\":10,\"reserve_base\":20000000,\"reserve_inc\":5000000}";
+            await runner.client.connection.OnMessage(jsonString);
+
+            var completed = await Task.WhenAny(tcs.Task, Task.Delay(5000));
+            Assert.AreEqual(tcs.Task, completed, "OnServerStatus was not invoked within timeout");
+
+            ServerStatusStream result = tcs.Task.Result;
+            Assert.AreEqual(ResponseStreamType.serverStatus, result.Type);
+            Assert.AreEqual(256u, result.LoadBase);
+            Assert.AreEqual(256u, result.LoadFactor);
+            Assert.AreEqual(512u, result.LoadFactorFeeEscalation);
+            Assert.AreEqual(256u, result.LoadFactorFeeQueue);
+            Assert.AreEqual(256u, result.LoadFactorFeeReference);
+            Assert.AreEqual(256u, result.LoadFactorServer);
+            Assert.AreEqual("full", result.ServerStatus);
+            Assert.AreEqual(10u, result.BaseFee);
+            Assert.AreEqual(20000000u, result.ReserveBase);
+            Assert.AreEqual(5000000u, result.ReserveInc);
+        }
     }
 
     [TestClass]

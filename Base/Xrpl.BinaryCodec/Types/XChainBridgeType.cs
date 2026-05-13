@@ -1,3 +1,4 @@
+using System;
 using System.Text.Json.Nodes;
 using Xrpl.BinaryCodec.Binary;
 
@@ -26,8 +27,12 @@ namespace Xrpl.BinaryCodec.Types
 
         public void ToBytes(IBytesSink sink)
         {
+            // AccountID fields inside XChainBridge are VL-encoded (length-prefixed)
+            // just like STAccount in rippled's STXChainBridge::add()
+            sink.Put(BinarySerializer.EncodeVl(20));
             LockingChainDoor.ToBytes(sink);
             LockingChainIssue.ToBytes(sink);
+            sink.Put(BinarySerializer.EncodeVl(20));
             IssuingChainDoor.ToBytes(sink);
             IssuingChainIssue.ToBytes(sink);
         }
@@ -58,9 +63,15 @@ namespace Xrpl.BinaryCodec.Types
 
         public static XChainBridgeType FromParser(BinaryParser parser, int? hint = null)
         {
-            AccountId lockingDoor = AccountId.FromParser(parser);
+            int lockingDoorLen = parser.ReadVlLength();
+            if (lockingDoorLen != 20)
+                throw new FormatException($"Invalid LockingChainDoor length: {lockingDoorLen}. Expected 20.");
+            AccountId lockingDoor = new AccountId(parser.Read(lockingDoorLen));
             Issue lockingIssue = Issue.FromParser(parser);
-            AccountId issuingDoor = AccountId.FromParser(parser);
+            int issuingDoorLen = parser.ReadVlLength();
+            if (issuingDoorLen != 20)
+                throw new FormatException($"Invalid IssuingChainDoor length: {issuingDoorLen}. Expected 20.");
+            AccountId issuingDoor = new AccountId(parser.Read(issuingDoorLen));
             Issue issuingIssue = Issue.FromParser(parser);
 
             return new XChainBridgeType(lockingDoor, lockingIssue, issuingDoor, issuingIssue);
