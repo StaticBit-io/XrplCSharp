@@ -23,7 +23,7 @@
 
 Протокол кредитования XRPL реализует обеспеченное кредитование на уровне реестра:
 
-```
+```text
 Брокер (Кредитор)                       Заёмщик
 ┌──────────────────────┐              ┌──────────────────────┐
 │                      │   LoanSet    │                      │
@@ -296,8 +296,10 @@ var brokerDict = JsonSerializer.Deserialize<Dictionary<string, object>>(
     prepared.ToJsonString(), XrplJsonOptions.Default);
 SignatureResult brokerSig = brokerWallet.Sign(brokerDict);
 
-// Устройство B (заёмщик): подписывает как контрагент
-SignatureResult counterpartySig = borrowerWallet.SignAsLoanCounterparty(brokerDict);
+// Устройство B (заёмщик): подписывает как контрагент (независимая копия payload)
+var borrowerDict = JsonSerializer.Deserialize<Dictionary<string, object>>(
+    prepared.ToJsonString(), XrplJsonOptions.Default);
+SignatureResult counterpartySig = borrowerWallet.SignAsLoanCounterparty(borrowerDict);
 
 // Комбинатор: объединяет обе подписи в один blob
 SignatureResult combined = LoanSigningHelper.CombineLoanSignatures(
@@ -329,8 +331,7 @@ await client.SubmitRequest(fullySigned.TxBlob);
 - Обе стороны подписывают **одинаковый** прообраз (транзакция, сериализованная для подписи, без полей подписей)
 - Прообраз подписи использует `SigningPubKey` **брокера** (отправляющий аккаунт)
 - `CounterpartySignature` — это STObject с `isSigningField = false` — он исключён из прообраза подписи
-- Комиссию необходимо увеличить после автозаполнения, т.к. добавление `CounterpartySignature` увеличивает размер транзакции (~150 байт)
-- `Autofill` автоматически рассчитывает корректную комиссию для LoanSet (включая overhead CounterpartySignature)
+- `Autofill` автоматически рассчитывает корректную комиссию для LoanSet (включая overhead CounterpartySignature ~150 байт)
 
 ---
 

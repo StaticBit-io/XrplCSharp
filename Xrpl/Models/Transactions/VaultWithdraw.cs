@@ -91,11 +91,27 @@ namespace Xrpl.Models.Transactions
         {
             await Common.ValidateBaseTransaction(tx);
 
-            if (!tx.TryGetValue("VaultID", out var vaultId) || vaultId is not string)
-                throw new ValidationException("VaultWithdraw: missing field VaultID");
+            if (!tx.TryGetValue("VaultID", out var vaultId) || vaultId is not string vaultIdStr
+                || !IsValidHash256(vaultIdStr))
+                throw new ValidationException("VaultWithdraw: VaultID must be a valid Hash256 (64 hex characters)");
 
             if (!tx.TryGetValue("Amount", out var amount) || amount is null)
                 throw new ValidationException("VaultWithdraw: missing field Amount");
+        }
+
+        /// <summary>
+        /// Validates that a string is a valid Hash256: exactly 64 hex characters.
+        /// </summary>
+        internal static bool IsValidHash256(string value)
+        {
+            if (string.IsNullOrWhiteSpace(value) || value.Length != 64)
+                return false;
+            foreach (char c in value)
+            {
+                if (!((c >= '0' && c <= '9') || (c >= 'a' && c <= 'f') || (c >= 'A' && c <= 'F')))
+                    return false;
+            }
+            return true;
         }
     }
 }

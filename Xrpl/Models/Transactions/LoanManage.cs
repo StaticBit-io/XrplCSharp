@@ -91,21 +91,31 @@ namespace Xrpl.Models.Transactions
 
     public partial class Validation
     {
+        /// <summary>
+        /// Mask of all LoanManage action flags (mutually exclusive).
+        /// </summary>
+        private const uint LoanManageActionMask =
+            (uint)LoanManageFlags.tfLoanDefault |
+            (uint)LoanManageFlags.tfLoanImpair |
+            (uint)LoanManageFlags.tfLoanUnimpair;
+
         public static async Task ValidateLoanManage(Dictionary<string, object> tx)
         {
             await Common.ValidateBaseTransaction(tx);
 
-            if (!tx.TryGetValue("LoanID", out var id) || id is not string)
+            if (!tx.TryGetValue("LoanID", out var id) || id is not string loanId || string.IsNullOrWhiteSpace(loanId))
                 throw new ValidationException("LoanManage: missing field LoanID");
 
-            // tfLoanImpair and tfLoanUnimpair are mutually exclusive (per xrpl.js)
+            // Exactly one action flag is required; they are mutually exclusive
             if (tx.TryGetValue("Flags", out var flagsObj) && flagsObj is not null)
             {
                 uint rawFlags = ParseFlags(flagsObj);
-                bool hasImpair = (rawFlags & (uint)LoanManageFlags.tfLoanImpair) != 0;
-                bool hasUnimpair = (rawFlags & (uint)LoanManageFlags.tfLoanUnimpair) != 0;
-                if (hasImpair && hasUnimpair)
-                    throw new ValidationException("LoanManage: tfLoanImpair and tfLoanUnimpair are mutually exclusive");
+                uint actionBits = rawFlags & LoanManageActionMask;
+
+                // Count set action bits — must be exactly 1
+                int actionCount = System.Numerics.BitOperations.PopCount(actionBits);
+                if (actionCount != 1)
+                    throw new ValidationException("LoanManage: exactly one action flag required (tfLoanDefault, tfLoanImpair, or tfLoanUnimpair)");
             }
         }
 
@@ -117,7 +127,7 @@ namespace Xrpl.Models.Transactions
                 int i when i >= 0 => (uint)i,
                 long l when l is >= 0 and <= uint.MaxValue => (uint)l,
                 JsonElement je when je.ValueKind == JsonValueKind.Number && je.TryGetUInt32(out uint u) => u,
-                _ => 0
+                _ => throw new FormatException($"LoanManage: cannot parse Flags value of type {flagsObj?.GetType().Name ?? "null"}")
             };
         }
     }

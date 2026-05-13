@@ -119,6 +119,30 @@ namespace Xrpl.Models.Transactions
                     throw new ValidationException("DelegateSet: Permissions must not be empty");
                 if (list.Count > MaxPermissions)
                     throw new ValidationException($"DelegateSet: Permissions must have at most {MaxPermissions} entries");
+
+                HashSet<string> seen = new();
+                foreach (object entry in list)
+                {
+                    // Each entry should be a dict-like object with a "Permission" sub-object
+                    if (entry is not IDictionary<string, object> entryDict)
+                        throw new ValidationException("DelegateSet: each Permission entry must be an object");
+
+                    if (!entryDict.TryGetValue("Permission", out object permObj) || permObj is not IDictionary<string, object> perm)
+                        throw new ValidationException("DelegateSet: each entry must contain a Permission object");
+
+                    if (!perm.TryGetValue("PermissionValue", out object permVal))
+                        throw new ValidationException("DelegateSet: each Permission must contain PermissionValue");
+
+                    string permValueStr = permVal?.ToString();
+                    if (string.IsNullOrWhiteSpace(permValueStr))
+                        throw new ValidationException("DelegateSet: PermissionValue must not be empty");
+
+                    if (NonDelegableTransactions.Contains(permValueStr))
+                        throw new ValidationException($"DelegateSet: transaction type '{permValueStr}' cannot be delegated");
+
+                    if (!seen.Add(permValueStr))
+                        throw new ValidationException($"DelegateSet: duplicate PermissionValue '{permValueStr}'");
+                }
             }
             else
             {

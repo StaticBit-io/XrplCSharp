@@ -23,7 +23,7 @@ This guide explains how to use the XRPL Lending Protocol with the XrplCSharp SDK
 
 The XRPL Lending Protocol introduces on-ledger collateralized lending with the following architecture:
 
-```
+```text
 Broker (Lender)                        Borrower
 ┌──────────────────────┐              ┌──────────────────────┐
 │                      │   LoanSet    │                      │
@@ -296,8 +296,10 @@ var brokerDict = JsonSerializer.Deserialize<Dictionary<string, object>>(
     prepared.ToJsonString(), XrplJsonOptions.Default);
 SignatureResult brokerSig = brokerWallet.Sign(brokerDict);
 
-// Device B (borrower): signs as counterparty
-SignatureResult counterpartySig = borrowerWallet.SignAsLoanCounterparty(brokerDict);
+// Device B (borrower): signs as counterparty (independent copy of the payload)
+var borrowerDict = JsonSerializer.Deserialize<Dictionary<string, object>>(
+    prepared.ToJsonString(), XrplJsonOptions.Default);
+SignatureResult counterpartySig = borrowerWallet.SignAsLoanCounterparty(borrowerDict);
 
 // Combiner: merge both signatures into a single blob
 SignatureResult combined = LoanSigningHelper.CombineLoanSignatures(

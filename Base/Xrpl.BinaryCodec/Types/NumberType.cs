@@ -12,8 +12,9 @@ namespace Xrpl.BinaryCodec.Types
     /// XRPL Number type (serialized type code 9). Serialized as 12 bytes big-endian:
     ///   8 bytes — mantissa (signed int64, big-endian)
     ///   4 bytes — exponent (signed int32, big-endian)
-    /// Mantissa is normalized to [10^15, 10^16-1] for non-zero values.
+    /// For non-zero values, mantissa is normalized to [10^18, long.MaxValue (2^63-1)].
     /// Zero is represented as mantissa=0, exponent=Int32.MinValue (-2147483648).
+    /// Exponent range: [-32768, 32768].
     /// Used by Loan/LoanBroker fields (PrincipalRequested, DebtMaximum, etc.) per XLS-66.
     /// Encoding matches rippled Number class (include/xrpl/basics/Number.h).
     /// </summary>
@@ -46,6 +47,18 @@ namespace Xrpl.BinaryCodec.Types
             byte[] exponentBytes = parser.Read(4);
             long mantissa = Bits.ToInt64(mantissaBytes, 0);
             int exponent = Bits.ToInt32(exponentBytes, 0);
+
+            // Validate zero-representation invariant
+            if (mantissa == 0 && exponent != ZeroExponent && exponent != 0)
+                throw new FormatException(
+                    $"NumberType: zero mantissa requires exponent {ZeroExponent} or 0, got {exponent}");
+
+            // Validate exponent bounds for non-zero values to prevent unbounded BigInteger.Pow
+            if (mantissa != 0 && exponent != ZeroExponent &&
+                (exponent < MinExponent || exponent > MaxExponent))
+                throw new FormatException(
+                    $"NumberType: exponent {exponent} out of range [{MinExponent}, {MaxExponent}]");
+
             return new NumberType(mantissa, exponent);
         }
 
@@ -118,50 +131,129 @@ namespace Xrpl.BinaryCodec.Types
         }
 
         /// <summary>
-        /// Parse a decimal string (e.g. "10000000000000", "0", "-500") into the XRPL Number wire format.
-        /// Normalizes mantissa to [10^15, 10^16-1] range per rippled Number class.
+        /// Parse a decimal string (e.g. "10000000000000", "0", "-500", "1e-32000")
+        /// into the XRPL Number wire format.
+        /// Uses BigInteger-based parsing to handle the full XRPL exponent range (±32768)
+        /// which exceeds System.Decimal capacity.
+        /// Normalizes mantissa to [10^18, long.MaxValue] per rippled Number class.
         /// </summary>
         public static NumberType FromString(string str)
         {
-            decimal value = decimal.Parse(str, NumberStyles.Any, CultureInfo.InvariantCulture);
+            if (string.IsNullOrWhiteSpace(str))
+                throw new FormatException("NumberType: input string must not be empty");
 
-            if (value == 0m)
+            str = str.Trim();
+
+            // Parse sign
+            bool negative = false;
+            int pos = 0;
+            if (pos < str.Length && str[pos] == '-')
+            {
+                negative = true;
+                pos++;
+            }
+            else if (pos < str.Length && str[pos] == '+')
+            {
+                pos++;
+            }
+
+            // Parse digits and optional decimal point
+            BigInteger integerPart = BigInteger.Zero;
+            int fracDigits = 0;
+            bool hasDot = false;
+            bool hasDigits = false;
+
+            while (pos < str.Length && (char.IsDigit(str[pos]) || str[pos] == '.'))
+            {
+                if (str[pos] == '.')
+                {
+                    if (hasDot)
+                        throw new FormatException($"NumberType: multiple decimal points in '{str}'");
+                    hasDot = true;
+                }
+                else
+                {
+                    integerPart = integerPart * 10 + (str[pos] - '0');
+                    if (hasDot)
+                        fracDigits++;
+                    hasDigits = true;
+                }
+                pos++;
+            }
+
+            if (!hasDigits)
+                throw new FormatException($"NumberType: no digits in '{str}'");
+
+            // Parse optional scientific notation exponent (e/E)
+            int sciExponent = 0;
+            if (pos < str.Length && (str[pos] == 'e' || str[pos] == 'E'))
+            {
+                pos++;
+                if (pos >= str.Length)
+                    throw new FormatException($"NumberType: incomplete scientific notation in '{str}'");
+
+                bool expNegative = false;
+                if (str[pos] == '-')
+                {
+                    expNegative = true;
+                    pos++;
+                }
+                else if (str[pos] == '+')
+                {
+                    pos++;
+                }
+
+                int expValue = 0;
+                bool hasExpDigits = false;
+                while (pos < str.Length && char.IsDigit(str[pos]))
+                {
+                    expValue = expValue * 10 + (str[pos] - '0');
+                    if (expValue > 100000) // sanity cap
+                        throw new FormatException($"NumberType: exponent too large in '{str}'");
+                    hasExpDigits = true;
+                    pos++;
+                }
+                if (!hasExpDigits)
+                    throw new FormatException($"NumberType: no digits in exponent of '{str}'");
+
+                sciExponent = expNegative ? -expValue : expValue;
+            }
+
+            if (pos != str.Length)
+                throw new FormatException($"NumberType: unexpected characters in '{str}' at position {pos}");
+
+            if (integerPart == BigInteger.Zero)
                 return new NumberType(0, ZeroExponent);
 
-            bool negative = value < 0m;
-            if (negative)
-                value = -value;
+            // Combined exponent: scientific exponent minus fractional digit count
+            int exponent = sciExponent - fracDigits;
 
-            // Normalize mantissa to [10^15, 10^16-1]
-            int exponent = 0;
-            while (value < MinMantissa)
+            // Normalize mantissa to [10^18, long.MaxValue]
+            BigInteger mantissa = integerPart;
+            BigInteger bigMinMantissa = new BigInteger(MinMantissa);
+            BigInteger bigMaxMantissa = new BigInteger(MaxMantissa);
+
+            while (mantissa < bigMinMantissa)
             {
-                value *= 10m;
+                mantissa *= 10;
                 exponent--;
             }
-            while (value > MaxMantissa)
+            while (mantissa > bigMaxMantissa)
             {
-                value /= 10m;
-                exponent++;
-            }
-
-            long mantissa = (long)Math.Round(value, MidpointRounding.AwayFromZero);
-
-            // Re-check after rounding
-            if (mantissa > MaxMantissa)
-            {
-                mantissa /= 10;
+                // Round: add 5 before dividing for away-from-zero rounding
+                mantissa = (mantissa + 5) / 10;
                 exponent++;
             }
 
             if (exponent < MinExponent || exponent > MaxExponent)
                 throw new FormatException(
-                    $"Number exponent {exponent} out of range [{MinExponent}, {MaxExponent}]");
+                    $"NumberType: exponent {exponent} out of range [{MinExponent}, {MaxExponent}]");
 
+            long mantissaLong = (long)mantissa;
             if (negative)
-                mantissa = -mantissa;
+                mantissaLong = -mantissaLong;
 
-            return new NumberType(mantissa, exponent);
+            return new NumberType(mantissaLong, exponent);
         }
     }
 }
