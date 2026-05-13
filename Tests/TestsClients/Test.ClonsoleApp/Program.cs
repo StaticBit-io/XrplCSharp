@@ -62,8 +62,9 @@ internal class Program
 
     private static async Task Main(string[] args)
     {
+        await BookChangesWebsocketTest();
         //TestWalletFromText();
-        await InitTestData(nodeType);
+        client = await InitTestData(nodeType);
 
         try
         {
@@ -108,7 +109,7 @@ internal class Program
         //WalletFromSeed();
         //WalletGenerate();
         //await SubmitTestTx();
-        //await WebsocketTest();
+        await WebsocketTest();
         //await WebsocketChangeServerTest();
     }
 
@@ -371,9 +372,9 @@ internal class Program
         Console.WriteLine("END");
     }
 
-    private static async Task InitTestData(TestNodeType serverType, bool withAccounts = true)
-    {
-        client = serverType switch
+    private static async Task<IXrplClient> InitTestData(TestNodeType serverType, bool withAccounts = true)
+    { 
+        var xrplClient = serverType switch
         {
             TestNodeType.TestNet => new XrplClient("wss://s.altnet.rippletest.net:51233"),
             TestNodeType.DevNet => new XrplClient("wss://s.devnet.rippletest.net:51233"),
@@ -383,13 +384,13 @@ internal class Program
             _ => throw new ArgumentOutOfRangeException(nameof(serverType), serverType, null)
         };
 
-        client.connection.OnConnected += async () => { Console.WriteLine("CONNECTED"); };
-        client.connection.OnWarning += (warning, message) =>
+        xrplClient.connection.OnConnected += async () => { Console.WriteLine("CONNECTED"); };
+        xrplClient.connection.OnWarning += (warning, message) =>
         {
             Console.WriteLine(warning);
             return Task.CompletedTask;
         };
-        client.connection.OnServerWarning += (warning, message) =>
+        xrplClient.connection.OnServerWarning += (warning, message) =>
         {
             foreach (RippleResponseWarning? responseWarning in warning)
             {
@@ -398,7 +399,7 @@ internal class Program
 
             return Task.CompletedTask;
         };
-        client.connection.OnError += (error, message, s, data) =>
+        xrplClient.connection.OnError += (error, message, s, data) =>
         {
             Console.WriteLine(error);
             Console.WriteLine(message);
@@ -406,34 +407,36 @@ internal class Program
             Console.WriteLine(data);
             return Task.CompletedTask;
         };
-        await client.Connect();
+        await xrplClient.Connect();
 
         if (!withAccounts)
         {
-            return;
+            return xrplClient;
         }
         if (serverType == TestNodeType.Standalone)
         {
-            await StandAloneUtils.FundAccount(client, walletPrimary, walletSecondary_1, walletSecondary_2, walletMultiSign, walletMultiSigner_1, walletMultiSigner_2, walletRegularKey, walletRegularKey_signer);
+            await StandAloneUtils.FundAccount(xrplClient, walletPrimary, walletSecondary_1, walletSecondary_2, walletMultiSign, walletMultiSigner_1, walletMultiSigner_2, walletRegularKey, walletRegularKey_signer);
         }
-        else if (client.Url().Contains("test"))
+        else if (xrplClient.Url().Contains("test"))
         {
-            await TryFillAccounts(walletPrimary, walletSecondary_1, walletSecondary_2, walletMultiSign, walletMultiSigner_1, walletMultiSigner_2, walletRegularKey, walletRegularKey_signer);
+            await TryFillAccounts(xrplClient, walletPrimary, walletSecondary_1, walletSecondary_2, walletMultiSign, walletMultiSigner_1, walletMultiSigner_2, walletRegularKey, walletRegularKey_signer);
         }
+
+        return xrplClient;
     }
 
-    private static async Task TryFillAccounts(params XrplWallet[] wallets)
+    private static async Task TryFillAccounts(IXrplClient xrplClient, params XrplWallet[] wallets)
     {
         foreach (var xrplWallet in wallets)
         {
             try
             {
-                var info = await client.GetXrpFreeBalance(xrplWallet.ClassicAddress);
+                var info = await xrplClient.GetXrpFreeBalance(xrplWallet.ClassicAddress);
                 Console.WriteLine($"Balance {xrplWallet.ClassicAddress} - {info} XRP");
 
                 if (info <= 10)
                 {
-                    var addFunds = await client.FundWallet(xrplWallet);
+                    var addFunds = await xrplClient.FundWallet(xrplWallet);
                     Console.WriteLine($"Fund {xrplWallet.ClassicAddress} - {addFunds.Balance} XRP");
                 }
                 continue;
@@ -442,7 +445,7 @@ internal class Program
             {
 
             }
-            var funded = await client.FundWallet(xrplWallet);
+            var funded = await xrplClient.FundWallet(xrplWallet);
             Console.WriteLine($"Fund {xrplWallet.ClassicAddress} - {funded.Balance} XRP");
         }
 
@@ -553,7 +556,7 @@ internal class Program
     {
         var seed = "spucWfdp2GUXmEkKSQkzzVfL78gaM";
         var wallet = XrplWallet.FromSeed(seed);
-        await TryFillAccounts(wallet);
+        await TryFillAccounts(client, wallet);
 
         Console.WriteLine("NEXT");
 
@@ -711,6 +714,60 @@ internal class Program
         };
 
         await client.Connect();
+
+        var task = Task.Run(
+            async () =>
+            {
+                while (!isFinished)
+                {
+                    Debug.WriteLine($"WAITING: {DateTime.Now}");
+                    await Task.Delay(1000);
+                }
+            });
+
+        await task;
+
+        await client.Disconnect();
+    }
+    private static async Task BookChangesWebsocketTest()
+    {
+        var isFinished = false;
+        var count = 0;
+        var client = await InitTestData(TestNodeType.MainNet,false);
+        
+        client.connection.OnDisconnect += OnDisconnect;
+
+        client.connection.OnError += OnError;
+
+        client.connection.OnTransaction += OnTransaction;
+
+        client.connection.OnBookChanges += r =>
+        {
+            count++;
+            Console.WriteLine($"MESSAGE RECEIVED: {r.LedgerTime} {r}");
+            foreach (var change in r.Changes)
+            {
+                Console.WriteLine($"{change.AssetA} - {change.AssetB}\nVA - {change.VolumeA}\nVB - {change.VolumeB}\nO - {change.Open}\nC - {change.Close}\nL - {change.Low}\nH - {change.High}");
+            }
+
+            if (count >= 5)
+            {
+                isFinished = true;
+            }
+            return Task.CompletedTask;
+        };
+
+        var subscribe = await client.Subscribe(
+            new SubscribeRequest()
+            {
+                Streams = new List<StreamType>(
+                    new[]
+                    {
+                        StreamType.BookChanges,
+                    }),
+            });
+        Console.WriteLine(subscribe);
+
 
         var task = Task.Run(
             async () =>

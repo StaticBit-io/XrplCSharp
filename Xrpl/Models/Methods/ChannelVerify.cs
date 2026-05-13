@@ -70,5 +70,15 @@ namespace Xrpl.Models.Methods
             }
         }
     }
-    //todo not found ChannelVerifyResponse https://github.com/XRPLF/xrpl.js/blob/b20c05c3680d80344006d20c44b4ae1c3b0ffcac/packages/xrpl/src/models/methods/channelVerify.ts#L33
+    /// <summary>
+    /// Response expected from a <see cref="ChannelVerifyRequest"/>.
+    /// </summary>
+    public class ChannelVerifyResponse
+    {
+        /// <summary>
+        /// If true, the signature is valid for the stated amount, channel, and public key.
+        /// </summary>
+        [JsonPropertyName("signature_verified")]
+        public bool SignatureVerified { get; set; }
+    }
 }

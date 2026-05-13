@@ -274,5 +274,8 @@ replit.md
 .breakpoints
 attached_assets/
 
+# Claude Code local settings
+.claude/settings.local.json
+
 # DocFx build output
 docs/

@@ -405,6 +405,11 @@ internal sealed class FeeTestClient : IXrplClient
     public Task<PathFindResponse> PathFindClose(PathFindCloseRequest request, CancellationToken cancellationToken = default) => throw new NotSupportedException();
     public Task<PathFindResponse> PathFindStatus(PathFindStatusRequest request, CancellationToken cancellationToken = default) => throw new NotSupportedException();
     public Task<RipplePathFindResponse> RipplePathFind(RipplePathFindRequest request, CancellationToken cancellationToken = default) => throw new NotSupportedException();
+    public Task<ChannelAuthorizeResponse> ChannelAuthorize(ChannelAuthorizeRequest request, CancellationToken cancellationToken = default) => throw new NotSupportedException();
+    public Task<ChannelVerifyResponse> ChannelVerify(ChannelVerifyRequest request, CancellationToken cancellationToken = default) => throw new NotSupportedException();
+    public Task<ServerDefinitionsResponse> ServerDefinitions(ServerDefinitionsRequest request, CancellationToken cancellationToken = default) => throw new NotSupportedException();
+    public Task<VaultInfoResponse> VaultInfo(VaultInfoRequest request, CancellationToken cancellationToken = default) => throw new NotSupportedException();
+    public Task<TransactionEntryResponse> TransactionEntry(TransactionEntryRequest request, CancellationToken cancellationToken = default) => throw new NotSupportedException();
     public void Dispose() { }
 
     #endregion

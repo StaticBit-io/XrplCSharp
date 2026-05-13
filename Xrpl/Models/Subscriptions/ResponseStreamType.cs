@@ -12,6 +12,9 @@
         peerStatusChange,
         consensusPhase,
         path_find,
-        error
+        error,
+        manifestReceived,
+        bookChanges,
+        serverStatus
     }
 }

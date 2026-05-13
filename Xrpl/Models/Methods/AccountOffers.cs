@@ -130,6 +130,6 @@ namespace Xrpl.Models.Methods
         /// The default is false.
         /// </summary>
         [JsonPropertyName("strict")]
-        public bool Strict { get; set; }
+        public bool? Strict { get; set; }
     }
 }

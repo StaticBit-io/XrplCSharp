@@ -13,6 +13,7 @@ using Xrpl.AddressCodec;
 using Xrpl.Client;
 using Xrpl.Client.Exceptions;
 using Xrpl.Client.Json;
+using Xrpl.Models;
 using Xrpl.Models.Common;
 using Xrpl.Models.Ledger;
 using Xrpl.Models.Methods;
@@ -205,7 +206,7 @@ namespace Xrpl.Sugar
             {
                 var maxFeeDrops = XrpConversion.XrpToDrops(client.maxFeeXRP);
                 var maxFeeBI = new BigInteger(Math.Floor(decimal.Parse(maxFeeDrops, NumberStyles.AllowDecimalPoint | NumberStyles.AllowLeadingSign | NumberStyles.AllowExponent, CultureInfo.InvariantCulture)));
-                totalFee = transactionType == "AccountDelete"
+                totalFee = IsReserveFeeTxNeed(tx)
                     ? calculatedFee
                     : BigInteger.Min(calculatedFee, maxFeeBI);
             }
@@ -228,6 +229,9 @@ namespace Xrpl.Sugar
             {
                 "EscrowFinish" when tx.TryGetValue("Fulfillment", out _) => CalculateEscrowFinishFee(tx, netFeeDrops),
                 "Batch" => await CalculateBatchFee(client, tx, baseFee, cancellationToken),
+                // LoanSet requires CounterpartySignature (~150 bytes extra).
+                // Fee formula: baseFee * (1 + 1 counterparty signer) = baseFee * 2
+                "LoanSet" => baseFee * 2,
                 _ when IsReserveFeeTxNeed(tx) => await FetchReserveFee(client, cancellationToken),
                 _ => baseFee
             };
@@ -317,7 +321,10 @@ namespace Xrpl.Sugar
         private static bool IsReserveFeeTxNeed(Dictionary<string, object> tx)
         {
             string txType = $"{tx["TransactionType"]}";
-            return txType == "AccountDelete" || txType == "AMMCreate";
+            return txType 
+                is nameof(TransactionType.AccountDelete) 
+                or nameof(TransactionType.AMMCreate) 
+                or nameof(TransactionType.LedgerStateFix);
         }
 
         public static decimal ScaleValueDecimal(string value, decimal multiplier)

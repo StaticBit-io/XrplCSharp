@@ -36,10 +36,13 @@ namespace Xrpl.Client
     public delegate Task OnPing(string ping);
     public delegate Task OnLedgerClosed(LedgerStream response);
     public delegate Task OnTransaction(TransactionStream response);
-    public delegate Task OnManifestReceived(ValidationStream response);
+    public delegate Task OnValidationReceived(ValidationStream response);
+    public delegate Task OnManifestReceived(ManifestStream response);
     public delegate Task OnPeerStatusChange(PeerStatusStream response);
     public delegate Task OnConsensusPhase(ConsensusStream response);
     public delegate Task OnPathFind(PathFindStream response);
+    public delegate Task OnBookChanges(BookChangesStream response);
+    public delegate Task OnServerStatus(ServerStatusStream response);
 
 
     public interface IXrplClient : IDisposable
@@ -116,6 +119,22 @@ namespace Xrpl.Client
         /// <param name="request">An <see cref="FeeRequest"/> request.</param>
         /// <returns>An <see cref="Models.Methods.Fee"/> response.</returns>
         Task<Fee> Fee(CancellationToken cancellationToken = default);
+
+        /// <summary>
+        /// The <c>server_definitions</c> method retrieves the definition enums used by the server.
+        /// </summary>
+        /// <param name="request">A <see cref="ServerDefinitionsRequest"/>.</param>
+        /// <param name="cancellationToken">Cancellation token.</param>
+        /// <returns>A <see cref="ServerDefinitionsResponse"/>.</returns>
+        Task<ServerDefinitionsResponse> ServerDefinitions(ServerDefinitionsRequest request, CancellationToken cancellationToken = default);
+
+        /// <summary>
+        /// The <c>vault_info</c> method retrieves information about a vault.
+        /// </summary>
+        /// <param name="request">A <see cref="VaultInfoRequest"/>.</param>
+        /// <param name="cancellationToken">Cancellation token.</param>
+        /// <returns>A <see cref="VaultInfoResponse"/>.</returns>
+        Task<VaultInfoResponse> VaultInfo(VaultInfoRequest request, CancellationToken cancellationToken = default);
 
         #endregion
 
@@ -253,10 +272,36 @@ namespace Xrpl.Client
         Task<TransactionResponse> Tx(TxRequest request, CancellationToken cancellationToken = default);
 
         Task<TransactionSummary> TxV2(TxRequest request, CancellationToken cancellationToken = default);
+
+        /// <summary>
+        /// The <c>transaction_entry</c> method retrieves information on a single transaction
+        /// from a specific ledger version.
+        /// </summary>
+        /// <param name="request">A <see cref="TransactionEntryRequest"/>.</param>
+        /// <param name="cancellationToken">Cancellation token.</param>
+        /// <returns>A <see cref="TransactionEntryResponse"/>.</returns>
+        Task<TransactionEntryResponse> TransactionEntry(TransactionEntryRequest request, CancellationToken cancellationToken = default);
         #endregion
 
         #region Channels
 
+        /// <summary>
+        /// The <c>channel_authorize</c> method creates a signature that can be used to redeem
+        /// a specific amount of XRP from a payment channel.
+        /// </summary>
+        /// <param name="request">A <see cref="ChannelAuthorizeRequest"/>.</param>
+        /// <param name="cancellationToken">Cancellation token.</param>
+        /// <returns>A <see cref="ChannelAuthorizeResponse"/> containing the signature.</returns>
+        Task<ChannelAuthorizeResponse> ChannelAuthorize(ChannelAuthorizeRequest request, CancellationToken cancellationToken = default);
+
+        /// <summary>
+        /// The <c>channel_verify</c> method checks the validity of a signature that can be
+        /// used to redeem a specific amount of XRP from a payment channel.
+        /// </summary>
+        /// <param name="request">A <see cref="ChannelVerifyRequest"/>.</param>
+        /// <param name="cancellationToken">Cancellation token.</param>
+        /// <returns>A <see cref="ChannelVerifyResponse"/> indicating whether the signature is valid.</returns>
+        Task<ChannelVerifyResponse> ChannelVerify(ChannelVerifyRequest request, CancellationToken cancellationToken = default);
 
         #endregion
 
@@ -369,9 +414,6 @@ namespace Xrpl.Client
         /// <returns>A <see cref="RipplePathFindResponse"/>.</returns>
         Task<RipplePathFindResponse> RipplePathFind(RipplePathFindRequest request, CancellationToken cancellationToken = default);
 
-        // Task<ServerState> ServerState(ServerStateRequest request);
-        //Task<SubmitMultisign> SubmitMultisign(SubmitMultisignRequest request);
-        //Task<TransactionEntry> TransactionEntry(TransactionEntryRequest request);
         Task<object> AnyRequest(BaseRequest request, CancellationToken cancellationToken = default);
 
         Task<Dictionary<string, object>> Request(Dictionary<string, object> request, CancellationToken cancellationToken = default);
@@ -598,6 +640,18 @@ namespace Xrpl.Client
             return this.GRequest<AccountChannels, AccountChannelsRequest>(request, cancellationToken);
         }
 
+        /// <inheritdoc />
+        public Task<ChannelAuthorizeResponse> ChannelAuthorize(ChannelAuthorizeRequest request, CancellationToken cancellationToken = default)
+        {
+            return this.GRequest<ChannelAuthorizeResponse, ChannelAuthorizeRequest>(request, cancellationToken);
+        }
+
+        /// <inheritdoc />
+        public Task<ChannelVerifyResponse> ChannelVerify(ChannelVerifyRequest request, CancellationToken cancellationToken = default)
+        {
+            return this.GRequest<ChannelVerifyResponse, ChannelVerifyRequest>(request, cancellationToken);
+        }
+
         public Task<SimulateResponse> Simulate(SimulateRequest request, CancellationToken cancellationToken = default)
         {
             return this.GRequest<SimulateResponse, SimulateRequest>(request, cancellationToken);
@@ -783,6 +837,18 @@ namespace Xrpl.Client
         }
 
         /// <inheritdoc />
+        public Task<ServerDefinitionsResponse> ServerDefinitions(ServerDefinitionsRequest request, CancellationToken cancellationToken = default)
+        {
+            return this.GRequest<ServerDefinitionsResponse, ServerDefinitionsRequest>(request, cancellationToken);
+        }
+
+        /// <inheritdoc />
+        public Task<VaultInfoResponse> VaultInfo(VaultInfoRequest request, CancellationToken cancellationToken = default)
+        {
+            return this.GRequest<VaultInfoResponse, VaultInfoRequest>(request, cancellationToken);
+        }
+
+        /// <inheritdoc />
         //public Task<Submit> Submit(SubmitRequest request)
         //{
         //    return this.GRequest<Submit, SubmitRequest>(request);
@@ -807,10 +873,11 @@ namespace Xrpl.Client
             return this.GRequest<object, UnsubscribeRequest>(request, cancellationToken);
         }
 
-        //public Task<TransactionEntry> TransactionEntry(TransactionEntryRequest request)
-        //{
-        //    return this.GRequest<TransactionEntry, TransactionEntryRequest>(request);
-        //}
+        /// <inheritdoc />
+        public Task<TransactionEntryResponse> TransactionEntry(TransactionEntryRequest request, CancellationToken cancellationToken = default)
+        {
+            return this.GRequest<TransactionEntryResponse, TransactionEntryRequest>(request, cancellationToken);
+        }
 
         /// <inheritdoc />
         public Task<TransactionResponse> Tx(TxRequest request, CancellationToken cancellationToken = default)

@@ -2,5 +2,9 @@
   href: index.md
 - name: Error Classifier
   href: ErrorClassifier.md
+- name: Cross-Chain Bridge Guide
+  href: XChainBridge-Guide.md
+- name: Lending Protocol Guide
+  href: LendingProtocol-Guide.md
 - name: API Reference
   href: reference/
