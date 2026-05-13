@@ -419,24 +419,24 @@ internal class Program
         }
         else if (xrplClient.Url().Contains("test"))
         {
-            await TryFillAccounts(walletPrimary, walletSecondary_1, walletSecondary_2, walletMultiSign, walletMultiSigner_1, walletMultiSigner_2, walletRegularKey, walletRegularKey_signer);
+            await TryFillAccounts(xrplClient, walletPrimary, walletSecondary_1, walletSecondary_2, walletMultiSign, walletMultiSigner_1, walletMultiSigner_2, walletRegularKey, walletRegularKey_signer);
         }
 
         return xrplClient;
     }
 
-    private static async Task TryFillAccounts(params XrplWallet[] wallets)
+    private static async Task TryFillAccounts(IXrplClient xrplClient, params XrplWallet[] wallets)
     {
         foreach (var xrplWallet in wallets)
         {
             try
             {
-                var info = await client.GetXrpFreeBalance(xrplWallet.ClassicAddress);
+                var info = await xrplClient.GetXrpFreeBalance(xrplWallet.ClassicAddress);
                 Console.WriteLine($"Balance {xrplWallet.ClassicAddress} - {info} XRP");
 
                 if (info <= 10)
                 {
-                    var addFunds = await client.FundWallet(xrplWallet);
+                    var addFunds = await xrplClient.FundWallet(xrplWallet);
                     Console.WriteLine($"Fund {xrplWallet.ClassicAddress} - {addFunds.Balance} XRP");
                 }
                 continue;
@@ -445,7 +445,7 @@ internal class Program
             {
 
             }
-            var funded = await client.FundWallet(xrplWallet);
+            var funded = await xrplClient.FundWallet(xrplWallet);
             Console.WriteLine($"Fund {xrplWallet.ClassicAddress} - {funded.Balance} XRP");
         }
 
@@ -556,7 +556,7 @@ internal class Program
     {
         var seed = "spucWfdp2GUXmEkKSQkzzVfL78gaM";
         var wallet = XrplWallet.FromSeed(seed);
-        await TryFillAccounts(wallet);
+        await TryFillAccounts(client, wallet);
 
         Console.WriteLine("NEXT");
 

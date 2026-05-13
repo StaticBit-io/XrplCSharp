@@ -45,7 +45,7 @@ namespace Xrpl.Models.Subscriptions
         /// A list of book changes in this ledger.
         /// </summary>
         [JsonPropertyName("changes")]
-        public List<BookChange> Changes { get; set; }
+        public List<BookChange> Changes { get; set; } = new List<BookChange>();
     }
 
     /// <summary>
