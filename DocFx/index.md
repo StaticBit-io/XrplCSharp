@@ -60,4 +60,10 @@ await client.Disconnect();
 - [Connection Guide (EN)](Connection-Guide.html) - How to configure and manage connections
 - [Connection Guide (RU)](Connection-Guide.ru.html) - Руководство по подключению
 - [Error Classifier](ErrorClassifier.html) - How to normalize exceptions and XRPL error responses with `XrplErrorClassifier`
+- [Cross-Chain Bridge Guide (EN)](XChainBridge-Guide.html) - How to use XChain bridge transactions
+- [Cross-Chain Bridge Guide (RU)](XChainBridge-Guide.ru.html) - Руководство по кросс-чейн мосту
+- [Vault Guide (EN)](Vault-Guide.html) - How to create and manage Vaults
+- [Vault Guide (RU)](Vault-Guide.ru.html) - Руководство по хранилищам (Vault)
+- [Lending Protocol Guide (EN)](LendingProtocol-Guide.html) - How to use Loan and LoanBroker transactions
+- [Lending Protocol Guide (RU)](LendingProtocol-Guide.ru.html) - Руководство по протоколу кредитования
 - [API Reference](reference/) - Full API documentation
