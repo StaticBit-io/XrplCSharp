@@ -63,10 +63,10 @@ namespace Xrpl.Models.Common
             /// </summary>
             public bool IsMpt()
             {
-                return MptIssuanceId is not null;
+                return !string.IsNullOrWhiteSpace(MptIssuanceId);
             }
 
-            public override string ToString() => MptIssuanceId is not null
+            public override string ToString() => !string.IsNullOrWhiteSpace(MptIssuanceId)
                 ? $"MPT:{MptIssuanceId}"
                 : $"{Currency.CurrencyReadableName()}";
         }

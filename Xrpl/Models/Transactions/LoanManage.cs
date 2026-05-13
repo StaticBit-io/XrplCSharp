@@ -107,7 +107,9 @@ namespace Xrpl.Models.Transactions
                 throw new ValidationException("LoanManage: missing field LoanID");
 
             // Exactly one action flag is required; they are mutually exclusive
-            if (tx.TryGetValue("Flags", out var flagsObj) && flagsObj is not null)
+            if (!tx.TryGetValue("Flags", out var flagsObj) || flagsObj is null)
+                throw new ValidationException("LoanManage: exactly one action flag required (tfLoanDefault, tfLoanImpair, or tfLoanUnimpair)");
+
             {
                 uint rawFlags = ParseFlags(flagsObj);
                 uint actionBits = rawFlags & LoanManageActionMask;
