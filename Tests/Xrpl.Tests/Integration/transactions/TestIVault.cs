@@ -493,6 +493,107 @@ public class TestIVault : TestIVaultBase
         Assert.IsNotNull(vault.PreviousTxnLgrSeq, "PreviousTxnLgrSeq should be set");
     }
 
+    [TestMethod]
+    public async Task TestVaultClawback_MPT()
+    {
+        // VaultClawback with MPT-backed vault
+        XrplWallet walletIssuer = XrplWallet.Generate();
+        XrplWallet walletHolder = XrplWallet.Generate();
+        await IntegrationTestConfig.TryFundWalletsAsync(client, nodeType, walletIssuer, walletHolder);
+
+        // 1. Enable clawback on issuer (must be before any issuances)
+        AccountSet clawbackSetTx = new AccountSet
+        {
+            Account = walletIssuer.ClassicAddress,
+            SetFlag = AccountSetAsfFlags.asfAllowTrustLineClawback,
+        };
+        clawbackSetTx = await client.Autofill(clawbackSetTx);
+        TransactionSummary clawbackSetResult = await client.SubmitAndWait(clawbackSetTx, walletIssuer, true);
+        ValidateResult(clawbackSetResult);
+
+        // 2. Create MPT issuance with clawback enabled
+        MPTokenIssuanceCreate mptCreateTx = new MPTokenIssuanceCreate
+        {
+            Account = walletIssuer.ClassicAddress,
+            Flags = MPTokenIssuanceCreateFlags.tfMPTCanTransfer | MPTokenIssuanceCreateFlags.tfMPTCanClawback,
+        };
+        mptCreateTx = await client.Autofill(mptCreateTx);
+        TransactionSummary mptCreateResult = await client.SubmitAndWait(mptCreateTx, walletIssuer, true);
+        ValidateResult(mptCreateResult);
+
+        string issuanceId = mptCreateResult.Meta?.MptIssuanceId;
+        Assert.IsNotNull(issuanceId, "MPTokenIssuanceID should be present in metadata");
+
+        // 3. Holder authorizes MPT
+        MPTokenAuthorize authTx = new MPTokenAuthorize
+        {
+            Account = walletHolder.ClassicAddress,
+            MPTokenIssuanceID = issuanceId,
+        };
+        authTx = await client.Autofill(authTx);
+        TransactionSummary authResult = await client.SubmitAndWait(authTx, walletHolder, true);
+        ValidateResult(authResult);
+
+        // 4. Issuer sends MPT to holder
+        Payment paymentTx = new Payment
+        {
+            Account = walletIssuer.ClassicAddress,
+            Destination = walletHolder.ClassicAddress,
+            Amount = new Currency
+            {
+                Value = "100",
+                MPTokenIssuanceID = issuanceId,
+            },
+        };
+        paymentTx = await client.Autofill(paymentTx);
+        TransactionSummary payResult = await client.SubmitAndWait(paymentTx, walletIssuer, true);
+        ValidateResult(payResult);
+
+        // 5. Create MPT-backed vault
+        VaultCreate vaultCreateTx = new VaultCreate
+        {
+            Account = walletIssuer.ClassicAddress,
+            Asset = new IssuedCurrency { MptIssuanceId = issuanceId },
+        };
+        vaultCreateTx = await client.Autofill(vaultCreateTx);
+        TransactionSummary vaultCreateResult = await client.SubmitAndWait(vaultCreateTx, walletIssuer, true);
+        ValidateResult(vaultCreateResult);
+
+        string vaultId = GetCreatedObjectId(vaultCreateResult);
+        Assert.IsNotNull(vaultId, "VaultID should be present in metadata");
+
+        // 6. Holder deposits MPT into vault
+        VaultDeposit depositTx = new VaultDeposit
+        {
+            Account = walletHolder.ClassicAddress,
+            VaultID = vaultId,
+            Amount = new Currency
+            {
+                Value = "50",
+                MPTokenIssuanceID = issuanceId,
+            },
+        };
+        depositTx = await client.Autofill(depositTx);
+        TransactionSummary depositResult = await client.SubmitAndWait(depositTx, walletHolder, true);
+        ValidateResult(depositResult);
+
+        // 7. Issuer claws back from holder's vault shares
+        VaultClawback clawbackTx = new VaultClawback
+        {
+            Account = walletIssuer.ClassicAddress,
+            VaultID = vaultId,
+            Holder = walletHolder.ClassicAddress,
+            Amount = new Currency
+            {
+                Value = "50",
+                MPTokenIssuanceID = issuanceId,
+            },
+        };
+        clawbackTx = await client.Autofill(clawbackTx);
+        TransactionSummary result = await client.SubmitAndWait(clawbackTx, walletIssuer, true);
+        ValidateResult(result);
+    }
+
     private static string GetCreatedObjectId(TransactionSummary result, LedgerEntryType entryType = LedgerEntryType.Vault)
     {
         if (result.Meta?.AffectedNodes == null) return null;

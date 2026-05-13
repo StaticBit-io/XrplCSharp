@@ -47,12 +47,28 @@ namespace Xrpl.Models.Common
             [JsonPropertyName("issuer")]
             public string Issuer { get; set; }
 
+            /// <summary>
+            /// MPT issuance identifier (XLS-33). When set, Currency and Issuer are ignored.
+            /// </summary>
+            [JsonPropertyName("mpt_issuance_id")]
+            public string MptIssuanceId { get; set; }
+
             public bool IsXrp()
             {
-                return Issuer is null;
+                return Issuer is null && MptIssuanceId is null;
             }
 
-            public override string ToString() => $"{Currency.CurrencyReadableName()}";
+            /// <summary>
+            /// Returns true if this represents an MPT issue.
+            /// </summary>
+            public bool IsMpt()
+            {
+                return MptIssuanceId is not null;
+            }
+
+            public override string ToString() => MptIssuanceId is not null
+                ? $"MPT:{MptIssuanceId}"
+                : $"{Currency.CurrencyReadableName()}";
         }
 
         /// <summary> currency with amount and issuer </summary>

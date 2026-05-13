@@ -255,6 +255,123 @@ public abstract class TestILoanBase
         return new TransactionSummary { Meta = txResponse.Meta };
     }
 
+    /// <summary>
+    /// Creates an MPT issuance, authorizes it for the holder, funds the holder with MPT tokens,
+    /// creates an MPT-backed Vault, deposits MPT into it, creates a LoanBroker backed by that vault,
+    /// deposits cover, and returns the broker ID along with the MPT issuance ID.
+    /// </summary>
+    protected static async Task<(string BrokerId, string MptIssuanceId)> CreateMptBroker(
+        IXrplClient client,
+        XrplWallet issuerWallet,
+        XrplWallet holderWallet)
+    {
+        // 1. Enable clawback on issuer (required before any issuances for clawback support)
+        AccountSet clawbackSetTx = new AccountSet
+        {
+            Account = issuerWallet.ClassicAddress,
+            SetFlag = AccountSetAsfFlags.asfAllowTrustLineClawback,
+        };
+        clawbackSetTx = await client.Autofill(clawbackSetTx);
+        TransactionSummary clawbackSetResult = await client.SubmitAndWait(clawbackSetTx, issuerWallet, true);
+        ValidateResult(clawbackSetResult);
+
+        // 2. Create MPT issuance with transfer + clawback enabled
+        MPTokenIssuanceCreate mptCreateTx = new MPTokenIssuanceCreate
+        {
+            Account = issuerWallet.ClassicAddress,
+            Flags = MPTokenIssuanceCreateFlags.tfMPTCanTransfer | MPTokenIssuanceCreateFlags.tfMPTCanClawback,
+        };
+        mptCreateTx = await client.Autofill(mptCreateTx);
+        TransactionSummary mptCreateResult = await client.SubmitAndWait(mptCreateTx, issuerWallet, true);
+        ValidateResult(mptCreateResult);
+
+        string issuanceId = mptCreateResult.Meta?.MptIssuanceId;
+        Assert.IsNotNull(issuanceId, "MPTokenIssuanceID should be present in metadata");
+
+        // 3. Holder authorizes MPT
+        MPTokenAuthorize authTx = new MPTokenAuthorize
+        {
+            Account = holderWallet.ClassicAddress,
+            MPTokenIssuanceID = issuanceId,
+        };
+        authTx = await client.Autofill(authTx);
+        TransactionSummary authResult = await client.SubmitAndWait(authTx, holderWallet, true);
+        ValidateResult(authResult);
+
+        // 4. Issuer sends MPT to holder (so holder can deposit to vault later)
+        Payment paymentTx = new Payment
+        {
+            Account = issuerWallet.ClassicAddress,
+            Destination = holderWallet.ClassicAddress,
+            Amount = new Currency
+            {
+                Value = "500",
+                MPTokenIssuanceID = issuanceId,
+            },
+        };
+        paymentTx = await client.Autofill(paymentTx);
+        TransactionSummary payResult = await client.SubmitAndWait(paymentTx, issuerWallet, true);
+        ValidateResult(payResult);
+
+        // 5. Create MPT-backed vault
+        VaultCreate vaultCreateTx = new VaultCreate
+        {
+            Account = issuerWallet.ClassicAddress,
+            Asset = new IssuedCurrency { MptIssuanceId = issuanceId },
+        };
+        vaultCreateTx = await client.Autofill(vaultCreateTx);
+        TransactionSummary vaultCreateResult = await client.SubmitAndWait(vaultCreateTx, issuerWallet, true);
+        ValidateResult(vaultCreateResult);
+
+        string vaultId = GetCreatedObjectId(vaultCreateResult, LedgerEntryType.Vault);
+        Assert.IsNotNull(vaultId, "VaultID should be present in metadata after VaultCreate");
+
+        // 6. Deposit MPT into the vault so it has liquidity
+        VaultDeposit depositTx = new VaultDeposit
+        {
+            Account = holderWallet.ClassicAddress,
+            VaultID = vaultId,
+            Amount = new Currency
+            {
+                Value = "200",
+                MPTokenIssuanceID = issuanceId,
+            },
+        };
+        depositTx = await client.Autofill(depositTx);
+        TransactionSummary depositResult = await client.SubmitAndWait(depositTx, holderWallet, true);
+        ValidateResult(depositResult);
+
+        // 7. Create LoanBroker backed by MPT vault
+        LoanBrokerSet brokerTx = new LoanBrokerSet
+        {
+            Account = issuerWallet.ClassicAddress,
+            VaultID = vaultId,
+        };
+        brokerTx = await client.Autofill(brokerTx);
+        TransactionSummary brokerResult = await client.SubmitAndWait(brokerTx, issuerWallet, true);
+        ValidateResult(brokerResult);
+
+        string brokerId = GetCreatedObjectId(brokerResult, LedgerEntryType.LoanBroker);
+        Assert.IsNotNull(brokerId, "LoanBrokerID should be present in metadata");
+
+        // 8. Deposit cover (MPT) into the broker
+        LoanBrokerCoverDeposit coverTx = new LoanBrokerCoverDeposit
+        {
+            Account = issuerWallet.ClassicAddress,
+            LoanBrokerID = brokerId,
+            Amount = new Currency
+            {
+                Value = "100",
+                MPTokenIssuanceID = issuanceId,
+            },
+        };
+        coverTx = await client.Autofill(coverTx);
+        TransactionSummary coverResult = await client.SubmitAndWait(coverTx, issuerWallet, true);
+        ValidateResult(coverResult);
+
+        return (brokerId, issuanceId);
+    }
+
     protected static async Task<IXrplClient> CreateStandaloneClient()
     {
         return await IntegrationTestConfig.CreateClientAsync(TestNodeType.Standalone);

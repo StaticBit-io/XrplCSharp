@@ -358,6 +358,108 @@ public class TestILoan : TestILoanBase
         Assert.IsNotNull(loan.PreviousTxnLgrSeq, "PreviousTxnLgrSeq should be set");
     }
 
+    // ==================== MPT-backed Loan Tests ====================
+
+    [TestMethod]
+    public async Task TestLoanBrokerSet_MPT()
+    {
+        // Create a LoanBroker backed by an MPT-backed vault
+        XrplWallet walletIssuer = XrplWallet.Generate();
+        XrplWallet walletHolder = XrplWallet.Generate();
+        await IntegrationTestConfig.TryFundWalletsAsync(client, nodeType, walletIssuer, walletHolder);
+
+        (string brokerId, string mptIssuanceId) = await CreateMptBroker(client, walletIssuer, walletHolder);
+        Assert.IsNotNull(brokerId, "MPT-backed LoanBroker should be created successfully");
+    }
+
+    [TestMethod]
+    public async Task TestLoanSet_MPT()
+    {
+        // Full MPT loan lifecycle: create broker → issue loan → verify
+        XrplWallet walletIssuer = XrplWallet.Generate();
+        XrplWallet walletHolder = XrplWallet.Generate();
+        XrplWallet walletBorrower = XrplWallet.Generate();
+        await IntegrationTestConfig.TryFundWalletsAsync(client, nodeType, walletIssuer, walletHolder, walletBorrower);
+
+        // Borrower also needs to authorize the MPT to receive it
+        (string brokerId, string mptIssuanceId) = await CreateMptBroker(client, walletIssuer, walletHolder);
+
+        // Authorize MPT for borrower
+        MPTokenAuthorize borrowerAuthTx = new MPTokenAuthorize
+        {
+            Account = walletBorrower.ClassicAddress,
+            MPTokenIssuanceID = mptIssuanceId,
+        };
+        borrowerAuthTx = await client.Autofill(borrowerAuthTx);
+        TransactionSummary borrowerAuthResult = await client.SubmitAndWait(borrowerAuthTx, walletBorrower, true);
+        ValidateResult(borrowerAuthResult);
+
+        LoanSet loanTx = new LoanSet
+        {
+            Account = walletIssuer.ClassicAddress,
+            LoanBrokerID = brokerId,
+            Counterparty = walletBorrower.ClassicAddress,
+            PrincipalRequested = "50",
+        };
+
+        TransactionSummary result = await SubmitLoanSetWithCounterpartySig(client, loanTx, walletIssuer, walletBorrower);
+        ValidateResult(result);
+
+        string loanId = GetCreatedObjectId(result, LedgerEntryType.Loan);
+        Assert.IsNotNull(loanId, "LoanID should be present in metadata for MPT-backed loan");
+    }
+
+    [TestMethod]
+    public async Task TestLoanPay_MPT()
+    {
+        // Full MPT loan lifecycle: create broker → issue loan → borrower repays with MPT
+        XrplWallet walletIssuer = XrplWallet.Generate();
+        XrplWallet walletHolder = XrplWallet.Generate();
+        XrplWallet walletBorrower = XrplWallet.Generate();
+        await IntegrationTestConfig.TryFundWalletsAsync(client, nodeType, walletIssuer, walletHolder, walletBorrower);
+
+        (string brokerId, string mptIssuanceId) = await CreateMptBroker(client, walletIssuer, walletHolder);
+
+        // Authorize MPT for borrower
+        MPTokenAuthorize borrowerAuthTx = new MPTokenAuthorize
+        {
+            Account = walletBorrower.ClassicAddress,
+            MPTokenIssuanceID = mptIssuanceId,
+        };
+        borrowerAuthTx = await client.Autofill(borrowerAuthTx);
+        TransactionSummary borrowerAuthResult = await client.SubmitAndWait(borrowerAuthTx, walletBorrower, true);
+        ValidateResult(borrowerAuthResult);
+
+        // Create loan
+        LoanSet loanTx = new LoanSet
+        {
+            Account = walletIssuer.ClassicAddress,
+            LoanBrokerID = brokerId,
+            Counterparty = walletBorrower.ClassicAddress,
+            PrincipalRequested = "50",
+        };
+        TransactionSummary loanResult = await SubmitLoanSetWithCounterpartySig(client, loanTx, walletIssuer, walletBorrower);
+        ValidateResult(loanResult);
+
+        string loanId = GetCreatedObjectId(loanResult, LedgerEntryType.Loan);
+        Assert.IsNotNull(loanId, "LoanID should be present in metadata");
+
+        // Borrower repays the loan with MPT tokens
+        LoanPay payTx = new LoanPay
+        {
+            Account = walletBorrower.ClassicAddress,
+            LoanID = loanId,
+            Amount = new Currency
+            {
+                Value = "50",
+                MPTokenIssuanceID = mptIssuanceId,
+            },
+        };
+        payTx = await client.Autofill(payTx);
+        TransactionSummary payResult = await client.SubmitAndWait(payTx, walletBorrower, true);
+        ValidateResult(payResult);
+    }
+
     [TestMethod]
     public async Task TestLoanPay_WithOverpaymentFlag_Rejected()
     {

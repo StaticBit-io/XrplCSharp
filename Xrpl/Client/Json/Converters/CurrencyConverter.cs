@@ -150,7 +150,13 @@ namespace Xrpl.Client.Json.Converters
                 return;
             }
 
-            if (value.Currency == "XRP")
+            if (value.IsMpt())
+            {
+                writer.WriteStartObject();
+                writer.WriteString("mpt_issuance_id", value.MptIssuanceId);
+                writer.WriteEndObject();
+            }
+            else if (value.Currency == "XRP")
             {
                 writer.WriteStartObject();
                 writer.WriteString("currency", "XRP");
@@ -158,7 +164,6 @@ namespace Xrpl.Client.Json.Converters
             }
             else
             {
-                // Let the default serializer handle it
                 writer.WriteStartObject();
                 writer.WriteString("currency", value.Currency);
                 if (value.Issuer != null)
@@ -181,6 +186,8 @@ namespace Xrpl.Client.Json.Converters
                         using JsonDocument doc = JsonDocument.ParseValue(ref reader);
                         JsonElement root = doc.RootElement;
                         Common.IssuedCurrency result = new Common.IssuedCurrency();
+                        if (root.TryGetProperty("mpt_issuance_id", out JsonElement mpt))
+                            result.MptIssuanceId = mpt.GetString();
                         if (root.TryGetProperty("currency", out JsonElement curr))
                             result.Currency = curr.GetString();
                         if (root.TryGetProperty("issuer", out JsonElement iss))
