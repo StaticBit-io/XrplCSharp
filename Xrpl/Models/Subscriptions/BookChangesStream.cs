@@ -41,11 +41,17 @@ namespace Xrpl.Models.Subscriptions
         [JsonPropertyName("validated")]
         public bool? Validated { get; set; }
 
+        private List<BookChange> _changes = new List<BookChange>();
+
         /// <summary>
         /// A list of book changes in this ledger.
         /// </summary>
         [JsonPropertyName("changes")]
-        public List<BookChange> Changes { get; set; } = new List<BookChange>();
+        public List<BookChange> Changes
+        {
+            get => _changes;
+            set => _changes = value ?? new List<BookChange>();
+        }
     }
 
     /// <summary>
