@@ -88,6 +88,8 @@ public class Connection
 
     public event OnTransaction OnTransaction;
 
+    public event OnValidationReceived OnValidationReceived;
+
     public event OnManifestReceived OnManifestReceived;
 
     public event OnPeerStatusChange OnPeerStatusChange;
@@ -95,6 +97,10 @@ public class Connection
     public event OnConsensusPhase OnConsensusPhase;
 
     public event OnPathFind OnPathFind;
+
+    public event OnBookChanges OnBookChanges;
+
+    public event OnServerStatus OnServerStatus;
 
     public event Action<ConnectionStatusInfo> OnConnectionStatus;
 
@@ -2535,9 +2541,9 @@ public class Connection
                 case ResponseStreamType.validationReceived:
                 {
                     var response = JsonSerializer.Deserialize<ValidationStream>(message, XrplJsonOptions.Default);
-                    if (OnManifestReceived is not null)
+                    if (OnValidationReceived is not null)
                     {
-                        await OnManifestReceived.Invoke(response)!;
+                        await OnValidationReceived.Invoke(response)!;
                     }
                     break;
                 }
@@ -2578,6 +2584,36 @@ public class Connection
                     if (OnPathFind is not null)
                     {
                         await OnPathFind.Invoke(response)!;
+                    }
+                    break;
+                }
+
+                case ResponseStreamType.manifestReceived:
+                {
+                    var response = JsonSerializer.Deserialize<ManifestStream>(message, XrplJsonOptions.Default);
+                    if (OnManifestReceived is not null)
+                    {
+                        await OnManifestReceived.Invoke(response)!;
+                    }
+                    break;
+                }
+
+                case ResponseStreamType.bookChanges:
+                {
+                    var response = JsonSerializer.Deserialize<BookChangesStream>(message, XrplJsonOptions.Default);
+                    if (OnBookChanges is not null)
+                    {
+                        await OnBookChanges.Invoke(response)!;
+                    }
+                    break;
+                }
+
+                case ResponseStreamType.serverStatus:
+                {
+                    var response = JsonSerializer.Deserialize<ServerStatusStream>(message, XrplJsonOptions.Default);
+                    if (OnServerStatus is not null)
+                    {
+                        await OnServerStatus.Invoke(response)!;
                     }
                     break;
                 }

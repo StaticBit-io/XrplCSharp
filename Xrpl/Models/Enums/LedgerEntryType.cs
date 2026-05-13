@@ -149,6 +149,18 @@ public enum LedgerEntryType
     XChainOwnedCreateAccountClaimID,
 
     /// <summary>
+    /// A loan broker that manages lending pools and cover deposits.
+    /// </summary>
+    /// <remarks>Requires the Loan amendment (XLS-66d). This feature is in draft and subject to change.</remarks>
+    LoanBroker,
+
+    /// <summary>
+    /// A loan between a borrower and a loan broker.
+    /// </summary>
+    /// <remarks>Requires the Loan amendment (XLS-66d). This feature is in draft and subject to change.</remarks>
+    Loan,
+
+    /// <summary>
     /// Unknown ledger entry type (for forward compatibility with future ledger objects).
     /// </summary>
     Unknown,

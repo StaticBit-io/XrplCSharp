@@ -102,6 +102,36 @@ namespace Xrpl.Client.Json.Converters
                 "CredentialCreate" => new CredentialCreateResponse(),
                 "CredentialAccept" => new CredentialAcceptResponse(),
                 "CredentialDelete" => new CredentialDeleteResponse(),
+
+                "XChainCreateBridge" => new XChainCreateBridgeResponse(),
+                "XChainModifyBridge" => new XChainModifyBridgeResponse(),
+                "XChainCreateClaimID" => new XChainCreateClaimIDResponse(),
+                "XChainCommit" => new XChainCommitResponse(),
+                "XChainClaim" => new XChainClaimResponse(),
+                "XChainAccountCreateCommit" => new XChainAccountCreateCommitResponse(),
+                "XChainAddClaimAttestation" => new XChainAddClaimAttestationResponse(),
+                "XChainAddAccountCreateAttestation" => new XChainAddAccountCreateAttestationResponse(),
+
+                "VaultCreate" => new VaultCreateResponse(),
+                "VaultSet" => new VaultSetResponse(),
+                "VaultDelete" => new VaultDeleteResponse(),
+                "VaultDeposit" => new VaultDepositResponse(),
+                "VaultWithdraw" => new VaultWithdrawResponse(),
+                "VaultClawback" => new VaultClawbackResponse(),
+
+                "LoanBrokerSet" => new LoanBrokerSetResponse(),
+                "LoanBrokerDelete" => new LoanBrokerDeleteResponse(),
+                "LoanBrokerCoverDeposit" => new LoanBrokerCoverDepositResponse(),
+                "LoanBrokerCoverWithdraw" => new LoanBrokerCoverWithdrawResponse(),
+                "LoanBrokerCoverClawback" => new LoanBrokerCoverClawbackResponse(),
+                "LoanSet" => new LoanSetResponse(),
+                "LoanDelete" => new LoanDeleteResponse(),
+                "LoanManage" => new LoanManageResponse(),
+                "LoanPay" => new LoanPayResponse(),
+
+                "DelegateSet" => new DelegateSetResponse(),
+                "LedgerStateFix" => new LedgerStateFixResponse(),
+
                 //_ => throw new Exception("Can't create transaction type" + transactionType)
                 _ => new TransactionResponseUnknown(),
             };

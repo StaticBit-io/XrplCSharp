@@ -1,5 +1,27 @@
 # Changes
 
+### 10.4.0.0 (unreleased)
+* Sync `Xrpl.BinaryCodec` enums with upstream `definitions.json` from [xrpl.js](https://github.com/XRPLF/xrpl.js)
+* Add 24 missing `TransactionType` entries: XChain (8), Vault (6), Loan (9), LedgerStateFix, DelegateSet, Batch, NFTokenModify, PermissionedDomainSet/Delete, CredentialCreate/Accept/Delete, MPToken (4), DID (2), Oracle (2), AMMClawback
+* Add 16 missing `LedgerEntryType` entries: Bridge, XChainOwnedClaimID, XChainOwnedCreateAccountClaimID, MPTokenIssuance, MPToken, Oracle, Credential, PermissionedDomain, Delegate, Vault, LoanBroker, Loan, DID, NegativeUNL, NFTokenOffer, NFTokenPage
+* Add 7 missing `FieldType` entries: Number, Int32, Int64, UInt96, UInt384, UInt512, XChainBridge
+* Add ~40 missing `Field` entries across all types; fix incorrect ordinals for DiscountedFee, VoteWeight, HookGrants
+* Regenerate `EngineResult` with all 189 transaction result codes from protocol spec
+* Add `terNO_DELEGATE_PERMISSION` (-85) to `definitions.json`
+* Mark deprecated entries with `[Obsolete]`: HookSet, GeneratorMap, Contract, EnabledAmendments
+* Refactor `EngineResult`, `TransactionType`, `LedgerEntryType` to partial-class architecture — hand-written infrastructure + auto-generated fields from `definitions.json`
+* Add `Tools/GenerateEnums` — .NET console tool for regenerating enum files from `definitions.json` (`dotnet run --project Tools/GenerateEnums`)
+* **XChain Bridge (XLS-38d):** Add 8 transaction models, 3 ledger objects (`LOBridge`, `LOXChainOwnedClaimID`, `LOXChainOwnedCreateAccountClaimID`), `XChainBridgeModel`, attestation models, and integration tests
+* **Vault (XLS-65d):** Add 6 transaction models (`VaultCreate`, `VaultSet`, `VaultDelete`, `VaultDeposit`, `VaultWithdraw`, `VaultClawback`), `LOVault` ledger object, and integration tests
+* **Lending Protocol (XLS-66d):** Add 9 transaction models (`LoanBrokerSet`, `LoanBrokerDelete`, `LoanBrokerCoverDeposit`, `LoanBrokerCoverWithdraw`, `LoanBrokerCoverClawback`, `LoanSet`, `LoanDelete`, `LoanManage`, `LoanPay`), `LOLoan` and `LOLoanBroker` ledger objects, and integration tests
+* **DelegateSet (XLS-74d):** Add `DelegateSet` transaction model, `LODelegate` ledger object, and integration tests
+* **LedgerStateFix:** Add `LedgerStateFix` transaction model and integration tests
+* Fix `NumberType` serialization — rewrite from 8-byte raw ulong to 12-byte format (8-byte int64 mantissa + 4-byte int32 exponent) matching rippled Number class. Normalizes mantissa to [10^18, long.MaxValue]
+* Add `CounterpartySignature` co-signing support for `LoanSet` — both broker and borrower sign the same preimage
+* Add TxFormat entries and validation for all 25 new transaction types
+* Add converter mappings for all new transaction and ledger entry types
+* Add `LendingProtocol-Guide.md` and `LendingProtocol-Guide.ru.md` documentation
+
 ### 10.3.0.0 05/05/2026
 * **BREAKING**: Migrate entire solution from `Newtonsoft.Json` to `System.Text.Json` — all models, converters, client infrastructure, wallet signing, binary codec
 * **BREAKING**: Remove `dynamic` keyword from all production code — replace with `object`, `JsonNode`, `JsonElement` for iOS Full AOT compatibility

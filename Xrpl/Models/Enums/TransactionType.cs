@@ -184,6 +184,146 @@
         /// Requires the Credentials amendment.
         /// </summary>
         CredentialDelete,
+
+        /// <summary>
+        /// Creates a cross-chain bridge between a locking chain and an issuing chain.
+        /// </summary>
+        XChainCreateBridge,
+
+        /// <summary>
+        /// Modifies the parameters of an existing cross-chain bridge.
+        /// </summary>
+        XChainModifyBridge,
+
+        /// <summary>
+        /// Creates a new cross-chain claim ID that is used for a cross-chain transfer.
+        /// </summary>
+        XChainCreateClaimID,
+
+        /// <summary>
+        /// Initiates a cross-chain transfer of value. Locks value on the source chain.
+        /// </summary>
+        XChainCommit,
+
+        /// <summary>
+        /// Completes a cross-chain transfer of value by claiming the locked value on the destination chain.
+        /// </summary>
+        XChainClaim,
+
+        /// <summary>
+        /// Creates a new account on the destination chain via a cross-chain transfer.
+        /// </summary>
+        XChainAccountCreateCommit,
+
+        /// <summary>
+        /// Adds an attestation to a cross-chain claim. Witnesses use this to confirm cross-chain transfers.
+        /// </summary>
+        XChainAddClaimAttestation,
+
+        /// <summary>
+        /// Adds an attestation to a cross-chain account create. Witnesses use this to confirm account creation.
+        /// </summary>
+        XChainAddAccountCreateAttestation,
+
+        /// <summary>
+        /// Creates a new vault for holding pooled assets.
+        /// </summary>
+        /// <remarks>Requires the Vault amendment (XLS-65d). This feature is in draft and subject to change.</remarks>
+        VaultCreate,
+
+        /// <summary>
+        /// Modifies the settings of an existing vault.
+        /// </summary>
+        /// <remarks>Requires the Vault amendment (XLS-65d). This feature is in draft and subject to change.</remarks>
+        VaultSet,
+
+        /// <summary>
+        /// Deletes an empty vault.
+        /// </summary>
+        /// <remarks>Requires the Vault amendment (XLS-65d). This feature is in draft and subject to change.</remarks>
+        VaultDelete,
+
+        /// <summary>
+        /// Deposits assets into a vault.
+        /// </summary>
+        /// <remarks>Requires the Vault amendment (XLS-65d). This feature is in draft and subject to change.</remarks>
+        VaultDeposit,
+
+        /// <summary>
+        /// Withdraws assets from a vault.
+        /// </summary>
+        /// <remarks>Requires the Vault amendment (XLS-65d). This feature is in draft and subject to change.</remarks>
+        VaultWithdraw,
+
+        /// <summary>
+        /// Claws back assets from a vault.
+        /// </summary>
+        /// <remarks>Requires the Vault amendment (XLS-65d). This feature is in draft and subject to change.</remarks>
+        VaultClawback,
+
+        /// <summary>
+        /// Creates or modifies a loan broker.
+        /// </summary>
+        /// <remarks>Requires the Loan amendment (XLS-66d). This feature is in draft and subject to change.</remarks>
+        LoanBrokerSet,
+
+        /// <summary>
+        /// Deletes a loan broker.
+        /// </summary>
+        /// <remarks>Requires the Loan amendment (XLS-66d). This feature is in draft and subject to change.</remarks>
+        LoanBrokerDelete,
+
+        /// <summary>
+        /// Deposits cover assets into a loan broker.
+        /// </summary>
+        /// <remarks>Requires the Loan amendment (XLS-66d). This feature is in draft and subject to change.</remarks>
+        LoanBrokerCoverDeposit,
+
+        /// <summary>
+        /// Withdraws cover assets from a loan broker.
+        /// </summary>
+        /// <remarks>Requires the Loan amendment (XLS-66d). This feature is in draft and subject to change.</remarks>
+        LoanBrokerCoverWithdraw,
+
+        /// <summary>
+        /// Claws back cover assets from a loan broker.
+        /// </summary>
+        /// <remarks>Requires the Loan amendment (XLS-66d). This feature is in draft and subject to change.</remarks>
+        LoanBrokerCoverClawback,
+
+        /// <summary>
+        /// Creates or modifies a loan.
+        /// </summary>
+        /// <remarks>Requires the Loan amendment (XLS-66d). This feature is in draft and subject to change.</remarks>
+        LoanSet,
+
+        /// <summary>
+        /// Deletes a loan.
+        /// </summary>
+        /// <remarks>Requires the Loan amendment (XLS-66d). This feature is in draft and subject to change.</remarks>
+        LoanDelete,
+
+        /// <summary>
+        /// Manages a loan (e.g. accept, liquidate).
+        /// </summary>
+        /// <remarks>Requires the Loan amendment (XLS-66d). This feature is in draft and subject to change.</remarks>
+        LoanManage,
+
+        /// <summary>
+        /// Makes a payment on a loan.
+        /// </summary>
+        /// <remarks>Requires the Loan amendment (XLS-66d). This feature is in draft and subject to change.</remarks>
+        LoanPay,
+
+        /// <summary>
+        /// Grants permissions to another account to send transactions on your behalf.
+        /// </summary>
+        DelegateSet,
+
+        /// <summary>
+        /// An administrative pseudo-transaction that fixes ledger state inconsistencies.
+        /// </summary>
+        LedgerStateFix,
     }
 }
 

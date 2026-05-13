@@ -19,8 +19,8 @@ namespace XrplTests.BinaryCodecLib.Types
             uint v1 = value1.ToJson().GetValue<uint>();
             uint v2 = value2.ToJson().GetValue<uint>();
             uint v3 = value3.ToJson().GetValue<uint>();
-            Assert.IsTrue(v2 < v1);
-            Assert.IsTrue(v1 > v2);
+            Assert.IsLessThan(v1, v2);
+            Assert.IsGreaterThan(v2, v1);
             Assert.AreNotEqual(v1, v2);
             Assert.AreEqual(v1, v3);
         }
@@ -38,8 +38,8 @@ namespace XrplTests.BinaryCodecLib.Types
             Uint8 value1 = Uint8.FromValue(124);
             uint v = value1.ToJson().GetValue<uint>();
             Assert.AreEqual(124u, v);
-            Assert.IsTrue(v < 125u);
-            Assert.IsTrue(v > 123u);
+            Assert.IsLessThan(125u, v);
+            Assert.IsGreaterThan(123u, v);
         }
 
         [TestMethod]
