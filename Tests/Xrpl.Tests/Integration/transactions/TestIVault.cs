@@ -594,6 +594,36 @@ public class TestIVault : TestIVaultBase
         ValidateResult(result);
     }
 
+    [TestMethod]
+    public async Task TestVaultInfo_Basic()
+    {
+        // Create a vault first
+        XrplWallet wallet = XrplWallet.Generate();
+        await IntegrationTestConfig.TryFundWalletAsync(client, wallet, nodeType);
+
+        VaultCreate tx = new VaultCreate
+        {
+            Account = wallet.ClassicAddress,
+            Asset = new IssuedCurrency { Currency = "XRP" },
+        };
+        tx = await client.Autofill(tx);
+
+        TransactionSummary createResult = await client.SubmitAndWait(tx, wallet, true);
+        ValidateResult(createResult);
+
+        string vaultId = GetCreatedObjectId(createResult);
+        Assert.IsNotNull(vaultId, "VaultCreate should produce a Vault ledger object");
+
+        // Query vault_info
+        VaultInfoResponse vaultInfo = await client.VaultInfo(new VaultInfoRequest { VaultID = vaultId });
+        Assert.IsNotNull(vaultInfo, "vault_info should return a response");
+        Assert.IsNotNull(vaultInfo.Vault, "vault_info response should contain a Vault object");
+        Assert.AreEqual(wallet.ClassicAddress, vaultInfo.Vault.Owner, "Vault owner should match the creator");
+        Assert.IsNotNull(vaultInfo.Vault.Account, "Vault should have a pseudo-account");
+        Assert.IsNotNull(vaultInfo.Vault.Asset, "Vault should have an Asset");
+        Assert.AreEqual("XRP", vaultInfo.Vault.Asset.Currency, "Vault asset should be XRP");
+    }
+
     private static string GetCreatedObjectId(TransactionSummary result, LedgerEntryType entryType = LedgerEntryType.Vault)
     {
         if (result.Meta?.AffectedNodes == null) return null;

@@ -42,6 +42,12 @@ namespace Xrpl.Models.Common
             public string Currency { get; set; }
 
             /// <summary>
+            /// Readable assert name 
+            /// </summary>
+            [JsonIgnore]
+            public string CurrencyName => Currency.CurrencyReadableName();
+
+            /// <summary>
             /// currency issuer
             /// </summary>
             [JsonPropertyName("issuer")]
