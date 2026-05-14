@@ -57,13 +57,12 @@ await client.Disconnect();
 
 ## Documentation
 
-- [Connection Guide (EN)](Connection-Guide.html) - How to configure and manage connections
-- [Connection Guide (RU)](Connection-Guide.ru.html) - Руководство по подключению
-- [Error Classifier](ErrorClassifier.html) - How to normalize exceptions and XRPL error responses with `XrplErrorClassifier`
-- [Cross-Chain Bridge Guide (EN)](XChainBridge-Guide.html) - How to use XChain bridge transactions
-- [Cross-Chain Bridge Guide (RU)](XChainBridge-Guide.ru.html) - Руководство по кросс-чейн мосту
-- [Vault Guide (EN)](Vault-Guide.html) - How to create and manage Vaults
-- [Vault Guide (RU)](Vault-Guide.ru.html) - Руководство по хранилищам (Vault)
-- [Lending Protocol Guide (EN)](LendingProtocol-Guide.html) - How to use Loan and LoanBroker transactions
-- [Lending Protocol Guide (RU)](LendingProtocol-Guide.ru.html) - Руководство по протоколу кредитования
+| Guide | EN | RU |
+|-------|----|----|
+| Connection Guide | [English](Connection-Guide.html) | [Русский](Connection-Guide.ru.html) |
+| Error Classifier | [English](ErrorClassifier.html) | [Русский](ErrorClassifier.ru.html) |
+| Cross-Chain Bridge | [English](XChainBridge-Guide.html) | [Русский](XChainBridge-Guide.ru.html) |
+| Vault Guide | [English](Vault-Guide.html) | [Русский](Vault-Guide.ru.html) |
+| Lending Protocol | [English](LendingProtocol-Guide.html) | [Русский](LendingProtocol-Guide.ru.html) |
+
 - [API Reference](reference/Xrpl.Client.html) - Full API documentation
