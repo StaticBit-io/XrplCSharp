@@ -66,4 +66,4 @@ await client.Disconnect();
 - [Vault Guide (RU)](Vault-Guide.ru.html) - Руководство по хранилищам (Vault)
 - [Lending Protocol Guide (EN)](LendingProtocol-Guide.html) - How to use Loan and LoanBroker transactions
 - [Lending Protocol Guide (RU)](LendingProtocol-Guide.ru.html) - Руководство по протоколу кредитования
-- [API Reference](reference/) - Full API documentation
+- [API Reference](reference/Xrpl.Client.html) - Full API documentation
