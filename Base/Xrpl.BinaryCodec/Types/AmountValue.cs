@@ -78,7 +78,9 @@ namespace Xrpl.BinaryCodec.Types
         public const int MaxExponent = 80;
         public const int MaxPrecision = 16;
 
-        public const string ValueRegex = @"^([-+])?(\d+)?(\.(\d+))?([eE]([+-]?\d+))?$";
+        // Tolerant of a trailing decimal point ("128700.") to align with xrpl.js / ripple-binary-codec,
+        // which parse IOU values via BigNumber. The fractional group allows zero or more digits.
+        public const string ValueRegex = @"^([-+])?(\d+)?(\.(\d*))?([eE]([+-]?\d+))?$";
         public static readonly ulong MinMantissa = Ul("1000,0000,0000,0000");
         public static readonly ulong MaxMantissa = Ul("9999,9999,9999,9999");
 
