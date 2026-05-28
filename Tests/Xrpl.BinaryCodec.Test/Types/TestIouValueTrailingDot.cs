@@ -47,6 +47,29 @@ namespace XrplTests.BinaryCodecLib.Types
         }
 
         [TestMethod]
+        [DataRow("5")]
+        [DataRow(".5")]
+        [DataRow("-.5")]
+        [DataRow("0.5")]
+        public void LeadingDot_StillValid(string value)
+        {
+            // A leading dot with fractional digits stays valid (BigNumber accepts ".5").
+            IouValue parsed = IouValue.FromString(value);
+            Assert.IsNotNull(parsed);
+        }
+
+        [TestMethod]
+        [DataRow(".")]
+        [DataRow("-.")]
+        [DataRow(".e10")]
+        [DataRow("+.e-3")]
+        public void BareDot_Rejected(string value)
+        {
+            // A dot with no digit anywhere in the mantissa must not parse (matches BigNumber).
+            Assert.ThrowsExactly<InvalidAmountValueException>(() => IouValue.FromString(value));
+        }
+
+        [TestMethod]
         [DataRow("100")]
         [DataRow("100.50")]
         [DataRow("0")]

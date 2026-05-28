@@ -2,7 +2,7 @@
 
 ### 10.4.1.0 05/28/2026
 * Fix `IouValue` (IOU token amount) parsing to accept a trailing decimal point (e.g. `"128700."`), aligning with `xrpl.js` / `ripple-binary-codec` and `rippled` `STAmount` reference behavior — previously the stricter validation regex rejected a value with no digits after the dot, breaking signing of transactions (e.g. `AMMDeposit` via WalletConnect) that carried such amounts
-* Relax IOU value regex fractional group from `(\.(\d+))?` to `(\.(\d*))?` in `AmountValue.cs` and `ExtenstionHelpers.cs`; deduplicate the regex by reusing the single `IouValue.ValueRegex` constant
+* Relax IOU value regex fractional group from `(\.(\d+))?` to `(\.(\d*))?` while adding a `(?=\.?\d)` lookahead that still requires at least one mantissa digit — so trailing/leading dots (`"128700."`, `".5"`) parse but bare-dot inputs (`"."`, `".e10"`) are rejected, matching BigNumber; deduplicate the regex by reusing the single `IouValue.ValueRegex` constant in `AmountValue.cs` and `ExtenstionHelpers.cs`
 * Native XRP (drops) and MPT amount parsing unchanged; mantissa/exponent math, `ToString()` output, and `ToBytes()` round-trip preserved bit-for-bit for already-valid values
 * Add unit tests verifying `"128700."` and `"1."` parse identically to their dot-less forms (same mantissa/exponent/precision and `ToBytes()` blob) and regression tests for existing values
 
