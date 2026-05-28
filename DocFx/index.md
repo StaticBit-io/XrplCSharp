@@ -57,7 +57,12 @@ await client.Disconnect();
 
 ## Documentation
 
-- [Connection Guide (EN)](Connection-Guide.html) - How to configure and manage connections
-- [Connection Guide (RU)](Connection-Guide.ru.html) - Руководство по подключению
-- [Error Classifier](ErrorClassifier.html) - How to normalize exceptions and XRPL error responses with `XrplErrorClassifier`
-- [API Reference](reference/) - Full API documentation
+| Guide | EN | RU |
+|-------|----|----|
+| Connection Guide | [English](Connection-Guide.html) | [Русский](Connection-Guide.ru.html) |
+| Error Classifier | [English](ErrorClassifier.html) | [Русский](ErrorClassifier.ru.html) |
+| Cross-Chain Bridge | [English](XChainBridge-Guide.html) | [Русский](XChainBridge-Guide.ru.html) |
+| Vault Guide | [English](Vault-Guide.html) | [Русский](Vault-Guide.ru.html) |
+| Lending Protocol | [English](LendingProtocol-Guide.html) | [Русский](LendingProtocol-Guide.ru.html) |
+
+- [API Reference](reference/Xrpl.Client.html) - Full API documentation
