@@ -372,6 +372,271 @@ namespace XrplTests.Xrpl.ClientLib.Integration
             }
         }
 
+        [TestMethod]
+        [Timeout(120000)]
+        public async Task TestRipplePathFindNegativeOneXrp()
+        {
+            IXrplClient client = await IntegrationTestConfig.CreateClientAsync(nodeType);
+
+            try
+            {
+                XrplWallet walletIssuer = XrplWallet.Generate();
+                XrplWallet walletMaker = XrplWallet.Generate();
+                XrplWallet walletSender = XrplWallet.Generate();
+
+                await IntegrationTestConfig.TryFundWalletsAsync(client, nodeType,
+                    walletIssuer, walletMaker, walletSender);
+
+                await SubmitTx(client, new AccountSet
+                {
+                    Account = walletIssuer.ClassicAddress,
+                    SetFlag = AccountSetAsfFlags.asfDefaultRipple
+                }, walletIssuer, "DefaultRipple on issuer");
+
+                await SubmitTx(client, new TrustSet
+                {
+                    Account = walletMaker.ClassicAddress,
+                    LimitAmount = new Currency
+                    {
+                        CurrencyCode = CurrencyCode,
+                        Issuer = walletIssuer.ClassicAddress,
+                        Value = "10000000"
+                    }
+                }, walletMaker, "TrustLine maker");
+
+                await SubmitTx(client, new TrustSet
+                {
+                    Account = walletSender.ClassicAddress,
+                    LimitAmount = new Currency
+                    {
+                        CurrencyCode = CurrencyCode,
+                        Issuer = walletIssuer.ClassicAddress,
+                        Value = "10000000"
+                    }
+                }, walletSender, "TrustLine sender");
+
+                await SubmitTx(client, new Payment
+                {
+                    Account = walletIssuer.ClassicAddress,
+                    Destination = walletMaker.ClassicAddress,
+                    Amount = new Currency
+                    {
+                        CurrencyCode = CurrencyCode,
+                        Issuer = walletIssuer.ClassicAddress,
+                        Value = "1000"
+                    }
+                }, walletIssuer, "Issue 1000 PPT to maker");
+
+                await SubmitTx(client, new Payment
+                {
+                    Account = walletIssuer.ClassicAddress,
+                    Destination = walletSender.ClassicAddress,
+                    Amount = new Currency
+                    {
+                        CurrencyCode = CurrencyCode,
+                        Issuer = walletIssuer.ClassicAddress,
+                        Value = "200"
+                    }
+                }, walletIssuer, "Issue 200 PPT to sender");
+
+                // Maker creates offer: buy PPT with XRP (sell 50 XRP for 100 PPT)
+                await SubmitTx(client, new OfferCreate
+                {
+                    Account = walletMaker.ClassicAddress,
+                    TakerGets = new Currency { ValueAsXrp = 50 },
+                    TakerPays = new Currency
+                    {
+                        CurrencyCode = CurrencyCode,
+                        Issuer = walletIssuer.ClassicAddress,
+                        Value = "100"
+                    }
+                }, walletMaker, "Offer: buy 100 PPT for 50 XRP");
+
+                // ripple_path_find with destination_amount = "-1" (XRP)
+                // "deliver as much XRP as possible, spending no more than send_max PPT"
+                Currency destinationAmount = new Currency
+                {
+                    CurrencyCode = "XRP",
+                    Value = "-1"
+                };
+
+                Currency sendMax = new Currency
+                {
+                    CurrencyCode = CurrencyCode,
+                    Issuer = walletIssuer.ClassicAddress,
+                    Value = "50"
+                };
+
+                RipplePathFindRequest pathRequest = new RipplePathFindRequest(
+                    sourceAccount: walletSender.ClassicAddress,
+                    destinationAccount: walletSender.ClassicAddress,
+                    destinationAmount: destinationAmount
+                )
+                {
+                    SendMax = sendMax
+                };
+
+                RipplePathFindResponse pathResponse = await client.RipplePathFind(pathRequest);
+
+                Assert.IsNotNull(pathResponse, "ripple_path_find response should not be null");
+                Assert.IsNotNull(pathResponse.Alternatives, "Alternatives should not be null");
+
+                Console.WriteLine($"[PathFind -1 XRP] Alternatives: {pathResponse.Alternatives.Count}");
+
+                foreach (PathAlternative alt in pathResponse.Alternatives)
+                {
+                    string srcVal = alt.SourceAmount.Value ?? alt.SourceAmount.ValueAsXrp?.ToString() ?? "?";
+                    string srcCur = alt.SourceAmount.CurrencyCode ?? "XRP";
+                    string dstVal = alt.DestinationAmount?.Value ?? alt.DestinationAmount?.ValueAsXrp?.ToString() ?? "?";
+                    string dstCur = alt.DestinationAmount?.CurrencyCode ?? "XRP";
+                    Console.WriteLine($"[PathFind -1 XRP]   alt: src={srcVal} {srcCur}, dst={dstVal} {dstCur}, paths={alt.PathsComputed?.Count ?? 0}");
+                }
+
+                Assert.IsTrue(pathResponse.Alternatives.Count > 0,
+                    "Expected at least 1 alternative for PPT→XRP path with destination_amount=-1");
+
+                PathAlternative best = pathResponse.Alternatives[0];
+                Assert.IsNotNull(best.DestinationAmount,
+                    "destination_amount should be populated in alternatives when request uses -1");
+            }
+            finally
+            {
+                client.Dispose();
+            }
+        }
+
+        [TestMethod]
+        [Timeout(120000)]
+        public async Task TestRipplePathFindNegativeOneToken()
+        {
+            IXrplClient client = await IntegrationTestConfig.CreateClientAsync(nodeType);
+
+            try
+            {
+                XrplWallet walletIssuer = XrplWallet.Generate();
+                XrplWallet walletMaker = XrplWallet.Generate();
+                XrplWallet walletSender = XrplWallet.Generate();
+                XrplWallet walletReceiver = XrplWallet.Generate();
+
+                await IntegrationTestConfig.TryFundWalletsAsync(client, nodeType,
+                    walletIssuer, walletMaker, walletSender, walletReceiver);
+
+                await SubmitTx(client, new AccountSet
+                {
+                    Account = walletIssuer.ClassicAddress,
+                    SetFlag = AccountSetAsfFlags.asfDefaultRipple
+                }, walletIssuer, "DefaultRipple on issuer");
+
+                await SubmitTx(client, new TrustSet
+                {
+                    Account = walletMaker.ClassicAddress,
+                    LimitAmount = new Currency
+                    {
+                        CurrencyCode = CurrencyCode,
+                        Issuer = walletIssuer.ClassicAddress,
+                        Value = "10000000"
+                    }
+                }, walletMaker, "TrustLine maker");
+
+                await SubmitTx(client, new TrustSet
+                {
+                    Account = walletReceiver.ClassicAddress,
+                    LimitAmount = new Currency
+                    {
+                        CurrencyCode = CurrencyCode,
+                        Issuer = walletIssuer.ClassicAddress,
+                        Value = "10000000"
+                    }
+                }, walletReceiver, "TrustLine receiver");
+
+                await SubmitTx(client, new Payment
+                {
+                    Account = walletIssuer.ClassicAddress,
+                    Destination = walletMaker.ClassicAddress,
+                    Amount = new Currency
+                    {
+                        CurrencyCode = CurrencyCode,
+                        Issuer = walletIssuer.ClassicAddress,
+                        Value = "1000"
+                    }
+                }, walletIssuer, "Issue 1000 PPT to maker");
+
+                // Maker creates offer: sell 100 PPT for 10 XRP
+                await SubmitTx(client, new OfferCreate
+                {
+                    Account = walletMaker.ClassicAddress,
+                    TakerGets = new Currency
+                    {
+                        CurrencyCode = CurrencyCode,
+                        Issuer = walletIssuer.ClassicAddress,
+                        Value = "100"
+                    },
+                    TakerPays = new Currency { ValueAsXrp = 10 }
+                }, walletMaker, "Offer: sell 100 PPT for 10 XRP");
+
+                // ripple_path_find with destination_amount token value = "-1"
+                // "deliver as much PPT as possible to receiver, spending no more than 5 XRP"
+                Currency destinationAmount = new Currency
+                {
+                    CurrencyCode = CurrencyCode,
+                    Issuer = walletIssuer.ClassicAddress,
+                    Value = "-1"
+                };
+
+                Currency sendMax = new Currency
+                {
+                    CurrencyCode = "XRP",
+                    Value = "5000000" // 5 XRP in drops
+                };
+
+                RipplePathFindRequest pathRequest = new RipplePathFindRequest(
+                    sourceAccount: walletSender.ClassicAddress,
+                    destinationAccount: walletReceiver.ClassicAddress,
+                    destinationAmount: destinationAmount
+                )
+                {
+                    SendMax = sendMax
+                };
+
+                RipplePathFindResponse pathResponse = await client.RipplePathFind(pathRequest);
+
+                Assert.IsNotNull(pathResponse, "ripple_path_find response should not be null");
+                Assert.IsNotNull(pathResponse.Alternatives, "Alternatives should not be null");
+
+                Console.WriteLine($"[PathFind -1 Token] Alternatives: {pathResponse.Alternatives.Count}");
+
+                foreach (PathAlternative alt in pathResponse.Alternatives)
+                {
+                    string srcVal = alt.SourceAmount.Value ?? alt.SourceAmount.ValueAsXrp?.ToString() ?? "?";
+                    string srcCur = alt.SourceAmount.CurrencyCode ?? "XRP";
+                    string dstVal = alt.DestinationAmount?.Value ?? alt.DestinationAmount?.ValueAsXrp?.ToString() ?? "?";
+                    string dstCur = alt.DestinationAmount?.CurrencyCode ?? "XRP";
+                    Console.WriteLine($"[PathFind -1 Token]   alt: src={srcVal} {srcCur}, dst={dstVal} {dstCur}, paths={alt.PathsComputed?.Count ?? 0}");
+                }
+
+                Assert.IsTrue(pathResponse.Alternatives.Count > 0,
+                    "Expected at least 1 alternative for XRP→PPT path with destination_amount=-1");
+
+                PathAlternative best = pathResponse.Alternatives[0];
+                Assert.IsNotNull(best.DestinationAmount,
+                    "destination_amount should be populated in alternatives when request uses -1");
+
+                string destCurrency = best.DestinationAmount.CurrencyCode;
+                Assert.AreEqual(CurrencyCode, destCurrency,
+                    $"Expected destination currency {CurrencyCode}, got {destCurrency}");
+
+                decimal destValue = best.DestinationAmount.ValueAsNumber;
+                Assert.IsTrue(destValue > 0,
+                    $"Expected positive destination_amount value, got {destValue}");
+
+                Console.WriteLine($"[PathFind -1 Token] Best path delivers {destValue} {CurrencyCode}");
+            }
+            finally
+            {
+                client.Dispose();
+            }
+        }
+
         private static async Task SubmitTx(IXrplClient client, ITransactionRequest tx, XrplWallet wallet, string label)
         {
             var autofilled = await client.Autofill(tx);
