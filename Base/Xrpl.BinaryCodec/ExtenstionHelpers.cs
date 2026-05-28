@@ -45,7 +45,7 @@ namespace Xrpl.BinaryCodec
         }
         public static NumFunc NumFuncAll(this string input)
         {
-            string regex = @"^([-+])?(\d+)?(\.(\d+))?([eE]([+-]?\d+))?$";
+            string regex = Types.IouValue.ValueRegex;
             var match = Regex.Match(input, regex);
             if (!match.Success)
             {
@@ -83,7 +83,7 @@ namespace Xrpl.BinaryCodec
         }
         public static int Exponent(this string input)
         {
-            string regex = @"^([-+])?(\d+)?(\.(\d+))?([eE]([+-]?\d+))?$";
+            string regex = Types.IouValue.ValueRegex;
             var match = Regex.Match(input, regex);
             if (!match.Success)
             {
@@ -115,7 +115,7 @@ namespace Xrpl.BinaryCodec
 
         public static int Precision(this string input)
         {
-            string regex = @"^([-+])?(\d+)?(\.(\d+))?([eE]([+-]?\d+))?$";
+            string regex = Types.IouValue.ValueRegex;
             var match = Regex.Match(input, regex);
             if (!match.Success)
             {
