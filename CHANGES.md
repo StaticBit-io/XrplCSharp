@@ -1,5 +1,10 @@
 # Changes
 
+### 10.4.2.0 06/05/2026
+* Fix thread-unsafe request id assignment in `RequestManager` — concurrent requests on a single connection (e.g. `Task.WhenAll` over several `BookOffers`) could collide on the same id and throw `Response with id '$<guid>' is already pending` or drop a pending promise. Removed the shared `nextId` field; each call now generates its own `Guid` and registers via a single atomic `ConcurrentDictionary.TryAdd`, enabling parallel requests on one connection
+* Surface exceptions thrown by stream handlers (`OnLedgerClosed`, `OnTransaction`, etc.) through the `OnError` event instead of swallowing them into a debug trace — consumer bugs are now observable, while the message loop stays alive and a throwing `OnError` handler is contained
+* Clarify in XML docs that `Xrpl.Client.Exceptions.TimeoutException` is not `System.TimeoutException` (it derives from `XrplException`), to avoid mismatched `catch` clauses
+
 ### 10.4.1.0 05/28/2026
 * Fix `IouValue` (IOU token amount) parsing to accept a trailing decimal point (e.g. `"128700."`), aligning with `xrpl.js` / `ripple-binary-codec` and `rippled` `STAmount` reference behavior — previously the stricter validation regex rejected a value with no digits after the dot, breaking signing of transactions (e.g. `AMMDeposit` via WalletConnect) that carried such amounts
 * Relax IOU value regex fractional group from `(\.(\d+))?` to `(\.(\d*))?` while adding a `(?=\.?\d)` lookahead that still requires at least one mantissa digit — so trailing/leading dots (`"128700."`, `".5"`) parse but bare-dot inputs (`"."`, `".e10"`) are rejected, matching BigNumber; deduplicate the regex by reusing the single `IouValue.ValueRegex` constant in `AmountValue.cs` and `ExtenstionHelpers.cs`

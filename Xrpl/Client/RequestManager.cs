@@ -42,7 +42,6 @@ namespace Xrpl.Client
             public Task<object> Promise { get; set; }
         }
 
-        private Guid nextId = Guid.NewGuid();
         private readonly ConcurrentDictionary<Guid, Timer> timeoutsAwaitingResponse = new ConcurrentDictionary<Guid, Timer>();
         private readonly ConcurrentDictionary<Guid, TaskInfo> promisesAwaitingResponse = new ConcurrentDictionary<Guid, TaskInfo>();
         private readonly JsonSerializerOptions serializerOptions = XrplJsonOptions.Default;
@@ -166,26 +165,13 @@ namespace Xrpl.Client
                     $"Timeout must be positive or Timeout.InfiniteTimeSpan, but was {timeout.TotalSeconds:F1}s");
             }
 
-            Guid newId;
             var info = request.GetType().GetProperty("Id");
-            if (info.GetValue(request) == null)
-            {
-                newId = this.nextId;
-                this.nextId = Guid.NewGuid();
-            }
-            else
-            {
-                newId = (Guid)info.GetValue(request);
-            }
+            object existingId = info.GetValue(request);
+            Guid newId = existingId == null ? Guid.NewGuid() : (Guid)existingId;
 
             info.SetValue(request, newId, null);
 
             string newRequest = JsonSerializer.Serialize(request, serializerOptions);
-
-            if (this.promisesAwaitingResponse.ContainsKey(newId))
-            {
-                throw new XrplException($"Response with id '${newId}' is already pending");
-            }
 
             TaskCompletionSource<object> task = new TaskCompletionSource<object>();
             TaskInfo taskInfo = new TaskInfo();
@@ -194,7 +180,10 @@ namespace Xrpl.Client
             taskInfo.RemoveUponCompletion = true;
             taskInfo.Type = typeof(T);
 
-            promisesAwaitingResponse.TryAdd(newId, taskInfo);
+            if (!promisesAwaitingResponse.TryAdd(newId, taskInfo))
+            {
+                throw new XrplException($"Response with id '${newId}' is already pending");
+            }
 
             if (cancellationToken.CanBeCanceled)
             {
@@ -249,26 +238,12 @@ namespace Xrpl.Client
                     $"Timeout must be positive or Timeout.InfiniteTimeSpan, but was {timeout.TotalSeconds:F1}s");
             }
 
-            Guid newId;
             var hasId = request.TryGetValue("id", out var id);
-            if (!hasId)
-            {
-                newId = this.nextId;
-                this.nextId = Guid.NewGuid();
-            }
-            else
-            {
-                newId = (Guid)id;
-            }
+            Guid newId = hasId ? (Guid)id : Guid.NewGuid();
 
             request["id"] = newId;
 
             string newRequest = JsonSerializer.Serialize(request, serializerOptions);
-
-            if (this.promisesAwaitingResponse.ContainsKey(newId))
-            {
-                throw new XrplException($"Response with id '${newId}' is already pending");
-            }
 
             TaskCompletionSource<Dictionary<string, object>> task = new TaskCompletionSource<Dictionary<string, object>>();
             TaskInfo taskInfo = new TaskInfo();
@@ -277,7 +252,10 @@ namespace Xrpl.Client
             taskInfo.RemoveUponCompletion = true;
             taskInfo.Type = typeof(Dictionary<string, object>);
 
-            promisesAwaitingResponse.TryAdd(newId, taskInfo);
+            if (!promisesAwaitingResponse.TryAdd(newId, taskInfo))
+            {
+                throw new XrplException($"Response with id '${newId}' is already pending");
+            }
 
             if (cancellationToken.CanBeCanceled)
             {
