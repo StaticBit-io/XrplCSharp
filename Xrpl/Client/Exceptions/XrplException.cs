@@ -96,7 +96,15 @@ namespace Xrpl.Client.Exceptions
     /// </summary>
     public class RippledNotInitializedException : XrplException { }
     /// <summary>
-    /// Exception thrown when xrpl.js times out.
+    /// Exception thrown when a request to rippled times out.
+    /// <para>
+    /// IMPORTANT: this is <c>Xrpl.Client.Exceptions.TimeoutException</c>, NOT
+    /// <see cref="System.TimeoutException"/>. It derives from <see cref="XrplException"/>, so a
+    /// <c>catch (System.TimeoutException)</c> will NOT catch it. Catch this type (or its base
+    /// <see cref="XrplException"/>) explicitly; if both <c>using System;</c> and
+    /// <c>using Xrpl.Client.Exceptions;</c> are in scope, fully-qualify the type to avoid catching
+    /// the wrong one.
+    /// </para>
     /// </summary>
     public class TimeoutException : XrplException
     {

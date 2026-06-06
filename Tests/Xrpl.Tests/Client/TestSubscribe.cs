@@ -258,6 +258,28 @@ namespace Xrpl.Tests.ClientLib
         }
 
         [TestMethod]
+        public async Task StreamHandlerException_IsSurfacedViaOnError()
+        {
+            TaskCompletionSource<string> errorReported = new TaskCompletionSource<string>();
+
+            runner.client.connection.OnLedgerClosed += _ =>
+                throw new InvalidOperationException("consumer handler bug");
+
+            runner.client.connection.OnError += (error, errorMessage, message, data) =>
+            {
+                errorReported.TrySetResult(errorMessage);
+                return Task.CompletedTask;
+            };
+
+            string jsonString = "{\"fee_base\":10,\"fee_ref\":10,\"ledger_hash\":\"B3980C722D71873D6708723E71B7A28C826BC66C58712ADCEC61603415305CD1\",\"ledger_index\":66093872,\"ledger_time\":683942720,\"reserve_base\":20000000,\"reserve_inc\":5000000,\"txn_count\":70,\"type\":\"ledgerClosed\",\"validated_ledgers\":\"65201743-66093872\"}";
+            await runner.client.connection.OnMessage(jsonString);
+
+            Task completed = await Task.WhenAny(errorReported.Task, Task.Delay(5000));
+            Assert.AreEqual(errorReported.Task, completed,
+                "Exception thrown by a stream handler was swallowed instead of surfaced via OnError");
+        }
+
+        [TestMethod]
         public async Task TestEmitsServerStatus()
         {
             var tcs = new TaskCompletionSource<ServerStatusStream>();
