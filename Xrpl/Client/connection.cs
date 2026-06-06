@@ -2419,14 +2419,14 @@ public class Connection
                         {
                             if (cts.Token.IsCancellationRequested)
                                 return;
-                            
+
                             try
                             {
                                 await ProcessStreamMessageAsync(message).ConfigureAwait(false);
                             }
                             catch (Exception ex)
                             {
-                                Debug.WriteLine($"{DateTime.Now}Stream message processing error: {ex.Message}");
+                                await NotifyStreamProcessingErrorAsync(ex, message).ConfigureAwait(false);
                             }
                         }
                     }
@@ -2755,7 +2755,39 @@ public class Connection
         }
         catch (Exception ex)
         {
-            Debug.WriteLine($"{DateTime.Now}Stream message processing error: {ex.Message}");
+            await NotifyStreamProcessingErrorAsync(ex, message).ConfigureAwait(false);
+        }
+    }
+
+    /// <summary>
+    /// Surfaces an exception raised while processing a stream message — including exceptions
+    /// thrown by consumer stream handlers (e.g. <see cref="OnLedgerClosed"/>, <see cref="OnTransaction"/>) —
+    /// through the <see cref="OnError"/> event instead of swallowing it into a debug trace, so consumer
+    /// bugs are observable. The message loop is always kept alive: cancellation is ignored, and an
+    /// exception thrown by the <see cref="OnError"/> handler itself is contained.
+    /// </summary>
+    private async Task NotifyStreamProcessingErrorAsync(Exception ex, string message)
+    {
+        Debug.WriteLine($"{DateTime.Now}Stream message processing error: {ex.Message}");
+
+        if (ex is OperationCanceledException)
+        {
+            return;
+        }
+
+        var handler = OnError;
+        if (handler is null)
+        {
+            return;
+        }
+
+        try
+        {
+            await handler.Invoke(error: "error", errorMessage: "streamHandlerError", message: ex.Message, data: message).ConfigureAwait(false);
+        }
+        catch (Exception notifyEx)
+        {
+            Debug.WriteLine($"{DateTime.Now}OnError handler threw while reporting stream processing error: {notifyEx.Message}");
         }
     }
 }
