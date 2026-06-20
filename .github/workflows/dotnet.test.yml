@@ -51,11 +51,15 @@ jobs:
         for i in $(seq 1 30); do
           if curl -sf http://localhost:5005/ -d '{"method":"server_info"}' > /dev/null 2>&1; then
             echo "rippled is ready"
-            break
+            exit 0
           fi
           echo "Waiting for rippled... ($i/30)"
           sleep 2
         done
+        echo "::error::rippled did not become ready after 30 attempts — dumping diagnostics"
+        docker compose -f .ci-config/docker-compose.ci.yml ps
+        docker compose -f .ci-config/docker-compose.ci.yml logs --no-color xrpld
+        exit 1
 
     - name: Use .NET ${{ env.DOTNET_VERSION }}
       uses: actions/setup-dotnet@v4

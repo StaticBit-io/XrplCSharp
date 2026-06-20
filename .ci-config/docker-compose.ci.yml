@@ -1,6 +1,6 @@
 services:
   xrpld:
-    image: xrpllabsofficial/xrpld:latest
+    image: xrpllabsofficial/xrpld:3.2.0
     container_name: rippled-service
     command: ["-a", "--start"]
     ports:
@@ -8,8 +8,8 @@ services:
       - "5006:5006"
       - "6006:6006"
     volumes:
-      - ./rippled.cfg:/etc/opt/ripple/rippled.cfg:ro
-      - ./validators.txt:/etc/opt/ripple/validators.txt:ro
+      - ./rippled.cfg:/config/rippled.cfg:ro
+      - ./validators.txt:/config/validators.txt:ro
 
   ledger-acceptor:
     image: curlimages/curl:latest

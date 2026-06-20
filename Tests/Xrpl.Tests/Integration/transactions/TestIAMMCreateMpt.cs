@@ -17,8 +17,11 @@ namespace XrplTests.Xrpl.ClientLib.Integration;
 
 /// <summary>
 /// Integration tests verifying AMM behavior with MPT (Multi-Purpose Token) assets.
-/// As of rippled 3.1.3, AMM does not support MPT — these tests verify the expected rejection.
-/// DEX/AMM support for MPT is proposed in XLS-62: https://github.com/XRPLF/XRPL-Standards/discussions/231
+/// With the featureMPTokensV2 amendment enabled, AMM supports MPT assets (XLS-62);
+/// these tests verify that creating an MPT/XRP AMM pool succeeds.
+/// XLS-62: https://github.com/XRPLF/XRPL-Standards/discussions/231
+/// NOTE: featureMPTokensV2 is In Development (not yet on Mainnet); the CI standalone node
+/// enables it via rippled.cfg [features] to exercise this path ahead of release.
 /// </summary>
 [TestClass]
 [TestCategory("AMM")]
@@ -47,11 +50,10 @@ public class TestIAMMCreateMpt
     }
 
     [TestMethod]
-    public async Task TestAMMCreate_MptXrpPool_RejectedByProtocol()
+    public async Task TestAMMCreate_MptXrpPool_Succeeds()
     {
-        // rippled 3.1.3 does not support MPT in AMM pools.
-        // AMMCreate with MPT Amount is rejected with "Amount can not be MPT" local check.
-        // This test documents and verifies this protocol-level restriction.
+        // With featureMPTokensV2 enabled, an MPT/XRP AMM pool can be created (XLS-62).
+        // Set up an MPT, fund a holder, then create the AMM and assert it succeeds.
         XrplWallet walletIssuer = XrplWallet.Generate();
         XrplWallet walletHolder = XrplWallet.Generate();
         await IntegrationTestConfig.TryFundWalletsAsync(client, nodeType, walletIssuer, walletHolder);
@@ -60,7 +62,8 @@ public class TestIAMMCreateMpt
         MPTokenIssuanceCreate mptCreateTx = new MPTokenIssuanceCreate
         {
             Account = walletIssuer.ClassicAddress,
-            Flags = MPTokenIssuanceCreateFlags.tfMPTCanTransfer,
+            // MPT must be tradable (lsfMPTCanTrade) for AMM/DEX use and transferable to move into the pool
+            Flags = MPTokenIssuanceCreateFlags.tfMPTCanTrade | MPTokenIssuanceCreateFlags.tfMPTCanTransfer,
         };
         mptCreateTx = await client.Autofill(mptCreateTx);
         TransactionSummary mptResult = await client.SubmitAndWait(mptCreateTx, walletIssuer, true);
@@ -93,7 +96,7 @@ public class TestIAMMCreateMpt
         TransactionSummary payResult = await client.SubmitAndWait(paymentTx, walletIssuer, true);
         AssertSuccess(payResult, "MPT Payment");
 
-        // Attempt to create AMM pool with MPT — should be rejected
+        // Create AMM pool with an MPT + XRP — succeeds when featureMPTokensV2 is enabled
         AMMCreate ammCreate = new AMMCreate
         {
             Account = walletHolder.ClassicAddress,
@@ -107,17 +110,7 @@ public class TestIAMMCreateMpt
         };
         ITransactionRequest autofilled = await client.Autofill(ammCreate);
 
-        try
-        {
-            await client.SubmitAndWait(autofilled, walletHolder, true);
-            Assert.Fail("Expected RippleException: AMM does not support MPT assets");
-        }
-        catch (RippledException ex)
-        {
-            // rippled rejects with "Amount can not be MPT" local check
-            Assert.IsTrue(
-                ex.Message.Contains("MPT", StringComparison.OrdinalIgnoreCase),
-                $"Expected MPT-related rejection, got: {ex.Message}");
-        }
+        TransactionSummary ammResult = await client.SubmitAndWait(autofilled, walletHolder, true);
+        AssertSuccess(ammResult, "AMMCreate MPT/XRP pool");
     }
 }
