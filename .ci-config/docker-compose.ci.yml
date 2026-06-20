@@ -1,6 +1,6 @@
 services:
   xrpld:
-    image: xrpllabsofficial/xrpld:latest
+    image: xrpllabsofficial/xrpld:3.2.0
     container_name: rippled-service
     command: ["-a", "--start"]
     ports:
