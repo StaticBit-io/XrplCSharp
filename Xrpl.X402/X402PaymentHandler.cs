@@ -25,6 +25,9 @@ public sealed class X402PaymentHandler : DelegatingHandler
     protected override async Task<HttpResponseMessage> SendAsync(
         HttpRequestMessage request, CancellationToken cancellationToken)
     {
+        if (request.Content is not null)
+            await request.Content.LoadIntoBufferAsync();
+
         HttpResponseMessage response = await base.SendAsync(request, cancellationToken);
         if (response.StatusCode != HttpStatusCode.PaymentRequired)
             return response;
@@ -43,7 +46,7 @@ public sealed class X402PaymentHandler : DelegatingHandler
         };
 
         response.Dispose();
-        HttpRequestMessage retry = await CloneAsync(request);
+        using HttpRequestMessage retry = await CloneAsync(request);
         retry.Headers.Remove(X402Headers.PaymentSignature);
         retry.Headers.Add(X402Headers.PaymentSignature, X402Base64Json.Encode(envelope));
 
@@ -73,7 +76,8 @@ public sealed class X402PaymentHandler : DelegatingHandler
 
     private void EnforcePolicy(PaymentRequirement req)
     {
-        if (_options.PayToAllowlist.Count > 0 && !_options.PayToAllowlist.Contains(req.PayTo))
+        bool restrict = _options.PayToAllowlist.Count > 0;
+        if (restrict && !_options.PayToAllowlist.Contains(req.PayTo))
             throw new X402PaymentException("payto_not_allowed", $"payTo {req.PayTo} not in allowlist.");
 
         if (X402AmountMapper.IsXrp(req))
@@ -81,21 +85,21 @@ public sealed class X402PaymentHandler : DelegatingHandler
             if (!ulong.TryParse(req.Amount, out ulong drops) || drops > _options.MaxAmountDrops)
                 throw new X402PaymentException("amount_over_cap",
                     $"XRP amount {req.Amount} drops exceeds cap {_options.MaxAmountDrops}.");
+            return;
         }
-        else
-        {
-            string issuer = req.Extra.TryGetValue("issuer", out JsonElement el) && el.ValueKind == JsonValueKind.String
-                ? el.GetString()! : "";
-            if (_options.IouValueCaps.TryGetValue(issuer, out decimal cap))
-            {
-                if (!decimal.TryParse(req.Amount, NumberStyles.Number, CultureInfo.InvariantCulture, out decimal val))
-                    throw new X402PaymentException("amount_over_cap",
-                        $"IOU amount '{req.Amount}' is not a valid decimal.");
-                if (val > cap)
-                    throw new X402PaymentException("amount_over_cap",
-                        $"IOU amount {val} exceeds cap {cap} for issuer {issuer}.");
-            }
-        }
+
+        // IOU/RLUSD: fail closed. An explicit per-issuer cap is REQUIRED to pay.
+        string issuer = req.Extra.TryGetValue("issuer", out JsonElement el) && el.ValueKind == JsonValueKind.String
+            ? el.GetString()! : "";
+        if (restrict && !_options.PayToAllowlist.Contains(issuer))
+            throw new X402PaymentException("issuer_not_allowed", $"issuer {issuer} not in allowlist.");
+        if (!_options.IouValueCaps.TryGetValue(issuer, out decimal cap))
+            throw new X402PaymentException("amount_over_cap",
+                $"No IOU cap configured for issuer {issuer}; refusing.");
+        if (!decimal.TryParse(req.Amount, NumberStyles.Number, CultureInfo.InvariantCulture, out decimal val))
+            throw new X402PaymentException("amount_over_cap", $"IOU amount '{req.Amount}' is not a valid decimal.");
+        if (val > cap)
+            throw new X402PaymentException("amount_over_cap", $"IOU amount {val} exceeds cap {cap} for issuer {issuer}.");
     }
 
     private static async Task<HttpRequestMessage> CloneAsync(HttpRequestMessage req)

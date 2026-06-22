@@ -118,4 +118,55 @@ public class PaymentHandlerTests
         await Assert.ThrowsExactlyAsync<X402PaymentException>(() => http.GetAsync("http://merchant/resource"));
         Assert.AreEqual(0, signer.Calls);
     }
+
+    [TestMethod]
+    public async Task TestURefusesUncappedIouIssuer()
+    {
+        StubInner inner = new()
+        {
+            Requirement = new PaymentRequirement
+            {
+                Scheme = "exact", Network = "xrpl:1",
+                Asset = "524C555344000000000000000000000000000000",
+                PayTo = "rMerchant", Amount = "2.5", MaxTimeoutSeconds = 60,
+                Extra = new()
+                {
+                    ["invoiceId"] = System.Text.Json.JsonDocument.Parse("\"inv\"").RootElement,
+                    ["issuer"] = System.Text.Json.JsonDocument.Parse("\"rUnknownIssuer\"").RootElement
+                }
+            }
+        };
+        FakeSigner signer = new();
+        HttpClient http = Build(inner, signer, new X402ClientOptions { Network = "xrpl:1" }); // empty IouValueCaps
+
+        await Assert.ThrowsExactlyAsync<X402PaymentException>(() => http.GetAsync("http://merchant/resource"));
+        Assert.AreEqual(0, signer.Calls);
+    }
+
+    [TestMethod]
+    public async Task TestURefusesIssuerNotInAllowlist()
+    {
+        StubInner inner = new()
+        {
+            Requirement = new PaymentRequirement
+            {
+                Scheme = "exact", Network = "xrpl:1",
+                Asset = "524C555344000000000000000000000000000000",
+                PayTo = "rMerchant", Amount = "2.5", MaxTimeoutSeconds = 60,
+                Extra = new()
+                {
+                    ["invoiceId"] = System.Text.Json.JsonDocument.Parse("\"inv\"").RootElement,
+                    ["issuer"] = System.Text.Json.JsonDocument.Parse("\"rIssuer\"").RootElement
+                }
+            }
+        };
+        FakeSigner signer = new();
+        X402ClientOptions opt = new() { Network = "xrpl:1" };
+        opt.IouValueCaps["rIssuer"] = 10m;          // capped...
+        opt.PayToAllowlist.Add("rMerchant");        // ...but issuer not allowlisted
+        HttpClient http = Build(inner, signer, opt);
+
+        await Assert.ThrowsExactlyAsync<X402PaymentException>(() => http.GetAsync("http://merchant/resource"));
+        Assert.AreEqual(0, signer.Calls);
+    }
 }
