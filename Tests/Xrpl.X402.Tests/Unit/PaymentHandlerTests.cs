@@ -17,7 +17,7 @@ public class PaymentHandlerTests
     {
         public string PayerAddress => "rPayer";
         public int Calls;
-        public Task<string> PrepareAndSignAsync(Payment p, CancellationToken ct = default)
+        public Task<string> PrepareAndSignAsync(Payment p, int? maxTimeoutSeconds = null, CancellationToken ct = default)
         { Calls++; return Task.FromResult("SIGNEDBLOB"); }
     }
 
