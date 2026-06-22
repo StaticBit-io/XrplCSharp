@@ -67,6 +67,9 @@ public sealed class X402PaymentHandler : DelegatingHandler
             Payload = new SignedPayload { SignedTxBlob = signedBlob },
         };
 
+        if (_options.VerifiableIntentProvider is not null)
+            envelope.Extensions = await _options.VerifiableIntentProvider.CreateExtensionsAsync(requirement, payment, cancellationToken);
+
         response.Dispose();
         using HttpRequestMessage retry = await CloneAsync(request);
         retry.Headers.Remove(X402Headers.PaymentSignature);

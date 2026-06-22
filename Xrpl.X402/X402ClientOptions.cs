@@ -34,4 +34,7 @@ public sealed class X402ClientOptions
 
     /// <summary>JSON field name for the optional session id inside the x402 memo.</summary>
     public string MemoSessionIdField { get; set; } = "sessionId";
+
+    /// <summary>Optional Verifiable Intent provider. When set, its extensions object is attached to each PAYMENT-SIGNATURE. Null = no VI.</summary>
+    public IVerifiableIntentProvider? VerifiableIntentProvider { get; set; }
 }

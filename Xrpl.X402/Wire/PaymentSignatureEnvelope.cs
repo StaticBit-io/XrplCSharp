@@ -23,4 +23,8 @@ public sealed class PaymentSignatureEnvelope
 
     /// <summary>Signed transaction payload that satisfies the accepted requirement.</summary>
     [JsonPropertyName("payload")] public SignedPayload Payload { get; set; } = new();
+
+    /// <summary>Optional x402 extensions object (e.g. Verifiable Intent under <c>x402Secure.verifiableIntentChain</c>). Omitted when null.</summary>
+    [JsonPropertyName("extensions")]
+    public object? Extensions { get; set; }
 }
