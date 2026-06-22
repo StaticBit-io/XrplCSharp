@@ -25,6 +25,7 @@ public class PaymentHandlerTests
     {
         public bool AlwaysPaymentRequired;
         public string? SeenSignature;
+        public PaymentRequirement? Requirement;
         protected override Task<HttpResponseMessage> SendAsync(HttpRequestMessage req, CancellationToken ct)
         {
             bool hasSig = req.Headers.TryGetValues(X402Headers.PaymentSignature, out System.Collections.Generic.IEnumerable<string>? v);
@@ -33,13 +34,12 @@ public class PaymentHandlerTests
             if (!hasSig || AlwaysPaymentRequired)
             {
                 HttpResponseMessage challenge = new(HttpStatusCode.PaymentRequired);
-                PaymentRequiredChallenge body = new()
-                {
-                    Accepts = { new PaymentRequirement {
-                        Scheme="exact", Network="xrpl:1", Asset="XRP", PayTo="rMerchant",
-                        Amount="1000000", MaxTimeoutSeconds=60,
-                        Extra = new() { ["invoiceId"]=System.Text.Json.JsonDocument.Parse("\"inv\"").RootElement } } }
+                PaymentRequirement requirement = Requirement ?? new PaymentRequirement {
+                    Scheme="exact", Network="xrpl:1", Asset="XRP", PayTo="rMerchant",
+                    Amount="1000000", MaxTimeoutSeconds=60,
+                    Extra = new() { ["invoiceId"]=System.Text.Json.JsonDocument.Parse("\"inv\"").RootElement }
                 };
+                PaymentRequiredChallenge body = new() { Accepts = { requirement } };
                 challenge.Headers.Add(X402Headers.PaymentRequired, X402Base64Json.Encode(body));
                 return Task.FromResult(challenge);
             }
@@ -91,5 +91,31 @@ public class PaymentHandlerTests
         HttpClient http = Build(inner, signer, new X402ClientOptions { Network="xrpl:1", MaxAmountDrops=10_000_000 });
 
         await Assert.ThrowsExactlyAsync<X402PaymentException>(() => http.GetAsync("http://merchant/resource"));
+    }
+
+    [TestMethod]
+    public async Task TestURefusesUnparseableIouAmountWhenCapped()
+    {
+        StubInner inner = new()
+        {
+            Requirement = new PaymentRequirement
+            {
+                Scheme = "exact", Network = "xrpl:1",
+                Asset = "524C555344000000000000000000000000000000",
+                PayTo = "rMerchant", Amount = "not-a-number", MaxTimeoutSeconds = 60,
+                Extra = new()
+                {
+                    ["invoiceId"] = System.Text.Json.JsonDocument.Parse("\"inv\"").RootElement,
+                    ["issuer"] = System.Text.Json.JsonDocument.Parse("\"rIssuer\"").RootElement
+                }
+            }
+        };
+        FakeSigner signer = new();
+        X402ClientOptions opt = new() { Network = "xrpl:1" };
+        opt.IouValueCaps["rIssuer"] = 10m;
+        HttpClient http = Build(inner, signer, opt);
+
+        await Assert.ThrowsExactlyAsync<X402PaymentException>(() => http.GetAsync("http://merchant/resource"));
+        Assert.AreEqual(0, signer.Calls);
     }
 }

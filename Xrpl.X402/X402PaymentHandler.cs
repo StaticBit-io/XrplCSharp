@@ -59,7 +59,10 @@ public sealed class X402PaymentHandler : DelegatingHandler
         if (!response.Headers.TryGetValues(X402Headers.PaymentRequired, out System.Collections.Generic.IEnumerable<string>? values))
             throw new X402PaymentException("invalid_challenge", "402 without PAYMENT-REQUIRED header.");
 
-        PaymentRequiredChallenge challenge = X402Base64Json.Decode<PaymentRequiredChallenge>(values.First());
+        string? headerValue = values.FirstOrDefault();
+        if (string.IsNullOrWhiteSpace(headerValue))
+            throw new X402PaymentException("invalid_challenge", "PAYMENT-REQUIRED header had no value.");
+        PaymentRequiredChallenge challenge = X402Base64Json.Decode<PaymentRequiredChallenge>(headerValue);
         PaymentRequirement? match = challenge.Accepts.FirstOrDefault(r =>
             string.Equals(r.Scheme, "exact", StringComparison.OrdinalIgnoreCase) &&
             string.Equals(r.Network, _options.Network, StringComparison.OrdinalIgnoreCase));
@@ -83,11 +86,15 @@ public sealed class X402PaymentHandler : DelegatingHandler
         {
             string issuer = req.Extra.TryGetValue("issuer", out JsonElement el) && el.ValueKind == JsonValueKind.String
                 ? el.GetString()! : "";
-            if (_options.IouValueCaps.TryGetValue(issuer, out decimal cap)
-                && decimal.TryParse(req.Amount, CultureInfo.InvariantCulture, out decimal val)
-                && val > cap)
-                throw new X402PaymentException("amount_over_cap",
-                    $"IOU amount {req.Amount} exceeds cap {cap} for issuer {issuer}.");
+            if (_options.IouValueCaps.TryGetValue(issuer, out decimal cap))
+            {
+                if (!decimal.TryParse(req.Amount, NumberStyles.Number, CultureInfo.InvariantCulture, out decimal val))
+                    throw new X402PaymentException("amount_over_cap",
+                        $"IOU amount '{req.Amount}' is not a valid decimal.");
+                if (val > cap)
+                    throw new X402PaymentException("amount_over_cap",
+                        $"IOU amount {val} exceeds cap {cap} for issuer {issuer}.");
+            }
         }
     }
 
