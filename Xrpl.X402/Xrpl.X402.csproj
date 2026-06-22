@@ -1,0 +1,14 @@
+<Project Sdk="Microsoft.NET.Sdk">
+  <PropertyGroup>
+    <TargetFrameworks>net8.0;net9.0;net10.0</TargetFrameworks>
+    <LangVersion>latest</LangVersion>
+    <Nullable>enable</Nullable>
+    <GenerateDocumentationFile>true</GenerateDocumentationFile>
+    <PackageId>Xrpl.X402</PackageId>
+    <Version>0.1.0-preview.1</Version>
+    <Description>x402 (HTTP 402) agentic payments client for the XRP Ledger (XRPL exact scheme).</Description>
+  </PropertyGroup>
+  <ItemGroup>
+    <ProjectReference Include="..\Xrpl\Xrpl.csproj" />
+  </ItemGroup>
+</Project>
