@@ -4,11 +4,27 @@ using Xrpl.X402.Wire;
 
 namespace Xrpl.X402;
 
+/// <summary>
+/// Converts a <see cref="PaymentRequirement"/> amount into an XRPL <see cref="Currency"/> value,
+/// handling both native XRP (drops) and IOU/token assets.
+/// </summary>
 public static class X402AmountMapper
 {
+    /// <summary>
+    /// Returns <c>true</c> when the requirement's asset is XRP (case-insensitive comparison).
+    /// </summary>
+    /// <param name="req">The payment requirement to inspect.</param>
+    /// <returns><c>true</c> for XRP; <c>false</c> for IOU/token assets.</returns>
     public static bool IsXrp(PaymentRequirement req) =>
         string.Equals(req.Asset, "XRP", System.StringComparison.OrdinalIgnoreCase);
 
+    /// <summary>
+    /// Converts the requirement's amount and asset to an XRPL <see cref="Currency"/> instance.
+    /// For XRP, the amount is expressed in drops. For IOU assets, <c>extra.issuer</c> must be present.
+    /// </summary>
+    /// <param name="req">The payment requirement containing asset, amount, and extra fields.</param>
+    /// <returns>An XRPL <see cref="Currency"/> ready to set as the <c>Amount</c> of a <c>Payment</c> transaction.</returns>
+    /// <exception cref="X402PaymentException">Thrown when an IOU requirement is missing <c>extra.issuer</c>.</exception>
     public static Currency ToCurrency(PaymentRequirement req)
     {
         if (IsXrp(req))

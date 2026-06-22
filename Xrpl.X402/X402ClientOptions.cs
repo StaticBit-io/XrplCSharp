@@ -2,6 +2,10 @@ using System.Collections.Generic;
 
 namespace Xrpl.X402;
 
+/// <summary>
+/// Configuration options for the x402 payment client (<see cref="X402PaymentHandler"/>).
+/// Controls the target network, amount caps, address allowlists, and field name mappings.
+/// </summary>
 public sealed class X402ClientOptions
 {
     /// <summary>CAIP-2 network the client is willing to pay on, e.g. "xrpl:1".</summary>

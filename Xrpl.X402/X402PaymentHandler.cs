@@ -11,17 +11,39 @@ using Xrpl.X402.Wire;
 
 namespace Xrpl.X402;
 
+/// <summary>
+/// A <see cref="DelegatingHandler"/> that automatically pays HTTP 402 challenges using the XRPL x402 protocol.
+/// On a 402 response the handler selects the matching <see cref="PaymentRequirement"/>, enforces configured
+/// amount caps and allowlists, signs the payment via <see cref="IX402Signer"/>, and retries the original request
+/// with the <c>PAYMENT-SIGNATURE</c> header attached.
+/// </summary>
 public sealed class X402PaymentHandler : DelegatingHandler
 {
     private readonly IX402Signer _signer;
     private readonly X402ClientOptions _options;
 
+    /// <summary>
+    /// Initializes a new instance of <see cref="X402PaymentHandler"/>.
+    /// </summary>
+    /// <param name="signer">Signer that autofills and locally signs XRPL payment transactions.</param>
+    /// <param name="options">Client options controlling network selection, amount caps, and allowlists.</param>
     public X402PaymentHandler(IX402Signer signer, X402ClientOptions options)
     {
         _signer = signer;
         _options = options;
     }
 
+    /// <summary>
+    /// Sends the request; if a 402 Payment Required response is received, negotiates and pays the challenge,
+    /// then retries the request with the payment proof attached.
+    /// </summary>
+    /// <param name="request">The HTTP request to send.</param>
+    /// <param name="cancellationToken">Cancellation token.</param>
+    /// <returns>The final <see cref="HttpResponseMessage"/> after any payment negotiation.</returns>
+    /// <exception cref="X402PaymentException">
+    /// Thrown when the challenge is malformed, no acceptable requirement is found, a policy cap is exceeded,
+    /// or the server returns 402 again after payment (anti double-pay guard).
+    /// </exception>
     protected override async Task<HttpResponseMessage> SendAsync(
         HttpRequestMessage request, CancellationToken cancellationToken)
     {

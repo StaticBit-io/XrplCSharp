@@ -4,8 +4,13 @@ using Xrpl.Models.Transactions;
 
 namespace Xrpl.X402;
 
+/// <summary>
+/// Abstracts the signing of an XRPL <see cref="Payment"/> transaction for x402 payments.
+/// Implementations autofill transaction fields and sign locally without submitting to the ledger.
+/// </summary>
 public interface IX402Signer
 {
+    /// <summary>Classic XRPL address of the account that signs and funds payments.</summary>
     string PayerAddress { get; }
 
     /// <summary>
