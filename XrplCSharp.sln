@@ -42,6 +42,8 @@ Project("{FAE04EC0-301F-11D3-BF4B-00C04F79EFBC}") = "Xrpl.X402", "Xrpl.X402\Xrpl
 EndProject
 Project("{FAE04EC0-301F-11D3-BF4B-00C04F79EFBC}") = "Xrpl.X402.Tests", "Tests\Xrpl.X402.Tests\Xrpl.X402.Tests.csproj", "{1A643927-2EB0-49B0-8497-40427F9C609C}"
 EndProject
+Project("{FAE04EC0-301F-11D3-BF4B-00C04F79EFBC}") = "Xrpl.X402.AspNetCore", "Xrpl.X402.AspNetCore\Xrpl.X402.AspNetCore.csproj", "{526B72FC-FAC0-4940-8075-4D1A107B0F64}"
+EndProject
 Global
 	GlobalSection(SolutionConfigurationPlatforms) = preSolution
 		Debug|Any CPU = Debug|Any CPU
@@ -208,6 +210,18 @@ Global
 		{1A643927-2EB0-49B0-8497-40427F9C609C}.Release|x64.Build.0 = Release|Any CPU
 		{1A643927-2EB0-49B0-8497-40427F9C609C}.Release|x86.ActiveCfg = Release|Any CPU
 		{1A643927-2EB0-49B0-8497-40427F9C609C}.Release|x86.Build.0 = Release|Any CPU
+		{526B72FC-FAC0-4940-8075-4D1A107B0F64}.Debug|Any CPU.ActiveCfg = Debug|Any CPU
+		{526B72FC-FAC0-4940-8075-4D1A107B0F64}.Debug|Any CPU.Build.0 = Debug|Any CPU
+		{526B72FC-FAC0-4940-8075-4D1A107B0F64}.Debug|x64.ActiveCfg = Debug|Any CPU
+		{526B72FC-FAC0-4940-8075-4D1A107B0F64}.Debug|x64.Build.0 = Debug|Any CPU
+		{526B72FC-FAC0-4940-8075-4D1A107B0F64}.Debug|x86.ActiveCfg = Debug|Any CPU
+		{526B72FC-FAC0-4940-8075-4D1A107B0F64}.Debug|x86.Build.0 = Debug|Any CPU
+		{526B72FC-FAC0-4940-8075-4D1A107B0F64}.Release|Any CPU.ActiveCfg = Release|Any CPU
+		{526B72FC-FAC0-4940-8075-4D1A107B0F64}.Release|Any CPU.Build.0 = Release|Any CPU
+		{526B72FC-FAC0-4940-8075-4D1A107B0F64}.Release|x64.ActiveCfg = Release|Any CPU
+		{526B72FC-FAC0-4940-8075-4D1A107B0F64}.Release|x64.Build.0 = Release|Any CPU
+		{526B72FC-FAC0-4940-8075-4D1A107B0F64}.Release|x86.ActiveCfg = Release|Any CPU
+		{526B72FC-FAC0-4940-8075-4D1A107B0F64}.Release|x86.Build.0 = Release|Any CPU
 	EndGlobalSection
 	GlobalSection(SolutionProperties) = preSolution
 		HideSolutionNode = FALSE

@@ -1,0 +1,18 @@
+<Project Sdk="Microsoft.NET.Sdk">
+  <PropertyGroup>
+    <TargetFrameworks>net8.0;net9.0;net10.0</TargetFrameworks>
+    <LangVersion>latest</LangVersion>
+    <Nullable>enable</Nullable>
+    <GenerateDocumentationFile>true</GenerateDocumentationFile>
+    <PackageId>Xrpl.X402.AspNetCore</PackageId>
+    <Version>0.1.0-preview.1</Version>
+    <Description>ASP.NET Core server middleware (x402 require_payment) for accepting XRPL agentic payments.</Description>
+  </PropertyGroup>
+  <ItemGroup>
+    <FrameworkReference Include="Microsoft.AspNetCore.App" />
+  </ItemGroup>
+  <ItemGroup>
+    <ProjectReference Include="..\Xrpl.X402\Xrpl.X402.csproj" />
+    <ProjectReference Include="..\Xrpl\Xrpl.csproj" />
+  </ItemGroup>
+</Project>

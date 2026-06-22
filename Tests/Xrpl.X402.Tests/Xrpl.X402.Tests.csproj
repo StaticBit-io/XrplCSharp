@@ -16,5 +16,6 @@
   <ItemGroup>
     <ProjectReference Include="..\..\Xrpl.X402\Xrpl.X402.csproj" />
     <ProjectReference Include="..\Xrpl.Tests\Xrpl.Tests.csproj" />
+    <ProjectReference Include="..\..\Xrpl.X402.AspNetCore\Xrpl.X402.AspNetCore.csproj" />
   </ItemGroup>
 </Project>
