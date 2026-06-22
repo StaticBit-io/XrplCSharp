@@ -35,7 +35,7 @@ public sealed class X402PaymentHandler : DelegatingHandler
         PaymentRequirement requirement = SelectRequirement(response);
         EnforcePolicy(requirement);
 
-        Payment payment = X402PaymentBuilder.Build(requirement, _signer.PayerAddress);
+        Payment payment = X402PaymentBuilder.Build(requirement, _signer.PayerAddress, _options);
         string signedBlob = await _signer.PrepareAndSignAsync(payment, cancellationToken);
 
         PaymentSignatureEnvelope envelope = new()

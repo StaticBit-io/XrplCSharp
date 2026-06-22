@@ -1,4 +1,5 @@
 using System;
+using System.Collections.Generic;
 using System.Text;
 using System.Text.Json;
 using Xrpl.Models.Transactions;
@@ -7,11 +8,12 @@ namespace Xrpl.X402;
 
 public static class X402MemoFactory
 {
-    public static MemoWrapper Build(string paymentId, string? sessionId)
+    public static MemoWrapper Build(string paymentId, string? sessionId,
+        string paymentIdField = "paymentId", string sessionIdField = "sessionId")
     {
-        object payload = sessionId is null
-            ? new { paymentId }
-            : new { paymentId, sessionId };
+        Dictionary<string, object> payload = new() { [paymentIdField] = paymentId };
+        if (sessionId is not null)
+            payload[sessionIdField] = sessionId;
         string json = JsonSerializer.Serialize(payload);
 
         return new MemoWrapper

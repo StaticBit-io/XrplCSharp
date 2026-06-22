@@ -9,11 +9,12 @@ public static class X402PaymentBuilder
 {
     public const uint DefaultSourceTag = 804681468;
 
-    public static Payment Build(PaymentRequirement req, string payerAddress)
+    public static Payment Build(PaymentRequirement req, string payerAddress, X402ClientOptions? options = null)
     {
-        string invoiceId = GetString(req.Extra, "invoiceId")
-            ?? throw new X402PaymentException("invalid_requirement", "missing extra.invoiceId");
-        string? sessionId = GetString(req.Extra, "sessionId");
+        options ??= new X402ClientOptions();
+        string invoiceId = GetString(req.Extra, options.InvoiceIdExtraKey)
+            ?? throw new X402PaymentException("invalid_requirement", $"missing extra.{options.InvoiceIdExtraKey}");
+        string? sessionId = GetString(req.Extra, options.SessionIdExtraKey);
         uint sourceTag = GetUInt(req.Extra, "sourceTag") ?? DefaultSourceTag;
 
         return new Payment
@@ -22,7 +23,7 @@ public static class X402PaymentBuilder
             Destination = req.PayTo,
             Amount = X402AmountMapper.ToCurrency(req),
             SourceTag = sourceTag,
-            Memos = new List<MemoWrapper> { X402MemoFactory.Build(invoiceId, sessionId) },
+            Memos = new List<MemoWrapper> { X402MemoFactory.Build(invoiceId, sessionId, options.MemoPaymentIdField, options.MemoSessionIdField) },
         };
     }
 

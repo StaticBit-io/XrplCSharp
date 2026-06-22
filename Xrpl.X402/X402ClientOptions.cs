@@ -18,4 +18,16 @@ public sealed class X402ClientOptions
 
     /// <summary>x402 protocol version emitted in PAYMENT-SIGNATURE.</summary>
     public int X402Version { get; set; } = 2;
+
+    /// <summary>Key in the requirement's <c>extra</c> object to read the payment id from (t54 uses "invoiceId").</summary>
+    public string InvoiceIdExtraKey { get; set; } = "invoiceId";
+
+    /// <summary>Key in the requirement's <c>extra</c> object to read the optional session id from.</summary>
+    public string SessionIdExtraKey { get; set; } = "sessionId";
+
+    /// <summary>JSON field name for the payment id inside the x402 memo (mpcp adapter uses "paymentId").</summary>
+    public string MemoPaymentIdField { get; set; } = "paymentId";
+
+    /// <summary>JSON field name for the optional session id inside the x402 memo.</summary>
+    public string MemoSessionIdField { get; set; } = "sessionId";
 }
