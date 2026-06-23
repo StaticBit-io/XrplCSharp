@@ -75,7 +75,15 @@ public class X402T54LiveInteropTests
     public async Task TestILiveT54SettlesXrpOnTestnet()
     {
         // ── 1. Connect to public testnet ───────────────────────────────────────────
-        XrplClient client = new(TestnetUrl);
+        XrplClient client = new(TestnetUrl, options: new XrplClient.ClientOptions
+        {
+            MaxReconnectAttempts = 3,
+            ReconnectBaseDelay = TimeSpan.FromSeconds(5),
+            ReconnectMaxDelay = TimeSpan.FromSeconds(6),
+            RequestPolicy = RequestFailurePolicy.ImmediateFail,
+            StopAfterMaxAttempts = true,
+            UseCustomPing = false,
+        });
         await client.Connect();
 
         try
@@ -176,7 +184,15 @@ public class X402T54LiveInteropTests
         const string Rlusd = "524C555344000000000000000000000000000000";
         const string RlusdInvoiceId = "inv-live-rlusd-001";
 
-        XrplClient client = new(TestnetUrl);
+        XrplClient client = new(TestnetUrl, options: new XrplClient.ClientOptions
+        {
+            MaxReconnectAttempts = 3,
+            ReconnectBaseDelay = TimeSpan.FromSeconds(5),
+            ReconnectMaxDelay = TimeSpan.FromSeconds(6),
+            RequestPolicy = RequestFailurePolicy.ImmediateFail,
+            StopAfterMaxAttempts = true,
+            UseCustomPing = false,
+        });
         await client.Connect();
 
         try
