@@ -37,7 +37,7 @@ public class PaymentHandlerTests
                 PaymentRequirement requirement = Requirement ?? new PaymentRequirement {
                     Scheme="exact", Network="xrpl:1", Asset="XRP", PayTo="rMerchant",
                     Amount="1000000", MaxTimeoutSeconds=60,
-                    Extra = new() { ["invoiceId"]=System.Text.Json.JsonDocument.Parse("\"A7F9C76B2EAC41A9B2D500AA76B8FA1800000000000000000000000000000001\"").RootElement }
+                    Extra = new() { ["invoiceId"] = System.Text.Json.JsonDocument.Parse("\"inv-handler-test\"").RootElement }
                 };
                 PaymentRequiredChallenge body = new() { Accepts = { requirement } };
                 challenge.Headers.Add(X402Headers.PaymentRequired, X402Base64Json.Encode(body));
@@ -73,6 +73,22 @@ public class PaymentHandlerTests
     }
 
     [TestMethod]
+    public async Task TestUPaymentSignatureCarriesPayloadInvoiceId()
+    {
+        // The PAYMENT-SIGNATURE envelope must include payload.invoiceId = the raw invoice id from extra
+        StubInner inner = new();
+        FakeSigner signer = new();
+        HttpClient http = Build(inner, signer, new X402ClientOptions { Network="xrpl:1", MaxAmountDrops=10_000_000 });
+
+        await http.GetAsync("http://merchant/resource");
+
+        Assert.IsNotNull(inner.SeenSignature);
+        PaymentSignatureEnvelope env = X402Base64Json.Decode<PaymentSignatureEnvelope>(inner.SeenSignature!);
+        Assert.AreEqual("inv-handler-test", env.Payload.InvoiceId,
+            "payload.invoiceId must equal the raw invoiceId from extra");
+    }
+
+    [TestMethod]
     public async Task TestURefusesWhenAmountOverCap()
     {
         StubInner inner = new();
@@ -105,7 +121,7 @@ public class PaymentHandlerTests
                 PayTo = "rMerchant", Amount = "not-a-number", MaxTimeoutSeconds = 60,
                 Extra = new()
                 {
-                    ["invoiceId"] = System.Text.Json.JsonDocument.Parse("\"A7F9C76B2EAC41A9B2D500AA76B8FA1800000000000000000000000000000001\"").RootElement,
+                    ["invoiceId"] = System.Text.Json.JsonDocument.Parse("\"inv-iou-test\"").RootElement,
                     ["issuer"] = System.Text.Json.JsonDocument.Parse("\"rIssuer\"").RootElement
                 }
             }
@@ -131,7 +147,7 @@ public class PaymentHandlerTests
                 PayTo = "rMerchant", Amount = "2.5", MaxTimeoutSeconds = 60,
                 Extra = new()
                 {
-                    ["invoiceId"] = System.Text.Json.JsonDocument.Parse("\"A7F9C76B2EAC41A9B2D500AA76B8FA1800000000000000000000000000000001\"").RootElement,
+                    ["invoiceId"] = System.Text.Json.JsonDocument.Parse("\"inv-iou-2\"").RootElement,
                     ["issuer"] = System.Text.Json.JsonDocument.Parse("\"rUnknownIssuer\"").RootElement
                 }
             }
@@ -155,7 +171,7 @@ public class PaymentHandlerTests
                 PayTo = "rMerchant", Amount = "2.5", MaxTimeoutSeconds = 60,
                 Extra = new()
                 {
-                    ["invoiceId"] = System.Text.Json.JsonDocument.Parse("\"A7F9C76B2EAC41A9B2D500AA76B8FA1800000000000000000000000000000001\"").RootElement,
+                    ["invoiceId"] = System.Text.Json.JsonDocument.Parse("\"inv-iou-3\"").RootElement,
                     ["issuer"] = System.Text.Json.JsonDocument.Parse("\"rIssuer\"").RootElement
                 }
             }

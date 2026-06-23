@@ -2,11 +2,14 @@ using System.Text.Json.Serialization;
 
 namespace Xrpl.X402.Wire;
 
-/// <summary>Holds the signed XRPL transaction blob submitted by the client as payment proof.</summary>
+/// <summary>Holds the signed XRPL transaction blob and the raw invoice id submitted by the client as payment proof.</summary>
 public sealed class SignedPayload
 {
     /// <summary>Hex-encoded signed transaction blob produced by the XRPL wallet.</summary>
     [JsonPropertyName("signedTxBlob")] public string SignedTxBlob { get; set; } = "";
+
+    /// <summary>Raw invoice id string from <c>extra.invoiceId</c> (any non-empty string). Required by the t54 facilitator.</summary>
+    [JsonPropertyName("invoiceId")] public string? InvoiceId { get; set; }
 }
 
 /// <summary>

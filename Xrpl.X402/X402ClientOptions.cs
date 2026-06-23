@@ -4,7 +4,7 @@ namespace Xrpl.X402;
 
 /// <summary>
 /// Configuration options for the x402 payment client (<see cref="X402PaymentHandler"/>).
-/// Controls the target network, amount caps, address allowlists, and field name mappings.
+/// Controls the target network, amount caps, address allowlists, and binding mode.
 /// </summary>
 public sealed class X402ClientOptions
 {
@@ -23,26 +23,23 @@ public sealed class X402ClientOptions
     /// <summary>x402 protocol version emitted in PAYMENT-SIGNATURE.</summary>
     public int X402Version { get; set; } = 2;
 
-    /// <summary>Key in the requirement's <c>extra</c> object to read the payment id from (t54 uses "invoiceId").</summary>
+    /// <summary>Key in the requirement's <c>extra</c> object to read the invoice id from (t54 uses "invoiceId").</summary>
     public string InvoiceIdExtraKey { get; set; } = "invoiceId";
-
-    /// <summary>Key in the requirement's <c>extra</c> object to read the optional session id from.</summary>
-    public string SessionIdExtraKey { get; set; } = "sessionId";
-
-    /// <summary>JSON field name for the payment id inside the x402 memo (mpcp adapter uses "paymentId").</summary>
-    public string MemoPaymentIdField { get; set; } = "paymentId";
-
-    /// <summary>JSON field name for the optional session id inside the x402 memo.</summary>
-    public string MemoSessionIdField { get; set; } = "sessionId";
 
     /// <summary>Optional Verifiable Intent provider. When set, its extensions object is attached to each PAYMENT-SIGNATURE. Null = no VI.</summary>
     public IVerifiableIntentProvider? VerifiableIntentProvider { get; set; }
 
     /// <summary>
-    /// How the x402 payment id is bound to the XRPL transaction.
-    /// <see cref="X402IntentBinding.InvoiceIdField"/> (default) sets <c>Payment.InvoiceID</c> to the 64-hex invoiceId —
-    /// required by the t54 facilitator and the standard XRPL exact scheme.
-    /// <see cref="X402IntentBinding.Memo"/> places the id in an XRPL Memo (mpcp-style facilitators).
+    /// How the x402 invoice id is bound to the XRPL transaction.
+    /// <para>
+    /// <see cref="X402IntentBinding.Both"/> (default) sets both <c>Payment.InvoiceID</c> (SHA-256 of the raw invoice id)
+    /// and a Memo with <c>MemoData = UTF-8 hex of the raw invoice id</c>.
+    /// This matches the t54 reference payer default (<c>invoice_binding = "both"</c>).
+    /// </para>
+    /// <para>
+    /// <see cref="X402IntentBinding.InvoiceIdField"/> sets only <c>Payment.InvoiceID</c>.
+    /// <see cref="X402IntentBinding.Memo"/> sets only the Memo.
+    /// </para>
     /// </summary>
-    public X402IntentBinding IntentBinding { get; set; } = X402IntentBinding.InvoiceIdField;
+    public X402IntentBinding IntentBinding { get; set; } = X402IntentBinding.Both;
 }

@@ -23,24 +23,15 @@ namespace Xrpl.X402.Tests.Integration;
 /// Run manually to verify end-to-end interoperability with the live t54 service.
 /// </para>
 /// <para>
-/// Fix applied (G4, 2026-06-22): t54 binds the payment id to the native XRPL
-/// <c>Payment.InvoiceID</c> field (Hash256, 64-hex), NOT a Memo.
-/// <c>X402PaymentBuilder</c> now uses <c>X402IntentBinding.InvoiceIdField</c> by default.
-/// <c>T54Facilitator</c> now calls <c>POST /verify</c> first so the real rejection reason
-/// is surfaced in <c>ErrorReason</c> before attempting <c>POST /settle</c>.
-/// </para>
-/// <para>
-/// Live t54 outcome (2026-06-22, G4 run): DONE_WITH_CONCERNS.
-/// /verify returns <c>{"isValid":false,"invalidReason":"invalid_payload","payer":null}</c>.
-/// /settle returns <c>{"success":false,"errorReason":"verify_failed:invalid_payload"}</c>.
-/// The signed XRPL transaction is structurally correct (InvoiceID field is set, blob is
-/// accepted by testnet with tesSUCCESS), but t54's Python-side signature verification
-/// rejects it. This is confirmed to be a t54 backend issue, not a wire-format divergence:
-/// - paymentPayload structure is correct (t54 API validated: requires <c>.accepted</c> field)
-/// - invoiceId is a valid 64-hex string, set identically in <c>Payment.InvoiceID</c> and
-///   <c>extra.invoiceId</c>
-/// - the rejection code "invalid_payload" from <c>/verify</c> is now surfaced verbatim
-///   (previously it was swallowed; this is the diagnostic value of this fix)
+/// G5 fix (2026-06-23): aligned to t54 reference payer (x402-xrpl 0.2.0):
+/// <list type="bullet">
+///   <item><c>payload.invoiceId</c> = raw invoice id string (now included in PAYMENT-SIGNATURE).</item>
+///   <item><c>Payment.InvoiceID</c> = SHA-256(UTF-8(invoiceId)) uppercase hex.</item>
+///   <item>Memo.MemoData = UTF-8 hex of raw invoiceId (only MemoData, no MemoType/MemoFormat).</item>
+///   <item>Default binding = <c>Both</c> (matches t54 reference default <c>invoice_binding = "both"</c>).</item>
+///   <item>SourceTag only from <c>extra.sourceTag</c>; no hardcoded default.</item>
+///   <item>invoiceId is now any non-empty string (no 64-hex requirement).</item>
+/// </list>
 /// </para>
 /// </summary>
 [TestClass]
@@ -49,9 +40,8 @@ public class X402T54LiveInteropTests
     private const string TestnetUrl = "wss://s.altnet.rippletest.net:51233";
     private const string T54BaseUrl = "https://xrpl-facilitator-testnet.t54.ai";
 
-    // A fixed 64-hex invoiceId that will be set as Payment.InvoiceID and in extra.invoiceId.
-    // t54 verifies tx.InvoiceID == accepted.extra.invoiceId — both must be identical.
-    private const string LiveInvoiceId = "A7F9C76B2EAC41A9B2D500AA76B8FA18DEADBEEF00000000000000000000CAFE";
+    // Plain-string invoiceId — any non-empty string; t54 binding reads invoiceId from extra
+    private const string LiveInvoiceId = "inv-live-001";
 
     private static readonly JsonSerializerOptions _jsonOpts = new()
     {
@@ -62,12 +52,13 @@ public class X402T54LiveInteropTests
 
     /// <summary>
     /// Full end-to-end x402 flow against the real t54 facilitator on testnet.
-    /// Uses <c>X402IntentBinding.InvoiceIdField</c> (default) to set <c>Payment.InvoiceID</c>.
-    /// <c>T54Facilitator</c> calls <c>/verify</c> first; any <c>invalidReason</c> is surfaced verbatim.
+    /// Uses default <c>X402IntentBinding.Both</c>: sets both <c>Payment.InvoiceID</c> (SHA-256)
+    /// and a Memo (UTF-8 hex). <c>payload.invoiceId</c> = raw invoice id string.
     /// </summary>
     [Ignore("Live external deps: public testnet faucet + t54 facilitator; run manually. " +
-            "Known outcome (G4): /verify returns isValid=false, invalidReason=invalid_payload " +
-            "— t54 backend cannot verify XRPL signature. Our InvoiceID fix is correct.")]
+            "Known outcome (G5, 2026-06-23): /verify returns isValid=false, invalidReason=source_tag_mismatch. " +
+            "G5 fix is confirmed effective: invalid_payload (G4) is resolved; payload.invoiceId + InvoiceID=SHA256 + Memo are accepted. " +
+            "source_tag_mismatch is a t54 backend routing requirement — t54 expects a sourceTag for the merchant account.")]
     [TestMethod]
     public async Task TestT54LiveSettlesXrpOnTestnet()
     {
@@ -87,10 +78,10 @@ public class X402T54LiveInteropTests
             Console.WriteLine($"[T54-LIVE] payer    = {payer.ClassicAddress} ({payerFunded.Balance} XRP)");
             Console.WriteLine($"[T54-LIVE] merchant = {merchant.ClassicAddress} ({merchantFunded.Balance} XRP)");
 
-            // ── 3. Build requirement & payment ────────────────────────────────────
-            // invoiceId must be a 64-hex string — set as Payment.InvoiceID and in extra.invoiceId.
             Console.WriteLine($"[T54-LIVE] invoiceId = {LiveInvoiceId}");
 
+            // ── 3. Build requirement & payment ────────────────────────────────────
+            // invoiceId is a plain string; Payment.InvoiceID = SHA-256(UTF-8(invoiceId))
             PaymentRequirement requirement = new()
             {
                 Scheme = "exact",
@@ -105,23 +96,27 @@ public class X402T54LiveInteropTests
                 }
             };
 
-            // Default IntentBinding = InvoiceIdField: sets Payment.InvoiceID = LiveInvoiceId (no Memo)
+            // Default IntentBinding = Both: sets Payment.InvoiceID = SHA-256(inv) + Memo.MemoData = UTF8-hex(inv)
             IX402Signer signer = new XrplWalletX402Signer(client, payer);
-            Xrpl.Models.Transactions.Payment payment = X402PaymentBuilder.Build(requirement, payer.ClassicAddress);
+            (Xrpl.Models.Transactions.Payment payment, string resolvedInv) =
+                X402PaymentBuilder.BuildWithInvoiceId(requirement, payer.ClassicAddress);
 
             Console.WriteLine($"[T54-LIVE] payment.InvoiceID = {payment.InvoiceID}");
+            Console.WriteLine($"[T54-LIVE] memo.MemoData     = {payment.Memos?[0].Memo.MemoData}");
+            Console.WriteLine($"[T54-LIVE] resolvedInv       = {resolvedInv}");
 
             string signedBlob = await signer.PrepareAndSignAsync(payment, requirement.MaxTimeoutSeconds);
             Console.WriteLine($"[T54-LIVE] signedBlob (first 80) = {signedBlob[..Math.Min(80, signedBlob.Length)]}...");
 
+            // payload.invoiceId = raw invoice id (G5 fix)
             PaymentSignatureEnvelope envelope = new()
             {
                 X402Version = 2,
                 Accepted = requirement,
-                Payload = new SignedPayload { SignedTxBlob = signedBlob }
+                Payload = new SignedPayload { SignedTxBlob = signedBlob, InvoiceId = resolvedInv }
             };
 
-            // Build request body (single paymentRequirements object — confirmed by t54 API validation)
+            // Build request body
             object requestBody = new
             {
                 paymentPayload = envelope,

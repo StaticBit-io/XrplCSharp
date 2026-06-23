@@ -57,14 +57,14 @@ public sealed class X402PaymentHandler : DelegatingHandler
         PaymentRequirement requirement = SelectRequirement(response);
         EnforcePolicy(requirement);
 
-        Payment payment = X402PaymentBuilder.Build(requirement, _signer.PayerAddress, _options);
+        (Payment payment, string invoiceId) = X402PaymentBuilder.BuildWithInvoiceId(requirement, _signer.PayerAddress, _options);
         string signedBlob = await _signer.PrepareAndSignAsync(payment, requirement.MaxTimeoutSeconds, cancellationToken);
 
         PaymentSignatureEnvelope envelope = new()
         {
             X402Version = _options.X402Version,
             Accepted = requirement,
-            Payload = new SignedPayload { SignedTxBlob = signedBlob },
+            Payload = new SignedPayload { SignedTxBlob = signedBlob, InvoiceId = invoiceId },
         };
 
         if (_options.VerifiableIntentProvider is not null)
