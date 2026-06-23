@@ -61,10 +61,11 @@ public class X402T54LiveInteropTests
     /// Uses default <c>X402IntentBinding.Both</c>: sets both <c>Payment.InvoiceID</c> (SHA-256)
     /// and a Memo (UTF-8 hex). <c>payload.invoiceId</c> = raw invoice id string.
     /// </summary>
-    [Ignore("Live external deps: public testnet faucet + t54 facilitator; run manually. " +
-            "G6 PASS (2026-06-23): sourceTag=804681468 in extra resolves source_tag_mismatch. " +
-            "/verify returns {\"isValid\":true,\"invalidReason\":null}. " +
-            "t54 settle tx hash: 8DB5B4144A24E7D72FED584D8B0EAFFE19B9034FE5EC3DD296B19FED5731B7E8")]
+    // Live test: hits public testnet faucet + the t54 hosted facilitator (no SLA).
+    // Kept out of the repo's TestI/TestU CI filters by name so a t54/testnet hiccup
+    // never reds an unrelated CI run; runs in a plain `dotnet test`.
+    // G6 PASS (2026-06-23): sourceTag=804681468 in extra resolves source_tag_mismatch;
+    // /verify returns {"isValid":true,"invalidReason":null}; settle tx 8DB5B414...B7E8.
     [TestMethod]
     public async Task TestT54LiveSettlesXrpOnTestnet()
     {
