@@ -170,7 +170,11 @@ public class X402T54LiveInteropTests
         }
         finally
         {
-            await client.Disconnect();
+            // Intentionally NOT calling client.Disconnect(): an intentional close cancels an
+            // in-flight background request and surfaces an unobserved OperationCanceledException
+            // ("Connection was intentionally closed") that crashes the MSTest host. The hermetic
+            // tests leave their client open too; the socket is reclaimed when the process exits.
+            await Task.CompletedTask;
         }
     }
 
@@ -281,7 +285,11 @@ public class X402T54LiveInteropTests
         }
         finally
         {
-            await client.Disconnect();
+            // Intentionally NOT calling client.Disconnect(): an intentional close cancels an
+            // in-flight background request and surfaces an unobserved OperationCanceledException
+            // ("Connection was intentionally closed") that crashes the MSTest host. The hermetic
+            // tests leave their client open too; the socket is reclaimed when the process exits.
+            await Task.CompletedTask;
         }
     }
 
