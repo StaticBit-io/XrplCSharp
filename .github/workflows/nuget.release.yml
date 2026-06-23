@@ -35,6 +35,8 @@ jobs:
         dotnet pack Base/Xrpl.AddressCodec/Xrpl.AddressCodec.csproj -c Release --no-build
         dotnet pack Base/Xrpl.BinaryCodec/Xrpl.BinaryCodec.csproj -c Release --no-build
         dotnet pack Base/Xrpl.Keypairs/Xrpl.Keypairs.csproj -c Release --no-build
+        dotnet pack Xrpl.X402/Xrpl.X402.csproj -c Release --no-build
+        dotnet pack Xrpl.X402.AspNetCore/Xrpl.X402.AspNetCore.csproj -c Release --no-build
 
     - name: Push to GitHub Packages
       run: dotnet nuget push "**/*.nupkg" --skip-duplicate --source https://nuget.pkg.github.com/StaticBit-io/index.json -k ${{ secrets.GITHUB_TOKEN }}

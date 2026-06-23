@@ -4,10 +4,22 @@
     <LangVersion>latest</LangVersion>
     <Nullable>enable</Nullable>
     <GenerateDocumentationFile>true</GenerateDocumentationFile>
+    <PackOnBuild>true</PackOnBuild>
+    <Authors>StaticBit-io</Authors>
+    <Owners>StaticBit-io</Owners>
+    <Title>Xrpl.X402</Title>
+    <Description>x402 (HTTP 402) agentic payments client for the XRP Ledger (XRPL exact scheme). Detects HTTP 402 challenges, builds and locally signs an XRPL Payment (XRP or RLUSD/IOU), and retries with a PAYMENT-SIGNATURE header. Verified live against the t54 facilitator.</Description>
     <PackageId>Xrpl.X402</PackageId>
-    <Version>0.1.0-preview.1</Version>
-    <Description>x402 (HTTP 402) agentic payments client for the XRP Ledger (XRPL exact scheme).</Description>
+    <PackageVersion>1.0.0</PackageVersion>
+    <NeutralLanguage>en-US</NeutralLanguage>
+    <PackageLicenseExpression>Apache-2.0</PackageLicenseExpression>
+    <PackageProjectUrl>https://github.com/StaticBit-io/XrplCSharp</PackageProjectUrl>
+    <PackageReadmeFile>README.md</PackageReadmeFile>
+    <PackageTags>xrpl;xrp;x402;payments;agentic;http-402;rlusd;stablecoin;t54</PackageTags>
   </PropertyGroup>
+  <ItemGroup>
+    <None Include="README.md" Pack="true" PackagePath="\" />
+  </ItemGroup>
   <ItemGroup>
     <ProjectReference Include="..\Xrpl\Xrpl.csproj" />
   </ItemGroup>

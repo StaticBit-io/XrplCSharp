@@ -1,5 +1,13 @@
 # Changes
 
+### Xrpl.X402 1.0.0 / Xrpl.X402.AspNetCore 1.0.0 06/23/2026
+* **New package `Xrpl.X402`** — x402 (HTTP-402) agentic payments client for the XRP Ledger (t54 "XRPL exact scheme"). A `DelegatingHandler` that detects a 402 challenge, builds and locally signs an XRPL `Payment` (XRP or RLUSD/IOU), and retries with a `PAYMENT-SIGNATURE` header. Signs but does not submit — the facilitator settles
+* Security: spending caps enforced before signing (XRP `MaxAmountDrops`; IOU fails closed without an explicit per-issuer cap), optional payTo/issuer allowlist, anti-double-pay, `LastLedgerSequence` capped by `maxTimeoutSeconds`
+* Intent binding matches the t54 reference payer: `Payment.InvoiceID = SHA-256(invoiceId)`, a `MemoData` = hex(invoiceId), `payload.invoiceId`, and `SourceTag` from `extra.sourceTag` (configurable via `X402IntentBinding`); IOU payments include `SendMax`
+* Verifiable Intent passthrough via `IVerifiableIntentProvider` (the SD-JWT chain itself is supplied by the caller)
+* **New package `Xrpl.X402.AspNetCore`** — ASP.NET Core server middleware: a `RequirePayment` endpoint filter plus `LedgerSettlingFacilitator` (settles locally) and `T54Facilitator` (delegates to a t54 facilitator)
+* Live interop with the t54 testnet facilitator confirmed on-chain for both XRP and RLUSD/IOU (`/verify` → `isValid:true`, `/settle` settles)
+
 ### 10.4.2.0 06/05/2026
 * Fix thread-unsafe request id assignment in `RequestManager` — concurrent requests on a single connection (e.g. `Task.WhenAll` over several `BookOffers`) could collide on the same id and throw `Response with id '$<guid>' is already pending` or drop a pending promise. Removed the shared `nextId` field; each call now generates its own `Guid` and registers via a single atomic `ConcurrentDictionary.TryAdd`, enabling parallel requests on one connection
 * Surface exceptions thrown by stream handlers (`OnLedgerClosed`, `OnTransaction`, etc.) through the `OnError` event instead of swallowing them into a debug trace — consumer bugs are now observable, while the message loop stays alive and a throwing `OnError` handler is contained
