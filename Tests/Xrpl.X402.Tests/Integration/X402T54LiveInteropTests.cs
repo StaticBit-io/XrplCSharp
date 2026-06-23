@@ -23,8 +23,9 @@ namespace Xrpl.X402.Tests.Integration;
 /// Live interop test that pins our x402 wire format against the real t54 facilitator
 /// (<c>https://xrpl-facilitator-testnet.t54.ai</c>) on public testnet.
 /// <para>
-/// This test is intentionally <see cref="IgnoreAttribute">ignored</see> in CI.
-/// Run manually to verify end-to-end interoperability with the live t54 service.
+/// These tests run in CI (the <c>TestI</c> integration filter) and require live external
+/// services: the public XRPL testnet faucet and the t54 hosted facilitator. A testnet or
+/// t54 outage will therefore fail the integration job.
 /// </para>
 /// <para>
 /// G5 fix (2026-06-23): aligned to t54 reference payer (x402-xrpl 0.2.0):
@@ -45,6 +46,7 @@ namespace Xrpl.X402.Tests.Integration;
 /// </para>
 /// </summary>
 [TestClass]
+[DoNotParallelize] // live tests hit the shared public testnet faucet; serialize to avoid burst rate-limiting
 public class X402T54LiveInteropTests
 {
     private const string TestnetUrl = "wss://s.altnet.rippletest.net:51233";
@@ -65,13 +67,12 @@ public class X402T54LiveInteropTests
     /// Uses default <c>X402IntentBinding.Both</c>: sets both <c>Payment.InvoiceID</c> (SHA-256)
     /// and a Memo (UTF-8 hex). <c>payload.invoiceId</c> = raw invoice id string.
     /// </summary>
-    // Live test: hits public testnet faucet + the t54 hosted facilitator (no SLA).
-    // Kept out of the repo's TestI/TestU CI filters by name so a t54/testnet hiccup
-    // never reds an unrelated CI run; runs in a plain `dotnet test`.
+    // Live test: hits the public testnet faucet + the t54 hosted facilitator.
+    // Named with the TestI prefix so it runs in the CI integration job (TestI filter).
     // G6 PASS (2026-06-23): sourceTag=804681468 in extra resolves source_tag_mismatch;
     // /verify returns {"isValid":true,"invalidReason":null}; settle tx 8DB5B414...B7E8.
     [TestMethod]
-    public async Task TestT54LiveSettlesXrpOnTestnet()
+    public async Task TestILiveT54SettlesXrpOnTestnet()
     {
         // ── 1. Connect to public testnet ───────────────────────────────────────────
         XrplClient client = new(TestnetUrl);
@@ -170,7 +171,7 @@ public class X402T54LiveInteropTests
     // matches the requirement (it does not validate the issuer is Ripple's real RLUSD).
     // Exercises the IOU wire path: Amount object + SendMax + InvoiceID(SHA256) + memo + sourceTag.
     [TestMethod]
-    public async Task TestT54LiveSettlesRlusdOnTestnet()
+    public async Task TestILiveT54SettlesRlusdOnTestnet()
     {
         const string Rlusd = "524C555344000000000000000000000000000000";
         const string RlusdInvoiceId = "inv-live-rlusd-001";
