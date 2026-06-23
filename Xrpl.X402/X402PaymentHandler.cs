@@ -77,8 +77,11 @@ public sealed class X402PaymentHandler : DelegatingHandler
 
         HttpResponseMessage paid = await base.SendAsync(retry, cancellationToken);
         if (paid.StatusCode == HttpStatusCode.PaymentRequired)
+        {
+            paid.Dispose();
             throw new X402PaymentException("payment_rejected",
                 "Server still returned 402 after payment (anti double-pay guard).");
+        }
         return paid;
     }
 
@@ -90,7 +93,19 @@ public sealed class X402PaymentHandler : DelegatingHandler
         string? headerValue = values.FirstOrDefault();
         if (string.IsNullOrWhiteSpace(headerValue))
             throw new X402PaymentException("invalid_challenge", "PAYMENT-REQUIRED header had no value.");
-        PaymentRequiredChallenge challenge = X402Base64Json.Decode<PaymentRequiredChallenge>(headerValue);
+        PaymentRequiredChallenge challenge;
+        try
+        {
+            challenge = X402Base64Json.Decode<PaymentRequiredChallenge>(headerValue);
+        }
+        catch (Exception)
+        {
+            throw new X402PaymentException("invalid_challenge", "PAYMENT-REQUIRED header is malformed.");
+        }
+
+        if (challenge.Accepts is null || challenge.Accepts.Count == 0)
+            throw new X402PaymentException("invalid_challenge", "PAYMENT-REQUIRED challenge had no requirements.");
+
         PaymentRequirement? match = challenge.Accepts.FirstOrDefault(r =>
             string.Equals(r.Scheme, "exact", StringComparison.OrdinalIgnoreCase) &&
             string.Equals(r.Network, _options.Network, StringComparison.OrdinalIgnoreCase));

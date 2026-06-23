@@ -86,6 +86,10 @@ public sealed class LedgerSettlingFacilitator : IX402Facilitator
                 Payer = payer
             };
         }
+        catch (OperationCanceledException) when (cancellationToken.IsCancellationRequested)
+        {
+            throw;
+        }
         catch
         {
             return new PaymentResponseEnvelope

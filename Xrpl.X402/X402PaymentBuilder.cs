@@ -118,6 +118,12 @@ public static class X402PaymentBuilder
     private static string? GetString(Dictionary<string, JsonElement> extra, string key) =>
         extra.TryGetValue(key, out JsonElement el) && el.ValueKind == JsonValueKind.String ? el.GetString() : null;
 
-    private static uint? GetUInt(Dictionary<string, JsonElement> extra, string key) =>
-        extra.TryGetValue(key, out JsonElement el) && el.ValueKind == JsonValueKind.Number ? el.GetUInt32() : null;
+    private static uint? GetUInt(Dictionary<string, JsonElement> extra, string key)
+    {
+        if (!extra.TryGetValue(key, out JsonElement el))
+            return null;
+        if (el.ValueKind != JsonValueKind.Number || !el.TryGetUInt32(out uint value))
+            throw new X402PaymentException("invalid_requirement", $"extra.{key} must be a uint32 number");
+        return value;
+    }
 }

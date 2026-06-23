@@ -49,6 +49,8 @@ public sealed class T54Facilitator : IX402Facilitator
     public T54Facilitator(HttpClient http, string baseUrl = "https://xrpl-facilitator-testnet.t54.ai")
     {
         _http = http ?? throw new ArgumentNullException(nameof(http));
+        if (string.IsNullOrWhiteSpace(baseUrl))
+            throw new ArgumentException("Base URL cannot be null or empty.", nameof(baseUrl));
         _baseUrl = baseUrl.TrimEnd('/');
     }
 
@@ -130,6 +132,10 @@ public sealed class T54Facilitator : IX402Facilitator
                 Success = false,
                 ErrorReason = "t54_empty_response"
             };
+        }
+        catch (OperationCanceledException) when (cancellationToken.IsCancellationRequested)
+        {
+            throw;
         }
         catch (Exception ex)
         {

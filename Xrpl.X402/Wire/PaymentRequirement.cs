@@ -35,7 +35,15 @@ public sealed class PaymentRequirement
 
     /// <summary>
     /// Arbitrary extension data supplied by the server, such as <c>invoiceId</c>, <c>sessionId</c>,
-    /// <c>sourceTag</c>, and <c>issuer</c> (required for IOU assets).
+    /// <c>sourceTag</c>, and <c>issuer</c> (required for IOU assets). A <c>null</c> JSON value is
+    /// normalized to an empty dictionary so consumers never dereference null.
     /// </summary>
-    [JsonPropertyName("extra")] public Dictionary<string, JsonElement> Extra { get; set; } = new();
+    [JsonPropertyName("extra")]
+    public Dictionary<string, JsonElement> Extra
+    {
+        get => _extra;
+        set => _extra = value ?? new Dictionary<string, JsonElement>();
+    }
+
+    private Dictionary<string, JsonElement> _extra = new();
 }
