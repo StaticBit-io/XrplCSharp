@@ -1,5 +1,6 @@
 using System;
 using System.Collections.Generic;
+using System.Globalization;
 using System.Net.Http;
 using System.Net.Http.Json;
 using System.Text.Json;
@@ -9,6 +10,7 @@ using System.Threading.Tasks;
 using Microsoft.VisualStudio.TestTools.UnitTesting;
 
 using Xrpl.Client;
+using Xrpl.Client.Exceptions;
 using Xrpl.Models.Common;
 using Xrpl.Models.Transactions;
 using Xrpl.Sugar;
@@ -26,6 +28,13 @@ namespace Xrpl.X402.Tests.Integration;
 /// These tests run in CI (the <c>TestI</c> integration filter) and require live external
 /// services: the public XRPL testnet faucet and the t54 hosted facilitator. A testnet or
 /// t54 outage will therefore fail the integration job.
+/// </para>
+/// <para>
+/// Faucet usage (2026-06-23): the public testnet faucet rate-limits bursts, so funding a
+/// fresh wallet per account (payer/merchant/issuer = up to 5 calls/run) is unreliable in CI.
+/// Instead, the faucet is hit <b>once per class</b> to fund a single shared <c>_treasury</c>
+/// wallet (with retry + top-up), and every payer/merchant/issuer is seeded from the treasury
+/// via plain XRP <see cref="Payment"/>s. This collapses the faucet dependency to one call.
 /// </para>
 /// <para>
 /// G5 fix (2026-06-23): aligned to t54 reference payer (x402-xrpl 0.2.0):
@@ -46,7 +55,7 @@ namespace Xrpl.X402.Tests.Integration;
 /// </para>
 /// </summary>
 [TestClass]
-[DoNotParallelize] // live tests hit the shared public testnet faucet; serialize to avoid burst rate-limiting
+[DoNotParallelize] // live tests share one client + treasury; serialize to keep the single faucet dependency clean
 public class X402T54LiveInteropTests
 {
     private const string TestnetUrl = "wss://s.altnet.rippletest.net:51233";
@@ -55,6 +64,10 @@ public class X402T54LiveInteropTests
     // Plain-string invoiceId — any non-empty string; t54 binding reads invoiceId from extra
     private const string LiveInvoiceId = "inv-live-001";
 
+    // Treasury must cover every seeded account: XRP test (payer 12 + merchant 12) and
+    // RLUSD test (issuer 12 + payer 14 + merchant 14) = 64 XRP, plus a fee buffer.
+    private const decimal TreasuryMinXrp = 66m;
+
     private static readonly JsonSerializerOptions _jsonOpts = new()
     {
         DefaultIgnoreCondition = JsonIgnoreCondition.WhenWritingNull,
@@ -62,120 +75,192 @@ public class X402T54LiveInteropTests
         WriteIndented = false
     };
 
+    // Shared across both live tests (the class is [DoNotParallelize], so access is serialized).
+    private static XrplClient _client = null!;
+    private static XrplWallet _treasury = null!;
+
+    private static XrplClient.ClientOptions SafeOptions() => new()
+    {
+        MaxReconnectAttempts = 3,
+        ReconnectBaseDelay = TimeSpan.FromSeconds(5),
+        ReconnectMaxDelay = TimeSpan.FromSeconds(6),
+        RequestPolicy = RequestFailurePolicy.ImmediateFail,
+        StopAfterMaxAttempts = true,
+        UseCustomPing = false,
+    };
+
+    /// <summary>
+    /// Connects to testnet and funds a single shared treasury wallet from the faucet (once).
+    /// Every per-test account is then seeded from this treasury, so the faucet is the only
+    /// external funding dependency and it is hit exactly once per class run.
+    /// </summary>
+    [ClassInitialize]
+    public static async Task ClassInitialize(TestContext context)
+    {
+        _client = new(TestnetUrl, options: SafeOptions());
+        await _client.Connect();
+        _treasury = await FundTreasuryAsync(TreasuryMinXrp);
+    }
+
+    /// <summary>
+    /// Funds one wallet from the testnet faucet, retrying on faucet failure and topping up the
+    /// same address (spaced out to avoid burst rate-limiting) until it holds at least
+    /// <paramref name="minXrp"/> XRP.
+    /// </summary>
+    private static async Task<XrplWallet> FundTreasuryAsync(decimal minXrp)
+    {
+        XrplWallet treasury = XrplWallet.Generate();
+        string? lastError = null;
+
+        for (int attempt = 1; attempt <= 6; attempt++)
+        {
+            try
+            {
+                await _client.FundWallet(treasury);
+            }
+            catch (XRPLFaucetException ex)
+            {
+                lastError = ex.Message;
+                Console.WriteLine($"[T54-LIVE] faucet attempt {attempt} failed: {ex.Message}");
+                await Task.Delay(TimeSpan.FromSeconds(10));
+                continue;
+            }
+
+            decimal balance = await GetXrpBalanceAsync(treasury.ClassicAddress);
+            Console.WriteLine($"[T54-LIVE] treasury {treasury.ClassicAddress} balance after attempt {attempt} = {balance} XRP");
+            if (balance >= minXrp)
+                return treasury;
+
+            // Not enough yet — top up the same address; space the calls to dodge rate-limiting.
+            await Task.Delay(TimeSpan.FromSeconds(10));
+        }
+
+        decimal final = await GetXrpBalanceAsync(treasury.ClassicAddress);
+        if (final >= minXrp)
+            return treasury;
+
+        throw new XRPLFaucetException(
+            $"Could not fund treasury to {minXrp} XRP via testnet faucet (got {final} XRP). Last error: {lastError ?? "(none)"}");
+    }
+
+    private static async Task<decimal> GetXrpBalanceAsync(string address)
+    {
+        try
+        {
+            return Convert.ToDecimal(await _client.GetXrpBalance(address), CultureInfo.InvariantCulture);
+        }
+        catch
+        {
+            return 0m;
+        }
+    }
+
+    /// <summary>
+    /// Creates a fresh wallet and funds it from the treasury with <paramref name="xrp"/> XRP
+    /// (a single on-ledger Payment, which also activates the new account).
+    /// </summary>
+    private static async Task<XrplWallet> SeedAccountAsync(decimal xrp, string label)
+    {
+        XrplWallet wallet = XrplWallet.Generate();
+        long drops = (long)(xrp * 1_000_000m);
+
+        await SubmitOrThrow(_client, new Payment
+        {
+            Account = _treasury.ClassicAddress,
+            Destination = wallet.ClassicAddress,
+            Amount = new Currency { CurrencyCode = "XRP", Value = drops.ToString(CultureInfo.InvariantCulture) }
+        }.ToDictionary(), _treasury, $"Seed {label} ({xrp} XRP) -> {wallet.ClassicAddress}");
+
+        return wallet;
+    }
+
     /// <summary>
     /// Full end-to-end x402 flow against the real t54 facilitator on testnet.
     /// Uses default <c>X402IntentBinding.Both</c>: sets both <c>Payment.InvoiceID</c> (SHA-256)
     /// and a Memo (UTF-8 hex). <c>payload.invoiceId</c> = raw invoice id string.
     /// </summary>
-    // Live test: hits the public testnet faucet + the t54 hosted facilitator.
+    // Live test: hits the t54 hosted facilitator; accounts are seeded from the shared treasury.
     // Named with the TestI prefix so it runs in the CI integration job (TestI filter).
     // G6 PASS (2026-06-23): sourceTag=804681468 in extra resolves source_tag_mismatch;
     // /verify returns {"isValid":true,"invalidReason":null}; settle tx 8DB5B414...B7E8.
     [TestMethod]
     public async Task TestILiveT54SettlesXrpOnTestnet()
     {
-        // ── 1. Connect to public testnet ───────────────────────────────────────────
-        XrplClient client = new(TestnetUrl, options: new XrplClient.ClientOptions
+        // ── 1. Seed payer and merchant from the shared treasury ────────────────────
+        XrplWallet payer = await SeedAccountAsync(12m, "xrp-payer");
+        XrplWallet merchant = await SeedAccountAsync(12m, "xrp-merchant");
+
+        Console.WriteLine($"[T54-LIVE] payer    = {payer.ClassicAddress}");
+        Console.WriteLine($"[T54-LIVE] merchant = {merchant.ClassicAddress}");
+        Console.WriteLine($"[T54-LIVE] invoiceId = {LiveInvoiceId}");
+
+        // ── 2. Build requirement & payment ────────────────────────────────────────
+        // invoiceId is a plain string; Payment.InvoiceID = SHA-256(UTF-8(invoiceId))
+        PaymentRequirement requirement = new()
         {
-            MaxReconnectAttempts = 3,
-            ReconnectBaseDelay = TimeSpan.FromSeconds(5),
-            ReconnectMaxDelay = TimeSpan.FromSeconds(6),
-            RequestPolicy = RequestFailurePolicy.ImmediateFail,
-            StopAfterMaxAttempts = true,
-            UseCustomPing = false,
-        });
-        await client.Connect();
+            Scheme = "exact",
+            Network = "xrpl:1",
+            Asset = "XRP",
+            PayTo = merchant.ClassicAddress,
+            Amount = "1000000",
+            MaxTimeoutSeconds = 600,
+            Extra = new()
+            {
+                ["invoiceId"] = JsonDocument.Parse($"\"{LiveInvoiceId}\"").RootElement,
+                ["sourceTag"] = JsonDocument.Parse("804681468").RootElement
+            }
+        };
 
-        try
+        // Default IntentBinding = Both: sets Payment.InvoiceID = SHA-256(inv) + Memo.MemoData = UTF8-hex(inv)
+        IX402Signer signer = new XrplWalletX402Signer(_client, payer);
+        (Xrpl.Models.Transactions.Payment payment, string resolvedInv) =
+            X402PaymentBuilder.BuildWithInvoiceId(requirement, payer.ClassicAddress);
+
+        Console.WriteLine($"[T54-LIVE] payment.InvoiceID = {payment.InvoiceID}");
+        Console.WriteLine($"[T54-LIVE] payment.SourceTag = {payment.SourceTag}");
+        Console.WriteLine($"[T54-LIVE] memo.MemoData     = {payment.Memos?[0].Memo.MemoData}");
+        Console.WriteLine($"[T54-LIVE] resolvedInv       = {resolvedInv}");
+
+        string signedBlob = await signer.PrepareAndSignAsync(payment, requirement.MaxTimeoutSeconds);
+        Console.WriteLine($"[T54-LIVE] signedBlob (first 80) = {signedBlob[..Math.Min(80, signedBlob.Length)]}...");
+
+        // payload.invoiceId = raw invoice id (G5 fix)
+        PaymentSignatureEnvelope envelope = new()
         {
-            // ── 2. Fund payer and merchant via testnet faucet ──────────────────────
-            XrplWallet payer = XrplWallet.Generate();
-            XrplWallet merchant = XrplWallet.Generate();
+            X402Version = 2,
+            Accepted = requirement,
+            Payload = new SignedPayload { SignedTxBlob = signedBlob, InvoiceId = resolvedInv }
+        };
 
-            WalletSugar.Funded payerFunded = await client.FundWallet(payer);
-            WalletSugar.Funded merchantFunded = await client.FundWallet(merchant);
-
-            Console.WriteLine($"[T54-LIVE] payer    = {payer.ClassicAddress} ({payerFunded.Balance} XRP)");
-            Console.WriteLine($"[T54-LIVE] merchant = {merchant.ClassicAddress} ({merchantFunded.Balance} XRP)");
-
-            Console.WriteLine($"[T54-LIVE] invoiceId = {LiveInvoiceId}");
-
-            // ── 3. Build requirement & payment ────────────────────────────────────
-            // invoiceId is a plain string; Payment.InvoiceID = SHA-256(UTF-8(invoiceId))
-            PaymentRequirement requirement = new()
-            {
-                Scheme = "exact",
-                Network = "xrpl:1",
-                Asset = "XRP",
-                PayTo = merchant.ClassicAddress,
-                Amount = "1000000",
-                MaxTimeoutSeconds = 600,
-                Extra = new()
-                {
-                    ["invoiceId"] = JsonDocument.Parse($"\"{LiveInvoiceId}\"").RootElement,
-                    ["sourceTag"] = JsonDocument.Parse("804681468").RootElement
-                }
-            };
-
-            // Default IntentBinding = Both: sets Payment.InvoiceID = SHA-256(inv) + Memo.MemoData = UTF8-hex(inv)
-            IX402Signer signer = new XrplWalletX402Signer(client, payer);
-            (Xrpl.Models.Transactions.Payment payment, string resolvedInv) =
-                X402PaymentBuilder.BuildWithInvoiceId(requirement, payer.ClassicAddress);
-
-            Console.WriteLine($"[T54-LIVE] payment.InvoiceID = {payment.InvoiceID}");
-            Console.WriteLine($"[T54-LIVE] payment.SourceTag = {payment.SourceTag}");
-            Console.WriteLine($"[T54-LIVE] memo.MemoData     = {payment.Memos?[0].Memo.MemoData}");
-            Console.WriteLine($"[T54-LIVE] resolvedInv       = {resolvedInv}");
-
-            string signedBlob = await signer.PrepareAndSignAsync(payment, requirement.MaxTimeoutSeconds);
-            Console.WriteLine($"[T54-LIVE] signedBlob (first 80) = {signedBlob[..Math.Min(80, signedBlob.Length)]}...");
-
-            // payload.invoiceId = raw invoice id (G5 fix)
-            PaymentSignatureEnvelope envelope = new()
-            {
-                X402Version = 2,
-                Accepted = requirement,
-                Payload = new SignedPayload { SignedTxBlob = signedBlob, InvoiceId = resolvedInv }
-            };
-
-            // Build request body
-            object requestBody = new
-            {
-                paymentPayload = envelope,
-                paymentRequirements = requirement
-            };
-
-            // ── 4. Call /verify directly and print verbatim response ──────────────
-            using HttpClient httpClient = new();
-
-            using HttpResponseMessage verifyResp = await httpClient.PostAsJsonAsync(
-                $"{T54BaseUrl}/verify", requestBody, _jsonOpts);
-
-            string verifyBody = await verifyResp.Content.ReadAsStringAsync();
-            Console.WriteLine($"[T54-LIVE] /verify status = {(int)verifyResp.StatusCode}");
-            Console.WriteLine($"[T54-LIVE] /verify body   = {verifyBody}");
-
-            // ── 5. Call T54Facilitator (verify → settle) ──────────────────────────
-            T54Facilitator t54 = new(new HttpClient());
-            PaymentResponseEnvelope receipt = await t54.VerifyAndSettleAsync(envelope);
-
-            Console.WriteLine($"[T54-LIVE] receipt.Success      = {receipt.Success}");
-            Console.WriteLine($"[T54-LIVE] receipt.Transaction   = {receipt.Transaction}");
-            Console.WriteLine($"[T54-LIVE] receipt.ErrorReason   = {receipt.ErrorReason}");
-
-            Assert.IsTrue(receipt.Success,
-                $"t54 settlement failed: errorReason={receipt.ErrorReason}");
-            Assert.IsFalse(string.IsNullOrEmpty(receipt.Transaction),
-                "Expected a non-empty transaction hash from t54");
-        }
-        finally
+        // Build request body
+        object requestBody = new
         {
-            // Intentionally NOT calling client.Disconnect(): an intentional close cancels an
-            // in-flight background request and surfaces an unobserved OperationCanceledException
-            // ("Connection was intentionally closed") that crashes the MSTest host. The hermetic
-            // tests leave their client open too; the socket is reclaimed when the process exits.
-            await Task.CompletedTask;
-        }
+            paymentPayload = envelope,
+            paymentRequirements = requirement
+        };
+
+        // ── 3. Call /verify directly and print verbatim response ──────────────────
+        using HttpClient httpClient = new();
+
+        using HttpResponseMessage verifyResp = await httpClient.PostAsJsonAsync(
+            $"{T54BaseUrl}/verify", requestBody, _jsonOpts);
+
+        string verifyBody = await verifyResp.Content.ReadAsStringAsync();
+        Console.WriteLine($"[T54-LIVE] /verify status = {(int)verifyResp.StatusCode}");
+        Console.WriteLine($"[T54-LIVE] /verify body   = {verifyBody}");
+
+        // ── 4. Call T54Facilitator (verify → settle) ──────────────────────────────
+        T54Facilitator t54 = new(new HttpClient());
+        PaymentResponseEnvelope receipt = await t54.VerifyAndSettleAsync(envelope);
+
+        Console.WriteLine($"[T54-LIVE] receipt.Success      = {receipt.Success}");
+        Console.WriteLine($"[T54-LIVE] receipt.Transaction   = {receipt.Transaction}");
+        Console.WriteLine($"[T54-LIVE] receipt.ErrorReason   = {receipt.ErrorReason}");
+
+        Assert.IsTrue(receipt.Success,
+            $"t54 settlement failed: errorReason={receipt.ErrorReason}");
+        Assert.IsFalse(string.IsNullOrEmpty(receipt.Transaction),
+            "Expected a non-empty transaction hash from t54");
     }
 
     // Live t54 RLUSD/IOU interop. Uses our OWN testnet issuer with the RLUSD currency code:
@@ -188,109 +273,85 @@ public class X402T54LiveInteropTests
         const string Rlusd = "524C555344000000000000000000000000000000";
         const string RlusdInvoiceId = "inv-live-rlusd-001";
 
-        XrplClient client = new(TestnetUrl, options: new XrplClient.ClientOptions
+        // Seed issuer, payer and merchant from the shared treasury (payer/merchant carry an
+        // extra owner reserve for their RLUSD trustline).
+        XrplWallet issuer = await SeedAccountAsync(12m, "rlusd-issuer");
+        XrplWallet payer = await SeedAccountAsync(14m, "rlusd-payer");
+        XrplWallet merchant = await SeedAccountAsync(14m, "rlusd-merchant");
+        Console.WriteLine($"[T54-LIVE-RLUSD] issuer={issuer.ClassicAddress} payer={payer.ClassicAddress} merchant={merchant.ClassicAddress}");
+
+        // Issuer enables rippling (else payer→merchant rippling through the issuer is tecPATH_DRY).
+        await SubmitOrThrow(_client, new AccountSet
         {
-            MaxReconnectAttempts = 3,
-            ReconnectBaseDelay = TimeSpan.FromSeconds(5),
-            ReconnectMaxDelay = TimeSpan.FromSeconds(6),
-            RequestPolicy = RequestFailurePolicy.ImmediateFail,
-            StopAfterMaxAttempts = true,
-            UseCustomPing = false,
-        });
-        await client.Connect();
+            Account = issuer.ClassicAddress,
+            SetFlag = AccountSetAsfFlags.asfDefaultRipple
+        }.ToDictionary(), issuer, "AccountSet(DefaultRipple)");
 
-        try
+        // Trustlines payer→issuer and merchant→issuer for RLUSD.
+        await SubmitOrThrow(_client, new TrustSet
         {
-            XrplWallet issuer = XrplWallet.Generate();
-            XrplWallet payer = XrplWallet.Generate();
-            XrplWallet merchant = XrplWallet.Generate();
+            Account = payer.ClassicAddress,
+            LimitAmount = new Currency { CurrencyCode = Rlusd, Issuer = issuer.ClassicAddress, Value = "1000000" }
+        }.ToDictionary(), payer, "TrustSet(payer)");
 
-            await client.FundWallet(issuer);
-            await client.FundWallet(payer);
-            await client.FundWallet(merchant);
-            Console.WriteLine($"[T54-LIVE-RLUSD] issuer={issuer.ClassicAddress} payer={payer.ClassicAddress} merchant={merchant.ClassicAddress}");
-
-            // Issuer enables rippling (else payer→merchant rippling through the issuer is tecPATH_DRY).
-            await SubmitOrThrow(client, new AccountSet
-            {
-                Account = issuer.ClassicAddress,
-                SetFlag = AccountSetAsfFlags.asfDefaultRipple
-            }.ToDictionary(), issuer, "AccountSet(DefaultRipple)");
-
-            // Trustlines payer→issuer and merchant→issuer for RLUSD.
-            await SubmitOrThrow(client, new TrustSet
-            {
-                Account = payer.ClassicAddress,
-                LimitAmount = new Currency { CurrencyCode = Rlusd, Issuer = issuer.ClassicAddress, Value = "1000000" }
-            }.ToDictionary(), payer, "TrustSet(payer)");
-
-            await SubmitOrThrow(client, new TrustSet
-            {
-                Account = merchant.ClassicAddress,
-                LimitAmount = new Currency { CurrencyCode = Rlusd, Issuer = issuer.ClassicAddress, Value = "1000000" }
-            }.ToDictionary(), merchant, "TrustSet(merchant)");
-
-            // Issuer issues 100 RLUSD to payer.
-            await SubmitOrThrow(client, new Payment
-            {
-                Account = issuer.ClassicAddress,
-                Destination = payer.ClassicAddress,
-                Amount = new Currency { CurrencyCode = Rlusd, Issuer = issuer.ClassicAddress, Value = "100" }
-            }.ToDictionary(), issuer, "Issue RLUSD");
-
-            PaymentRequirement requirement = new()
-            {
-                Scheme = "exact",
-                Network = "xrpl:1",
-                Asset = Rlusd,
-                PayTo = merchant.ClassicAddress,
-                Amount = "2.5",
-                MaxTimeoutSeconds = 600,
-                Extra = new()
-                {
-                    ["invoiceId"] = JsonDocument.Parse($"\"{RlusdInvoiceId}\"").RootElement,
-                    ["issuer"] = JsonDocument.Parse($"\"{issuer.ClassicAddress}\"").RootElement,
-                    ["sourceTag"] = JsonDocument.Parse("804681468").RootElement
-                }
-            };
-
-            IX402Signer signer = new XrplWalletX402Signer(client, payer);
-            (Payment payment, string resolvedInv) = X402PaymentBuilder.BuildWithInvoiceId(requirement, payer.ClassicAddress);
-
-            Console.WriteLine($"[T54-LIVE-RLUSD] InvoiceID={payment.InvoiceID} SourceTag={payment.SourceTag}");
-            Console.WriteLine($"[T54-LIVE-RLUSD] Amount={JsonSerializer.Serialize(payment.Amount)} SendMax={JsonSerializer.Serialize(payment.SendMax)}");
-
-            string signedBlob = await signer.PrepareAndSignAsync(payment, requirement.MaxTimeoutSeconds);
-
-            PaymentSignatureEnvelope envelope = new()
-            {
-                X402Version = 2,
-                Accepted = requirement,
-                Payload = new SignedPayload { SignedTxBlob = signedBlob, InvoiceId = resolvedInv }
-            };
-
-            using HttpClient httpClient = new();
-            using HttpResponseMessage verifyResp = await httpClient.PostAsJsonAsync(
-                $"{T54BaseUrl}/verify",
-                new { paymentPayload = envelope, paymentRequirements = requirement },
-                _jsonOpts);
-            Console.WriteLine($"[T54-LIVE-RLUSD] /verify status={(int)verifyResp.StatusCode} body={await verifyResp.Content.ReadAsStringAsync()}");
-
-            T54Facilitator t54 = new(new HttpClient());
-            PaymentResponseEnvelope receipt = await t54.VerifyAndSettleAsync(envelope);
-            Console.WriteLine($"[T54-LIVE-RLUSD] receipt.Success={receipt.Success} tx={receipt.Transaction} err={receipt.ErrorReason}");
-
-            Assert.IsTrue(receipt.Success, $"t54 RLUSD settlement failed: errorReason={receipt.ErrorReason}");
-            Assert.IsFalse(string.IsNullOrEmpty(receipt.Transaction), "Expected a non-empty tx hash from t54");
-        }
-        finally
+        await SubmitOrThrow(_client, new TrustSet
         {
-            // Intentionally NOT calling client.Disconnect(): an intentional close cancels an
-            // in-flight background request and surfaces an unobserved OperationCanceledException
-            // ("Connection was intentionally closed") that crashes the MSTest host. The hermetic
-            // tests leave their client open too; the socket is reclaimed when the process exits.
-            await Task.CompletedTask;
-        }
+            Account = merchant.ClassicAddress,
+            LimitAmount = new Currency { CurrencyCode = Rlusd, Issuer = issuer.ClassicAddress, Value = "1000000" }
+        }.ToDictionary(), merchant, "TrustSet(merchant)");
+
+        // Issuer issues 100 RLUSD to payer.
+        await SubmitOrThrow(_client, new Payment
+        {
+            Account = issuer.ClassicAddress,
+            Destination = payer.ClassicAddress,
+            Amount = new Currency { CurrencyCode = Rlusd, Issuer = issuer.ClassicAddress, Value = "100" }
+        }.ToDictionary(), issuer, "Issue RLUSD");
+
+        PaymentRequirement requirement = new()
+        {
+            Scheme = "exact",
+            Network = "xrpl:1",
+            Asset = Rlusd,
+            PayTo = merchant.ClassicAddress,
+            Amount = "2.5",
+            MaxTimeoutSeconds = 600,
+            Extra = new()
+            {
+                ["invoiceId"] = JsonDocument.Parse($"\"{RlusdInvoiceId}\"").RootElement,
+                ["issuer"] = JsonDocument.Parse($"\"{issuer.ClassicAddress}\"").RootElement,
+                ["sourceTag"] = JsonDocument.Parse("804681468").RootElement
+            }
+        };
+
+        IX402Signer signer = new XrplWalletX402Signer(_client, payer);
+        (Payment payment, string resolvedInv) = X402PaymentBuilder.BuildWithInvoiceId(requirement, payer.ClassicAddress);
+
+        Console.WriteLine($"[T54-LIVE-RLUSD] InvoiceID={payment.InvoiceID} SourceTag={payment.SourceTag}");
+        Console.WriteLine($"[T54-LIVE-RLUSD] Amount={JsonSerializer.Serialize(payment.Amount)} SendMax={JsonSerializer.Serialize(payment.SendMax)}");
+
+        string signedBlob = await signer.PrepareAndSignAsync(payment, requirement.MaxTimeoutSeconds);
+
+        PaymentSignatureEnvelope envelope = new()
+        {
+            X402Version = 2,
+            Accepted = requirement,
+            Payload = new SignedPayload { SignedTxBlob = signedBlob, InvoiceId = resolvedInv }
+        };
+
+        using HttpClient httpClient = new();
+        using HttpResponseMessage verifyResp = await httpClient.PostAsJsonAsync(
+            $"{T54BaseUrl}/verify",
+            new { paymentPayload = envelope, paymentRequirements = requirement },
+            _jsonOpts);
+        Console.WriteLine($"[T54-LIVE-RLUSD] /verify status={(int)verifyResp.StatusCode} body={await verifyResp.Content.ReadAsStringAsync()}");
+
+        T54Facilitator t54 = new(new HttpClient());
+        PaymentResponseEnvelope receipt = await t54.VerifyAndSettleAsync(envelope);
+        Console.WriteLine($"[T54-LIVE-RLUSD] receipt.Success={receipt.Success} tx={receipt.Transaction} err={receipt.ErrorReason}");
+
+        Assert.IsTrue(receipt.Success, $"t54 RLUSD settlement failed: errorReason={receipt.ErrorReason}");
+        Assert.IsFalse(string.IsNullOrEmpty(receipt.Transaction), "Expected a non-empty tx hash from t54");
     }
 
     private static async Task SubmitOrThrow(IXrplClient client, Dictionary<string, object> tx, XrplWallet wallet, string label)
@@ -299,6 +360,6 @@ public class X402T54LiveInteropTests
         string result = summary.Meta?.TransactionResult ?? "(none)";
         if (!summary.Validated || !result.StartsWith("tes", StringComparison.Ordinal))
             throw new InvalidOperationException($"{label} did not validate: validated={summary.Validated} result={result}");
-        Console.WriteLine($"[T54-LIVE-RLUSD] {label} -> {result} ({summary.Hash})");
+        Console.WriteLine($"[T54-LIVE] {label} -> {result} ({summary.Hash})");
     }
 }
