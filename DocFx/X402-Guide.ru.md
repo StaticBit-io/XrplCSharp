@@ -59,6 +59,119 @@ HttpResponseMessage resource = await http.GetAsync("https://api.example.com/paid
 - **Окно валидности** — `LastLedgerSequence` ограничивается `maxTimeoutSeconds` из требования.
 - Все отказы бросают [`X402PaymentException`](reference/Xrpl.X402.X402PaymentException.html) с машиночитаемым `Reason`.
 
+## Полный флоу (XRP)
+
+Обмен — это три HTTP-шага. `X402PaymentHandler` выполняет шаги 2–3 прозрачно внутри одного `GetAsync`; ниже — что реально идёт на проводе.
+
+### 1. Клиент запрашивает ресурс — сервер называет цену
+
+```http
+GET /paid
+→ 402 Payment Required
+  PAYMENT-REQUIRED: <base64>
+```
+
+Декодированный `PAYMENT-REQUIRED`:
+
+```json
+{
+  "x402Version": 2,
+  "accepts": [{
+    "scheme": "exact",
+    "network": "xrpl:1",
+    "asset": "XRP",
+    "payTo": "rMerchant...",
+    "amount": "1000000",
+    "maxTimeoutSeconds": 600,
+    "extra": { "invoiceId": "inv-123", "sourceTag": 804681468 }
+  }]
+}
+```
+
+### 2. Клиент платит — повторяет запрос с подписанным платежом
+
+Handler выбирает требование `exact` на своей сети, проверяет лимиты трат, строит и локально подписывает XRPL `Payment` (1 XRP на `rMerchant`, `InvoiceID = SHA-256("inv-123")`, `SourceTag = 804681468`) и повторяет запрос с заголовком `PAYMENT-SIGNATURE`:
+
+```http
+GET /paid
+  PAYMENT-SIGNATURE: <base64>
+```
+
+Декодированный `PAYMENT-SIGNATURE`:
+
+```json
+{
+  "x402Version": 2,
+  "accepted": { "scheme": "exact", "network": "xrpl:1", "asset": "XRP", "payTo": "rMerchant...", "amount": "1000000", "maxTimeoutSeconds": 600, "extra": { "invoiceId": "inv-123", "sourceTag": 804681468 } },
+  "payload": { "signedTxBlob": "1200002280000000...", "invoiceId": "inv-123" }
+}
+```
+
+### 3. Сервер сеттлит — возвращает ресурс + квитанцию
+
+Фасилитатор верифицирует подписанный платёж и сеттлит его в леджере (ждёт `tesSUCCESS`), затем отдаёт ресурс с квитанцией `PAYMENT-RESPONSE`:
+
+```http
+200 OK
+  PAYMENT-RESPONSE: <base64>
+
+premium content
+```
+
+Декодированный `PAYMENT-RESPONSE`:
+
+```json
+{ "success": true, "transaction": "8DB5B4144A24E7D72FED584D8B0EAFFE19B9034FE5EC3DD296B19FED5731B7E8", "network": "xrpl:1", "payer": "rPayer..." }
+```
+
+### Чтение квитанции на клиенте
+
+`GetAsync` возвращает финальный ответ `200`; декодируйте заголовок `PAYMENT-RESPONSE`, чтобы получить результат сеттлмента и хеш он-чейн транзакции:
+
+```csharp
+using System.Linq;
+using Xrpl.X402.Wire;
+
+HttpResponseMessage r = await http.GetAsync("https://api.example.com/paid");
+string content = await r.Content.ReadAsStringAsync();   // "premium content"
+
+if (r.Headers.TryGetValues(X402Headers.PaymentResponse, out var values))
+{
+    PaymentResponseEnvelope receipt = X402Base64Json.Decode<PaymentResponseEnvelope>(values.First());
+    Console.WriteLine($"оплачено: {receipt.Success}, tx: {receipt.Transaction}, плательщик: {receipt.Payer}");
+}
+```
+
+## Оплата в RLUSD / IOU
+
+Флоу идентичен — отличается только требование, и у плательщика уже должны быть токен и trust line к эмитенту. Сервер называет цену в issued-валюте:
+
+```json
+{
+  "scheme": "exact",
+  "network": "xrpl:1",
+  "asset": "524C555344000000000000000000000000000000",
+  "payTo": "rMerchant...",
+  "amount": "2.50",
+  "maxTimeoutSeconds": 600,
+  "extra": {
+    "invoiceId": "inv-456",
+    "issuer": "rIssuer...",
+    "sourceTag": 804681468
+  }
+}
+```
+
+- `asset` — 40-hex код валюты (например RLUSD), `amount` — десятичная строка, `extra.issuer` — **обязателен**.
+- Клиент строит issued-currency `Payment`, у которого `Amount` = `{ currency, issuer, value }`, и добавляет соответствующий `SendMax`; шаги 2–3 и квитанция — ровно как выше.
+- IOU-платёж **fail-closed**, пока не задан лимит на эмитента:
+
+```csharp
+var options = new X402ClientOptions { Network = "xrpl:1" };
+options.IouValueCaps["rIssuer..."] = 10m;   // разрешить до 10.0 токена этого эмитента
+// var http = new HttpClient(new X402PaymentHandler(signer, options) { InnerHandler = new HttpClientHandler() });
+```
+
 ## Использование на сервере (`Xrpl.X402.AspNetCore`)
 
 ```csharp

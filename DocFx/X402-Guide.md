@@ -59,6 +59,119 @@ HttpResponseMessage resource = await http.GetAsync("https://api.example.com/paid
 - **Validity window** — `LastLedgerSequence` is capped by the requirement's `maxTimeoutSeconds`.
 - All refusals throw [`X402PaymentException`](reference/Xrpl.X402.X402PaymentException.html) with a machine-readable `Reason`.
 
+## End-to-end flow (XRP)
+
+The exchange is three HTTP steps. `X402PaymentHandler` performs steps 2–3 transparently inside a single `GetAsync`; below is what actually travels on the wire.
+
+### 1. Client requests the resource — server quotes a price
+
+```http
+GET /paid
+→ 402 Payment Required
+  PAYMENT-REQUIRED: <base64>
+```
+
+Decoded `PAYMENT-REQUIRED`:
+
+```json
+{
+  "x402Version": 2,
+  "accepts": [{
+    "scheme": "exact",
+    "network": "xrpl:1",
+    "asset": "XRP",
+    "payTo": "rMerchant...",
+    "amount": "1000000",
+    "maxTimeoutSeconds": 600,
+    "extra": { "invoiceId": "inv-123", "sourceTag": 804681468 }
+  }]
+}
+```
+
+### 2. Client pays — retries with a signed payment
+
+The handler selects the `exact` requirement on its configured network, enforces the spending caps, builds and locally signs an XRPL `Payment` (1 XRP to `rMerchant`, `InvoiceID = SHA-256("inv-123")`, `SourceTag = 804681468`), then retries with the `PAYMENT-SIGNATURE` header:
+
+```http
+GET /paid
+  PAYMENT-SIGNATURE: <base64>
+```
+
+Decoded `PAYMENT-SIGNATURE`:
+
+```json
+{
+  "x402Version": 2,
+  "accepted": { "scheme": "exact", "network": "xrpl:1", "asset": "XRP", "payTo": "rMerchant...", "amount": "1000000", "maxTimeoutSeconds": 600, "extra": { "invoiceId": "inv-123", "sourceTag": 804681468 } },
+  "payload": { "signedTxBlob": "1200002280000000...", "invoiceId": "inv-123" }
+}
+```
+
+### 3. Server settles — returns the resource + a receipt
+
+The facilitator verifies the signed payment and settles it on-ledger (waits for `tesSUCCESS`), then serves the resource with a `PAYMENT-RESPONSE` receipt:
+
+```http
+200 OK
+  PAYMENT-RESPONSE: <base64>
+
+premium content
+```
+
+Decoded `PAYMENT-RESPONSE`:
+
+```json
+{ "success": true, "transaction": "8DB5B4144A24E7D72FED584D8B0EAFFE19B9034FE5EC3DD296B19FED5731B7E8", "network": "xrpl:1", "payer": "rPayer..." }
+```
+
+### Reading the receipt on the client
+
+`GetAsync` returns the final `200` response; decode the `PAYMENT-RESPONSE` header to get the settlement result and on-ledger transaction hash:
+
+```csharp
+using System.Linq;
+using Xrpl.X402.Wire;
+
+HttpResponseMessage r = await http.GetAsync("https://api.example.com/paid");
+string content = await r.Content.ReadAsStringAsync();   // "premium content"
+
+if (r.Headers.TryGetValues(X402Headers.PaymentResponse, out var values))
+{
+    PaymentResponseEnvelope receipt = X402Base64Json.Decode<PaymentResponseEnvelope>(values.First());
+    Console.WriteLine($"paid: {receipt.Success}, tx: {receipt.Transaction}, payer: {receipt.Payer}");
+}
+```
+
+## Paying in RLUSD / IOU
+
+The flow is identical — only the requirement differs, and the payer must already hold the token and a trust line to the issuer. The server quotes an issued currency:
+
+```json
+{
+  "scheme": "exact",
+  "network": "xrpl:1",
+  "asset": "524C555344000000000000000000000000000000",
+  "payTo": "rMerchant...",
+  "amount": "2.50",
+  "maxTimeoutSeconds": 600,
+  "extra": {
+    "invoiceId": "inv-456",
+    "issuer": "rIssuer...",
+    "sourceTag": 804681468
+  }
+}
+```
+
+- `asset` is the 40-hex currency code (e.g. RLUSD), `amount` is a decimal string, and `extra.issuer` is **required**.
+- The client builds an issued-currency `Payment` whose `Amount` is `{ currency, issuer, value }` and adds a matching `SendMax`; steps 2–3 and the receipt are exactly as above.
+- An IOU payment **fails closed** unless a per-issuer cap is configured:
+
+```csharp
+var options = new X402ClientOptions { Network = "xrpl:1" };
+options.IouValueCaps["rIssuer..."] = 10m;   // allow up to 10.0 of this issuer's token
+// var http = new HttpClient(new X402PaymentHandler(signer, options) { InnerHandler = new HttpClientHandler() });
+```
+
 ## Server usage (`Xrpl.X402.AspNetCore`)
 
 ```csharp
