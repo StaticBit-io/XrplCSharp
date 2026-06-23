@@ -1,4 +1,5 @@
 using System;
+using System.Collections.Generic;
 using System.Net.Http;
 using System.Net.Http.Json;
 using System.Text.Json;
@@ -8,6 +9,9 @@ using System.Threading.Tasks;
 using Microsoft.VisualStudio.TestTools.UnitTesting;
 
 using Xrpl.Client;
+using Xrpl.Models.Common;
+using Xrpl.Models.Transactions;
+using Xrpl.Sugar;
 using Xrpl.Wallet;
 using Xrpl.X402;
 using Xrpl.X402.AspNetCore;
@@ -159,5 +163,117 @@ public class X402T54LiveInteropTests
         {
             await client.Disconnect();
         }
+    }
+
+    // Live t54 RLUSD/IOU interop. Uses our OWN testnet issuer with the RLUSD currency code:
+    // real RLUSD has no programmatic testnet faucet, and t54 settles any valid IOU Payment that
+    // matches the requirement (it does not validate the issuer is Ripple's real RLUSD).
+    // Exercises the IOU wire path: Amount object + SendMax + InvoiceID(SHA256) + memo + sourceTag.
+    [TestMethod]
+    public async Task TestT54LiveSettlesRlusdOnTestnet()
+    {
+        const string Rlusd = "524C555344000000000000000000000000000000";
+        const string RlusdInvoiceId = "inv-live-rlusd-001";
+
+        XrplClient client = new(TestnetUrl);
+        await client.Connect();
+
+        try
+        {
+            XrplWallet issuer = XrplWallet.Generate();
+            XrplWallet payer = XrplWallet.Generate();
+            XrplWallet merchant = XrplWallet.Generate();
+
+            await client.FundWallet(issuer);
+            await client.FundWallet(payer);
+            await client.FundWallet(merchant);
+            Console.WriteLine($"[T54-LIVE-RLUSD] issuer={issuer.ClassicAddress} payer={payer.ClassicAddress} merchant={merchant.ClassicAddress}");
+
+            // Issuer enables rippling (else payer→merchant rippling through the issuer is tecPATH_DRY).
+            await SubmitOrThrow(client, new AccountSet
+            {
+                Account = issuer.ClassicAddress,
+                SetFlag = AccountSetAsfFlags.asfDefaultRipple
+            }.ToDictionary(), issuer, "AccountSet(DefaultRipple)");
+
+            // Trustlines payer→issuer and merchant→issuer for RLUSD.
+            await SubmitOrThrow(client, new TrustSet
+            {
+                Account = payer.ClassicAddress,
+                LimitAmount = new Currency { CurrencyCode = Rlusd, Issuer = issuer.ClassicAddress, Value = "1000000" }
+            }.ToDictionary(), payer, "TrustSet(payer)");
+
+            await SubmitOrThrow(client, new TrustSet
+            {
+                Account = merchant.ClassicAddress,
+                LimitAmount = new Currency { CurrencyCode = Rlusd, Issuer = issuer.ClassicAddress, Value = "1000000" }
+            }.ToDictionary(), merchant, "TrustSet(merchant)");
+
+            // Issuer issues 100 RLUSD to payer.
+            await SubmitOrThrow(client, new Payment
+            {
+                Account = issuer.ClassicAddress,
+                Destination = payer.ClassicAddress,
+                Amount = new Currency { CurrencyCode = Rlusd, Issuer = issuer.ClassicAddress, Value = "100" }
+            }.ToDictionary(), issuer, "Issue RLUSD");
+
+            PaymentRequirement requirement = new()
+            {
+                Scheme = "exact",
+                Network = "xrpl:1",
+                Asset = Rlusd,
+                PayTo = merchant.ClassicAddress,
+                Amount = "2.5",
+                MaxTimeoutSeconds = 600,
+                Extra = new()
+                {
+                    ["invoiceId"] = JsonDocument.Parse($"\"{RlusdInvoiceId}\"").RootElement,
+                    ["issuer"] = JsonDocument.Parse($"\"{issuer.ClassicAddress}\"").RootElement,
+                    ["sourceTag"] = JsonDocument.Parse("804681468").RootElement
+                }
+            };
+
+            IX402Signer signer = new XrplWalletX402Signer(client, payer);
+            (Payment payment, string resolvedInv) = X402PaymentBuilder.BuildWithInvoiceId(requirement, payer.ClassicAddress);
+
+            Console.WriteLine($"[T54-LIVE-RLUSD] InvoiceID={payment.InvoiceID} SourceTag={payment.SourceTag}");
+            Console.WriteLine($"[T54-LIVE-RLUSD] Amount={JsonSerializer.Serialize(payment.Amount)} SendMax={JsonSerializer.Serialize(payment.SendMax)}");
+
+            string signedBlob = await signer.PrepareAndSignAsync(payment, requirement.MaxTimeoutSeconds);
+
+            PaymentSignatureEnvelope envelope = new()
+            {
+                X402Version = 2,
+                Accepted = requirement,
+                Payload = new SignedPayload { SignedTxBlob = signedBlob, InvoiceId = resolvedInv }
+            };
+
+            using HttpClient httpClient = new();
+            using HttpResponseMessage verifyResp = await httpClient.PostAsJsonAsync(
+                $"{T54BaseUrl}/verify",
+                new { paymentPayload = envelope, paymentRequirements = requirement },
+                _jsonOpts);
+            Console.WriteLine($"[T54-LIVE-RLUSD] /verify status={(int)verifyResp.StatusCode} body={await verifyResp.Content.ReadAsStringAsync()}");
+
+            T54Facilitator t54 = new(new HttpClient());
+            PaymentResponseEnvelope receipt = await t54.VerifyAndSettleAsync(envelope);
+            Console.WriteLine($"[T54-LIVE-RLUSD] receipt.Success={receipt.Success} tx={receipt.Transaction} err={receipt.ErrorReason}");
+
+            Assert.IsTrue(receipt.Success, $"t54 RLUSD settlement failed: errorReason={receipt.ErrorReason}");
+            Assert.IsFalse(string.IsNullOrEmpty(receipt.Transaction), "Expected a non-empty tx hash from t54");
+        }
+        finally
+        {
+            await client.Disconnect();
+        }
+    }
+
+    private static async Task SubmitOrThrow(IXrplClient client, Dictionary<string, object> tx, XrplWallet wallet, string label)
+    {
+        var summary = await client.SubmitAndWait(tx, wallet: wallet);
+        string result = summary.Meta?.TransactionResult ?? "(none)";
+        if (!summary.Validated || !result.StartsWith("tes", StringComparison.Ordinal))
+            throw new InvalidOperationException($"{label} did not validate: validated={summary.Validated} result={result}");
+        Console.WriteLine($"[T54-LIVE-RLUSD] {label} -> {result} ({summary.Hash})");
     }
 }
