@@ -17,6 +17,14 @@
                 {
                     "files": [ "*.csproj" ],
                     "src": "../Base/Xrpl.Keypairs"
+                },
+                {
+                    "files": [ "*.csproj" ],
+                    "src": "../Xrpl.X402"
+                },
+                {
+                    "files": [ "*.csproj" ],
+                    "src": "../Xrpl.X402.AspNetCore"
                 }
             ],
             "dest": "reference",

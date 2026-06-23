@@ -10,5 +10,7 @@
   href: Vault-Guide.md
 - name: Lending Protocol Guide
   href: LendingProtocol-Guide.md
+- name: x402 Agentic Payments
+  href: X402-Guide.md
 - name: API Reference
   href: reference/
