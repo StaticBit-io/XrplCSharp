@@ -36,6 +36,22 @@ WebSocket client for communicating with XRP Ledger nodes.
 - [Connection](reference/Xrpl.Client.connection.html) - Connection management
 - [Models](reference/Xrpl.Models.html) - Request/Response models
 
+### [Xrpl.X402](reference/Xrpl.X402.html)
+
+x402 (HTTP-402) agentic payments client for the XRP Ledger — autonomously pay for HTTP resources in XRP or RLUSD. See the [x402 Agentic Payments Guide](X402-Guide.html).
+
+- [X402PaymentHandler](reference/Xrpl.X402.X402PaymentHandler.html) - DelegatingHandler that pays 402 challenges
+- [X402ClientOptions](reference/Xrpl.X402.X402ClientOptions.html) - Network, spending caps, intent binding
+- [X402IntentBinding](reference/Xrpl.X402.X402IntentBinding.html) - InvoiceID / Memo binding modes
+
+### [Xrpl.X402.AspNetCore](reference/Xrpl.X402.AspNetCore.html)
+
+ASP.NET Core server middleware to require an x402 payment for an endpoint.
+
+- [X402PaymentExtensions](reference/Xrpl.X402.AspNetCore.X402PaymentExtensions.html) - RequirePayment endpoint filter
+- [LedgerSettlingFacilitator](reference/Xrpl.X402.AspNetCore.LedgerSettlingFacilitator.html) - settles locally
+- [T54Facilitator](reference/Xrpl.X402.AspNetCore.T54Facilitator.html) - delegates to a t54 facilitator
+
 ## Quick Start
 
 ```csharp
@@ -64,5 +80,6 @@ await client.Disconnect();
 | Cross-Chain Bridge | [English](XChainBridge-Guide.html) | [Русский](XChainBridge-Guide.ru.html) |
 | Vault Guide | [English](Vault-Guide.html) | [Русский](Vault-Guide.ru.html) |
 | Lending Protocol | [English](LendingProtocol-Guide.html) | [Русский](LendingProtocol-Guide.ru.html) |
+| x402 Agentic Payments | [English](X402-Guide.html) | — |
 
 - [API Reference](reference/Xrpl.Client.html) - Full API documentation
