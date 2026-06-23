@@ -17,6 +17,11 @@ namespace Xrpl.X402.AspNetCore;
 /// the signed blob to the XRPL node on its end. The response maps directly to
 /// <see cref="PaymentResponseEnvelope"/>.
 /// </para>
+/// <para>
+/// Verification flow: first calls <c>POST {baseUrl}/verify</c> to get a human-readable
+/// rejection reason if the payload is invalid, then calls <c>POST {baseUrl}/settle</c> only
+/// when verify reports <c>isValid: true</c>.
+/// </para>
 /// </summary>
 public sealed class T54Facilitator : IX402Facilitator
 {
@@ -33,7 +38,7 @@ public sealed class T54Facilitator : IX402Facilitator
     /// Initializes a new instance of <see cref="T54Facilitator"/>.
     /// </summary>
     /// <param name="http">
-    /// <see cref="HttpClient"/> used for the outbound call to t54.
+    /// <see cref="HttpClient"/> used for the outbound calls to t54.
     /// The caller owns the lifetime of this client.
     /// </param>
     /// <param name="baseUrl">
@@ -49,10 +54,11 @@ public sealed class T54Facilitator : IX402Facilitator
 
     /// <inheritdoc />
     /// <remarks>
-    /// Calls <c>POST {baseUrl}/settle</c> with body
+    /// First calls <c>POST {baseUrl}/verify</c> with body
     /// <c>{ paymentPayload: &lt;envelope&gt;, paymentRequirements: &lt;envelope.Accepted&gt; }</c>.
-    /// t54 verifies the signed transaction and submits it to the ledger; the response carries the
-    /// validated transaction hash on success.
+    /// If <c>isValid == false</c>, returns immediately with the <c>invalidReason</c> from t54.
+    /// On success, calls <c>POST {baseUrl}/settle</c> with the same body;
+    /// t54 verifies the signed transaction and submits it to the ledger.
     /// </remarks>
     public async Task<PaymentResponseEnvelope> VerifyAndSettleAsync(
         PaymentSignatureEnvelope envelope,
@@ -60,7 +66,7 @@ public sealed class T54Facilitator : IX402Facilitator
     {
         try
         {
-            // Build the request body as t54's SpecSettleRequest:
+            // Build the request body shared by /verify and /settle:
             //   { paymentPayload: <PaymentSignatureEnvelope>, paymentRequirements: <PaymentRequirement> }
             object requestBody = new
             {
@@ -68,22 +74,54 @@ public sealed class T54Facilitator : IX402Facilitator
                 paymentRequirements = envelope.Accepted
             };
 
-            using HttpResponseMessage httpResponse = await _http.PostAsJsonAsync(
+            // ── Step 1: /verify ────────────────────────────────────────────────────
+            using HttpResponseMessage verifyResponse = await _http.PostAsJsonAsync(
+                $"{_baseUrl}/verify",
+                requestBody,
+                _jsonOptions,
+                cancellationToken).ConfigureAwait(false);
+
+            if (!verifyResponse.IsSuccessStatusCode)
+            {
+                string verifyBody = await verifyResponse.Content.ReadAsStringAsync(cancellationToken).ConfigureAwait(false);
+                return new PaymentResponseEnvelope
+                {
+                    Success = false,
+                    ErrorReason = $"t54_verify_http_{(int)verifyResponse.StatusCode}: {verifyBody}"
+                };
+            }
+
+            SpecVerifyResponse? verifyResult = await verifyResponse.Content
+                .ReadFromJsonAsync<SpecVerifyResponse>(_jsonOptions, cancellationToken)
+                .ConfigureAwait(false);
+
+            if (verifyResult == null || !verifyResult.IsValid)
+            {
+                return new PaymentResponseEnvelope
+                {
+                    Success = false,
+                    ErrorReason = verifyResult?.InvalidReason ?? "verify_failed"
+                };
+            }
+
+            // ── Step 2: /settle (only when verify passed) ──────────────────────────
+            using HttpResponseMessage settleResponse = await _http.PostAsJsonAsync(
                 $"{_baseUrl}/settle",
                 requestBody,
                 _jsonOptions,
                 cancellationToken).ConfigureAwait(false);
 
-            if (!httpResponse.IsSuccessStatusCode)
+            if (!settleResponse.IsSuccessStatusCode)
             {
+                string settleBody = await settleResponse.Content.ReadAsStringAsync(cancellationToken).ConfigureAwait(false);
                 return new PaymentResponseEnvelope
                 {
                     Success = false,
-                    ErrorReason = $"t54_http_{(int)httpResponse.StatusCode}"
+                    ErrorReason = $"t54_settle_http_{(int)settleResponse.StatusCode}: {settleBody}"
                 };
             }
 
-            PaymentResponseEnvelope? result = await httpResponse.Content
+            PaymentResponseEnvelope? result = await settleResponse.Content
                 .ReadFromJsonAsync<PaymentResponseEnvelope>(_jsonOptions, cancellationToken)
                 .ConfigureAwait(false);
 
@@ -93,13 +131,26 @@ public sealed class T54Facilitator : IX402Facilitator
                 ErrorReason = "t54_empty_response"
             };
         }
-        catch (Exception)
+        catch (Exception ex)
         {
             return new PaymentResponseEnvelope
             {
                 Success = false,
-                ErrorReason = "t54_error"
+                ErrorReason = $"t54_error: {ex.Message}"
             };
         }
+    }
+
+    /// <summary>t54 /verify response schema.</summary>
+    private sealed class SpecVerifyResponse
+    {
+        [JsonPropertyName("isValid")]
+        public bool IsValid { get; set; }
+
+        [JsonPropertyName("invalidReason")]
+        public string? InvalidReason { get; set; }
+
+        [JsonPropertyName("payer")]
+        public string? Payer { get; set; }
     }
 }

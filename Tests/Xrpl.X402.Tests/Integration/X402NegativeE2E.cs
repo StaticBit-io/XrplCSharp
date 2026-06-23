@@ -34,7 +34,7 @@ public class X402NegativeE2E
             PayTo = merchant.ClassicAddress,
             Amount = "5000000000",
             MaxTimeoutSeconds = 60,
-            Extra = new() { ["invoiceId"] = JsonDocument.Parse("\"inv-e2e-overcap\"").RootElement }
+            Extra = new() { ["invoiceId"] = JsonDocument.Parse("\"A7F9C76B2EAC41A9B2D500AA76B8FA1800000000000000000000000000000003\"").RootElement }
         };
 
         WebApplication app = new TestMerchant(new TestFacilitator(client), requirement).Build();

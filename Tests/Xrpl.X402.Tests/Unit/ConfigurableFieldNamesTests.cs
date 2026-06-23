@@ -15,8 +15,10 @@ public class ConfigurableFieldNamesTests
     public void TestUBuilderHonorsConfiguredFieldNames()
     {
         // Read the id from extra["paymentId"] and write it into memo field "invoiceId" (swapped vs defaults).
+        // Memo mode: non-hex invoiceId is acceptable; builder places it in a Memo.
         X402ClientOptions opt = new()
         {
+            IntentBinding = X402IntentBinding.Memo,
             InvoiceIdExtraKey = "paymentId",
             MemoPaymentIdField = "invoiceId"
         };

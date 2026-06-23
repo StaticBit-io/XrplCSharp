@@ -37,4 +37,12 @@ public sealed class X402ClientOptions
 
     /// <summary>Optional Verifiable Intent provider. When set, its extensions object is attached to each PAYMENT-SIGNATURE. Null = no VI.</summary>
     public IVerifiableIntentProvider? VerifiableIntentProvider { get; set; }
+
+    /// <summary>
+    /// How the x402 payment id is bound to the XRPL transaction.
+    /// <see cref="X402IntentBinding.InvoiceIdField"/> (default) sets <c>Payment.InvoiceID</c> to the 64-hex invoiceId —
+    /// required by the t54 facilitator and the standard XRPL exact scheme.
+    /// <see cref="X402IntentBinding.Memo"/> places the id in an XRPL Memo (mpcp-style facilitators).
+    /// </summary>
+    public X402IntentBinding IntentBinding { get; set; } = X402IntentBinding.InvoiceIdField;
 }

@@ -35,7 +35,7 @@ public class VerifiableIntentTests
             HttpResponseMessage challenge = new(HttpStatusCode.PaymentRequired);
             PaymentRequiredChallenge body = new() { Accepts = { new PaymentRequirement {
                 Scheme="exact", Network="xrpl:1", Asset="XRP", PayTo="rM", Amount="1", MaxTimeoutSeconds=60,
-                Extra = new() { ["invoiceId"] = JsonDocument.Parse("\"i\"").RootElement } } } };
+                Extra = new() { ["invoiceId"] = JsonDocument.Parse("\"A7F9C76B2EAC41A9B2D500AA76B8FA1800000000000000000000000000000001\"").RootElement } } } };
             challenge.Headers.Add(X402Headers.PaymentRequired, X402Base64Json.Encode(body));
             return Task.FromResult(challenge);
         }

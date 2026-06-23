@@ -37,7 +37,7 @@ public class X402XrpE2E
             PayTo = merchant.ClassicAddress,
             Amount = "1000000",
             MaxTimeoutSeconds = 60,
-            Extra = new() { ["invoiceId"] = JsonDocument.Parse("\"inv-e2e-xrp\"").RootElement }
+            Extra = new() { ["invoiceId"] = JsonDocument.Parse("\"A7F9C76B2EAC41A9B2D500AA76B8FA1800000000000000000000000000000001\"").RootElement }
         };
 
         WebApplication app = new TestMerchant(new TestFacilitator(client), requirement).Build();

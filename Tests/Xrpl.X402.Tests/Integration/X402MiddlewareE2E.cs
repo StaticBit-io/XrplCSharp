@@ -40,7 +40,7 @@ public class X402MiddlewareE2E
             PayTo = merchant.ClassicAddress,
             Amount = "1000000",
             MaxTimeoutSeconds = 60,
-            Extra = new() { ["invoiceId"] = JsonDocument.Parse("\"inv-mw\"").RootElement }
+            Extra = new() { ["invoiceId"] = JsonDocument.Parse("\"A7F9C76B2EAC41A9B2D500AA76B8FA1800000000000000000000000000000004\"").RootElement }
         };
 
         WebApplicationBuilder appBuilder = WebApplication.CreateBuilder();

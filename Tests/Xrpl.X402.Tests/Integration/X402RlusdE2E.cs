@@ -97,7 +97,7 @@ public class X402RlusdE2E
             MaxTimeoutSeconds = 60,
             Extra = new()
             {
-                ["invoiceId"] = JsonDocument.Parse("\"inv-e2e-rlusd\"").RootElement,
+                ["invoiceId"] = JsonDocument.Parse("\"A7F9C76B2EAC41A9B2D500AA76B8FA1800000000000000000000000000000002\"").RootElement,
                 ["issuer"]    = JsonDocument.Parse($"\"{issuer.ClassicAddress}\"").RootElement,
             }
         };

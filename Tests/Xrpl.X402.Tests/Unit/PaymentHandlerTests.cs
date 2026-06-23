@@ -37,7 +37,7 @@ public class PaymentHandlerTests
                 PaymentRequirement requirement = Requirement ?? new PaymentRequirement {
                     Scheme="exact", Network="xrpl:1", Asset="XRP", PayTo="rMerchant",
                     Amount="1000000", MaxTimeoutSeconds=60,
-                    Extra = new() { ["invoiceId"]=System.Text.Json.JsonDocument.Parse("\"inv\"").RootElement }
+                    Extra = new() { ["invoiceId"]=System.Text.Json.JsonDocument.Parse("\"A7F9C76B2EAC41A9B2D500AA76B8FA1800000000000000000000000000000001\"").RootElement }
                 };
                 PaymentRequiredChallenge body = new() { Accepts = { requirement } };
                 challenge.Headers.Add(X402Headers.PaymentRequired, X402Base64Json.Encode(body));
@@ -105,7 +105,7 @@ public class PaymentHandlerTests
                 PayTo = "rMerchant", Amount = "not-a-number", MaxTimeoutSeconds = 60,
                 Extra = new()
                 {
-                    ["invoiceId"] = System.Text.Json.JsonDocument.Parse("\"inv\"").RootElement,
+                    ["invoiceId"] = System.Text.Json.JsonDocument.Parse("\"A7F9C76B2EAC41A9B2D500AA76B8FA1800000000000000000000000000000001\"").RootElement,
                     ["issuer"] = System.Text.Json.JsonDocument.Parse("\"rIssuer\"").RootElement
                 }
             }
@@ -131,7 +131,7 @@ public class PaymentHandlerTests
                 PayTo = "rMerchant", Amount = "2.5", MaxTimeoutSeconds = 60,
                 Extra = new()
                 {
-                    ["invoiceId"] = System.Text.Json.JsonDocument.Parse("\"inv\"").RootElement,
+                    ["invoiceId"] = System.Text.Json.JsonDocument.Parse("\"A7F9C76B2EAC41A9B2D500AA76B8FA1800000000000000000000000000000001\"").RootElement,
                     ["issuer"] = System.Text.Json.JsonDocument.Parse("\"rUnknownIssuer\"").RootElement
                 }
             }
@@ -155,7 +155,7 @@ public class PaymentHandlerTests
                 PayTo = "rMerchant", Amount = "2.5", MaxTimeoutSeconds = 60,
                 Extra = new()
                 {
-                    ["invoiceId"] = System.Text.Json.JsonDocument.Parse("\"inv\"").RootElement,
+                    ["invoiceId"] = System.Text.Json.JsonDocument.Parse("\"A7F9C76B2EAC41A9B2D500AA76B8FA1800000000000000000000000000000001\"").RootElement,
                     ["issuer"] = System.Text.Json.JsonDocument.Parse("\"rIssuer\"").RootElement
                 }
             }
