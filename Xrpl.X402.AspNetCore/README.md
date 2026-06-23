@@ -4,6 +4,8 @@
 
 Pairs with the client package [`Xrpl.X402`](https://www.nuget.org/packages/Xrpl.X402). Builds on the [`Xrpl`](https://www.nuget.org/packages/Xrpl) SDK.
 
+📖 **Full documentation** — end-to-end flow (price → pay → receipt) with XRP and RLUSD/IOU examples: **[x402 Agentic Payments Guide](https://staticbit-io.github.io/XrplCSharp/X402-Guide.html)** · [API reference](https://staticbit-io.github.io/XrplCSharp/).
+
 ## What it adds
 
 | Type | Role |

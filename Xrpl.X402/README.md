@@ -2,6 +2,8 @@
 
 > **Preview.** x402 (HTTP-402) agentic payments for the XRP Ledger, implementing the t54 **"XRPL exact scheme"** wire format. Lets an AI agent / client autonomously pay for HTTP resources (APIs, model inference, services) in **XRP** or **RLUSD/IOU**, and lets a server require payment for an endpoint.
 
+📖 **Full documentation** — end-to-end flow (price → pay → receipt) with XRP and RLUSD/IOU examples: **[x402 Agentic Payments Guide](https://staticbit-io.github.io/XrplCSharp/X402-Guide.html)** · [API reference](https://staticbit-io.github.io/XrplCSharp/).
+
 Two packages:
 
 | Package | Role |
