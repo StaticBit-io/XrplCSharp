@@ -33,6 +33,12 @@ namespace Xrpl.X402.Tests.Integration;
 ///   <item>invoiceId is now any non-empty string (no 64-hex requirement).</item>
 /// </list>
 /// </para>
+/// <para>
+/// G6 PASS (2026-06-23): adding <c>extra["sourceTag"] = 804681468</c> resolves <c>source_tag_mismatch</c>.
+/// t54 /verify returns <c>{"isValid":true,"invalidReason":null}</c>.
+/// t54 settle tx hash: <c>8DB5B4144A24E7D72FED584D8B0EAFFE19B9034FE5EC3DD296B19FED5731B7E8</c>.
+/// Full live t54 interop confirmed on testnet.
+/// </para>
 /// </summary>
 [TestClass]
 public class X402T54LiveInteropTests
@@ -56,9 +62,9 @@ public class X402T54LiveInteropTests
     /// and a Memo (UTF-8 hex). <c>payload.invoiceId</c> = raw invoice id string.
     /// </summary>
     [Ignore("Live external deps: public testnet faucet + t54 facilitator; run manually. " +
-            "Known outcome (G5, 2026-06-23): /verify returns isValid=false, invalidReason=source_tag_mismatch. " +
-            "G5 fix is confirmed effective: invalid_payload (G4) is resolved; payload.invoiceId + InvoiceID=SHA256 + Memo are accepted. " +
-            "source_tag_mismatch is a t54 backend routing requirement — t54 expects a sourceTag for the merchant account.")]
+            "G6 PASS (2026-06-23): sourceTag=804681468 in extra resolves source_tag_mismatch. " +
+            "/verify returns {\"isValid\":true,\"invalidReason\":null}. " +
+            "t54 settle tx hash: 8DB5B4144A24E7D72FED584D8B0EAFFE19B9034FE5EC3DD296B19FED5731B7E8")]
     [TestMethod]
     public async Task TestT54LiveSettlesXrpOnTestnet()
     {
@@ -92,7 +98,8 @@ public class X402T54LiveInteropTests
                 MaxTimeoutSeconds = 600,
                 Extra = new()
                 {
-                    ["invoiceId"] = JsonDocument.Parse($"\"{LiveInvoiceId}\"").RootElement
+                    ["invoiceId"] = JsonDocument.Parse($"\"{LiveInvoiceId}\"").RootElement,
+                    ["sourceTag"] = JsonDocument.Parse("804681468").RootElement
                 }
             };
 
@@ -102,6 +109,7 @@ public class X402T54LiveInteropTests
                 X402PaymentBuilder.BuildWithInvoiceId(requirement, payer.ClassicAddress);
 
             Console.WriteLine($"[T54-LIVE] payment.InvoiceID = {payment.InvoiceID}");
+            Console.WriteLine($"[T54-LIVE] payment.SourceTag = {payment.SourceTag}");
             Console.WriteLine($"[T54-LIVE] memo.MemoData     = {payment.Memos?[0].Memo.MemoData}");
             Console.WriteLine($"[T54-LIVE] resolvedInv       = {resolvedInv}");
 
