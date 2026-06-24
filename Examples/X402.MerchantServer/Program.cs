@@ -2,29 +2,31 @@ using System;
 using System.Threading.Tasks;
 
 using Microsoft.AspNetCore.Builder;
+using Microsoft.Extensions.Configuration;
 using Microsoft.Extensions.Hosting;
 
 using Xrpl.X402.Examples.MerchantServer;
 
-// Example entry point. Configure via environment variables, then `dotnet run`.
-// Requires a reachable rippled node (RIPPLED_WS) and a funded MERCHANT_ADDRESS.
-MerchantServerOptions options = new()
-{
-    RippledWsUrl = Environment.GetEnvironmentVariable("RIPPLED_WS") ?? "ws://localhost:6006",
-    ListenUrl = Environment.GetEnvironmentVariable("LISTEN_URL") ?? "http://127.0.0.1:5402",
-    MerchantAddress = Environment.GetEnvironmentVariable("MERCHANT_ADDRESS") ?? "",
-    Network = Environment.GetEnvironmentVariable("NETWORK") ?? "xrpl:1",
-    Asset = Environment.GetEnvironmentVariable("ASSET") ?? "XRP",
-    Amount = Environment.GetEnvironmentVariable("AMOUNT") ?? "1000000",
-    IouIssuer = Environment.GetEnvironmentVariable("IOU_ISSUER"),
-    InvoiceId = Environment.GetEnvironmentVariable("INVOICE_ID") ?? "example-invoice-001",
-};
+// Configuration comes from appsettings.json (the "X402" section); any value can be overridden by
+// an environment variable or a --Key=value command-line argument. See appsettings.json for the
+// full list of knobs.
+WebApplicationBuilder configBuilder = WebApplication.CreateBuilder(args);
+MerchantServerOptions options =
+    configBuilder.Configuration.GetSection("X402").Get<MerchantServerOptions>() ?? new MerchantServerOptions();
+
+// Friendly flat environment-variable overrides (handy for shell/CI; appsettings is the primary source).
+options.RippledWsUrl = Environment.GetEnvironmentVariable("RIPPLED_WS") ?? options.RippledWsUrl;
+options.ListenUrl = Environment.GetEnvironmentVariable("LISTEN_URL") ?? options.ListenUrl;
+options.MerchantAddress = Environment.GetEnvironmentVariable("MERCHANT_ADDRESS") ?? options.MerchantAddress;
+options.Asset = Environment.GetEnvironmentVariable("ASSET") ?? options.Asset;
+options.Amount = Environment.GetEnvironmentVariable("AMOUNT") ?? options.Amount;
+options.IouIssuer = Environment.GetEnvironmentVariable("IOU_ISSUER") ?? options.IouIssuer;
+options.InvoiceId = Environment.GetEnvironmentVariable("INVOICE_ID") ?? options.InvoiceId;
 
 if (string.IsNullOrWhiteSpace(options.MerchantAddress))
-{
-    Console.Error.WriteLine("Set MERCHANT_ADDRESS to a funded XRPL classic address before running.");
-    return 1;
-}
+    throw new InvalidOperationException(
+        "X402:MerchantAddress is not configured. Set it in appsettings.json (the X402 section) " +
+        "or via the MERCHANT_ADDRESS environment variable, then run again.");
 
 WebApplication app = await MerchantServer.BuildAsync(options);
 await app.StartAsync();
@@ -35,4 +37,3 @@ Console.WriteLine($"[merchant] GET {boundUrl.TrimEnd('/')}/paid requires {option
 Console.WriteLine("[merchant] press Ctrl+C to stop.");
 
 await app.WaitForShutdownAsync();
-return 0;

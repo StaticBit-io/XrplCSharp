@@ -25,8 +25,11 @@ public sealed class MerchantServerOptions
     /// <summary>WebSocket URL of the rippled node used to settle payments on-ledger.</summary>
     public string RippledWsUrl { get; set; } = "ws://localhost:6006";
 
-    /// <summary>URL Kestrel binds to. Use a <c>:0</c> port to let the OS pick a free one.</summary>
-    public string ListenUrl { get; set; } = "http://127.0.0.1:5402";
+    /// <summary>
+    /// URL Kestrel binds to. Use a <c>:0</c> port to let the OS pick a free one. Leave empty to
+    /// defer to the launch profile / <c>ASPNETCORE_URLS</c> (so Visual Studio F5 works cleanly).
+    /// </summary>
+    public string ListenUrl { get; set; } = "";
 
     /// <summary>Classic XRPL address that receives the payment (the merchant). Required.</summary>
     public string MerchantAddress { get; set; } = "";
@@ -86,7 +89,8 @@ public static class MerchantServer
         await client.Connect();
 
         WebApplicationBuilder builder = WebApplication.CreateBuilder();
-        builder.WebHost.UseUrls(options.ListenUrl);
+        if (!string.IsNullOrWhiteSpace(options.ListenUrl))
+            builder.WebHost.UseUrls(options.ListenUrl);
         WebApplication app = builder.Build();
 
         IX402Facilitator facilitator = new LedgerSettlingFacilitator(client);
