@@ -15,16 +15,40 @@ standalone `rippled` used by the rest of the integration suite.
 
 ## Configuration
 
-Both apps read their settings from their own **`appsettings.json`** (the `X402` section) — that file
-is the canonical list of every knob, with inline comments. Each value can be overridden by an
-environment variable (e.g. `MERCHANT_ADDRESS`, `PAYER_SEED`) without editing the file.
+Both apps read their settings from their own **`appsettings.json`** (the `X402` section) — strict
+JSON, so it lists every knob. Each value can be overridden by an environment variable (e.g.
+`MERCHANT_ADDRESS`, `PAYER_SEED`) without editing the file.
 
-- **Server** ([`appsettings.json`](X402.MerchantServer/appsettings.json)) requires `MerchantAddress`.
-  The port comes from the launch profile ([`launchSettings.json`](X402.MerchantServer/Properties/launchSettings.json),
-  `http://127.0.0.1:5402`) unless you set `ListenUrl`. Runs from Visual Studio (F5) or `dotnet run`.
-- **Client** ([`appsettings.json`](X402.PayingClient/appsettings.json)) requires `PayerSeed` —
-  **do not commit a real seed**; set it via the `PAYER_SEED` environment variable or only in your
-  local copy.
+### Server ([`X402.MerchantServer/appsettings.json`](X402.MerchantServer/appsettings.json))
+
+| Key | Env override | Meaning |
+|---|---|---|
+| `RippledWsUrl` | `RIPPLED_WS` | WebSocket URL of the rippled node that settles payments. |
+| `ListenUrl` | `LISTEN_URL` | URL Kestrel binds to. Empty → use the launch profile / `ASPNETCORE_URLS` (`http://127.0.0.1:5402`). Use a `:0` port for an OS-assigned one. |
+| `MerchantAddress` | `MERCHANT_ADDRESS` | **Required.** Classic XRPL address that receives the payment. |
+| `Network` | `NETWORK` | CAIP-2 network advertised in the 402 challenge (e.g. `xrpl:1`). |
+| `Asset` | `ASSET` | `XRP` (drops) or a 40-hex currency code such as RLUSD (then also set `IouIssuer`). |
+| `Amount` | `AMOUNT` | Amount to charge: drops for XRP, a decimal value string for IOUs. |
+| `IouIssuer` | `IOU_ISSUER` | Issuer address for IOU assets. Required when `Asset` is not XRP. |
+| `MaxTimeoutSeconds` | — | Seconds the signed payment stays valid (maps to `LastLedgerSequence`). |
+| `InvoiceId` | `INVOICE_ID` | Invoice id echoed back in `extra.invoiceId`. |
+| `ResourceBody` | — | Body returned once the payment settles. |
+
+The port comes from the launch profile
+([`launchSettings.json`](X402.MerchantServer/Properties/launchSettings.json), `http://127.0.0.1:5402`)
+unless `ListenUrl` is set. Runs from Visual Studio (F5) or `dotnet run`. The committed
+`MerchantAddress` is a throwaway standalone-funded sample — replace it with your own.
+
+### Client ([`X402.PayingClient/appsettings.json`](X402.PayingClient/appsettings.json))
+
+| Key | Env override | Meaning |
+|---|---|---|
+| `RippledWsUrl` | `RIPPLED_WS` | WebSocket URL of the rippled node used to autofill/sign the payment. |
+| `ResourceUrl` | `RESOURCE_URL` | Absolute URL of the payment-protected resource (the merchant's `/paid`). |
+| `PayerSeed` | `PAYER_SEED` | **Required.** Seed of the funded payer wallet. **Do not commit a real seed** — set it via `PAYER_SEED` or only in a local, untracked copy. |
+| `Network` | `NETWORK` | CAIP-2 network the client is willing to pay on. |
+| `MaxAmountDrops` | — | Hard cap for XRP payments, in drops. |
+| `IouValueCaps` | — | Per-issuer IOU/RLUSD caps: `{ "<issuerAddress>": <decimal cap> }`. Required to pay any IOU. |
 
 You need a reachable `rippled` (a standalone node or testnet) and two funded wallets — one for the
 merchant (receives) and one for the payer (signs/funds). For a standalone node, see the integration

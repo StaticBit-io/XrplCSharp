@@ -1,4 +1,5 @@
 using System;
+using System.Collections.Generic;
 using System.IO;
 using System.Text.Json;
 using System.Threading.Tasks;
@@ -70,6 +71,19 @@ static PayingClientOptions LoadOptions()
         options.Network = v4.GetString()!;
     if (x.TryGetProperty("MaxAmountDrops", out JsonElement v5) && v5.ValueKind == JsonValueKind.Number && v5.TryGetUInt64(out ulong drops))
         options.MaxAmountDrops = drops;
+
+    // Per-issuer IOU/RLUSD caps: { "<issuerAddress>": <decimal cap>, ... }. Required to pay any IOU.
+    if (x.TryGetProperty("IouValueCaps", out JsonElement v6) && v6.ValueKind == JsonValueKind.Object)
+    {
+        Dictionary<string, decimal> caps = new();
+        foreach (JsonProperty cap in v6.EnumerateObject())
+        {
+            if (cap.Value.ValueKind == JsonValueKind.Number && cap.Value.TryGetDecimal(out decimal value))
+                caps[cap.Name] = value;
+        }
+        if (caps.Count > 0)
+            options.IouValueCaps = caps;
+    }
 
     return options;
 }
