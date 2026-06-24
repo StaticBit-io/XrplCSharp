@@ -55,6 +55,8 @@ public static class PayingClient
             throw new ArgumentNullException(nameof(options));
         if (string.IsNullOrWhiteSpace(options.PayerSeed))
             throw new ArgumentException("PayerSeed is required.", nameof(options));
+        if (!Uri.TryCreate(options.ResourceUrl, UriKind.Absolute, out _))
+            throw new ArgumentException("ResourceUrl must be an absolute URL.", nameof(options));
 
         XrplClient client = new(options.RippledWsUrl, options: new XrplClient.ClientOptions
         {

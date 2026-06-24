@@ -70,6 +70,9 @@ public static class MerchantServer
             throw new ArgumentNullException(nameof(options));
         if (string.IsNullOrWhiteSpace(options.MerchantAddress))
             throw new ArgumentException("MerchantAddress is required.", nameof(options));
+        if (!string.Equals(options.Asset, "XRP", StringComparison.OrdinalIgnoreCase)
+            && string.IsNullOrWhiteSpace(options.IouIssuer))
+            throw new ArgumentException("IouIssuer is required when Asset is not XRP.", nameof(options));
 
         XrplClient client = new(options.RippledWsUrl, options: new XrplClient.ClientOptions
         {
