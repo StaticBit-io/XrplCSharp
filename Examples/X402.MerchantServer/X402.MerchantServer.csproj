@@ -1,0 +1,18 @@
+<Project Sdk="Microsoft.NET.Sdk.Web">
+
+  <PropertyGroup>
+    <TargetFramework>net10.0</TargetFramework>
+    <LangVersion>latest</LangVersion>
+    <Nullable>enable</Nullable>
+    <ImplicitUsings>disable</ImplicitUsings>
+    <IsPackable>false</IsPackable>
+    <InvariantGlobalization>true</InvariantGlobalization>
+    <RootNamespace>Xrpl.X402.Examples.MerchantServer</RootNamespace>
+    <AssemblyName>Xrpl.X402.Examples.MerchantServer</AssemblyName>
+  </PropertyGroup>
+
+  <ItemGroup>
+    <ProjectReference Include="..\..\Xrpl.X402.AspNetCore\Xrpl.X402.AspNetCore.csproj" />
+  </ItemGroup>
+
+</Project>

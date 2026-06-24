@@ -1,0 +1,13 @@
+{
+  "$schema": "https://json.schemastore.org/launchsettings.json",
+  "profiles": {
+    "X402.MerchantServer": {
+      "commandName": "Project",
+      "launchBrowser": false,
+      "applicationUrl": "http://127.0.0.1:5402",
+      "environmentVariables": {
+        "ASPNETCORE_ENVIRONMENT": "Development"
+      }
+    }
+  }
+}

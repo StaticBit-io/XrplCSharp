@@ -1,0 +1,30 @@
+<Project Sdk="Microsoft.NET.Sdk">
+  <PropertyGroup>
+    <TargetFrameworks>net8.0;net9.0;net10.0</TargetFrameworks>
+    <LangVersion>latest</LangVersion>
+    <Nullable>enable</Nullable>
+    <GenerateDocumentationFile>true</GenerateDocumentationFile>
+    <PackOnBuild>true</PackOnBuild>
+    <Authors>StaticBit-io</Authors>
+    <Owners>StaticBit-io</Owners>
+    <Title>Xrpl.X402.AspNetCore</Title>
+    <Description>ASP.NET Core server middleware (x402 require_payment) for accepting XRPL agentic payments. Adds a RequirePayment endpoint filter plus ledger-settling and t54 facilitators that verify and settle x402 PAYMENT-SIGNATUREs on the XRP Ledger.</Description>
+    <PackageId>Xrpl.X402.AspNetCore</PackageId>
+    <PackageVersion>1.0.0</PackageVersion>
+    <NeutralLanguage>en-US</NeutralLanguage>
+    <PackageLicenseExpression>Apache-2.0</PackageLicenseExpression>
+    <PackageProjectUrl>https://github.com/StaticBit-io/XrplCSharp</PackageProjectUrl>
+    <PackageReadmeFile>README.md</PackageReadmeFile>
+    <PackageTags>xrpl;xrp;x402;payments;agentic;http-402;aspnetcore;middleware;t54</PackageTags>
+  </PropertyGroup>
+  <ItemGroup>
+    <None Include="README.md" Pack="true" PackagePath="\" />
+  </ItemGroup>
+  <ItemGroup>
+    <FrameworkReference Include="Microsoft.AspNetCore.App" />
+  </ItemGroup>
+  <ItemGroup>
+    <ProjectReference Include="..\Xrpl.X402\Xrpl.X402.csproj" />
+    <ProjectReference Include="..\Xrpl\Xrpl.csproj" />
+  </ItemGroup>
+</Project>
