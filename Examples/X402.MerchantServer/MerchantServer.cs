@@ -95,6 +95,19 @@ public static class MerchantServer
 
         IX402Facilitator facilitator = new LedgerSettlingFacilitator(client);
 
+        // Friendly landing page so a plain browser GET / shows guidance instead of a bare 404.
+        app.MapGet("/", () => Results.Text(
+            "x402 merchant example\n" +
+            "\n" +
+            "Paid resource : GET /paid\n" +
+            $"Price         : {options.Amount} {options.Asset} -> {options.MerchantAddress}\n" +
+            $"Network       : {options.Network}\n" +
+            "\n" +
+            "A plain browser request to /paid returns 402 (Payment Required) with an x402\n" +
+            "PAYMENT-REQUIRED challenge. To receive the content, pay the challenge with the\n" +
+            "X402.PayingClient example (it signs a Payment and retries automatically).\n",
+            "text/plain"));
+
         // Without a valid PAYMENT-SIGNATURE this returns 402 + PAYMENT-REQUIRED; with one, the
         // facilitator settles the payment on-ledger, sets PAYMENT-RESPONSE, and the handler runs.
         app.MapGet("/paid", () => Results.Text(options.ResourceBody))
