@@ -195,6 +195,6 @@ The `XrplCSharp` library is licensed under the Apache License 2.0. See [LICENSE]
 
 ## Repository Credit
 
-This project is originally based on work by [Chris Williams](https://github.com/chriswill).
+This project is originally based on work by [Chris Williams](https://github.com/chriswill), and descends from the [`XrplCSharp`](https://github.com/Transia-RnD/XrplCSharp) C# port by [Denis Angell](https://github.com/dangell7) ([Transia-RnD](https://github.com/Transia-RnD)).
 
 Currently maintained and developed by [StaticBit-io](https://github.com/StaticBit-io).

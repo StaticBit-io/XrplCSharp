@@ -51,11 +51,15 @@ jobs:
         for i in $(seq 1 30); do
           if curl -sf http://localhost:5005/ -d '{"method":"server_info"}' > /dev/null 2>&1; then
             echo "rippled is ready"
-            break
+            exit 0
           fi
           echo "Waiting for rippled... ($i/30)"
           sleep 2
         done
+        echo "::error::rippled did not become ready after 30 attempts — dumping diagnostics"
+        docker compose -f .ci-config/docker-compose.ci.yml ps
+        docker compose -f .ci-config/docker-compose.ci.yml logs --no-color xrpld
+        exit 1
 
     - name: Use .NET ${{ env.DOTNET_VERSION }}
       uses: actions/setup-dotnet@v4
@@ -67,6 +71,15 @@ jobs:
       run: dotnet build
     - name: Test Integration
       run: dotnet test Tests/Xrpl.Tests/Xrpl.Tests.csproj --verbosity normal --settings test.runsettings --filter "TestI"
+      env:
+        HOST: localhost
+        PORT: 6006
+
+    # x402 integration tests: hermetic E2E (against the standalone rippled above) plus the
+    # live t54 interop tests (TestILive*), which require the public XRPL testnet faucet and
+    # the t54 hosted facilitator.
+    - name: Test Integration (Xrpl.X402)
+      run: dotnet test Tests/Xrpl.X402.Tests/Xrpl.X402.Tests.csproj --verbosity normal --settings test.runsettings --filter "TestI"
       env:
         HOST: localhost
         PORT: 6006
