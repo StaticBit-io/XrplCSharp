@@ -50,6 +50,62 @@ unless `ListenUrl` is set. Runs from Visual Studio (F5) or `dotnet run`. The com
 | `MaxAmountDrops` | — | Hard cap for XRP payments, in drops. |
 | `IouValueCaps` | — | Per-issuer IOU/RLUSD caps: `{ "<issuerAddress>": <decimal cap> }`. Required to pay any IOU. |
 
+### Worked example: charging in RLUSD (IOU)
+
+RLUSD is a non-standard 5-character code, so it appears as the 40-hex currency
+`524C555344000000000000000000000000000000`. For an IOU the price is a **decimal token value** (not
+drops), the asset needs an **issuer**, and the client only pays an IOU when an explicit per-issuer
+cap is present (IOU payments fail closed otherwise). The values below use Ripple's **mainnet** RLUSD
+issuer `rMxCKbEDwqr76QuheSUMdEGf4B9xJ8m5De`.
+
+**Server** — `X402.MerchantServer/appsettings.json` (charge 2.5 RLUSD):
+
+```json
+{
+  "X402": {
+    "RippledWsUrl": "wss://xrplcluster.com",
+    "ListenUrl": "",
+    "MerchantAddress": "rMerchantYouControl00000000000000000",
+    "Network": "xrpl:1",
+    "Asset": "524C555344000000000000000000000000000000",
+    "IouIssuer": "rMxCKbEDwqr76QuheSUMdEGf4B9xJ8m5De",
+    "Amount": "2.5",
+    "MaxTimeoutSeconds": 60,
+    "InvoiceId": "example-invoice-rlusd-001",
+    "ResourceBody": "premium content"
+  }
+}
+```
+
+**Client** — `X402.PayingClient/appsettings.json` (allow up to 5 RLUSD from that issuer):
+
+```json
+{
+  "X402": {
+    "RippledWsUrl": "wss://xrplcluster.com",
+    "ResourceUrl": "http://127.0.0.1:5402/paid",
+    "PayerSeed": "",
+    "Network": "xrpl:1",
+    "MaxAmountDrops": 10000000,
+    "IouValueCaps": {
+      "rMxCKbEDwqr76QuheSUMdEGf4B9xJ8m5De": 5.0
+    }
+  }
+}
+```
+
+Notes:
+- The `IouValueCaps` key is the **same issuer** as the server's `IouIssuer` (the client receives it
+  as `extra.issuer` in the challenge); the value is a ceiling in token units (`5.0` ≥ the `2.5` price).
+- `MaxAmountDrops` only caps XRP — it does not apply to IOUs, which is why the cap entry is required.
+- On-ledger prerequisites (else settlement fails with `tecPATH_DRY` / `tecNO_LINE`): the **payer** has
+  an RLUSD trustline to the issuer and a balance ≥ the price; the **merchant** also has an RLUSD
+  trustline; the **issuer** has `DefaultRipple` enabled.
+- **Mainnet uses real funds.** For local testing, point `RippledWsUrl` at a standalone node and use
+  your own issuer instead — the live test
+  [`X402T54LiveInteropTests.TestILiveT54SettlesRlusdOnTestnet`](../Tests/Xrpl.X402.Tests/Integration/X402T54LiveInteropTests.cs)
+  shows the full self-issued setup (issuer → trustlines → RLUSD issuance → payment with `SendMax`).
+
 You need a reachable `rippled` (a standalone node or testnet) and two funded wallets — one for the
 merchant (receives) and one for the payer (signs/funds). For a standalone node, see the integration
 setup in the repo root [`README`](../README.md).
