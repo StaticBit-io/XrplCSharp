@@ -61,8 +61,11 @@ XrplCSharp/
 ├── docs/                            # Generated HTML documentation
 │
 ├── .ci-config/
-│   ├── docker-compose.ci.yml       # Docker Compose: rippled standalone + ledger-acceptor
+│   ├── docker-compose.ci.yml       # Docker Compose: rippled standalone + ledger-acceptor (release image)
 │   ├── rippled.cfg                 # rippled configuration for CI
+│   ├── docker-compose.batchv11.yml # Nightly-develop stand for unreleased amendments (BatchV1_1, ...)
+│   ├── Dockerfile.nightly          # xrpld nightly image from repos.ripple.com (version pinned)
+│   ├── rippled.batchv11.cfg        # Config with [amendments] genesis up-votes for the nightly stand
 │   └── validators.txt              # Validator config for CI
 │
 ├── XrplCSharp.sln                   # Solution file
@@ -155,6 +158,25 @@ The Docker setup exposes:
 - Port 6006 — Admin WebSocket
 
 The `ledger-acceptor` container calls `ledger_accept` every 4 seconds to advance the standalone ledger.
+
+### Integration Tests for Unreleased Amendments (nightly stand)
+
+Some amendments (e.g. `BatchV1_1`, `PermissionDelegationV1_1`) exist only on the rippled `develop` branch and are absent from the release image used by CI. A second stand runs the nightly `xrpld` build with those amendments enabled at genesis:
+
+```bash
+# Uses the same ports as the CI stand — stop it first
+docker compose -f .ci-config/docker-compose.ci.yml down
+
+docker compose -f .ci-config/docker-compose.batchv11.yml up -d --build
+dotnet test Tests/Xrpl.Tests/Xrpl.Tests.csproj --settings test.runsettings --filter "TestIBatch|TestIDelegateSet"
+docker compose -f .ci-config/docker-compose.batchv11.yml down
+```
+
+Amendment-dependent test classes use `Tests/Xrpl.Tests/Integration/AmendmentGuard.cs`: `ClassInitialize` checks the Amendments ledger object and marks tests inconclusive (skipped, exit 0) when the amendment is not active — so these tests are safe on the CI stand and run for real on the nightly stand. To gate a new test class, add the amendment id constant to `AmendmentGuard` and call `Assert.Inconclusive` from `TestInitialize` when inactive.
+
+Nightly stand specifics (see comments in `Dockerfile.nightly` / `rippled.batchv11.cfg`):
+- rippled was renamed to **xrpld** on `develop`; the nightly apt channel publishes the `xrpld` package. The version must be **pinned**: the build-timestamp format shrank from 14 to 12 digits in mid-2026, so Debian version ordering ranks older builds above newer ones. To bump: pick the latest `xrpld` version from the `jammy nightly` Packages index at repos.ripple.com and update `ARG XRPLD_VERSION`.
+- On `develop` (3.3.x) the `[features]` config section no longer registers genesis up-votes. Genesis amendments come from the `[amendments]` section with lines of the form `<hash> <name>`, where hash = sha512half of the amendment name. In standalone mode there is no amendment voting, so `[amendments]` at `--start` is the only way to activate a DefaultNo amendment.
 
 ### Generate Documentation
 
