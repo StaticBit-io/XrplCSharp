@@ -19,9 +19,15 @@ namespace XrplTests.Xrpl.ClientLib.Integration;
 
 [TestClass]
 [DoNotParallelize]
-[Ignore("Batch amendment removed in v3.1.1 due to a bug; will be replaced by BatchV1_1")]
 public class TestIBatch
 {
+    /// <summary>Well-known index of the Amendments ledger object.</summary>
+    private const string AmendmentsLedgerIndex = "7DB0788C020F02780A673DC74757F23823FA3014C1866E72CC4CD8B226CD6EF4";
+    /// <summary>Amendment id of BatchV1_1 (sha512half of the name).</summary>
+    private const string BatchV11AmendmentId = "9F287AED3CDB50A7BD1ACEC24296A30C9B5230CCD136219317AC790E3B884377";
+
+    private static bool batchV11Active;
+
     // private static int Timeout = 20;
     public TestContext TestContext { get; set; }
     public static SetupIntegration runner;
@@ -39,6 +45,14 @@ public class TestIBatch
     public static async Task MyClassInitializeAsync(TestContext testContext)
     {
         runner = await new SetupIntegration().SetupClient(ServerUrl.serverUrl);
+
+        batchV11Active = await IsBatchV11ActiveAsync();
+        if (!batchV11Active)
+        {
+            // Tests will be reported as inconclusive from CheckBatchV11Amendment.
+            return;
+        }
+
         await TryFillAccounts(walletPrimary, walletSecondary_1, walletSecondary_2, walletMultiSign, walletMultiSigner_1, walletMultiSigner_2, walletRegularKey, walletRegularKey_signer);
         if (!await SetSigners(walletMultiSign, walletMultiSigner_1, walletMultiSigner_2))
         {
@@ -48,6 +62,37 @@ public class TestIBatch
         if (!await DisableMaster(walletMultiSign))
         {
             throw new RippledNotInitializedException();
+        }
+    }
+
+    [TestInitialize]
+    public void CheckBatchV11Amendment()
+    {
+        if (!batchV11Active)
+        {
+            Assert.Inconclusive("BatchV1_1 amendment is not enabled on the test node; start .ci-config/docker-compose.batchv11.yml to run these tests.");
+        }
+    }
+
+    private static async Task<bool> IsBatchV11ActiveAsync()
+    {
+        try
+        {
+            var request = new LedgerEntryRequest { Index = AmendmentsLedgerIndex };
+            var node = await runner.client.GRequest<System.Text.Json.Nodes.JsonNode, LedgerEntryRequest>(request);
+            var amendments = node?["node"]?["Amendments"]?.AsArray();
+            if (amendments == null)
+                return false;
+            foreach (var amendment in amendments)
+            {
+                if (string.Equals(amendment?.GetValue<string>(), BatchV11AmendmentId, StringComparison.OrdinalIgnoreCase))
+                    return true;
+            }
+            return false;
+        }
+        catch
+        {
+            return false;
         }
     }
     [ClassCleanup]
