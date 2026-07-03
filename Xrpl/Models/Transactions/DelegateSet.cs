@@ -17,9 +17,9 @@ namespace Xrpl.Models.Transactions
     public interface IDelegateSet : ITransactionCommon
     {
         /// <summary>
-        /// The account to delegate permissions to.
+        /// The account to delegate permissions to (sfAuthorize in PermissionDelegationV1_1).
         /// </summary>
-        string Delegate { get; set; }
+        string Authorize { get; set; }
 
         /// <summary>
         /// An array of permission objects defining which transaction types the delegate can submit.
@@ -36,8 +36,8 @@ namespace Xrpl.Models.Transactions
         }
 
         /// <inheritdoc />
-        [JsonPropertyName("Delegate")]
-        public string Delegate { get; set; }
+        [JsonPropertyName("Authorize")]
+        public string Authorize { get; set; }
 
         /// <inheritdoc />
         [JsonPropertyName("Permissions")]
@@ -48,8 +48,8 @@ namespace Xrpl.Models.Transactions
     public class DelegateSetResponse : TransactionResponse, IDelegateSet
     {
         /// <inheritdoc />
-        [JsonPropertyName("Delegate")]
-        public string Delegate { get; set; }
+        [JsonPropertyName("Authorize")]
+        public string Authorize { get; set; }
 
         /// <inheritdoc />
         [JsonPropertyName("Permissions")]
@@ -72,8 +72,8 @@ namespace Xrpl.Models.Transactions
         {
             await Common.ValidateBaseTransaction(tx);
 
-            if (!tx.TryGetValue("Delegate", out var auth) || auth is not string)
-                throw new ValidationException("DelegateSet: missing field Delegate");
+            if (!tx.TryGetValue("Authorize", out var auth) || auth is not string)
+                throw new ValidationException("DelegateSet: missing field Authorize");
 
             if (!tx.TryGetValue("Permissions", out var perms) || perms is null)
                 throw new ValidationException("DelegateSet: missing field Permissions");

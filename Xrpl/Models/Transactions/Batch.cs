@@ -201,6 +201,9 @@ public partial class Validation
 
         if (tx.TryGetValue("BatchSigners", out var batchSignersObj) && batchSignersObj is IEnumerable<object> batchSignersEnumerable)
         {
+            string? outerAccount = tx.TryGetValue("Account", out var outerAccountObj) ? outerAccountObj as string : null;
+            HashSet<string> seenAccounts = new HashSet<string>(StringComparer.Ordinal);
+
             List<object> batchSigners = batchSignersEnumerable.Cast<object>().ToList();
             for (var i = 0; i < batchSigners.Count; i++)
             {
@@ -220,6 +223,13 @@ public partial class Validation
                 {
                     throw new ArgumentException($"Batch: BatchSigners[{i}].Account is required.");
                 }
+
+                // BatchV1_1: дубликаты и подпись внешним аккаунтом → temBAD_SIGNER на сервере
+                string signerAccount = $"{accountObj}";
+                if (!seenAccounts.Add(signerAccount))
+                    throw new ArgumentException($"Batch: BatchSigners[{i}].Account '{signerAccount}' is duplicated (temBAD_SIGNER).");
+                if (outerAccount != null && string.Equals(signerAccount, outerAccount, StringComparison.Ordinal))
+                    throw new ArgumentException($"Batch: BatchSigners[{i}].Account must not equal the outer Batch Account (temBAD_SIGNER).");
                 // SigningPubKey / TxnSignature / Signers — опциональны
             }
         }

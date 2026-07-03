@@ -747,24 +747,46 @@ namespace Xrpl.Wallet
                 outer["Flags"] = flags;
             }
 
-            // NetworkID (если присутствует)
-            uint? networkId = null;
-            var nTok = outer["NetworkID"];
-            if (nTok != null)
+            // 5.1) Account и Sequence внешнего батча — входят в batch-preimage (BatchV1_1)
+            var outerAccount = outer["Account"]?.GetValue<string>();
+            if (string.IsNullOrWhiteSpace(outerAccount))
+                throw new ValidationException("Batch transaction must have Account.");
+
+            uint outerSequence;
+            var seqTok = outer["Sequence"];
+            if (seqTok is JsonValue seqVal && seqVal.TryGetValue<long>(out var seqLong))
             {
-                if (nTok is JsonValue nVal && nVal.TryGetValue<long>(out var nLong)) networkId = (uint)nLong;
-                else if (nTok is JsonValue nStr && nStr.TryGetValue<string>(out var nStrVal) && uint.TryParse(nStrVal, out var n)) networkId = n;
+                outerSequence = (uint)seqLong;
+            }
+            else if (seqTok is JsonValue seqStr && seqStr.TryGetValue<string>(out var seqStrVal) && uint.TryParse(seqStrVal, out var s))
+            {
+                outerSequence = s;
+            }
+            else if (seqTok == null && outer["TicketSequence"] != null)
+            {
+                // При использовании тикетов Sequence сериализуется как 0
+                outerSequence = 0;
+            }
+            else
+            {
+                throw new ValidationException("Batch transaction must have Sequence (run Autofill first) or TicketSequence.");
             }
 
             // 6) Подписание (оба режима строят один и тот же batch-preimage)
-            // batch-preimage = BCH\0 [ + NetworkID ] || Flags || Count || txID[0..N-1]
-            byte[] preimage = XrplBinaryCodec.EncodeForSigningBatch(flags, txIds, networkId);
+            // batch-preimage = BCH\0 || outerAccount(20) || outerSequence(4) || Flags(4) || Count(4) || txID[0..N-1]
+            byte[] preimage = XrplBinaryCodec.EncodeForSigningBatch(outerAccount, outerSequence, flags, txIds);
             if (!multisign)
             {
-                // MULTI-ACCOUNT: кладём подпись участника в BatchSigners над batch-preimage.
-                string signature = XrplKeypairs.Sign(preimage, this.PrivateKey);
-
                 var accountFor = NormalizeClassic(signingFor);
+
+                // MULTI-ACCOUNT: подпись участника над batch-preimage + AccountID этого BatchSigner'а
+                // (эквивалент finishMultiSigningData(batchSigner.Account, msg) в rippled).
+                var batchSignerAccountId = Xrpl.AddressCodec.XrplCodec.DecodeAccountID(accountFor);
+                var signData = new byte[preimage.Length + batchSignerAccountId.Length];
+                Buffer.BlockCopy(preimage, 0, signData, 0, preimage.Length);
+                Buffer.BlockCopy(batchSignerAccountId, 0, signData, preimage.Length, batchSignerAccountId.Length);
+
+                string signature = XrplKeypairs.Sign(signData, this.PrivateKey);
 
                 var existingBatchSigners = outer["BatchSigners"] as JsonArray;
                 var batchSigners = existingBatchSigners != null
@@ -801,13 +823,15 @@ namespace Xrpl.Wallet
                     ? signingFor
                     : XrplAddressCodec.XAddressToClassicAddress(signingFor).ClassicAddress;
 
-                // Для inner multisign (BatchSigner.Signers[]) по XLS-56:
-                // preimage = batch-preimage + signer's account ID bytes
-                // (batch-preimage уже содержит HashPrefix.Batch, дополнительный TransactionMultiSig не нужен)
+                // Для inner multisign (BatchSigner.Signers[]) по XLS-56 / BatchV1_1:
+                // data = batch-preimage + BatchSigner.Account(20) + signer's account ID(20)
+                // (в rippled: serializeBatch → addBitString(batchSignerAccount) → finishMultiSigningData(signerAccount))
+                var ownerAccountId = Xrpl.AddressCodec.XrplCodec.DecodeAccountID(ownerAccount);
                 var signerAccountId = Xrpl.AddressCodec.XrplCodec.DecodeAccountID(this.ClassicAddress);
-                var fullPreimage = new byte[preimage.Length + signerAccountId.Length];
+                var fullPreimage = new byte[preimage.Length + ownerAccountId.Length + signerAccountId.Length];
                 Buffer.BlockCopy(preimage, 0, fullPreimage, 0, preimage.Length);
-                Buffer.BlockCopy(signerAccountId, 0, fullPreimage, preimage.Length, signerAccountId.Length);
+                Buffer.BlockCopy(ownerAccountId, 0, fullPreimage, preimage.Length, ownerAccountId.Length);
+                Buffer.BlockCopy(signerAccountId, 0, fullPreimage, preimage.Length + ownerAccountId.Length, signerAccountId.Length);
 
                 var sig = Xrpl.Keypairs.XrplKeypairs.Sign(fullPreimage, this.PrivateKey);
 

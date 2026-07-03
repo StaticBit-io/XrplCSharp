@@ -584,10 +584,10 @@ namespace Xrpl.Models.Transaction
                     [Field.Amount] = Requirement.Required,
                 },
 
-                // DelegateSet (XLS-74d)
+                // DelegateSet (XLS-75, PermissionDelegationV1_1)
                 [BinaryCodec.Types.TransactionType.DelegateSet] = new TxFormat
                 {
-                    [Field.Delegate] = Requirement.Required,
+                    [Field.Authorize] = Requirement.Required,
                     [Field.Permissions] = Requirement.Required,
                 },
 

@@ -1,0 +1,33 @@
+services:
+  xrpld:
+    build:
+      context: .
+      dockerfile: Dockerfile.nightly
+    image: rippled-nightly:local
+    container_name: rippled-batchv11
+    command: ["-a", "--start"]
+    ports:
+      - "5005:5005"
+      - "5006:5006"
+      - "6006:6006"
+    volumes:
+      - ./rippled.batchv11.cfg:/config/rippled.cfg:ro
+      - ./validators.txt:/config/validators.txt:ro
+
+  ledger-acceptor:
+    image: curlimages/curl:latest
+    container_name: ledger-acceptor-batchv11
+    depends_on:
+      - xrpld
+    entrypoint:
+      - sh
+      - -c
+      - |
+        sleep 3
+        while true; do
+          curl -s -X POST http://xrpld:5006/ \
+            -H "Content-Type: application/json" \
+            -d '{"method":"ledger_accept"}'
+          sleep 4
+        done
+    restart: unless-stopped
