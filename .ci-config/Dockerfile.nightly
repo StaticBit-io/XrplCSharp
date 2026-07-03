@@ -16,7 +16,13 @@ RUN echo "deb [signed-by=/usr/share/keyrings/ripple-key.gpg] https://repos.rippl
     && apt-get install -y --no-install-recommends --allow-downgrades "xrpld=${XRPLD_VERSION}" \
     && rm -rf /var/lib/apt/lists/*
 
+# The xrpld deb package may already create the service user; keep this idempotent
+RUN id -u xrpld >/dev/null 2>&1 || useradd --system --home-dir /var/lib/rippled --create-home --shell /usr/sbin/nologin xrpld; \
+    mkdir -p /var/lib/rippled/db \
+    && chown -R xrpld:xrpld /var/lib/rippled
+
 EXPOSE 5005 5006 6006
 
+USER xrpld
 ENTRYPOINT ["/bin/sh", "-c", "exec \"$(command -v xrpld || command -v rippled || echo /opt/ripple/bin/rippled)\" --conf /config/rippled.cfg \"$@\"", "--"]
 CMD ["-a", "--start"]
