@@ -21,11 +21,6 @@ namespace XrplTests.Xrpl.ClientLib.Integration;
 [DoNotParallelize]
 public class TestIBatch
 {
-    /// <summary>Well-known index of the Amendments ledger object.</summary>
-    private const string AmendmentsLedgerIndex = "7DB0788C020F02780A673DC74757F23823FA3014C1866E72CC4CD8B226CD6EF4";
-    /// <summary>Amendment id of BatchV1_1 (sha512half of the name).</summary>
-    private const string BatchV11AmendmentId = "9F287AED3CDB50A7BD1ACEC24296A30C9B5230CCD136219317AC790E3B884377";
-
     private static bool batchV11Active;
 
     // private static int Timeout = 20;
@@ -46,7 +41,7 @@ public class TestIBatch
     {
         runner = await new SetupIntegration().SetupClient(ServerUrl.serverUrl);
 
-        batchV11Active = await IsBatchV11ActiveAsync();
+        batchV11Active = await AmendmentGuard.IsEnabledAsync(runner.client, AmendmentGuard.BatchV11);
         if (!batchV11Active)
         {
             // Tests will be reported as inconclusive from CheckBatchV11Amendment.
@@ -74,27 +69,6 @@ public class TestIBatch
         }
     }
 
-    private static async Task<bool> IsBatchV11ActiveAsync()
-    {
-        try
-        {
-            var request = new LedgerEntryRequest { Index = AmendmentsLedgerIndex };
-            var node = await runner.client.GRequest<System.Text.Json.Nodes.JsonNode, LedgerEntryRequest>(request);
-            var amendments = node?["node"]?["Amendments"]?.AsArray();
-            if (amendments == null)
-                return false;
-            foreach (var amendment in amendments)
-            {
-                if (string.Equals(amendment?.GetValue<string>(), BatchV11AmendmentId, StringComparison.OrdinalIgnoreCase))
-                    return true;
-            }
-            return false;
-        }
-        catch
-        {
-            return false;
-        }
-    }
     [ClassCleanup]
     public static void AfterAllTests()
     {
