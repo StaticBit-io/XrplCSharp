@@ -76,6 +76,8 @@ await client.Disconnect();
 | Guide | EN | RU |
 |-------|----|----|
 | Connection Guide | [English](Connection-Guide.html) | [Русский](Connection-Guide.ru.html) |
+| Standalone Node | [English](StandaloneNode-Guide.html) | [Русский](StandaloneNode-Guide.ru.html) |
+| Mainnet Node | [English](MainnetNode-Guide.html) | [Русский](MainnetNode-Guide.ru.html) |
 | Error Classifier | [English](ErrorClassifier.html) | [Русский](ErrorClassifier.ru.html) |
 | Cross-Chain Bridge | [English](XChainBridge-Guide.html) | [Русский](XChainBridge-Guide.ru.html) |
 | Vault Guide | [English](Vault-Guide.html) | [Русский](Vault-Guide.ru.html) |

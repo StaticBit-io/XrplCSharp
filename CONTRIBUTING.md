@@ -43,6 +43,8 @@ dotnet test Tests/Xrpl.Tests/Xrpl.Tests.csproj --verbosity normal --settings tes
 docker compose -f .ci-config/docker-compose.ci.yml down
 ```
 
+For amendment activation details, the nightly-develop stand for unreleased amendments, `temDISABLED` troubleshooting and genesis account funding, see the [Standalone Node Guide](DocFx/StandaloneNode-Guide.md).
+
 ## Generate reference docs
 
 You can see the complete reference documentation at [`XrplCSharp` docs](https://staticbit-io.github.io/XrplCSharp/). You can also generate them locally:
