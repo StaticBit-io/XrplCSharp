@@ -18,9 +18,10 @@ namespace XrplTests.Xrpl.ClientLib.Integration;
 
 [TestClass]
 [TestCategory("Delegate")]
-[Ignore("PermissionDelegation amendment removed in v2.6.1 due to a bug; replacement PermissionDelegationV1_1 not yet released (XLS-75)")]
 public class TestIDelegateSet
 {
+    private static bool permissionDelegationActive;
+
     public TestContext TestContext { get; set; }
     private static IXrplClient client;
     private static TestNodeType nodeType = TestNodeType.Standalone;
@@ -29,6 +30,16 @@ public class TestIDelegateSet
     public static async Task ClassInitializeAsync(TestContext testContext)
     {
         client = await IntegrationTestConfig.CreateClientAsync(TestNodeType.Standalone);
+        permissionDelegationActive = await AmendmentGuard.IsEnabledAsync(client, AmendmentGuard.PermissionDelegationV11);
+    }
+
+    [TestInitialize]
+    public void CheckPermissionDelegationAmendment()
+    {
+        if (!permissionDelegationActive)
+        {
+            Assert.Inconclusive("PermissionDelegationV1_1 amendment is not enabled on the test node; start .ci-config/docker-compose.batchv11.yml to run these tests.");
+        }
     }
 
     [ClassCleanup]
@@ -67,7 +78,7 @@ public class TestIDelegateSet
         DelegateSet tx = new DelegateSet
         {
             Account = walletOwner.ClassicAddress,
-            Delegate = walletDelegate.ClassicAddress,
+            Authorize = walletDelegate.ClassicAddress,
             Permissions = new List<PermissionWrapper>
             {
                 new PermissionWrapper { Permission = new PermissionEntry { PermissionValue = 1 } },
@@ -82,7 +93,7 @@ public class TestIDelegateSet
         LODelegate delegateObj = await GetDelegateObject(walletOwner.ClassicAddress);
         Assert.IsNotNull(delegateObj, "LODelegate object should exist after DelegateSet");
         Assert.AreEqual(walletOwner.ClassicAddress, delegateObj.Account);
-        Assert.AreEqual(walletDelegate.ClassicAddress, delegateObj.Delegate);
+        Assert.AreEqual(walletDelegate.ClassicAddress, delegateObj.Authorize);
         Assert.IsNotNull(delegateObj.Permissions);
         Assert.HasCount(1, delegateObj.Permissions);
         Assert.AreEqual((uint)1, delegateObj.Permissions[0].Permission.PermissionValue);
@@ -98,7 +109,7 @@ public class TestIDelegateSet
         DelegateSet tx = new DelegateSet
         {
             Account = walletOwner.ClassicAddress,
-            Delegate = walletDelegate.ClassicAddress,
+            Authorize = walletDelegate.ClassicAddress,
             Permissions = new List<PermissionWrapper>
             {
                 new PermissionWrapper { Permission = new PermissionEntry { PermissionValue = 1 } },
@@ -115,7 +126,7 @@ public class TestIDelegateSet
         LODelegate delegateObj = await GetDelegateObject(walletOwner.ClassicAddress);
         Assert.IsNotNull(delegateObj, "LODelegate object should exist after DelegateSet");
         Assert.AreEqual(walletOwner.ClassicAddress, delegateObj.Account);
-        Assert.AreEqual(walletDelegate.ClassicAddress, delegateObj.Delegate);
+        Assert.AreEqual(walletDelegate.ClassicAddress, delegateObj.Authorize);
         Assert.IsNotNull(delegateObj.Permissions);
         Assert.HasCount(3, delegateObj.Permissions);
 

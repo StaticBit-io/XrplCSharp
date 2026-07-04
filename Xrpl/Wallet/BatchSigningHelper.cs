@@ -25,7 +25,7 @@ public static class BatchSigningHelper
             }
         }
 
-        return new JsonArray(
+        JsonArray sorted = new JsonArray(
             batchSigners.Select(b => b?.DeepClone()).OrderBy(b =>
             {
                 var bObj = b as JsonObject;
@@ -34,6 +34,20 @@ public static class BatchSigningHelper
                 return SignerUtilities.GetAccountIdBytes(acc);
             }, SignerUtilities.ByteArrayComparer.Instance).ToArray()
         );
+
+        // BatchV1_1: rippled rejects duplicate BatchSigner accounts with temBAD_SIGNER
+        string? previousAccount = null;
+        foreach (var node in sorted)
+        {
+            var bObj = node as JsonObject;
+            var bs = bObj?["BatchSigner"]?.AsObject() ?? bObj;
+            var acc = bs?["Account"]?.GetValue<string>();
+            if (acc != null && string.Equals(acc, previousAccount, StringComparison.Ordinal))
+                throw new InvalidOperationException($"Duplicate BatchSigner account '{acc}' is not allowed (temBAD_SIGNER).");
+            previousAccount = acc;
+        }
+
+        return sorted;
     }
 
     public static JsonObject FindOrCreateBatchSigner(JsonArray batchSigners, string ownerAccount)

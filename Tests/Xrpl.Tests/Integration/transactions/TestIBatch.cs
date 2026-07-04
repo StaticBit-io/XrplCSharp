@@ -19,9 +19,10 @@ namespace XrplTests.Xrpl.ClientLib.Integration;
 
 [TestClass]
 [DoNotParallelize]
-[Ignore("Batch amendment removed in v3.1.1 due to a bug; will be replaced by BatchV1_1")]
 public class TestIBatch
 {
+    private static bool batchV11Active;
+
     // private static int Timeout = 20;
     public TestContext TestContext { get; set; }
     public static SetupIntegration runner;
@@ -39,6 +40,14 @@ public class TestIBatch
     public static async Task MyClassInitializeAsync(TestContext testContext)
     {
         runner = await new SetupIntegration().SetupClient(ServerUrl.serverUrl);
+
+        batchV11Active = await AmendmentGuard.IsEnabledAsync(runner.client, AmendmentGuard.BatchV11);
+        if (!batchV11Active)
+        {
+            // Tests will be reported as inconclusive from CheckBatchV11Amendment.
+            return;
+        }
+
         await TryFillAccounts(walletPrimary, walletSecondary_1, walletSecondary_2, walletMultiSign, walletMultiSigner_1, walletMultiSigner_2, walletRegularKey, walletRegularKey_signer);
         if (!await SetSigners(walletMultiSign, walletMultiSigner_1, walletMultiSigner_2))
         {
@@ -50,6 +59,16 @@ public class TestIBatch
             throw new RippledNotInitializedException();
         }
     }
+
+    [TestInitialize]
+    public void CheckBatchV11Amendment()
+    {
+        if (!batchV11Active)
+        {
+            Assert.Inconclusive("BatchV1_1 amendment is not enabled on the test node; start .ci-config/docker-compose.batchv11.yml to run these tests.");
+        }
+    }
+
     [ClassCleanup]
     public static void AfterAllTests()
     {

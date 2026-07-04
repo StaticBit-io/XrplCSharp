@@ -1,5 +1,7 @@
 using System.Text.Json.Serialization;
 
+using Xrpl.Client.Json.Converters;
+
 namespace Xrpl.Models.Common;
 
 /// <summary>
@@ -20,9 +22,11 @@ public class PermissionWrapper
 public class PermissionEntry
 {
     /// <summary>
-    /// A bit-flag value representing the specific permission granted.
-    /// Each bit corresponds to a particular transaction type or capability.
+    /// The numeric value of the granted permission: transaction type code + 1
+    /// for transaction-type permissions, or a granular permission value (65537+).
+    /// rippled returns a name string in JSON responses; the converter maps it back.
     /// </summary>
     [JsonPropertyName("PermissionValue")]
+    [JsonConverter(typeof(PermissionValueConverter))]
     public uint PermissionValue { get; set; }
 }

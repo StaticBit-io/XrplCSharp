@@ -109,16 +109,22 @@ namespace Xrpl.BinaryCodec
         }
 
         /// <summary>
-        /// Encode a multi transaction - Batch
+        /// Encode a multi transaction - Batch (XLS-56, BatchV1_1 amendment).
+        /// Preimage layout mirrors rippled's serializeBatch():
+        /// "BCH\0" || outerAccount(20) || outerSequence(4) || Flags(4) || Count(4) || txID[i](32 each).
+        /// The signer-specific suffixes (BatchSigner account, inner multisign signer account)
+        /// are appended by the caller, matching finishMultiSigningData() in rippled.
         /// </summary>
+        /// <param name="outerAccount">Account of the outer Batch transaction (classic r-address or 40-char hex).</param>
+        /// <param name="outerSequence">Sequence of the outer Batch transaction.</param>
         /// <param name="flags">Batch flags.</param>
         /// <param name="txIDs">Collection of inner transaction IDs.</param>
-        /// <param name="networkId">Optional network ID for cross‑chain replay protection.</param>
         /// <returns></returns>
         /// <exception cref="ArgumentNullException"></exception>
         /// <exception cref="ArgumentException"></exception>
-        public static byte[] EncodeForSigningBatch(uint flags, IEnumerable<string> txIDs, uint? networkId = null)
+        public static byte[] EncodeForSigningBatch(string outerAccount, uint outerSequence, uint flags, IEnumerable<string> txIDs)
         {
+            if (string.IsNullOrWhiteSpace(outerAccount)) throw new ArgumentNullException(nameof(outerAccount));
             if (txIDs == null) throw new ArgumentNullException(nameof(txIDs));
 
             var list = new BytesList();
@@ -126,19 +132,21 @@ namespace Xrpl.BinaryCodec
             // 1) Префикс "BCH\0"
             list.Put(Bits.GetBytes((uint)HashPrefix.Batch));
 
-            // 1.5) NetworkID (если есть)
-            if (networkId.HasValue)
-            {
-                list.Put(new Uint32(networkId.Value).ToBytes());
-            }
+            // 2) Account внешней Batch-транзакции (20 байт)
+            byte[] outerAccountId = new AccountId(outerAccount).Buffer;
+            if (outerAccountId.Length != 20) throw new ArgumentException("outerAccount must decode to 20 bytes.");
+            list.Put(outerAccountId);
 
-            // 2) Flags (UInt32 BE)
+            // 3) Sequence внешней Batch-транзакции (UInt32 BE)
+            list.Put(new Uint32(outerSequence).ToBytes());
+
+            // 4) Flags (UInt32 BE)
             list.Put(new Uint32(flags).ToBytes());
 
-            // 3) Количество txIDs (UInt32 BE)
+            // 5) Количество txIDs (UInt32 BE)
             list.Put(new Uint32((uint)txIDs.Count()).ToBytes());
 
-            // 4) Каждый txid как 32 байта
+            // 6) Каждый txid как 32 байта
             foreach (var id in txIDs)
             {
                 var raw = Hash256.FromHex(id).Buffer; // validate hex string

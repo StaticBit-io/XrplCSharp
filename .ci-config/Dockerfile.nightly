@@ -1,0 +1,28 @@
+FROM ubuntu:22.04
+
+RUN apt-get update \
+    && apt-get install -y --no-install-recommends curl gnupg ca-certificates \
+    && rm -rf /var/lib/apt/lists/*
+
+RUN install -m 0755 -d /usr/share/keyrings \
+    && curl -fsSL https://repos.ripple.com/repos/api/gpg/key/public | gpg --dearmor -o /usr/share/keyrings/ripple-key.gpg
+
+# rippled was renamed to xrpld on the develop branch; the nightly channel publishes it as the "xrpld" package.
+# The version must be pinned: the timestamp format changed from 14 to 12 digits mid-2026,
+# so Debian version ordering ranks old 14-digit builds above the newer 12-digit ones.
+ARG XRPLD_VERSION=3.3.0~b0+202607031559.c92285f1-1
+RUN echo "deb [signed-by=/usr/share/keyrings/ripple-key.gpg] https://repos.ripple.com/repos/rippled-deb jammy nightly" > /etc/apt/sources.list.d/ripple.list \
+    && apt-get update \
+    && apt-get install -y --no-install-recommends --allow-downgrades "xrpld=${XRPLD_VERSION}" \
+    && rm -rf /var/lib/apt/lists/*
+
+# The xrpld deb package may already create the service user; keep this idempotent
+RUN id -u xrpld >/dev/null 2>&1 || useradd --system --home-dir /var/lib/rippled --create-home --shell /usr/sbin/nologin xrpld; \
+    mkdir -p /var/lib/rippled/db \
+    && chown -R xrpld:xrpld /var/lib/rippled
+
+EXPOSE 5005 5006 6006
+
+USER xrpld
+ENTRYPOINT ["/bin/sh", "-c", "exec \"$(command -v xrpld || command -v rippled || echo /opt/ripple/bin/rippled)\" --conf /config/rippled.cfg \"$@\"", "--"]
+CMD ["-a", "--start"]

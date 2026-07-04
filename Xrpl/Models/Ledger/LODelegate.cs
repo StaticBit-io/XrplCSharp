@@ -23,10 +23,10 @@ public class LODelegate : BaseLedgerEntry
     public string Account { get; init; }
 
     /// <summary>
-    /// The account that received the permissions.
+    /// The account that received the permissions (sfAuthorize in PermissionDelegationV1_1).
     /// </summary>
-    [JsonPropertyName("Delegate")]
-    public string Delegate { get; init; }
+    [JsonPropertyName("Authorize")]
+    public string Authorize { get; init; }
 
     /// <summary>
     /// The permissions granted to the delegate.
