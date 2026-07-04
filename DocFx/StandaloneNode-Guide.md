@@ -2,6 +2,8 @@
 
 How to run a local `rippled`/`xrpld` node in standalone mode for development and integration testing — and why a freshly started node answers `temDISABLED` to almost everything until you activate amendments.
 
+For a production node connected to the live network see the [Mainnet Node Guide](MainnetNode-Guide.md).
+
 > **TL;DR**: `rippled -a --start` alone is **not enough**. A bare standalone node starts with (almost) no amendments enabled, so `AMMCreate`, `NFTokenMint`, `MPTokenIssuanceCreate` and most modern transaction types fail with `temDISABLED`. Use the ready-made Docker stands from `.ci-config/` in this repository, or configure amendment activation yourself as described below.
 
 ## Quick start (recommended)

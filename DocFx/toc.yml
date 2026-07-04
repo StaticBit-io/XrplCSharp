@@ -4,6 +4,8 @@
   href: Connection-Guide.md
 - name: Standalone Node Guide
   href: StandaloneNode-Guide.md
+- name: Mainnet Node Guide
+  href: MainnetNode-Guide.md
 - name: Error Classifier
   href: ErrorClassifier.md
 - name: Cross-Chain Bridge Guide
