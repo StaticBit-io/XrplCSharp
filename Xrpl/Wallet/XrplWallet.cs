@@ -764,8 +764,10 @@ namespace Xrpl.Wallet
             }
             else if (seqTok == null && outer["TicketSequence"] != null)
             {
-                // При использовании тикетов Sequence сериализуется как 0
+                // При использовании тикетов Sequence обязателен и равен 0 — и в preimage,
+                // и в сериализованном blob, иначе итоговая транзакция malformed.
                 outerSequence = 0;
+                outer["Sequence"] = 0u;
             }
             else
             {
