@@ -169,6 +169,35 @@ namespace Xrpl.Tests.Wallet.Tests
         }
 
         [TestMethod]
+        public void TestUSignAsBatchPart_TicketSequence_SerializesSequenceZero()
+        {
+            XrplWallet submitter = XrplWallet.Generate();
+            XrplWallet participant = XrplWallet.Generate();
+            XrplWallet destination = XrplWallet.Generate();
+
+            JsonObject inner1 = InnerPayment(submitter.ClassicAddress, destination.ClassicAddress, 4);
+            JsonObject inner2 = InnerPayment(participant.ClassicAddress, destination.ClassicAddress, 20);
+            JsonObject outer = BuildOuterBatch(submitter.ClassicAddress, 0, inner1, inner2);
+            outer.Remove("Sequence");
+            outer["TicketSequence"] = 15;
+
+            SignatureResult result = participant.SignAsBatchPart(BuildBatchDictionary(outer), multisign: false, signingFor: participant.ClassicAddress);
+
+            // The serialized blob must carry the explicit Sequence: 0 required for ticket transactions
+            JsonNode decoded = XrplBinaryCodec.Decode(result.TxBlob);
+            Assert.AreEqual(0u, decoded["Sequence"]?.GetValue<uint>(),
+                "Serialized Batch must contain Sequence = 0 when TicketSequence is used.");
+            Assert.AreEqual(15u, decoded["TicketSequence"]?.GetValue<uint>());
+
+            // Signature must verify over the preimage built with outerSequence = 0
+            JsonObject signer = decoded["BatchSigners"]!.AsArray()[0]!["BatchSigner"]!.AsObject();
+            string signature = signer["TxnSignature"]!.GetValue<string>();
+            byte[] basePreimage = ComputeBasePreimage(submitter.ClassicAddress, 0, TfAllOrNothing, inner1, inner2);
+            byte[] signerAccountId = XrplCodec.DecodeAccountID(participant.ClassicAddress);
+            Assert.IsTrue(XrplKeypairs.Verify(Concat(basePreimage, signerAccountId), signature, participant.PublicKey));
+        }
+
+        [TestMethod]
         public void TestUSignAsBatchPart_MissingSequence_Throws()
         {
             XrplWallet submitter = XrplWallet.Generate();

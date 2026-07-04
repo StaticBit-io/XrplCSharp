@@ -7,9 +7,11 @@ services:
     container_name: rippled-batchv11
     command: ["-a", "--start"]
     ports:
-      - "5005:5005"
-      - "5006:5006"
-      - "6006:6006"
+      # Admin RPC/WS — publish to loopback only; the ledger-acceptor sidecar reaches
+      # the node over the compose network, tests connect via localhost
+      - "127.0.0.1:5005:5005"
+      - "127.0.0.1:5006:5006"
+      - "127.0.0.1:6006:6006"
     volumes:
       - ./rippled.batchv11.cfg:/config/rippled.cfg:ro
       - ./validators.txt:/config/validators.txt:ro
