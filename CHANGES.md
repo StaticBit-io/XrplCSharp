@@ -1,5 +1,11 @@
 # Changes
 
+### 10.5.1.0 07/04/2026
+* Fix `SignAsBatchPart` with `TicketSequence`: when the outer Batch used a ticket and had no `Sequence`, the value `0` was applied only to the signing preimage while the serialized blob omitted the required `Sequence: 0` field, producing a malformed transaction on submit. The field is now written into the transaction as well; signatures are unaffected (the preimage already used `0`). Found by review on the 10.5.0.0 release PR
+* Add a unit test covering the `TicketSequence`-present / `Sequence`-absent signing path (blob carries `Sequence: 0`, signature verifies over the zero-sequence preimage)
+* Correct the `EncodeForSigningBatch` XML doc: `outerAccount` accepts a classic base58 r-address only (the 40-char hex form was never supported by this overload)
+* Harden the nightly amendment stand: admin RPC/WS ports (5005/5006/6006) in `docker-compose.batchv11.yml` are now published to `127.0.0.1` only
+
 ### 10.5.0.0 07/03/2026
 * **BREAKING**: Align Batch (XLS-56) signing with the `BatchV1_1` amendment ([rippled #6446](https://github.com/XRPLF/rippled/pull/6446), merged into `develop` 07/01/2026). The signing preimage now includes the outer `Account` (20 bytes) and outer `Sequence` (4 bytes) after the `BCH\0` prefix; `NetworkID` is removed from the preimage. `XrplBinaryCodec.EncodeForSigningBatch` signature changed to `(string outerAccount, uint outerSequence, uint flags, IEnumerable<string> txIDs)`. Signatures produced by the previous format are rejected by rippled once `BatchV1_1` is active
 * `SignAsBatchPart` single-sig now binds the signature to the `BatchSigner` account id (`finishMultiSigningData` equivalent); inner multisign binds `owner(20) + signer(20)` account ids — both per the audit hardening in BatchV1_1

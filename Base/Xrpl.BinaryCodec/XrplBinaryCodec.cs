@@ -115,7 +115,7 @@ namespace Xrpl.BinaryCodec
         /// The signer-specific suffixes (BatchSigner account, inner multisign signer account)
         /// are appended by the caller, matching finishMultiSigningData() in rippled.
         /// </summary>
-        /// <param name="outerAccount">Account of the outer Batch transaction (classic r-address or 40-char hex).</param>
+        /// <param name="outerAccount">Account of the outer Batch transaction (classic base58 r-address).</param>
         /// <param name="outerSequence">Sequence of the outer Batch transaction.</param>
         /// <param name="flags">Batch flags.</param>
         /// <param name="txIDs">Collection of inner transaction IDs.</param>
