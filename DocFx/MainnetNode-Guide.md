@@ -40,8 +40,8 @@ sudo install -m 0755 -d /usr/share/keyrings
 curl -fsSL https://repos.ripple.com/repos/api/gpg/key/public | \
     sudo gpg --dearmor -o /usr/share/keyrings/ripple-key.gpg
 
-# repository (jammy/noble — match your release)
-echo "deb [signed-by=/usr/share/keyrings/ripple-key.gpg] https://repos.ripple.com/repos/rippled-deb jammy stable" | \
+# repository — codename is taken from your OS release automatically
+echo "deb [signed-by=/usr/share/keyrings/ripple-key.gpg] https://repos.ripple.com/repos/rippled-deb $(lsb_release -cs) stable" | \
     sudo tee /etc/apt/sources.list.d/ripple.list
 
 sudo apt update && sudo apt install -y rippled
@@ -132,7 +132,7 @@ Key points:
 - **`network_id` is not set** for mainnet (it defaults to mainnet). Setting it wrongly is a classic way to end up on the wrong network.
 - **UNL**: the stock `validators.txt` points at the dUNL publishers (`vl.ripple.com`, `unl.xrplf.org`). Do not edit it unless you know exactly why.
 - **`online_delete`** is what keeps your disk finite: the node keeps a rotating window of ledgers and deletes older shards. Size the disk for the window, not the other way around.
-- **Never expose admin ports.** `admin = 127.0.0.1`, and if you need remote API — publish only `port_ws_public`/`port_rpc_public` behind nginx with TLS (see the `nginx` reverse-proxy pattern with WebSocket upgrade headers).
+- **Never expose admin ports.** `admin = 127.0.0.1`, and if you need remote API — publish only `port_ws_public` behind nginx with TLS (the reverse-proxy pattern with WebSocket upgrade headers).
 - **Firewall**: inbound `51235/tcp` open to the world (peer protocol benefits from inbound connectivity), everything else closed or internal.
 
 ## Running under systemd
@@ -188,8 +188,10 @@ To pin against surprise major upgrades, use `apt-mark hold rippled` and upgrade 
 ```csharp
 using Xrpl.Client;
 
-// public WS port of your node
+// plain ws:// is acceptable ONLY inside a trusted private network / localhost
 IXrplClient client = new XrplClient("ws://10.0.0.5:6005");
+// anything reachable from outside must go through TLS (nginx in front of port_ws_public):
+// IXrplClient client = new XrplClient("wss://xrpl-node.example.com");
 await client.Connect();
 
 ServerInfo info = await client.ServerInfo();

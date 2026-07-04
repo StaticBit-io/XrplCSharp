@@ -128,7 +128,7 @@ Compose-стенды включают sidecar `ledger-acceptor`, который 
 
 ## Фондирование аккаунтов
 
-Фaucet-а в standalone нет. Все 100 миллиардов XRP лежат на genesis-аккаунте:
+Faucet-а в standalone нет. Все 100 миллиардов XRP лежат на genesis-аккаунте:
 
 | | |
 |---|---|
