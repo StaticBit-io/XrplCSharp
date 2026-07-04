@@ -2,6 +2,8 @@
   href: index.md
 - name: Connection Guide
   href: Connection-Guide.md
+- name: Standalone Node Guide
+  href: StandaloneNode-Guide.md
 - name: Error Classifier
   href: ErrorClassifier.md
 - name: Cross-Chain Bridge Guide
