@@ -65,7 +65,7 @@ namespace Xrpl.Models.Transactions
             await Common.ValidateBaseTransaction(tx);
             if (!tx.TryGetValue("SignerQuorum", out var SignerQuorum) || SignerQuorum is null)
                 throw new ValidationException("SignerListSet: missing field SignerQuorum");
-            if (SignerQuorum is not uint)
+            if (!Common.IsUInt32(SignerQuorum))
                 throw new ValidationException("SignerListSet: invalid SignerQuorum");
 
 

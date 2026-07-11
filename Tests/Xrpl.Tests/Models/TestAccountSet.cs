@@ -39,8 +39,8 @@ namespace XrplTests.Xrpl.Models
             await Validation.ValidateAccountSet(accountSet);
             await Validation.Validate(accountSet);
 
-            //throws w/ invalid SetFlag (out of range)
-            accountSet["SetFlag"] = 12;
+            //throws w/ invalid SetFlag (out of range; 12 is a valid asf value and int is a valid representation)
+            accountSet["SetFlag"] = 9999;
             await Helper.ThrowsExceptionAsync<ValidationException>(() => Validation.ValidateAccountSet(accountSet), "AccountSet: invalid SetFlag");
             await Helper.ThrowsExceptionAsync<ValidationException>(() => Validation.Validate(accountSet), "AccountSet: invalid SetFlag");
 
@@ -51,8 +51,8 @@ namespace XrplTests.Xrpl.Models
 
             accountSet["SetFlag"] = 5u;
 
-            //throws w/ invalid ClearFlag
-            accountSet["ClearFlag"] = 12;
+            //throws w/ invalid ClearFlag (out of range)
+            accountSet["ClearFlag"] = 9999;
             await Helper.ThrowsExceptionAsync<ValidationException>(() => Validation.ValidateAccountSet(accountSet), "AccountSet: invalid ClearFlag");
             await Helper.ThrowsExceptionAsync<ValidationException>(() => Validation.Validate(accountSet), "AccountSet: invalid ClearFlag");
             accountSet.Remove("ClearFlag");
@@ -81,8 +81,8 @@ namespace XrplTests.Xrpl.Models
             await Helper.ThrowsExceptionAsync<ValidationException>(() => Validation.Validate(accountSet), "AccountSet: invalid TransferRate");
             accountSet.Remove("TransferRate");
 
-            //throws w/ invalid TickSize
-            accountSet["TickSize"] = 5;
+            //throws w/ invalid TickSize (non-numeric type; int/long are valid integral representations)
+            accountSet["TickSize"] = "5";
             await Helper.ThrowsExceptionAsync<ValidationException>(() => Validation.ValidateAccountSet(accountSet), "AccountSet: invalid TickSize");
             await Helper.ThrowsExceptionAsync<ValidationException>(() => Validation.Validate(accountSet), "AccountSet: invalid TickSize");
             //throws w/ invalid TickSize

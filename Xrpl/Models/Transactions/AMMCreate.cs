@@ -112,7 +112,7 @@ namespace Xrpl.Models.Transactions
                 throw new ValidationException("AMMCreate: missing field TradingFee");
             }
 
-            if (TradingFee is not uint fee)
+            if (!Common.TryGetUInt32(TradingFee, out uint fee))
             {
                 throw new ValidationException("AMMCreate: TradingFee must be a number");
             }

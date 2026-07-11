@@ -133,15 +133,15 @@ namespace Xrpl.Models.Transactions
                 throw new ValidationException("PaymentChannelCreate: Destination must be a string");
             if (!tx.TryGetValue("SettleDelay", out var SettleDelay) || SettleDelay is null)
                 throw new ValidationException("PaymentChannelCreate: missing field SettleDelay");
-            if (SettleDelay is not uint)
+            if (!Common.IsUInt32(SettleDelay))
                 throw new ValidationException("PaymentChannelCreate: SettleDelay must be a number");
             if (!tx.TryGetValue("PublicKey", out var PublicKey) || PublicKey is null)
                 throw new ValidationException("PaymentChannelCreate: missing field PublicKey");
             if (PublicKey is not string)
                 throw new ValidationException("PaymentChannelCreate: PublicKey must be a string");
-            if (tx.TryGetValue("CancelAfter", out var CancelAfter) && CancelAfter is not uint)
+            if (tx.TryGetValue("CancelAfter", out var CancelAfter) && !Common.IsUInt32(CancelAfter))
                 throw new ValidationException("PaymentChannelCreate: CancelAfter must be a number");
-            if (tx.TryGetValue("DestinationTag", out var DestinationTag) && DestinationTag is not uint)
+            if (tx.TryGetValue("DestinationTag", out var DestinationTag) && !Common.IsUInt32(DestinationTag))
                 throw new ValidationException("PaymentChannelCreate: DestinationTag must be a number");
 
         }

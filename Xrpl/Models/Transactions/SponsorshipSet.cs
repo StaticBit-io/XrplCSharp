@@ -179,18 +179,8 @@ namespace Xrpl.Models.Transactions
             if (hasSponsee == hasCounterpartySponsor)
                 throw new ValidationException("SponsorshipSet: exactly one of Sponsee or CounterpartySponsor must be present");
 
-            if (tx.TryGetValue("RemainingOwnerCount", out var roc))
-            {
-                bool isValidOwnerCount = roc switch
-                {
-                    uint => true,
-                    long l => l >= 0 && l <= uint.MaxValue,
-                    int i => i >= 0,
-                    _ => false,
-                };
-                if (!isValidOwnerCount)
-                    throw new ValidationException("SponsorshipSet: invalid RemainingOwnerCount");
-            }
+            if (tx.TryGetValue("RemainingOwnerCount", out var roc) && !Common.IsUInt32(roc))
+                throw new ValidationException("SponsorshipSet: invalid RemainingOwnerCount");
 
             uint flags = ExtractFlags(tx);
             const uint feePair = (uint)(SponsorshipSetFlags.tfSponsorshipSetRequireSignForFee | SponsorshipSetFlags.tfSponsorshipClearRequireSignForFee);

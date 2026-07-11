@@ -172,7 +172,7 @@ public partial class Validation
             }
 
             if (!innerTx.TryGetValue("Flags", out var flagsObj) ||
-                !(flagsObj is long flagsValue) ||
+                !Common.TryGetUInt32(flagsObj, out uint flagsValue) ||
                 (flagsValue & (uint)XrplGlobalFlags.tfInnerBatchTxn) == 0)
             {
                 throw new ArgumentException($"Batch: RawTransactions[{i}] must contain the `tfInnerBatchTxn` flag.");
