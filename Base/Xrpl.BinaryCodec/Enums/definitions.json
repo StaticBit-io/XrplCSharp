@@ -3649,6 +3649,16 @@
         "nth": 39,
         "type": "Hash256"
       }
+    ],
+    [
+      "SponsorFlags",
+      {
+        "isSerialized": true,
+        "isSigningField": true,
+        "isVLEncoded": false,
+        "nth": 74,
+        "type": "UInt32"
+      }
     ]
   ],
   "LEDGER_ENTRY_TYPES": {

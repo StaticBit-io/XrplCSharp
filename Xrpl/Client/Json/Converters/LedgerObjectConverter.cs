@@ -205,6 +205,7 @@ public class LOConverter : JsonConverter<BaseLedgerEntry>
         LedgerEntryType.Vault => typeof(LOVault),
         LedgerEntryType.LoanBroker => typeof(LOLoanBroker),
         LedgerEntryType.Loan => typeof(LOLoan),
+        LedgerEntryType.Sponsorship => typeof(LOSponsorship),
         _ => typeof(BaseLedgerEntry),
     };
 

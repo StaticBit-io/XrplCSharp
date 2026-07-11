@@ -304,6 +304,16 @@ namespace Xrpl.Models.Transactions
         /// <inheritdoc />
         public uint? TicketSequence { get; set; }
 
+        /// <summary>
+        /// XLS-68: the account sponsoring this transaction's fee and/or reserve.
+        /// </summary>
+        public string Sponsor { get; set; }
+
+        /// <summary>
+        /// XLS-68: what the sponsor covers — spfSponsorFee (1) and/or spfSponsorReserve (2).
+        /// </summary>
+        public uint? SponsorFlags { get; set; }
+
         //todo not found fields -  SourceTag?: number, TicketSequence?: number
     }
 
@@ -677,6 +687,16 @@ namespace Xrpl.Models.Transactions
         /// <inheritdoc/>
         [JsonPropertyName("meta")]
         public Meta Meta { get; set; }
+
+        /// <summary>
+        /// XLS-68: the account sponsoring this transaction's fee and/or reserve.
+        /// </summary>
+        public string Sponsor { get; set; }
+
+        /// <summary>
+        /// XLS-68: what the sponsor covers — spfSponsorFee (1) and/or spfSponsorReserve (2).
+        /// </summary>
+        public uint? SponsorFlags { get; set; }
 
         /// <inheritdoc/>
         public string ToJson()
