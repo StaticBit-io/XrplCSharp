@@ -55,7 +55,7 @@ namespace Xrpl.Models.Transactions
             if (!tx.TryGetValue("OfferSequence", out var OfferSequence) || OfferSequence is null)
                 throw new ValidationException("OfferCancel: missing field OfferSequence");
 
-            if (OfferSequence is not uint { })
+            if (!Common.IsUInt32(OfferSequence))
                 throw new ValidationException("OfferCancel: OfferSequence must be a number");
         }
     }

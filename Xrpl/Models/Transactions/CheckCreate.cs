@@ -104,9 +104,9 @@ namespace Xrpl.Models.Transactions
             if (Destination is not string { })
                 throw new ValidationException("CheckCreate: invalid Destination");
 
-            if (tx.TryGetValue("DestinationTag", out var DestinationTag) && DestinationTag is not uint { })
+            if (tx.TryGetValue("DestinationTag", out var DestinationTag) && !Common.IsUInt32(DestinationTag))
                 throw new ValidationException("CheckCreate: invalid DestinationTag");
-            if (tx.TryGetValue("Expiration", out var Expiration) && Expiration is not uint { })
+            if (tx.TryGetValue("Expiration", out var Expiration) && !Common.IsUInt32(Expiration))
                 throw new ValidationException("CheckCreate: invalid Expiration");
             if (tx.TryGetValue("InvoiceID", out var InvoiceID) && InvoiceID is not string { })
                 throw new ValidationException("CheckCreate: invalid InvoiceID");

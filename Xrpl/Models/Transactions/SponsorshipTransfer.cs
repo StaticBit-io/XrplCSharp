@@ -144,13 +144,9 @@ namespace Xrpl.Models.Transactions
         {
             if (!tx.TryGetValue("Flags", out var flagsObj) || flagsObj is null)
                 return 0;
-            return flagsObj switch
-            {
-                uint u => u,
-                long l when l >= 0 && l <= uint.MaxValue => (uint)l,
-                int i when i >= 0 => (uint)i,
-                _ => throw new ValidationException("Invalid Flags value"),
-            };
+            if (!Common.TryGetUInt32(flagsObj, out uint flags))
+                throw new ValidationException("Invalid Flags value");
+            return flags;
         }
     }
 }

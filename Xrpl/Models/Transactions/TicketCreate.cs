@@ -55,7 +55,7 @@ namespace Xrpl.Models.Transactions
 
             if (!tx.TryGetValue("TicketCount", out var TicketCount) || TicketCount is null)
                 throw new ValidationException("TicketCreate: missing field TicketCount");
-            if (TicketCount is not uint count)
+            if (!Common.TryGetUInt32(TicketCount, out uint count))
                 throw new ValidationException("TicketCreate: TicketCount must be a number");
 
             if(count is < 1 or > MAX_TICKETS)

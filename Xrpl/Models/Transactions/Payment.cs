@@ -260,7 +260,7 @@ namespace Xrpl.Models.Transactions
             if (!Common.IsAmount(Destination))
                 throw new ValidationException("PaymentTransaction: invalid Destination");
 
-            if (tx.TryGetValue("DestinationTag", out var DestinationTag) && DestinationTag is not uint { })
+            if (tx.TryGetValue("DestinationTag", out var DestinationTag) && !Common.IsUInt32(DestinationTag))
                 throw new ValidationException("PaymentTransaction: DestinationTag must be a number");
 
             if (tx.TryGetValue("InvoiceID", out var InvoiceID) && InvoiceID is not string { })
