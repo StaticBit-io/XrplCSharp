@@ -1,5 +1,16 @@
 # Changes
 
+### 10.6.0.0 07/10/2026
+* **Sponsored Fees & Reserves (XLS-68, `Sponsor` amendment)** — merged into rippled `develop` on 07/10/2026 ([rippled #7350](https://github.com/XRPLF/rippled/pull/7350)):
+  * New transaction models `SponsorshipSet` (91) and `SponsorshipTransfer` (90) with tf-flag enums per rippled `TxFlags.h`; `LOSponsorship` ledger object (0x90)
+  * Common transaction fields `Sponsor` and `SponsorFlags` (`SponsorCoverage`: `spfSponsorFee` = 1, `spfSponsorReserve` = 2) on all transactions
+  * Sponsor co-signing: `SponsorSigningHelper` (V1 automatic / V2 parallel combine / V3 sequential) and `XrplWallet.SignAsSponsor` — `SponsorSignature` is an inner not-signing STObject over the same preimage as the main signature, mirroring the LoanSet counterparty pattern
+* **ConfidentialTransfer** — five transaction models: `ConfidentialMPTConvert` (85), `ConfidentialMPTMergeInbox` (86), `ConfidentialMPTConvertBack` (87), `ConfidentialMPTSend` (88), `ConfidentialMPTClawback` (89); encrypted amounts/commitments/proofs are opaque hex blobs supplied by an external prover
+* `definitions.json` sync with rippled `develop` @ `fd2cc6dc`: +7 transaction types, +Sponsorship ledger entry, +23 fields (Sponsor set, ConfidentialTransfer set, `TakerPaysMPT`/`TakerGetsMPT`, `ReferenceHolding`, `SponsorFlags`), +8 result codes (`temBAD_MPT`, `temBAD_CIPHERTEXT`, `tefNO_DST_PARTIAL`, `tefBAD_PATH_COUNT`, `terLOCKED`, `terNO_PERMISSION`, `tecBAD_PROOF`, `tecNO_SPONSOR_PERMISSION`); TYPES renamed `UInt384`/`UInt512` → `Hash384`/`Hash512` (ordinals unchanged)
+* TxFormat: common optional fields `Delegate`, `Sponsor`, `SponsorFlags`, `SponsorSignature`; formats for all 7 new transaction types
+* Integration: `TestISponsorship` gated by `AmendmentGuard` (Sponsor/ConfidentialTransfer amendment ids added); nightly stand config carries commented-out `Sponsor` genesis entries — uncomment and bump `XRPLD_VERSION` once a post-2026-07-10 nightly is published (none existed at release time, so sponsorship integration tests are pending the next nightly)
+* Unit tests: sponsor co-signing across all three flows with cryptographic verification over the shared preimage; `SponsorSignature` excluded from the preimage (kNotSigning) but round-trips through the binary codec
+
 ### 10.5.1.0 07/04/2026
 * Fix `SignAsBatchPart` with `TicketSequence`: when the outer Batch used a ticket and had no `Sequence`, the value `0` was applied only to the signing preimage while the serialized blob omitted the required `Sequence: 0` field, producing a malformed transaction on submit. The field is now written into the transaction as well; signatures are unaffected (the preimage already used `0`). Found by review on the 10.5.0.0 release PR
 * Add a unit test covering the `TicketSequence`-present / `Sequence`-absent signing path (blob carries `Sequence: 0`, signature verifies over the zero-sequence preimage)
