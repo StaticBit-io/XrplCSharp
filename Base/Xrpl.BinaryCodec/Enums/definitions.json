@@ -3659,6 +3659,116 @@
         "nth": 74,
         "type": "UInt32"
       }
+    ],
+    [
+      "ConfidentialBalanceVersion",
+      {
+        "isSerialized": true,
+        "isSigningField": true,
+        "isVLEncoded": false,
+        "nth": 69,
+        "type": "UInt32"
+      }
+    ],
+    [
+      "SponsoredOwnerCount",
+      {
+        "isSerialized": true,
+        "isSigningField": true,
+        "isVLEncoded": false,
+        "nth": 70,
+        "type": "UInt32"
+      }
+    ],
+    [
+      "SponsoringOwnerCount",
+      {
+        "isSerialized": true,
+        "isSigningField": true,
+        "isVLEncoded": false,
+        "nth": 71,
+        "type": "UInt32"
+      }
+    ],
+    [
+      "SponsoringAccountCount",
+      {
+        "isSerialized": true,
+        "isSigningField": true,
+        "isVLEncoded": false,
+        "nth": 72,
+        "type": "UInt32"
+      }
+    ],
+    [
+      "ConfidentialOutstandingAmount",
+      {
+        "isSerialized": true,
+        "isSigningField": true,
+        "isVLEncoded": false,
+        "nth": 32,
+        "type": "UInt64"
+      }
+    ],
+    [
+      "ConfidentialBalanceInbox",
+      {
+        "isSerialized": true,
+        "isSigningField": true,
+        "isVLEncoded": true,
+        "nth": 32,
+        "type": "Blob"
+      }
+    ],
+    [
+      "ConfidentialBalanceSpending",
+      {
+        "isSerialized": true,
+        "isSigningField": true,
+        "isVLEncoded": true,
+        "nth": 33,
+        "type": "Blob"
+      }
+    ],
+    [
+      "IssuerEncryptedBalance",
+      {
+        "isSerialized": true,
+        "isSigningField": true,
+        "isVLEncoded": true,
+        "nth": 34,
+        "type": "Blob"
+      }
+    ],
+    [
+      "IssuerEncryptionKey",
+      {
+        "isSerialized": true,
+        "isSigningField": true,
+        "isVLEncoded": true,
+        "nth": 35,
+        "type": "Blob"
+      }
+    ],
+    [
+      "AuditorEncryptedBalance",
+      {
+        "isSerialized": true,
+        "isSigningField": true,
+        "isVLEncoded": true,
+        "nth": 42,
+        "type": "Blob"
+      }
+    ],
+    [
+      "AuditorEncryptionKey",
+      {
+        "isSerialized": true,
+        "isSigningField": true,
+        "isVLEncoded": true,
+        "nth": 44,
+        "type": "Blob"
+      }
     ]
   ],
   "LEDGER_ENTRY_TYPES": {

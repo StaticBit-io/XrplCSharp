@@ -89,5 +89,41 @@ namespace Xrpl.Models.Ledger
         [JsonPropertyName("OwnerNode")]
         [JsonConverter(typeof(UInt64HexJsonConverter))]
         public ulong? OwnerNode { get; init; }
+
+        /// <summary>
+        /// ConfidentialTransfer: encrypted inbound balance awaiting merge (hex blob).
+        /// </summary>
+        [JsonPropertyName("ConfidentialBalanceInbox")]
+        public string? ConfidentialBalanceInbox { get; init; }
+
+        /// <summary>
+        /// ConfidentialTransfer: encrypted spendable balance (hex blob).
+        /// </summary>
+        [JsonPropertyName("ConfidentialBalanceSpending")]
+        public string? ConfidentialBalanceSpending { get; init; }
+
+        /// <summary>
+        /// ConfidentialTransfer: version counter of the confidential balance state.
+        /// </summary>
+        [JsonPropertyName("ConfidentialBalanceVersion")]
+        public uint? ConfidentialBalanceVersion { get; init; }
+
+        /// <summary>
+        /// ConfidentialTransfer: holder balance encrypted under the issuer's key (hex blob).
+        /// </summary>
+        [JsonPropertyName("IssuerEncryptedBalance")]
+        public string? IssuerEncryptedBalance { get; init; }
+
+        /// <summary>
+        /// ConfidentialTransfer: holder balance encrypted under the auditor's key (hex blob).
+        /// </summary>
+        [JsonPropertyName("AuditorEncryptedBalance")]
+        public string? AuditorEncryptedBalance { get; init; }
+
+        /// <summary>
+        /// ConfidentialTransfer: the holder's ElGamal encryption public key (hex blob).
+        /// </summary>
+        [JsonPropertyName("HolderEncryptionKey")]
+        public string? HolderEncryptionKey { get; init; }
     }
 }
