@@ -176,13 +176,7 @@ namespace Xrpl.Wallet
                 throw new ValidationException($"Sponsor field ({sponsor}) does not match the sponsor wallet ({sponsorWallet.ClassicAddress}).");
         }
 
-        private static JsonObject Canonicalize(JsonObject tx)
-        {
-            JsonObject canon = tx.DeepClone().AsObject();
-            canon.Remove("TxnSignature");
-            canon.Remove("SigningPubKey");
-            canon.Remove("SponsorSignature");
-            return canon;
-        }
+        private static JsonObject Canonicalize(JsonObject tx) =>
+            tx.WithoutFields("TxnSignature", "SigningPubKey", "SponsorSignature");
     }
 }

@@ -84,8 +84,51 @@ namespace Xrpl.Models.Transactions
             if (tx.TryGetValue("ObjectID", out var objectId) && objectId is not string)
                 throw new ValidationException("SponsorshipTransfer: invalid ObjectID");
 
-            if (tx.TryGetValue("Sponsee", out var sponsee) && sponsee is not string)
+            bool hasSponsee = tx.TryGetValue("Sponsee", out var sponsee);
+            if (hasSponsee && sponsee is not string)
                 throw new ValidationException("SponsorshipTransfer: invalid Sponsee");
+
+            // Mirror of rippled SponsorshipTransfer::preflight
+            uint flags = ExtractFlags(tx);
+            const uint transferFlags = (uint)(SponsorshipTransferFlags.tfSponsorshipCreate
+                | SponsorshipTransferFlags.tfSponsorshipReassign
+                | SponsorshipTransferFlags.tfSponsorshipEnd);
+            if (System.Numerics.BitOperations.PopCount(flags & transferFlags) != 1)
+                throw new ValidationException("SponsorshipTransfer: exactly one of tfSponsorshipCreate, tfSponsorshipReassign or tfSponsorshipEnd must be set");
+
+            bool hasSponsor = tx.TryGetValue("Sponsor", out var sponsorField) && sponsorField is string;
+            bool isCreateOrReassign = (flags & (uint)(SponsorshipTransferFlags.tfSponsorshipCreate | SponsorshipTransferFlags.tfSponsorshipReassign)) != 0;
+
+            if (isCreateOrReassign)
+            {
+                if (!hasSponsor)
+                    throw new ValidationException("SponsorshipTransfer: Sponsor must be present when creating or reassigning sponsorship");
+                if (hasSponsee)
+                    throw new ValidationException("SponsorshipTransfer: Sponsee must not be present when creating or reassigning sponsorship");
+            }
+            else // tfSponsorshipEnd
+            {
+                if (hasSponsor)
+                    throw new ValidationException("SponsorshipTransfer: Sponsor must not be present when ending sponsorship");
+                if (hasSponsee && tx.TryGetValue("Account", out var account) &&
+                    string.Equals(sponsee as string, account as string, StringComparison.Ordinal))
+                {
+                    throw new ValidationException("SponsorshipTransfer: Sponsee must not be the same as Account");
+                }
+            }
+        }
+
+        private static uint ExtractFlags(Dictionary<string, object> tx)
+        {
+            if (!tx.TryGetValue("Flags", out var flagsObj) || flagsObj is null)
+                return 0;
+            return flagsObj switch
+            {
+                uint u => u,
+                long l when l >= 0 && l <= uint.MaxValue => (uint)l,
+                int i when i >= 0 => (uint)i,
+                _ => throw new ValidationException("Invalid Flags value"),
+            };
         }
     }
 }

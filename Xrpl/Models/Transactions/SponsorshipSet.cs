@@ -169,6 +169,12 @@ namespace Xrpl.Models.Transactions
                 if (!isValidOwnerCount)
                     throw new ValidationException("SponsorshipSet: invalid RemainingOwnerCount");
             }
+
+            uint flags = ExtractFlags(tx);
+            const uint feePair = (uint)(SponsorshipSetFlags.tfSponsorshipSetRequireSignForFee | SponsorshipSetFlags.tfSponsorshipClearRequireSignForFee);
+            const uint reservePair = (uint)(SponsorshipSetFlags.tfSponsorshipSetRequireSignForReserve | SponsorshipSetFlags.tfSponsorshipClearRequireSignForReserve);
+            if ((flags & feePair) == feePair || (flags & reservePair) == reservePair)
+                throw new ValidationException("SponsorshipSet: cannot set and clear the same require-signature flag");
         }
     }
 }

@@ -242,6 +242,14 @@ namespace Xrpl.Models.Transactions
             {
                 throw new ValidationException("BaseTransaction: invalid TxnSignature");
             }
+            if (tx.TryGetValue("Sponsor", out var Sponsor) && Sponsor is not string { })
+            {
+                throw new ValidationException("BaseTransaction: invalid Sponsor");
+            }
+            if (tx.TryGetValue("SponsorFlags", out var SponsorFlags) && SponsorFlags is not uint { })
+            {
+                throw new ValidationException("BaseTransaction: invalid SponsorFlags");
+            }
             return Task.CompletedTask;
         }
     }

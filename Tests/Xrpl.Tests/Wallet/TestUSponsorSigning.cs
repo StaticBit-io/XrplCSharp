@@ -82,6 +82,16 @@ namespace Xrpl.Tests.Wallet.Tests
             Assert.IsNotNull(decoded["TxnSignature"]);
             Assert.IsNotNull(decoded["SponsorSignature"]);
             Assert.AreEqual(sponsor.PublicKey, decoded["SponsorSignature"]!["SigningPubKey"]?.GetValue<string>());
+
+            JsonObject preimageTx = decoded.DeepClone().AsObject();
+            preimageTx.Remove("SponsorSignature");
+            preimageTx.Remove("TxnSignature");
+            byte[] preimage = SponsorSigningHelper.GetSigningPreimage(preimageTx);
+
+            Assert.IsTrue(XrplKeypairs.Verify(preimage, decoded["SponsorSignature"]!["TxnSignature"]!.GetValue<string>(), sponsor.PublicKey),
+                "Combined SponsorSignature must verify over the shared preimage.");
+            Assert.IsTrue(XrplKeypairs.Verify(preimage, decoded["TxnSignature"]!.GetValue<string>(), submitter.PublicKey),
+                "Combined TxnSignature must verify over the shared preimage.");
         }
 
         [TestMethod]
