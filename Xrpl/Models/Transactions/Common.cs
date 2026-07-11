@@ -318,9 +318,9 @@ namespace Xrpl.Models.Transactions
         public string Sponsor { get; set; }
 
         /// <summary>
-        /// XLS-68: what the sponsor covers — spfSponsorFee (1) and/or spfSponsorReserve (2).
+        /// XLS-68: what the sponsor covers (serialized as the numeric sfSponsorFlags value).
         /// </summary>
-        public uint? SponsorFlags { get; set; }
+        public SponsorCoverage? SponsorFlags { get; set; }
 
         //todo not found fields -  SourceTag?: number, TicketSequence?: number
     }
@@ -702,9 +702,9 @@ namespace Xrpl.Models.Transactions
         public string Sponsor { get; set; }
 
         /// <summary>
-        /// XLS-68: what the sponsor covers — spfSponsorFee (1) and/or spfSponsorReserve (2).
+        /// XLS-68: what the sponsor covers (serialized as the numeric sfSponsorFlags value).
         /// </summary>
-        public uint? SponsorFlags { get; set; }
+        public SponsorCoverage? SponsorFlags { get; set; }
 
         /// <inheritdoc/>
         public string ToJson()

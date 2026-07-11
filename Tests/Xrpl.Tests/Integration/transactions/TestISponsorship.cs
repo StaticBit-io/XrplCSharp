@@ -115,7 +115,7 @@ public class TestISponsorship
             Destination = destination.ClassicAddress,
             Amount = new Currency { ValueAsXrp = 1m },
             Sponsor = sponsor.ClassicAddress,
-            SponsorFlags = (uint)SponsorCoverage.spfSponsorFee,
+            SponsorFlags = SponsorCoverage.spfSponsorFee,
         };
         payment = await client.Autofill(payment);
 
