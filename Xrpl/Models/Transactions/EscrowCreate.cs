@@ -148,7 +148,7 @@ namespace Xrpl.Models.Transactions
                 throw new ValidationException("EscrowCreate: Condition must be a string");
 
             tx.TryGetValue("DestinationTag", out var DestinationTag);
-            if (Destination is not null && !Common.IsUInt32(DestinationTag))
+            if (DestinationTag is not null && !Common.IsUInt32(DestinationTag))
                 throw new ValidationException("EscrowCreate: DestinationTag must be a number");
         }
     }

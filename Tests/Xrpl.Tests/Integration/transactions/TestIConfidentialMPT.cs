@@ -87,10 +87,11 @@ public class TestIConfidentialMPT
         Submit response = await client.SubmitRequest(signed.TxBlob, false);
 
         // Domain-level rejection proves the node successfully parsed our binary encoding.
-        // Serialization failures surface as invalidTransaction/telBAD_* instead.
-        StringAssert.StartsWith(response.EngineResult, "te",
-            $"Expected a transaction-engine result, got: {response.EngineResult}");
-        Assert.AreNotEqual("invalidTransaction", response.EngineResult);
+        // Serialization failures surface as invalidTransaction, and tel/ter/tef admission
+        // results would not prove the payload reached the ConfidentialTransfer logic.
+        Assert.IsTrue(response.EngineResult.StartsWith("tem", System.StringComparison.Ordinal)
+                   || response.EngineResult.StartsWith("tec", System.StringComparison.Ordinal),
+            $"Expected a tem/tec verdict from ConfidentialTransfer domain logic, got: {response.EngineResult}");
         TestContext.WriteLine($"Node verdict for bogus confidential payload: {response.EngineResult} — {response.EngineResultMessage}");
     }
 }

@@ -99,6 +99,25 @@ namespace Xrpl.Tests.Models.Tests
         }
 
         [TestMethod]
+        public async Task TestUValidateEscrowCreate_WithoutDestinationTag_Passes()
+        {
+            // Pre-fix the guard tested the required Destination instead of the optional
+            // DestinationTag, so every escrow without a tag failed validation
+            Dictionary<string, object> tx = new()
+            {
+                ["TransactionType"] = "EscrowCreate",
+                ["Account"] = Account1,
+                ["Destination"] = Account2,
+                ["Amount"] = "1000000",
+                ["FinishAfter"] = 800000000u,
+            };
+            await Validation.ValidateEscrowCreate(tx);
+
+            tx["DestinationTag"] = "not-a-number";
+            await Assert.ThrowsExactlyAsync<ValidationException>(() => Validation.ValidateEscrowCreate(tx));
+        }
+
+        [TestMethod]
         public void TestUIntegralHelpers()
         {
             Assert.IsTrue(TxCommon.IsUInt32(5u));
