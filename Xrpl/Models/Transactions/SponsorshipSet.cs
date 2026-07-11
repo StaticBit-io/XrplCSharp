@@ -94,6 +94,17 @@ namespace Xrpl.Models.Transactions
             TransactionType = TransactionType.SponsorshipSet;
         }
 
+        /// <summary>
+        /// Typed view over the base Flags value (see <see cref="SponsorshipSetFlags"/>).
+        /// </summary>
+        [JsonPropertyName("Flags")]
+        [JsonIgnore(Condition = JsonIgnoreCondition.WhenWritingNull)]
+        public new SponsorshipSetFlags? Flags
+        {
+            get => base.Flags.HasValue ? (SponsorshipSetFlags?)base.Flags.Value : null;
+            set => base.Flags = (uint?)value;
+        }
+
         /// <inheritdoc />
         [JsonPropertyName("Sponsee")]
         public string Sponsee { get; set; }
@@ -120,6 +131,17 @@ namespace Xrpl.Models.Transactions
     /// <inheritdoc cref="ISponsorshipSet" />
     public class SponsorshipSetResponse : TransactionResponse, ISponsorshipSet
     {
+        /// <summary>
+        /// Typed view over the base Flags value (see <see cref="SponsorshipSetFlags"/>).
+        /// </summary>
+        [JsonPropertyName("Flags")]
+        [JsonIgnore(Condition = JsonIgnoreCondition.WhenWritingNull)]
+        public new SponsorshipSetFlags? Flags
+        {
+            get => base.Flags.HasValue ? (SponsorshipSetFlags?)base.Flags.Value : null;
+            set => base.Flags = (uint?)value;
+        }
+
         /// <inheritdoc />
         [JsonPropertyName("Sponsee")]
         public string Sponsee { get; set; }

@@ -148,7 +148,7 @@ public class TestISponsorship
         {
             Account = sponsor.ClassicAddress,
             Sponsee = sponsee.ClassicAddress,
-            Flags = (uint)SponsorshipSetFlags.tfDeleteObject,
+            Flags = SponsorshipSetFlags.tfDeleteObject,
         };
         delete = await client.Autofill(delete);
         ValidateResult(await client.SubmitAndWait(delete, sponsor, true));
