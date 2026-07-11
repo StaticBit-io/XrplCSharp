@@ -246,9 +246,22 @@ namespace Xrpl.Models.Transactions
             {
                 throw new ValidationException("BaseTransaction: invalid Sponsor");
             }
-            if (tx.TryGetValue("SponsorFlags", out var SponsorFlags) && SponsorFlags is not uint { })
+            // DictionaryObjectConverter materializes JSON numbers as int/long/ulong,
+            // so accept any non-negative integral value that fits UInt32
+            if (tx.TryGetValue("SponsorFlags", out var SponsorFlags))
             {
-                throw new ValidationException("BaseTransaction: invalid SponsorFlags");
+                bool sponsorFlagsValid = SponsorFlags switch
+                {
+                    uint => true,
+                    int i => i >= 0,
+                    long l => l >= 0 && l <= uint.MaxValue,
+                    ulong ul => ul <= uint.MaxValue,
+                    _ => false,
+                };
+                if (!sponsorFlagsValid)
+                {
+                    throw new ValidationException("BaseTransaction: invalid SponsorFlags");
+                }
             }
             return Task.CompletedTask;
         }
