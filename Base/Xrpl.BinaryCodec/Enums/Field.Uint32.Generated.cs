@@ -72,5 +72,6 @@ namespace Xrpl.BinaryCodec.Enums
         public static readonly Uint32Field LateInterestRate = new Uint32Field(nameof(LateInterestRate), 66);
         public static readonly Uint32Field CloseInterestRate = new Uint32Field(nameof(CloseInterestRate), 67);
         public static readonly Uint32Field OverpaymentInterestRate = new Uint32Field(nameof(OverpaymentInterestRate), 68);
+        public static readonly Uint32Field RemainingOwnerCount = new Uint32Field(nameof(RemainingOwnerCount), 73);
     }
 }

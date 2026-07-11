@@ -37,5 +37,6 @@ namespace Xrpl.BinaryCodec.Enums
         public static readonly LedgerEntryType Vault = Add(nameof(Vault), 132);
         public static readonly LedgerEntryType LoanBroker = Add(nameof(LoanBroker), 136);
         public static readonly LedgerEntryType Loan = Add(nameof(Loan), 137);
+        public static readonly LedgerEntryType Sponsorship = Add(nameof(Sponsorship), 144);
     }
 }

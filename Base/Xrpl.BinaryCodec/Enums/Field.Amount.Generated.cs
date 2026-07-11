@@ -33,5 +33,7 @@ namespace Xrpl.BinaryCodec.Enums
         public static readonly AmountField SignatureReward = new AmountField(nameof(SignatureReward), 29);
         public static readonly AmountField MinAccountCreateAmount = new AmountField(nameof(MinAccountCreateAmount), 30);
         public static readonly AmountField LPTokenBalance = new AmountField(nameof(LPTokenBalance), 31);
+        public static readonly AmountField FeeAmount = new AmountField(nameof(FeeAmount), 32);
+        public static readonly AmountField MaxFee = new AmountField(nameof(MaxFee), 33);
     }
 }

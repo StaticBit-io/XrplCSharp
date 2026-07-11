@@ -36,5 +36,14 @@ namespace Xrpl.BinaryCodec.Enums
         public static readonly BlobField Provider = new BlobField(nameof(Provider), 29);
         public static readonly BlobField MPTokenMetadata = new BlobField(nameof(MPTokenMetadata), 30);
         public static readonly BlobField CredentialType = new BlobField(nameof(CredentialType), 31);
+        public static readonly BlobField HolderEncryptionKey = new BlobField(nameof(HolderEncryptionKey), 36);
+        public static readonly BlobField ZKProof = new BlobField(nameof(ZKProof), 37);
+        public static readonly BlobField HolderEncryptedAmount = new BlobField(nameof(HolderEncryptedAmount), 38);
+        public static readonly BlobField IssuerEncryptedAmount = new BlobField(nameof(IssuerEncryptedAmount), 39);
+        public static readonly BlobField SenderEncryptedAmount = new BlobField(nameof(SenderEncryptedAmount), 40);
+        public static readonly BlobField DestinationEncryptedAmount = new BlobField(nameof(DestinationEncryptedAmount), 41);
+        public static readonly BlobField AuditorEncryptedAmount = new BlobField(nameof(AuditorEncryptedAmount), 43);
+        public static readonly BlobField AmountCommitment = new BlobField(nameof(AmountCommitment), 45);
+        public static readonly BlobField BalanceCommitment = new BlobField(nameof(BalanceCommitment), 46);
     }
 }

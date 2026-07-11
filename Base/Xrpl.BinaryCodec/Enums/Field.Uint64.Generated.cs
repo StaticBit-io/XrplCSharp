@@ -35,5 +35,6 @@ namespace Xrpl.BinaryCodec.Enums
         public static readonly Uint64Field LockedAmount = new Uint64Field(nameof(LockedAmount), 29);
         public static readonly Uint64Field VaultNode = new Uint64Field(nameof(VaultNode), 30);
         public static readonly Uint64Field LoanBrokerNode = new Uint64Field(nameof(LoanBrokerNode), 31);
+        public static readonly Uint64Field SponseeNode = new Uint64Field(nameof(SponseeNode), 33);
     }
 }
