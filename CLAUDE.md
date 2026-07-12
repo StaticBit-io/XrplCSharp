@@ -193,16 +193,16 @@ Output goes to `docs/` directory. Published to GitHub Pages.
 
 | Workflow | Trigger | Purpose |
 |----------|---------|---------|
-| `dotnet.test.yml` | Push/PR to `dev`, `main` | Build + unit tests (`TestU`) + integration tests (`TestI` with Docker rippled) |
+| `dotnet.test.yml` | Push/PR to `dev`, `release` | Build + unit tests (`TestU`) + integration tests (`TestI` with Docker rippled) |
 | `nuget.release.yml` | Push to `release` | Build Release → Pack → Publish to GitHub Packages + NuGet.org |
-| `docs.yml` | Push to `main` | DocFx → GitHub Pages |
+| `docs.yml` | Push to `release` | DocFx → GitHub Pages |
 
 ### Release Process
 
 1. Ensure all tests pass on `dev`
 2. Update version in all `.csproj` files (`Xrpl`, `Xrpl.AddressCodec`, `Xrpl.BinaryCodec`, `Xrpl.Keypairs`)
 3. Update `CHANGES.md`
-4. Merge `dev` → `main` → `release`
+4. Merge `dev` → `release`
 5. NuGet publish triggers automatically on push to `release`
 6. Create GitHub release with tag
 

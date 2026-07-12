@@ -2,8 +2,8 @@ name: Deploy Documentation
 
 on:
   push:
-    branches: [ main ]
-  workflow_dispatch:
+    branches: [ release ]   # docs always match the published NuGet packages
+  workflow_dispatch:       # manual deploy (e.g. from dev) remains allowed by the Pages branch policy
 
 permissions:
   contents: read
