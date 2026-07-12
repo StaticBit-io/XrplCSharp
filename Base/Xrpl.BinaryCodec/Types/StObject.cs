@@ -178,6 +178,19 @@ namespace Xrpl.BinaryCodec.Types
             return ToJsonObject();
         }
         /// <summary>
+        /// UInt64 fields flagged kSmdBaseTen in rippled sfields.macro — their JSON
+        /// representation is a base-ten decimal string, unlike the default hex.
+        /// </summary>
+        private static readonly HashSet<string> BaseTenUint64Fields = new HashSet<string>(System.StringComparer.Ordinal)
+        {
+            "MaximumAmount",
+            "OutstandingAmount",
+            "MPTAmount",
+            "LockedAmount",
+            "ConfidentialOutstandingAmount",
+        };
+
+        /// <summary>
         /// Get the JSON interpretation of this.bytes
         /// </summary>
         public JsonObject ToJsonObject()
@@ -185,7 +198,14 @@ namespace Xrpl.BinaryCodec.Types
             JsonObject json = new JsonObject();
             foreach (KeyValuePair<Field, ISerializedType> pair in Fields)
             {
-                json[(string)pair.Key] = pair.Value.ToJson();
+                if (pair.Value is Uint64 u64 && BaseTenUint64Fields.Contains((string)pair.Key))
+                {
+                    json[(string)pair.Key] = JsonValue.Create(u64.Value.ToString(System.Globalization.CultureInfo.InvariantCulture));
+                }
+                else
+                {
+                    json[(string)pair.Key] = pair.Value.ToJson();
+                }
             }
             return json;
         }

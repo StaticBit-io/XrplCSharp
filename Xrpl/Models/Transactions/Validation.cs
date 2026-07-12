@@ -273,6 +273,29 @@ namespace Xrpl.Models.Transactions
                     await ValidateLedgerStateFix(tx);
                     break;
 
+                case "SponsorshipSet":
+                    await ValidateSponsorshipSet(tx);
+                    break;
+                case "SponsorshipTransfer":
+                    await ValidateSponsorshipTransfer(tx);
+                    break;
+
+                case "ConfidentialMPTConvert":
+                    await ValidateConfidentialMPTConvert(tx);
+                    break;
+                case "ConfidentialMPTMergeInbox":
+                    await ValidateConfidentialMPTMergeInbox(tx);
+                    break;
+                case "ConfidentialMPTConvertBack":
+                    await ValidateConfidentialMPTConvertBack(tx);
+                    break;
+                case "ConfidentialMPTSend":
+                    await ValidateConfidentialMPTSend(tx);
+                    break;
+                case "ConfidentialMPTClawback":
+                    await ValidateConfidentialMPTClawback(tx);
+                    break;
+
                 default:
                     throw new ValidationException($"Invalid field TransactionType: {type}");
             }

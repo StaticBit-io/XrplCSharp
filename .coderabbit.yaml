@@ -9,5 +9,7 @@ reviews:
     auto_incremental_review: true
     auto_pause_after_reviewed_commits: 0
     drafts: false
+    # Review only PRs targeting dev; dev -> main/release promotions re-merge
+    # already-reviewed code and produced duplicate findings (see PRs #20/#21)
     base_branches:
-      - ".*"
+      - "dev"

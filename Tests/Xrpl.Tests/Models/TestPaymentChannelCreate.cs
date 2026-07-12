@@ -101,13 +101,13 @@ namespace XrplTests.Xrpl.Models
             channel["PublicKey"] = "32D2471DB72B27E3310F355BB33E339BF26F8392D5A93D3BC0FC3B566612DA0F0A";
 
             // throws w/ DestinationTag must be a number
-            channel["DestinationTag"] = 10;
+            channel["DestinationTag"] = true; // int/long are now valid integral representations
             await Helper.ThrowsExceptionAsync<ValidationException>(() => Validation.ValidatePaymentChannelCreate(channel), "PaymentChannelCreate: DestinationTag must be a number");
             await Helper.ThrowsExceptionAsync<ValidationException>(() => Validation.Validate(channel), "PaymentChannelCreate: DestinationTag must be a number");
             channel["DestinationTag"] = 23480u;
 
             // throws w/ CancelAfter must be a number
-            channel["CancelAfter"] = 10;
+            channel["CancelAfter"] = true; // int/long are now valid integral representations
             await Helper.ThrowsExceptionAsync<ValidationException>(() => Validation.ValidatePaymentChannelCreate(channel), "PaymentChannelCreate: CancelAfter must be a number");
             await Helper.ThrowsExceptionAsync<ValidationException>(() => Validation.Validate(channel), "PaymentChannelCreate: CancelAfter must be a number");
             channel["CancelAfter"] = 11747u;

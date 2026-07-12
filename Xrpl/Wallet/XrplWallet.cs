@@ -1079,6 +1079,66 @@ namespace Xrpl.Wallet
         }
 
         /// <summary>
+        /// Signs a sponsored transaction as the sponsor (XLS-68).
+        /// Computes the signing preimage and adds SponsorSignature (inner STObject
+        /// with this wallet's SigningPubKey and TxnSignature over the same preimage
+        /// the submitter signs). The transaction must carry Sponsor = this wallet's address.
+        ///
+        /// <b>V3 (sequential) — sponsor signs first, passes to submitter:</b>
+        /// <code>
+        /// var withSponsor = sponsorWallet.SignAsSponsor(preparedTx);
+        /// var final = SponsorSigningHelper.SubmitterSign(withSponsor.TxBlob, submitterWallet);
+        /// </code>
+        ///
+        /// <b>V2 (parallel) — both sign independently, then combine:</b>
+        /// <code>
+        /// var sponsorSig = sponsorWallet.SignAsSponsor(preparedTx);
+        /// var submitterSig = submitterWallet.Sign(preparedTx);
+        /// var combined = SponsorSigningHelper.CombineSponsorSignatures(submitterSig.TxBlob, sponsorSig.TxBlob);
+        /// </code>
+        /// </summary>
+        /// <param name="transaction">Prepared transaction with Sponsor/SponsorFlags and the submitter's SigningPubKey set.</param>
+        /// <returns>SignatureResult with SponsorSignature added (no TxnSignature yet).</returns>
+        public SignatureResult SignAsSponsor(ITransactionRequest transaction)
+        {
+            Dictionary<string, object> txDict = JsonSerializer.Deserialize<Dictionary<string, object>>(
+                transaction.ToJson(), XrplJsonOptions.Default);
+            return SignAsSponsor(txDict);
+        }
+
+        /// <summary>
+        /// Signs a sponsored transaction as the sponsor (XLS-68).
+        /// </summary>
+        public SignatureResult SignAsSponsor(Dictionary<string, object> transaction)
+        {
+            JsonObject tx = JsonNode.Parse(JsonSerializer.Serialize(transaction, XrplJsonOptions.Default))?.AsObject()
+                ?? throw new ValidationException("Failed to serialize transaction to JSON");
+
+            SponsorSigningHelper.VerifySponsorMatches(tx, this);
+
+            // The submitter's SigningPubKey must be present — the sponsor signs the same preimage
+            string submitterSigningPubKey = tx["SigningPubKey"]?.GetValue<string>();
+            if (string.IsNullOrWhiteSpace(submitterSigningPubKey))
+                throw new ValidationException("Sponsored transaction must include the submitter SigningPubKey before sponsor signing.");
+
+            tx.Remove("SponsorSignature");
+            tx.Remove("TxnSignature");
+
+            byte[] signingBytes = SponsorSigningHelper.GetSigningPreimage(tx);
+            string sig = XrplKeypairs.Sign(signingBytes, this.PrivateKey);
+
+            tx["SponsorSignature"] = new JsonObject
+            {
+                ["SigningPubKey"] = this.PublicKey,
+                ["TxnSignature"] = sig,
+            };
+
+            string txBlob = XrplBinaryCodec.Encode(tx);
+            string txHash = HashLedger.HashSignedTx(txBlob);
+            return new SignatureResult(txBlob, txHash);
+        }
+
+        /// <summary>
         /// Объединяет несколько частично подписанных Batch-транзакций (txBlob в hex) в один финальный blob.
         /// Условия:
         ///  - Все входные blob'ы должны быть Batch и иметь ИДЕНТИЧНОЕ тело (кроме SigningPubKey/TxnSignature/BatchSigners).

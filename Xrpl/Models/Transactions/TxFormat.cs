@@ -36,6 +36,11 @@ namespace Xrpl.Models.Transaction
             this[Field.Memos] = Requirement.Optional;
             this[Field.TxnSignature] = Requirement.Optional;
             this[Field.Signers] = Requirement.Optional;
+            this[Field.Delegate] = Requirement.Optional;
+            // XLS-68 sponsored fees/reserves
+            this[Field.Sponsor] = Requirement.Optional;
+            this[Field.SponsorFlags] = Requirement.Optional;
+            this[Field.SponsorSignature] = Requirement.Optional;
         }
 
         public static void Validate(StObject obj)
@@ -596,6 +601,70 @@ namespace Xrpl.Models.Transaction
                 {
                     [Field.LedgerFixType] = Requirement.Required,
                     [Field.Owner] = Requirement.Optional,
+                },
+
+                // Sponsor (XLS-68)
+                [BinaryCodec.Types.TransactionType.SponsorshipSet] = new TxFormat
+                {
+                    [Field.CounterpartySponsor] = Requirement.Optional,
+                    [Field.Sponsee] = Requirement.Optional,
+                    [Field.FeeAmount] = Requirement.Optional,
+                    [Field.MaxFee] = Requirement.Optional,
+                    [Field.RemainingOwnerCount] = Requirement.Optional,
+                },
+                [BinaryCodec.Types.TransactionType.SponsorshipTransfer] = new TxFormat
+                {
+                    [Field.ObjectID] = Requirement.Optional,
+                    [Field.Sponsee] = Requirement.Optional,
+                },
+
+                // ConfidentialTransfer
+                [BinaryCodec.Types.TransactionType.ConfidentialMPTConvert] = new TxFormat
+                {
+                    [Field.MPTokenIssuanceID] = Requirement.Required,
+                    [Field.MPTAmount] = Requirement.Required,
+                    [Field.HolderEncryptionKey] = Requirement.Optional,
+                    [Field.HolderEncryptedAmount] = Requirement.Required,
+                    [Field.IssuerEncryptedAmount] = Requirement.Required,
+                    [Field.AuditorEncryptedAmount] = Requirement.Optional,
+                    [Field.BlindingFactor] = Requirement.Required,
+                    [Field.ZKProof] = Requirement.Optional,
+                },
+                [BinaryCodec.Types.TransactionType.ConfidentialMPTMergeInbox] = new TxFormat
+                {
+                    [Field.MPTokenIssuanceID] = Requirement.Required,
+                },
+                [BinaryCodec.Types.TransactionType.ConfidentialMPTConvertBack] = new TxFormat
+                {
+                    [Field.MPTokenIssuanceID] = Requirement.Required,
+                    [Field.MPTAmount] = Requirement.Required,
+                    [Field.HolderEncryptedAmount] = Requirement.Required,
+                    [Field.IssuerEncryptedAmount] = Requirement.Required,
+                    [Field.AuditorEncryptedAmount] = Requirement.Optional,
+                    [Field.BlindingFactor] = Requirement.Required,
+                    [Field.ZKProof] = Requirement.Required,
+                    [Field.BalanceCommitment] = Requirement.Required,
+                },
+                [BinaryCodec.Types.TransactionType.ConfidentialMPTSend] = new TxFormat
+                {
+                    [Field.MPTokenIssuanceID] = Requirement.Required,
+                    [Field.Destination] = Requirement.Required,
+                    [Field.DestinationTag] = Requirement.Optional,
+                    [Field.SenderEncryptedAmount] = Requirement.Required,
+                    [Field.DestinationEncryptedAmount] = Requirement.Required,
+                    [Field.IssuerEncryptedAmount] = Requirement.Required,
+                    [Field.AuditorEncryptedAmount] = Requirement.Optional,
+                    [Field.ZKProof] = Requirement.Required,
+                    [Field.AmountCommitment] = Requirement.Required,
+                    [Field.BalanceCommitment] = Requirement.Required,
+                    [Field.CredentialIDs] = Requirement.Optional,
+                },
+                [BinaryCodec.Types.TransactionType.ConfidentialMPTClawback] = new TxFormat
+                {
+                    [Field.MPTokenIssuanceID] = Requirement.Required,
+                    [Field.Holder] = Requirement.Required,
+                    [Field.MPTAmount] = Requirement.Required,
+                    [Field.ZKProof] = Requirement.Required,
                 },
 
             };

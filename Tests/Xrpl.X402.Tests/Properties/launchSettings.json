@@ -1,0 +1,12 @@
+{
+  "profiles": {
+    "Xrpl.X402.Tests": {
+      "commandName": "Project",
+      "launchBrowser": true,
+      "environmentVariables": {
+        "ASPNETCORE_ENVIRONMENT": "Development"
+      },
+      "applicationUrl": "https://localhost:49722;http://localhost:49723"
+    }
+  }
+}

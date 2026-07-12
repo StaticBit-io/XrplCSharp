@@ -161,6 +161,12 @@ public enum LedgerEntryType
     Loan,
 
     /// <summary>
+    /// A sponsorship relationship: which fees and reserves a sponsor covers for a sponsee.
+    /// </summary>
+    /// <remarks>Requires the Sponsor amendment (XLS-68). This feature is in draft and subject to change.</remarks>
+    Sponsorship,
+
+    /// <summary>
     /// Unknown ledger entry type (for forward compatibility with future ledger objects).
     /// </summary>
     Unknown,

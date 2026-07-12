@@ -249,13 +249,7 @@ namespace Xrpl.Wallet
         /// <summary>
         /// Canonicalize a tx by removing all signature-related fields for comparison.
         /// </summary>
-        private static JsonObject Canonicalize(JsonObject tx)
-        {
-            JsonObject canon = tx.DeepClone().AsObject();
-            canon.Remove("TxnSignature");
-            canon.Remove("SigningPubKey");
-            canon.Remove("CounterpartySignature");
-            return canon;
-        }
+        private static JsonObject Canonicalize(JsonObject tx) =>
+            tx.WithoutFields("TxnSignature", "SigningPubKey", "CounterpartySignature");
     }
 }

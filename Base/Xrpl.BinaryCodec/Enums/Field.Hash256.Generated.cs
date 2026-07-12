@@ -42,5 +42,8 @@ namespace Xrpl.BinaryCodec.Enums
         public static readonly Hash256Field ParentBatchID = new Hash256Field(nameof(ParentBatchID), 36);
         public static readonly Hash256Field LoanBrokerID = new Hash256Field(nameof(LoanBrokerID), 37);
         public static readonly Hash256Field LoanID = new Hash256Field(nameof(LoanID), 38);
+        public static readonly Hash256Field ReferenceHolding = new Hash256Field(nameof(ReferenceHolding), 39);
+        public static readonly Hash256Field BlindingFactor = new Hash256Field(nameof(BlindingFactor), 40);
+        public static readonly Hash256Field ObjectID = new Hash256Field(nameof(ObjectID), 41);
     }
 }

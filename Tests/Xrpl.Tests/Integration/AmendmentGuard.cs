@@ -22,6 +22,12 @@ public static class AmendmentGuard
     /// <summary>Amendment id of PermissionDelegationV1_1 (sha512half of the name).</summary>
     public const string PermissionDelegationV11 = "0F48FF561C709540328F31F1C97FD512ACC8B4E42138A161CB0E21ECA292540B";
 
+    /// <summary>Amendment id of Sponsor / XLS-68 (sha512half of the name).</summary>
+    public const string Sponsor = "BE1F90581635DBCEBFC4678C4B54FEDDC1A17B50FD02CFE765A4132A342126AC";
+
+    /// <summary>Amendment id of ConfidentialTransfer (sha512half of the name).</summary>
+    public const string ConfidentialTransfer = "2110E4A19966E2EF517C0A8C56A5F35099D7665B0BB89D7B126B30D50B86AAD5";
+
     public static async Task<bool> IsEnabledAsync(IXrplClient client, string amendmentId)
     {
         try

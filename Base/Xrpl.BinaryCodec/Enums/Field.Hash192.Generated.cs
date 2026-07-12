@@ -8,5 +8,7 @@ namespace Xrpl.BinaryCodec.Enums
     {
         public static readonly Hash192Field MPTokenIssuanceID = new Hash192Field(nameof(MPTokenIssuanceID), 1);
         public static readonly Hash192Field ShareMPTID = new Hash192Field(nameof(ShareMPTID), 2);
+        public static readonly Hash192Field TakerPaysMPT = new Hash192Field(nameof(TakerPaysMPT), 3);
+        public static readonly Hash192Field TakerGetsMPT = new Hash192Field(nameof(TakerGetsMPT), 4);
     }
 }

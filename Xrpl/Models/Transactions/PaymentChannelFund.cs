@@ -89,7 +89,7 @@ namespace Xrpl.Models.Transactions
                 throw new ValidationException("PaymentChannelFund: missing field Amount");
             if (Amount is not string)
                 throw new ValidationException("PaymentChannelFund: Amount must be a string");
-            if (tx.TryGetValue("Expiration", out var Expiration) && Expiration is not uint)
+            if (tx.TryGetValue("Expiration", out var Expiration) && !Common.IsUInt32(Expiration))
                 throw new ValidationException("PaymentChannelFund: Expiration must be a number");
         }
     }

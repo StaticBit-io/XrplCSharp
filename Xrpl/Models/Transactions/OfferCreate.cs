@@ -176,9 +176,9 @@ namespace Xrpl.Models.Transactions
             if (TakerPays is not string && !Common.IsAmount(TakerPays))
                 throw new ValidationException("OfferCreate: invalid TakerPays");
 
-            if (tx.TryGetValue("Expiration", out var Expiration) && Expiration is not uint { })
+            if (tx.TryGetValue("Expiration", out var Expiration) && !Common.IsUInt32(Expiration))
                 throw new ValidationException("OfferCreate: invalid Expiration");
-            if (tx.TryGetValue("OfferSequence", out var OfferSequence) && OfferSequence is not uint { })
+            if (tx.TryGetValue("OfferSequence", out var OfferSequence) && !Common.IsUInt32(OfferSequence))
                 throw new ValidationException("OfferCreate: invalid OfferSequence");
 
             if (tx.TryGetValue("DomainID", out var domainId) && domainId is not null)

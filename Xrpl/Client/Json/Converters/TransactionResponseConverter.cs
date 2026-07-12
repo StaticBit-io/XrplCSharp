@@ -132,6 +132,15 @@ namespace Xrpl.Client.Json.Converters
                 "DelegateSet" => new DelegateSetResponse(),
                 "LedgerStateFix" => new LedgerStateFixResponse(),
 
+                "SponsorshipSet" => new SponsorshipSetResponse(),
+                "SponsorshipTransfer" => new SponsorshipTransferResponse(),
+
+                "ConfidentialMPTConvert" => new ConfidentialMPTConvertResponse(),
+                "ConfidentialMPTMergeInbox" => new ConfidentialMPTMergeInboxResponse(),
+                "ConfidentialMPTConvertBack" => new ConfidentialMPTConvertBackResponse(),
+                "ConfidentialMPTSend" => new ConfidentialMPTSendResponse(),
+                "ConfidentialMPTClawback" => new ConfidentialMPTClawbackResponse(),
+
                 //_ => throw new Exception("Can't create transaction type" + transactionType)
                 _ => new TransactionResponseUnknown(),
             };

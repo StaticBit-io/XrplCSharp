@@ -324,6 +324,48 @@
         /// An administrative pseudo-transaction that fixes ledger state inconsistencies.
         /// </summary>
         LedgerStateFix,
+
+        /// <summary>
+        /// Creates or updates a sponsorship relationship (sponsor pays fees/reserves for the sponsee).
+        /// </summary>
+        /// <remarks>Requires the Sponsor amendment (XLS-68). This feature is in draft and subject to change.</remarks>
+        SponsorshipSet,
+
+        /// <summary>
+        /// Ends, creates or reassigns the sponsorship of a ledger object or account reserve.
+        /// </summary>
+        /// <remarks>Requires the Sponsor amendment (XLS-68). This feature is in draft and subject to change.</remarks>
+        SponsorshipTransfer,
+
+        /// <summary>
+        /// Converts a public MPT balance into a confidential (encrypted) balance.
+        /// </summary>
+        /// <remarks>Requires the ConfidentialTransfer amendment. This feature is in draft and subject to change.</remarks>
+        ConfidentialMPTConvert,
+
+        /// <summary>
+        /// Merges the confidential inbox balance into the confidential spending balance.
+        /// </summary>
+        /// <remarks>Requires the ConfidentialTransfer amendment. This feature is in draft and subject to change.</remarks>
+        ConfidentialMPTMergeInbox,
+
+        /// <summary>
+        /// Converts a confidential (encrypted) MPT balance back into a public balance.
+        /// </summary>
+        /// <remarks>Requires the ConfidentialTransfer amendment. This feature is in draft and subject to change.</remarks>
+        ConfidentialMPTConvertBack,
+
+        /// <summary>
+        /// Sends a confidential MPT amount to another holder's confidential inbox.
+        /// </summary>
+        /// <remarks>Requires the ConfidentialTransfer amendment. This feature is in draft and subject to change.</remarks>
+        ConfidentialMPTSend,
+
+        /// <summary>
+        /// Claws back a confidential MPT amount from a holder (issuer only).
+        /// </summary>
+        /// <remarks>Requires the ConfidentialTransfer amendment. This feature is in draft and subject to change.</remarks>
+        ConfidentialMPTClawback,
     }
 }
 

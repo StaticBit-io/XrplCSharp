@@ -125,6 +125,15 @@ public class TransactionRequestConverter : JsonConverter<ITransactionRequest>
             "DelegateSet" => new DelegateSet(),
             "LedgerStateFix" => new LedgerStateFix(),
 
+            "SponsorshipSet" => new SponsorshipSet(),
+            "SponsorshipTransfer" => new SponsorshipTransfer(),
+
+            "ConfidentialMPTConvert" => new ConfidentialMPTConvert(),
+            "ConfidentialMPTMergeInbox" => new ConfidentialMPTMergeInbox(),
+            "ConfidentialMPTConvertBack" => new ConfidentialMPTConvertBack(),
+            "ConfidentialMPTSend" => new ConfidentialMPTSend(),
+            "ConfidentialMPTClawback" => new ConfidentialMPTClawback(),
+
             //_ => throw new Exception("Can't create transaction type" + transactionType)
             _ => new TransactionUnknown(),
         };
