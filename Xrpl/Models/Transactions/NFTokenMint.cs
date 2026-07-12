@@ -5,6 +5,9 @@ using System.Threading.Tasks;
 using Xrpl.Client.Exceptions;
 using Xrpl.Models.Enums;
 using Xrpl.Models.Utils;
+using System.Text.Json.Serialization;
+using Xrpl.Client.Json.Converters;
+using Xrpl.Models.Common;
 
 // https://github.com/XRPLF/xrpl.js/blob/main/packages/xrpl/src/models/transactions/NFTokenMint.ts
 
@@ -70,7 +73,17 @@ namespace Xrpl.Models.Transactions
 
         /// <inheritdoc />
         public string URI { get; set; }
-    }
+    
+        /// <summary>NFTokenMintOffer: amount for the bundled sell offer.</summary>
+        [JsonConverter(typeof(CurrencyConverter))]
+        public Currency Amount { get; set; }
+
+        /// <summary>NFTokenMintOffer: destination allowed to accept the bundled offer.</summary>
+        public string Destination { get; set; }
+
+        /// <summary>NFTokenMintOffer: expiration of the bundled offer (Ripple epoch seconds).</summary>
+        public uint? Expiration { get; set; }
+}
 
     /// <summary>
     /// The NFTokenMint transaction creates an NFToken object and adds it to the  relevant NFTokenPage object of the minter.<br/>
@@ -128,7 +141,17 @@ namespace Xrpl.Models.Transactions
 
         /// <inheritdoc />
         public string URI { get; set; }
-    }
+    
+        /// <summary>NFTokenMintOffer: amount for the bundled sell offer.</summary>
+        [JsonConverter(typeof(CurrencyConverter))]
+        public Currency Amount { get; set; }
+
+        /// <summary>NFTokenMintOffer: destination allowed to accept the bundled offer.</summary>
+        public string Destination { get; set; }
+
+        /// <summary>NFTokenMintOffer: expiration of the bundled offer (Ripple epoch seconds).</summary>
+        public uint? Expiration { get; set; }
+}
 
     public partial class Validation
     {

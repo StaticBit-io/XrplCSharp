@@ -3,8 +3,8 @@
     [
       "Generic",
       {
-        "isSerialized": false,
-        "isSigningField": false,
+        "isSerialized": true,
+        "isSigningField": true,
         "isVLEncoded": false,
         "nth": 0,
         "type": "Unknown"
@@ -3435,7 +3435,7 @@
       {
         "isSerialized": true,
         "isSigningField": true,
-        "isVLEncoded": false,
+        "isVLEncoded": true,
         "nth": 27,
         "type": "AccountID"
       }
@@ -3445,7 +3445,7 @@
       {
         "isSerialized": true,
         "isSigningField": true,
-        "isVLEncoded": false,
+        "isVLEncoded": true,
         "nth": 30,
         "type": "AccountID"
       }
@@ -3455,7 +3455,7 @@
       {
         "isSerialized": true,
         "isSigningField": true,
-        "isVLEncoded": false,
+        "isVLEncoded": true,
         "nth": 31,
         "type": "AccountID"
       }
@@ -3768,6 +3768,26 @@
         "isVLEncoded": true,
         "nth": 44,
         "type": "Blob"
+      }
+    ],
+    [
+      "HighSponsor",
+      {
+        "isSerialized": true,
+        "isSigningField": true,
+        "isVLEncoded": true,
+        "nth": 28,
+        "type": "AccountID"
+      }
+    ],
+    [
+      "LowSponsor",
+      {
+        "isSerialized": true,
+        "isSigningField": true,
+        "isVLEncoded": true,
+        "nth": 29,
+        "type": "AccountID"
       }
     ]
   ],

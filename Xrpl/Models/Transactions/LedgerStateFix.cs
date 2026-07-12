@@ -38,7 +38,11 @@ namespace Xrpl.Models.Transactions
         /// <inheritdoc />
         [JsonPropertyName("Owner")]
         public string Owner { get; set; }
-    }
+    
+        /// <summary>DirectoryLimit fix type: the book directory to fix.</summary>
+        [JsonPropertyName("BookDirectory")]
+        public string BookDirectory { get; set; }
+}
 
     /// <inheritdoc cref="ILedgerStateFix" />
     public class LedgerStateFixResponse : TransactionResponse, ILedgerStateFix
@@ -50,7 +54,11 @@ namespace Xrpl.Models.Transactions
         /// <inheritdoc />
         [JsonPropertyName("Owner")]
         public string Owner { get; set; }
-    }
+    
+        /// <summary>DirectoryLimit fix type: the book directory to fix.</summary>
+        [JsonPropertyName("BookDirectory")]
+        public string BookDirectory { get; set; }
+}
 
     public partial class Validation
     {

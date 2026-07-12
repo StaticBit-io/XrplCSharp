@@ -1,4 +1,9 @@
 ﻿//https://xrpl.org/setfee.html
+using System.Text.Json.Serialization;
+
+using Xrpl.Client.Json.Converters;
+using Xrpl.Models.Common;
+
 namespace Xrpl.Models.Transactions
 {
     public class SetFee : TransactionRequest, ISetFee
@@ -22,7 +27,19 @@ namespace Xrpl.Models.Transactions
 
         /// <inheritdoc />
         public uint LedgerSequence { get; set; }
-    }
+    
+        /// <summary>XRPFees: base fee in drops.</summary>
+        [JsonConverter(typeof(CurrencyConverter))]
+        public Currency BaseFeeDrops { get; set; }
+
+        /// <summary>XRPFees: account reserve in drops.</summary>
+        [JsonConverter(typeof(CurrencyConverter))]
+        public Currency ReserveBaseDrops { get; set; }
+
+        /// <summary>XRPFees: owner reserve increment in drops.</summary>
+        [JsonConverter(typeof(CurrencyConverter))]
+        public Currency ReserveIncrementDrops { get; set; }
+}
 
     public interface ISetFee : ITransactionCommon
     {
@@ -63,5 +80,17 @@ namespace Xrpl.Models.Transactions
         public uint ReserveBase { get; set; }
         /// <inheritdoc />
         public uint ReserveIncrement { get; set; }
-    }
+    
+        /// <summary>XRPFees: base fee in drops.</summary>
+        [JsonConverter(typeof(CurrencyConverter))]
+        public Currency BaseFeeDrops { get; set; }
+
+        /// <summary>XRPFees: account reserve in drops.</summary>
+        [JsonConverter(typeof(CurrencyConverter))]
+        public Currency ReserveBaseDrops { get; set; }
+
+        /// <summary>XRPFees: owner reserve increment in drops.</summary>
+        [JsonConverter(typeof(CurrencyConverter))]
+        public Currency ReserveIncrementDrops { get; set; }
+}
 }

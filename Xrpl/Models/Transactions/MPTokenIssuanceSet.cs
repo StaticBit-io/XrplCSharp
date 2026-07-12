@@ -71,7 +71,31 @@ namespace Xrpl.Models.Transactions
             set => base.Flags = (uint?)value;
         }
 
-    }
+    
+        /// <summary>DynamicMPT: mutable flags being updated.</summary>
+        [JsonPropertyName("MutableFlags")]
+        public uint? MutableFlags { get; set; }
+
+        /// <summary>DynamicMPT: new transfer fee (requires tfMPTCanMutateTransferFee).</summary>
+        [JsonPropertyName("TransferFee")]
+        public ushort? TransferFee { get; set; }
+
+        /// <summary>DynamicMPT: new metadata blob in hex (requires tfMPTCanMutateMetadata).</summary>
+        [JsonPropertyName("MPTokenMetadata")]
+        public string MPTokenMetadata { get; set; }
+
+        /// <summary>PermissionedDomains: domain restricting who may hold this MPT.</summary>
+        [JsonPropertyName("DomainID")]
+        public string DomainID { get; set; }
+
+        /// <summary>ConfidentialTransfer: issuer ElGamal encryption public key (hex).</summary>
+        [JsonPropertyName("IssuerEncryptionKey")]
+        public string IssuerEncryptionKey { get; set; }
+
+        /// <summary>ConfidentialTransfer: auditor ElGamal encryption public key (hex).</summary>
+        [JsonPropertyName("AuditorEncryptionKey")]
+        public string AuditorEncryptionKey { get; set; }
+}
 
     /// <inheritdoc cref="IMPTokenIssuanceSet" />
     public class MPTokenIssuanceSetResponse : TransactionResponse, IMPTokenIssuanceSet
@@ -93,7 +117,31 @@ namespace Xrpl.Models.Transactions
             set => base.Flags = (uint?)value;
         }
 
-    }
+    
+        /// <summary>DynamicMPT: mutable flags being updated.</summary>
+        [JsonPropertyName("MutableFlags")]
+        public uint? MutableFlags { get; set; }
+
+        /// <summary>DynamicMPT: new transfer fee (requires tfMPTCanMutateTransferFee).</summary>
+        [JsonPropertyName("TransferFee")]
+        public ushort? TransferFee { get; set; }
+
+        /// <summary>DynamicMPT: new metadata blob in hex (requires tfMPTCanMutateMetadata).</summary>
+        [JsonPropertyName("MPTokenMetadata")]
+        public string MPTokenMetadata { get; set; }
+
+        /// <summary>PermissionedDomains: domain restricting who may hold this MPT.</summary>
+        [JsonPropertyName("DomainID")]
+        public string DomainID { get; set; }
+
+        /// <summary>ConfidentialTransfer: issuer ElGamal encryption public key (hex).</summary>
+        [JsonPropertyName("IssuerEncryptionKey")]
+        public string IssuerEncryptionKey { get; set; }
+
+        /// <summary>ConfidentialTransfer: auditor ElGamal encryption public key (hex).</summary>
+        [JsonPropertyName("AuditorEncryptionKey")]
+        public string AuditorEncryptionKey { get; set; }
+}
 
     public partial class Validation
     {

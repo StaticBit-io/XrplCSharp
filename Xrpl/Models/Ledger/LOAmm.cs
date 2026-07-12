@@ -64,7 +64,11 @@ namespace Xrpl.Models.Ledger
         /// </summary>
         public bool? Validated { get; set; }
 
-    }
+    
+        /// <summary>Owner directory page hint (hex UInt64).</summary>
+        [JsonPropertyName("OwnerNode")]
+        public string OwnerNode { get; set; }
+}
 
     public interface IAuthAccount
     {

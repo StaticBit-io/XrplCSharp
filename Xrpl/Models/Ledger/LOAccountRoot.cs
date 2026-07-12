@@ -209,5 +209,17 @@ namespace Xrpl.Models.Ledger
         /// </summary>
         public uint? TicketCount { get; set; }
 
-    }
+    
+        /// <summary>The sequence of the first NFToken minted by this account.</summary>
+        [JsonPropertyName("FirstNFTokenSequence")]
+        public uint? FirstNFTokenSequence { get; set; }
+
+        /// <summary>Arbitrary 256-bit locator (e.g. for off-ledger wallet data).</summary>
+        [JsonPropertyName("WalletLocator")]
+        public string WalletLocator { get; set; }
+
+        /// <summary>Unused legacy field kept for ledger compatibility.</summary>
+        [JsonPropertyName("WalletSize")]
+        public uint? WalletSize { get; set; }
+}
 }

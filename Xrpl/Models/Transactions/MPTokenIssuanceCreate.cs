@@ -146,7 +146,15 @@ namespace Xrpl.Models.Transactions
             get => base.Flags.HasValue ? (MPTokenIssuanceCreateFlags?)base.Flags.Value : null;
             set => base.Flags = (uint?)value;
         }
-    }
+    
+        /// <summary>DynamicMPT: which issuance flags remain mutable.</summary>
+        [JsonPropertyName("MutableFlags")]
+        public uint? MutableFlags { get; set; }
+
+        /// <summary>PermissionedDomains: domain restricting who may hold this MPT.</summary>
+        [JsonPropertyName("DomainID")]
+        public string DomainID { get; set; }
+}
 
     /// <inheritdoc cref="IMPTokenIssuanceCreate" />
     public class MPTokenIssuanceCreateResponse : TransactionResponse, IMPTokenIssuanceCreate
@@ -198,7 +206,15 @@ namespace Xrpl.Models.Transactions
             get => base.Flags.HasValue ? (MPTokenIssuanceCreateFlags?)base.Flags.Value : null;
             set => base.Flags = (uint?)value;
         }
-    }
+    
+        /// <summary>DynamicMPT: which issuance flags remain mutable.</summary>
+        [JsonPropertyName("MutableFlags")]
+        public uint? MutableFlags { get; set; }
+
+        /// <summary>PermissionedDomains: domain restricting who may hold this MPT.</summary>
+        [JsonPropertyName("DomainID")]
+        public string DomainID { get; set; }
+}
 
     public partial class Validation
     {

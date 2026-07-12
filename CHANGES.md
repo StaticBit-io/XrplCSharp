@@ -1,5 +1,15 @@
 # Changes
 
+### 10.7.0.0 07/13/2026
+* Protocol-completeness pass driven by a field-level diff against rippled `develop` (`server_definitions` @ `8306ac77`):
+  * `definitions.json`: add `HighSponsor`/`LowSponsor` (XLS-68 RippleState reserve sponsors); fix `isVLEncoded` on `Sponsor`/`Sponsee`/`CounterpartySponsor` (AccountID fields are VL-encoded); align `Generic` attributes with the node
+  * Transaction models: `NFTokenMint` + `Amount`/`Destination`/`Expiration` (NFTokenMintOffer); `MPTokenIssuanceSet` + `MutableFlags`/`TransferFee`/`MPTokenMetadata`/`DomainID`/`IssuerEncryptionKey`/`AuditorEncryptionKey`; `MPTokenIssuanceCreate` + `MutableFlags`/`DomainID`; `AMMDeposit` + `TradingFee`; `LedgerStateFix` + `BookDirectory`; `VaultDelete` + `MemoData`; `SetFee` + XRPFees drops fields
+  * Ledger objects: `LODirectoryNode` + `DomainID`/`ExchangeRate`/`NFTokenID`/`TakerPaysMPT`/`TakerGetsMPT`; `LORippleState` + `HighSponsor`/`LowSponsor`; `LOAccountRoot` + `FirstNFTokenSequence`/`WalletLocator`/`WalletSize`; plus `LOAmm`, `LOEscrow`, `LOPayChannel`, `LOSignerList`, `LOOracle` (`OracleDocumentID`), `LONFTokenPage`, `LOFeeSettings`, `LODelegate` field gaps
+  * TxFormat: entries for all four MPT transactions
+* Fix `Validation.Validate` dispatch: `NFTokenModify` was routed to `ValidateNFTokenMint` (a valid Modify without `NFTokenTaxon` was rejected); now calls `ValidateNFTokenModify`
+* Fix `LOSignerList.SignerListId` never being populated: the property lacked a `JsonPropertyName` attribute and its casing did not match rippled's `SignerListID`
+* Unit tests pinning the new fields (binary round-trips) and the dispatch fix; full integration suite (238 tests) green against xrpld `8306ac77` with all amendments active
+
 ### 10.6.0.0 07/10/2026
 * **Sponsored Fees & Reserves (XLS-68, `Sponsor` amendment)** — merged into rippled `develop` on 07/10/2026 ([rippled #7350](https://github.com/XRPLF/rippled/pull/7350)):
   * New transaction models `SponsorshipSet` (91) and `SponsorshipTransfer` (90) with tf-flag enums per rippled `TxFlags.h`; `LOSponsorship` ledger object (0x90)

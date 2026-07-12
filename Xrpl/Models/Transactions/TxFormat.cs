@@ -601,6 +601,38 @@ namespace Xrpl.Models.Transaction
                 {
                     [Field.LedgerFixType] = Requirement.Required,
                     [Field.Owner] = Requirement.Optional,
+                    [Field.BookDirectory] = Requirement.Optional,
+                },
+
+                // MPT (XLS-33 + DynamicMPT + PermissionedDomains + ConfidentialTransfer)
+                [BinaryCodec.Types.TransactionType.MPTokenIssuanceCreate] = new TxFormat
+                {
+                    [Field.AssetScale] = Requirement.Optional,
+                    [Field.TransferFee] = Requirement.Optional,
+                    [Field.MaximumAmount] = Requirement.Optional,
+                    [Field.MPTokenMetadata] = Requirement.Optional,
+                    [Field.DomainID] = Requirement.Optional,
+                    [Field.MutableFlags] = Requirement.Optional,
+                },
+                [BinaryCodec.Types.TransactionType.MPTokenIssuanceDestroy] = new TxFormat
+                {
+                    [Field.MPTokenIssuanceID] = Requirement.Required,
+                },
+                [BinaryCodec.Types.TransactionType.MPTokenIssuanceSet] = new TxFormat
+                {
+                    [Field.MPTokenIssuanceID] = Requirement.Required,
+                    [Field.Holder] = Requirement.Optional,
+                    [Field.DomainID] = Requirement.Optional,
+                    [Field.MPTokenMetadata] = Requirement.Optional,
+                    [Field.TransferFee] = Requirement.Optional,
+                    [Field.MutableFlags] = Requirement.Optional,
+                    [Field.IssuerEncryptionKey] = Requirement.Optional,
+                    [Field.AuditorEncryptionKey] = Requirement.Optional,
+                },
+                [BinaryCodec.Types.TransactionType.MPTokenAuthorize] = new TxFormat
+                {
+                    [Field.MPTokenIssuanceID] = Requirement.Required,
+                    [Field.Holder] = Requirement.Optional,
                 },
 
                 // Sponsor (XLS-68)
