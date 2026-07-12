@@ -118,7 +118,10 @@ namespace Xrpl.Models.Transactions
             if (System.Numerics.BitOperations.PopCount(flags & transferFlags) != 1)
                 throw new ValidationException("SponsorshipTransfer: exactly one of tfSponsorshipCreate, tfSponsorshipReassign or tfSponsorshipEnd must be set");
 
-            bool hasSponsor = tx.TryGetValue("Sponsor", out var sponsorField) && sponsorField is string;
+            bool hasSponsorField = tx.TryGetValue("Sponsor", out var sponsorField);
+            if (hasSponsorField && sponsorField is not string)
+                throw new ValidationException("SponsorshipTransfer: invalid Sponsor");
+            bool hasSponsor = hasSponsorField && sponsorField is string;
             bool isCreateOrReassign = (flags & (uint)(SponsorshipTransferFlags.tfSponsorshipCreate | SponsorshipTransferFlags.tfSponsorshipReassign)) != 0;
 
             if (isCreateOrReassign)

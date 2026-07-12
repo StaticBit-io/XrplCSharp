@@ -2,18 +2,18 @@
 
 Integration tests (`TestI*` filter) require a local `rippled` node in standalone mode with amendments enabled and an automatic ledger acceptor.
 
-> **Do not** run a bare `rippled -a` or a random standalone image: a node without amendment configuration answers `temDISABLED` to AMM/NFT/MPT/Batch and most other modern transactions. Use the compose stands below — they enable the required amendments at genesis.
+> **Do not** run a bare `rippled -a` or a random standalone image: a node without amendment configuration answers `temDISABLED` to AMM/NFT/MPT/Batch and most other modern transactions. Use the Docker Compose environments below — they enable the required amendments at genesis.
 
 ## Run
 
 ```bash
-# release-node stand (rippled 3.2.0, same as CI)
+# release-node environment (rippled 3.2.0, same as CI)
 docker compose -f .ci-config/docker-compose.ci.yml up -d
 dotnet test Tests/Xrpl.Tests/Xrpl.Tests.csproj --settings test.runsettings --filter "TestI"
 docker compose -f .ci-config/docker-compose.ci.yml down
 ```
 
-Amendment-gated classes (`TestIBatch`, `TestIDelegateSet`) are skipped on the release stand and need the nightly-develop stand instead:
+Amendment-gated classes (`TestIBatch`, `TestIDelegateSet`) are skipped on the release node and need the nightly-develop environment instead:
 
 ```bash
 docker compose -f .ci-config/docker-compose.batchv11.yml up -d --build

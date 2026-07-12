@@ -33,7 +33,7 @@ public class TestIConfidentialMPT
     [ClassInitialize]
     public static async Task ClassInitializeAsync(TestContext testContext)
     {
-        client = await IntegrationTestConfig.CreateClientAsync(TestNodeType.Standalone);
+        client = await IntegrationTestConfig.CreateClientAsync(nodeType);
         confidentialActive = await AmendmentGuard.IsEnabledAsync(client, AmendmentGuard.ConfidentialTransfer);
     }
 

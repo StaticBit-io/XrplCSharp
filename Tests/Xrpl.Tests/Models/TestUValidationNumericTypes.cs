@@ -118,6 +118,33 @@ namespace Xrpl.Tests.Models.Tests
         }
 
         [TestMethod]
+        public async Task TestUValidateAccountSet_TickSizeZero_Clears()
+        {
+            Dictionary<string, object> tx = new()
+            {
+                ["TransactionType"] = "AccountSet",
+                ["Account"] = Account1,
+                ["TickSize"] = 0u,
+            };
+            // 0 clears the tick size per rippled; must not be rejected as out of range
+            await Validation.ValidateAccountSet(tx);
+        }
+
+        [TestMethod]
+        public async Task TestUValidateSponsorshipTransfer_NonStringSponsor_TypeError()
+        {
+            Dictionary<string, object> tx = new()
+            {
+                ["TransactionType"] = "SponsorshipTransfer",
+                ["Account"] = Account1,
+                ["Flags"] = (uint)SponsorshipTransferFlags.tfSponsorshipCreate,
+                ["Sponsor"] = 123,
+            };
+            ValidationException ex = await Assert.ThrowsExactlyAsync<ValidationException>(() => Validation.ValidateSponsorshipTransfer(tx));
+            StringAssert.Contains(ex.Message, "invalid Sponsor");
+        }
+
+        [TestMethod]
         public void TestUIntegralHelpers()
         {
             Assert.IsTrue(TxCommon.IsUInt32(5u));
