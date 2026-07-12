@@ -75,7 +75,7 @@ Use [this repo](https://github.com/RichardAH/xrpl-codec-gen) to generate a new `
 1. Ensure that all tests passed on the last CI that ran on `dev`.
 2. Update the version in all `.csproj` files (`Xrpl`, `Xrpl.AddressCodec`, `Xrpl.BinaryCodec`, `Xrpl.Keypairs`).
 3. Update `CHANGES.md` with the new version and changelog.
-4. Merge `dev` into `main`, then `main` into `release`.
+4. Merge `dev` into `release` (the push to `release` publishes the NuGet packages and deploys the documentation).
 5. The NuGet publish workflow will start automatically on push to `release`.
 6. Create a GitHub release with the appropriate tag.
 
