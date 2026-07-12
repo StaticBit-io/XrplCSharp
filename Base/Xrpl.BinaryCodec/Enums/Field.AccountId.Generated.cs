@@ -27,5 +27,8 @@ namespace Xrpl.BinaryCodec.Enums
         public static readonly AccountIdField Subject = new AccountIdField(nameof(Subject), 24);
         public static readonly AccountIdField Borrower = new AccountIdField(nameof(Borrower), 25);
         public static readonly AccountIdField Counterparty = new AccountIdField(nameof(Counterparty), 26);
+        public static readonly AccountIdField Sponsor = new AccountIdField(nameof(Sponsor), 27);
+        public static readonly AccountIdField CounterpartySponsor = new AccountIdField(nameof(CounterpartySponsor), 30);
+        public static readonly AccountIdField Sponsee = new AccountIdField(nameof(Sponsee), 31);
     }
 }

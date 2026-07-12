@@ -89,7 +89,7 @@ namespace Xrpl.Models.Transactions
                 throw new ValidationException("AMMVote: Asset2 must be an Issue");
             if(TradingFee is null)
                 throw new ValidationException("AMMVote: missing field TradingFee");
-            if (TradingFee is not uint fee)
+            if (!Common.TryGetUInt32(TradingFee, out uint fee))
             {
                 throw new ValidationException("AMMVote: TradingFee must be a number");
             }

@@ -31,8 +31,9 @@ namespace Xrpl.BinaryCodec.Enums
         public static readonly FieldType Vector256 = new FieldType(nameof(Vector256), 19);
         public static readonly FieldType UInt96 = new FieldType(nameof(UInt96), 20);
         public static readonly FieldType Hash192 = new FieldType(nameof(Hash192), 21);
-        public static readonly FieldType UInt384 = new FieldType(nameof(UInt384), 22);
-        public static readonly FieldType UInt512 = new FieldType(nameof(UInt512), 23);
+        // Renamed from UInt384/UInt512 upstream (same ordinals 22/23)
+        public static readonly FieldType Hash384 = new FieldType(nameof(Hash384), 22);
+        public static readonly FieldType Hash512 = new FieldType(nameof(Hash512), 23);
         public static readonly FieldType Issue = new FieldType(nameof(Issue), 24);
         public static readonly FieldType XChainBridge = new FieldType(nameof(XChainBridge), 25);
         /// <summary>Currency type for Oracle price data (ordinal 26).</summary>

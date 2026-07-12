@@ -140,15 +140,15 @@ namespace Xrpl.Models.Transactions
             if (FinishAfter is null && Condition is null)
                 throw new ValidationException("EscrowCreate: Either Condition or FinishAfter must be specified");
 
-            if (CancelAfter is not null && CancelAfter is not uint)
+            if (CancelAfter is not null && !Common.IsUInt32(CancelAfter))
                 throw new ValidationException("EscrowCreate: CancelAfter must be a number");
-            if (FinishAfter is not null && FinishAfter is not uint)
+            if (FinishAfter is not null && !Common.IsUInt32(FinishAfter))
                 throw new ValidationException("EscrowCreate: FinishAfter must be a number");
             if (Condition is not null && Condition is not string)
                 throw new ValidationException("EscrowCreate: Condition must be a string");
 
             tx.TryGetValue("DestinationTag", out var DestinationTag);
-            if (Destination is not null && DestinationTag is not uint)
+            if (DestinationTag is not null && !Common.IsUInt32(DestinationTag))
                 throw new ValidationException("EscrowCreate: DestinationTag must be a number");
         }
     }

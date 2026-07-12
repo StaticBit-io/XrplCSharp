@@ -79,6 +79,13 @@ namespace Xrpl.BinaryCodec.Types
         public static readonly TransactionType LoanDelete = Add(nameof(LoanDelete), 81);
         public static readonly TransactionType LoanManage = Add(nameof(LoanManage), 82);
         public static readonly TransactionType LoanPay = Add(nameof(LoanPay), 84);
+        public static readonly TransactionType ConfidentialMPTConvert = Add(nameof(ConfidentialMPTConvert), 85);
+        public static readonly TransactionType ConfidentialMPTMergeInbox = Add(nameof(ConfidentialMPTMergeInbox), 86);
+        public static readonly TransactionType ConfidentialMPTConvertBack = Add(nameof(ConfidentialMPTConvertBack), 87);
+        public static readonly TransactionType ConfidentialMPTSend = Add(nameof(ConfidentialMPTSend), 88);
+        public static readonly TransactionType ConfidentialMPTClawback = Add(nameof(ConfidentialMPTClawback), 89);
+        public static readonly TransactionType SponsorshipTransfer = Add(nameof(SponsorshipTransfer), 90);
+        public static readonly TransactionType SponsorshipSet = Add(nameof(SponsorshipSet), 91);
         public static readonly TransactionType EnableAmendment = Add(nameof(EnableAmendment), 100);
         public static readonly TransactionType SetFee = Add(nameof(SetFee), 101);
         public static readonly TransactionType UNLModify = Add(nameof(UNLModify), 102);

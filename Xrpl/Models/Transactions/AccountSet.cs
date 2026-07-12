@@ -227,7 +227,7 @@ namespace Xrpl.Models.Transactions
             await Common.ValidateBaseTransaction(tx);
             if (tx.TryGetValue("ClearFlag", out var ClearFlag) && ClearFlag is not null)
             {
-                if (ClearFlag is not uint { } flag )
+                if (!Common.TryGetUInt32(ClearFlag, out uint flag))
                     throw new ValidationException("AccountSet: invalid ClearFlag");
 
                 if (Enum.GetValues<AccountSetAsfFlags>().All(c => (uint)c != flag))
@@ -244,19 +244,19 @@ namespace Xrpl.Models.Transactions
 
             if (tx.TryGetValue("SetFlag", out var SetFlag) && SetFlag is not null)
             {
-                if (SetFlag is not uint { })
+                if (!Common.TryGetUInt32(SetFlag, out uint setFlag))
                     throw new ValidationException("AccountSet: invalid SetFlag");
 
-                if (Enum.GetValues<AccountSetAsfFlags>().All(c => (uint)c != (uint)SetFlag))
-                    throw new ValidationException("AccountSet: missing field Destination");
+                if (Enum.GetValues<AccountSetAsfFlags>().All(c => (uint)c != setFlag))
+                    throw new ValidationException("AccountSet: invalid SetFlag");
             }
 
-            if (tx.TryGetValue("TransferRate", out var TransferRate) && TransferRate is not uint { })
+            if (tx.TryGetValue("TransferRate", out var TransferRate) && !Common.IsUInt32(TransferRate))
                 throw new ValidationException("AccountSet: invalid TransferRate");
 
             if (tx.TryGetValue("TickSize", out var TickSize) && TickSize is not null)
             {
-                if (TickSize is not uint { } size)
+                if (!Common.TryGetUInt32(TickSize, out uint size))
                     throw new ValidationException("AccountSet: invalid TickSize");
 
                 if (size is < MIN_TICK_SIZE or > MAX_TICK_SIZE)

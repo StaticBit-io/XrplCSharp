@@ -161,6 +161,44 @@ namespace Xrpl.Models.Ledger
         public uint Sequence { get; init; }
 
         /// <summary>
+        /// PermissionedDomain restricting who may hold this MPT.
+        /// </summary>
+        [JsonPropertyName("DomainID")]
+        public string? DomainID { get; init; }
+
+        /// <summary>
+        /// DynamicMPT: which issuance flags remain mutable.
+        /// </summary>
+        [JsonPropertyName("MutableFlags")]
+        public uint? MutableFlags { get; init; }
+
+        /// <summary>
+        /// MPTokensV2: the reference holding object for DEX trading.
+        /// </summary>
+        [JsonPropertyName("ReferenceHolding")]
+        public string? ReferenceHolding { get; init; }
+
+        /// <summary>
+        /// ConfidentialTransfer: the issuer's ElGamal encryption public key (hex blob).
+        /// </summary>
+        [JsonPropertyName("IssuerEncryptionKey")]
+        public string? IssuerEncryptionKey { get; init; }
+
+        /// <summary>
+        /// ConfidentialTransfer: the auditor's ElGamal encryption public key (hex blob).
+        /// </summary>
+        [JsonPropertyName("AuditorEncryptionKey")]
+        public string? AuditorEncryptionKey { get; init; }
+
+        /// <summary>
+        /// ConfidentialTransfer: total amount held in confidential balances.
+        /// UInt64 (0 .. 2^63-1)
+        /// </summary>
+        [JsonPropertyName("ConfidentialOutstandingAmount")]
+        [JsonConverter(typeof(UInt64StringJsonConverter))]
+        public ulong? ConfidentialOutstandingAmount { get; init; }
+
+        /// <summary>
         /// Computed 192-bit MPTokenIssuanceID (48 hex chars, uppercase).
         /// Derived from <see cref="Sequence"/> and <see cref="Issuer"/> per XLS-33.
         /// </summary>

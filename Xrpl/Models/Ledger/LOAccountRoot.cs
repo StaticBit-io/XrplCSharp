@@ -100,6 +100,31 @@ namespace Xrpl.Models.Ledger
         [JsonPropertyName("AMMID")]
         public string? AmmId { get; set; }
         /// <summary>
+        /// Identifier of the associated Vault (for vault pseudo-accounts).
+        /// </summary>
+        [JsonPropertyName("VaultID")]
+        public string? VaultID { get; set; }
+        /// <summary>
+        /// Identifier of the associated LoanBroker (for loan-broker pseudo-accounts).
+        /// </summary>
+        [JsonPropertyName("LoanBrokerID")]
+        public string? LoanBrokerID { get; set; }
+        /// <summary>
+        /// XLS-68: how many of this account's owned objects have their reserve covered by sponsors.
+        /// </summary>
+        [JsonPropertyName("SponsoredOwnerCount")]
+        public uint? SponsoredOwnerCount { get; set; }
+        /// <summary>
+        /// XLS-68: how many objects of other accounts this account sponsors.
+        /// </summary>
+        [JsonPropertyName("SponsoringOwnerCount")]
+        public uint? SponsoringOwnerCount { get; set; }
+        /// <summary>
+        /// XLS-68: how many account reserves this account sponsors.
+        /// </summary>
+        [JsonPropertyName("SponsoringAccountCount")]
+        public uint? SponsoringAccountCount { get; set; }
+        /// <summary>
         /// The identifying (classic) address of this account.
         /// </summary>
         public string Account { get; set; }

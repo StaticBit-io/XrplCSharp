@@ -87,7 +87,7 @@ namespace Xrpl.Models.Transactions
             if (Destination is not string { })
                 throw new ValidationException("AccountDelete: invalid Destination");
 
-            if (tx.TryGetValue("DestinationTag", out var DestinationTag) && DestinationTag is not uint { })
+            if (tx.TryGetValue("DestinationTag", out var DestinationTag) && !Common.IsUInt32(DestinationTag))
                 throw new ValidationException("AccountDelete: invalid DestinationTag");
 
             if (tx.TryGetValue("CredentialIDs", out var credentialIds) && credentialIds is not null)

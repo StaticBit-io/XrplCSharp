@@ -147,6 +147,35 @@ namespace Xrpl.Models.Transactions
         /// This should be called any time a transaction will be verified.
         /// </summary>
         /// <param name="tx">An interface w/ common transaction fields.</param>
+        /// <summary>
+        /// True when the value is an integral number representable as UInt32.
+        /// DictionaryObjectConverter materializes JSON numbers as int/long/ulong,
+        /// so a uint-only type test rejects valid dictionary values.
+        /// </summary>
+        public static bool IsUInt32(object value) => value switch
+        {
+            uint => true,
+            int i => i >= 0,
+            long l => l >= 0 && l <= uint.MaxValue,
+            ulong ul => ul <= uint.MaxValue,
+            _ => false,
+        };
+
+        /// <summary>
+        /// Extracts a UInt32 from any integral representation produced by the JSON layer.
+        /// </summary>
+        public static bool TryGetUInt32(object value, out uint result)
+        {
+            switch (value)
+            {
+                case uint u: result = u; return true;
+                case int i when i >= 0: result = (uint)i; return true;
+                case long l when l >= 0 && l <= uint.MaxValue: result = (uint)l; return true;
+                case ulong ul when ul <= uint.MaxValue: result = (uint)ul; return true;
+                default: result = 0; return false;
+            }
+        }
+
         /// <returns></returns>
         /// <exception cref="ValidationException"> When the common param is malformed.</exception>
         public static Task ValidateBaseTransaction(Dictionary<string, object> tx)
@@ -182,7 +211,7 @@ namespace Xrpl.Models.Transactions
                 throw new ValidationException("BaseTransaction: invalid Fee");
             }
 
-            if (tx.TryGetValue("Sequence", out var Sequence) && Sequence is not uint { })
+            if (tx.TryGetValue("Sequence", out var Sequence) && !IsUInt32(Sequence))
             {
                 throw new ValidationException("BaseTransaction: invalid Sequence");
             }
@@ -190,7 +219,7 @@ namespace Xrpl.Models.Transactions
             {
                 throw new ValidationException("BaseTransaction: invalid AccountTxnID");
             }
-            if (tx.TryGetValue("LastLedgerSequence", out var LastLedgerSequence) && LastLedgerSequence is not uint { })
+            if (tx.TryGetValue("LastLedgerSequence", out var LastLedgerSequence) && !IsUInt32(LastLedgerSequence))
             {
                 throw new ValidationException("BaseTransaction: invalid LastLedgerSequence");
             }
@@ -226,7 +255,7 @@ namespace Xrpl.Models.Transactions
 
             }
 
-            if (tx.TryGetValue("SourceTag", out var SourceTag) && SourceTag is not uint { })
+            if (tx.TryGetValue("SourceTag", out var SourceTag) && !IsUInt32(SourceTag))
             {
                 throw new ValidationException("BaseTransaction: invalid SourceTag");
             }
@@ -234,13 +263,21 @@ namespace Xrpl.Models.Transactions
             {
                 throw new ValidationException("BaseTransaction: invalid SigningPubKey");
             }
-            if (tx.TryGetValue("TicketSequence", out var TicketSequence) && TicketSequence is not uint { })
+            if (tx.TryGetValue("TicketSequence", out var TicketSequence) && !IsUInt32(TicketSequence))
             {
                 throw new ValidationException("BaseTransaction: invalid TicketSequence");
             }
             if (tx.TryGetValue("TxnSignature", out var TxnSignature) && TxnSignature is not string { })
             {
                 throw new ValidationException("BaseTransaction: invalid TxnSignature");
+            }
+            if (tx.TryGetValue("Sponsor", out var Sponsor) && Sponsor is not string { })
+            {
+                throw new ValidationException("BaseTransaction: invalid Sponsor");
+            }
+            if (tx.TryGetValue("SponsorFlags", out var SponsorFlags) && !IsUInt32(SponsorFlags))
+            {
+                throw new ValidationException("BaseTransaction: invalid SponsorFlags");
             }
             return Task.CompletedTask;
         }
@@ -303,6 +340,16 @@ namespace Xrpl.Models.Transactions
         public uint? SourceTag { get; set; }
         /// <inheritdoc />
         public uint? TicketSequence { get; set; }
+
+        /// <summary>
+        /// XLS-68: the account sponsoring this transaction's fee and/or reserve.
+        /// </summary>
+        public string Sponsor { get; set; }
+
+        /// <summary>
+        /// XLS-68: what the sponsor covers (serialized as the numeric sfSponsorFlags value).
+        /// </summary>
+        public SponsorCoverage? SponsorFlags { get; set; }
 
         //todo not found fields -  SourceTag?: number, TicketSequence?: number
     }
@@ -677,6 +724,16 @@ namespace Xrpl.Models.Transactions
         /// <inheritdoc/>
         [JsonPropertyName("meta")]
         public Meta Meta { get; set; }
+
+        /// <summary>
+        /// XLS-68: the account sponsoring this transaction's fee and/or reserve.
+        /// </summary>
+        public string Sponsor { get; set; }
+
+        /// <summary>
+        /// XLS-68: what the sponsor covers (serialized as the numeric sfSponsorFlags value).
+        /// </summary>
+        public SponsorCoverage? SponsorFlags { get; set; }
 
         /// <inheritdoc/>
         public string ToJson()

@@ -76,6 +76,8 @@ namespace Xrpl.BinaryCodec.Enums
         public static readonly EngineResult temARRAY_TOO_LARGE = Add(nameof(temARRAY_TOO_LARGE), -252);
         public static readonly EngineResult temBAD_TRANSFER_FEE = Add(nameof(temBAD_TRANSFER_FEE), -251);
         public static readonly EngineResult temINVALID_INNER_BATCH = Add(nameof(temINVALID_INNER_BATCH), -250);
+        public static readonly EngineResult temBAD_MPT = Add(nameof(temBAD_MPT), -249);
+        public static readonly EngineResult temBAD_CIPHERTEXT = Add(nameof(temBAD_CIPHERTEXT), -248);
 
         // ─── tef ───
         public static readonly EngineResult tefFAILURE = Add(nameof(tefFAILURE), -199);
@@ -100,6 +102,8 @@ namespace Xrpl.BinaryCodec.Enums
         public static readonly EngineResult tefNO_TICKET = Add(nameof(tefNO_TICKET), -180);
         public static readonly EngineResult tefNFTOKEN_IS_NOT_TRANSFERABLE = Add(nameof(tefNFTOKEN_IS_NOT_TRANSFERABLE), -179);
         public static readonly EngineResult tefINVALID_LEDGER_FIX_TYPE = Add(nameof(tefINVALID_LEDGER_FIX_TYPE), -178);
+        public static readonly EngineResult tefNO_DST_PARTIAL = Add(nameof(tefNO_DST_PARTIAL), -177);
+        public static readonly EngineResult tefBAD_PATH_COUNT = Add(nameof(tefBAD_PATH_COUNT), -176);
 
         // ─── ter ───
         public static readonly EngineResult terRETRY = Add(nameof(terRETRY), -99);
@@ -117,6 +121,8 @@ namespace Xrpl.BinaryCodec.Enums
         public static readonly EngineResult terNO_AMM = Add(nameof(terNO_AMM), -87);
         public static readonly EngineResult terADDRESS_COLLISION = Add(nameof(terADDRESS_COLLISION), -86);
         public static readonly EngineResult terNO_DELEGATE_PERMISSION = Add(nameof(terNO_DELEGATE_PERMISSION), -85);
+        public static readonly EngineResult terLOCKED = Add(nameof(terLOCKED), -84);
+        public static readonly EngineResult terNO_PERMISSION = Add(nameof(terNO_PERMISSION), -83);
 
         // ─── tes ───
         public static readonly EngineResult tesSUCCESS = Add(nameof(tesSUCCESS), 0);
@@ -206,5 +212,7 @@ namespace Xrpl.BinaryCodec.Enums
         public static readonly EngineResult tecPSEUDO_ACCOUNT = Add(nameof(tecPSEUDO_ACCOUNT), 196);
         public static readonly EngineResult tecPRECISION_LOSS = Add(nameof(tecPRECISION_LOSS), 197);
         public static readonly EngineResult tecNO_DELEGATE_PERMISSION = Add(nameof(tecNO_DELEGATE_PERMISSION), 198);
+        public static readonly EngineResult tecBAD_PROOF = Add(nameof(tecBAD_PROOF), 199);
+        public static readonly EngineResult tecNO_SPONSOR_PERMISSION = Add(nameof(tecNO_SPONSOR_PERMISSION), 200);
     }
 }

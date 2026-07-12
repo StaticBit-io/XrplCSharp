@@ -93,6 +93,18 @@ public static class SignerUtilities
     }
 
     /// <summary>
+    /// Returns a deep clone of the object with the given fields removed.
+    /// Shared clone-and-strip helper for signing flows (canonicalization, preimage prep).
+    /// </summary>
+    public static JsonObject WithoutFields(this JsonObject obj, params string[] fields)
+    {
+        JsonObject clone = obj.DeepClone().AsObject();
+        foreach (string field in fields)
+            clone.Remove(field);
+        return clone;
+    }
+
+    /// <summary>
     /// Converts JsonNode objects to CLR types (Dictionary, List, primitives) for proper binary encoding.
     /// The XrplBinaryCodec.Encode expects native CLR types, not JsonNode instances.
     /// </summary>
