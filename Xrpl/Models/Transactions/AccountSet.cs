@@ -259,7 +259,8 @@ namespace Xrpl.Models.Transactions
                 if (!Common.TryGetUInt32(TickSize, out uint size))
                     throw new ValidationException("AccountSet: invalid TickSize");
 
-                if (size is < MIN_TICK_SIZE or > MAX_TICK_SIZE)
+                // 0 clears the tick size; otherwise 3..15 per rippled
+                if (size != 0 && size is < MIN_TICK_SIZE or > MAX_TICK_SIZE)
                     throw new ValidationException("AccountSet: out of TickSize");
             }
 

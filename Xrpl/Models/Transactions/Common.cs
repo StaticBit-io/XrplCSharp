@@ -142,12 +142,6 @@ namespace Xrpl.Models.Transactions
             return (length == 1 && currency is string c && c == "XRP") || (length == 2 && currency is string && issuer is string);
         }
         /// <summary>
-        /// Verify the common fields of a transaction.<br/>
-        /// The validate functionality will be optional, and will check transaction form at runtime.
-        /// This should be called any time a transaction will be verified.
-        /// </summary>
-        /// <param name="tx">An interface w/ common transaction fields.</param>
-        /// <summary>
         /// True when the value is an integral number representable as UInt32.
         /// DictionaryObjectConverter materializes JSON numbers as int/long/ulong,
         /// so a uint-only type test rejects valid dictionary values.
@@ -176,6 +170,12 @@ namespace Xrpl.Models.Transactions
             }
         }
 
+        /// <summary>
+        /// Verify the common fields of a transaction.<br/>
+        /// The validate functionality will be optional, and will check transaction form at runtime.
+        /// This should be called any time a transaction will be verified.
+        /// </summary>
+        /// <param name="tx">An interface w/ common transaction fields.</param>
         /// <returns></returns>
         /// <exception cref="ValidationException"> When the common param is malformed.</exception>
         public static Task ValidateBaseTransaction(Dictionary<string, object> tx)

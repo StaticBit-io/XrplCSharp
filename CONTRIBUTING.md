@@ -43,7 +43,7 @@ dotnet test Tests/Xrpl.Tests/Xrpl.Tests.csproj --verbosity normal --settings tes
 docker compose -f .ci-config/docker-compose.ci.yml down
 ```
 
-For amendment activation details, the nightly-develop stand for unreleased amendments, `temDISABLED` troubleshooting and genesis account funding, see the [Standalone Node Guide](DocFx/StandaloneNode-Guide.md).
+For amendment activation details, the nightly-develop standalone environment for unreleased amendments, `temDISABLED` troubleshooting and genesis account funding, see the [Standalone Node Guide](DocFx/StandaloneNode-Guide.md).
 
 ## Generate reference docs
 
