@@ -45,7 +45,8 @@ namespace Xrpl.BinaryCodec.Types
             [FieldType.StArray] = new BuildFrom(StArray.FromJson, StArray.FromParser),
             [FieldType.Uint8] = new BuildFrom(Uint8.FromJson, Uint8.FromParser),
             [FieldType.Uint32] = new BuildFrom(Uint32.FromJson, Uint32.FromParser),
-            [FieldType.Uint64] = new BuildFrom(Uint64.FromJson, Uint64.FromParser),
+            // Uint64 is intentionally absent: EnsureDispatch binds it per-field with
+            // kSmdBaseTen context (see the FieldType.Uint64 branch below).
             [FieldType.Uint16] = new BuildFrom(Uint16.FromJson, Uint16.FromParser),
             [FieldType.Amount] = new BuildFrom(Amount.FromJson, Amount.FromParser),
             [FieldType.Hash128] = new BuildFrom(Hash128.FromJson, Hash128.FromParser),

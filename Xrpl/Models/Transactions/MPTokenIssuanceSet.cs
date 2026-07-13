@@ -75,6 +75,23 @@ namespace Xrpl.Models.Transactions
         public string? Holder { get; set; }
         public new MPTokenIssuanceSetFlags? Flags { get; set; }
 
+        /// <summary>DynamicMPT: capability flags to enable on the issuance (one-way).</summary>
+        public MPTokenIssuanceSetMutableFlags? MutableFlags { get; set; }
+
+        /// <summary>DynamicMPT: new transfer fee (requires tfMPTCanMutateTransferFee).</summary>
+        public ushort? TransferFee { get; set; }
+
+        /// <summary>DynamicMPT: new metadata blob in hex (requires tfMPTCanMutateMetadata).</summary>
+        public string MPTokenMetadata { get; set; }
+
+        /// <summary>PermissionedDomains: domain restricting who may hold this MPT.</summary>
+        public string DomainID { get; set; }
+
+        /// <summary>ConfidentialTransfer: issuer ElGamal encryption public key (hex).</summary>
+        public string IssuerEncryptionKey { get; set; }
+
+        /// <summary>ConfidentialTransfer: auditor ElGamal encryption public key (hex).</summary>
+        public string AuditorEncryptionKey { get; set; }
     }
 
     /// <summary>
@@ -104,15 +121,15 @@ namespace Xrpl.Models.Transactions
         }
 
     
-        /// <summary>DynamicMPT: capability flags to enable on the issuance (one-way).</summary>
+        /// <inheritdoc />
         [JsonPropertyName("MutableFlags")]
         public MPTokenIssuanceSetMutableFlags? MutableFlags { get; set; }
 
-        /// <summary>DynamicMPT: new transfer fee (requires tfMPTCanMutateTransferFee).</summary>
+        /// <inheritdoc />
         [JsonPropertyName("TransferFee")]
         public ushort? TransferFee { get; set; }
 
-        /// <summary>DynamicMPT: new metadata blob in hex (requires tfMPTCanMutateMetadata).</summary>
+        /// <inheritdoc />
         [JsonPropertyName("MPTokenMetadata")]
         public string MPTokenMetadata { get; set; }
 
@@ -131,15 +148,15 @@ namespace Xrpl.Models.Transactions
             set => MPTokenMetadata = value?.ToHex();
         }
 
-        /// <summary>PermissionedDomains: domain restricting who may hold this MPT.</summary>
+        /// <inheritdoc />
         [JsonPropertyName("DomainID")]
         public string DomainID { get; set; }
 
-        /// <summary>ConfidentialTransfer: issuer ElGamal encryption public key (hex).</summary>
+        /// <inheritdoc />
         [JsonPropertyName("IssuerEncryptionKey")]
         public string IssuerEncryptionKey { get; set; }
 
-        /// <summary>ConfidentialTransfer: auditor ElGamal encryption public key (hex).</summary>
+        /// <inheritdoc />
         [JsonPropertyName("AuditorEncryptionKey")]
         public string AuditorEncryptionKey { get; set; }
 }
@@ -165,15 +182,15 @@ namespace Xrpl.Models.Transactions
         }
 
     
-        /// <summary>DynamicMPT: capability flags to enable on the issuance (one-way).</summary>
+        /// <inheritdoc />
         [JsonPropertyName("MutableFlags")]
         public MPTokenIssuanceSetMutableFlags? MutableFlags { get; set; }
 
-        /// <summary>DynamicMPT: new transfer fee (requires tfMPTCanMutateTransferFee).</summary>
+        /// <inheritdoc />
         [JsonPropertyName("TransferFee")]
         public ushort? TransferFee { get; set; }
 
-        /// <summary>DynamicMPT: new metadata blob in hex (requires tfMPTCanMutateMetadata).</summary>
+        /// <inheritdoc />
         [JsonPropertyName("MPTokenMetadata")]
         public string MPTokenMetadata { get; set; }
 
@@ -187,15 +204,15 @@ namespace Xrpl.Models.Transactions
         [JsonIgnore]
         public MPTokenMetadataSchema? Metadata => MPTokenMetadataSchema.FromHex(MPTokenMetadata);
 
-        /// <summary>PermissionedDomains: domain restricting who may hold this MPT.</summary>
+        /// <inheritdoc />
         [JsonPropertyName("DomainID")]
         public string DomainID { get; set; }
 
-        /// <summary>ConfidentialTransfer: issuer ElGamal encryption public key (hex).</summary>
+        /// <inheritdoc />
         [JsonPropertyName("IssuerEncryptionKey")]
         public string IssuerEncryptionKey { get; set; }
 
-        /// <summary>ConfidentialTransfer: auditor ElGamal encryption public key (hex).</summary>
+        /// <inheritdoc />
         [JsonPropertyName("AuditorEncryptionKey")]
         public string AuditorEncryptionKey { get; set; }
 }
@@ -239,6 +256,47 @@ namespace Xrpl.Models.Transactions
                 {
                     throw new ValidationException("MPTokenIssuanceSet: cannot set both tfMPTLock and tfMPTUnlock flags");
                 }
+            }
+
+            if (tx.TryGetValue("TransferFee", out var transferFee) && transferFee is not null)
+            {
+                if (!Common.TryGetUInt32(transferFee, out uint fee))
+                {
+                    throw new ValidationException("MPTokenIssuanceSet: TransferFee must be a number");
+                }
+
+                if (fee > MPT_MAX_TRANSFER_FEE)
+                {
+                    throw new ValidationException($"MPTokenIssuanceSet: TransferFee must be between 0 and {MPT_MAX_TRANSFER_FEE}");
+                }
+            }
+
+            if (tx.TryGetValue("MPTokenMetadata", out var metadata) && metadata is not null)
+            {
+                if (metadata is not string metadataStr)
+                {
+                    throw new ValidationException("MPTokenIssuanceSet: MPTokenMetadata must be a string");
+                }
+
+                if (metadataStr.Length > MPT_MAX_METADATA_LENGTH * 2)
+                {
+                    throw new ValidationException($"MPTokenIssuanceSet: MPTokenMetadata must be at most {MPT_MAX_METADATA_LENGTH} bytes");
+                }
+            }
+
+            if (tx.TryGetValue("DomainID", out var domainId) && domainId is not null && domainId is not string)
+            {
+                throw new ValidationException("MPTokenIssuanceSet: DomainID must be a string");
+            }
+
+            if (tx.TryGetValue("IssuerEncryptionKey", out var issuerKey) && issuerKey is not null && issuerKey is not string)
+            {
+                throw new ValidationException("MPTokenIssuanceSet: IssuerEncryptionKey must be a string");
+            }
+
+            if (tx.TryGetValue("AuditorEncryptionKey", out var auditorKey) && auditorKey is not null && auditorKey is not string)
+            {
+                throw new ValidationException("MPTokenIssuanceSet: AuditorEncryptionKey must be a string");
             }
         }
     }

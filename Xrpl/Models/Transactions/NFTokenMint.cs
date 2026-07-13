@@ -74,14 +74,14 @@ namespace Xrpl.Models.Transactions
         /// <inheritdoc />
         public string URI { get; set; }
     
-        /// <summary>NFTokenMintOffer: amount for the bundled sell offer.</summary>
+        /// <inheritdoc />
         [JsonConverter(typeof(CurrencyConverter))]
         public Currency Amount { get; set; }
 
-        /// <summary>NFTokenMintOffer: destination allowed to accept the bundled offer.</summary>
+        /// <inheritdoc />
         public string Destination { get; set; }
 
-        /// <summary>NFTokenMintOffer: time after which the bundled offer is no longer valid.</summary>
+        /// <inheritdoc />
         [JsonConverter(typeof(RippleDateTimeConverter))]
         public DateTime? Expiration { get; set; }
 }
@@ -120,6 +120,19 @@ namespace Xrpl.Models.Transactions
         /// You can use `convertStringToHex` to convert this field to the proper encoding.
         /// </summary>
         string URI { get; set; }
+        /// <summary>
+        /// NFTokenMintOffer: amount for the bundled sell offer.<br/>
+        /// Required when <see cref="Destination"/> or <see cref="Expiration"/> is present.
+        /// </summary>
+        Currency Amount { get; set; }
+        /// <summary>
+        /// NFTokenMintOffer: destination allowed to accept the bundled offer. Must differ from Account.
+        /// </summary>
+        string Destination { get; set; }
+        /// <summary>
+        /// NFTokenMintOffer: time after which the bundled offer is no longer valid.
+        /// </summary>
+        DateTime? Expiration { get; set; }
     }
 
     /// <inheritdoc cref="INFTokenMint" />
@@ -143,14 +156,14 @@ namespace Xrpl.Models.Transactions
         /// <inheritdoc />
         public string URI { get; set; }
     
-        /// <summary>NFTokenMintOffer: amount for the bundled sell offer.</summary>
+        /// <inheritdoc />
         [JsonConverter(typeof(CurrencyConverter))]
         public Currency Amount { get; set; }
 
-        /// <summary>NFTokenMintOffer: destination allowed to accept the bundled offer.</summary>
+        /// <inheritdoc />
         public string Destination { get; set; }
 
-        /// <summary>NFTokenMintOffer: time after which the bundled offer is no longer valid.</summary>
+        /// <inheritdoc />
         [JsonConverter(typeof(RippleDateTimeConverter))]
         public DateTime? Expiration { get; set; }
 }
@@ -176,6 +189,29 @@ namespace Xrpl.Models.Transactions
             if (!tx.TryGetValue("NFTokenTaxon", out var NFTokenTaxon) || NFTokenTaxon is null)
                 throw new ValidationException("NFTokenMint: missing field NFTokenTaxon");
 
+            bool hasAmount = tx.TryGetValue("Amount", out var Amount) && Amount is not null;
+            bool hasDestination = tx.TryGetValue("Destination", out var Destination) && Destination is not null;
+            bool hasExpiration = tx.TryGetValue("Expiration", out var Expiration) && Expiration is not null;
+
+            // rippled NFTokenMint preflight (NFTokenMintOffer): the Amount field must
+            // be present if either the Destination or Expiration fields are present
+            if ((hasDestination || hasExpiration) && !hasAmount)
+                throw new ValidationException("NFTokenMint: Amount is required when Destination or Expiration is present");
+
+            if (hasAmount && !Common.IsAmount(Amount))
+                throw new ValidationException("NFTokenMint: invalid Amount");
+
+            if (hasDestination)
+            {
+                if (Destination is not string destination)
+                    throw new ValidationException("NFTokenMint: invalid Destination");
+
+                if (tx.TryGetValue("Account", out var account) && destination.Equals(account))
+                    throw new ValidationException("NFTokenMint: Destination must not be equal to Account");
+            }
+
+            if (hasExpiration && !Common.IsUInt32(Expiration))
+                throw new ValidationException("NFTokenMint: invalid Expiration");
         }
     }
 

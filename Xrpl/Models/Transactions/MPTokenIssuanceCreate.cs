@@ -133,6 +133,12 @@ namespace Xrpl.Models.Transactions
             set => MPTokenMetadata = value?.ToHex();
         }
 
+        /// <summary>DynamicMPT: which issuance flags remain mutable after creation.</summary>
+        public MPTokenIssuanceCreateMutableFlags? MutableFlags { get; set; }
+
+        /// <summary>PermissionedDomains: domain restricting who may hold this MPT.</summary>
+        public string DomainID { get; set; }
+
         public new MPTokenIssuanceCreateFlags? Flags { get; set; }
     }
 
@@ -183,11 +189,11 @@ namespace Xrpl.Models.Transactions
             set => base.Flags = (uint?)value;
         }
     
-        /// <summary>DynamicMPT: which issuance flags remain mutable after creation.</summary>
+        /// <inheritdoc />
         [JsonPropertyName("MutableFlags")]
         public MPTokenIssuanceCreateMutableFlags? MutableFlags { get; set; }
 
-        /// <summary>PermissionedDomains: domain restricting who may hold this MPT.</summary>
+        /// <inheritdoc />
         [JsonPropertyName("DomainID")]
         public string DomainID { get; set; }
 }
@@ -243,11 +249,11 @@ namespace Xrpl.Models.Transactions
             set => base.Flags = (uint?)value;
         }
     
-        /// <summary>DynamicMPT: which issuance flags remain mutable after creation.</summary>
+        /// <inheritdoc />
         [JsonPropertyName("MutableFlags")]
         public MPTokenIssuanceCreateMutableFlags? MutableFlags { get; set; }
 
-        /// <summary>PermissionedDomains: domain restricting who may hold this MPT.</summary>
+        /// <inheritdoc />
         [JsonPropertyName("DomainID")]
         public string DomainID { get; set; }
 }

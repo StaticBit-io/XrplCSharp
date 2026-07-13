@@ -198,11 +198,12 @@ namespace Xrpl.Sugar
 
             var transactionType = (string)tx["TransactionType"];
             var calculatedFee = await CalculateBaseFeeForType(client, tx, transactionType, baseFee, netFeeDrops, cancellationToken);
-            var signerFee = CalculateMultisigFee(netFeeDrops, signersCount);
-            // XLS-68: rippled Transactor::calculateBaseFee charges one baseFee per signer
-            // inside SponsorSignature.Signers (sponsor multisig). A single-signed
-            // SponsorSignature adds nothing.
-            var sponsorSignerFee = CalculateMultisigFee(netFeeDrops, GetSponsorSignerCount(tx));
+            // rippled Transactor::calculateBaseFee: one baseFee per outer multisig signer
+            // plus one per signer nested in SponsorSignature.Signers (XLS-68 sponsor
+            // multisig; a single-signed SponsorSignature adds nothing). Scaled from the
+            // devnet-corrected baseFee so all charges use the same unit.
+            var signerFee = baseFee * Math.Max(0, signersCount);
+            var sponsorSignerFee = baseFee * GetSponsorSignerCount(tx);
 
             calculatedFee += signerFee + sponsorSignerFee;
             BigInteger totalFee;
@@ -312,19 +313,6 @@ namespace Xrpl.Sugar
             };
         }
 
-        /// <summary>
-        /// Calculates additional fee for multi-signed transactions.
-        /// Formula: baseFeeDrops × signersCount (added to base fee already calculated elsewhere)
-        /// Total multisig fee = baseFee × (1 + signersCount)
-        /// </summary>
-        private static BigInteger CalculateMultisigFee(string netFeeDrops, int signersCount)
-        {
-            if (signersCount <= 0)
-                return BigInteger.Zero;
-
-            var scaled = ScaleValueDecimal(netFeeDrops, signersCount);
-            return new BigInteger(scaled);
-        }
         private static bool TryGetInnerFieldsAsDict(object item, out Dictionary<string, object> dict)
         {
             dict = null!;
