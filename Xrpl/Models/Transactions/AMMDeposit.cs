@@ -100,7 +100,10 @@ namespace Xrpl.Models.Transactions
             get => base.Flags.HasValue ? (AMMDepositFlags?)base.Flags.Value : null;
             set => base.Flags = (uint?)value;
         }
-    }
+    
+        /// <summary>Trading fee to set when depositing into an empty AMM (tfTwoAssetIfEmpty).</summary>
+        public uint? TradingFee { get; set; }
+}
 
     /// <summary>
     /// AMMDeposit is the deposit transaction used to add liquidity to the AMM instance pool,
@@ -178,7 +181,10 @@ namespace Xrpl.Models.Transactions
         }
 
         #endregion
-    }
+    
+        /// <summary>Trading fee to set when depositing into an empty AMM (tfTwoAssetIfEmpty).</summary>
+        public uint? TradingFee { get; set; }
+}
 
     public partial class Validation
     {

@@ -1,5 +1,19 @@
 # Changes
 
+### 10.7.0.0 07/13/2026
+* Protocol-completeness pass driven by a field-level diff against rippled `develop` (`server_definitions` @ `8306ac77`):
+  * `definitions.json`: add `HighSponsor`/`LowSponsor` (XLS-68 RippleState reserve sponsors); fix `isVLEncoded` on `Sponsor`/`Sponsee`/`CounterpartySponsor` (AccountID fields are VL-encoded); align `Generic` attributes with the node
+  * Transaction models: `NFTokenMint` + `Amount`/`Destination`/`Expiration` (NFTokenMintOffer); `MPTokenIssuanceSet` + `MutableFlags`/`TransferFee`/`MPTokenMetadata`/`DomainID`/`IssuerEncryptionKey`/`AuditorEncryptionKey`; `MPTokenIssuanceCreate` + `MutableFlags`/`DomainID`; `AMMDeposit` + `TradingFee`; `LedgerStateFix` + `BookDirectory`; `VaultDelete` + `MemoData`; `SetFee` + XRPFees drops fields
+  * Ledger objects: `LODirectoryNode` + `DomainID`/`ExchangeRate`/`NFTokenID`/`TakerPaysMPT`/`TakerGetsMPT`; `LORippleState` + `HighSponsor`/`LowSponsor`; `LOAccountRoot` + `FirstNFTokenSequence`/`WalletLocator`/`WalletSize`; plus `LOAmm`, `LOEscrow`, `LOPayChannel`, `LOSignerList`, `LOOracle` (`OracleDocumentID`), `LONFTokenPage`, `LOFeeSettings`, `LODelegate` field gaps
+  * TxFormat: entries for all four MPT transactions
+* Fix `Validation.Validate` dispatch: `NFTokenModify` was routed to `ValidateNFTokenMint` (a valid Modify without `NFTokenTaxon` was rejected); now calls `ValidateNFTokenModify`
+* Fix `LOSignerList.SignerListId` never being populated: the property lacked a `JsonPropertyName` attribute and its casing did not match rippled's `SignerListID`
+* Review pass (PR #34): TxFormat corrections — the entry labeled `UNLModify` actually held SetFee's legacy format; relabeled to `SetFee` (all fee fields optional per rippled `ttFEE`, + XRPFees drops fields), added the real `UNLModify` and the missing `EnableAmendment` entries; `AMMDeposit` + optional `TradingFee`, `VaultDelete` + optional `MemoData` (both verified against rippled develop `transactions.macro`); `MPTokenIssuanceSet` gains the `MPTokenMetadataRow`/`Metadata` (XLS-89) convenience accessors for parity with `MPTokenIssuanceCreate`
+* Fix binary-codec JSON **encode** of UInt64 fields losing field context: a digit-only string for a hex-semantics field (e.g. `OwnerNode: "0000000000000012"`) was parsed as decimal, silently corrupting the value on round-trip. `Uint64.FromJson` now receives the field's `kSmdBaseTen` context (decimal for the five base-ten fields, strict hex otherwise) — the decode-side counterpart shipped in 10.6.0
+* `Autofill` fee: account for sponsor multisig per rippled `Transactor::calculateBaseFee` — each signer nested in `SponsorSignature.Signers` adds one base fee (a single-signed `SponsorSignature` adds nothing)
+* `ValidateAccountSet`: `SetFlag`/`ClearFlag` asf-range checks extracted into a shared helper
+* Unit tests pinning the new fields (binary round-trips) and the dispatch fix; full integration suite (238 tests) green against xrpld `8306ac77` with all amendments active
+
 ### 10.6.0.0 07/10/2026
 * **Sponsored Fees & Reserves (XLS-68, `Sponsor` amendment)** — merged into rippled `develop` on 07/10/2026 ([rippled #7350](https://github.com/XRPLF/rippled/pull/7350)):
   * New transaction models `SponsorshipSet` (91) and `SponsorshipTransfer` (90) with tf-flag enums per rippled `TxFlags.h`; `LOSponsorship` ledger object (0x90)

@@ -1,6 +1,7 @@
 ﻿using System;
 
 using Xrpl.Models.Common;
+using System.Text.Json.Serialization;
 
 
 // https://github.com/XRPLF/xrpl.js/blob/main/packages/xrpl/src/models/ledger/RippleState.ts
@@ -108,5 +109,13 @@ namespace Xrpl.Models.Ledger
         /// As a special case, the value 0 is equivalent to 1 billion, or face value.
         /// </summary>
         public uint? HighQualityOut { get; set; }
-    }
+    
+    /// <summary>XLS-68: account sponsoring the high side's reserve for this trust line.</summary>
+    [JsonPropertyName("HighSponsor")]
+    public string HighSponsor { get; set; }
+
+    /// <summary>XLS-68: account sponsoring the low side's reserve for this trust line.</summary>
+    [JsonPropertyName("LowSponsor")]
+    public string LowSponsor { get; set; }
+}
 }

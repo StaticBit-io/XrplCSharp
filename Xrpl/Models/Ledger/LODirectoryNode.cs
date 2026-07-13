@@ -3,6 +3,8 @@
 
 // https://github.com/XRPLF/xrpl.js/blob/main/packages/xrpl/src/models/ledger/DirectoryNode.ts
 
+using System.Text.Json.Serialization;
+
 namespace Xrpl.Models.Ledger
 {
     /// <summary>
@@ -59,5 +61,25 @@ namespace Xrpl.Models.Ledger
         /// The issuer of the TakerGets amount from the offers in this directory.
         /// </summary>
         public string TakerGetsIssuer { get; set; }
-    }
+    
+    /// <summary>PermissionedDEX: the domain this order book belongs to.</summary>
+    [JsonPropertyName("DomainID")]
+    public string DomainID { get; set; }
+
+    /// <summary>Order book directories: the exchange rate portion of the directory index (hex UInt64).</summary>
+    [JsonPropertyName("ExchangeRate")]
+    public string ExchangeRate { get; set; }
+
+    /// <summary>NFT offer directories: the NFToken this directory relates to.</summary>
+    [JsonPropertyName("NFTokenID")]
+    public string NFTokenID { get; set; }
+
+    /// <summary>MPT order books: MPT issuance id on the TakerPays side.</summary>
+    [JsonPropertyName("TakerPaysMPT")]
+    public string TakerPaysMPT { get; set; }
+
+    /// <summary>MPT order books: MPT issuance id on the TakerGets side.</summary>
+    [JsonPropertyName("TakerGetsMPT")]
+    public string TakerGetsMPT { get; set; }
+}
 }

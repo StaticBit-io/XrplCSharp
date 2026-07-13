@@ -218,6 +218,24 @@ namespace Xrpl.Models.Transactions
         private const uint MAX_TICK_SIZE = 15;
 
         /// <summary>
+        /// Validates that an optional AccountSet flag field holds a known asf* value.
+        /// </summary>
+        /// <param name="tx">The transaction dictionary.</param>
+        /// <param name="fieldName">"SetFlag" or "ClearFlag".</param>
+        /// <exception cref="ValidationException">When the field is present but not a valid AccountSetAsfFlags value.</exception>
+        private static void ValidateAsfFlagField(Dictionary<string, object> tx, string fieldName)
+        {
+            if (!tx.TryGetValue(fieldName, out var value) || value is null)
+                return;
+
+            if (!Common.TryGetUInt32(value, out uint flag))
+                throw new ValidationException($"AccountSet: invalid {fieldName}");
+
+            if (Enum.GetValues<AccountSetAsfFlags>().All(c => (uint)c != flag))
+                throw new ValidationException($"AccountSet: invalid {fieldName}");
+        }
+
+        /// <summary>
         /// Verify the form and type of a AccountSet at runtime.
         /// </summary>
         /// <param name="tx"> A AccountSet Transaction.</param>
@@ -225,14 +243,7 @@ namespace Xrpl.Models.Transactions
         public static async Task ValidateAccountSet(Dictionary<string, object> tx)
         {
             await Common.ValidateBaseTransaction(tx);
-            if (tx.TryGetValue("ClearFlag", out var ClearFlag) && ClearFlag is not null)
-            {
-                if (!Common.TryGetUInt32(ClearFlag, out uint flag))
-                    throw new ValidationException("AccountSet: invalid ClearFlag");
-
-                if (Enum.GetValues<AccountSetAsfFlags>().All(c => (uint)c != flag))
-                    throw new ValidationException("AccountSet: invalid ClearFlag");
-            }
+            ValidateAsfFlagField(tx, "ClearFlag");
             if (tx.TryGetValue("Domain", out var Domain) && Domain is not string { })
                 throw new ValidationException("AccountSet: invalid Domain");
 
@@ -242,14 +253,7 @@ namespace Xrpl.Models.Transactions
             if (tx.TryGetValue("MessageKey", out var MessageKey) && MessageKey is not string { })
                 throw new ValidationException("AccountSet: invalid MessageKey");
 
-            if (tx.TryGetValue("SetFlag", out var SetFlag) && SetFlag is not null)
-            {
-                if (!Common.TryGetUInt32(SetFlag, out uint setFlag))
-                    throw new ValidationException("AccountSet: invalid SetFlag");
-
-                if (Enum.GetValues<AccountSetAsfFlags>().All(c => (uint)c != setFlag))
-                    throw new ValidationException("AccountSet: invalid SetFlag");
-            }
+            ValidateAsfFlagField(tx, "SetFlag");
 
             if (tx.TryGetValue("TransferRate", out var TransferRate) && !Common.IsUInt32(TransferRate))
                 throw new ValidationException("AccountSet: invalid TransferRate");

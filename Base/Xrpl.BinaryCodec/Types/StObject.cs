@@ -45,7 +45,8 @@ namespace Xrpl.BinaryCodec.Types
             [FieldType.StArray] = new BuildFrom(StArray.FromJson, StArray.FromParser),
             [FieldType.Uint8] = new BuildFrom(Uint8.FromJson, Uint8.FromParser),
             [FieldType.Uint32] = new BuildFrom(Uint32.FromJson, Uint32.FromParser),
-            [FieldType.Uint64] = new BuildFrom(Uint64.FromJson, Uint64.FromParser),
+            // Uint64 is intentionally absent: EnsureDispatch binds it per-field with
+            // kSmdBaseTen context (see the FieldType.Uint64 branch below).
             [FieldType.Uint16] = new BuildFrom(Uint16.FromJson, Uint16.FromParser),
             [FieldType.Amount] = new BuildFrom(Amount.FromJson, Amount.FromParser),
             [FieldType.Hash128] = new BuildFrom(Hash128.FromJson, Hash128.FromParser),
@@ -80,6 +81,15 @@ namespace Xrpl.BinaryCodec.Types
             {
                 field.FromJson = LedgerEntryType.Values.FromJson;
                 field.FromParser = LedgerEntryType.Values.FromParser;
+            }
+            else if (field.Type == FieldType.Uint64)
+            {
+                // Uint64 JSON form depends on the field: kSmdBaseTen fields use decimal
+                // strings, all others hex. Digit-only strings are ambiguous, so the
+                // parser needs the field context (mirrors ToJsonObject's emission).
+                bool baseTen = BaseTenUint64Fields.Contains(field.Name);
+                field.FromJson = token => Uint64.FromJson(token, baseTen);
+                field.FromParser = Uint64.FromParser;
             }
             else if (DispatchTable.TryGetValue(field.Type, out BuildFrom buildFrom))
             {

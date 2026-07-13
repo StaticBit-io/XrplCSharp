@@ -158,6 +158,57 @@ namespace Xrpl.Tests.ClientLib
         }
 
         [TestMethod]
+        public async Task TestAutofillFeeSponsorMultisig()
+        {
+            // rippled Transactor::calculateBaseFee: each signer nested in
+            // SponsorSignature.Signers adds one baseFee; a single-signed
+            // SponsorSignature adds nothing.
+            Dictionary<string, object> singleSigned = new Dictionary<string, object>
+            {
+                { "TransactionType", "DepositPreauth" },
+                { "Account", "rGWrZyQqhTp9Xu7G5Pkayo7bXjH4k4QYpf" },
+                { "Authorize", "rpZc4mVfWUif9CRoHRKKcmhu1nx2xktxBo" },
+                { "Sequence", Sequence },
+                { "LastLedgerSequence", LastLedgerSequence },
+                { "Sponsor", "rN4oCm1c6BQz6nru83H52FBSpNbC9VQcRc" },
+                {
+                    "SponsorSignature", new Dictionary<string, object>
+                    {
+                        { "Account", "rN4oCm1c6BQz6nru83H52FBSpNbC9VQcRc" },
+                        { "SigningPubKey", "02A1633CAFCC01EBFB6D78E39F687A1F0995C62FC95F51EAD10A02EE0BE551B5DC" },
+                        { "TxnSignature", "DEADBEEF" },
+                    }
+                },
+            };
+
+            string serverInfoString = "{\"id\":0,\"status\":\"success\",\"type\":\"response\",\"result\":{\"info\":{\"build_version\":\"0.24.0-rc1\",\"complete_ledgers\":\"32570-6595042\",\"hostid\":\"ARTS\",\"io_latency_ms\":1,\"last_close\":{\"converge_time_s\":2.007,\"proposers\":4},\"load_factor\":1,\"peers\":53,\"pubkey_node\":\"n94wWvFUmaKGYrKUGgpv1DyYgDeXRGdACkNQaSe7zJiy5Znio7UC\",\"server_state\":\"full\",\"validated_ledger\":{\"age\":5,\"base_fee_xrp\":0.00001,\"hash\":\"4482DEE5362332F54A4036ED57EE1767C9F33CF7CE5A6670355C16CECE381D46\",\"reserve_base_xrp\":20,\"reserve_inc_xrp\":5,\"seq\":6595042},\"validation_quorum\":3}}}";
+            Dictionary<string, object> serverInfoData = JsonSerializer.Deserialize<Dictionary<string, object>>(serverInfoString);
+            runner.mockedRippled.AddResponse("server_info", serverInfoData);
+
+            Dictionary<string, object> singleResult = await runner.client.Autofill(singleSigned);
+            Assert.AreEqual("12", (string)singleResult["Fee"]);
+
+            Dictionary<string, object> multiSigned = new Dictionary<string, object>(singleSigned);
+            multiSigned.Remove("Fee");
+            multiSigned["SponsorSignature"] = new Dictionary<string, object>
+            {
+                { "Account", "rN4oCm1c6BQz6nru83H52FBSpNbC9VQcRc" },
+                { "SigningPubKey", "" },
+                {
+                    "Signers", new List<object>
+                    {
+                        new Dictionary<string, object> { { "Signer", new Dictionary<string, object> { { "Account", "rpHit3GvUR1VSGh2PXcaaZKEEUnCVxWU2i" } } } },
+                        new Dictionary<string, object> { { "Signer", new Dictionary<string, object> { { "Account", "rJ8KhCi67VgbapiKCQN3r1ZA6BMUxUvvnD" } } } },
+                    }
+                },
+            };
+
+            Dictionary<string, object> multiResult = await runner.client.Autofill(multiSigned);
+            // baseFee 12 + 2 sponsor signers * 12 = 36
+            Assert.AreEqual("36", (string)multiResult["Fee"]);
+        }
+
+        [TestMethod]
         public async Task TestAutofillEscrowFinish()
         {
             Dictionary<string, object> tx = new Dictionary<string, object>

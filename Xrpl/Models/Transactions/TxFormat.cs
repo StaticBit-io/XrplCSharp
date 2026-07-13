@@ -289,13 +289,27 @@ namespace Xrpl.Models.Transaction
                     [Field.NFTokenBuyOffer] = Requirement.Optional,
                     [Field.NFTokenBrokerFee] = Requirement.Optional,
                 },
-                [BinaryCodec.Types.TransactionType.UNLModify] = new TxFormat
+                [BinaryCodec.Types.TransactionType.EnableAmendment] = new TxFormat
+                {
+                    [Field.LedgerSequence] = Requirement.Required,
+                    [Field.Amendment] = Requirement.Required,
+                },
+                [BinaryCodec.Types.TransactionType.SetFee] = new TxFormat
                 {
                     [Field.LedgerSequence] = Requirement.Optional,
-                    [Field.BaseFee] = Requirement.Required,
-                    [Field.ReferenceFeeUnits] = Requirement.Required,
-                    [Field.ReserveBase] = Requirement.Required,
-                    [Field.ReserveIncrement] = Requirement.Required
+                    [Field.BaseFee] = Requirement.Optional,
+                    [Field.ReferenceFeeUnits] = Requirement.Optional,
+                    [Field.ReserveBase] = Requirement.Optional,
+                    [Field.ReserveIncrement] = Requirement.Optional,
+                    [Field.BaseFeeDrops] = Requirement.Optional,
+                    [Field.ReserveBaseDrops] = Requirement.Optional,
+                    [Field.ReserveIncrementDrops] = Requirement.Optional,
+                },
+                [BinaryCodec.Types.TransactionType.UNLModify] = new TxFormat
+                {
+                    [Field.UNLModifyDisabling] = Requirement.Required,
+                    [Field.LedgerSequence] = Requirement.Required,
+                    [Field.UNLModifyValidator] = Requirement.Required,
                 },
                 [BinaryCodec.Types.TransactionType.AMMBid] = new TxFormat
                 {
@@ -324,6 +338,7 @@ namespace Xrpl.Models.Transaction
                     [Field.Amount2] = Requirement.Optional,
                     [Field.EPrice] = Requirement.Optional,
                     [Field.LPTokenOut] = Requirement.Optional,
+                    [Field.TradingFee] = Requirement.Optional,
                 },
                 [BinaryCodec.Types.TransactionType.AMMVote] = new TxFormat
                 {
@@ -503,6 +518,7 @@ namespace Xrpl.Models.Transaction
                 [BinaryCodec.Types.TransactionType.VaultDelete] = new TxFormat
                 {
                     [Field.VaultID] = Requirement.Required,
+                    [Field.MemoData] = Requirement.Optional,
                 },
                 [BinaryCodec.Types.TransactionType.VaultDeposit] = new TxFormat
                 {
@@ -601,6 +617,38 @@ namespace Xrpl.Models.Transaction
                 {
                     [Field.LedgerFixType] = Requirement.Required,
                     [Field.Owner] = Requirement.Optional,
+                    [Field.BookDirectory] = Requirement.Optional,
+                },
+
+                // MPT (XLS-33 + DynamicMPT + PermissionedDomains + ConfidentialTransfer)
+                [BinaryCodec.Types.TransactionType.MPTokenIssuanceCreate] = new TxFormat
+                {
+                    [Field.AssetScale] = Requirement.Optional,
+                    [Field.TransferFee] = Requirement.Optional,
+                    [Field.MaximumAmount] = Requirement.Optional,
+                    [Field.MPTokenMetadata] = Requirement.Optional,
+                    [Field.DomainID] = Requirement.Optional,
+                    [Field.MutableFlags] = Requirement.Optional,
+                },
+                [BinaryCodec.Types.TransactionType.MPTokenIssuanceDestroy] = new TxFormat
+                {
+                    [Field.MPTokenIssuanceID] = Requirement.Required,
+                },
+                [BinaryCodec.Types.TransactionType.MPTokenIssuanceSet] = new TxFormat
+                {
+                    [Field.MPTokenIssuanceID] = Requirement.Required,
+                    [Field.Holder] = Requirement.Optional,
+                    [Field.DomainID] = Requirement.Optional,
+                    [Field.MPTokenMetadata] = Requirement.Optional,
+                    [Field.TransferFee] = Requirement.Optional,
+                    [Field.MutableFlags] = Requirement.Optional,
+                    [Field.IssuerEncryptionKey] = Requirement.Optional,
+                    [Field.AuditorEncryptionKey] = Requirement.Optional,
+                },
+                [BinaryCodec.Types.TransactionType.MPTokenAuthorize] = new TxFormat
+                {
+                    [Field.MPTokenIssuanceID] = Requirement.Required,
+                    [Field.Holder] = Requirement.Optional,
                 },
 
                 // Sponsor (XLS-68)

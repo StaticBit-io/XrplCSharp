@@ -47,6 +47,7 @@ public class LOSignerList : BaseLedgerEntry
     /// Currently always set to 0.<br/>
     /// If a future amendment allows multiple signer lists for an account, this may change.
     /// </summary>
+    [JsonPropertyName("SignerListID")]
     public uint SignerListId { get; set; }
 
     /// <summary>
@@ -58,6 +59,10 @@ public class LOSignerList : BaseLedgerEntry
     /// The index of the ledger that contains the transaction that most recently modified this object.
     /// </summary>
     public uint PreviousTxnLgrSeq { get; set; }
+
+        /// <summary>Owner of the signer list (present in some historical entries).</summary>
+        [JsonPropertyName("Owner")]
+        public string Owner { get; set; }
 }
 
 public class SignerEntryWrapper
