@@ -61,14 +61,25 @@ namespace Xrpl.BinaryCodec.Types
 
             if (token is JsonValue jvNum && jvNum.GetValueKind() == System.Text.Json.JsonValueKind.Number)
             {
-                try { return new Uint64(jvNum.GetValue<ulong>()); }
-                catch (InvalidOperationException)
+                if (jvNum.TryGetValue(out ulong asUlong))
+                    return new Uint64(asUlong);
+
+                // Manually-built JsonValue<int>/<long> wrappers don't convert to ulong
+                if (jvNum.TryGetValue(out long asLong))
                 {
-                    long val = jvNum.GetValue<long>();
-                    if (val < 0)
-                        throw new OverflowException($"Value {val} is out of range for Uint64.");
-                    return new Uint64((ulong)val);
+                    if (asLong < 0)
+                        throw new OverflowException($"Value {asLong} is out of range for Uint64.");
+                    return new Uint64((ulong)asLong);
                 }
+
+                if (jvNum.TryGetValue(out int asInt))
+                {
+                    if (asInt < 0)
+                        throw new OverflowException($"Value {asInt} is out of range for Uint64.");
+                    return new Uint64((ulong)asInt);
+                }
+
+                throw new FormatException("Uint64 JSON number must be a non-negative integer.");
             }
 
             if (!(token is JsonValue jvStr) || jvStr.GetValueKind() != System.Text.Json.JsonValueKind.String)
