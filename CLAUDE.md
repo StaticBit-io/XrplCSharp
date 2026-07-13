@@ -195,6 +195,7 @@ Output goes to `docs/` directory. Published to GitHub Pages.
 | `dotnet.test.yml` | Push/PR to `dev`, `release`; merge queue | Build + unit tests (`TestU`) + integration tests (`TestI` with Docker rippled) |
 | `nuget.release.yml` | Push to `release` | Build Release → Pack → Publish to GitHub Packages + NuGet.org |
 | `docs.yml` | Push to `release` | DocFx → GitHub Pages |
+| `protocol-watch.yml` | Weekly cron (Mon 06:00 UTC); manual | Diffs rippled develop `*.macro` protocol files vs the baseline in the `protocol-watch` tracking issue; comments there on changes |
 
 Integration tests do **not** run on PRs into `dev` — `dev` uses a GitHub merge queue, and the `integration` job runs on the `merge_group` event against the merge result before the merge lands ("Merge when ready" button). Promotion PRs into `release` still run the full suite directly. New pushes to a PR cancel its in-flight CI run (`concurrency`, PR events only).
 
