@@ -3,6 +3,7 @@ using System.Text.Json.Serialization;
 
 using System;
 using System.Collections.Generic;
+using System.Linq;
 using System.Threading.Tasks;
 
 using Xrpl.BinaryCodec.Types;
@@ -339,6 +340,28 @@ namespace Xrpl.Models.Transactions
                 {
                     throw new ValidationException($"MPTokenIssuanceCreate: MPTokenMetadata must be at most {MPT_MAX_METADATA_LENGTH} bytes");
                 }
+            }
+
+            if (tx.TryGetValue("MutableFlags", out var mutableFlags) && mutableFlags is not null)
+            {
+                if (!Common.TryGetUInt32(mutableFlags, out uint mutable))
+                {
+                    throw new ValidationException("MPTokenIssuanceCreate: MutableFlags must be a number");
+                }
+
+                // rippled MPTokenIssuanceCreate::preflight: at least one flag must be
+                // set and only tmf* bits are allowed (temINVALID_FLAG otherwise)
+                uint validMask = Enum.GetValues<MPTokenIssuanceCreateMutableFlags>()
+                    .Aggregate(0u, (acc, flag) => acc | (uint)flag);
+                if (mutable == 0 || (mutable & ~validMask) != 0)
+                {
+                    throw new ValidationException("MPTokenIssuanceCreate: invalid MutableFlags");
+                }
+            }
+
+            if (tx.TryGetValue("DomainID", out var domainId) && domainId is not null && domainId is not string)
+            {
+                throw new ValidationException("MPTokenIssuanceCreate: DomainID must be a string");
             }
         }
     }

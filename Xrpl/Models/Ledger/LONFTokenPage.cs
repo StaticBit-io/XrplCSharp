@@ -42,7 +42,7 @@ public class LONFTokenPage : BaseLedgerEntry
     /// </summary>
     public long PreviousTxnLgrSeq { get; set; }
 
-        /// <summary>Index of the previous page in the owner's NFToken directory.</summary>
+        /// <summary>The locator of the next page, if any, in the owner's NFToken directory.</summary>
         [JsonPropertyName("NextPageMin")]
         public string NextPageMin { get; set; }
 }

@@ -188,6 +188,50 @@ namespace Xrpl.Tests.Models.Tests
         }
 
         [TestMethod]
+        public async Task TestUMPTokenIssuanceSet_PreflightRules()
+        {
+            // rippled MPTokenIssuanceSet::preflight rules pinned client-side
+            Dictionary<string, object> tx = new()
+            {
+                ["TransactionType"] = "MPTokenIssuanceSet",
+                ["Account"] = Account1,
+                ["MPTokenIssuanceID"] = "00000001A407AF5856CCF3C42619DAA925813FC955C72983",
+            };
+
+            // MutableFlags: zero and out-of-mask values are temINVALID_FLAG
+            tx["MutableFlags"] = 0u;
+            await Assert.ThrowsExactlyAsync<Xrpl.Client.Exceptions.ValidationException>(() => Validation.ValidateMPTokenIssuanceSet(tx));
+            tx["MutableFlags"] = 0x80u;
+            await Assert.ThrowsExactlyAsync<Xrpl.Client.Exceptions.ValidationException>(() => Validation.ValidateMPTokenIssuanceSet(tx));
+
+            // Non-zero TransferFee combined with enabling confidential balances is temBAD_TRANSFER_FEE
+            tx["MutableFlags"] = (uint)MPTokenIssuanceSetMutableFlags.tmfMPTSetCanHoldConfidentialBalance;
+            tx["TransferFee"] = 10u;
+            await Assert.ThrowsExactlyAsync<Xrpl.Client.Exceptions.ValidationException>(() => Validation.ValidateMPTokenIssuanceSet(tx));
+
+            tx["TransferFee"] = 0u;
+            await Validation.ValidateMPTokenIssuanceSet(tx);
+        }
+
+        [TestMethod]
+        public async Task TestUMPTokenIssuanceCreate_MutableFlagsMask()
+        {
+            Dictionary<string, object> tx = new()
+            {
+                ["TransactionType"] = "MPTokenIssuanceCreate",
+                ["Account"] = Account1,
+            };
+
+            tx["MutableFlags"] = 0u;
+            await Assert.ThrowsExactlyAsync<Xrpl.Client.Exceptions.ValidationException>(() => Validation.ValidateMPTokenIssuanceCreate(tx));
+            tx["MutableFlags"] = 0x100u; // outside tmf* mask
+            await Assert.ThrowsExactlyAsync<Xrpl.Client.Exceptions.ValidationException>(() => Validation.ValidateMPTokenIssuanceCreate(tx));
+
+            tx["MutableFlags"] = (uint)(MPTokenIssuanceCreateMutableFlags.tmfMPTCanMutateMetadata | MPTokenIssuanceCreateMutableFlags.tmfMPTCanMutateTransferFee);
+            await Validation.ValidateMPTokenIssuanceCreate(tx);
+        }
+
+        [TestMethod]
         public void TestULORippleState_SponsorFields_Deserialize()
         {
             string json = JsonSerializer.Serialize(new Dictionary<string, object>
