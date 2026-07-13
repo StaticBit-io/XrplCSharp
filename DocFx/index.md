@@ -82,6 +82,8 @@ await client.Disconnect();
 | Cross-Chain Bridge | [English](XChainBridge-Guide.html) | [Русский](XChainBridge-Guide.ru.html) |
 | Vault Guide | [English](Vault-Guide.html) | [Русский](Vault-Guide.ru.html) |
 | Lending Protocol | [English](LendingProtocol-Guide.html) | [Русский](LendingProtocol-Guide.ru.html) |
+| Sponsored Fees & Reserves | [English](Sponsorship-Guide.html) | [Русский](Sponsorship-Guide.ru.html) |
+| Confidential MPT | [English](ConfidentialMPT-Guide.html) | [Русский](ConfidentialMPT-Guide.ru.html) |
 | x402 Agentic Payments | [English](X402-Guide.html) | [Русский](X402-Guide.ru.html) |
 
 - [API Reference](reference/Xrpl.Client.html) - Full API documentation
