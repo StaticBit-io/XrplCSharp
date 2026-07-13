@@ -17,6 +17,11 @@ on:
 permissions:
   issues: write
 
+# Only one run may read/update the tracking-issue state at a time
+concurrency:
+  group: protocol-watch
+  cancel-in-progress: false
+
 env:
   UPSTREAM: XRPLF/rippled
   UPSTREAM_REF: develop
@@ -35,13 +40,14 @@ jobs:
         run: |
           set -euo pipefail
 
+          # Resolve the upstream head first, then pin the contents lookup to it
+          # so the recorded shas and the diff links refer to the same commit
+          head_sha=$(gh api "repos/$UPSTREAM/commits/$UPSTREAM_REF" --jq .sha)
+
           # Current per-file blob shas of the watched .macro files
-          current=$(gh api "repos/$UPSTREAM/contents/$UPSTREAM_DIR?ref=$UPSTREAM_REF" \
+          current=$(gh api "repos/$UPSTREAM/contents/$UPSTREAM_DIR?ref=$head_sha" \
             --jq '[.[] | select(.name | endswith(".macro")) | {(.name): .sha}] | add')
           echo "current: $current"
-
-          # Upstream head commit for stable diff links
-          head_sha=$(gh api "repos/$UPSTREAM/commits/$UPSTREAM_REF" --jq .sha)
 
           # Find the tracking issue
           issue=$(gh issue list --repo "$REPO" --label "$ISSUE_LABEL" --state open \
@@ -60,8 +66,9 @@ jobs:
           stored=$(echo "$issue" | jq -r .body | awk '/^```json$/{f=1;next} /^```$/{f=0} f' | jq -c . 2>/dev/null || echo '{}')
           echo "stored: $stored"
 
+          # Union of keys so upstream file removals/renames are detected too
           changed=$(jq -n --argjson cur "$current" --argjson old "$stored" \
-            '[$cur | keys[] | select($cur[.] != $old[.])]')
+            '[(($cur | keys) + ($old | keys) | unique)[] | select($cur[.] != $old[.])]')
           echo "changed: $changed"
 
           if [ "$(echo "$changed" | jq length)" -eq 0 ]; then
