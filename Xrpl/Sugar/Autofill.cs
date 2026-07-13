@@ -199,8 +199,12 @@ namespace Xrpl.Sugar
             var transactionType = (string)tx["TransactionType"];
             var calculatedFee = await CalculateBaseFeeForType(client, tx, transactionType, baseFee, netFeeDrops, cancellationToken);
             var signerFee = CalculateMultisigFee(netFeeDrops, signersCount);
-            
-            calculatedFee += signerFee;
+            // XLS-68: rippled Transactor::calculateBaseFee charges one baseFee per signer
+            // inside SponsorSignature.Signers (sponsor multisig). A single-signed
+            // SponsorSignature adds nothing.
+            var sponsorSignerFee = CalculateMultisigFee(netFeeDrops, GetSponsorSignerCount(tx));
+
+            calculatedFee += signerFee + sponsorSignerFee;
             BigInteger totalFee;
             if (!string.IsNullOrWhiteSpace(client.maxFeeXRP))
             {
@@ -280,6 +284,32 @@ namespace Xrpl.Sugar
             }
 
             return calculatedFee;
+        }
+
+        /// <summary>
+        /// Counts multisig signers nested inside SponsorSignature (XLS-68).
+        /// Mirrors rippled Transactor::calculateBaseFee: only SponsorSignature.Signers
+        /// entries add fee units; a single sponsor signature is free.
+        /// </summary>
+        private static int GetSponsorSignerCount(Dictionary<string, object> tx)
+        {
+            if (!tx.TryGetValue("SponsorSignature", out var sponsorSignature) || sponsorSignature == null)
+                return 0;
+
+            object signers = sponsorSignature switch
+            {
+                Dictionary<string, object> dict => dict.TryGetValue("Signers", out var s) ? s : null,
+                JsonObject jo => jo.TryGetPropertyValue("Signers", out var node) ? (object)node : null,
+                _ => null
+            };
+
+            return signers switch
+            {
+                JsonArray ja => ja.Count,
+                ICollection collection => collection.Count,
+                IEnumerable<object> enumerable => enumerable.Count(),
+                _ => 0
+            };
         }
 
         /// <summary>

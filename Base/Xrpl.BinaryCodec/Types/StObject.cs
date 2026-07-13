@@ -81,6 +81,15 @@ namespace Xrpl.BinaryCodec.Types
                 field.FromJson = LedgerEntryType.Values.FromJson;
                 field.FromParser = LedgerEntryType.Values.FromParser;
             }
+            else if (field.Type == FieldType.Uint64)
+            {
+                // Uint64 JSON form depends on the field: kSmdBaseTen fields use decimal
+                // strings, all others hex. Digit-only strings are ambiguous, so the
+                // parser needs the field context (mirrors ToJsonObject's emission).
+                bool baseTen = BaseTenUint64Fields.Contains(field.Name);
+                field.FromJson = token => Uint64.FromJson(token, baseTen);
+                field.FromParser = Uint64.FromParser;
+            }
             else if (DispatchTable.TryGetValue(field.Type, out BuildFrom buildFrom))
             {
                 field.FromJson = buildFrom.Json;

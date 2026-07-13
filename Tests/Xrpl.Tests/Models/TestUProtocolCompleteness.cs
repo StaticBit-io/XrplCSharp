@@ -171,6 +171,22 @@ namespace Xrpl.Tests.Models.Tests
         }
 
         [TestMethod]
+        public void TestUUint64_FieldContext_RoundTrip()
+        {
+            // Digit-only value of a hex-semantics UInt64 field must be parsed as hex:
+            // pre-fix "0000000000000012" was parsed as decimal 12 (0x0C) and the
+            // round-trip silently corrupted the value.
+            JsonObject hexField = JsonNode.Parse(@"{""OwnerNode"": ""0000000000000012""}")!.AsObject();
+            JsonObject decodedHex = XrplBinaryCodec.Decode(XrplBinaryCodec.Encode(hexField)).AsObject();
+            Assert.AreEqual("0000000000000012", decodedHex["OwnerNode"]!.GetValue<string>());
+
+            // kSmdBaseTen fields keep decimal-string semantics in both directions
+            JsonObject baseTenField = JsonNode.Parse(@"{""MaximumAmount"": ""18446744073709551615""}")!.AsObject();
+            JsonObject decodedBaseTen = XrplBinaryCodec.Decode(XrplBinaryCodec.Encode(baseTenField)).AsObject();
+            Assert.AreEqual("18446744073709551615", decodedBaseTen["MaximumAmount"]!.GetValue<string>());
+        }
+
+        [TestMethod]
         public void TestULORippleState_SponsorFields_Deserialize()
         {
             string json = JsonSerializer.Serialize(new Dictionary<string, object>
