@@ -27,7 +27,7 @@ public class TestIGatewayBalances
     [ClassInitialize]
     public static async Task MyClassInitializeAsync(TestContext testContext)
     {
-        client = await IntegrationTestConfig.CreateClientAsync(TestNodeType.Standalone);
+        client = await IntegrationTestConfig.CreateClientAsync(nodeType);
     }
 
     [ClassCleanup]
