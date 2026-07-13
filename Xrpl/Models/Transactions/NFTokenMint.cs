@@ -81,8 +81,9 @@ namespace Xrpl.Models.Transactions
         /// <summary>NFTokenMintOffer: destination allowed to accept the bundled offer.</summary>
         public string Destination { get; set; }
 
-        /// <summary>NFTokenMintOffer: expiration of the bundled offer (Ripple epoch seconds).</summary>
-        public uint? Expiration { get; set; }
+        /// <summary>NFTokenMintOffer: time after which the bundled offer is no longer valid.</summary>
+        [JsonConverter(typeof(RippleDateTimeConverter))]
+        public DateTime? Expiration { get; set; }
 }
 
     /// <summary>
@@ -149,8 +150,9 @@ namespace Xrpl.Models.Transactions
         /// <summary>NFTokenMintOffer: destination allowed to accept the bundled offer.</summary>
         public string Destination { get; set; }
 
-        /// <summary>NFTokenMintOffer: expiration of the bundled offer (Ripple epoch seconds).</summary>
-        public uint? Expiration { get; set; }
+        /// <summary>NFTokenMintOffer: time after which the bundled offer is no longer valid.</summary>
+        [JsonConverter(typeof(RippleDateTimeConverter))]
+        public DateTime? Expiration { get; set; }
 }
 
     public partial class Validation

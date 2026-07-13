@@ -51,13 +51,14 @@ namespace Xrpl.Tests.Models.Tests
         [TestMethod]
         public void TestUNFTokenMint_MintOfferFields_RoundTrip()
         {
+            System.DateTime rippleEpoch = new System.DateTime(2000, 1, 1, 0, 0, 0, System.DateTimeKind.Utc);
             NFTokenMint mint = new NFTokenMint
             {
                 Account = Account1,
                 NFTokenTaxon = 7,
                 Amount = new Currency { ValueAsXrp = 2m },
                 Destination = Account2,
-                Expiration = 800000000,
+                Expiration = rippleEpoch.AddSeconds(800000000),
                 Sequence = 1,
                 Fee = new Currency { Value = "12" },
                 SigningPublicKey = "",
@@ -78,7 +79,7 @@ namespace Xrpl.Tests.Models.Tests
             {
                 Account = Account1,
                 MPTokenIssuanceID = "00000001A407AF5856CCF3C42619DAA925813FC955C72983",
-                MutableFlags = 3,
+                MutableFlags = MPTokenIssuanceSetMutableFlags.tmfMPTSetCanLock | MPTokenIssuanceSetMutableFlags.tmfMPTSetRequireAuth,
                 TransferFee = 250,
                 MPTokenMetadata = "DEADBEEF",
                 DomainID = new string('B', 64),

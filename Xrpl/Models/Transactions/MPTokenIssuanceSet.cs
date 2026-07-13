@@ -11,6 +11,36 @@ using Xrpl.Utils;
 namespace Xrpl.Models.Transactions
 {
     /// <summary>
+    /// DynamicMPT (XLS-94): MutableFlags values for MPTokenIssuanceSet —
+    /// one-way enabling of capability flags (once enabled, cannot be disabled here).
+    /// Values mirror rippled TxFlags.h tmfMPTSet*.
+    /// </summary>
+    [Flags]
+    public enum MPTokenIssuanceSetMutableFlags : uint
+    {
+        /// <summary>Enable lsfMPTCanLock on the issuance.</summary>
+        tmfMPTSetCanLock = 0x00000001,
+
+        /// <summary>Enable lsfMPTRequireAuth on the issuance.</summary>
+        tmfMPTSetRequireAuth = 0x00000002,
+
+        /// <summary>Enable lsfMPTCanEscrow on the issuance.</summary>
+        tmfMPTSetCanEscrow = 0x00000004,
+
+        /// <summary>Enable lsfMPTCanTrade on the issuance.</summary>
+        tmfMPTSetCanTrade = 0x00000008,
+
+        /// <summary>Enable lsfMPTCanTransfer on the issuance.</summary>
+        tmfMPTSetCanTransfer = 0x00000010,
+
+        /// <summary>Enable lsfMPTCanClawback on the issuance.</summary>
+        tmfMPTSetCanClawback = 0x00000020,
+
+        /// <summary>Enable holding confidential balances (ConfidentialTransfer).</summary>
+        tmfMPTSetCanHoldConfidentialBalance = 0x00000040,
+    }
+
+    /// <summary>
     /// Enum representing flags for MPTokenIssuanceSet transactions.
     /// </summary>
     [Flags]
@@ -74,9 +104,9 @@ namespace Xrpl.Models.Transactions
         }
 
     
-        /// <summary>DynamicMPT: mutable flags being updated.</summary>
+        /// <summary>DynamicMPT: capability flags to enable on the issuance (one-way).</summary>
         [JsonPropertyName("MutableFlags")]
-        public uint? MutableFlags { get; set; }
+        public MPTokenIssuanceSetMutableFlags? MutableFlags { get; set; }
 
         /// <summary>DynamicMPT: new transfer fee (requires tfMPTCanMutateTransferFee).</summary>
         [JsonPropertyName("TransferFee")]
@@ -135,9 +165,9 @@ namespace Xrpl.Models.Transactions
         }
 
     
-        /// <summary>DynamicMPT: mutable flags being updated.</summary>
+        /// <summary>DynamicMPT: capability flags to enable on the issuance (one-way).</summary>
         [JsonPropertyName("MutableFlags")]
-        public uint? MutableFlags { get; set; }
+        public MPTokenIssuanceSetMutableFlags? MutableFlags { get; set; }
 
         /// <summary>DynamicMPT: new transfer fee (requires tfMPTCanMutateTransferFee).</summary>
         [JsonPropertyName("TransferFee")]

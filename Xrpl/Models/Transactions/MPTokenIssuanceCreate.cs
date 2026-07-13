@@ -50,6 +50,42 @@ namespace Xrpl.Models.Transactions
     }
 
     /// <summary>
+    /// DynamicMPT (XLS-94): MutableFlags values for MPTokenIssuanceCreate —
+    /// which capabilities/fields may be changed after issuance.
+    /// Values mirror rippled TxFlags.h (tmf* = lsmf* ledger flags).
+    /// </summary>
+    [Flags]
+    public enum MPTokenIssuanceCreateMutableFlags : uint
+    {
+        /// <summary>Allow enabling lsfMPTCanLock after issuance.</summary>
+        tmfMPTCanEnableCanLock = 0x00000002,
+
+        /// <summary>Allow enabling lsfMPTRequireAuth after issuance.</summary>
+        tmfMPTCanEnableRequireAuth = 0x00000004,
+
+        /// <summary>Allow enabling lsfMPTCanEscrow after issuance.</summary>
+        tmfMPTCanEnableCanEscrow = 0x00000008,
+
+        /// <summary>Allow enabling lsfMPTCanTrade after issuance.</summary>
+        tmfMPTCanEnableCanTrade = 0x00000010,
+
+        /// <summary>Allow enabling lsfMPTCanTransfer after issuance.</summary>
+        tmfMPTCanEnableCanTransfer = 0x00000020,
+
+        /// <summary>Allow enabling lsfMPTCanClawback after issuance.</summary>
+        tmfMPTCanEnableCanClawback = 0x00000040,
+
+        /// <summary>Forbid enabling confidential balances (ConfidentialTransfer) after issuance.</summary>
+        tmfMPTCannotEnableCanHoldConfidentialBalance = 0x00000080,
+
+        /// <summary>Allow mutating MPTokenMetadata after issuance.</summary>
+        tmfMPTCanMutateMetadata = 0x00010000,
+
+        /// <summary>Allow mutating TransferFee after issuance.</summary>
+        tmfMPTCanMutateTransferFee = 0x00020000,
+    }
+
+    /// <summary>
     /// The MPTokenIssuanceCreate transaction creates an MPTokenIssuance object
     /// and adds it to the relevant directory node of the creator account.
     /// </summary>
@@ -147,9 +183,9 @@ namespace Xrpl.Models.Transactions
             set => base.Flags = (uint?)value;
         }
     
-        /// <summary>DynamicMPT: which issuance flags remain mutable.</summary>
+        /// <summary>DynamicMPT: which issuance flags remain mutable after creation.</summary>
         [JsonPropertyName("MutableFlags")]
-        public uint? MutableFlags { get; set; }
+        public MPTokenIssuanceCreateMutableFlags? MutableFlags { get; set; }
 
         /// <summary>PermissionedDomains: domain restricting who may hold this MPT.</summary>
         [JsonPropertyName("DomainID")]
@@ -207,9 +243,9 @@ namespace Xrpl.Models.Transactions
             set => base.Flags = (uint?)value;
         }
     
-        /// <summary>DynamicMPT: which issuance flags remain mutable.</summary>
+        /// <summary>DynamicMPT: which issuance flags remain mutable after creation.</summary>
         [JsonPropertyName("MutableFlags")]
-        public uint? MutableFlags { get; set; }
+        public MPTokenIssuanceCreateMutableFlags? MutableFlags { get; set; }
 
         /// <summary>PermissionedDomains: domain restricting who may hold this MPT.</summary>
         [JsonPropertyName("DomainID")]
