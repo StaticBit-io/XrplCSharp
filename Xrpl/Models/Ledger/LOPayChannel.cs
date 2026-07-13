@@ -100,10 +100,6 @@ namespace Xrpl.Models.Ledger
         /// </summary>
         public uint DestinationTag { get; set; }
 
-        //todo not found field DestinationNode?: string
-        //A hint indicating which page of the destination's owner directory links to
-        //this object, in case the directory consists of multiple pages.
-    
         /// <summary>Sequence (or ticket) of the PaymentChannelCreate that created this channel.</summary>
         [JsonPropertyName("Sequence")]
         public uint? Sequence { get; set; }

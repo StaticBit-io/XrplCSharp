@@ -5,6 +5,8 @@ using System.Text.Json.Serialization;
 using System.Threading.Tasks;
 
 using Xrpl.Client.Exceptions;
+using Xrpl.Models.Utils;
+using Xrpl.Utils;
 
 namespace Xrpl.Models.Transactions
 {
@@ -84,6 +86,21 @@ namespace Xrpl.Models.Transactions
         [JsonPropertyName("MPTokenMetadata")]
         public string MPTokenMetadata { get; set; }
 
+        /// <summary>Decoded (non-hex) representation of <see cref="MPTokenMetadata"/>.</summary>
+        [JsonIgnore]
+        public string? MPTokenMetadataRow => MPTokenMetadata?.FromHexString();
+
+        /// <summary>
+        /// Parsed metadata object conforming to the XLS-89 Multi-Purpose Token Metadata Schema.
+        /// Setting this property automatically serializes the schema to the <see cref="MPTokenMetadata"/> hex field.
+        /// </summary>
+        [JsonIgnore]
+        public MPTokenMetadataSchema? Metadata
+        {
+            get => MPTokenMetadataSchema.FromHex(MPTokenMetadata);
+            set => MPTokenMetadata = value?.ToHex();
+        }
+
         /// <summary>PermissionedDomains: domain restricting who may hold this MPT.</summary>
         [JsonPropertyName("DomainID")]
         public string DomainID { get; set; }
@@ -129,6 +146,16 @@ namespace Xrpl.Models.Transactions
         /// <summary>DynamicMPT: new metadata blob in hex (requires tfMPTCanMutateMetadata).</summary>
         [JsonPropertyName("MPTokenMetadata")]
         public string MPTokenMetadata { get; set; }
+
+        /// <summary>Decoded (non-hex) representation of <see cref="MPTokenMetadata"/>.</summary>
+        [JsonIgnore]
+        public string? MPTokenMetadataRow => MPTokenMetadata?.FromHexString();
+
+        /// <summary>
+        /// Parsed metadata object conforming to the XLS-89 Multi-Purpose Token Metadata Schema.
+        /// </summary>
+        [JsonIgnore]
+        public MPTokenMetadataSchema? Metadata => MPTokenMetadataSchema.FromHex(MPTokenMetadata);
 
         /// <summary>PermissionedDomains: domain restricting who may hold this MPT.</summary>
         [JsonPropertyName("DomainID")]

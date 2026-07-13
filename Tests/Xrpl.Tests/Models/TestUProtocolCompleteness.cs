@@ -10,6 +10,8 @@ using Xrpl.Client.Json;
 using Xrpl.Models.Common;
 using Xrpl.Models.Ledger;
 using Xrpl.Models.Transactions;
+
+using TxFormat = Xrpl.Models.Transaction.TxFormat;
 using Xrpl.Wallet;
 
 namespace Xrpl.Tests.Models.Tests
@@ -80,6 +82,8 @@ namespace Xrpl.Tests.Models.Tests
                 TransferFee = 250,
                 MPTokenMetadata = "DEADBEEF",
                 DomainID = new string('B', 64),
+                IssuerEncryptionKey = new string('C', 66),
+                AuditorEncryptionKey = new string('D', 66),
                 Sequence = 1,
                 Fee = new Currency { Value = "12" },
                 SigningPublicKey = "",
@@ -92,6 +96,78 @@ namespace Xrpl.Tests.Models.Tests
             Assert.AreEqual(250u, decoded["TransferFee"]!.GetValue<uint>());
             Assert.AreEqual("DEADBEEF", decoded["MPTokenMetadata"]!.GetValue<string>());
             Assert.AreEqual(new string('B', 64), decoded["DomainID"]!.GetValue<string>());
+            Assert.AreEqual(new string('C', 66), decoded["IssuerEncryptionKey"]!.GetValue<string>());
+            Assert.AreEqual(new string('D', 66), decoded["AuditorEncryptionKey"]!.GetValue<string>());
+        }
+
+        [TestMethod]
+        public void TestUSetFee_XRPFeesFields_RoundTrip()
+        {
+            JsonObject json = JsonNode.Parse($@"{{
+                ""TransactionType"": ""SetFee"",
+                ""Account"": ""rrrrrrrrrrrrrrrrrrrrrhoLvTp"",
+                ""Fee"": ""0"",
+                ""Sequence"": 0,
+                ""SigningPubKey"": """",
+                ""LedgerSequence"": 123456,
+                ""BaseFeeDrops"": ""10"",
+                ""ReserveBaseDrops"": ""1000000"",
+                ""ReserveIncrementDrops"": ""200000""
+            }}")!.AsObject();
+            string blob = XrplBinaryCodec.Encode(json);
+            JsonObject decoded = XrplBinaryCodec.Decode(blob).AsObject();
+
+            Assert.AreEqual("10", decoded["BaseFeeDrops"]!.GetValue<string>());
+            Assert.AreEqual("1000000", decoded["ReserveBaseDrops"]!.GetValue<string>());
+            Assert.AreEqual("200000", decoded["ReserveIncrementDrops"]!.GetValue<string>());
+
+            TxFormat setFeeFormat = TxFormat.Formats[BinaryCodec.Types.TransactionType.SetFee];
+            Assert.IsTrue(setFeeFormat.ContainsKey(BinaryCodec.Enums.Field.BaseFeeDrops));
+            Assert.IsTrue(setFeeFormat.ContainsKey(BinaryCodec.Enums.Field.ReserveBaseDrops));
+            Assert.IsTrue(setFeeFormat.ContainsKey(BinaryCodec.Enums.Field.ReserveIncrementDrops));
+            Assert.IsTrue(TxFormat.Formats[BinaryCodec.Types.TransactionType.UNLModify]
+                .ContainsKey(BinaryCodec.Enums.Field.UNLModifyDisabling));
+        }
+
+        [TestMethod]
+        public void TestUAMMDeposit_TradingFee_RoundTrip()
+        {
+            JsonObject json = JsonNode.Parse($@"{{
+                ""TransactionType"": ""AMMDeposit"",
+                ""Account"": ""{Account1}"",
+                ""Fee"": ""12"",
+                ""Sequence"": 1,
+                ""SigningPubKey"": """",
+                ""Asset"": {{ ""currency"": ""XRP"" }},
+                ""Asset2"": {{ ""currency"": ""USD"", ""issuer"": ""{Account2}"" }},
+                ""TradingFee"": 600
+            }}")!.AsObject();
+            string blob = XrplBinaryCodec.Encode(json);
+            JsonObject decoded = XrplBinaryCodec.Decode(blob).AsObject();
+
+            Assert.AreEqual(600u, decoded["TradingFee"]!.GetValue<uint>());
+            Assert.IsTrue(TxFormat.Formats[BinaryCodec.Types.TransactionType.AMMDeposit]
+                .ContainsKey(BinaryCodec.Enums.Field.TradingFee));
+        }
+
+        [TestMethod]
+        public void TestUVaultDelete_MemoData_RoundTrip()
+        {
+            JsonObject json = JsonNode.Parse($@"{{
+                ""TransactionType"": ""VaultDelete"",
+                ""Account"": ""{Account1}"",
+                ""Fee"": ""12"",
+                ""Sequence"": 1,
+                ""SigningPubKey"": """",
+                ""VaultID"": ""{new string('E', 64)}"",
+                ""MemoData"": ""CAFEBABE""
+            }}")!.AsObject();
+            string blob = XrplBinaryCodec.Encode(json);
+            JsonObject decoded = XrplBinaryCodec.Decode(blob).AsObject();
+
+            Assert.AreEqual("CAFEBABE", decoded["MemoData"]!.GetValue<string>());
+            Assert.IsTrue(TxFormat.Formats[BinaryCodec.Types.TransactionType.VaultDelete]
+                .ContainsKey(BinaryCodec.Enums.Field.MemoData));
         }
 
         [TestMethod]
