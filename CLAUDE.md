@@ -70,7 +70,6 @@ XrplCSharp/
 │
 ├── XrplCSharp.sln                   # Solution file
 ├── test.runsettings                 # MSTest config: parallel at class level
-├── azure-pipelines.yml              # Legacy CI (outdated, references old project names)
 ├── CONTRIBUTING.md                  # Development setup and release process
 ├── CHANGES.md                       # Changelog
 └── README.md                        # Usage examples and documentation links
@@ -227,7 +226,6 @@ Reference: [xrpl-codec-gen](https://github.com/RichardAH/xrpl-codec-gen)
 
 - No `Directory.Build.props` or `global.json` — versions are managed per `.csproj`
 - No centralized package management — each project specifies its own NuGet versions
-- `azure-pipelines.yml` is **outdated** (references old `RippleDotNet` project name) — use GitHub Actions workflows instead
 - `test.runsettings` configures MSTest parallel execution at class level
 - `.editorconfig` is minimal (primarily CS8632 suppression)
 - The library uses `System.Text.Json` (not Newtonsoft.Json) for serialization
