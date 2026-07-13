@@ -8,7 +8,13 @@ on:
     branches: [ dev, release ]
   pull_request:
     branches: [ dev, release ]
+  merge_group:
   workflow_dispatch:
+
+# New pushes to a PR cancel its in-flight run; push/merge-queue runs are never cancelled
+concurrency:
+  group: ci-${{ github.ref }}
+  cancel-in-progress: ${{ github.event_name == 'pull_request' }}
 
 jobs:
   build-and-lint:
@@ -38,6 +44,11 @@ jobs:
       run: dotnet test --verbosity normal --settings test.runsettings --filter "TestU"
 
   integration:
+    # PRs into dev skip integration — it runs for real in the merge queue
+    # (merge_group) before the merge lands, and on promotion PRs into release.
+    # A skipped required check counts as satisfied, but the dev merge queue
+    # re-runs it on the merge result, so the gate holds.
+    if: github.event_name != 'pull_request' || github.base_ref == 'release'
     runs-on: ubuntu-latest
 
     steps:
