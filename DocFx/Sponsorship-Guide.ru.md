@@ -21,7 +21,7 @@
 
 ## Обзор
 
-```
+```text
 Спонсор (rSponsor...)                   Спонсируемый (rUser...)
 ┌───────────────────────┐               ┌────────────────────────┐
 │ SponsorshipSet        │──────────────►│ может слать транзакции │
@@ -43,9 +43,9 @@
 | Измерение | Значение `SponsorFlags` | Что платит спонсор |
 |---|---|---|
 | Комиссии | `SponsorCoverage.spfSponsorFee` (= 1) | `Fee` транзакций спонсируемого |
-| Резервы | `SponsorCoverage.spfSponsorReserve` (= 2) | Owner-резервы создаваемых объектов |
+| Резервы | `SponsorCoverage.spfSponsorReserve` (= 2) | Резервы за спонсируемого: owner-резервы создаваемых им объектов **и** резервы аккаунтов (включая спонсируемое создание аккаунта) |
 
-У каждого типа транзакций появляются три общих поля: `Sponsor`, `SponsorFlags` и (когда спонсорство этого требует) `SponsorSignature` — вложенный not-signing STObject с `SigningPubKey` + `TxnSignature` спонсора поверх **того же преимиджа**, что и основная подпись.
+У каждого типа транзакций появляются три общих поля: `Sponsor`, `SponsorFlags` и (когда спонсорство этого требует) `SponsorSignature` — вложенный not-signing STObject поверх **того же преимиджа**, что и основная подпись. Допустимы две альтернативные формы: одиночная подпись (`SigningPubKey` + `TxnSignature`) либо мультисиг спонсора (вложенный массив `Signers`).
 
 ---
 
@@ -175,6 +175,7 @@ await client.SubmitRequest(signed.TxBlob, true);
 var sponsorSig  = sponsorWallet.SignAsSponsor(prepared);
 var submitterSig = sponseeWallet.Sign(prepared);
 var combined = SponsorSigningHelper.CombineSponsorSignatures(submitterSig.TxBlob, sponsorSig.TxBlob);
+await client.SubmitRequest(combined.TxBlob, true);
 ```
 
 **V3 — Последовательный (сначала спонсор, затем отправитель финализирует):**
@@ -182,6 +183,7 @@ var combined = SponsorSigningHelper.CombineSponsorSignatures(submitterSig.TxBlob
 ```csharp
 var withSponsor = sponsorWallet.SignAsSponsor(prepared);
 var final = SponsorSigningHelper.SubmitterSign(withSponsor.TxBlob, sponseeWallet);
+await client.SubmitRequest(final.TxBlob, true);
 ```
 
 ---

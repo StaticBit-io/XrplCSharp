@@ -21,7 +21,7 @@ This guide explains how to use XRPL Sponsored Fees & Reserves with the XrplCShar
 
 ## Overview
 
-```
+```text
 Sponsor (rSponsor...)                    Sponsee (rUser...)
 ┌───────────────────────┐               ┌───────────────────────┐
 │ SponsorshipSet        │──────────────►│ may now send txs with │
@@ -43,9 +43,9 @@ Two independent dimensions can be sponsored:
 | Dimension | `SponsorFlags` value | What the sponsor pays |
 |---|---|---|
 | Fees | `SponsorCoverage.spfSponsorFee` (= 1) | The `Fee` of the sponsee's transactions |
-| Reserves | `SponsorCoverage.spfSponsorReserve` (= 2) | Owner reserves of objects the sponsee creates |
+| Reserves | `SponsorCoverage.spfSponsorReserve` (= 2) | Reserves on behalf of the sponsee: owner reserves of objects it creates **and** account reserves (including sponsored account creation) |
 
-Every transaction type gains three common fields: `Sponsor`, `SponsorFlags`, and (when the sponsorship demands a co-signature) `SponsorSignature` — an inner not-signing STObject carrying the sponsor's `SigningPubKey` + `TxnSignature` over the **same preimage** as the main signature.
+Every transaction type gains three common fields: `Sponsor`, `SponsorFlags`, and (when the sponsorship demands a co-signature) `SponsorSignature` — an inner not-signing STObject over the **same preimage** as the main signature. It comes in two alternative forms: single-signature (`SigningPubKey` + `TxnSignature`) or sponsor multisig (a nested `Signers` array).
 
 ---
 
@@ -175,6 +175,7 @@ await client.SubmitRequest(signed.TxBlob, true);
 var sponsorSig  = sponsorWallet.SignAsSponsor(prepared);
 var submitterSig = sponseeWallet.Sign(prepared);
 var combined = SponsorSigningHelper.CombineSponsorSignatures(submitterSig.TxBlob, sponsorSig.TxBlob);
+await client.SubmitRequest(combined.TxBlob, true);
 ```
 
 **V3 — Sequential (sponsor first, then submitter finalizes):**
@@ -182,6 +183,7 @@ var combined = SponsorSigningHelper.CombineSponsorSignatures(submitterSig.TxBlob
 ```csharp
 var withSponsor = sponsorWallet.SignAsSponsor(prepared);
 var final = SponsorSigningHelper.SubmitterSign(withSponsor.TxBlob, sponseeWallet);
+await client.SubmitRequest(final.TxBlob, true);
 ```
 
 ---

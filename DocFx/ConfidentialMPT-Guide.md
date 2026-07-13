@@ -3,7 +3,7 @@
 This guide explains how the XrplCSharp SDK supports Confidential Multi-Purpose Tokens — MPT balances hidden behind ElGamal encryption and zero-knowledge proofs, with optional issuer/auditor visibility.
 
 > **Note:** Requires the `ConfidentialTransfer` amendment. As of mid-2026 it exists only on the rippled `develop` branch — not in any release, not on mainnet/testnet. The feature is in draft and subject to change.
-
+>
 > **Scope of the SDK:** XrplCSharp provides the **transport layer** — transaction models, binary serialization, signing and submission. Encrypted amounts, commitments, blinding factors and ZK proofs are **opaque hex blobs** to the SDK; producing them requires an external prover (cryptographic tooling published by the protocol authors). Until such a prover is available, only negative-path testing is possible (see [Testing](#testing)).
 
 ## Table of Contents
@@ -22,7 +22,7 @@ This guide explains how the XrplCSharp SDK supports Confidential Multi-Purpose T
 
 Confidential MPT splits a holder's balance into a **public** part (ordinary `MPTAmount`) and a **confidential** part (encrypted). Third parties see that a transfer happened, but not the amount. The issuer and an optional auditor can decrypt amounts with their own keys — every confidential operation carries the amount encrypted separately under each relevant key.
 
-```
+```text
 public balance ──Convert──► confidential balance ──Send──► recipient inbox
       ▲                          │      ▲                        │
       └──────ConvertBack─────────┘      └───────MergeInbox───────┘
