@@ -198,9 +198,14 @@ namespace Xrpl.Sugar
 
             var transactionType = (string)tx["TransactionType"];
             var calculatedFee = await CalculateBaseFeeForType(client, tx, transactionType, baseFee, netFeeDrops, cancellationToken);
-            var signerFee = CalculateMultisigFee(netFeeDrops, signersCount);
-            
-            calculatedFee += signerFee;
+            // rippled Transactor::calculateBaseFee: one baseFee per outer multisig signer
+            // plus one per signer nested in SponsorSignature.Signers (XLS-68 sponsor
+            // multisig; a single-signed SponsorSignature adds nothing). Scaled from the
+            // devnet-corrected baseFee so all charges use the same unit.
+            var signerFee = baseFee * Math.Max(0, signersCount);
+            var sponsorSignerFee = baseFee * GetSponsorSignerCount(tx);
+
+            calculatedFee += signerFee + sponsorSignerFee;
             BigInteger totalFee;
             if (!string.IsNullOrWhiteSpace(client.maxFeeXRP))
             {
@@ -283,18 +288,31 @@ namespace Xrpl.Sugar
         }
 
         /// <summary>
-        /// Calculates additional fee for multi-signed transactions.
-        /// Formula: baseFeeDrops × signersCount (added to base fee already calculated elsewhere)
-        /// Total multisig fee = baseFee × (1 + signersCount)
+        /// Counts multisig signers nested inside SponsorSignature (XLS-68).
+        /// Mirrors rippled Transactor::calculateBaseFee: only SponsorSignature.Signers
+        /// entries add fee units; a single sponsor signature is free.
         /// </summary>
-        private static BigInteger CalculateMultisigFee(string netFeeDrops, int signersCount)
+        private static int GetSponsorSignerCount(Dictionary<string, object> tx)
         {
-            if (signersCount <= 0)
-                return BigInteger.Zero;
+            if (!tx.TryGetValue("SponsorSignature", out var sponsorSignature) || sponsorSignature == null)
+                return 0;
 
-            var scaled = ScaleValueDecimal(netFeeDrops, signersCount);
-            return new BigInteger(scaled);
+            object signers = sponsorSignature switch
+            {
+                Dictionary<string, object> dict => dict.TryGetValue("Signers", out var s) ? s : null,
+                JsonObject jo => jo.TryGetPropertyValue("Signers", out var node) ? (object)node : null,
+                _ => null
+            };
+
+            return signers switch
+            {
+                JsonArray ja => ja.Count,
+                ICollection collection => collection.Count,
+                IEnumerable<object> enumerable => enumerable.Count(),
+                _ => 0
+            };
         }
+
         private static bool TryGetInnerFieldsAsDict(object item, out Dictionary<string, object> dict)
         {
             dict = null!;

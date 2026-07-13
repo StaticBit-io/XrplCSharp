@@ -41,6 +41,10 @@ public class LONFTokenPage : BaseLedgerEntry
     /// The sequence of the ledger that contains the transaction that most recently modified this NFTokenPage object.
     /// </summary>
     public long PreviousTxnLgrSeq { get; set; }
+
+        /// <summary>Index of the previous page in the owner's NFToken directory.</summary>
+        [JsonPropertyName("NextPageMin")]
+        public string NextPageMin { get; set; }
 }
 
 [JsonConverter(typeof(LONFTokenConverter))]

@@ -110,5 +110,9 @@ namespace Xrpl.Models.Ledger
         //A bit-map of boolean flags. No flags are defined for the Escrow type, so
         //this value is always 0.
 
-    }
+    
+        /// <summary>Sequence (or ticket) of the EscrowCreate transaction that created this escrow.</summary>
+        [JsonPropertyName("Sequence")]
+        public uint? Sequence { get; set; }
+}
 }

@@ -41,46 +41,56 @@ namespace Xrpl.BinaryCodec.Types
         /// <inheritdoc />
         public override string ToString() => B16.Encode(ToBytes());
 
-        /// <summary> Deserialize Uint64 from JSON </summary>
-        /// <param name="token">json token - decimal digit-only strings, <c>0x</c>-prefixed hex, or bare hex (fixtures / rippled may omit the prefix)</param>
+        /// <summary> Deserialize Uint64 from JSON without field context (hex string semantics, rippled default) </summary>
+        /// <param name="token">json token - <c>0x</c>-prefixed hex or bare hex string, or a JSON number</param>
         /// <returns>Uint64 value</returns>
-        public static Uint64 FromJson(JsonNode token)
+        public static Uint64 FromJson(JsonNode token) => FromJson(token, baseTen: false);
+
+        /// <summary> Deserialize Uint64 from JSON </summary>
+        /// <param name="token">json token</param>
+        /// <param name="baseTen">
+        /// true for fields flagged kSmdBaseTen in rippled sfields.macro (decimal string JSON form);
+        /// false for the default hex string form. Digit-only strings are ambiguous between the two,
+        /// so only the field context can decide — mirrors rippled STUInt64 JSON handling.
+        /// </param>
+        /// <returns>Uint64 value</returns>
+        public static Uint64 FromJson(JsonNode token, bool baseTen)
         {
             if (token == null)
                 throw new FormatException("Uint64 JSON token cannot be null.");
 
             if (token is JsonValue jvNum && jvNum.GetValueKind() == System.Text.Json.JsonValueKind.Number)
             {
-                return new Uint64(jvNum.GetValue<ulong>());
+                try { return new Uint64(jvNum.GetValue<ulong>()); }
+                catch (InvalidOperationException)
+                {
+                    long val = jvNum.GetValue<long>();
+                    if (val < 0)
+                        throw new OverflowException($"Value {val} is out of range for Uint64.");
+                    return new Uint64((ulong)val);
+                }
             }
 
             if (!(token is JsonValue jvStr) || jvStr.GetValueKind() != System.Text.Json.JsonValueKind.String)
                 throw new FormatException($"Uint64 JSON token must be a JSON number or string, got {token.GetType().Name}.");
 
             string str = jvStr.GetValue<string>();
-            
-            if (str.StartsWith("0x", StringComparison.OrdinalIgnoreCase))
-            {
-                string hexPart = str.Substring(2);
-                if (!Regex.IsMatch(hexPart, HEX_REGEX))
-                    throw new FormatException($"Cannot parse '{str}' as Uint64. Expected up to 16 hex digits after 0x.");
 
-                hexPart = hexPart.PadLeft(16, '0');
-                return new Uint64(Bits.ToUInt64(B16.Decode(hexPart), 0));
-            }
-            
-            if (Regex.IsMatch(str, DECIMAL_REGEX))
+            if (baseTen)
             {
-                return new Uint64(ulong.Parse(str));
+                if (!Regex.IsMatch(str, DECIMAL_REGEX))
+                    throw new FormatException($"Cannot parse '{str}' as base-ten Uint64. Expected decimal digits only.");
+
+                return new Uint64(ulong.Parse(str, System.Globalization.CultureInfo.InvariantCulture));
             }
 
-            if (Regex.IsMatch(str, HEX_REGEX))
-            {
-                string padded = str.PadLeft(16, '0');
-                return new Uint64(Bits.ToUInt64(B16.Decode(padded), 0));
-            }
+            string hex = str.StartsWith("0x", StringComparison.OrdinalIgnoreCase)
+                ? str.Substring(2)
+                : str;
+            if (!Regex.IsMatch(hex, HEX_REGEX))
+                throw new FormatException($"Cannot parse '{str}' as Uint64. Expected up to 16 hex digits.");
 
-            throw new FormatException($"Cannot parse '{str}' as Uint64. Expected decimal or hex string.");
+            return new Uint64(Bits.ToUInt64(B16.Decode(hex.PadLeft(16, '0')), 0));
         }
 
         public static implicit operator Uint64(ulong v) => new Uint64(v);

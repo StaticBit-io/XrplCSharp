@@ -51,4 +51,8 @@ public class LODelegate : BaseLedgerEntry
     /// </summary>
     [JsonPropertyName("PreviousTxnLgrSeq")]
     public uint? PreviousTxnLgrSeq { get; init; }
+
+    /// <summary>Destination directory page hint (hex UInt64).</summary>
+    [JsonPropertyName("DestinationNode")]
+    public string DestinationNode { get; set; }
 }

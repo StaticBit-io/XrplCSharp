@@ -1,5 +1,7 @@
 ﻿// https://github.com/XRPLF/xrpl.js/blob/main/packages/xrpl/src/models/ledger/FeeSettings.ts
 
+using System.Text.Json.Serialization;
+
 namespace Xrpl.Models.Ledger
 {
     /// <summary>
@@ -33,5 +35,17 @@ namespace Xrpl.Models.Ledger
         /// The incremental owner reserve for owning objects, as drops of XRP.
         /// </summary>
         public uint ReserveIncrement { get; set; }
-    }
+    
+        /// <summary>XRPFees: base fee in drops.</summary>
+        [JsonPropertyName("BaseFeeDrops")]
+        public string BaseFeeDrops { get; set; }
+
+        /// <summary>XRPFees: account reserve in drops.</summary>
+        [JsonPropertyName("ReserveBaseDrops")]
+        public string ReserveBaseDrops { get; set; }
+
+        /// <summary>XRPFees: owner reserve increment in drops.</summary>
+        [JsonPropertyName("ReserveIncrementDrops")]
+        public string ReserveIncrementDrops { get; set; }
+}
 }

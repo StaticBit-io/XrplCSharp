@@ -31,7 +31,11 @@ namespace Xrpl.Models.Transactions
         /// <inheritdoc />
         [JsonPropertyName("VaultID")]
         public string VaultID { get; set; }
-    }
+    
+        /// <summary>Optional memo data recorded with the deletion (hex).</summary>
+        [JsonPropertyName("MemoData")]
+        public string MemoData { get; set; }
+}
 
     /// <inheritdoc cref="IVaultDelete" />
     public class VaultDeleteResponse : TransactionResponse, IVaultDelete
@@ -39,7 +43,11 @@ namespace Xrpl.Models.Transactions
         /// <inheritdoc />
         [JsonPropertyName("VaultID")]
         public string VaultID { get; set; }
-    }
+    
+        /// <summary>Optional memo data recorded with the deletion (hex).</summary>
+        [JsonPropertyName("MemoData")]
+        public string MemoData { get; set; }
+}
 
     public partial class Validation
     {

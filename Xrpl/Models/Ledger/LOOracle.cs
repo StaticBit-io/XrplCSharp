@@ -95,5 +95,9 @@ namespace Xrpl.Models.Ledger
         /// </summary>
         [JsonPropertyName("Flags")]
         public uint Flags { get; set; }
-    }
+    
+        /// <summary>The document id distinguishing this oracle among the owner's oracles.</summary>
+        [JsonPropertyName("OracleDocumentID")]
+        public uint? OracleDocumentID { get; set; }
+}
 }
