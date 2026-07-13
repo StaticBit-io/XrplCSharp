@@ -351,12 +351,7 @@ namespace Xrpl.Models.Transactions
 
                 // rippled MPTokenIssuanceCreate::preflight: at least one flag must be
                 // set and only tmf* bits are allowed (temINVALID_FLAG otherwise)
-                uint validMask = Enum.GetValues<MPTokenIssuanceCreateMutableFlags>()
-                    .Aggregate(0u, (acc, flag) => acc | (uint)flag);
-                if (mutable == 0 || (mutable & ~validMask) != 0)
-                {
-                    throw new ValidationException("MPTokenIssuanceCreate: invalid MutableFlags");
-                }
+                Common.ValidateNonZeroFlagsMask<MPTokenIssuanceCreateMutableFlags>(mutable, "MPTokenIssuanceCreate: invalid MutableFlags");
             }
 
             if (tx.TryGetValue("DomainID", out var domainId) && domainId is not null && domainId is not string)

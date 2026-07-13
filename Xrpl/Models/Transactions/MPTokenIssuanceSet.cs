@@ -269,12 +269,7 @@ namespace Xrpl.Models.Transactions
 
                 // rippled MPTokenIssuanceSet::preflight: at least one flag must be
                 // set and only tmfMPTSet* bits are allowed (temINVALID_FLAG otherwise)
-                uint validMask = Enum.GetValues<MPTokenIssuanceSetMutableFlags>()
-                    .Aggregate(0u, (acc, flag) => acc | (uint)flag);
-                if (mutable == 0 || (mutable & ~validMask) != 0)
-                {
-                    throw new ValidationException("MPTokenIssuanceSet: invalid MutableFlags");
-                }
+                Common.ValidateNonZeroFlagsMask<MPTokenIssuanceSetMutableFlags>(mutable, "MPTokenIssuanceSet: invalid MutableFlags");
             }
 
             if (tx.TryGetValue("TransferFee", out var transferFee) && transferFee is not null)

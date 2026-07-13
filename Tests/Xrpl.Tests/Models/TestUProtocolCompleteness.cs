@@ -229,6 +229,9 @@ namespace Xrpl.Tests.Models.Tests
 
             tx["MutableFlags"] = (uint)(MPTokenIssuanceCreateMutableFlags.tmfMPTCanMutateMetadata | MPTokenIssuanceCreateMutableFlags.tmfMPTCanMutateTransferFee);
             await Validation.ValidateMPTokenIssuanceCreate(tx);
+
+            tx["DomainID"] = 12345;
+            await Assert.ThrowsExactlyAsync<Xrpl.Client.Exceptions.ValidationException>(() => Validation.ValidateMPTokenIssuanceCreate(tx));
         }
 
         [TestMethod]

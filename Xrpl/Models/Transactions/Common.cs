@@ -171,6 +171,20 @@ namespace Xrpl.Models.Transactions
         }
 
         /// <summary>
+        /// Validates a flags value that must be non-zero and contain only bits
+        /// defined by <typeparamref name="TEnum"/> (rippled temINVALID_FLAG pattern).
+        /// </summary>
+        /// <exception cref="ValidationException">When the value is zero or has bits outside the enum mask.</exception>
+        public static void ValidateNonZeroFlagsMask<TEnum>(uint value, string error) where TEnum : struct, Enum
+        {
+            uint validMask = Enum.GetValues<TEnum>().Aggregate(0u, (acc, flag) => acc | Convert.ToUInt32(flag));
+            if (value == 0 || (value & ~validMask) != 0)
+            {
+                throw new ValidationException(error);
+            }
+        }
+
+        /// <summary>
         /// Verify the common fields of a transaction.<br/>
         /// The validate functionality will be optional, and will check transaction form at runtime.
         /// This should be called any time a transaction will be verified.
