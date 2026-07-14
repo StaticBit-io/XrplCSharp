@@ -593,6 +593,19 @@ namespace Xrpl.Wallet
                     VerifyBatchSubmitter(transaction, signingFor, true);
                 }
             }
+            // 2) XLS-68: when this wallet is the transaction's Sponsor, route to the
+            // sponsor co-signature path automatically (same pattern as the Batch
+            // inner-signer routing above). Multisig signing is exempt: a Signer
+            // entry is section-agnostic (identical preimage for tx.Signers and
+            // SponsorSignature.Signers), so the role is decided at composition time.
+            if (!multisign
+                && transaction.TryGetValue("Sponsor", out var sponsorField)
+                && sponsorField is string sponsorAddress
+                && string.Equals(sponsorAddress, this.ClassicAddress, StringComparison.Ordinal))
+            {
+                return SignAsSponsor(transaction);
+            }
+
             string multisignAddress = "";
             if (multisign)
             {
@@ -610,6 +623,19 @@ namespace Xrpl.Wallet
                 }
 
                 JsonObject txToSignAndEncode = JsonNode.Parse(JsonSerializer.Serialize(transaction, XrplJsonOptions.Default))?.AsObject();
+
+                // A present SponsorSignature was computed over a preimage that already
+                // carried the submitter's SigningPubKey — refuse to silently invalidate it
+                if (txToSignAndEncode.ContainsKey("SponsorSignature"))
+                {
+                    string existingPubKey = txToSignAndEncode["SigningPubKey"]?.GetValue<string>();
+                    if (!string.IsNullOrEmpty(existingPubKey) &&
+                        !string.Equals(existingPubKey, this.PublicKey, StringComparison.Ordinal))
+                    {
+                        throw new ValidationException("Sponsored transaction SigningPubKey does not match this wallet; the sponsor co-signed a different submitter's preimage.");
+                    }
+                }
+
                 txToSignAndEncode["SigningPubKey"] = multisignAddress != "" ? "" : this.PublicKey;
 
                 string signature = ComputeSignature(JsonSerializer.Deserialize<Dictionary<string, object>>(txToSignAndEncode.ToJsonString(), XrplJsonOptions.Default), this.PrivateKey);
