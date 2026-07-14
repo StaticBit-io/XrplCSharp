@@ -1,5 +1,16 @@
 # Changes
 
+### 10.8.0.0 07/14/2026
+* **Unified signing & submission for sponsored transactions ([#43](https://github.com/StaticBit-io/XrplCSharp/issues/43))** — the standard `Sign`/`SubmitAndWait` now handle XLS-68 end-to-end, no helper choice required:
+  * `Sign` routes by role: a wallet matching `tx.Sponsor` produces the sponsor co-signature; the submitter path preserves an existing `SponsorSignature` and guards against a `SigningPubKey` mismatch. `multisign: true` is untouched — Signer entries are section-agnostic per rippled `STTx::checkMultiSign` (identical preimage for `tx.Signers` and `SponsorSignature.Signers`), so the role is decided at composition time
+  * `SignatureComposer.ComposeSignatures` (offline, explicit sponsor signers) and `client.ComposeSignatures` (ledger-driven SignerList routing with ambiguity/unknown-signer errors) assemble a fully signed transaction from partially signed blobs
+  * Smart `SubmitAndWait`: a sponsor wallet finalizes a sponsee-signed transaction (compose, not re-sign) and fails fast when the main signature is missing; a sponsee submitting without `SponsorSignature` triggers a one-RPC pre-check of the Sponsorship require-sign flags (`sponsorPreCheck: false` to skip)
+  * `client.ComposeSignatures` validates SignerList quorum by weights for both sections — readable client-side error instead of `tefBAD_QUORUM`
+  * `SubmitAndWaitSponsored(tx, sponseeWallet, sponsorWallet)` — the both-keys-local flow in one call
+  * New `SignatureObject` model (shared shape of `SponsorSignature`/`CounterpartySignature`/`BatchSigner`); `LOSponsorship` gains `Flags` + `SponsorshipFlags`
+  * Wire-format safety: pre-refactor outputs pinned byte-level with fixed seeds (`TestUSigningPinned`); all unified flows produce byte-identical blobs; full integration suite 240/240 on the nightly stand with zero skips, including a live require-sign fail-fast scenario
+* Fixes accumulated since 10.7.0: TxFormat interface parity for `AMMDeposit.TradingFee`, `Uint64.FromJson` TryGetValue parsing, MPT validators mirror rippled preflight (`MutableFlags` masks, `TransferFee` vs confidential-balances rule), `LONFTokenPage.NextPageMin` doc, gateway_balances integration test rebuilt on the standalone node
+
 ### 10.7.0.0 07/13/2026
 * Protocol-completeness pass driven by a field-level diff against rippled `develop` (`server_definitions` @ `8306ac77`):
   * `definitions.json`: add `HighSponsor`/`LowSponsor` (XLS-68 RippleState reserve sponsors); fix `isVLEncoded` on `Sponsor`/`Sponsee`/`CounterpartySponsor` (AccountID fields are VL-encoded); align `Generic` attributes with the node

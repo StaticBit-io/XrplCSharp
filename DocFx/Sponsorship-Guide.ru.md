@@ -159,7 +159,28 @@ payment = await client.Autofill(payment);
 
 ## Сценарии подписания (V1/V2/V3)
 
-`SponsorSignature` подписывается над тем же преимиджем, что и основная подпись (аналогично counterparty-паттерну LoanSet). Три сценария через `SponsorSigningHelper`:
+`SponsorSignature` подписывается над тем же преимиджем, что и основная подпись (аналогично counterparty-паттерну LoanSet).
+
+### Простой путь — стандартные Sign/Submit (10.8.0+)
+
+Выбирать хелпер не нужно: стандартный API маршрутизирует по роли. Кошелёк, совпадающий с `tx.Sponsor`, создаёт подпись спонсора; кошелёк отправителя подписывает основную подпись, сохраняя уже присутствующий `SponsorSignature`; умный `SubmitAndWait` компонует, сверяет require-sign флаги спонсорства с леджером и отправляет.
+
+```csharp
+// Оба ключа локально — один вызов:
+await client.SubmitAndWaitSponsored(payment, sponseeWallet, sponsorWallet);
+
+// Ключи на разных устройствах — каждая сторона просто вызывает Sign:
+var sponsorPart = sponsorWallet.Sign(preparedTx);          // добавит SponsorSignature
+var final = sponseeWallet.Sign(handedOverTx);              // добавит основную подпись
+await client.SubmitRequest(final.TxBlob, true);
+
+// Либо отправляющая сторона финализирует всё сама:
+await client.SubmitAndWait(partiallySignedTx, sponsorWallet); // спонсор доводит tx, подписанную спонсируемым
+```
+
+При отсутствии обязательной подписи `SubmitAndWait` падает сразу с "transaction is not signed by all participants" вместо ошибки от ноды. Мультисиг любой из сторон остаётся переносимым: устройства подписывают с `multisign: true`, а `client.ComposeSignatures(parts)` раскладывает Signer-записи по секциям согласно SignerList'ам леджера (с пре-чеком кворума по весам).
+
+### Advanced — явные хелперные сценарии
 
 **V1 — Автоматический (оба ключа в одном процессе):**
 

@@ -159,7 +159,28 @@ If the sponsorship does **not** require a co-signature, sign and submit as usual
 
 ## Signing Flows (V1/V2/V3)
 
-`SponsorSignature` is signed over the same preimage as the main signature (analogous to the LoanSet counterparty pattern). Three flows via `SponsorSigningHelper`:
+`SponsorSignature` is signed over the same preimage as the main signature (analogous to the LoanSet counterparty pattern).
+
+### The simple path — standard Sign/Submit (10.8.0+)
+
+No helper choice is needed: the standard API routes by role. A wallet matching `tx.Sponsor` produces the sponsor co-signature; the submitter's wallet signs the main signature preserving an existing `SponsorSignature`; the smart `SubmitAndWait` composes, pre-checks the sponsorship's require-sign flags against the ledger and submits.
+
+```csharp
+// Both keys local — one call:
+await client.SubmitAndWaitSponsored(payment, sponseeWallet, sponsorWallet);
+
+// Keys on different devices — each side just calls Sign:
+var sponsorPart = sponsorWallet.Sign(preparedTx);          // adds SponsorSignature
+var final = sponseeWallet.Sign(handedOverTx);              // adds the main signature
+await client.SubmitRequest(final.TxBlob, true);
+
+// Or let the submitting side finish everything:
+await client.SubmitAndWait(partiallySignedTx, sponsorWallet); // sponsor finalizes a sponsee-signed tx
+```
+
+If a required signature is missing, `SubmitAndWait` fails fast with "transaction is not signed by all participants" instead of a node-side error. Multisig on either side stays portable: devices sign with `multisign: true` and `client.ComposeSignatures(parts)` routes the Signer entries into the right section by the ledger SignerLists (with a quorum-by-weight pre-check).
+
+### Advanced — explicit helper flows
 
 **V1 — Automatic (both keys available in one process):**
 
