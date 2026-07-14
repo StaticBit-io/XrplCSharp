@@ -1066,11 +1066,7 @@ namespace Xrpl.Wallet
             string sig = XrplKeypairs.Sign(signingBytes, this.PrivateKey);
 
             // Add CounterpartySignature
-            tx["CounterpartySignature"] = new JsonObject
-            {
-                ["SigningPubKey"] = this.PublicKey,
-                ["TxnSignature"] = sig,
-            };
+            tx["CounterpartySignature"] = SignatureObject.Single(this.PublicKey, sig).ToJsonObject();
 
             // Encode (without broker's TxnSignature — partially signed)
             string txBlob = XrplBinaryCodec.Encode(tx);
@@ -1127,11 +1123,7 @@ namespace Xrpl.Wallet
             byte[] signingBytes = SponsorSigningHelper.GetSigningPreimage(tx);
             string sig = XrplKeypairs.Sign(signingBytes, this.PrivateKey);
 
-            tx["SponsorSignature"] = new JsonObject
-            {
-                ["SigningPubKey"] = this.PublicKey,
-                ["TxnSignature"] = sig,
-            };
+            tx["SponsorSignature"] = SignatureObject.Single(this.PublicKey, sig).ToJsonObject();
 
             string txBlob = XrplBinaryCodec.Encode(tx);
             string txHash = HashLedger.HashSignedTx(txBlob);

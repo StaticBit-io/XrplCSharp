@@ -120,11 +120,7 @@ namespace Xrpl.Wallet
             string counterpartySig = XrplKeypairs.Sign(signingBytes, borrowerWallet.PrivateKey);
 
             // Add CounterpartySignature
-            tx["CounterpartySignature"] = new JsonObject
-            {
-                ["SigningPubKey"] = borrowerWallet.PublicKey,
-                ["TxnSignature"] = counterpartySig,
-            };
+            tx["CounterpartySignature"] = SignatureObject.Single(borrowerWallet.PublicKey, counterpartySig).ToJsonObject();
 
             // Broker signs the preimage
             string brokerSig = XrplKeypairs.Sign(signingBytes, brokerWallet.PrivateKey);

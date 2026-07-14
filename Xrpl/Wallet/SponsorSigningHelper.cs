@@ -80,11 +80,7 @@ namespace Xrpl.Wallet
             byte[] signingBytes = GetSigningPreimage(tx);
 
             string sponsorSig = XrplKeypairs.Sign(signingBytes, sponsorWallet.PrivateKey);
-            tx["SponsorSignature"] = new JsonObject
-            {
-                ["SigningPubKey"] = sponsorWallet.PublicKey,
-                ["TxnSignature"] = sponsorSig,
-            };
+            tx["SponsorSignature"] = SignatureObject.Single(sponsorWallet.PublicKey, sponsorSig).ToJsonObject();
 
             string submitterSig = XrplKeypairs.Sign(signingBytes, submitterWallet.PrivateKey);
             tx["TxnSignature"] = submitterSig;
