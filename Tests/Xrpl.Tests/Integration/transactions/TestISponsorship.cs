@@ -161,7 +161,7 @@ public class TestISponsorship
     /// standard Sign, the sponsee submits the standard way.
     /// </summary>
     [TestMethod]
-    public async Task TestUnified_StandardSignBothSides_V3()
+    public async Task Unified_StandardSignBothSides_V3()
     {
         var (sponsor, sponsee, destination) = await SetupSponsorshipAsync();
 
@@ -189,7 +189,7 @@ public class TestISponsorship
     /// signature is already present, the sponsor wallet composes and submits.
     /// </summary>
     [TestMethod]
-    public async Task TestUnified_SmartSubmit_SponsorFinalizes()
+    public async Task Unified_SmartSubmit_SponsorFinalizes()
     {
         var (sponsor, sponsee, destination) = await SetupSponsorshipAsync();
 
@@ -213,7 +213,7 @@ public class TestISponsorship
     /// Unified API (#43): the one-call V1 flow with both wallets local.
     /// </summary>
     [TestMethod]
-    public async Task TestUnified_SubmitAndWaitSponsored_OneCall()
+    public async Task Unified_SubmitAndWaitSponsored_OneCall()
     {
         var (sponsor, sponsee, destination) = await SetupSponsorshipAsync();
 
@@ -227,7 +227,7 @@ public class TestISponsorship
     /// requires the sponsor's co-signature and it is missing.
     /// </summary>
     [TestMethod]
-    public async Task TestUnified_SmartSubmit_RequireSign_FailsFastWithoutSponsorSignature()
+    public async Task Unified_SmartSubmit_RequireSign_FailsFastWithoutSponsorSignature()
     {
         var (sponsor, sponsee, destination) = await SetupSponsorshipAsync(
             SponsorshipSetFlags.tfSponsorshipSetRequireSignForFee);
