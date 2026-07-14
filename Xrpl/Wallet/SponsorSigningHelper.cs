@@ -5,9 +5,7 @@ using System.Text.Json.Nodes;
 using Xrpl.BinaryCodec;
 using Xrpl.Client.Exceptions;
 using Xrpl.Client.Json;
-using Xrpl.Keypairs;
 using Xrpl.Models.Transactions;
-using Xrpl.Utils.Hashes;
 
 namespace Xrpl.Wallet
 {
@@ -70,23 +68,8 @@ namespace Xrpl.Wallet
             XrplWallet submitterWallet,
             XrplWallet sponsorWallet)
         {
-            JsonObject tx = preparedTx.DeepClone().AsObject();
-            VerifySponsorMatches(tx, sponsorWallet);
-
-            tx["SigningPubKey"] = submitterWallet.PublicKey;
-            tx.Remove("SponsorSignature");
-            tx.Remove("TxnSignature");
-
-            byte[] signingBytes = GetSigningPreimage(tx);
-
-            string sponsorSig = XrplKeypairs.Sign(signingBytes, sponsorWallet.PrivateKey);
-            tx["SponsorSignature"] = SignatureObject.Single(sponsorWallet.PublicKey, sponsorSig).ToJsonObject();
-
-            string submitterSig = XrplKeypairs.Sign(signingBytes, submitterWallet.PrivateKey);
-            tx["TxnSignature"] = submitterSig;
-
-            string txBlob = XrplBinaryCodec.Encode(tx);
-            return new SignatureResult(txBlob, HashLedger.HashSignedTx(txBlob));
+            VerifySponsorMatches(preparedTx, sponsorWallet);
+            return CoSigningEngine.SignBoth(preparedTx, submitterWallet, sponsorWallet, "SponsorSignature");
         }
 
         /// <summary>
@@ -97,71 +80,20 @@ namespace Xrpl.Wallet
         public static SignatureResult CombineSponsorSignatures(
             string submitterSignedBlob,
             string sponsorSignedBlob)
-        {
-            JsonObject submitterTx = XrplBinaryCodec.Decode(submitterSignedBlob).AsObject();
-            JsonObject sponsorTx = XrplBinaryCodec.Decode(sponsorSignedBlob).AsObject();
-
-            string submitterPubKey = submitterTx["SigningPubKey"]?.GetValue<string>();
-            string sponsorSidePubKey = sponsorTx["SigningPubKey"]?.GetValue<string>();
-            if (!string.Equals(submitterPubKey, sponsorSidePubKey, StringComparison.Ordinal))
-                throw new ValidationException("Incompatible SigningPubKey values. Both blobs must use the submitter's SigningPubKey.");
-
-            if (!JsonNode.DeepEquals(Canonicalize(submitterTx), Canonicalize(sponsorTx)))
-                throw new ValidationException("Incompatible sponsored transaction bodies. Both inputs must have identical non-signing fields.");
-
-            JsonObject combined = submitterTx.DeepClone().AsObject();
-
-            JsonNode sponsorSig = sponsorTx["SponsorSignature"]
-                ?? throw new ValidationException("Sponsor blob is missing SponsorSignature.");
-            combined["SponsorSignature"] = sponsorSig.DeepClone();
-
-            if (combined["TxnSignature"] == null)
-                throw new ValidationException("Submitter blob is missing TxnSignature.");
-
-            string txBlob = XrplBinaryCodec.Encode(combined);
-            return new SignatureResult(txBlob, HashLedger.HashSignedTx(txBlob));
-        }
+            => CoSigningEngine.Combine(submitterSignedBlob, sponsorSignedBlob, "SponsorSignature", "Sponsor");
 
         /// <summary>
         /// V3 — The submitter signs a partially signed blob that already has SponsorSignature.
         /// </summary>
         public static SignatureResult SubmitterSign(string partiallySignedBlob, XrplWallet submitterWallet)
-        {
-            JsonObject tx = XrplBinaryCodec.Decode(partiallySignedBlob).AsObject();
-
-            JsonNode sponsorSig = tx["SponsorSignature"]?.DeepClone()
-                ?? throw new ValidationException("Partially signed blob is missing SponsorSignature.");
-
-            tx.Remove("SponsorSignature");
-            tx.Remove("TxnSignature");
-
-            string existingSigningPubKey = tx["SigningPubKey"]?.GetValue<string>();
-            if (!string.IsNullOrEmpty(existingSigningPubKey) &&
-                !string.Equals(existingSigningPubKey, submitterWallet.PublicKey, StringComparison.Ordinal))
-            {
-                throw new ValidationException("Partially signed blob SigningPubKey does not match submitter wallet.");
-            }
-            tx["SigningPubKey"] = submitterWallet.PublicKey;
-
-            byte[] signingBytes = GetSigningPreimage(tx);
-            string submitterSig = XrplKeypairs.Sign(signingBytes, submitterWallet.PrivateKey);
-
-            tx["TxnSignature"] = submitterSig;
-            tx["SponsorSignature"] = sponsorSig;
-
-            string txBlob = XrplBinaryCodec.Encode(tx);
-            return new SignatureResult(txBlob, HashLedger.HashSignedTx(txBlob));
-        }
+            => CoSigningEngine.FinalizeAsSubmitter(partiallySignedBlob, submitterWallet, "SponsorSignature");
 
         /// <summary>
         /// Computes the signing preimage bytes for a sponsored transaction.
         /// Both the submitter and the sponsor sign the same preimage.
         /// </summary>
         public static byte[] GetSigningPreimage(JsonObject txJson)
-        {
-            string signingHex = XrplBinaryCodec.EncodeForSigning(txJson);
-            return AddressCodec.Utils.FromHexToBytes(signingHex);
-        }
+            => CoSigningEngine.GetSigningPreimage(txJson);
 
         internal static void VerifySponsorMatches(JsonObject tx, XrplWallet sponsorWallet)
         {
@@ -172,7 +104,5 @@ namespace Xrpl.Wallet
                 throw new ValidationException($"Sponsor field ({sponsor}) does not match the sponsor wallet ({sponsorWallet.ClassicAddress}).");
         }
 
-        private static JsonObject Canonicalize(JsonObject tx) =>
-            tx.WithoutFields("TxnSignature", "SigningPubKey", "SponsorSignature");
     }
 }

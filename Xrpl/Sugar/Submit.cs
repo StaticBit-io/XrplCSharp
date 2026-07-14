@@ -141,12 +141,6 @@ public static class SubmitSugar
     /// <returns></returns>
     public static async Task<Submit> SubmitRequest(this IXrplClient client, object signedTransaction, bool failHard, CancellationToken cancellationToken = default)
     {
-        //todo activate after fix
-        //if (!IsSigned(signedTransaction))
-        //{
-        //    throw new ValidationException("Transaction must be signed");
-        //}
-
         var signedTxEncoded = GetTxBlob(signedTransaction);
 
         var request = new SubmitRequest

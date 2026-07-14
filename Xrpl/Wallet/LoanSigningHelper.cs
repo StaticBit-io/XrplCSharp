@@ -1,14 +1,11 @@
 using System;
-using System.Collections.Generic;
 using System.Text.Json;
 using System.Text.Json.Nodes;
 
 using Xrpl.BinaryCodec;
 using Xrpl.Client.Exceptions;
 using Xrpl.Client.Json;
-using Xrpl.Keypairs;
 using Xrpl.Models.Transactions;
-using Xrpl.Utils.Hashes;
 
 namespace Xrpl.Wallet
 {
@@ -104,33 +101,7 @@ namespace Xrpl.Wallet
             JsonObject preparedTx,
             XrplWallet brokerWallet,
             XrplWallet borrowerWallet)
-        {
-            // Work on a deep clone to avoid mutating the input
-            JsonObject tx = preparedTx.DeepClone().AsObject();
-
-            // Ensure SigningPubKey is set to broker's key
-            tx["SigningPubKey"] = brokerWallet.PublicKey;
-            tx.Remove("CounterpartySignature");
-            tx.Remove("TxnSignature");
-
-            // Compute signing preimage
-            byte[] signingBytes = GetSigningPreimage(tx);
-
-            // Borrower signs the preimage
-            string counterpartySig = XrplKeypairs.Sign(signingBytes, borrowerWallet.PrivateKey);
-
-            // Add CounterpartySignature
-            tx["CounterpartySignature"] = SignatureObject.Single(borrowerWallet.PublicKey, counterpartySig).ToJsonObject();
-
-            // Broker signs the preimage
-            string brokerSig = XrplKeypairs.Sign(signingBytes, brokerWallet.PrivateKey);
-            tx["TxnSignature"] = brokerSig;
-
-            // Encode the complete signed transaction
-            string txBlob = XrplBinaryCodec.Encode(tx);
-            string txHash = HashLedger.HashSignedTx(txBlob);
-            return new SignatureResult(txBlob, txHash);
-        }
+            => CoSigningEngine.SignBoth(preparedTx, brokerWallet, borrowerWallet, "CounterpartySignature");
 
         /// <summary>
         /// V2 — Combine independently signed broker and counterparty blobs.
@@ -144,46 +115,9 @@ namespace Xrpl.Wallet
             string brokerSignedBlob,
             string counterpartySignedBlob)
         {
-            JsonObject brokerTx = XrplBinaryCodec.Decode(brokerSignedBlob).AsObject();
-            JsonObject counterpartyTx = XrplBinaryCodec.Decode(counterpartySignedBlob).AsObject();
-
-            // Verify both are LoanSet
-            string brokerType = brokerTx["TransactionType"]?.GetValue<string>();
-            string counterpartyType = counterpartyTx["TransactionType"]?.GetValue<string>();
-            if (!string.Equals(brokerType, "LoanSet", StringComparison.OrdinalIgnoreCase))
-                throw new ValidationException($"Broker blob TransactionType must be LoanSet, got: {brokerType}");
-            if (!string.Equals(counterpartyType, "LoanSet", StringComparison.OrdinalIgnoreCase))
-                throw new ValidationException($"Counterparty blob TransactionType must be LoanSet, got: {counterpartyType}");
-
-            // Verify SigningPubKey matches (both must sign the same preimage)
-            string brokerSigningPubKey = brokerTx["SigningPubKey"]?.GetValue<string>();
-            string counterpartySigningPubKey = counterpartyTx["SigningPubKey"]?.GetValue<string>();
-            if (!string.Equals(brokerSigningPubKey, counterpartySigningPubKey, StringComparison.Ordinal))
-                throw new ValidationException("Incompatible LoanSet SigningPubKey values. Both blobs must use the same broker SigningPubKey.");
-
-            // Verify bodies match (excluding signatures)
-            JsonObject brokerCanon = Canonicalize(brokerTx);
-            JsonObject counterpartyCanon = Canonicalize(counterpartyTx);
-            if (!JsonNode.DeepEquals(brokerCanon, counterpartyCanon))
-                throw new ValidationException("Incompatible LoanSet bodies. Both inputs must have identical non-signing fields.");
-
-            // Build combined: start from broker (has TxnSignature + SigningPubKey)
-            JsonObject combined = brokerTx.DeepClone().AsObject();
-
-            // Extract CounterpartySignature from borrower's blob
-            JsonNode counterpartySigNode = counterpartyTx["CounterpartySignature"];
-            if (counterpartySigNode == null)
-                throw new ValidationException("Counterparty blob is missing CounterpartySignature.");
-
-            combined["CounterpartySignature"] = counterpartySigNode.DeepClone();
-
-            // Ensure broker's TxnSignature is present
-            if (combined["TxnSignature"] == null)
-                throw new ValidationException("Broker blob is missing TxnSignature.");
-
-            string txBlob = XrplBinaryCodec.Encode(combined);
-            string txHash = HashLedger.HashSignedTx(txBlob);
-            return new SignatureResult(txBlob, txHash);
+            RequireLoanSet(brokerSignedBlob, "Broker");
+            RequireLoanSet(counterpartySignedBlob, "Counterparty");
+            return CoSigningEngine.Combine(brokerSignedBlob, counterpartySignedBlob, "CounterpartySignature", "Counterparty");
         }
 
         /// <summary>
@@ -196,40 +130,16 @@ namespace Xrpl.Wallet
         /// <returns>Fully signed transaction blob and hash.</returns>
         public static SignatureResult BrokerSign(string partiallySignedBlob, XrplWallet brokerWallet)
         {
-            JsonObject tx = XrplBinaryCodec.Decode(partiallySignedBlob).AsObject();
+            RequireLoanSet(partiallySignedBlob, "Partially signed");
+            return CoSigningEngine.FinalizeAsSubmitter(partiallySignedBlob, brokerWallet, "CounterpartySignature");
+        }
 
+        private static void RequireLoanSet(string blob, string label)
+        {
+            JsonObject tx = XrplBinaryCodec.Decode(blob).AsObject();
             string txType = tx["TransactionType"]?.GetValue<string>();
             if (!string.Equals(txType, "LoanSet", StringComparison.OrdinalIgnoreCase))
-                throw new ValidationException($"TransactionType must be LoanSet, got: {txType}");
-
-            // Preserve CounterpartySignature (borrower's partial signature)
-            JsonNode counterpartySig = tx["CounterpartySignature"]?.DeepClone()
-                ?? throw new ValidationException("Partially signed blob is missing CounterpartySignature.");
-
-            // Strip signatures for preimage computation
-            tx.Remove("CounterpartySignature");
-            tx.Remove("TxnSignature");
-
-            // Verify SigningPubKey matches broker wallet (don't silently overwrite — would invalidate CounterpartySignature)
-            string existingSigningPubKey = tx["SigningPubKey"]?.GetValue<string>();
-            if (!string.IsNullOrEmpty(existingSigningPubKey) &&
-                !string.Equals(existingSigningPubKey, brokerWallet.PublicKey, StringComparison.Ordinal))
-            {
-                throw new ValidationException("Partially signed blob SigningPubKey does not match broker wallet.");
-            }
-            tx["SigningPubKey"] = brokerWallet.PublicKey;
-
-            // Compute the same preimage the borrower signed
-            byte[] signingBytes = GetSigningPreimage(tx);
-            string brokerSig = XrplKeypairs.Sign(signingBytes, brokerWallet.PrivateKey);
-
-            // Assemble final tx with both signatures
-            tx["TxnSignature"] = brokerSig;
-            tx["CounterpartySignature"] = counterpartySig;
-
-            string txBlob = XrplBinaryCodec.Encode(tx);
-            string txHash = HashLedger.HashSignedTx(txBlob);
-            return new SignatureResult(txBlob, txHash);
+                throw new ValidationException($"{label} blob TransactionType must be LoanSet, got: {txType}");
         }
 
         /// <summary>
@@ -237,15 +147,7 @@ namespace Xrpl.Wallet
         /// Both broker and borrower sign the same preimage.
         /// </summary>
         internal static byte[] GetSigningPreimage(JsonObject txJson)
-        {
-            string signingHex = XrplBinaryCodec.EncodeForSigning(txJson);
-            return AddressCodec.Utils.FromHexToBytes(signingHex);
-        }
+            => CoSigningEngine.GetSigningPreimage(txJson);
 
-        /// <summary>
-        /// Canonicalize a tx by removing all signature-related fields for comparison.
-        /// </summary>
-        private static JsonObject Canonicalize(JsonObject tx) =>
-            tx.WithoutFields("TxnSignature", "SigningPubKey", "CounterpartySignature");
     }
 }

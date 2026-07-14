@@ -627,7 +627,6 @@ namespace Xrpl.Wallet
                 return SignAsLoanCounterparty(transaction);
             }
 
-            string multisignAddress = "";
             if (multisign)
             {
                 // Адрес ПОДПИСАНТА (не владельца!). Если пришёл X-адрес — конвертируем.
@@ -661,13 +660,12 @@ namespace Xrpl.Wallet
                     }
                 }
 
-                txToSignAndEncode["SigningPubKey"] = multisignAddress != "" ? "" : this.PublicKey;
+                txToSignAndEncode["SigningPubKey"] = this.PublicKey;
 
                 string signature = ComputeSignature(JsonSerializer.Deserialize<Dictionary<string, object>>(txToSignAndEncode.ToJsonString(), XrplJsonOptions.Default), this.PrivateKey);
                 txToSignAndEncode["TxnSignature"] = signature;
 
                 string serialized = XrplBinaryCodec.Encode(txToSignAndEncode);
-                //this.checkTxSerialization(serialized, tx);
                 return new SignatureResult(serialized, HashLedger.HashSignedTx(serialized));
             }
         }
@@ -718,18 +716,8 @@ namespace Xrpl.Wallet
                 }
             });
 
-            // КРИТИЧЕСКОЕ: сортировка Signers по Account
-            signers = new JsonArray(
-                signers.Select(s => s?.DeepClone()).OrderBy(s =>
-                {
-                    var acc = s?["Signer"]?["Account"]?.GetValue<string>() ?? "";
-                    // для строгого соответствия спекам — сортируем по байтам адреса
-                    var accBytes = Xrpl.AddressCodec.XrplCodec.DecodeAccountID(acc);
-                    return BitConverter.ToString(accBytes);
-                }).ToArray()
-            );
-
-            txBase["Signers"] = signers;
+            // КРИТИЧЕСКОЕ: сортировка Signers по байтам Account (общий хелпер)
+            txBase["Signers"] = SignerUtilities.DedupeAndSortSigners(signers);
             // Preserve the submitter's pubkey on sponsored single-main parts so the
             // composed transaction keeps the exact serialization the entries signed
             txBase["SigningPubKey"] = sponsoredSingleMain
