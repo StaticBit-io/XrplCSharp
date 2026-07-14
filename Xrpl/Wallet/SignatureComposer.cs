@@ -22,7 +22,10 @@ namespace Xrpl.Wallet
     /// </summary>
     public static class SignatureComposer
     {
-        private static readonly string[] SignatureFields = { "TxnSignature", "SigningPubKey", "Signers", "SponsorSignature" };
+        // SigningPubKey is intentionally NOT stripped: it is part of every signing
+        // preimage, so all parts of one transaction must agree on it - a mismatch
+        // means the parts were signed over different submitter forms.
+        private static readonly string[] SignatureFields = { "TxnSignature", "Signers", "SponsorSignature" };
 
         /// <summary>
         /// Offline composition. Signer entries from accounts listed in
@@ -76,7 +79,9 @@ namespace Xrpl.Wallet
                 string? signature = part["TxnSignature"]?.GetValue<string>();
                 if (!string.IsNullOrEmpty(pubKey) && !string.IsNullOrEmpty(signature))
                 {
-                    if (mainSignature is not null && !string.Equals(mainSignature, signature, StringComparison.Ordinal))
+                    if (mainSignature is not null &&
+                        (!string.Equals(mainSignature, signature, StringComparison.Ordinal) ||
+                         !string.Equals(mainPubKey, pubKey, StringComparison.Ordinal)))
                         throw new ValidationException("Multiple conflicting main signatures supplied.");
                     mainPubKey = pubKey;
                     mainSignature = signature;
@@ -95,17 +100,21 @@ namespace Xrpl.Wallet
                     {
                         foreach (SignatureObject inner in parsed.Signers)
                         {
+                            if (string.IsNullOrEmpty(inner.SigningPubKey) || string.IsNullOrEmpty(inner.TxnSignature))
+                                throw new ValidationException("A SponsorSignature Signers entry is missing SigningPubKey or TxnSignature.");
                             sponsorEntries.Add(new JsonObject
                             {
                                 ["Signer"] = SignatureObject
-                                    .Single(inner.SigningPubKey ?? "", inner.TxnSignature ?? "", inner.Account)
+                                    .Single(inner.SigningPubKey, inner.TxnSignature, inner.Account)
                                     .ToJsonObject(),
                             });
                         }
                     }
                     else if (!string.IsNullOrEmpty(parsed.TxnSignature))
                     {
-                        if (sponsorSingle is not null && !string.Equals(sponsorSingle.TxnSignature, parsed.TxnSignature, StringComparison.Ordinal))
+                        if (sponsorSingle is not null &&
+                            (!string.Equals(sponsorSingle.TxnSignature, parsed.TxnSignature, StringComparison.Ordinal) ||
+                             !string.Equals(sponsorSingle.SigningPubKey, parsed.SigningPubKey, StringComparison.Ordinal)))
                             throw new ValidationException("Multiple conflicting sponsor signatures supplied.");
                         sponsorSingle = parsed;
                     }

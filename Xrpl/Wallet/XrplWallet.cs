@@ -641,8 +641,11 @@ namespace Xrpl.Wallet
                 if (txToSignAndEncode.ContainsKey("SponsorSignature") || txToSignAndEncode.ContainsKey("CounterpartySignature"))
                 {
                     string existingPubKey = txToSignAndEncode["SigningPubKey"]?.GetValue<string>();
-                    if (!string.IsNullOrEmpty(existingPubKey) &&
-                        !string.Equals(existingPubKey, this.PublicKey, StringComparison.Ordinal))
+                    if (string.IsNullOrEmpty(existingPubKey))
+                    {
+                        throw new ValidationException("The co-signature was made over a multisig submitter form (empty SigningPubKey); a single main signature would invalidate it. Sign with multisign: true instead.");
+                    }
+                    if (!string.Equals(existingPubKey, this.PublicKey, StringComparison.Ordinal))
                     {
                         throw new ValidationException("Transaction SigningPubKey does not match this wallet; the co-signer signed a different submitter's preimage.");
                     }

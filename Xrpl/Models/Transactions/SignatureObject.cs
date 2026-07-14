@@ -79,6 +79,9 @@ namespace Xrpl.Models.Transactions
                     .ToList();
             }
 
+            if (result.Signers is { Count: > 0 } && !string.IsNullOrEmpty(result.TxnSignature))
+                throw new ValidationException("Signature object mixes the single-signature and multisig forms (both TxnSignature and Signers present).");
+
             return result;
         }
     }

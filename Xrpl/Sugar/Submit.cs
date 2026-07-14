@@ -534,7 +534,7 @@ public static class SubmitSugar
 
         if (isSponsored && sponsorPreCheck)
         {
-            bool hasSponsorSignature = tx.ContainsKey("SponsorSignature");
+            bool hasSponsorSignature = tx.TryGetValue("SponsorSignature", out var sponsorSigValue) && sponsorSigValue is not null;
             if (!hasSponsorSignature &&
                 await IsSponsorSignatureRequired(client, tx, sponsorAddress!, cancellationToken))
             {
