@@ -136,6 +136,14 @@ public partial class Validation
             throw new ArgumentException("Batch: TransactionType must be 'Batch'.");
         }
 
+        // rippled Batch::preflight: reserve sponsorship is not allowed on the outer Batch
+        if (tx.TryGetValue("SponsorFlags", out var outerSponsorFlagsObj) &&
+            Common.TryGetUInt32(outerSponsorFlagsObj, out uint outerSponsorFlags) &&
+            (outerSponsorFlags & (uint)SponsorCoverage.spfSponsorReserve) != 0)
+        {
+            throw new ArgumentException("Batch: spfSponsorReserve is not allowed on the outer Batch transaction.");
+        }
+
         if (!tx.TryGetValue("RawTransactions", out var rawTxsObj) || rawTxsObj is not IEnumerable<object> rawTxsEnumerable)
             throw new ArgumentException("Batch: RawTransactions is required and must be non-empty.");
 
@@ -196,6 +204,29 @@ public partial class Validation
             if (innerTx.TryGetValue("Signers", out var signers) && signers != null)
             {
                 throw new ArgumentException($"Batch: RawTransactions[{i}].RawTransaction.Signers is not allowed inside Batch.");
+            }
+
+            // rippled Batch::preflight: fee sponsorship is not allowed on inner txs
+            if (innerTx.ContainsKey("Sponsor") &&
+                innerTx.TryGetValue("SponsorFlags", out var innerSponsorFlagsObj) &&
+                Common.TryGetUInt32(innerSponsorFlagsObj, out uint innerSponsorFlags) &&
+                (innerSponsorFlags & (uint)SponsorCoverage.spfSponsorFee) != 0)
+            {
+                throw new ArgumentException($"Batch: RawTransactions[{i}] fee sponsorship (spfSponsorFee) is not allowed on inner Batch transactions.");
+            }
+
+            // Co-signature markers on inners must carry no signature material -
+            // the sponsor/counterparty authorizes via BatchSigners instead
+            foreach (string markerField in new[] { "SponsorSignature", "CounterpartySignature" })
+            {
+                if (!innerTx.TryGetValue(markerField, out var markerObj) || markerObj is not IDictionary<string, object> marker)
+                    continue;
+                if (marker.TryGetValue("TxnSignature", out var markerSig) && markerSig != null)
+                    throw new ArgumentException($"Batch: RawTransactions[{i}].{markerField} must not contain TxnSignature inside a Batch.");
+                if (marker.TryGetValue("Signers", out var markerSigners) && markerSigners != null)
+                    throw new ArgumentException($"Batch: RawTransactions[{i}].{markerField} must not contain Signers inside a Batch.");
+                if (marker.TryGetValue("SigningPubKey", out var markerPk) && markerPk != null && $"{markerPk}" != "")
+                    throw new ArgumentException($"Batch: RawTransactions[{i}].{markerField}.SigningPubKey must be empty inside a Batch.");
             }
         }
 

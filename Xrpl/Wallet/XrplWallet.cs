@@ -588,6 +588,16 @@ namespace Xrpl.Wallet
                     return SignAsBatchPart(transaction, multisign, signingFor);
                 }
 
+                // The sponsor of the OUTER batch (spfSponsorFee) co-signs the batch
+                // itself with a regular SponsorSignature - it is not a batch signer
+                if (!multisign
+                    && transaction.TryGetValue("Sponsor", out var outerSponsorObj)
+                    && outerSponsorObj is string outerSponsor
+                    && string.Equals(outerSponsor, myAccount, StringComparison.OrdinalIgnoreCase))
+                {
+                    return SignAsSponsor(transaction);
+                }
+
                 if (!multisign)
                 {
                     VerifyBatchSubmitter(transaction, signingFor, true);
