@@ -90,6 +90,31 @@ namespace Xrpl.Tests.Wallet.Tests
         }
 
         [TestMethod]
+        public void TestUSign_LoanCounterpartyWallet_RoutesToCounterpartySignature()
+        {
+            // XLS-66: the borrower (tx.Counterparty) calling the standard Sign
+            // must produce the same partial blob as the explicit helper
+            Dictionary<string, object> loanSet = JsonSerializer.Deserialize<Dictionary<string, object>>(new JsonObject
+            {
+                ["TransactionType"] = "LoanSet",
+                ["Account"] = Sponsor.ClassicAddress,      // the broker
+                ["Counterparty"] = Submitter.ClassicAddress, // the borrower
+                ["Fee"] = "12",
+                ["Sequence"] = 9u,
+                ["LastLedgerSequence"] = 8000002u,
+                ["SigningPubKey"] = Sponsor.PublicKey,
+            }.ToJsonString(), XrplJsonOptions.Default);
+
+            var viaUnified = Submitter.Sign(loanSet);
+            var viaExplicit = Submitter.SignAsLoanCounterparty(loanSet);
+            Assert.AreEqual(viaExplicit.TxBlob, viaUnified.TxBlob);
+
+            JsonObject decoded = XrplBinaryCodec.Decode(viaUnified.TxBlob).AsObject();
+            Assert.IsNotNull(decoded["CounterpartySignature"], "borrower path must add CounterpartySignature");
+            Assert.IsNull(decoded["TxnSignature"], "borrower path must not add the main signature");
+        }
+
+        [TestMethod]
         public void TestUSign_MultisignBypassesSponsorRouting()
         {
             // multisign: true must keep producing a portable Signer entry even

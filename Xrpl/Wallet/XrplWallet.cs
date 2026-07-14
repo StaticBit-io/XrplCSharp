@@ -606,6 +606,17 @@ namespace Xrpl.Wallet
                 return SignAsSponsor(transaction);
             }
 
+            // 3) XLS-66: when this wallet is a LoanSet's Counterparty (the borrower),
+            // route to the counterparty co-signature path automatically.
+            if (!multisign
+                && string.Equals($"{transaction[nameof(ITransactionCommon.TransactionType)]}", "LoanSet", StringComparison.OrdinalIgnoreCase)
+                && transaction.TryGetValue("Counterparty", out var counterpartyField)
+                && counterpartyField is string counterpartyAddress
+                && string.Equals(counterpartyAddress, this.ClassicAddress, StringComparison.Ordinal))
+            {
+                return SignAsLoanCounterparty(transaction);
+            }
+
             string multisignAddress = "";
             if (multisign)
             {
@@ -624,15 +635,16 @@ namespace Xrpl.Wallet
 
                 JsonObject txToSignAndEncode = JsonNode.Parse(JsonSerializer.Serialize(transaction, XrplJsonOptions.Default))?.AsObject();
 
-                // A present SponsorSignature was computed over a preimage that already
-                // carried the submitter's SigningPubKey — refuse to silently invalidate it
-                if (txToSignAndEncode.ContainsKey("SponsorSignature"))
+                // A present inner co-signature (SponsorSignature / CounterpartySignature)
+                // was computed over a preimage that already carried the submitter's
+                // SigningPubKey — refuse to silently invalidate it
+                if (txToSignAndEncode.ContainsKey("SponsorSignature") || txToSignAndEncode.ContainsKey("CounterpartySignature"))
                 {
                     string existingPubKey = txToSignAndEncode["SigningPubKey"]?.GetValue<string>();
                     if (!string.IsNullOrEmpty(existingPubKey) &&
                         !string.Equals(existingPubKey, this.PublicKey, StringComparison.Ordinal))
                     {
-                        throw new ValidationException("Sponsored transaction SigningPubKey does not match this wallet; the sponsor co-signed a different submitter's preimage.");
+                        throw new ValidationException("Transaction SigningPubKey does not match this wallet; the co-signer signed a different submitter's preimage.");
                     }
                 }
 
