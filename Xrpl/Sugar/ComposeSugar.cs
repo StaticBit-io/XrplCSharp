@@ -54,12 +54,16 @@ namespace Xrpl.Sugar
             }
 
             HashSet<string> sponsorSide = new HashSet<string>(StringComparer.Ordinal);
+            LOSignerList? accountSignerList = null;
+            LOSignerList? sponsorSignerList = null;
             if (seenSigners.Count > 0)
             {
-                HashSet<string> accountList = await GetSignerListAccounts(client, account, cancellationToken).ConfigureAwait(false);
-                HashSet<string> sponsorList = sponsor is null
-                    ? new HashSet<string>(StringComparer.Ordinal)
-                    : await GetSignerListAccounts(client, sponsor, cancellationToken).ConfigureAwait(false);
+                accountSignerList = await GetSignerList(client, account, cancellationToken).ConfigureAwait(false);
+                sponsorSignerList = sponsor is null
+                    ? null
+                    : await GetSignerList(client, sponsor, cancellationToken).ConfigureAwait(false);
+                HashSet<string> accountList = ToAccountSet(accountSignerList);
+                HashSet<string> sponsorList = ToAccountSet(sponsorSignerList);
 
                 foreach (string signer in seenSigners)
                 {
@@ -74,7 +78,51 @@ namespace Xrpl.Sugar
                 }
             }
 
-            return SignatureComposer.ComposeSignatures(parts, sponsorSide);
+            SignatureResult composed = SignatureComposer.ComposeSignatures(parts, sponsorSide);
+
+            // Quorum pre-check by weights, for each side using the multisig form
+            JsonObject result = XrplBinaryCodec.Decode(composed.TxBlob).AsObject();
+            ValidateQuorum(accountSignerList, result["Signers"] as JsonArray, "Account");
+            ValidateQuorum(sponsorSignerList, result["SponsorSignature"]?["Signers"] as JsonArray, "Sponsor");
+
+            return composed;
+        }
+
+        private static HashSet<string> ToAccountSet(LOSignerList? list) =>
+            list?.SignerEntries is null
+                ? new HashSet<string>(StringComparer.Ordinal)
+                : new HashSet<string>(
+                    list.SignerEntries.Select(w => SignerUtilities.NormalizeClassicAddress(w.SignerEntry.Account)),
+                    StringComparer.Ordinal);
+
+        /// <summary>
+        /// Verifies that the collected Signer entries reach the SignerList quorum
+        /// by weight — fails fast with a readable message instead of a node-side
+        /// tefBAD_QUORUM.
+        /// </summary>
+        private static void ValidateQuorum(LOSignerList? list, JsonArray? signers, string side)
+        {
+            if (signers is null || signers.Count == 0 || list?.SignerEntries is null)
+                return;
+
+            Dictionary<string, ushort> weights = list.SignerEntries.ToDictionary(
+                w => SignerUtilities.NormalizeClassicAddress(w.SignerEntry.Account),
+                w => w.SignerEntry.SignerWeight,
+                StringComparer.Ordinal);
+
+            uint collected = 0;
+            foreach (JsonNode? entry in signers)
+            {
+                string? signerAccount = entry?["Signer"]?["Account"]?.GetValue<string>();
+                if (signerAccount is not null &&
+                    weights.TryGetValue(SignerUtilities.NormalizeClassicAddress(signerAccount), out ushort weight))
+                {
+                    collected += weight;
+                }
+            }
+
+            if (collected < list.SignerQuorum)
+                throw new ValidationException($"Insufficient signatures for the {side} SignerList: collected weight {collected} of the required quorum {list.SignerQuorum}.");
         }
 
         /// <summary>

@@ -496,14 +496,10 @@ public static class SubmitSugar
         bool autofill = false,
         bool failHard = false,
         XrplWallet? wallet = null,
-        CancellationToken cancellationToken = default
+        CancellationToken cancellationToken = default,
+        bool sponsorPreCheck = true
     )
     {
-        //if (IsSigned(transaction))
-        //{
-        //    return transaction
-        //}
-
         if (wallet == null)
         {
             throw new ValidationException("Wallet must be provided when submitting an unsigned transaction");
@@ -511,16 +507,135 @@ public static class SubmitSugar
 
         var tx = transaction;
 
-        //var tx = transaction is string 
-        //    ? // eslint-disable-next-line @typescript-eslint/consistent-type-assertions -- converts JsonObject to correct Transaction type
-        //      (decode(transaction) as unknown as TransactionCommon)
-        //    : transaction
+        bool isSponsored = tx.TryGetValue("Sponsor", out var sponsorField) && sponsorField is string;
+        string? sponsorAddress = isSponsored ? (string)sponsorField : null;
+        bool hasMainSignature = tx.TryGetValue("TxnSignature", out var mainSig) && mainSig is string { Length: > 0 };
+
+        // A tx already carrying the main signature must not be mutated by autofill
+        if (autofill && !hasMainSignature)
+        {
+            tx = await client.Autofill(tx, cancellationToken: cancellationToken);
+        }
+
+        if (isSponsored && string.Equals(sponsorAddress, wallet.ClassicAddress, StringComparison.Ordinal))
+        {
+            // The sponsor finalizes: the sponsee's signature must already be present —
+            // the sponsor cannot produce it
+            if (!hasMainSignature)
+            {
+                throw new ValidationException("Sponsored transaction is not signed by all participants: the submitter's TxnSignature is missing and the sponsor cannot produce it.");
+            }
+
+            string mainBlob = XrplBinaryCodec.Encode(tx);
+            SignatureResult sponsorPart = wallet.Sign(tx, multisign: false); // routes to the sponsor path
+            SignatureResult final = SignatureComposer.ComposeSignatures(new[] { mainBlob, sponsorPart.TxBlob });
+            return (final.TxBlob, tx);
+        }
+
+        if (isSponsored && sponsorPreCheck)
+        {
+            bool hasSponsorSignature = tx.ContainsKey("SponsorSignature");
+            if (!hasSponsorSignature &&
+                await IsSponsorSignatureRequired(client, tx, sponsorAddress!, cancellationToken))
+            {
+                throw new ValidationException("Sponsored transaction is not signed by all participants: the sponsorship requires the sponsor's co-signature (SponsorSignature) for this coverage.");
+            }
+        }
+
+        return (wallet.Sign(tx, multisign: false).TxBlob, tx);
+    }
+
+    /// <summary>
+    /// Submits a sponsored transaction with both keys available locally (the
+    /// V1 flow in one call): autofills, prepares, co-signs with the sponsee
+    /// and the sponsor, submits and waits for the final outcome.
+    /// </summary>
+    /// <param name="client">A Client.</param>
+    /// <param name="transaction">A transaction carrying Sponsor/SponsorFlags.</param>
+    /// <param name="sponseeWallet">The submitting account's wallet.</param>
+    /// <param name="sponsorWallet">The sponsor's wallet (must match tx.Sponsor).</param>
+    /// <param name="autofill">If true, autofill the transaction.</param>
+    /// <param name="failHard">If true, do not retry or relay on local failure.</param>
+    public static async Task<TransactionSummary> SubmitAndWaitSponsored(
+        this IXrplClient client,
+        Dictionary<string, object> transaction,
+        XrplWallet sponseeWallet,
+        XrplWallet sponsorWallet,
+        bool autofill = true,
+        bool failHard = false,
+        CancellationToken cancellationToken = default)
+    {
+        if (sponseeWallet is null || sponsorWallet is null)
+        {
+            throw new ValidationException("Both the sponsee and the sponsor wallets must be provided.");
+        }
+
+        var tx = transaction;
         if (autofill)
         {
             tx = await client.Autofill(tx, cancellationToken: cancellationToken);
         }
 
-        return (wallet.Sign(tx, multisign: false).TxBlob, tx);
+        JsonObject prepared = JsonNode.Parse(JsonSerializer.Serialize(tx, XrplJsonOptions.Default))?.AsObject()
+            ?? throw new ValidationException("Failed to serialize transaction to JSON");
+        prepared["SigningPubKey"] = sponseeWallet.PublicKey;
+        prepared.Remove("SponsorSignature");
+        prepared.Remove("TxnSignature");
+
+        var signed = SponsorSigningHelper.SignSponsored(prepared, sponseeWallet, sponsorWallet);
+        return await client.SubmitRequestAndWait(signed.TxBlob, failHard, cancellationToken);
+    }
+
+    /// <summary>
+    /// Submits a sponsored transaction with both keys available locally (the
+    /// V1 flow in one call).
+    /// </summary>
+    public static Task<TransactionSummary> SubmitAndWaitSponsored(
+        this IXrplClient client,
+        ITransactionRequest transaction,
+        XrplWallet sponseeWallet,
+        XrplWallet sponsorWallet,
+        bool autofill = true,
+        bool failHard = false,
+        CancellationToken cancellationToken = default) =>
+        SubmitAndWaitSponsored(client, transaction.ToDictionary(), sponseeWallet, sponsorWallet, autofill, failHard, cancellationToken);
+
+    /// <summary>
+    /// Checks the Sponsorship ledger object's require-sign flags against the
+    /// transaction's SponsorFlags coverage. Returns false when the relationship
+    /// does not exist (the node will reject the transaction with a clear code).
+    /// </summary>
+    internal static async Task<bool> IsSponsorSignatureRequired(
+        IXrplClient client,
+        Dictionary<string, object> tx,
+        string sponsorAddress,
+        CancellationToken cancellationToken = default)
+    {
+        if (!tx.TryGetValue("Account", out var accountField) || accountField is not string account)
+            return false;
+        uint coverage = tx.TryGetValue("SponsorFlags", out var flagsField) &&
+                        Models.Transactions.Common.TryGetUInt32(flagsField, out uint parsed)
+            ? parsed
+            : 0;
+        if (coverage == 0)
+            return false;
+
+        var request = new Models.Methods.AccountObjectsRequest(sponsorAddress)
+        {
+            Type = Models.LedgerEntryType.Sponsorship,
+        };
+        var response = await client.AccountObjects(request, cancellationToken).ConfigureAwait(false);
+        var sponsorship = response?.AccountObjectList?
+            .OfType<Models.Ledger.LOSponsorship>()
+            .FirstOrDefault(s => string.Equals(s.Sponsee, account, StringComparison.Ordinal));
+        if (sponsorship is null)
+            return false;
+
+        bool requireForFee = sponsorship.Flags.HasFlag(Models.Ledger.SponsorshipFlags.lsfSponsorshipRequireSignForFee);
+        bool requireForReserve = sponsorship.Flags.HasFlag(Models.Ledger.SponsorshipFlags.lsfSponsorshipRequireSignForReserve);
+
+        return ((coverage & (uint)SponsorCoverage.spfSponsorFee) != 0 && requireForFee)
+            || ((coverage & (uint)SponsorCoverage.spfSponsorReserve) != 0 && requireForReserve);
     }
 
     public static bool IsSigned(object transaction)
