@@ -659,9 +659,18 @@ namespace Xrpl.Wallet
             // txBase — то, что в итоге отправим (накапливает Signers)
             var txBase = JsonNode.Parse(JsonSerializer.Serialize(transaction, XrplJsonOptions.Default))?.AsObject();
 
-            // txForSign — копия для preimage: без Signers и TxnSignature
+            // txForSign — копия для preimage: без Signers и TxnSignature.
+            // SigningPubKey входит в мультисиг-преимидж (startMultiSigningData
+            // сериализует внешнюю транзакцию целиком): для мультисиг-основной
+            // подписи он обязан быть "", но для спонсируемой транзакции с
+            // ОДИНОЧНОЙ основной подписью sponsor-side подписанты подписывают
+            // поверх pubkey отправителя — тогда сохраняем его как есть.
             var txForSign = txBase.DeepClone().AsObject();
-            txForSign["SigningPubKey"] = "";
+            bool sponsoredSingleMain = txBase["Sponsor"] is not null &&
+                !string.IsNullOrEmpty(txBase["SigningPubKey"]?.GetValue<string>());
+            txForSign["SigningPubKey"] = sponsoredSingleMain
+                ? txBase["SigningPubKey"]!.GetValue<string>()
+                : "";
             txForSign.Remove("TxnSignature");
             txForSign.Remove("Signers");
 
@@ -696,7 +705,11 @@ namespace Xrpl.Wallet
             );
 
             txBase["Signers"] = signers;
-            txBase["SigningPubKey"] = "";
+            // Preserve the submitter's pubkey on sponsored single-main parts so the
+            // composed transaction keeps the exact serialization the entries signed
+            txBase["SigningPubKey"] = sponsoredSingleMain
+                ? txBase["SigningPubKey"]!.GetValue<string>()
+                : "";
             txBase.Remove("TxnSignature");
 
             string blob = XrplBinaryCodec.Encode(txBase);
@@ -1138,10 +1151,11 @@ namespace Xrpl.Wallet
 
             SponsorSigningHelper.VerifySponsorMatches(tx, this);
 
-            // The submitter's SigningPubKey must be present — the sponsor signs the same preimage
-            string submitterSigningPubKey = tx["SigningPubKey"]?.GetValue<string>();
-            if (string.IsNullOrWhiteSpace(submitterSigningPubKey))
-                throw new ValidationException("Sponsored transaction must include the submitter SigningPubKey before sponsor signing.");
+            // The submitter's SigningPubKey must be present — the sponsor signs the same
+            // preimage. An empty value is legal: it is the protocol marker of a
+            // multisig main signature (tx.Signers), and the sponsor co-signs over it.
+            if (tx["SigningPubKey"] is null)
+                throw new ValidationException("Sponsored transaction must include the submitter SigningPubKey (empty for a multisig submitter) before sponsor signing.");
 
             tx.Remove("SponsorSignature");
             tx.Remove("TxnSignature");

@@ -8,7 +8,8 @@
   * `client.ComposeSignatures` validates SignerList quorum by weights for both sections — readable client-side error instead of `tefBAD_QUORUM`
   * `SubmitAndWaitSponsored(tx, sponseeWallet, sponsorWallet)` — the both-keys-local flow in one call
   * New `SignatureObject` model (shared shape of `SponsorSignature`/`CounterpartySignature`/`BatchSigner`); `LOSponsorship` gains `Flags` + `SponsorshipFlags`
-  * Wire-format safety: pre-refactor outputs pinned byte-level with fixed seeds (`TestUSigningPinned`); all unified flows produce byte-identical blobs; full integration suite 240/240 on the nightly stand with zero skips, including a live require-sign fail-fast scenario
+  * Full live signing matrix (`TestISponsorshipSigningMatrix`): single/multisig on each side in every combination, ledger-routed composition, quorum and ambiguous-signer fail-fast, RegularKey submitter — the matrix surfaced and fixed a real preimage nuance: the multisig preimage includes the outer `SigningPubKey`, so sponsor-side signers of a single-main sponsored tx must sign over the submitter's pubkey (`SignMulti` now derives the context from the tx shape)
+  * Wire-format safety: pre-refactor outputs pinned byte-level with fixed seeds (`TestUSigningPinned`); all unified flows produce byte-identical blobs; full integration suite 247/247 on the nightly stand with zero skips
 * Fixes accumulated since 10.7.0: TxFormat interface parity for `AMMDeposit.TradingFee`, `Uint64.FromJson` TryGetValue parsing, MPT validators mirror rippled preflight (`MutableFlags` masks, `TransferFee` vs confidential-balances rule), `LONFTokenPage.NextPageMin` doc, gateway_balances integration test rebuilt on the standalone node
 
 ### 10.7.0.0 07/13/2026
