@@ -167,6 +167,24 @@ namespace Xrpl.Tests.Wallet.Tests
         }
 
         [TestMethod]
+        public async Task TestUValidateBatch_MarkerNotAnObject_Throws()
+        {
+            // a scalar marker can never serialize as an STObject — reject it
+            // client-side instead of failing deep inside the binary codec
+            Dictionary<string, object> batch = ToDict(OuterBatch(
+                InnerPayment(Other.ClassicAddress, new JsonObject
+                {
+                    ["Sponsor"] = Sponsor.ClassicAddress,
+                    ["SponsorFlags"] = 2u,
+                    ["SponsorSignature"] = "DEADBEEF",
+                }),
+                InnerPayment(Root.ClassicAddress, new JsonObject { ["Amount"] = "3000000" })));
+
+            var ex = await Assert.ThrowsExactlyAsync<System.ArgumentException>(() => Validation.ValidateBatch(batch));
+            StringAssert.Contains(ex.Message, "must be an object");
+        }
+
+        [TestMethod]
         public async Task TestUValidateBatch_LoanOrVaultInner_Throws()
         {
             // rippled Batch::preflight kDisabledTxTypes: every Loan/Vault tx

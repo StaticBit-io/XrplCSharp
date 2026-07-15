@@ -167,12 +167,17 @@ payment = await client.Autofill(payment);
 Выбирать хелпер не нужно: стандартный API маршрутизирует по роли. Кошелёк, совпадающий с `tx.Sponsor`, создаёт подпись спонсора; кошелёк отправителя подписывает основную подпись, сохраняя уже присутствующий `SponsorSignature`; умный `SubmitAndWait` компонует, сверяет require-sign флаги спонсорства с леджером и отправляет.
 
 ```csharp
+// Декодирует переданный blob обратно в транзакцию для подписи
+static Dictionary<string, object> Reparse(string blob) =>
+    JsonSerializer.Deserialize<Dictionary<string, object>>(
+        XrplBinaryCodec.Decode(blob).ToJsonString(), XrplJsonOptions.Default);
+
 // Оба ключа локально — один вызов:
 await client.SubmitAndWaitSponsored(payment, sponseeWallet, sponsorWallet);
 
 // Ключи на разных устройствах — каждая сторона просто вызывает Sign:
-var sponsorPart = sponsorWallet.Sign(preparedTx);          // добавит SponsorSignature
-var final = sponseeWallet.Sign(handedOverTx);              // добавит основную подпись
+var sponsorPart = sponsorWallet.Sign(preparedTx);               // добавит SponsorSignature
+var final = sponseeWallet.Sign(Reparse(sponsorPart.TxBlob));    // добавит основную подпись
 await client.SubmitRequest(final.TxBlob, true);
 
 // Либо отправляющая сторона финализирует всё сама:
@@ -219,7 +224,8 @@ await client.SubmitRequest(final.TxBlob, true);
 - **Запрещено протоколом** (`ValidateBatch` отсекает на клиенте): `spfSponsorReserve` на внешнем Batch, спонсирование комиссии на inner-транзакциях, подписные данные внутри маркеров и **любые Loan/Vault транзакции как inner** (rippled `kDisabledTxTypes` → `temINVALID_INNER_BATCH`) — со-подпись заёмщика LoanSet внутри Batch невозможна.
 
 ```csharp
-// Внутренний TrustSet со спонсированным резервом; спонсор подписывает через свой SignerList
+// Внутренний TrustSet со спонсированным резервом; спонсор подписывает через
+// свой SignerList (Reparse — см. «Простой путь» выше)
 SignatureResult holderPart  = holder.Sign(batchDict);
 SignatureResult signer1Part = signer1.Sign(Reparse(holderPart.TxBlob),  multisign: true, signingFor: sponsor.ClassicAddress);
 SignatureResult signer2Part = signer2.Sign(Reparse(signer1Part.TxBlob), multisign: true, signingFor: sponsor.ClassicAddress);

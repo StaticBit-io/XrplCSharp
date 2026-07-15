@@ -237,8 +237,12 @@ public partial class Validation
             // the sponsor/counterparty authorizes via BatchSigners instead
             foreach (string markerField in new[] { "SponsorSignature", "CounterpartySignature" })
             {
-                if (!innerTx.TryGetValue(markerField, out var markerObj) || markerObj is not IDictionary<string, object> marker)
+                // null is treated as absent (same convention as GetBatchSignerAccounts);
+                // any other non-object value can never serialize as an STObject
+                if (!innerTx.TryGetValue(markerField, out var markerObj) || markerObj is null)
                     continue;
+                if (markerObj is not IDictionary<string, object> marker)
+                    throw new ArgumentException($"Batch: RawTransactions[{i}].{markerField} must be an object inside a Batch.");
                 if (marker.TryGetValue("TxnSignature", out var markerSig) && markerSig != null)
                     throw new ArgumentException($"Batch: RawTransactions[{i}].{markerField} must not contain TxnSignature inside a Batch.");
                 if (marker.TryGetValue("Signers", out var markerSigners) && markerSigners != null)

@@ -170,8 +170,9 @@ public class TestIBatchSponsorship
     /// The maximum legal co-signing combination in one Batch: the inner
     /// TrustSet is reserve-sponsored and the sponsor authorizes as a batch
     /// signer THROUGH ITS SIGNERLIST — a nested-multisig BatchSigner entry
-    /// (BatchSigner.Signers, per rippled Batch::checkBatchSign). This is the
-    /// live check of the SignAsBatchPart multisign path. Loan/Vault inners are
+    /// (BatchSigner.Signers, per rippled Batch::checkBatchSign) — the
+    /// sponsor-role counterpart of TestBatchMultiAccountsWithInnerMultiSign,
+    /// routed by the marker instead of inner ownership. Loan/Vault inners are
     /// protocol-forbidden (kDisabledTxTypes), so LoanSet co-signing stays a
     /// standalone flow and cannot join a batch.
     /// </summary>
