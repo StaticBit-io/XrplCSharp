@@ -146,7 +146,7 @@ public static class BatchUtils
 
             // - the Sponsor of an inner that carries the SponsorSignature marker
             if (rawTx.TryGetValue("Sponsor", out var sponsorObj) && sponsorObj is string sponsorAcc &&
-                rawTx.ContainsKey("SponsorSignature"))
+                rawTx.TryGetValue("SponsorSignature", out var sponsorMarker) && sponsorMarker is not null)
                 AddRequired(sponsorAcc);
         }
 

@@ -101,7 +101,20 @@ namespace Xrpl.Wallet
             JsonObject preparedTx,
             XrplWallet brokerWallet,
             XrplWallet borrowerWallet)
-            => CoSigningEngine.SignBoth(preparedTx, brokerWallet, borrowerWallet, "CounterpartySignature");
+        {
+            string txType = preparedTx["TransactionType"]?.GetValue<string>();
+            if (!string.Equals(txType, "LoanSet", StringComparison.OrdinalIgnoreCase))
+                throw new ValidationException($"TransactionType must be LoanSet, got: {txType}");
+
+            string counterparty = preparedTx["Counterparty"]?.GetValue<string>();
+            if (!string.IsNullOrWhiteSpace(counterparty) &&
+                !string.Equals(counterparty, borrowerWallet.ClassicAddress, StringComparison.Ordinal))
+            {
+                throw new ValidationException($"Counterparty field ({counterparty}) does not match the borrower wallet ({borrowerWallet.ClassicAddress}).");
+            }
+
+            return CoSigningEngine.SignBoth(preparedTx, brokerWallet, borrowerWallet, "CounterpartySignature");
+        }
 
         /// <summary>
         /// V2 — Combine independently signed broker and counterparty blobs.

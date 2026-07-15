@@ -27,11 +27,13 @@ namespace Xrpl.Tests.Wallet.Tests
         private const string SponsorSeed = "sEdTTqBarUA64vciRMqd1KwpBguQuXJ";
         private const string DestinationSeed = "sEdVPTJ6emfG3hCFdubKMpaskvkWLrT";
         private const string OtherSeed = "sEdVUGxDJ7sqTupycsVNowrQMeJn7UP";
+        private const string CounterpartySeed = "sEdVYaN7HpU9U7S17zkzPW7pCKqWXzR";
 
         private static XrplWallet Root => XrplWallet.FromSeed(SubmitterSeed);
         private static XrplWallet Sponsor => XrplWallet.FromSeed(SponsorSeed);
         private static XrplWallet Destination => XrplWallet.FromSeed(DestinationSeed);
         private static XrplWallet Other => XrplWallet.FromSeed(OtherSeed);
+        private static XrplWallet Counterparty => XrplWallet.FromSeed(CounterpartySeed);
 
         private static Dictionary<string, object> ToDict(JsonObject json) =>
             JsonSerializer.Deserialize<Dictionary<string, object>>(json.ToJsonString(), XrplJsonOptions.Default);
@@ -82,7 +84,7 @@ namespace Xrpl.Tests.Wallet.Tests
                 // delegated inner: the Delegate is the required signer, not the Account
                 InnerPayment(Destination.ClassicAddress, new JsonObject { ["Delegate"] = Other.ClassicAddress }),
                 // LoanSet-style inner: the Counterparty is required too
-                InnerPayment(Root.ClassicAddress, new JsonObject { ["Counterparty"] = Sponsor.ClassicAddress }),
+                InnerPayment(Root.ClassicAddress, new JsonObject { ["Counterparty"] = Counterparty.ClassicAddress }),
                 // sponsored inner WITH the marker: the sponsor is required
                 InnerPayment(Root.ClassicAddress, new JsonObject
                 {
@@ -96,7 +98,8 @@ namespace Xrpl.Tests.Wallet.Tests
 
             CollectionAssert.Contains(accounts.Raw, Other.ClassicAddress, "the Delegate must be required");
             CollectionAssert.DoesNotContain(accounts.Raw, Destination.ClassicAddress, "a delegated inner's Account is not the initiator");
-            CollectionAssert.Contains(accounts.Raw, Sponsor.ClassicAddress, "Counterparty/Sponsor-with-marker must be required");
+            CollectionAssert.Contains(accounts.Raw, Counterparty.ClassicAddress, "the inner Counterparty must be required");
+            CollectionAssert.Contains(accounts.Raw, Sponsor.ClassicAddress, "the Sponsor with a marker must be required");
         }
 
         [TestMethod]

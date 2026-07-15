@@ -112,8 +112,11 @@ namespace Xrpl.Wallet
             tx.Remove("TxnSignature");
 
             string? existingSigningPubKey = tx["SigningPubKey"]?.GetValue<string>();
-            if (!string.IsNullOrEmpty(existingSigningPubKey) &&
-                !string.Equals(existingSigningPubKey, submitterWallet.PublicKey, StringComparison.Ordinal))
+            if (string.IsNullOrEmpty(existingSigningPubKey))
+            {
+                throw new ValidationException($"The {coSignatureField} was made over a multisig submitter form (empty SigningPubKey); a single main signature would invalidate it. Compose multisig parts instead.");
+            }
+            if (!string.Equals(existingSigningPubKey, submitterWallet.PublicKey, StringComparison.Ordinal))
             {
                 throw new ValidationException("Partially signed blob SigningPubKey does not match submitter wallet.");
             }
