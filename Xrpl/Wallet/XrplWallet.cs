@@ -588,12 +588,45 @@ namespace Xrpl.Wallet
                     return SignAsBatchPart(transaction, multisign, signingFor);
                 }
 
+                // The sponsor of the OUTER batch (spfSponsorFee) co-signs the batch
+                // itself with a regular SponsorSignature - it is not a batch signer
+                if (!multisign
+                    && transaction.TryGetValue("Sponsor", out var outerSponsorObj)
+                    && outerSponsorObj is string outerSponsor
+                    && string.Equals(outerSponsor, myAccount, StringComparison.OrdinalIgnoreCase))
+                {
+                    return SignAsSponsor(transaction);
+                }
+
                 if (!multisign)
                 {
                     VerifyBatchSubmitter(transaction, signingFor, true);
                 }
             }
-            string multisignAddress = "";
+            // 2) XLS-68: when this wallet is the transaction's Sponsor, route to the
+            // sponsor co-signature path automatically (same pattern as the Batch
+            // inner-signer routing above). Multisig signing is exempt: a Signer
+            // entry is section-agnostic (identical preimage for tx.Signers and
+            // SponsorSignature.Signers), so the role is decided at composition time.
+            if (!multisign
+                && transaction.TryGetValue("Sponsor", out var sponsorField)
+                && sponsorField is string sponsorAddress
+                && string.Equals(sponsorAddress, this.ClassicAddress, StringComparison.Ordinal))
+            {
+                return SignAsSponsor(transaction);
+            }
+
+            // 3) XLS-66: when this wallet is a LoanSet's Counterparty (the borrower),
+            // route to the counterparty co-signature path automatically.
+            if (!multisign
+                && string.Equals($"{transaction[nameof(ITransactionCommon.TransactionType)]}", "LoanSet", StringComparison.OrdinalIgnoreCase)
+                && transaction.TryGetValue("Counterparty", out var counterpartyField)
+                && counterpartyField is string counterpartyAddress
+                && string.Equals(counterpartyAddress, this.ClassicAddress, StringComparison.Ordinal))
+            {
+                return SignAsLoanCounterparty(transaction);
+            }
+
             if (multisign)
             {
                 // Адрес ПОДПИСАНТА (не владельца!). Если пришёл X-адрес — конвертируем.
@@ -610,13 +643,29 @@ namespace Xrpl.Wallet
                 }
 
                 JsonObject txToSignAndEncode = JsonNode.Parse(JsonSerializer.Serialize(transaction, XrplJsonOptions.Default))?.AsObject();
-                txToSignAndEncode["SigningPubKey"] = multisignAddress != "" ? "" : this.PublicKey;
+
+                // A present inner co-signature (SponsorSignature / CounterpartySignature)
+                // was computed over a preimage that already carried the submitter's
+                // SigningPubKey — refuse to silently invalidate it
+                if (txToSignAndEncode.ContainsKey("SponsorSignature") || txToSignAndEncode.ContainsKey("CounterpartySignature"))
+                {
+                    string existingPubKey = txToSignAndEncode["SigningPubKey"]?.GetValue<string>();
+                    if (string.IsNullOrEmpty(existingPubKey))
+                    {
+                        throw new ValidationException("The co-signature was made over a multisig submitter form (empty SigningPubKey); a single main signature would invalidate it. Sign with multisign: true instead.");
+                    }
+                    if (!string.Equals(existingPubKey, this.PublicKey, StringComparison.Ordinal))
+                    {
+                        throw new ValidationException("Transaction SigningPubKey does not match this wallet; the co-signer signed a different submitter's preimage.");
+                    }
+                }
+
+                txToSignAndEncode["SigningPubKey"] = this.PublicKey;
 
                 string signature = ComputeSignature(JsonSerializer.Deserialize<Dictionary<string, object>>(txToSignAndEncode.ToJsonString(), XrplJsonOptions.Default), this.PrivateKey);
                 txToSignAndEncode["TxnSignature"] = signature;
 
                 string serialized = XrplBinaryCodec.Encode(txToSignAndEncode);
-                //this.checkTxSerialization(serialized, tx);
                 return new SignatureResult(serialized, HashLedger.HashSignedTx(serialized));
             }
         }
@@ -633,9 +682,18 @@ namespace Xrpl.Wallet
             // txBase — то, что в итоге отправим (накапливает Signers)
             var txBase = JsonNode.Parse(JsonSerializer.Serialize(transaction, XrplJsonOptions.Default))?.AsObject();
 
-            // txForSign — копия для preimage: без Signers и TxnSignature
+            // txForSign — копия для preimage: без Signers и TxnSignature.
+            // SigningPubKey входит в мультисиг-преимидж (startMultiSigningData
+            // сериализует внешнюю транзакцию целиком): для мультисиг-основной
+            // подписи он обязан быть "", но для спонсируемой транзакции с
+            // ОДИНОЧНОЙ основной подписью sponsor-side подписанты подписывают
+            // поверх pubkey отправителя — тогда сохраняем его как есть.
             var txForSign = txBase.DeepClone().AsObject();
-            txForSign["SigningPubKey"] = "";
+            bool sponsoredSingleMain = txBase["Sponsor"] is not null &&
+                !string.IsNullOrEmpty(txBase["SigningPubKey"]?.GetValue<string>());
+            txForSign["SigningPubKey"] = sponsoredSingleMain
+                ? txBase["SigningPubKey"]!.GetValue<string>()
+                : "";
             txForSign.Remove("TxnSignature");
             txForSign.Remove("Signers");
 
@@ -658,19 +716,13 @@ namespace Xrpl.Wallet
                 }
             });
 
-            // КРИТИЧЕСКОЕ: сортировка Signers по Account
-            signers = new JsonArray(
-                signers.Select(s => s?.DeepClone()).OrderBy(s =>
-                {
-                    var acc = s?["Signer"]?["Account"]?.GetValue<string>() ?? "";
-                    // для строгого соответствия спекам — сортируем по байтам адреса
-                    var accBytes = Xrpl.AddressCodec.XrplCodec.DecodeAccountID(acc);
-                    return BitConverter.ToString(accBytes);
-                }).ToArray()
-            );
-
-            txBase["Signers"] = signers;
-            txBase["SigningPubKey"] = "";
+            // КРИТИЧЕСКОЕ: сортировка Signers по байтам Account (общий хелпер)
+            txBase["Signers"] = SignerUtilities.DedupeAndSortSigners(signers);
+            // Preserve the submitter's pubkey on sponsored single-main parts so the
+            // composed transaction keeps the exact serialization the entries signed
+            txBase["SigningPubKey"] = sponsoredSingleMain
+                ? txBase["SigningPubKey"]!.GetValue<string>()
+                : "";
             txBase.Remove("TxnSignature");
 
             string blob = XrplBinaryCodec.Encode(txBase);
@@ -1066,11 +1118,7 @@ namespace Xrpl.Wallet
             string sig = XrplKeypairs.Sign(signingBytes, this.PrivateKey);
 
             // Add CounterpartySignature
-            tx["CounterpartySignature"] = new JsonObject
-            {
-                ["SigningPubKey"] = this.PublicKey,
-                ["TxnSignature"] = sig,
-            };
+            tx["CounterpartySignature"] = SignatureObject.Single(this.PublicKey, sig).ToJsonObject();
 
             // Encode (without broker's TxnSignature — partially signed)
             string txBlob = XrplBinaryCodec.Encode(tx);
@@ -1116,10 +1164,11 @@ namespace Xrpl.Wallet
 
             SponsorSigningHelper.VerifySponsorMatches(tx, this);
 
-            // The submitter's SigningPubKey must be present — the sponsor signs the same preimage
-            string submitterSigningPubKey = tx["SigningPubKey"]?.GetValue<string>();
-            if (string.IsNullOrWhiteSpace(submitterSigningPubKey))
-                throw new ValidationException("Sponsored transaction must include the submitter SigningPubKey before sponsor signing.");
+            // The submitter's SigningPubKey must be present — the sponsor signs the same
+            // preimage. An empty value is legal: it is the protocol marker of a
+            // multisig main signature (tx.Signers), and the sponsor co-signs over it.
+            if (tx["SigningPubKey"] is null)
+                throw new ValidationException("Sponsored transaction must include the submitter SigningPubKey (empty for a multisig submitter) before sponsor signing.");
 
             tx.Remove("SponsorSignature");
             tx.Remove("TxnSignature");
@@ -1127,11 +1176,7 @@ namespace Xrpl.Wallet
             byte[] signingBytes = SponsorSigningHelper.GetSigningPreimage(tx);
             string sig = XrplKeypairs.Sign(signingBytes, this.PrivateKey);
 
-            tx["SponsorSignature"] = new JsonObject
-            {
-                ["SigningPubKey"] = this.PublicKey,
-                ["TxnSignature"] = sig,
-            };
+            tx["SponsorSignature"] = SignatureObject.Single(this.PublicKey, sig).ToJsonObject();
 
             string txBlob = XrplBinaryCodec.Encode(tx);
             string txHash = HashLedger.HashSignedTx(txBlob);

@@ -123,13 +123,31 @@ public static class BatchUtils
             if (string.IsNullOrWhiteSpace(acc))
                 throw new ValidationException("RawTransaction.Account cannot be empty.");
 
-            // skip root if appears inside RawTransactions
-            if (acc.Equals(root, StringComparison.OrdinalIgnoreCase))
-                continue;
+            void AddRequired(string candidate)
+            {
+                if (string.IsNullOrWhiteSpace(candidate))
+                    return;
+                if (candidate.Equals(root, StringComparison.OrdinalIgnoreCase))
+                    return;
+                if (seen.Add(candidate))
+                    rawAccounts.Add(candidate);
+            }
 
-            // distinct
-            if (seen.Add(acc))
-                rawAccounts.Add(acc);
+            // rippled Batch::preflight requiredSigners:
+            // - the initiator of each inner (the Delegate for delegated inners)
+            AddRequired(rawTx.TryGetValue("Delegate", out var delegateObj) &&
+                        delegateObj is string delegateAcc && !string.IsNullOrWhiteSpace(delegateAcc)
+                ? delegateAcc
+                : acc);
+
+            // - the Counterparty of an inner (LoanSet borrower)
+            if (rawTx.TryGetValue("Counterparty", out var counterpartyObj) && counterpartyObj is string counterparty)
+                AddRequired(counterparty);
+
+            // - the Sponsor of an inner that carries the SponsorSignature marker
+            if (rawTx.TryGetValue("Sponsor", out var sponsorObj) && sponsorObj is string sponsorAcc &&
+                rawTx.TryGetValue("SponsorSignature", out var sponsorMarker) && sponsorMarker is not null)
+                AddRequired(sponsorAcc);
         }
 
         return new BatchSignerAccounts

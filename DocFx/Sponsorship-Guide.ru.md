@@ -12,6 +12,7 @@
 - [Пошагово: создание спонсорства](#пошагово-создание-спонсорства)
 - [Отправка спонсируемой транзакции](#отправка-спонсируемой-транзакции)
 - [Сценарии подписания (V1/V2/V3)](#сценарии-подписания-v1v2v3)
+- [Спонсорство внутри Batch](#спонсорство-внутри-batch)
 - [Комиссии](#комиссии)
 - [Объекты леджера](#объекты-леджера)
 - [Тестирование](#тестирование)
@@ -159,7 +160,33 @@ payment = await client.Autofill(payment);
 
 ## Сценарии подписания (V1/V2/V3)
 
-`SponsorSignature` подписывается над тем же преимиджем, что и основная подпись (аналогично counterparty-паттерну LoanSet). Три сценария через `SponsorSigningHelper`:
+`SponsorSignature` подписывается над тем же преимиджем, что и основная подпись (аналогично counterparty-паттерну LoanSet).
+
+### Простой путь — стандартные Sign/Submit (10.8.0+)
+
+Выбирать хелпер не нужно: стандартный API маршрутизирует по роли. Кошелёк, совпадающий с `tx.Sponsor`, создаёт подпись спонсора; кошелёк отправителя подписывает основную подпись, сохраняя уже присутствующий `SponsorSignature`; умный `SubmitAndWait` компонует, сверяет require-sign флаги спонсорства с леджером и отправляет.
+
+```csharp
+// Декодирует переданный blob обратно в транзакцию для подписи
+static Dictionary<string, object> Reparse(string blob) =>
+    JsonSerializer.Deserialize<Dictionary<string, object>>(
+        XrplBinaryCodec.Decode(blob).ToJsonString(), XrplJsonOptions.Default);
+
+// Оба ключа локально — один вызов:
+await client.SubmitAndWaitSponsored(payment, sponseeWallet, sponsorWallet);
+
+// Ключи на разных устройствах — каждая сторона просто вызывает Sign:
+var sponsorPart = sponsorWallet.Sign(preparedTx);               // добавит SponsorSignature
+var final = sponseeWallet.Sign(Reparse(sponsorPart.TxBlob));    // добавит основную подпись
+await client.SubmitRequest(final.TxBlob, true);
+
+// Либо отправляющая сторона финализирует всё сама:
+await client.SubmitAndWait(partiallySignedTx, sponsorWallet); // спонсор доводит tx, подписанную спонсируемым
+```
+
+При отсутствии обязательной подписи `SubmitAndWait` падает сразу с "transaction is not signed by all participants" вместо ошибки от ноды. Мультисиг любой из сторон остаётся переносимым: устройства подписывают с `multisign: true`, а `client.ComposeSignatures(parts)` раскладывает Signer-записи по секциям согласно SignerList'ам леджера (с пре-чеком кворума по весам).
+
+### Advanced — явные хелперные сценарии
 
 **V1 — Автоматический (оба ключа в одном процессе):**
 
@@ -184,6 +211,25 @@ await client.SubmitRequest(combined.TxBlob, true);
 var withSponsor = sponsorWallet.SignAsSponsor(prepared);
 var final = SponsorSigningHelper.SubmitterSign(withSponsor.TxBlob, sponseeWallet);
 await client.SubmitRequest(final.TxBlob, true);
+```
+
+---
+
+## Спонсорство внутри Batch
+
+Спонсорство сочетается с Batch (XLS-56); правила зеркалят rippled `Batch::preflight`:
+
+- **Спонсирование резерва внутренней транзакции**: на inner ставятся `Sponsor` + `spfSponsorReserve` и **пустой** объект `SponsorSignature` как маркер. Маркер делает спонсора *обязательным batch-подписантом* — спонсор авторизует весь батч через стандартный `Sign`: одиночной подписью или **через свой SignerList** (вложенный мультисиг `BatchSigner.Signers`). Подписные данные внутрь маркера не кладутся никогда.
+- **Спонсирование комиссии внешнего батча**: `Sponsor` + `spfSponsorFee` на внешнем Batch; спонсор со-подписывает сам батч обычной `SponsorSignature` через стандартный `Sign`.
+- **Запрещено протоколом** (`ValidateBatch` отсекает на клиенте): `spfSponsorReserve` на внешнем Batch, спонсирование комиссии на inner-транзакциях, подписные данные внутри маркеров и **любые Loan/Vault транзакции как inner** (rippled `kDisabledTxTypes` → `temINVALID_INNER_BATCH`) — со-подпись заёмщика LoanSet внутри Batch невозможна.
+
+```csharp
+// Внутренний TrustSet со спонсированным резервом; спонсор подписывает через
+// свой SignerList (Reparse — см. «Простой путь» выше)
+SignatureResult holderPart  = holder.Sign(batchDict);
+SignatureResult signer1Part = signer1.Sign(Reparse(holderPart.TxBlob),  multisign: true, signingFor: sponsor.ClassicAddress);
+SignatureResult signer2Part = signer2.Sign(Reparse(signer1Part.TxBlob), multisign: true, signingFor: sponsor.ClassicAddress);
+SignatureResult final       = root.Sign(Reparse(signer2Part.TxBlob));
 ```
 
 ---

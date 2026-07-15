@@ -1,9 +1,23 @@
+using System;
 using System.Text.Json.Serialization;
 
 using Xrpl.Client.Json.Converters;
 using Xrpl.Models.Common;
 
 namespace Xrpl.Models.Ledger;
+
+/// <summary>
+/// Ledger flags of the Sponsorship object (rippled LedgerFormats.h).
+/// </summary>
+[Flags]
+public enum SponsorshipFlags : uint
+{
+    /// <summary>Sponsored fee payments require the sponsor's co-signature.</summary>
+    lsfSponsorshipRequireSignForFee = 0x00010000,
+
+    /// <summary>Sponsored reserve allocations require the sponsor's co-signature.</summary>
+    lsfSponsorshipRequireSignForReserve = 0x00020000,
+}
 
 /// <summary>
 /// A Sponsorship ledger object records a sponsorship relationship between a sponsor
@@ -16,6 +30,12 @@ public class LOSponsorship : BaseLedgerEntry
     {
         LedgerEntryType = LedgerEntryType.Sponsorship;
     }
+
+    /// <summary>
+    /// A bit-map of boolean flags (see <see cref="SponsorshipFlags"/>).
+    /// </summary>
+    [JsonPropertyName("Flags")]
+    public SponsorshipFlags Flags { get; init; }
 
     /// <summary>
     /// The sponsoring account.
