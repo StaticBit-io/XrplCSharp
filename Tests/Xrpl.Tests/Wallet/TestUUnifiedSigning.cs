@@ -90,6 +90,29 @@ namespace Xrpl.Tests.Wallet.Tests
         }
 
         [TestMethod]
+        public void TestUSign_CoSignatureOverMultisigForm_Throws()
+        {
+            // A co-signature computed over the multisig submitter form (empty
+            // SigningPubKey) must not be silently invalidated by a single main
+            // signature — Sign refuses and points to multisign: true
+            Dictionary<string, object> multisigForm = PreparedSponsoredTx();
+            multisigForm["SigningPubKey"] = "";
+            var sponsorPart = Sponsor.SignAsSponsor(multisigForm);
+
+            Dictionary<string, object> handedOver = JsonSerializer.Deserialize<Dictionary<string, object>>(
+                XrplBinaryCodec.Decode(sponsorPart.TxBlob).ToJsonString(), XrplJsonOptions.Default);
+            handedOver["SigningPubKey"] = "";
+
+            var ex = Assert.ThrowsExactly<ValidationException>(() => Submitter.Sign(handedOver));
+            StringAssert.Contains(ex.Message, "multisig submitter form");
+
+            // The V3 helper facade guards the same way
+            var helperEx = Assert.ThrowsExactly<ValidationException>(
+                () => SponsorSigningHelper.SubmitterSign(sponsorPart.TxBlob, Submitter));
+            StringAssert.Contains(helperEx.Message, "multisig submitter form");
+        }
+
+        [TestMethod]
         public void TestUSign_LoanCounterpartyWallet_RoutesToCounterpartySignature()
         {
             // XLS-66: the borrower (tx.Counterparty) calling the standard Sign
