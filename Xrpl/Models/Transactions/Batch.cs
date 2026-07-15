@@ -123,6 +123,17 @@ public sealed class BatchResponse : TransactionResponse, IBatch
 
 public partial class Validation
 {
+    /// <summary>
+    /// Transaction types rippled forbids inside a Batch
+    /// (Batch::preflight kDisabledTxTypes → temINVALID_INNER_BATCH).
+    /// </summary>
+    private static readonly HashSet<string> DisabledInnerTxTypes = new HashSet<string>(StringComparer.OrdinalIgnoreCase)
+    {
+        "VaultCreate", "VaultSet", "VaultDelete", "VaultDeposit", "VaultWithdraw", "VaultClawback",
+        "LoanBrokerSet", "LoanBrokerDelete", "LoanBrokerCoverDeposit", "LoanBrokerCoverWithdraw", "LoanBrokerCoverClawback",
+        "LoanSet", "LoanDelete", "LoanManage", "LoanPay",
+    };
+
     public static async Task ValidateBatch(Dictionary<string, object> tx)
     {
         if (tx == null)
@@ -177,6 +188,13 @@ public partial class Validation
                 string.Equals(innerType, "Batch", StringComparison.OrdinalIgnoreCase))
             {
                 throw new ArgumentException($"Batch: RawTransactions[{i}] cannot be a Batch transaction (nesting is not allowed).");
+            }
+
+            // rippled Batch::preflight kDisabledTxTypes: every Vault and Loan
+            // transaction type is rejected as an inner tx (temINVALID_INNER_BATCH)
+            if (DisabledInnerTxTypes.Contains(innerType))
+            {
+                throw new ArgumentException($"Batch: RawTransactions[{i}] TransactionType '{innerType}' is not allowed inside Batch (rippled kDisabledTxTypes).");
             }
 
             if (!innerTx.TryGetValue("Flags", out var flagsObj) ||

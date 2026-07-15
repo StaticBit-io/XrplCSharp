@@ -12,6 +12,7 @@
 - [Пошагово: создание спонсорства](#пошагово-создание-спонсорства)
 - [Отправка спонсируемой транзакции](#отправка-спонсируемой-транзакции)
 - [Сценарии подписания (V1/V2/V3)](#сценарии-подписания-v1v2v3)
+- [Спонсорство внутри Batch](#спонсорство-внутри-batch)
 - [Комиссии](#комиссии)
 - [Объекты леджера](#объекты-леджера)
 - [Тестирование](#тестирование)
@@ -205,6 +206,24 @@ await client.SubmitRequest(combined.TxBlob, true);
 var withSponsor = sponsorWallet.SignAsSponsor(prepared);
 var final = SponsorSigningHelper.SubmitterSign(withSponsor.TxBlob, sponseeWallet);
 await client.SubmitRequest(final.TxBlob, true);
+```
+
+---
+
+## Спонсорство внутри Batch
+
+Спонсорство сочетается с Batch (XLS-56); правила зеркалят rippled `Batch::preflight`:
+
+- **Спонсирование резерва внутренней транзакции**: на inner ставятся `Sponsor` + `spfSponsorReserve` и **пустой** объект `SponsorSignature` как маркер. Маркер делает спонсора *обязательным batch-подписантом* — спонсор авторизует весь батч через стандартный `Sign`: одиночной подписью или **через свой SignerList** (вложенный мультисиг `BatchSigner.Signers`). Подписные данные внутрь маркера не кладутся никогда.
+- **Спонсирование комиссии внешнего батча**: `Sponsor` + `spfSponsorFee` на внешнем Batch; спонсор со-подписывает сам батч обычной `SponsorSignature` через стандартный `Sign`.
+- **Запрещено протоколом** (`ValidateBatch` отсекает на клиенте): `spfSponsorReserve` на внешнем Batch, спонсирование комиссии на inner-транзакциях, подписные данные внутри маркеров и **любые Loan/Vault транзакции как inner** (rippled `kDisabledTxTypes` → `temINVALID_INNER_BATCH`) — со-подпись заёмщика LoanSet внутри Batch невозможна.
+
+```csharp
+// Внутренний TrustSet со спонсированным резервом; спонсор подписывает через свой SignerList
+SignatureResult holderPart  = holder.Sign(batchDict);
+SignatureResult signer1Part = signer1.Sign(Reparse(holderPart.TxBlob),  multisign: true, signingFor: sponsor.ClassicAddress);
+SignatureResult signer2Part = signer2.Sign(Reparse(signer1Part.TxBlob), multisign: true, signingFor: sponsor.ClassicAddress);
+SignatureResult final       = root.Sign(Reparse(signer2Part.TxBlob));
 ```
 
 ---

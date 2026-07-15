@@ -167,6 +167,26 @@ namespace Xrpl.Tests.Wallet.Tests
         }
 
         [TestMethod]
+        public async Task TestUValidateBatch_LoanOrVaultInner_Throws()
+        {
+            // rippled Batch::preflight kDisabledTxTypes: every Loan/Vault tx
+            // type is rejected as an inner (temINVALID_INNER_BATCH), so
+            // LoanSet co-signing can never ride inside a Batch
+            JsonObject loanInner = InnerPayment(Root.ClassicAddress, new JsonObject
+            {
+                ["Counterparty"] = Counterparty.ClassicAddress,
+            });
+            loanInner["RawTransaction"]["TransactionType"] = "LoanSet";
+
+            Dictionary<string, object> batch = ToDict(OuterBatch(
+                loanInner,
+                InnerPayment(Other.ClassicAddress)));
+
+            var ex = await Assert.ThrowsExactlyAsync<System.ArgumentException>(() => Validation.ValidateBatch(batch));
+            StringAssert.Contains(ex.Message, "LoanSet");
+        }
+
+        [TestMethod]
         public async Task TestUValidateBatch_MarkerWithSignatureMaterial_Throws()
         {
             Dictionary<string, object> batch = ToDict(OuterBatch(

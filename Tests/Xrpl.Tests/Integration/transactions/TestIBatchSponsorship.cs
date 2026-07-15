@@ -167,6 +167,104 @@ public class TestIBatchSponsorship
     }
 
     /// <summary>
+    /// The maximum legal co-signing combination in one Batch: the inner
+    /// TrustSet is reserve-sponsored and the sponsor authorizes as a batch
+    /// signer THROUGH ITS SIGNERLIST — a nested-multisig BatchSigner entry
+    /// (BatchSigner.Signers, per rippled Batch::checkBatchSign). This is the
+    /// live check of the SignAsBatchPart multisign path. Loan/Vault inners are
+    /// protocol-forbidden (kDisabledTxTypes), so LoanSet co-signing stays a
+    /// standalone flow and cannot join a batch.
+    /// </summary>
+    [TestMethod]
+    public async Task Batch_SponsoredReserveInner_SponsorSignsViaSignerList()
+    {
+        XrplWallet root = XrplWallet.Generate();
+        XrplWallet holder = XrplWallet.Generate();
+        XrplWallet sponsor = XrplWallet.Generate();
+        XrplWallet signer1 = XrplWallet.Generate();
+        XrplWallet signer2 = XrplWallet.Generate();
+        await IntegrationTestConfig.TryFundWalletsAsync(client, nodeType, root, holder, sponsor, signer1, signer2);
+        await SponsorshipSetAsync(sponsor, holder);
+
+        // The sponsor authorizes through a SignerList, not its master key
+        var signerList = new SignerListSet
+        {
+            Account = sponsor.ClassicAddress,
+            SignerQuorum = 2,
+            SignerEntries = new List<SignerEntryWrapper>
+            {
+                new SignerEntryWrapper { SignerEntry = new SignerEntry { Account = signer1.ClassicAddress, SignerWeight = 1 } },
+                new SignerEntryWrapper { SignerEntry = new SignerEntry { Account = signer2.ClassicAddress, SignerWeight = 1 } },
+            },
+        };
+        signerList = await client.Autofill(signerList);
+        ValidateResult(await client.SubmitAndWait(signerList, sponsor, autofill: false));
+
+        var inner1 = new Payment
+        {
+            Account = root.ClassicAddress,
+            Destination = holder.ClassicAddress,
+            Amount = new Currency { ValueAsXrp = 1m },
+            Fee = new Currency { Value = "0" },
+        }.ToBatchTx();
+
+        var inner2 = new TrustSet
+        {
+            Account = holder.ClassicAddress,
+            LimitAmount = new Currency
+            {
+                CurrencyCode = "USD",
+                Issuer = root.ClassicAddress,
+                Value = "1000",
+            },
+            Fee = new Currency { Value = "0" },
+            Sponsor = sponsor.ClassicAddress,
+            SponsorFlags = SponsorCoverage.spfSponsorReserve,
+        }.ToBatchTx();
+
+        var batch = new Batch
+        {
+            Account = root.ClassicAddress,
+            Flags = BatchFlags.tfAllOrNothing,
+            RawTransactions = new List<RawTransactionWrapper> { inner1, inner2 },
+            Fee = new Currency { Value = "500" },
+        };
+        batch = await client.Autofill(batch);
+
+        Dictionary<string, object> batchDict = batch.ToDictionary();
+        var rawList = ((IEnumerable<object>)batchDict["RawTransactions"]).Cast<Dictionary<string, object>>().ToList();
+        var sponsoredInner = (Dictionary<string, object>)rawList[1]["RawTransaction"];
+        sponsoredInner["SponsorSignature"] = new Dictionary<string, object>();
+        batchDict["RawTransactions"] = rawList.Cast<object>().ToList();
+
+        // Holder: a single-form batch signature. Sponsor: nested multisig —
+        // each list signer signs FOR the sponsor via the standard Sign
+        SignatureResult holderPart = holder.Sign(batchDict);
+        SignatureResult signer1Part = signer1.Sign(Reparse(holderPart.TxBlob), multisign: true, signingFor: sponsor.ClassicAddress);
+        SignatureResult signer2Part = signer2.Sign(Reparse(signer1Part.TxBlob), multisign: true, signingFor: sponsor.ClassicAddress);
+        SignatureResult final = root.Sign(Reparse(signer2Part.TxBlob));
+
+        await SubmitBlobTesAsync(final.TxBlob);
+
+        // The created trust line must carry the sponsor on the holder's side
+        AccountObjectsRequest request = new AccountObjectsRequest(holder.ClassicAddress)
+        {
+            Type = LedgerEntryType.RippleState,
+        };
+        LORippleState line = null;
+        for (int attempt = 0; attempt < 10 && line is null; attempt++)
+        {
+            await Task.Delay(2000);
+            AccountObjects objects = await client.AccountObjects(request);
+            line = objects?.AccountObjectList?.OfType<LORippleState>().FirstOrDefault();
+        }
+        Assert.IsNotNull(line, "the sponsored trust line must appear in the ledger");
+        Assert.IsTrue(
+            sponsor.ClassicAddress == line.HighSponsor || sponsor.ClassicAddress == line.LowSponsor,
+            $"the trust line reserve must be sponsored by {sponsor.ClassicAddress} (High: {line.HighSponsor}, Low: {line.LowSponsor})");
+    }
+
+    /// <summary>
     /// The OUTER batch fee is sponsored: the sponsor co-signs the batch itself
     /// via the standard Sign (SponsorSignature on the outer transaction).
     /// </summary>
