@@ -103,7 +103,7 @@ Without an external prover the positive path cannot be exercised. What the repos
 
 - builds a regular MPT issuance on the nightly stand (no confidential-balance flags or encryption keys — the positive privacy path needs the external prover);
 - submits a `ConfidentialMPTConvert` with structurally valid but cryptographically bogus proof material;
-- asserts the node answers with a **domain** verdict (any `tem`/`tec` from the ConfidentialTransfer logic), not a parse error — proving the SDK's encoding is protocol-correct end-to-end.
+- asserts the node answers with a **domain** verdict (any `tem`/`tec` from the ConfidentialTransfer logic), not a parse error — confirming the SDK's serialization of this payload shape is compatible with the node's parser all the way into domain validation.
 
 ```bash
 docker compose -f .ci-config/docker-compose.batchv11.yml up -d --build

@@ -82,20 +82,32 @@ namespace XrplTests.Xrpl.Models
         [TestMethod]
         public async Task TestVerifyWithZeroDomainId()
         {
-            // rippled MPTokenIssuanceSet: a zero DomainID clears the domain - legal
-            mpTokenIssuanceSet["DomainID"] = new string('0', 64);
-            await Validation.Validate(mpTokenIssuanceSet);
-            mpTokenIssuanceSet.Remove("DomainID");
+            try
+            {
+                // rippled MPTokenIssuanceSet: a zero DomainID clears the domain - legal
+                mpTokenIssuanceSet["DomainID"] = new string('0', 64);
+                await Validation.Validate(mpTokenIssuanceSet);
+            }
+            finally
+            {
+                mpTokenIssuanceSet.Remove("DomainID");
+            }
         }
 
         [TestMethod]
         public async Task TestThrowsWithMalformedDomainId()
         {
-            mpTokenIssuanceSet["DomainID"] = "1234";
-            await Helper.ThrowsExceptionAsync<ValidationException>(
-                () => Validation.Validate(mpTokenIssuanceSet),
-                "MPTokenIssuanceSet: DomainID must be a 64-character hexadecimal string");
-            mpTokenIssuanceSet.Remove("DomainID");
+            try
+            {
+                mpTokenIssuanceSet["DomainID"] = "1234";
+                await Helper.ThrowsExceptionAsync<ValidationException>(
+                    () => Validation.Validate(mpTokenIssuanceSet),
+                    "MPTokenIssuanceSet: DomainID must be a 64-character hexadecimal string");
+            }
+            finally
+            {
+                mpTokenIssuanceSet.Remove("DomainID");
+            }
         }
     }
 }

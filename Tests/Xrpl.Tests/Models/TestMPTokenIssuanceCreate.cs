@@ -87,46 +87,70 @@ namespace XrplTests.Xrpl.Models
         [TestMethod]
         public async Task TestVerifyWithDomainIdAndRequireAuth()
         {
-            // rippled: DomainID implies a non-public issuance - tfMPTRequireAuth required
-            mpTokenIssuanceCreate["DomainID"] = ValidDomainId;
-            mpTokenIssuanceCreate["Flags"] = (uint)MPTokenIssuanceCreateFlags.tfMPTRequireAuth;
-            await Validation.Validate(mpTokenIssuanceCreate);
-            mpTokenIssuanceCreate.Remove("DomainID");
-            mpTokenIssuanceCreate.Remove("Flags");
+            try
+            {
+                // rippled: DomainID implies a non-public issuance - tfMPTRequireAuth required
+                mpTokenIssuanceCreate["DomainID"] = ValidDomainId;
+                mpTokenIssuanceCreate["Flags"] = (uint)MPTokenIssuanceCreateFlags.tfMPTRequireAuth;
+                await Validation.Validate(mpTokenIssuanceCreate);
+            }
+            finally
+            {
+                mpTokenIssuanceCreate.Remove("DomainID");
+                mpTokenIssuanceCreate.Remove("Flags");
+            }
         }
 
         [TestMethod]
         public async Task TestThrowsWithDomainIdWithoutRequireAuth()
         {
-            mpTokenIssuanceCreate["DomainID"] = ValidDomainId;
-            await Helper.ThrowsExceptionAsync<ValidationException>(
-                () => Validation.Validate(mpTokenIssuanceCreate),
-                "MPTokenIssuanceCreate: DomainID requires the tfMPTRequireAuth flag");
-            mpTokenIssuanceCreate.Remove("DomainID");
+            try
+            {
+                mpTokenIssuanceCreate["DomainID"] = ValidDomainId;
+                await Helper.ThrowsExceptionAsync<ValidationException>(
+                    () => Validation.Validate(mpTokenIssuanceCreate),
+                    "MPTokenIssuanceCreate: DomainID requires the tfMPTRequireAuth flag");
+            }
+            finally
+            {
+                mpTokenIssuanceCreate.Remove("DomainID");
+            }
         }
 
         [TestMethod]
         public async Task TestThrowsWithMalformedDomainId()
         {
-            mpTokenIssuanceCreate["DomainID"] = "NOT-A-HASH";
-            mpTokenIssuanceCreate["Flags"] = (uint)MPTokenIssuanceCreateFlags.tfMPTRequireAuth;
-            await Helper.ThrowsExceptionAsync<ValidationException>(
-                () => Validation.Validate(mpTokenIssuanceCreate),
-                "MPTokenIssuanceCreate: DomainID must be a 64-character hexadecimal string");
-            mpTokenIssuanceCreate.Remove("DomainID");
-            mpTokenIssuanceCreate.Remove("Flags");
+            try
+            {
+                mpTokenIssuanceCreate["DomainID"] = "NOT-A-HASH";
+                mpTokenIssuanceCreate["Flags"] = (uint)MPTokenIssuanceCreateFlags.tfMPTRequireAuth;
+                await Helper.ThrowsExceptionAsync<ValidationException>(
+                    () => Validation.Validate(mpTokenIssuanceCreate),
+                    "MPTokenIssuanceCreate: DomainID must be a 64-character hexadecimal string");
+            }
+            finally
+            {
+                mpTokenIssuanceCreate.Remove("DomainID");
+                mpTokenIssuanceCreate.Remove("Flags");
+            }
         }
 
         [TestMethod]
         public async Task TestThrowsWithZeroDomainId()
         {
-            mpTokenIssuanceCreate["DomainID"] = new string('0', 64);
-            mpTokenIssuanceCreate["Flags"] = (uint)MPTokenIssuanceCreateFlags.tfMPTRequireAuth;
-            await Helper.ThrowsExceptionAsync<ValidationException>(
-                () => Validation.Validate(mpTokenIssuanceCreate),
-                "MPTokenIssuanceCreate: DomainID must not be zero");
-            mpTokenIssuanceCreate.Remove("DomainID");
-            mpTokenIssuanceCreate.Remove("Flags");
+            try
+            {
+                mpTokenIssuanceCreate["DomainID"] = new string('0', 64);
+                mpTokenIssuanceCreate["Flags"] = (uint)MPTokenIssuanceCreateFlags.tfMPTRequireAuth;
+                await Helper.ThrowsExceptionAsync<ValidationException>(
+                    () => Validation.Validate(mpTokenIssuanceCreate),
+                    "MPTokenIssuanceCreate: DomainID must not be zero");
+            }
+            finally
+            {
+                mpTokenIssuanceCreate.Remove("DomainID");
+                mpTokenIssuanceCreate.Remove("Flags");
+            }
         }
     }
 }
