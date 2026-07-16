@@ -46,7 +46,7 @@ jobs:
 
           # Current per-file blob shas of the watched .macro files
           current=$(gh api "repos/$UPSTREAM/contents/$UPSTREAM_DIR?ref=$head_sha" \
-            --jq '[.[] | select(.name | endswith(".macro")) | {(.name): .sha}] | add')
+            --jq '[.[] | select(.name | endswith(".macro")) | {(.name): .sha}] | add // {}')
           echo "current: $current"
 
           # Find the tracking issue
