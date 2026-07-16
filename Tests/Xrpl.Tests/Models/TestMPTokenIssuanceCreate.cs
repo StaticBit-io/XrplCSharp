@@ -81,5 +81,76 @@ namespace XrplTests.Xrpl.Models
                 "MPTokenIssuanceCreate: AssetScale must be between 0 and 10");
             mpTokenIssuanceCreate.Remove("AssetScale");
         }
+
+        private const string ValidDomainId = "77D6234D074E505024D39C04C3F262997B773719AB29ACFA83119E4210328776";
+
+        [TestMethod]
+        public async Task TestVerifyWithDomainIdAndRequireAuth()
+        {
+            try
+            {
+                // rippled: DomainID implies a non-public issuance - tfMPTRequireAuth required
+                mpTokenIssuanceCreate["DomainID"] = ValidDomainId;
+                mpTokenIssuanceCreate["Flags"] = (uint)MPTokenIssuanceCreateFlags.tfMPTRequireAuth;
+                await Validation.Validate(mpTokenIssuanceCreate);
+            }
+            finally
+            {
+                mpTokenIssuanceCreate.Remove("DomainID");
+                mpTokenIssuanceCreate.Remove("Flags");
+            }
+        }
+
+        [TestMethod]
+        public async Task TestThrowsWithDomainIdWithoutRequireAuth()
+        {
+            try
+            {
+                mpTokenIssuanceCreate["DomainID"] = ValidDomainId;
+                await Helper.ThrowsExceptionAsync<ValidationException>(
+                    () => Validation.Validate(mpTokenIssuanceCreate),
+                    "MPTokenIssuanceCreate: DomainID requires the tfMPTRequireAuth flag");
+            }
+            finally
+            {
+                mpTokenIssuanceCreate.Remove("DomainID");
+            }
+        }
+
+        [TestMethod]
+        public async Task TestThrowsWithMalformedDomainId()
+        {
+            try
+            {
+                mpTokenIssuanceCreate["DomainID"] = "NOT-A-HASH";
+                mpTokenIssuanceCreate["Flags"] = (uint)MPTokenIssuanceCreateFlags.tfMPTRequireAuth;
+                await Helper.ThrowsExceptionAsync<ValidationException>(
+                    () => Validation.Validate(mpTokenIssuanceCreate),
+                    "MPTokenIssuanceCreate: DomainID must be a 64-character hexadecimal string");
+            }
+            finally
+            {
+                mpTokenIssuanceCreate.Remove("DomainID");
+                mpTokenIssuanceCreate.Remove("Flags");
+            }
+        }
+
+        [TestMethod]
+        public async Task TestThrowsWithZeroDomainId()
+        {
+            try
+            {
+                mpTokenIssuanceCreate["DomainID"] = new string('0', 64);
+                mpTokenIssuanceCreate["Flags"] = (uint)MPTokenIssuanceCreateFlags.tfMPTRequireAuth;
+                await Helper.ThrowsExceptionAsync<ValidationException>(
+                    () => Validation.Validate(mpTokenIssuanceCreate),
+                    "MPTokenIssuanceCreate: DomainID must not be zero");
+            }
+            finally
+            {
+                mpTokenIssuanceCreate.Remove("DomainID");
+                mpTokenIssuanceCreate.Remove("Flags");
+            }
+        }
     }
 }

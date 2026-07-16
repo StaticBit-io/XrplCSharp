@@ -101,7 +101,7 @@ namespace Xrpl.Models.Transactions
             set => base.Flags = (uint?)value;
         }
     
-        /// <summary>Trading fee to set when depositing into an empty AMM (tfTwoAssetIfEmpty).</summary>
+        /// <inheritdoc />
         public uint? TradingFee { get; set; }
 }
 
@@ -148,6 +148,9 @@ namespace Xrpl.Models.Transactions
         public Xrpl.Models.Common.Currency? EPrice { get; set; }
 
         new AMMDepositFlags? Flags { get; set; }
+
+        /// <summary>Trading fee to set when depositing into an empty AMM (tfTwoAssetIfEmpty).</summary>
+        public uint? TradingFee { get; set; }
     }
 
     /// <inheritdoc cref="IAMMDeposit" />
@@ -182,7 +185,7 @@ namespace Xrpl.Models.Transactions
 
         #endregion
     
-        /// <summary>Trading fee to set when depositing into an empty AMM (tfTwoAssetIfEmpty).</summary>
+        /// <inheritdoc />
         public uint? TradingFee { get; set; }
 }
 

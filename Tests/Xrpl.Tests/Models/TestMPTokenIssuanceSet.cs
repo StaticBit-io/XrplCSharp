@@ -78,5 +78,36 @@ namespace XrplTests.Xrpl.Models
                 "MPTokenIssuanceSet: cannot set both tfMPTLock and tfMPTUnlock flags");
             mpTokenIssuanceSet.Remove("Flags");
         }
+
+        [TestMethod]
+        public async Task TestVerifyWithZeroDomainId()
+        {
+            try
+            {
+                // rippled MPTokenIssuanceSet: a zero DomainID clears the domain - legal
+                mpTokenIssuanceSet["DomainID"] = new string('0', 64);
+                await Validation.Validate(mpTokenIssuanceSet);
+            }
+            finally
+            {
+                mpTokenIssuanceSet.Remove("DomainID");
+            }
+        }
+
+        [TestMethod]
+        public async Task TestThrowsWithMalformedDomainId()
+        {
+            try
+            {
+                mpTokenIssuanceSet["DomainID"] = "1234";
+                await Helper.ThrowsExceptionAsync<ValidationException>(
+                    () => Validation.Validate(mpTokenIssuanceSet),
+                    "MPTokenIssuanceSet: DomainID must be a 64-character hexadecimal string");
+            }
+            finally
+            {
+                mpTokenIssuanceSet.Remove("DomainID");
+            }
+        }
     }
 }

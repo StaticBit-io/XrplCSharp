@@ -3,6 +3,7 @@ using System.Text.Json.Serialization;
 
 using System;
 using System.Collections.Generic;
+using System.Linq;
 using System.Threading.Tasks;
 
 using Xrpl.BinaryCodec.Types;
@@ -338,6 +339,38 @@ namespace Xrpl.Models.Transactions
                 if (metadataStr.Length > MPT_MAX_METADATA_LENGTH * 2)
                 {
                     throw new ValidationException($"MPTokenIssuanceCreate: MPTokenMetadata must be at most {MPT_MAX_METADATA_LENGTH} bytes");
+                }
+            }
+
+            if (tx.TryGetValue("MutableFlags", out var mutableFlags) && mutableFlags is not null)
+            {
+                if (!Common.TryGetUInt32(mutableFlags, out uint mutable))
+                {
+                    throw new ValidationException("MPTokenIssuanceCreate: MutableFlags must be a number");
+                }
+
+                // rippled MPTokenIssuanceCreate::preflight: at least one flag must be
+                // set and only tmf* bits are allowed (temINVALID_FLAG otherwise)
+                Common.ValidateNonZeroFlagsMask<MPTokenIssuanceCreateMutableFlags>(mutable, "MPTokenIssuanceCreate: invalid MutableFlags");
+            }
+
+            if (tx.TryGetValue("DomainID", out var domainId) && domainId is not null)
+            {
+                if (domainId is not string domain)
+                {
+                    throw new ValidationException("MPTokenIssuanceCreate: DomainID must be a string");
+                }
+
+                Common.ValidateDomainId(domain, "MPTokenIssuanceCreate");
+
+                // rippled MPTokenIssuanceCreate::preflight: a domain implies the
+                // issuance is not public - tfMPTRequireAuth must be set
+                bool requireAuth = tx.TryGetValue("Flags", out var flagsObj) &&
+                    Common.TryGetUInt32(flagsObj, out uint flagsValue) &&
+                    (flagsValue & (uint)MPTokenIssuanceCreateFlags.tfMPTRequireAuth) != 0;
+                if (!requireAuth)
+                {
+                    throw new ValidationException("MPTokenIssuanceCreate: DomainID requires the tfMPTRequireAuth flag");
                 }
             }
         }

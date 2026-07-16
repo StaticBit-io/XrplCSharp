@@ -127,6 +127,124 @@ public class TestISponsorship
             throw new RippleException($"Sponsored payment failed: {response.EngineResult}");
     }
 
+    private async Task<(XrplWallet sponsor, XrplWallet sponsee, XrplWallet destination)> SetupSponsorshipAsync(
+        SponsorshipSetFlags? flags = null)
+    {
+        XrplWallet sponsor = XrplWallet.Generate();
+        XrplWallet sponsee = XrplWallet.Generate();
+        XrplWallet destination = XrplWallet.Generate();
+        await IntegrationTestConfig.TryFundWalletsAsync(client, nodeType, sponsor, sponsee, destination);
+
+        SponsorshipSet setup = new SponsorshipSet
+        {
+            Account = sponsor.ClassicAddress,
+            Sponsee = sponsee.ClassicAddress,
+            FeeAmount = new Currency { ValueAsXrp = 5m },
+            Flags = flags,
+        };
+        setup = await client.Autofill(setup);
+        ValidateResult(await client.SubmitAndWait(setup, sponsor, true));
+        return (sponsor, sponsee, destination);
+    }
+
+    private static Payment SponsoredPayment(XrplWallet sponsee, XrplWallet destination, XrplWallet sponsor) => new Payment
+    {
+        Account = sponsee.ClassicAddress,
+        Destination = destination.ClassicAddress,
+        Amount = new Currency { ValueAsXrp = 1m },
+        Sponsor = sponsor.ClassicAddress,
+        SponsorFlags = SponsorCoverage.spfSponsorFee,
+    };
+
+    /// <summary>
+    /// Unified API (#43): no helpers, no flow choice — each side calls the
+    /// standard Sign, the sponsee submits the standard way.
+    /// </summary>
+    [TestMethod]
+    public async Task Unified_StandardSignBothSides_V3()
+    {
+        var (sponsor, sponsee, destination) = await SetupSponsorshipAsync();
+
+        Payment payment = await client.Autofill(SponsoredPayment(sponsee, destination, sponsor));
+        System.Text.Json.Nodes.JsonObject prepared = SponsorSigningHelper.PrepareForSigning(payment, sponsee);
+        var preparedDict = System.Text.Json.JsonSerializer.Deserialize<System.Collections.Generic.Dictionary<string, object>>(
+            prepared.ToJsonString(), global::Xrpl.Client.Json.XrplJsonOptions.Default);
+
+        // Sponsor side: standard Sign routes to the sponsor co-signature
+        SignatureResult sponsorPart = sponsor.Sign(preparedDict);
+
+        // Sponsee side: standard Sign preserves the SponsorSignature
+        var handedOver = System.Text.Json.JsonSerializer.Deserialize<System.Collections.Generic.Dictionary<string, object>>(
+            global::Xrpl.BinaryCodec.XrplBinaryCodec.Decode(sponsorPart.TxBlob).ToJsonString(),
+            global::Xrpl.Client.Json.XrplJsonOptions.Default);
+        SignatureResult final = sponsee.Sign(handedOver);
+
+        Submit response = await client.SubmitRequest(final.TxBlob, true);
+        if (response is not { EngineResult: "tesSUCCESS" or "terQUEUED" })
+            throw new RippleException($"Unified V3 sponsored payment failed: {response.EngineResult}");
+    }
+
+    /// <summary>
+    /// Unified API (#43): smart Submit finalizes as the sponsor — the sponsee's
+    /// signature is already present, the sponsor wallet composes and submits.
+    /// </summary>
+    [TestMethod]
+    public async Task Unified_SmartSubmit_SponsorFinalizes()
+    {
+        var (sponsor, sponsee, destination) = await SetupSponsorshipAsync();
+
+        Payment payment = await client.Autofill(SponsoredPayment(sponsee, destination, sponsor));
+        System.Text.Json.Nodes.JsonObject prepared = SponsorSigningHelper.PrepareForSigning(payment, sponsee);
+        var preparedDict = System.Text.Json.JsonSerializer.Deserialize<System.Collections.Generic.Dictionary<string, object>>(
+            prepared.ToJsonString(), global::Xrpl.Client.Json.XrplJsonOptions.Default);
+
+        // Sponsee signs with the standard Sign, hands the partially signed tx to the sponsor
+        SignatureResult sponseePart = sponsee.Sign(preparedDict);
+        var handedOver = System.Text.Json.JsonSerializer.Deserialize<System.Collections.Generic.Dictionary<string, object>>(
+            global::Xrpl.BinaryCodec.XrplBinaryCodec.Decode(sponseePart.TxBlob).ToJsonString(),
+            global::Xrpl.Client.Json.XrplJsonOptions.Default);
+
+        // The sponsor submits via the standard SubmitAndWait — composition happens inside
+        TransactionSummary result = await client.SubmitAndWait(handedOver, sponsor, autofill: false);
+        ValidateResult(result);
+    }
+
+    /// <summary>
+    /// Unified API (#43): the one-call V1 flow with both wallets local.
+    /// </summary>
+    [TestMethod]
+    public async Task Unified_SubmitAndWaitSponsored_OneCall()
+    {
+        var (sponsor, sponsee, destination) = await SetupSponsorshipAsync();
+
+        Payment payment = SponsoredPayment(sponsee, destination, sponsor);
+        TransactionSummary result = await client.SubmitAndWaitSponsored(payment, sponsee, sponsor);
+        ValidateResult(result);
+    }
+
+    /// <summary>
+    /// Unified API (#43): the ledger pre-check fails fast when the sponsorship
+    /// requires the sponsor's co-signature and it is missing.
+    /// </summary>
+    [TestMethod]
+    public async Task Unified_SmartSubmit_RequireSign_FailsFastWithoutSponsorSignature()
+    {
+        var (sponsor, sponsee, destination) = await SetupSponsorshipAsync(
+            SponsorshipSetFlags.tfSponsorshipSetRequireSignForFee);
+
+        Payment payment = await client.Autofill(SponsoredPayment(sponsee, destination, sponsor));
+        var txDict = payment.ToDictionary();
+
+        ValidationException ex = await Assert.ThrowsExactlyAsync<ValidationException>(
+            () => client.SubmitAndWait(txDict, sponsee, autofill: false));
+        StringAssert.Contains(ex.Message, "not signed by all participants");
+
+        // With the sponsor's co-signature the same transaction goes through
+        TransactionSummary result = await client.SubmitAndWaitSponsored(
+            SponsoredPayment(sponsee, destination, sponsor), sponsee, sponsor);
+        ValidateResult(result);
+    }
+
     [TestMethod]
     public async Task TestSponsorshipSet_DeleteObject()
     {

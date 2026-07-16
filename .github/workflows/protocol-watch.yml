@@ -1,0 +1,117 @@
+name: Protocol Watch
+
+# Weekly diff of rippled develop's protocol definition files against the
+# baseline recorded in the tracking issue. When a watched file changes, a
+# comment lands on the issue with links to the diffs — the manual "did the
+# protocol move?" ritual becomes a notification.
+#
+# State lives in the tracking issue body (labeled protocol-watch), not in the
+# repo and not in actions cache: no commits through branch protection, no
+# cache eviction.
+
+on:
+  schedule:
+    - cron: '0 6 * * 1' # Mondays 06:00 UTC
+  workflow_dispatch:
+
+permissions:
+  issues: write
+
+# Only one run may read/update the tracking-issue state at a time
+concurrency:
+  group: protocol-watch
+  cancel-in-progress: false
+
+env:
+  UPSTREAM: XRPLF/rippled
+  UPSTREAM_REF: develop
+  UPSTREAM_DIR: include/xrpl/protocol/detail
+  ISSUE_TITLE: 'Protocol watch: rippled develop'
+  ISSUE_LABEL: protocol-watch
+
+jobs:
+  watch:
+    runs-on: ubuntu-latest
+    steps:
+      - name: Compare protocol files against tracked baseline
+        env:
+          GH_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+          REPO: ${{ github.repository }}
+        run: |
+          set -euo pipefail
+
+          # Resolve the upstream head first, then pin the contents lookup to it
+          # so the recorded shas and the diff links refer to the same commit
+          head_sha=$(gh api "repos/$UPSTREAM/commits/$UPSTREAM_REF" --jq .sha)
+
+          # Current per-file blob shas of the watched .macro files
+          current=$(gh api "repos/$UPSTREAM/contents/$UPSTREAM_DIR?ref=$head_sha" \
+            --jq '[.[] | select(.name | endswith(".macro")) | {(.name): .sha}] | add // {}')
+          echo "current: $current"
+
+          # Find the tracking issue
+          issue=$(gh issue list --repo "$REPO" --label "$ISSUE_LABEL" --state open \
+            --json number,body --jq '.[0] // empty')
+
+          if [ -z "$issue" ]; then
+            gh label create "$ISSUE_LABEL" --repo "$REPO" \
+              --description "rippled develop protocol tracking" --color 5319e7 2>/dev/null || true
+            body=$(printf 'Automated baseline for the weekly protocol watch (.github/workflows/protocol-watch.yml). Do not edit the JSON block by hand.\n\nLast checked upstream commit: %s\n\n```json\n%s\n```\n' "$head_sha" "$current")
+            gh issue create --repo "$REPO" --title "$ISSUE_TITLE" --label "$ISSUE_LABEL" --body "$body"
+            echo "Baseline issue created."
+            exit 0
+          fi
+
+          number=$(echo "$issue" | jq -r .number)
+          # Fail closed on a corrupted baseline: an empty-object fallback would
+          # report every file as changed and overwrite the evidence
+          block=$(echo "$issue" | jq -r .body | awk '/^```json$/{f=1;next} /^```$/{f=0} f')
+          if [ -z "$block" ]; then
+            echo "::error::Tracking issue #$number has no JSON baseline block. Fix the issue body or close the issue to bootstrap a fresh baseline."
+            exit 1
+          fi
+          if ! stored=$(echo "$block" | jq -ce 'select(type == "object" and (to_entries | all(.value | type == "string")))'); then
+            echo "::error::Tracking issue #$number JSON baseline is malformed. Fix the issue body or close the issue to bootstrap a fresh baseline."
+            exit 1
+          fi
+          echo "stored: $stored"
+
+          # Union of keys so upstream file removals/renames are detected too
+          changed=$(jq -n --argjson cur "$current" --argjson old "$stored" \
+            '[(($cur | keys) + ($old | keys) | unique)[] | select($cur[.] != $old[.])]')
+          echo "changed: $changed"
+
+          if [ "$(echo "$changed" | jq length)" -eq 0 ]; then
+            echo "No protocol changes."
+            exit 0
+          fi
+
+          # Build a comment with per-file history links; a file missing from the
+          # current snapshot was removed/renamed upstream - do not link a 404 blob
+          files=$(echo "$changed" | jq -r '.[]')
+          lines=""
+          for f in $files; do
+            if [ "$(echo "$current" | jq --arg f "$f" 'has($f)')" = "true" ]; then
+              lines="$lines- \`$f\` — [history](https://github.com/$UPSTREAM/commits/$UPSTREAM_REF/$UPSTREAM_DIR/$f) · [current](https://github.com/$UPSTREAM/blob/$head_sha/$UPSTREAM_DIR/$f)"$'\n'
+            else
+              lines="$lines- \`$f\` — **removed or renamed upstream** · [history](https://github.com/$UPSTREAM/commits/$UPSTREAM_REF/$UPSTREAM_DIR/$f)"$'\n'
+            fi
+          done
+          # Idempotency: if the notification for this head_sha is already posted
+          # (a previous run died between comment and baseline update), skip the
+          # duplicate comment but still update the baseline below
+          marker="<!-- protocol-watch:$head_sha -->"
+          # Capture first: an API failure must abort the run (set -e), and a
+          # grep -q early-exit must not SIGPIPE the gh call under pipefail
+          existing_comments=$(gh api "repos/$REPO/issues/$number/comments" --paginate --jq '.[].body')
+          if grep -qF "$marker" <<< "$existing_comments"; then
+            echo "Notification for $head_sha already posted; updating the baseline only."
+          else
+            comment=$(printf '%s\nProtocol definitions changed on `%s` `%s` (checked at upstream commit %s):\n\n%s\nFollow-ups to consider: sync `definitions.json` (`server_definitions` diff), new amendments for the nightly stand config, new transaction/ledger-object fields for the models.\n' "$marker" "$UPSTREAM" "$UPSTREAM_REF" "$head_sha" "$lines")
+            gh issue comment "$number" --repo "$REPO" --body "$comment"
+          fi
+
+          # Update the baseline in the issue body
+          body=$(printf 'Automated baseline for the weekly protocol watch (.github/workflows/protocol-watch.yml). Do not edit the JSON block by hand.\n\nLast checked upstream commit: %s\n\n```json\n%s\n```\n' "$head_sha" "$current")
+          gh issue edit "$number" --repo "$REPO" --body "$body"
+          echo "Comment posted and baseline updated."

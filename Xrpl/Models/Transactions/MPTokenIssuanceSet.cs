@@ -1,6 +1,7 @@
 #nullable enable
 using System;
 using System.Collections.Generic;
+using System.Linq;
 using System.Text.Json.Serialization;
 using System.Threading.Tasks;
 
@@ -258,6 +259,19 @@ namespace Xrpl.Models.Transactions
                 }
             }
 
+            uint mutable = 0;
+            if (tx.TryGetValue("MutableFlags", out var mutableFlags) && mutableFlags is not null)
+            {
+                if (!Common.TryGetUInt32(mutableFlags, out mutable))
+                {
+                    throw new ValidationException("MPTokenIssuanceSet: MutableFlags must be a number");
+                }
+
+                // rippled MPTokenIssuanceSet::preflight: at least one flag must be
+                // set and only tmfMPTSet* bits are allowed (temINVALID_FLAG otherwise)
+                Common.ValidateNonZeroFlagsMask<MPTokenIssuanceSetMutableFlags>(mutable, "MPTokenIssuanceSet: invalid MutableFlags");
+            }
+
             if (tx.TryGetValue("TransferFee", out var transferFee) && transferFee is not null)
             {
                 if (!Common.TryGetUInt32(transferFee, out uint fee))
@@ -268,6 +282,13 @@ namespace Xrpl.Models.Transactions
                 if (fee > MPT_MAX_TRANSFER_FEE)
                 {
                     throw new ValidationException($"MPTokenIssuanceSet: TransferFee must be between 0 and {MPT_MAX_TRANSFER_FEE}");
+                }
+
+                // rippled MPTokenIssuanceSet::preflight: a non-zero TransferFee combined
+                // with enabling confidential balances is temBAD_TRANSFER_FEE
+                if (fee > 0 && (mutable & (uint)MPTokenIssuanceSetMutableFlags.tmfMPTSetCanHoldConfidentialBalance) != 0)
+                {
+                    throw new ValidationException("MPTokenIssuanceSet: TransferFee must be 0 when tmfMPTSetCanHoldConfidentialBalance is set");
                 }
             }
 
@@ -284,9 +305,16 @@ namespace Xrpl.Models.Transactions
                 }
             }
 
-            if (tx.TryGetValue("DomainID", out var domainId) && domainId is not null && domainId is not string)
+            if (tx.TryGetValue("DomainID", out var domainId) && domainId is not null)
             {
-                throw new ValidationException("MPTokenIssuanceSet: DomainID must be a string");
+                if (domainId is not string domain)
+                {
+                    throw new ValidationException("MPTokenIssuanceSet: DomainID must be a string");
+                }
+
+                // Format only, zero allowed (clears the domain); whether the
+                // issuance has RequireAuth is ledger state rippled checks in preclaim
+                Common.ValidateDomainId(domain, "MPTokenIssuanceSet", allowZero: true);
             }
 
             if (tx.TryGetValue("IssuerEncryptionKey", out var issuerKey) && issuerKey is not null && issuerKey is not string)

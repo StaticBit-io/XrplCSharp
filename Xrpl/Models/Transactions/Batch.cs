@@ -123,6 +123,17 @@ public sealed class BatchResponse : TransactionResponse, IBatch
 
 public partial class Validation
 {
+    /// <summary>
+    /// Transaction types rippled forbids inside a Batch
+    /// (Batch::preflight kDisabledTxTypes → temINVALID_INNER_BATCH).
+    /// </summary>
+    private static readonly HashSet<string> DisabledInnerTxTypes = new HashSet<string>(StringComparer.OrdinalIgnoreCase)
+    {
+        "VaultCreate", "VaultSet", "VaultDelete", "VaultDeposit", "VaultWithdraw", "VaultClawback",
+        "LoanBrokerSet", "LoanBrokerDelete", "LoanBrokerCoverDeposit", "LoanBrokerCoverWithdraw", "LoanBrokerCoverClawback",
+        "LoanSet", "LoanDelete", "LoanManage", "LoanPay",
+    };
+
     public static async Task ValidateBatch(Dictionary<string, object> tx)
     {
         if (tx == null)
@@ -134,6 +145,14 @@ public partial class Validation
             !string.Equals(transactionType, "Batch", StringComparison.OrdinalIgnoreCase))
         {
             throw new ArgumentException("Batch: TransactionType must be 'Batch'.");
+        }
+
+        // rippled Batch::preflight: reserve sponsorship is not allowed on the outer Batch
+        if (tx.TryGetValue("SponsorFlags", out var outerSponsorFlagsObj) &&
+            Common.TryGetUInt32(outerSponsorFlagsObj, out uint outerSponsorFlags) &&
+            (outerSponsorFlags & (uint)SponsorCoverage.spfSponsorReserve) != 0)
+        {
+            throw new ArgumentException("Batch: spfSponsorReserve is not allowed on the outer Batch transaction.");
         }
 
         if (!tx.TryGetValue("RawTransactions", out var rawTxsObj) || rawTxsObj is not IEnumerable<object> rawTxsEnumerable)
@@ -171,6 +190,13 @@ public partial class Validation
                 throw new ArgumentException($"Batch: RawTransactions[{i}] cannot be a Batch transaction (nesting is not allowed).");
             }
 
+            // rippled Batch::preflight kDisabledTxTypes: every Vault and Loan
+            // transaction type is rejected as an inner tx (temINVALID_INNER_BATCH)
+            if (DisabledInnerTxTypes.Contains(innerType))
+            {
+                throw new ArgumentException($"Batch: RawTransactions[{i}] TransactionType '{innerType}' is not allowed inside Batch (rippled kDisabledTxTypes).");
+            }
+
             if (!innerTx.TryGetValue("Flags", out var flagsObj) ||
                 !Common.TryGetUInt32(flagsObj, out uint flagsValue) ||
                 (flagsValue & (uint)XrplGlobalFlags.tfInnerBatchTxn) == 0)
@@ -196,6 +222,33 @@ public partial class Validation
             if (innerTx.TryGetValue("Signers", out var signers) && signers != null)
             {
                 throw new ArgumentException($"Batch: RawTransactions[{i}].RawTransaction.Signers is not allowed inside Batch.");
+            }
+
+            // rippled Batch::preflight: fee sponsorship is not allowed on inner txs
+            if (innerTx.ContainsKey("Sponsor") &&
+                innerTx.TryGetValue("SponsorFlags", out var innerSponsorFlagsObj) &&
+                Common.TryGetUInt32(innerSponsorFlagsObj, out uint innerSponsorFlags) &&
+                (innerSponsorFlags & (uint)SponsorCoverage.spfSponsorFee) != 0)
+            {
+                throw new ArgumentException($"Batch: RawTransactions[{i}] fee sponsorship (spfSponsorFee) is not allowed on inner Batch transactions.");
+            }
+
+            // Co-signature markers on inners must carry no signature material -
+            // the sponsor/counterparty authorizes via BatchSigners instead
+            foreach (string markerField in new[] { "SponsorSignature", "CounterpartySignature" })
+            {
+                // null is treated as absent (same convention as GetBatchSignerAccounts);
+                // any other non-object value can never serialize as an STObject
+                if (!innerTx.TryGetValue(markerField, out var markerObj) || markerObj is null)
+                    continue;
+                if (markerObj is not IDictionary<string, object> marker)
+                    throw new ArgumentException($"Batch: RawTransactions[{i}].{markerField} must be an object inside a Batch.");
+                if (marker.TryGetValue("TxnSignature", out var markerSig) && markerSig != null)
+                    throw new ArgumentException($"Batch: RawTransactions[{i}].{markerField} must not contain TxnSignature inside a Batch.");
+                if (marker.TryGetValue("Signers", out var markerSigners) && markerSigners != null)
+                    throw new ArgumentException($"Batch: RawTransactions[{i}].{markerField} must not contain Signers inside a Batch.");
+                if (marker.TryGetValue("SigningPubKey", out var markerPk) && markerPk != null && $"{markerPk}" != "")
+                    throw new ArgumentException($"Batch: RawTransactions[{i}].{markerField}.SigningPubKey must be empty inside a Batch.");
             }
         }
 

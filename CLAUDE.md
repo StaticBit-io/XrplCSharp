@@ -70,7 +70,6 @@ XrplCSharp/
 │
 ├── XrplCSharp.sln                   # Solution file
 ├── test.runsettings                 # MSTest config: parallel at class level
-├── azure-pipelines.yml              # Legacy CI (outdated, references old project names)
 ├── CONTRIBUTING.md                  # Development setup and release process
 ├── CHANGES.md                       # Changelog
 └── README.md                        # Usage examples and documentation links
@@ -193,9 +192,12 @@ Output goes to `docs/` directory. Published to GitHub Pages.
 
 | Workflow | Trigger | Purpose |
 |----------|---------|---------|
-| `dotnet.test.yml` | Push/PR to `dev`, `release` | Build + unit tests (`TestU`) + integration tests (`TestI` with Docker rippled) |
+| `dotnet.test.yml` | Push/PR to `dev`, `release`; merge queue | Build + unit tests (`TestU`) + integration tests (`TestI` with Docker rippled) |
 | `nuget.release.yml` | Push to `release` | Build Release → Pack → Publish to GitHub Packages + NuGet.org |
 | `docs.yml` | Push to `release` | DocFx → GitHub Pages |
+| `protocol-watch.yml` | Weekly cron (Mon 06:00 UTC); manual | Diffs rippled develop `*.macro` protocol files vs the baseline in the `protocol-watch` tracking issue; comments there on changes |
+
+Integration tests do **not** run on PRs into `dev` — `dev` uses a GitHub merge queue, and the `integration` job runs on the `merge_group` event against the merge result before the merge lands ("Merge when ready" button). Promotion PRs into `release` still run the full suite directly. New pushes to a PR cancel its in-flight CI run (`concurrency`, PR events only).
 
 ### Release Process
 
@@ -225,7 +227,6 @@ Reference: [xrpl-codec-gen](https://github.com/RichardAH/xrpl-codec-gen)
 
 - No `Directory.Build.props` or `global.json` — versions are managed per `.csproj`
 - No centralized package management — each project specifies its own NuGet versions
-- `azure-pipelines.yml` is **outdated** (references old `RippleDotNet` project name) — use GitHub Actions workflows instead
 - `test.runsettings` configures MSTest parallel execution at class level
 - `.editorconfig` is minimal (primarily CS8632 suppression)
 - The library uses `System.Text.Json` (not Newtonsoft.Json) for serialization
