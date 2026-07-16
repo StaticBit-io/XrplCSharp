@@ -98,8 +98,13 @@ namespace Xrpl.Wallet
                     SignatureObject parsed = SignatureObject.FromJsonObject(sponsorJson);
                     if (parsed.Signers is { Count: > 0 })
                     {
+                        // Entries pre-placed under SponsorSignature.Signers keep their
+                        // explicit role: the producer asserted the sponsor side, so they
+                        // are NOT re-routed by sponsorSide (offline compose may have none)
                         foreach (SignatureObject inner in parsed.Signers)
                         {
+                            if (string.IsNullOrEmpty(inner.Account))
+                                throw new ValidationException("A SponsorSignature Signers entry is missing the Account field.");
                             if (string.IsNullOrEmpty(inner.SigningPubKey) || string.IsNullOrEmpty(inner.TxnSignature))
                                 throw new ValidationException("A SponsorSignature Signers entry is missing SigningPubKey or TxnSignature.");
                             sponsorEntries.Add(new JsonObject

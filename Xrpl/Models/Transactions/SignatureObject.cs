@@ -79,10 +79,35 @@ namespace Xrpl.Models.Transactions
                     .ToList();
             }
 
-            if (result.Signers is { Count: > 0 } && !string.IsNullOrEmpty(result.TxnSignature))
-                throw new ValidationException("Signature object mixes the single-signature and multisig forms (both TxnSignature and Signers present).");
+            result.ValidateShape();
 
             return result;
+        }
+
+        /// <summary>
+        /// Enforces the two protocol shapes: multisig (non-empty Signers, empty
+        /// SigningPubKey, no TxnSignature) or single-signature (SigningPubKey +
+        /// TxnSignature, no Signers). Empty and mixed forms are rejected.
+        /// </summary>
+        /// <exception cref="ValidationException">When the object matches neither shape.</exception>
+        public void ValidateShape()
+        {
+            if (Signers is { Count: > 0 })
+            {
+                if (!string.IsNullOrEmpty(TxnSignature))
+                    throw new ValidationException("Signature object mixes the single-signature and multisig forms (both TxnSignature and Signers present).");
+                if (!string.IsNullOrEmpty(SigningPubKey))
+                    throw new ValidationException("Multisig signature objects require an empty SigningPubKey.");
+                foreach (SignatureObject signer in Signers)
+                {
+                    if (string.IsNullOrEmpty(signer.SigningPubKey) || string.IsNullOrEmpty(signer.TxnSignature))
+                        throw new ValidationException("Each Signer entry requires SigningPubKey and TxnSignature.");
+                }
+                return;
+            }
+
+            if (string.IsNullOrEmpty(SigningPubKey) || string.IsNullOrEmpty(TxnSignature))
+                throw new ValidationException("Single-signature objects require SigningPubKey and TxnSignature.");
         }
     }
 }

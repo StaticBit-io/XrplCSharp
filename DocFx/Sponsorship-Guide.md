@@ -81,11 +81,12 @@ When required, the sponsee's transaction must carry a valid `SponsorSignature` â
 
 ## Transaction Types
 
-### SponsorshipSet (sent by the sponsor)
+### SponsorshipSet
 
-Creates/updates the relationship or deletes it with `tfDeleteObject`:
+Creates/updates the relationship or deletes it with `tfDeleteObject`. Per rippled `SponsorshipSet::preflight`, exactly one of `Sponsee` / `CounterpartySponsor` is present (the submitter is the other side); **only the sponsor can create or update**, but **either side can delete**:
 
 ```csharp
+// The sponsor creates/updates (names the sponsee):
 var setup = new SponsorshipSet
 {
     Account = sponsor.ClassicAddress,
@@ -95,17 +96,28 @@ var setup = new SponsorshipSet
 };
 setup = await client.Autofill(setup);
 await client.SubmitAndWait(setup, sponsor, true);
+
+// The sponsee deletes its own sponsorship (names the sponsor);
+// deletion forbids the modification flags and FeeAmount/MaxFee/RemainingOwnerCount:
+var deletion = new SponsorshipSet
+{
+    Account = sponsee.ClassicAddress,
+    CounterpartySponsor = sponsor.ClassicAddress,
+    Flags = SponsorshipSetFlags.tfDeleteObject,
+};
+deletion = await client.Autofill(deletion);
+await client.SubmitAndWait(deletion, sponsee, true);
 ```
 
 ### SponsorshipTransfer
 
-Moves or terminates an existing sponsorship. Exactly one mode flag is required:
+Creates, moves or terminates reserve sponsorship of existing ledger objects. Exactly one mode flag is required (per rippled `SponsorshipTransfer::preflight`; the target owner is `Account` for Create/Reassign â€” `Sponsee` is forbidden there):
 
-| Flag | Who sends | Extra fields |
-|---|---|---|
-| `tfSponsorshipCreate` | current sponsor | `Sponsor` (the new sponsor) required, `Sponsee` forbidden |
-| `tfSponsorshipReassign` | current sponsor | `Sponsor` required, `Sponsee` forbidden |
-| `tfSponsorshipEnd` | sponsee or sponsor | `Sponsor` forbidden; `Sponsee` must differ from `Account` |
+| Flag | Who sends | What it does | Extra fields |
+|---|---|---|---|
+| `tfSponsorshipCreate` | the sponsee (owner of the unsponsored objects) | establishes reserve sponsorship of existing objects | `Sponsor` (the new sponsor) + `spfSponsorReserve` required; the sponsor co-signs |
+| `tfSponsorshipReassign` | the sponsee (owner of the sponsored objects) | moves the reserve from the current sponsor to a new one | `Sponsor` (the new sponsor) + `spfSponsorReserve` required; the new sponsor co-signs |
+| `tfSponsorshipEnd` | sponsee or sponsor | removes reserve sponsorship (target = `Sponsee` if present, else `Account`) | `Sponsor` and `SponsorFlags` forbidden |
 
 ---
 

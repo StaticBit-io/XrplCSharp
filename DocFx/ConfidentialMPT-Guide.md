@@ -101,9 +101,9 @@ All amounts encrypted under holder/issuer/auditor keys are supplied by the **pro
 
 Without an external prover the positive path cannot be exercised. What the repository's integration suite does instead (`Tests/Xrpl.Tests/Integration/transactions/TestIConfidentialMPT.cs`):
 
-- builds a privacy-enabled issuance on the nightly stand;
+- builds a regular MPT issuance on the nightly stand (no confidential-balance flags or encryption keys — the positive privacy path needs the external prover);
 - submits a `ConfidentialMPTConvert` with structurally valid but cryptographically bogus proof material;
-- asserts the node rejects it with a **domain** error (`tecBAD_PROOF`-class), not a parse error — proving the SDK's encoding is protocol-correct end-to-end.
+- asserts the node answers with a **domain** verdict (any `tem`/`tec` from the ConfidentialTransfer logic), not a parse error — proving the SDK's encoding is protocol-correct end-to-end.
 
 ```bash
 docker compose -f .ci-config/docker-compose.batchv11.yml up -d --build
@@ -121,7 +121,7 @@ Tests are gated by `AmendmentGuard` and exit inconclusive on nodes without the a
 | `temDISABLED` | The `ConfidentialTransfer` amendment is not active |
 | `temBAD_CIPHERTEXT` | Malformed encrypted amount / key material |
 | `temBAD_TRANSFER_FEE` | Non-zero `TransferFee` combined with enabling confidential balances |
-| `tecBAD_PROOF` | The ZK proof does not verify (expected with bogus prover input) |
+| `tecBAD_PROOF` | The ZK proof does not verify (a possible protocol verdict for bogus prover input) |
 | `terLOCKED` | The issuance or holder balance is locked |
 
 *Русская версия: [ConfidentialMPT-Guide.ru](ConfidentialMPT-Guide.ru.md)*

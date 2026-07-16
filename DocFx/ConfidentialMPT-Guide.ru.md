@@ -101,9 +101,9 @@ var set = new MPTokenIssuanceSet
 
 Без внешнего prover'а позитивный путь пройти нельзя. Что вместо этого делает интеграционный набор репозитория (`Tests/Xrpl.Tests/Integration/transactions/TestIConfidentialMPT.cs`):
 
-- строит privacy-enabled выпуск на nightly-стенде;
+- строит обычный MPT-выпуск на nightly-стенде (без флагов конфиденциальных балансов и ключей шифрования — позитивный privacy-путь требует внешнего prover'а);
 - отправляет `ConfidentialMPTConvert` со структурно валидным, но криптографически фиктивным материалом доказательства;
-- проверяет, что нода отклоняет его **доменной** ошибкой (класс `tecBAD_PROOF`), а не ошибкой парсинга — то есть кодировка SDK протокольно корректна end-to-end.
+- проверяет, что нода отвечает **доменным** вердиктом (любой `tem`/`tec` из логики ConfidentialTransfer), а не ошибкой парсинга — то есть кодировка SDK протокольно корректна end-to-end.
 
 ```bash
 docker compose -f .ci-config/docker-compose.batchv11.yml up -d --build
@@ -121,7 +121,7 @@ dotnet test Tests/Xrpl.Tests/Xrpl.Tests.csproj --settings test.runsettings --fil
 | `temDISABLED` | Амендмент `ConfidentialTransfer` не активен |
 | `temBAD_CIPHERTEXT` | Некорректный зашифрованный материал |
 | `temBAD_TRANSFER_FEE` | Ненулевой `TransferFee` вместе со включением конфиденциальных балансов |
-| `tecBAD_PROOF` | ZK-доказательство не проходит верификацию (ожидаемо для фиктивного prover-материала) |
+| `tecBAD_PROOF` | ZK-доказательство не проходит верификацию (один из возможных протокольных вердиктов для фиктивного prover-материала) |
 | `terLOCKED` | Выпуск или баланс держателя заблокирован |
 
 *English version: [ConfidentialMPT-Guide](ConfidentialMPT-Guide.md)*

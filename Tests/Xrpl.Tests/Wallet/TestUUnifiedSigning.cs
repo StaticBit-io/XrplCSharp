@@ -138,6 +138,30 @@ namespace Xrpl.Tests.Wallet.Tests
         }
 
         [TestMethod]
+        public void TestUSign_CounterpartyMultisignPart_PreservesSubmitterPubKey()
+        {
+            // XLS-66 mirror of the sponsor preimage rule: a multisign part for a
+            // LoanSet whose MAIN signature is single (broker pubkey present) must
+            // sign over that pubkey - "" would produce a different preimage
+            Dictionary<string, object> loanSet = JsonSerializer.Deserialize<Dictionary<string, object>>(new JsonObject
+            {
+                ["TransactionType"] = "LoanSet",
+                ["Account"] = Sponsor.ClassicAddress,        // the broker (single-sign submitter)
+                ["Counterparty"] = Submitter.ClassicAddress, // the borrower (multisig side)
+                ["Fee"] = "12",
+                ["Sequence"] = 9u,
+                ["LastLedgerSequence"] = 8000002u,
+                ["SigningPubKey"] = Sponsor.PublicKey,
+            }.ToJsonString(), XrplJsonOptions.Default);
+
+            var part = Destination.Sign(loanSet, multisign: true);
+
+            JsonObject decoded = XrplBinaryCodec.Decode(part.TxBlob).AsObject();
+            Assert.AreEqual(Sponsor.PublicKey, decoded["SigningPubKey"]?.GetValue<string>(),
+                "the multisign part must keep the broker's SigningPubKey in the serialized form");
+        }
+
+        [TestMethod]
         public void TestUSign_MultisignBypassesSponsorRouting()
         {
             // multisign: true must keep producing a portable Signer entry even

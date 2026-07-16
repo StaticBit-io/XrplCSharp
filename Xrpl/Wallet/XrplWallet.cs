@@ -689,7 +689,9 @@ namespace Xrpl.Wallet
             // ОДИНОЧНОЙ основной подписью sponsor-side подписанты подписывают
             // поверх pubkey отправителя — тогда сохраняем его как есть.
             var txForSign = txBase.DeepClone().AsObject();
-            bool sponsoredSingleMain = txBase["Sponsor"] is not null &&
+            // Sponsor (XLS-68) and LoanSet Counterparty (XLS-66) share the inner
+            // co-signature protocol - both co-sign over the submitter's pubkey
+            bool sponsoredSingleMain = (txBase["Sponsor"] is not null || txBase["Counterparty"] is not null) &&
                 !string.IsNullOrEmpty(txBase["SigningPubKey"]?.GetValue<string>());
             txForSign["SigningPubKey"] = sponsoredSingleMain
                 ? txBase["SigningPubKey"]!.GetValue<string>()

@@ -354,9 +354,24 @@ namespace Xrpl.Models.Transactions
                 Common.ValidateNonZeroFlagsMask<MPTokenIssuanceCreateMutableFlags>(mutable, "MPTokenIssuanceCreate: invalid MutableFlags");
             }
 
-            if (tx.TryGetValue("DomainID", out var domainId) && domainId is not null && domainId is not string)
+            if (tx.TryGetValue("DomainID", out var domainId) && domainId is not null)
             {
-                throw new ValidationException("MPTokenIssuanceCreate: DomainID must be a string");
+                if (domainId is not string domain)
+                {
+                    throw new ValidationException("MPTokenIssuanceCreate: DomainID must be a string");
+                }
+
+                Common.ValidateDomainId(domain, "MPTokenIssuanceCreate");
+
+                // rippled MPTokenIssuanceCreate::preflight: a domain implies the
+                // issuance is not public - tfMPTRequireAuth must be set
+                bool requireAuth = tx.TryGetValue("Flags", out var flagsObj) &&
+                    Common.TryGetUInt32(flagsObj, out uint flagsValue) &&
+                    (flagsValue & (uint)MPTokenIssuanceCreateFlags.tfMPTRequireAuth) != 0;
+                if (!requireAuth)
+                {
+                    throw new ValidationException("MPTokenIssuanceCreate: DomainID requires the tfMPTRequireAuth flag");
+                }
             }
         }
     }
