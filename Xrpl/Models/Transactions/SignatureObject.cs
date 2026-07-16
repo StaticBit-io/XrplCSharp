@@ -92,14 +92,19 @@ namespace Xrpl.Models.Transactions
         /// <exception cref="ValidationException">When the object matches neither shape.</exception>
         public void ValidateShape()
         {
-            if (Signers is { Count: > 0 })
+            if (Signers is not null)
             {
+                if (Signers.Count == 0)
+                    throw new ValidationException("Multisig signature objects require at least one Signer entry.");
                 if (!string.IsNullOrEmpty(TxnSignature))
                     throw new ValidationException("Signature object mixes the single-signature and multisig forms (both TxnSignature and Signers present).");
                 if (!string.IsNullOrEmpty(SigningPubKey))
                     throw new ValidationException("Multisig signature objects require an empty SigningPubKey.");
                 foreach (SignatureObject signer in Signers)
                 {
+                    // A nested Signer is the rippled Signer STObject: Account is required
+                    if (string.IsNullOrEmpty(signer.Account))
+                        throw new ValidationException("Each Signer entry requires the Account field.");
                     if (string.IsNullOrEmpty(signer.SigningPubKey) || string.IsNullOrEmpty(signer.TxnSignature))
                         throw new ValidationException("Each Signer entry requires SigningPubKey and TxnSignature.");
                 }

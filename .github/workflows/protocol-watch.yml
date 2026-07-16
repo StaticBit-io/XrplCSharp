@@ -70,7 +70,7 @@ jobs:
             echo "::error::Tracking issue #$number has no JSON baseline block. Fix the issue body or close the issue to bootstrap a fresh baseline."
             exit 1
           fi
-          if ! stored=$(echo "$block" | jq -ce 'select(type == "object")'); then
+          if ! stored=$(echo "$block" | jq -ce 'select(type == "object" and (to_entries | all(.value | type == "string")))'); then
             echo "::error::Tracking issue #$number JSON baseline is malformed. Fix the issue body or close the issue to bootstrap a fresh baseline."
             exit 1
           fi
@@ -101,7 +101,10 @@ jobs:
           # (a previous run died between comment and baseline update), skip the
           # duplicate comment but still update the baseline below
           marker="<!-- protocol-watch:$head_sha -->"
-          if gh api "repos/$REPO/issues/$number/comments" --paginate --jq '.[].body' | grep -qF "$marker"; then
+          # Capture first: an API failure must abort the run (set -e), and a
+          # grep -q early-exit must not SIGPIPE the gh call under pipefail
+          existing_comments=$(gh api "repos/$REPO/issues/$number/comments" --paginate --jq '.[].body')
+          if grep -qF "$marker" <<< "$existing_comments"; then
             echo "Notification for $head_sha already posted; updating the baseline only."
           else
             comment=$(printf '%s\nProtocol definitions changed on `%s` `%s` (checked at upstream commit %s):\n\n%s\nFollow-ups to consider: sync `definitions.json` (`server_definitions` diff), new amendments for the nightly stand config, new transaction/ledger-object fields for the models.\n' "$marker" "$UPSTREAM" "$UPSTREAM_REF" "$head_sha" "$lines")
