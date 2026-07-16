@@ -305,9 +305,16 @@ namespace Xrpl.Models.Transactions
                 }
             }
 
-            if (tx.TryGetValue("DomainID", out var domainId) && domainId is not null && domainId is not string)
+            if (tx.TryGetValue("DomainID", out var domainId) && domainId is not null)
             {
-                throw new ValidationException("MPTokenIssuanceSet: DomainID must be a string");
+                if (domainId is not string domain)
+                {
+                    throw new ValidationException("MPTokenIssuanceSet: DomainID must be a string");
+                }
+
+                // Format only, zero allowed (clears the domain); whether the
+                // issuance has RequireAuth is ledger state rippled checks in preclaim
+                Common.ValidateDomainId(domain, "MPTokenIssuanceSet", allowZero: true);
             }
 
             if (tx.TryGetValue("IssuerEncryptionKey", out var issuerKey) && issuerKey is not null && issuerKey is not string)

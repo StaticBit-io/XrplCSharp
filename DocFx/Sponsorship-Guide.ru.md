@@ -81,11 +81,12 @@
 
 ## Типы транзакций
 
-### SponsorshipSet (отправляет спонсор)
+### SponsorshipSet
 
-Создаёт/обновляет отношение либо удаляет его флагом `tfDeleteObject`:
+Создаёт/обновляет отношение либо удаляет его флагом `tfDeleteObject`. По rippled `SponsorshipSet::preflight` присутствует ровно одно из полей `Sponsee` / `CounterpartySponsor` (отправитель — другая сторона); **создавать и обновлять может только спонсор**, а **удалять — любая из сторон**:
 
 ```csharp
+// Спонсор создаёт/обновляет (указывает спонсируемого):
 var setup = new SponsorshipSet
 {
     Account = sponsor.ClassicAddress,
@@ -95,17 +96,28 @@ var setup = new SponsorshipSet
 };
 setup = await client.Autofill(setup);
 await client.SubmitAndWait(setup, sponsor, true);
+
+// Спонсируемый сам удаляет своё спонсорство (указывает спонсора);
+// при удалении запрещены модификационные флаги и FeeAmount/MaxFee/RemainingOwnerCount:
+var deletion = new SponsorshipSet
+{
+    Account = sponsee.ClassicAddress,
+    CounterpartySponsor = sponsor.ClassicAddress,
+    Flags = SponsorshipSetFlags.tfDeleteObject,
+};
+deletion = await client.Autofill(deletion);
+await client.SubmitAndWait(deletion, sponsee, true);
 ```
 
 ### SponsorshipTransfer
 
-Передаёт или завершает существующее спонсорство. Обязателен ровно один режимный флаг:
+Создаёт, передаёт или завершает спонсорство резерва уже существующих объектов леджера. Обязателен ровно один режимный флаг (по rippled `SponsorshipTransfer::preflight`; для Create/Reassign целевой владелец — `Account`, поле `Sponsee` там запрещено):
 
-| Флаг | Кто отправляет | Дополнительные поля |
-|---|---|---|
-| `tfSponsorshipCreate` | текущий спонсор | `Sponsor` (новый спонсор) обязателен, `Sponsee` запрещён |
-| `tfSponsorshipReassign` | текущий спонсор | `Sponsor` обязателен, `Sponsee` запрещён |
-| `tfSponsorshipEnd` | спонсируемый или спонсор | `Sponsor` запрещён; `Sponsee` не должен совпадать с `Account` |
+| Флаг | Кто отправляет | Что делает | Дополнительные поля |
+|---|---|---|---|
+| `tfSponsorshipCreate` | спонсируемый (владелец неспонсируемых объектов) | устанавливает спонсорство резерва существующих объектов | `Sponsor` (новый спонсор) + `spfSponsorReserve` обязательны; спонсор со-подписывает |
+| `tfSponsorshipReassign` | спонсируемый (владелец спонсируемых объектов) | переносит резерв с текущего спонсора на нового | `Sponsor` (новый спонсор) + `spfSponsorReserve` обязательны; новый спонсор со-подписывает |
+| `tfSponsorshipEnd` | спонсируемый или спонсор | снимает спонсорство резерва (цель = `Sponsee`, если указан, иначе `Account`) | `Sponsor` и `SponsorFlags` запрещены |
 
 ---
 

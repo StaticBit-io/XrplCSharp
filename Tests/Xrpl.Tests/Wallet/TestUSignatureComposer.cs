@@ -8,6 +8,7 @@ using Xrpl.BinaryCodec;
 using Xrpl.Client.Exceptions;
 using Xrpl.Client.Json;
 using Xrpl.Keypairs;
+using Xrpl.Models.Transactions;
 using Xrpl.Wallet;
 
 namespace Xrpl.Tests.Wallet.Tests
@@ -118,6 +119,34 @@ namespace Xrpl.Tests.Wallet.Tests
             Assert.AreEqual("", sponsorSig["SigningPubKey"]!.GetValue<string>(), "sponsor multisig form uses an empty SigningPubKey");
             Assert.AreEqual(2, sponsorSig["Signers"]!.AsArray().Count);
             Assert.IsNull(decoded["Signers"], "no entries may leak into the main Signers section");
+        }
+
+        [TestMethod]
+        public void TestUSignatureObject_EmptyOrMixedShapes_Throw()
+        {
+            // Empty object: neither signature form
+            Assert.ThrowsExactly<ValidationException>(
+                () => SignatureObject.FromJsonObject(new JsonObject()));
+
+            // Bare TxnSignature without the signing key
+            Assert.ThrowsExactly<ValidationException>(
+                () => SignatureObject.FromJsonObject(new JsonObject { ["TxnSignature"] = "DEADBEEF" }));
+
+            // Multisig form must keep the envelope SigningPubKey empty
+            Assert.ThrowsExactly<ValidationException>(
+                () => SignatureObject.FromJsonObject(new JsonObject
+                {
+                    ["SigningPubKey"] = "ABCDEF",
+                    ["Signers"] = new JsonArray(new JsonObject
+                    {
+                        ["Signer"] = new JsonObject
+                        {
+                            ["Account"] = "rWYkbWkCeg8dP6rXALnjgZSjjLyih5NXm",
+                            ["SigningPubKey"] = "AB",
+                            ["TxnSignature"] = "CD",
+                        },
+                    }),
+                }));
         }
 
         [TestMethod]

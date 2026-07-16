@@ -503,10 +503,17 @@ public static class SubmitSugar
 
         bool isSponsored = tx.TryGetValue("Sponsor", out var sponsorField) && sponsorField is string;
         string? sponsorAddress = isSponsored ? (string)sponsorField : null;
-        bool hasMainSignature = tx.TryGetValue("TxnSignature", out var mainSig) && mainSig is string { Length: > 0 };
+        // The main signature is either a single TxnSignature or multisig Signers
+        bool hasMainSignature =
+            (tx.TryGetValue("TxnSignature", out var mainSig) && mainSig is string { Length: > 0 }) ||
+            (tx.TryGetValue("Signers", out var mainSigners) && mainSigners is not null);
+        // ANY signature material freezes the body: a co-signature was computed
+        // over these exact fields, so autofill would silently invalidate it
+        bool hasAnySignature = hasMainSignature ||
+            (tx.TryGetValue("SponsorSignature", out var sponsorSigMaterial) && sponsorSigMaterial is not null) ||
+            (tx.TryGetValue("CounterpartySignature", out var counterpartySigMaterial) && counterpartySigMaterial is not null);
 
-        // A tx already carrying the main signature must not be mutated by autofill
-        if (autofill && !hasMainSignature)
+        if (autofill && !hasAnySignature)
         {
             tx = await client.Autofill(tx, cancellationToken: cancellationToken);
         }

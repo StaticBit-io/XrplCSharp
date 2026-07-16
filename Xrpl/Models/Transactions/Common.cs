@@ -185,6 +185,25 @@ namespace Xrpl.Models.Transactions
         }
 
         /// <summary>
+        /// Validates a DomainID value: a 64-character hex UInt256. On
+        /// MPTokenIssuanceCreate a zero domain is temMALFORMED; on
+        /// MPTokenIssuanceSet zero is legal (it clears the domain), so the
+        /// zero check is opt-in via <paramref name="allowZero"/>.
+        /// </summary>
+        /// <exception cref="ValidationException">When the value is malformed.</exception>
+        public static void ValidateDomainId(string value, string txLabel, bool allowZero = false)
+        {
+            if (value.Length != 64 || !value.All(Uri.IsHexDigit))
+            {
+                throw new ValidationException($"{txLabel}: DomainID must be a 64-character hexadecimal string");
+            }
+            if (!allowZero && value.All(c => c == '0'))
+            {
+                throw new ValidationException($"{txLabel}: DomainID must not be zero");
+            }
+        }
+
+        /// <summary>
         /// Verify the common fields of a transaction.<br/>
         /// The validate functionality will be optional, and will check transaction form at runtime.
         /// This should be called any time a transaction will be verified.

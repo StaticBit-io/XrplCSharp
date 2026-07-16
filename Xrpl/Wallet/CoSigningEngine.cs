@@ -86,9 +86,12 @@ namespace Xrpl.Wallet
 
             JsonNode coSignature = coSignerTx[coSignatureField]
                 ?? throw new ValidationException($"{coSignerLabel} blob is missing {coSignatureField}.");
+            // Reject structurally unsigned material (an empty object would
+            // otherwise flow through and produce an unusable combined blob)
+            SignatureObject.FromJsonObject(coSignature.AsObject());
             combined[coSignatureField] = coSignature.DeepClone();
 
-            if (combined["TxnSignature"] == null)
+            if (string.IsNullOrEmpty(combined["TxnSignature"]?.GetValue<string>()))
                 throw new ValidationException("Submitter blob is missing TxnSignature.");
 
             return Encode(combined);
@@ -107,6 +110,9 @@ namespace Xrpl.Wallet
 
             JsonNode coSignature = tx[coSignatureField]?.DeepClone()
                 ?? throw new ValidationException($"Partially signed blob is missing {coSignatureField}.");
+            // Same structural gate as Combine: an unsigned or malformed
+            // co-signature object must not be finalized into a "signed" blob
+            SignatureObject.FromJsonObject(coSignature.AsObject());
 
             tx.Remove(coSignatureField);
             tx.Remove("TxnSignature");
