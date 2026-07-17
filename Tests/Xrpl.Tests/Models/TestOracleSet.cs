@@ -508,8 +508,8 @@ namespace XrplTests.Xrpl.Models
             Assert.IsTrue(json.Contains("\"BaseAsset\":\"XRP\""), "XRP (3 chars) should remain as plain string");
 
             // Verify Provider and AssetClass are hex
-            Assert.IsTrue(json.Contains("\"Provider\":\"4d756c746950726f7669646572\""), "Provider should be hex ASCII");
-            Assert.IsTrue(json.Contains("\"AssetClass\":\"63757272656e6379\""), "AssetClass should be hex ASCII");
+            Assert.IsTrue(json.Contains("\"Provider\":\"4D756C746950726F7669646572\""), "Provider should be UPPERCASE hex ASCII (rippled strHex case)");
+            Assert.IsTrue(json.Contains("\"AssetClass\":\"63757272656E6379\""), "AssetClass should be UPPERCASE hex ASCII (rippled strHex case)");
         }
 
         /// <summary>
@@ -581,7 +581,7 @@ namespace XrplTests.Xrpl.Models
 
             // Verify > 3 char currencies become 40-char hex (lowercase)
             Assert.IsTrue(json.Contains("4644555344000000000000000000000000000000"), "FDUSD should be 40-char hex");
-            Assert.IsTrue(json.Contains("524c555344000000000000000000000000000000"), "RLUSD should be 40-char lowercase hex");
+            Assert.IsTrue(json.Contains("524C555344000000000000000000000000000000"), "RLUSD should be 40-char UPPERCASE hex (rippled strHex case)");
 
             // Verify 3-char currencies remain as plain strings
             Assert.IsTrue(json.Contains("\"QuoteAsset\":\"USD\""), "USD (3 chars) should remain as plain string");

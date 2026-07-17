@@ -1,4 +1,5 @@
-﻿using Xrpl.Keypairs.Utils;
+using Xrpl.AddressCodec;
+using Xrpl.Keypairs.Utils;
 
 namespace Xrpl.Keypairs
 {
@@ -19,7 +20,7 @@ namespace Xrpl.Keypairs
     {
         public static byte[] PubKeyHash(this IXrplKeyPair pair)
         {
-            return HashUtils.PublicKeyHash(pair.Id().ToBytes());
+            return HashUtils.PublicKeyHash(pair.Id().FromHex());
         }
     }
 }

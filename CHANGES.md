@@ -1,5 +1,14 @@
 # Changes
 
+### 10.9.0.0 07/16/2026
+* **Unified hex helpers ([#40](https://github.com/StaticBit-io/XrplCSharp/issues/40))** — seven overlapping implementations consolidated into two canonical utilities; **breaking removals** (no `[Obsolete]` grace period):
+  * Canonical byte-level pair: `Xrpl.AddressCodec.Utils.ToHex(byte[])` / `FromHex(string)` (renamed from `FromBytesToHex`/`FromHexToBytes`); canonical string-level: `Xrpl.Utils.StringConversion` (+`Xrpl.Models.Utils.HexStringHelper` for validated/padded VL fields)
+  * Removed: the global-namespace `ExtensionHelpers` class from `Xrpl.AddressCodec` (leaked `ToHex`/`FromHex` into every consumer's scope), the byte-identical `Xrpl.Client.Extensions.ExtensionHelpers` duplicate (the CS0121 ambiguity trap with `StringConversion`), dead internal copies in `Xrpl.Keypairs`/`Xrpl.BinaryCodec`
+  * **Hex case convention: UPPERCASE everywhere the SDK emits hex in JSON** — matching what rippled returns, so SDK-generated hex compares `Ordinal`-equal against node output. Affected outputs: `ConvertStringToHex`, `CurrencyToHex` (Oracle nonstandard currency codes), Oracle `Provider`/`AssetClass`/`URI` (Blob fields per rippled `strHex`), cross-chain payment memos. `AssetPrice` keeps rippled's lowercase UInt64 emission. **Transaction bytes, signatures and hashes are unchanged** — hex decoding is case-insensitive on both sides
+  * `HexStringHelper.FromHex` gains `trimTrailingNulls` (default `true`; `FromHexString` passes `false` so variable-length fields round-trip bytes exactly)
+  * Fix `IsHexCurrencyCode`: the regex lacked `^…$` anchors — any longer string containing 40 consecutive hex chars passed as a currency code
+  * Pinning suite `TestUHexHelpers` locks the unified behavior (case, null-trim, anchoring, round-trips)
+
 ### 10.8.0.0 07/14/2026
 * **Unified signing & submission for sponsored transactions ([#43](https://github.com/StaticBit-io/XrplCSharp/issues/43))** — the standard `Sign`/`SubmitAndWait` now handle XLS-68 end-to-end, no helper choice required:
   * `Sign` routes by role: a wallet matching `tx.Sponsor` produces the sponsor co-signature; the submitter path preserves an existing `SponsorSignature` and guards against a `SigningPubKey` mismatch. `multisign: true` is untouched — Signer entries are section-agnostic per rippled `STTx::checkMultiSign` (identical preimage for `tx.Signers` and `SponsorSignature.Signers`), so the role is decided at composition time

@@ -28,6 +28,9 @@ public static class AmendmentGuard
     /// <summary>Amendment id of ConfidentialTransfer (sha512half of the name).</summary>
     public const string ConfidentialTransfer = "2110E4A19966E2EF517C0A8C56A5F35099D7665B0BB89D7B126B30D50B86AAD5";
 
+    /// <summary>Amendment id of PriceOracle / XLS-47 (sha512half of the name).</summary>
+    public const string PriceOracle = "96FD2F293A519AE1DB6F8BED23E4AD9119342DA7CB6BAFD00953D16C54205D8B";
+
     public static async Task<bool> IsEnabledAsync(IXrplClient client, string amendmentId)
     {
         try

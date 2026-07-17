@@ -65,20 +65,27 @@ namespace Xrpl.Models.Utils
 
         /// <summary>
         /// Decodes a hex-encoded string back to its human-readable UTF-8 representation.
-        /// Trailing null bytes (0x00) are trimmed.
         /// </summary>
         /// <param name="hex">Hex-encoded string.</param>
+        /// <param name="trimTrailingNulls">When true (default), decoding stops at the
+        /// first 0x00 byte — the right behavior for zero-padded fixed-size fields
+        /// (WalletLocator, currency codes). Pass false for variable-length fields
+        /// (Memos, metadata) whose bytes must round-trip exactly.</param>
         /// <returns>Decoded UTF-8 string, or null if input is null/empty.</returns>
-        public static string FromHex(string hex)
+        public static string FromHex(string hex, bool trimTrailingNulls = true)
         {
             if (string.IsNullOrWhiteSpace(hex))
                 return null;
 
             var bytes = Convert.FromHexString(hex);
 
-            int len = Array.IndexOf(bytes, (byte)0x00);
-            if (len < 0)
-                len = bytes.Length;
+            int len = bytes.Length;
+            if (trimTrailingNulls)
+            {
+                int firstNull = Array.IndexOf(bytes, (byte)0x00);
+                if (firstNull >= 0)
+                    len = firstNull;
+            }
 
             return Encoding.UTF8.GetString(bytes, 0, len);
         }

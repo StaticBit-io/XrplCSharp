@@ -1,41 +1,40 @@
-﻿using System.Globalization;
+using System;
 using System.Text;
 
-using Org.BouncyCastle.Utilities.Encoders;
+using Xrpl.Models.Utils;
 
 // https://github.com/XRPLF/xrpl.js/blob/main/packages/xrpl/src/utils/stringConversion.ts
 
 namespace Xrpl.Utils
 {
+    /// <summary>
+    /// Canonical text ↔ hex conversion extensions. Hex output is UPPERCASE —
+    /// the convention rippled uses in every JSON response — so SDK-generated
+    /// hex compares Ordinal-equal against node output.
+    /// </summary>
     public static class StringConversion
     {
         /// <summary>
-        /// convert string to UTF8 HEX
+        /// Encodes a UTF-8 string as an UPPERCASE hex string.
         /// </summary>
         /// <param name="input">string</param>
         /// <returns></returns>
         public static string ConvertStringToHex(this string input)
         {
-            var bytes = Encoding.UTF8.GetBytes(input);
-            return Hex.ToHexString(bytes);
+            return Convert.ToHexString(Encoding.UTF8.GetBytes(input));
         }
 
         /// <summary>
-        /// Encoding UTF8 HEX string to readable string
+        /// Decodes a UTF-8 hex string back to readable text. Bytes are decoded
+        /// as-is (no trailing-null trimming) — pass the string through
+        /// <see cref="HexStringHelper.FromHex(string, bool)"/> with
+        /// <c>trimTrailingNulls: true</c> for zero-padded fixed-size fields.
         /// </summary>
         /// <param name="input">UTF8 HEX string</param>
         /// <returns></returns>
         public static string FromHexString(this string input)
         {
-            if (string.IsNullOrWhiteSpace(input))
-                return null;
-            var buffer = new byte[input.Length / 2];
-            for (var i = 0; i < input.Length; i += 2)
-            {
-                var hexadecimal = input.Substring(i, 2);
-                buffer[i / 2] = byte.Parse(hexadecimal, NumberStyles.HexNumber);
-            }
-            return Encoding.UTF8.GetString(buffer);
+            return HexStringHelper.FromHex(input, trimTrailingNulls: false);
         }
     }
 }
