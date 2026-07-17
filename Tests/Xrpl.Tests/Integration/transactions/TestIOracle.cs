@@ -34,10 +34,22 @@ public class TestIOracle
 
     public static TestNodeType nodeType = TestNodeType.Standalone;
 
+    private static bool priceOracleAmendmentActive;
+
     [ClassInitialize]
     public static async Task MyClassInitializeAsync(TestContext testContext)
     {
         client = await IntegrationTestConfig.CreateClientAsync(nodeType);
+        priceOracleAmendmentActive = await AmendmentGuard.IsEnabledAsync(client, AmendmentGuard.PriceOracle);
+    }
+
+    [TestInitialize]
+    public void CheckPriceOracleAmendment()
+    {
+        if (!priceOracleAmendmentActive)
+        {
+            Assert.Inconclusive("PriceOracle amendment (XLS-47) is not enabled on the test node.");
+        }
     }
 
     [ClassCleanup]
