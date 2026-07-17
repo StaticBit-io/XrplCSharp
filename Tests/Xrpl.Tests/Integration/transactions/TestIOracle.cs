@@ -94,6 +94,77 @@ public class TestIOracle
     }
 
     /// <summary>
+    /// Value-level round-trip (#40 hex unification): the SDK now writes
+    /// Provider/AssetClass/URI and nonstandard currency codes as UPPERCASE hex;
+    /// the node stores bytes and answers with its own hex casing. Reading the
+    /// Oracle back must decode every field to the exact original strings.
+    /// </summary>
+    [TestMethod]
+    public async Task TestOracleSet_ReadBack_FieldValuesRoundTrip()
+    {
+        XrplWallet walletOracle = XrplWallet.Generate();
+        await IntegrationTestConfig.TryFundWalletAsync(client, walletOracle, nodeType);
+
+        var oracleDocumentId = (uint)new Random().Next(1, 100000);
+        var lastUpdateTime = await GetLedgerCloseTimeAsync();
+
+        var oracleSet = new OracleSet
+        {
+            Account = walletOracle.ClassicAddress,
+            OracleDocumentID = oracleDocumentId,
+            LastUpdateTime = lastUpdateTime,
+            Provider = "RoundTripProvider",
+            AssetClass = "currency",
+            URI = "https://example.com/oracle",
+            PriceDataSeries = new List<PriceDataWrapper>
+            {
+                new PriceDataWrapper
+                {
+                    PriceData = new PriceData
+                    {
+                        BaseAsset = "XRP",
+                        QuoteAsset = "RLUSD", // nonstandard code: 40-char hex on the wire
+                        AssetPrice = 740,
+                        Scale = 2
+                    }
+                },
+                new PriceDataWrapper
+                {
+                    PriceData = new PriceData
+                    {
+                        BaseAsset = "XRP",
+                        QuoteAsset = "USD",
+                        AssetPrice = 65000,
+                        // Scale omitted: zero is the field default and rippled
+                        // rejects an explicitly serialized default (soeDEFAULT)
+                    }
+                }
+            }
+        };
+
+        var autofilled = await client.Autofill(oracleSet);
+        var res = await client.SubmitAndWait(autofilled, walletOracle, true);
+        ValidateSuccessResult(res, "OracleSet round-trip create");
+
+        var request = new AccountObjectsRequest(walletOracle.ClassicAddress)
+        {
+            Type = LedgerEntryType.Oracle,
+        };
+        var response = await client.AccountObjects(request);
+        var oracle = response?.AccountObjectList?.OfType<LOOracle>().FirstOrDefault();
+        Assert.IsNotNull(oracle, "the Oracle object must deserialize from the node response");
+
+        Assert.AreEqual("RoundTripProvider", oracle.Provider, "Provider must decode back to the original text");
+        Assert.AreEqual("currency", oracle.AssetClass, "AssetClass must decode back to the original text");
+        Assert.AreEqual("https://example.com/oracle", oracle.URI, "URI must decode back to the original text");
+
+        Assert.IsNotNull(oracle.PriceDataSeries);
+        var quoteAssets = oracle.PriceDataSeries.Select(w => w.PriceData?.QuoteAsset).ToList();
+        CollectionAssert.Contains(quoteAssets, "RLUSD", "the nonstandard currency code must decode back from 40-char hex");
+        CollectionAssert.Contains(quoteAssets, "USD", "the standard 3-char code must survive as-is");
+    }
+
+    /// <summary>
     /// Tests creating a new Oracle with multiple price data entries.
     /// </summary>
     [TestMethod]
