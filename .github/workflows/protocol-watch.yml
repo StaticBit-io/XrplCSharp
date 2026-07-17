@@ -100,7 +100,10 @@ jobs:
           number=$(echo "$issue" | jq -r .number)
           # Fail closed on a corrupted baseline: an empty-object fallback would
           # report every file as changed and overwrite the evidence
-          block=$(echo "$issue" | jq -r .body | awk '/^```json$/{f=1;next} /^```$/{f=0} f')
+          # Strip a trailing CR first: a CRLF-encoded issue body (e.g. from a
+          # hand-edit on Windows) would leave `\r` before the `$` anchor and the
+          # fence never matches, tripping the fail-closed guard below
+          block=$(echo "$issue" | jq -r .body | awk '{sub(/\r$/,"")} /^```json$/{f=1;next} /^```$/{f=0} f')
           if [ -z "$block" ]; then
             echo "::error::Tracking issue #$number has no JSON baseline block. Fix the issue body or close the issue to bootstrap a fresh baseline."
             exit 1
