@@ -74,6 +74,8 @@ namespace XrplTests.Xrpl.Models
             Assert.IsFalse((valid + "Z").IsHexCurrencyCode());
             Assert.IsFalse(("Z" + valid).IsHexCurrencyCode());
             Assert.IsFalse(new string('A', 39).IsHexCurrencyCode());
+            // .NET $ matches before a trailing newline - \z must reject it
+            Assert.IsFalse((valid + "\n").IsHexCurrencyCode());
         }
 
         [TestMethod]
