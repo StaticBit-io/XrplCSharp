@@ -1,5 +1,6 @@
 ﻿using System;
 using Microsoft.VisualStudio.TestTools.UnitTesting;
+using Xrpl.AddressCodec;
 using Xrpl.BinaryCodec.Binary;
 using Xrpl.BinaryCodec.Types;
 

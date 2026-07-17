@@ -1,4 +1,4 @@
-﻿using System.Security.Cryptography;
+using System.Security.Cryptography;
 using System.Text;
 
 using Org.BouncyCastle.Math;
@@ -78,7 +78,7 @@ namespace Xrpl.Keypairs
         /// <returns></returns>
         public static string GetAlgorithmFromKey(string key)
         {
-            byte[] data = key.FromHexToBytes();
+            byte[] data = key.FromHex();
             return data.Length == 33 && data[0] == 0xED ? "ed25519" : "secp256k1";
         }
 
@@ -101,7 +101,7 @@ namespace Xrpl.Keypairs
         /// <param name="HexMessage">Hex Message</param>
         /// <param name="privateKey">private key</param>
         /// <returns></returns>
-        public static string Sign(string HexMessage, string privateKey) => Sign(HexMessage.FromHexToBytes(), privateKey);
+        public static string Sign(string HexMessage, string privateKey) => Sign(HexMessage.FromHex(), privateKey);
 
         public static bool Verify(byte[] message, string signature, string publicKey)
         {
@@ -111,13 +111,13 @@ namespace Xrpl.Keypairs
                 : K256KeyPair.Verify(signature.FromHex(), message, publicKey.FromHex());
         }
 
-        public static bool Verify(string HexMessage, string signature, string publicKey) => Verify(HexMessage.FromHexToBytes(), signature, publicKey);
+        public static bool Verify(string HexMessage, string signature, string publicKey) => Verify(HexMessage.FromHex(), signature, publicKey);
 
         public static string DeriveAddressFromBytes(byte[] publicKeyBytes)
             => XrplCodec.EncodeAccountID(Utils.HashUtils.PublicKeyHash(publicKeyBytes));
 
         public static string DeriveAddress(string publicKey)
-            => XrplKeypairs.DeriveAddressFromBytes(publicKey.FromHexToBytes());
+            => XrplKeypairs.DeriveAddressFromBytes(publicKey.FromHex());
 
         public static string DerivePublicKeyFromPrivateKey(string privateKey)
         {
@@ -127,7 +127,7 @@ namespace Xrpl.Keypairs
             if (keyBytes.Length == 33 && keyBytes[0] == 0xED)
             {
                 byte[] expanded = Chaos.NaCl.Ed25519.ExpandedPrivateKeyFromSeed(keyBytes[1..]);
-                return "ED" + expanded[32..64].FromBytesToHex();
+                return "ED" + expanded[32..64].ToHex();
             }
 
             // XRPL secp256k1: "00" prefix (33 bytes, first byte = 0x00) — BigInteger нужно без знакового байта

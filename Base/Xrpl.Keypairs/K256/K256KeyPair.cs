@@ -1,4 +1,4 @@
-﻿using Org.BouncyCastle.Asn1;
+using Org.BouncyCastle.Asn1;
 using Org.BouncyCastle.Asn1.Sec;
 using Org.BouncyCastle.Crypto.Parameters;
 using Org.BouncyCastle.Crypto.Signers;
@@ -32,7 +32,7 @@ namespace Xrpl.Keypairs.K256
 
         public string Pk()
         {
-            return $"00{_privKey.ToByteArrayUnsigned().FromBytesToHex()}";
+            return $"00{_privKey.ToByteArrayUnsigned().ToHex()}";
         }
 
         public static byte[] Sign(byte[] message, byte[] privateKey)

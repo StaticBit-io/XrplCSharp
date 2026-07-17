@@ -1,4 +1,4 @@
-﻿using System.Text.Json.Serialization;
+using System.Text.Json.Serialization;
 
 using System;
 using System.Globalization;
@@ -7,6 +7,7 @@ using System.Text;
 using System.Text.RegularExpressions;
 
 using Xrpl.Client.Extensions;
+using Xrpl.Utils;
 using Xrpl.Models.Methods;
 using Xrpl.Models.Utils;
 using Xrpl.Utils.Hashes;

@@ -28,7 +28,7 @@ namespace Xrpl.Wallet
         internal static byte[] GetSigningPreimage(JsonObject txJson)
         {
             string signingHex = XrplBinaryCodec.EncodeForSigning(txJson);
-            return AddressCodec.Utils.FromHexToBytes(signingHex);
+            return AddressCodec.Utils.FromHex(signingHex);
         }
 
         /// <summary>Removes the signature-bearing fields for body comparison.</summary>

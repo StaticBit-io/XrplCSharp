@@ -179,10 +179,9 @@ namespace Xrpl.Client.Json.Converters
                 throw new JsonException(ex.Message, ex);
             }
 
-            if (encoded.Length == 40 && OracleAsciiValidation.IsHexString(encoded.AsSpan()))
-                writer.WriteStringValue(encoded.ToLowerInvariant());
-            else
-                writer.WriteStringValue(encoded);
+            // UPPERCASE for 40-char codes: rippled STCurrency::to_json emits
+            // nonstandard currency codes via strHex (uppercase)
+            writer.WriteStringValue(encoded);
         }
 
         private static string DecodeOracleCurrency(string hex)
@@ -245,7 +244,9 @@ namespace Xrpl.Client.Json.Converters
 
             OracleAsciiValidation.ValidatePrintableAsciiChars(value.AsSpan(), "Oracle hex string");
             byte[] bytes = Encoding.ASCII.GetBytes(value);
-            writer.WriteStringValue(BitConverter.ToString(bytes).Replace("-", "").ToLowerInvariant());
+            // UPPERCASE: Provider/AssetClass/URI are Blob fields — rippled
+            // serializes Blob JSON via strHex (uppercase)
+            writer.WriteStringValue(Convert.ToHexString(bytes));
         }
 
         private static string DecodeHexString(string hex)

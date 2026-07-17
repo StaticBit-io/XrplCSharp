@@ -117,8 +117,9 @@ public class TestUOracleCurrencyConverter
     {
         Model model = new Model { Currency = "Bitcoin" };
         string json = JsonSerializer.Serialize(model, XrplJsonOptions.Default);
-        // "Bitcoin" (7 chars) should be padded to 40 hex chars (Hashes.CurrencyToHex)
-        string expected = "426974636f696e00000000000000000000000000";
+        // "Bitcoin" (7 chars) should be padded to 40 hex chars (Hashes.CurrencyToHex).
+        // UPPERCASE: the SDK emits hex in the same case rippled returns it
+        string expected = "426974636F696E00000000000000000000000000";
         Assert.IsTrue(json.Contains(expected));
     }
 

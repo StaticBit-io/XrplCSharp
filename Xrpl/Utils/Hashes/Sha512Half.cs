@@ -1,8 +1,9 @@
-﻿
+
 
 // https://github.com/XRPLF/xrpl.js/blob/main/packages/xrpl/src/utils/hashes/sha512Half.ts
 
 using Xrpl.BinaryCodec.Hashing;
+using Xrpl.AddressCodec;
 
 namespace Xrpl.Utils.Hashes
 {

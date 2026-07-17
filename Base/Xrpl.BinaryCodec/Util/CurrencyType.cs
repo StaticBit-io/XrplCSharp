@@ -1,4 +1,5 @@
-﻿using System;
+using System;
+using Xrpl.AddressCodec;
 
 namespace Xrpl.BinaryCodec.Util
 {

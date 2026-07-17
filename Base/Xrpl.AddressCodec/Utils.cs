@@ -1,4 +1,4 @@
-﻿using Org.BouncyCastle.Utilities.Encoders;
+using Org.BouncyCastle.Utilities.Encoders;
 
 using System.Linq;
 
@@ -13,14 +13,14 @@ namespace Xrpl.AddressCodec
         /// </summary>
         /// <param name="bytes">bytes array</param>
         /// <returns></returns>
-        public static string FromBytesToHex(this byte[] bytes) => Hex.ToHexString(bytes).ToUpper();
+        public static string ToHex(this byte[] bytes) => Hex.ToHexString(bytes).ToUpper();
 
         /// <summary>
         /// hex row to bytes array
         /// </summary>
         /// <param name="hex">hex row</param>
         /// <returns></returns>
-        public static byte[] FromHexToBytes(this string hex) => Hex.Decode(hex);
+        public static byte[] FromHex(this string hex) => Hex.Decode(hex);
 
         /// <summary>
         /// combine bytes arrays to single array

@@ -1,4 +1,5 @@
 using System.Collections.Generic;
+using Xrpl.Utils;
 using System.Threading.Tasks;
 using Microsoft.VisualStudio.TestTools.UnitTesting;
 using Xrpl.Client.Extensions;

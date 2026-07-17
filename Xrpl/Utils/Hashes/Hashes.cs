@@ -42,7 +42,8 @@ namespace Xrpl.Utils.Hashes
         /// </summary>
         /// <param name="code">currency code</param>
         /// <returns></returns>
-        public static bool IsHexCurrencyCode(this string code) => Regex.IsMatch(code, @"[0-9a-fA-F]{40}", RegexOptions.IgnoreCase);
+        // Anchored: without ^…$ any longer string CONTAINING 40 hex chars passed
+        public static bool IsHexCurrencyCode(this string code) => Regex.IsMatch(code, @"^[0-9a-fA-F]{40}$");
 
         /// <summary>
         /// checks and generates a token code for transmission to the network

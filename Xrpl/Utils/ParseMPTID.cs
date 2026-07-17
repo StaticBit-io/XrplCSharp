@@ -41,7 +41,7 @@ namespace Xrpl.Utils
 
             uint sequence = Convert.ToUInt32(mptIssuanceId.Substring(0, SequenceHexLength), 16);
             string issuerHex = mptIssuanceId.Substring(SequenceHexLength, AccountIdHexLength);
-            string issuer = XrplCodec.EncodeAccountID(issuerHex.FromHexToBytes());
+            string issuer = XrplCodec.EncodeAccountID(issuerHex.FromHex());
 
             return new MPTokenIssuanceIdData(sequence, issuer);
         }

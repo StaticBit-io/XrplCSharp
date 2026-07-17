@@ -1,4 +1,4 @@
-﻿using System;
+using System;
 
 using static Xrpl.AddressCodec.Utils;
 
@@ -29,9 +29,9 @@ namespace Xrpl.Keypairs.Ed25519
             return new EdKeyPair(publicKey, expandedPrivateKey);
         }
 
-        public string Id() => prefix + _pubBytes.FromBytesToHex();
+        public string Id() => prefix + _pubBytes.ToHex();
 
-        public string Pk() => prefix + _privBytes[0..32].FromBytesToHex();
+        public string Pk() => prefix + _privBytes[0..32].ToHex();
 
         public static byte[] Sign(byte[] message, byte[] privateKey) => Chaos.NaCl.Ed25519.Sign(message, privateKey);
 

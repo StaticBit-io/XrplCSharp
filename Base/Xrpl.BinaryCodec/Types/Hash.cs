@@ -1,4 +1,5 @@
-﻿using System.Text.Json.Nodes;
+using System.Text.Json.Nodes;
+using Xrpl.AddressCodec;
 using System;
 using System.Linq;
 using Xrpl.BinaryCodec.Binary;
