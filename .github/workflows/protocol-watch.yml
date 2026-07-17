@@ -59,16 +59,27 @@ jobs:
           head_sha=$(gh api "repos/$UPSTREAM/commits/$UPSTREAM_REF" --jq .sha)
 
           # Build the current path->blob-sha map from the explicit watch list.
-          # A path missing upstream (404) is omitted, so the union diff below
-          # flags it as removed instead of aborting the run.
+          # Fail closed: only a genuine HTTP 404 means "removed upstream" (omit it
+          # so the union diff flags it as removed); any other failure (401/403/429/
+          # 5xx, network) aborts the run so a transient error can never drop an
+          # entry and overwrite the baseline.
           current='{}'
           while IFS= read -r path; do
             [ -z "$path" ] && continue
-            sha=$(gh api "repos/$UPSTREAM/contents/$path?ref=$head_sha" --jq '.sha' 2>/dev/null || echo "")
-            if [ -n "$sha" ]; then
+            if resp=$(gh api "repos/$UPSTREAM/contents/$path?ref=$head_sha" 2>/tmp/gh_err); then
+              # A file returns an object with a string sha; a directory returns an array
+              sha=$(printf '%s' "$resp" | jq -r 'select(type == "object" and .type == "file") | .sha // empty')
+              if [ -z "$sha" ]; then
+                echo "::error::watched path is not a file with a sha: $path"
+                exit 1
+              fi
               current=$(jq -n --argjson cur "$current" --arg p "$path" --arg s "$sha" '$cur + {($p): $s}')
+            elif grep -q 'HTTP 404' /tmp/gh_err; then
+              echo "::warning::watched path not found upstream (404): $path"
             else
-              echo "::warning::watched path not found upstream: $path"
+              echo "::error::lookup failed for $path:"
+              cat /tmp/gh_err
+              exit 1
             fi
           done <<< "$WATCH"
           echo "current: $current"
