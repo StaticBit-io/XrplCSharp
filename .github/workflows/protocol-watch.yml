@@ -5,9 +5,15 @@ name: Protocol Watch
 # comment lands on the issue with links to the diffs — the manual "did the
 # protocol move?" ritual becomes a notification.
 #
+# Coverage is an explicit list of full repo-relative paths (WATCH), so files
+# from any directory can be tracked: the five protocol .macro definition files
+# plus TxFlags.h (transaction flags) and TER.h (result codes), which the SDK
+# mirrors as flag enums and the EngineResult enum but which live outside the
+# macros.
+#
 # State lives in the tracking issue body (labeled protocol-watch), not in the
 # repo and not in actions cache: no commits through branch protection, no
-# cache eviction.
+# cache eviction. The baseline JSON is keyed by full path.
 
 on:
   schedule:
@@ -25,7 +31,15 @@ concurrency:
 env:
   UPSTREAM: XRPLF/rippled
   UPSTREAM_REF: develop
-  UPSTREAM_DIR: include/xrpl/protocol/detail
+  # Explicit watch list — full repo-relative paths, one per line
+  WATCH: |
+    include/xrpl/protocol/detail/features.macro
+    include/xrpl/protocol/detail/ledger_entries.macro
+    include/xrpl/protocol/detail/permissions.macro
+    include/xrpl/protocol/detail/sfields.macro
+    include/xrpl/protocol/detail/transactions.macro
+    include/xrpl/protocol/TxFlags.h
+    include/xrpl/protocol/TER.h
   ISSUE_TITLE: 'Protocol watch: rippled develop'
   ISSUE_LABEL: protocol-watch
 
@@ -40,13 +54,23 @@ jobs:
         run: |
           set -euo pipefail
 
-          # Resolve the upstream head first, then pin the contents lookup to it
+          # Resolve the upstream head first, then pin the contents lookups to it
           # so the recorded shas and the diff links refer to the same commit
           head_sha=$(gh api "repos/$UPSTREAM/commits/$UPSTREAM_REF" --jq .sha)
 
-          # Current per-file blob shas of the watched .macro files
-          current=$(gh api "repos/$UPSTREAM/contents/$UPSTREAM_DIR?ref=$head_sha" \
-            --jq '[.[] | select(.name | endswith(".macro")) | {(.name): .sha}] | add // {}')
+          # Build the current path->blob-sha map from the explicit watch list.
+          # A path missing upstream (404) is omitted, so the union diff below
+          # flags it as removed instead of aborting the run.
+          current='{}'
+          while IFS= read -r path; do
+            [ -z "$path" ] && continue
+            sha=$(gh api "repos/$UPSTREAM/contents/$path?ref=$head_sha" --jq '.sha' 2>/dev/null || echo "")
+            if [ -n "$sha" ]; then
+              current=$(jq -n --argjson cur "$current" --arg p "$path" --arg s "$sha" '$cur + {($p): $s}')
+            else
+              echo "::warning::watched path not found upstream: $path"
+            fi
+          done <<< "$WATCH"
           echo "current: $current"
 
           # Find the tracking issue
@@ -86,15 +110,15 @@ jobs:
             exit 0
           fi
 
-          # Build a comment with per-file history links; a file missing from the
+          # Build a comment with per-file history links; a path missing from the
           # current snapshot was removed/renamed upstream - do not link a 404 blob
           files=$(echo "$changed" | jq -r '.[]')
           lines=""
           for f in $files; do
             if [ "$(echo "$current" | jq --arg f "$f" 'has($f)')" = "true" ]; then
-              lines="$lines- \`$f\` — [history](https://github.com/$UPSTREAM/commits/$UPSTREAM_REF/$UPSTREAM_DIR/$f) · [current](https://github.com/$UPSTREAM/blob/$head_sha/$UPSTREAM_DIR/$f)"$'\n'
+              lines="$lines- \`$f\` — [history](https://github.com/$UPSTREAM/commits/$UPSTREAM_REF/$f) · [current](https://github.com/$UPSTREAM/blob/$head_sha/$f)"$'\n'
             else
-              lines="$lines- \`$f\` — **removed or renamed upstream** · [history](https://github.com/$UPSTREAM/commits/$UPSTREAM_REF/$UPSTREAM_DIR/$f)"$'\n'
+              lines="$lines- \`$f\` — **removed or renamed upstream** · [history](https://github.com/$UPSTREAM/commits/$UPSTREAM_REF/$f)"$'\n'
             fi
           done
           # Idempotency: if the notification for this head_sha is already posted
@@ -107,7 +131,7 @@ jobs:
           if grep -qF "$marker" <<< "$existing_comments"; then
             echo "Notification for $head_sha already posted; updating the baseline only."
           else
-            comment=$(printf '%s\nProtocol definitions changed on `%s` `%s` (checked at upstream commit %s):\n\n%s\nFollow-ups to consider: sync `definitions.json` (`server_definitions` diff), new amendments for the nightly stand config, new transaction/ledger-object fields for the models.\n' "$marker" "$UPSTREAM" "$UPSTREAM_REF" "$head_sha" "$lines")
+            comment=$(printf '%s\nProtocol definitions changed on `%s` `%s` (checked at upstream commit %s):\n\n%s\nFollow-ups to consider: sync `definitions.json` (`server_definitions` diff), new amendments for the nightly stand config, new transaction/ledger-object fields, flags or result codes for the models.\n' "$marker" "$UPSTREAM" "$UPSTREAM_REF" "$head_sha" "$lines")
             gh issue comment "$number" --repo "$REPO" --body "$comment"
           fi
 
