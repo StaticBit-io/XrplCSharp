@@ -700,7 +700,7 @@ namespace Xrpl.Wallet
             txForSign.Remove("Signers");
 
             string preimageHex = XrplBinaryCodec.EncodeForMultiSigning(txForSign, signerAccount);
-            var preimage = Xrpl.AddressCodec.Utils.FromHexToBytes(preimageHex);
+            var preimage = Xrpl.AddressCodec.Utils.FromHex(preimageHex);
 
             string sig = Xrpl.Keypairs.XrplKeypairs.Sign(preimage, this.PrivateKey);
 
@@ -1059,7 +1059,7 @@ namespace Xrpl.Wallet
         public string ComputeSignature(Dictionary<string, object> transaction, string privateKey, string? signAs = null)
         {
             string encoded = XrplBinaryCodec.EncodeForSigning(transaction);
-            return XrplKeypairs.Sign(AddressCodec.Utils.FromHexToBytes(encoded), privateKey);
+            return XrplKeypairs.Sign(AddressCodec.Utils.FromHex(encoded), privateKey);
         }
 
         /// <summary>

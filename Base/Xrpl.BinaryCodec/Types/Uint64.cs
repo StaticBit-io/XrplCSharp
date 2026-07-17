@@ -1,4 +1,5 @@
-﻿using System;
+using System;
+using Xrpl.AddressCodec;
 using System.Text.Json;
 using System.Text.Json.Nodes;
 

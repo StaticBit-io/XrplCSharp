@@ -1,4 +1,4 @@
-﻿using System;
+using System;
 using Xrpl.AddressCodec;
 using Xrpl.BinaryCodec.Util;
 using Xrpl.Client.Exceptions;
@@ -57,7 +57,7 @@ namespace Xrpl.Utils
             uint sequence = Convert.ToUInt32(nftokenID.Substring(56, 8), 16);
             uint taxon = UnscrambleTaxon(Convert.ToUInt32(scrambledTaxon, 16), sequence);
 
-            string issuer = XrplCodec.EncodeAccountID(nftokenID.Substring(8, 40).FromHexToBytes());
+            string issuer = XrplCodec.EncodeAccountID(nftokenID.Substring(8, 40).FromHex());
                         
             return new NFTokenIdData(flags, transferFee, issuer, taxon, sequence);
         }

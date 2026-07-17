@@ -2,6 +2,7 @@ using System.Text.Json.Serialization;
 
 using System.Collections.Generic;
 using Xrpl.Client.Extensions;
+using Xrpl.Utils;
 using Xrpl.Client.Json.Converters;
 
 //https://github.com/XRPLF/xrpl.js/blob/main/packages/xrpl/src/models/methods/accountNFTs.ts

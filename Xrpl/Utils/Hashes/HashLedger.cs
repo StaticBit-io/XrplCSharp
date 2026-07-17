@@ -31,7 +31,7 @@ namespace Xrpl.Utils.Hashes
                 new ValidationException("The transaction must be signed to hash it.");
             }
 
-            return B16.Encode(Sha512.Half(input: txBlob.FromHexToBytes(), prefix: (uint)Xrpl.BinaryCodec.Hashing.HashPrefix.TransactionId));
+            return B16.Encode(Sha512.Half(input: txBlob.FromHex(), prefix: (uint)Xrpl.BinaryCodec.Hashing.HashPrefix.TransactionId));
         }
 
         public static string HashSignedTx(JsonNode tx)
@@ -43,7 +43,7 @@ namespace Xrpl.Utils.Hashes
                 new ValidationException("The transaction must be signed to hash it.");
             }
 
-            return B16.Encode(Sha512.Half(input: txBlob.FromHexToBytes(), prefix: (uint)Xrpl.BinaryCodec.Hashing.HashPrefix.TransactionId));
+            return B16.Encode(Sha512.Half(input: txBlob.FromHex(), prefix: (uint)Xrpl.BinaryCodec.Hashing.HashPrefix.TransactionId));
         }
     }
 }
