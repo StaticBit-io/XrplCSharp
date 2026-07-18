@@ -54,7 +54,19 @@ public static class ServerDefinitionsClient
         }
         while (!result.EndOfMessage);
 
-        await ws.CloseAsync(WebSocketCloseStatus.NormalClosure, "done", CancellationToken.None);
+        // The payload is fully received; the close is only courtesy. Bound the
+        // close handshake so an unresponsive peer cannot hang the tool, and fall
+        // back to Abort if it does not complete in time.
+        try
+        {
+            using CancellationTokenSource closeCts = new CancellationTokenSource(TimeSpan.FromSeconds(5));
+            await ws.CloseAsync(WebSocketCloseStatus.NormalClosure, "done", closeCts.Token);
+        }
+        catch (Exception)
+        {
+            ws.Abort();
+        }
+
         return sb.ToString();
     }
 
