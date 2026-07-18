@@ -14,7 +14,7 @@
 
 ## File Structure
 
-```
+```text
 Tests/Xrpl.Tests/Xrpl.Tests.csproj          — MODIFY: link definitions.json as copy-to-output
 Tests/Xrpl.Tests/Models/TestUModelEnumDrift.cs — CREATE: the drift test (both enums + shared helper)
 ```

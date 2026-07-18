@@ -47,8 +47,8 @@ Non-goals: generating any `.cs`; changing the Models enums, their doc comments, 
 For each enum:
 
 1. `HashSet<string> modelNames = new(Enum.GetNames(typeof(TargetEnum)), StringComparer.Ordinal);`
-2. `HashSet<string> definitionKeys = ` the section's keys parsed from `definitions.json`.
-3. Bidirectional diff against a documented, per-enum exception allow-list:
+2. `HashSet<string> definitionKeys =` the section's keys parsed from `definitions.json`.
+3. Build the **exact** member set the Models enum must contain, then compare against it (not merely subtract the allow-lists from each raw diff). The exact-set form also catches an intentionally-omitted name being *added* (e.g. `Invalid`) or a sentinel being *removed* (e.g. `Unknown`) — the allow-lists are passed per-enum so a future enum-specific exception can be scoped without affecting the other:
 
    ```csharp
    // definitions.json has these; the Models enum intentionally omits them
@@ -56,15 +56,20 @@ For each enum:
    // the Models enum adds these synthetic members (not protocol types)
    static readonly HashSet<string> ModelsOnly = new(StringComparer.Ordinal) { "Unknown" };
 
-   missingInModels = definitionKeys.Except(modelNames).Except(DefinitionsOnly);
-   extraInModels   = modelNames.Except(definitionKeys).Except(ModelsOnly);
+   // expected = protocol types − intentionally-omitted + synthetic sentinels
+   var expected = new HashSet<string>(definitionKeys, StringComparer.Ordinal);
+   expected.ExceptWith(DefinitionsOnly);
+   expected.UnionWith(ModelsOnly);
+
+   missingInModels = expected.Except(modelNames);   // in the contract, absent from the enum
+   extraInModels   = modelNames.Except(expected);   // in the enum, not in the contract
    ```
 
-   Both enums have the identical exception pattern today (verified against the current `definitions.json`): definitions-only = `{ "Invalid" }`, Models-only = `{ "Unknown" }`. The same two allow-lists apply to `TransactionType` and `LedgerEntryType`.
+   Both enums have the identical exception pattern today (verified against the current `definitions.json`): definitions-only = `{ "Invalid" }`, Models-only = `{ "Unknown" }`. The same two allow-lists are passed to both `TransactionType` and `LedgerEntryType`.
 
 4. Fail when either set is non-empty, with an explicit message:
 
-   ```
+   ```text
    TransactionType drift vs definitions.json:
      missing in Models (add them):      Batch, LoanSet
      extra in Models (remove/justify):  FooBar

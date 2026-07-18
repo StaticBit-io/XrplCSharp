@@ -31,27 +31,38 @@ namespace XrplTests.Xrpl.Models
         [TestMethod]
         public void TestUTransactionTypeEnum_MatchesDefinitions()
         {
-            AssertEnumMatchesDefinitions(typeof(global::Xrpl.Models.TransactionType), "TRANSACTION_TYPES");
+            AssertEnumMatchesDefinitions(typeof(global::Xrpl.Models.TransactionType), "TRANSACTION_TYPES", DefinitionsOnly, ModelsOnly);
         }
 
         [TestMethod]
         public void TestULedgerEntryTypeEnum_MatchesDefinitions()
         {
-            AssertEnumMatchesDefinitions(typeof(global::Xrpl.Models.LedgerEntryType), "LEDGER_ENTRY_TYPES");
+            AssertEnumMatchesDefinitions(typeof(global::Xrpl.Models.LedgerEntryType), "LEDGER_ENTRY_TYPES", DefinitionsOnly, ModelsOnly);
         }
 
-        private static void AssertEnumMatchesDefinitions(Type enumType, string section)
+        private static void AssertEnumMatchesDefinitions(
+            Type enumType, string section, ISet<string> definitionsOnly, ISet<string> modelsOnly)
         {
             HashSet<string> modelNames = new(Enum.GetNames(enumType), StringComparer.Ordinal);
             HashSet<string> definitionKeys = LoadSectionKeys(section);
 
-            List<string> missingInModels = definitionKeys
-                .Where(k => !modelNames.Contains(k) && !DefinitionsOnly.Contains(k))
-                .OrderBy(k => k, StringComparer.Ordinal)
+            // The EXACT member set the Models enum must contain: every protocol
+            // type minus the intentionally-omitted ones, plus the synthetic
+            // sentinels. Comparing against this exact set — rather than only
+            // subtracting the allow-lists from each diff — also catches an
+            // omitted name being ADDED (e.g. Invalid) or a sentinel being
+            // REMOVED (e.g. Unknown), not just names on either raw side.
+            HashSet<string> expected = new(definitionKeys, StringComparer.Ordinal);
+            expected.ExceptWith(definitionsOnly);
+            expected.UnionWith(modelsOnly);
+
+            List<string> missingInModels = expected
+                .Where(n => !modelNames.Contains(n))
+                .OrderBy(n => n, StringComparer.Ordinal)
                 .ToList();
 
             List<string> extraInModels = modelNames
-                .Where(n => !definitionKeys.Contains(n) && !ModelsOnly.Contains(n))
+                .Where(n => !expected.Contains(n))
                 .OrderBy(n => n, StringComparer.Ordinal)
                 .ToList();
 
@@ -62,7 +73,7 @@ namespace XrplTests.Xrpl.Models
                 $"{enumType.Name} drift vs definitions.json ({section}):" + Environment.NewLine +
                 $"  missing in Models (add them):      {Format(missingInModels)}" + Environment.NewLine +
                 $"  extra in Models (remove/justify):  {Format(extraInModels)}" + Environment.NewLine +
-                "If a divergence is intentional, add the name to the DefinitionsOnly/ModelsOnly allow-list with a reason.";
+                "If a divergence is intentional, adjust the DefinitionsOnly/ModelsOnly allow-list with a reason.";
             Assert.Fail(message);
         }
 
