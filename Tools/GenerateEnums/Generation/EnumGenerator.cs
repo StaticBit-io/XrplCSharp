@@ -510,7 +510,74 @@ public static class EnumGenerator
             totalFields += fieldList.Count;
         }
 
+        RemoveStaleFieldFiles(grouped, outputDir);
+
         Console.WriteLine($"  Total: {totalFields} fields");
+    }
+
+    /// <summary>
+    /// Removes generated field files whose type-group lost ALL its fields. The
+    /// loop above only visits types still present in <paramref name="grouped"/>,
+    /// so without this a type dropping to zero fields would leave an orphan
+    /// Field.&lt;Type&gt;.Generated.cs with stale declarations while generation
+    /// still reports success. In the normal case (no removed type) nothing on
+    /// disk is stale, so this is a no-op and `generate` stays byte-identical.
+    /// </summary>
+    private static void RemoveStaleFieldFiles(Dictionary<string, List<FieldEntry>> grouped, string outputDir)
+    {
+        if (!Directory.Exists(outputDir))
+            return;
+
+        IEnumerable<string> expectedStems = grouped.Keys.Select(t => TypeToFileName[t]);
+        Dictionary<string, string> stemToPath = Directory
+            .GetFiles(outputDir, "Field.*.Generated.cs")
+            .Select(path => (Stem: FieldFileStem(Path.GetFileName(path)), Path: path))
+            .Where(x => x.Stem is not null)
+            .ToDictionary(x => x.Stem!, x => x.Path, StringComparer.Ordinal);
+
+        foreach (string stem in FindStaleFieldFileStems(expectedStems, stemToPath.Keys))
+        {
+            string path = stemToPath[stem];
+            Dictionary<string, (int Nth, bool IsSigningField, bool IsSerialized)> existing = ParseExistingFieldFile(path);
+            ReportFieldDiff(stem, existing, new List<FieldEntry>());
+            File.Delete(path);
+            Console.WriteLine($"  -> Removed stale: Field.{stem}.Generated.cs ({existing.Count} fields dropped)");
+            _filesWritten++;
+        }
+    }
+
+    /// <summary>
+    /// Extracts the type stem of a generated field file
+    /// (<c>Field.Uint16.Generated.cs</c> → <c>Uint16</c>); returns null when the
+    /// file name is not a <c>Field.*.Generated.cs</c> file.
+    /// </summary>
+    public static string? FieldFileStem(string fileName)
+    {
+        const string prefix = "Field.";
+        const string suffix = ".Generated.cs";
+        if (fileName.Length > prefix.Length + suffix.Length
+            && fileName.StartsWith(prefix, StringComparison.Ordinal)
+            && fileName.EndsWith(suffix, StringComparison.Ordinal))
+        {
+            return fileName[prefix.Length..^suffix.Length];
+        }
+        return null;
+    }
+
+    /// <summary>
+    /// Given the field-type file stems the new definitions should produce and
+    /// the stems currently on disk, returns the on-disk stems that no longer
+    /// have any fields (stale), Ordinal-sorted.
+    /// </summary>
+    public static List<string> FindStaleFieldFileStems(
+        IEnumerable<string> expectedStems,
+        IEnumerable<string> existingStems)
+    {
+        HashSet<string> expected = new HashSet<string>(expectedStems, StringComparer.Ordinal);
+        return existingStems
+            .Where(s => !expected.Contains(s))
+            .OrderBy(s => s, StringComparer.Ordinal)
+            .ToList();
     }
 
     #endregion
