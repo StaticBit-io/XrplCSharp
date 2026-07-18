@@ -20,7 +20,7 @@ public static class ServerDefinitionsClient
         if (!Uri.TryCreate(url, UriKind.Absolute, out Uri? uri))
             throw new ArgumentException($"Invalid URL: {url}");
 
-        using var cts = CancellationTokenSource.CreateLinkedTokenSource(ct);
+        using CancellationTokenSource cts = CancellationTokenSource.CreateLinkedTokenSource(ct);
         cts.CancelAfter(timeout);
 
         string json = uri.Scheme switch
@@ -36,14 +36,14 @@ public static class ServerDefinitionsClient
 
     private static async Task<string> FetchWebSocketAsync(Uri uri, CancellationToken ct)
     {
-        using var ws = new ClientWebSocket();
+        using ClientWebSocket ws = new ClientWebSocket();
         await ws.ConnectAsync(uri, ct);
 
         byte[] request = Encoding.UTF8.GetBytes("{\"id\":1,\"command\":\"server_definitions\"}");
         await ws.SendAsync(request, WebSocketMessageType.Text, endOfMessage: true, ct);
 
-        var buffer = new byte[64 * 1024];
-        var sb = new StringBuilder();
+        byte[] buffer = new byte[64 * 1024];
+        StringBuilder sb = new StringBuilder();
         WebSocketReceiveResult result;
         do
         {
@@ -60,8 +60,8 @@ public static class ServerDefinitionsClient
 
     private static async Task<string> FetchHttpAsync(Uri uri, CancellationToken ct)
     {
-        using var http = new HttpClient();
-        var body = new StringContent(
+        using HttpClient http = new HttpClient();
+        StringContent body = new StringContent(
             "{\"method\":\"server_definitions\",\"params\":[{}]}",
             Encoding.UTF8, "application/json");
         using HttpResponseMessage response = await http.PostAsync(uri, body, ct);

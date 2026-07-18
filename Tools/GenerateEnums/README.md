@@ -150,7 +150,7 @@ public Uint128 this[Uint128Field f]
 
 ### 6. Маппинги генератора
 
-В `Tools/GenerateEnums/Program.cs` добавить в оба словаря:
+В `Tools/GenerateEnums/Generation/EnumGenerator.cs` добавить в оба словаря:
 
 ```csharp
 // TypeToFieldClass
