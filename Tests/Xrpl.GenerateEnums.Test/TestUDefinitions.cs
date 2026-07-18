@@ -1,3 +1,4 @@
+using System.IO;
 using System.Text.Json;
 
 using GenerateEnums;
@@ -47,5 +48,18 @@ public class TestUDefinitions
         Definitions d = Definitions.ParseResponse(doc.RootElement);
         Assert.AreEqual(2, d.Fields.Count);
         Assert.AreEqual(0, d.TransactionTypes["Payment"]);
+    }
+
+    [TestMethod]
+    public void TestUParseResponse_NodeError_ThrowsClearMessage()
+    {
+        // rippled JSON-RPC error: HTTP 200 with status/error inside result
+        string errorResponse =
+            "{\"result\":{\"error\":\"unknownCmd\",\"error_message\":\"Unknown method.\",\"status\":\"error\"}}";
+        using JsonDocument doc = JsonDocument.Parse(errorResponse);
+        InvalidDataException ex = Assert.ThrowsExactly<InvalidDataException>(
+            () => Definitions.ParseResponse(doc.RootElement));
+        StringAssert.Contains(ex.Message, "unknownCmd");
+        StringAssert.Contains(ex.Message, "Unknown method.");
     }
 }

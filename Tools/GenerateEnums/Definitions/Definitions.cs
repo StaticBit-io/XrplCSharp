@@ -1,3 +1,4 @@
+using System;
 using System.Collections.Generic;
 using System.IO;
 using System.Text.Json;
@@ -48,7 +49,31 @@ public sealed record Definitions(
         JsonElement payload = responseRoot.TryGetProperty("result", out JsonElement result)
             ? result
             : responseRoot;
+
+        ThrowIfNodeError(responseRoot);
+        ThrowIfNodeError(payload);
+
         return Parse(payload);
+    }
+
+    private static void ThrowIfNodeError(JsonElement element)
+    {
+        if (element.ValueKind != JsonValueKind.Object)
+            return;
+        bool isError =
+            (element.TryGetProperty("status", out JsonElement status) &&
+             status.ValueKind == JsonValueKind.String &&
+             string.Equals(status.GetString(), "error", StringComparison.Ordinal)) ||
+            element.TryGetProperty("error", out _);
+        if (!isError)
+            return;
+        string code = element.TryGetProperty("error", out JsonElement err) && err.ValueKind == JsonValueKind.String
+            ? err.GetString()!
+            : "error";
+        string message = element.TryGetProperty("error_message", out JsonElement msg) && msg.ValueKind == JsonValueKind.String
+            ? msg.GetString()!
+            : "(no error_message)";
+        throw new InvalidDataException($"node returned an error: {code} — {message}");
     }
 
     private static JsonElement Require(JsonElement root, string name) =>
