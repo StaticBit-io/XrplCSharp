@@ -21,7 +21,7 @@ public sealed record Definitions(
     /// <summary>Parses a root element that directly holds the five sections.</summary>
     public static Definitions Parse(JsonElement root)
     {
-        var fields = new Dictionary<string, FieldDef>();
+        Dictionary<string, FieldDef> fields = new();
         foreach (JsonElement entry in Require(root, "FIELDS").EnumerateArray())
         {
             string name = entry[0].GetString()!;
@@ -58,7 +58,7 @@ public sealed record Definitions(
 
     private static Dictionary<string, int> ReadIntMap(JsonElement root, string name)
     {
-        var map = new Dictionary<string, int>();
+        Dictionary<string, int> map = new();
         foreach (JsonProperty prop in Require(root, name).EnumerateObject())
             map[prop.Name] = prop.Value.GetInt32();
         return map;
