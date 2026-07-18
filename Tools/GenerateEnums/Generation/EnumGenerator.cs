@@ -552,6 +552,9 @@ public static class EnumGenerator
         return "unknown";
     }
 
+    /// <summary>Public accessor for the shared repo-root resolver.</summary>
+    public static string RepoRoot() => FindRepoRoot();
+
     private static string FindRepoRoot()
     {
         string? dir = AppContext.BaseDirectory;
