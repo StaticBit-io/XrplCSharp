@@ -20,24 +20,32 @@ namespace XrplTests.Xrpl.Models
     [TestClass]
     public class TestUModelEnumDrift
     {
-        // definitions.json has these; the Models enums intentionally omit them.
-        private static readonly HashSet<string> DefinitionsOnly =
-            new(StringComparer.Ordinal) { "Invalid" };
+        // Allow-lists are scoped PER ENUM so an exception intended for one enum
+        // is never silently accepted in the other. Both carry the same pattern
+        // today (definitions.json has "Invalid", which the Models enum omits;
+        // the Models enum adds the synthetic "Unknown" sentinel), but keeping
+        // them separate means a future enum-specific exception cannot leak.
 
-        // The Models enums add these synthetic members (not protocol types).
-        private static readonly HashSet<string> ModelsOnly =
+        private static readonly HashSet<string> TxTypeDefinitionsOnly =
+            new(StringComparer.Ordinal) { "Invalid" };
+        private static readonly HashSet<string> TxTypeModelsOnly =
+            new(StringComparer.Ordinal) { "Unknown" };
+
+        private static readonly HashSet<string> LedgerTypeDefinitionsOnly =
+            new(StringComparer.Ordinal) { "Invalid" };
+        private static readonly HashSet<string> LedgerTypeModelsOnly =
             new(StringComparer.Ordinal) { "Unknown" };
 
         [TestMethod]
         public void TestUTransactionTypeEnum_MatchesDefinitions()
         {
-            AssertEnumMatchesDefinitions(typeof(global::Xrpl.Models.TransactionType), "TRANSACTION_TYPES", DefinitionsOnly, ModelsOnly);
+            AssertEnumMatchesDefinitions(typeof(global::Xrpl.Models.TransactionType), "TRANSACTION_TYPES", TxTypeDefinitionsOnly, TxTypeModelsOnly);
         }
 
         [TestMethod]
         public void TestULedgerEntryTypeEnum_MatchesDefinitions()
         {
-            AssertEnumMatchesDefinitions(typeof(global::Xrpl.Models.LedgerEntryType), "LEDGER_ENTRY_TYPES", DefinitionsOnly, ModelsOnly);
+            AssertEnumMatchesDefinitions(typeof(global::Xrpl.Models.LedgerEntryType), "LEDGER_ENTRY_TYPES", LedgerTypeDefinitionsOnly, LedgerTypeModelsOnly);
         }
 
         private static void AssertEnumMatchesDefinitions(

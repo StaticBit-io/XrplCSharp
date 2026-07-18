@@ -65,7 +65,7 @@ For each enum:
    extraInModels   = modelNames.Except(expected);   // in the enum, not in the contract
    ```
 
-   Both enums have the identical exception pattern today (verified against the current `definitions.json`): definitions-only = `{ "Invalid" }`, Models-only = `{ "Unknown" }`. The same two allow-lists are passed to both `TransactionType` and `LedgerEntryType`.
+   Each enum gets its OWN allow-list pair (`TxTypeDefinitionsOnly`/`TxTypeModelsOnly`, `LedgerTypeDefinitionsOnly`/`LedgerTypeModelsOnly`), so an exception intended for one enum is never silently accepted in the other. Both carry the identical pattern today (verified against the current `definitions.json`): definitions-only = `{ "Invalid" }`, Models-only = `{ "Unknown" }`.
 
 4. Fail when either set is non-empty, with an explicit message:
 
