@@ -94,12 +94,14 @@ public static class EnumGenerator
     private static int _filesWritten;
     private static int _filesUnchanged;
     private static bool _forceRewrite;
+    private static int _unknownFieldTypeCount;
 
     public static int Run(string[] args)
     {
         _forceRewrite = false;
         _filesWritten = 0;
         _filesUnchanged = 0;
+        _unknownFieldTypeCount = 0;
 
         string repoRoot = FindRepoRoot();
         List<string> positionalArgs = new();
@@ -153,6 +155,17 @@ public static class EnumGenerator
         Console.WriteLine();
         Console.WriteLine($"Done. Written: {_filesWritten}, Unchanged: {_filesUnchanged}");
         Console.WriteLine($"Generated files in: {outputDir}");
+
+        // Unknown field types leave the generated output incomplete (their fields
+        // are skipped). Fail loudly so the mapping tables get updated instead of
+        // silently shipping partial enums.
+        if (_unknownFieldTypeCount > 0)
+        {
+            Console.Error.WriteLine(
+                $"ERROR: {_unknownFieldTypeCount} field(s) had an unknown type and were skipped — " +
+                "update TypeToFieldClass/TypeToFileName. No stale files were removed.");
+            return 1;
+        }
 
         return 0;
     }
@@ -437,8 +450,9 @@ public static class EnumGenerator
         _filesWritten++;
     }
 
-    private static void GenerateFields(JsonElement fields, string outputDir)
+    internal static void GenerateFields(JsonElement fields, string outputDir)
     {
+        _unknownFieldTypeCount = 0;
         var grouped = new Dictionary<string, List<FieldEntry>>();
 
         foreach (JsonElement entry in fields.EnumerateArray())
@@ -454,6 +468,7 @@ public static class EnumGenerator
             if (!TypeToFieldClass.ContainsKey(typeName))
             {
                 Console.Error.WriteLine($"  ! Unknown field type '{typeName}' for field '{name}', skipping.");
+                _unknownFieldTypeCount++;
                 continue;
             }
 
@@ -510,7 +525,14 @@ public static class EnumGenerator
             totalFields += fieldList.Count;
         }
 
-        RemoveStaleFieldFiles(grouped, outputDir);
+        // Only prune stale files when EVERY field type was recognized. An
+        // unknown type is skipped and never enters `grouped`, so its existing
+        // Field.<Type>.Generated.cs would otherwise be misread as stale and
+        // deleted even though its fields are still in the protocol.
+        if (_unknownFieldTypeCount == 0)
+            RemoveStaleFieldFiles(grouped, outputDir);
+        else
+            Console.Error.WriteLine("  ! Skipping stale-file removal because unknown field types were encountered.");
 
         Console.WriteLine($"  Total: {totalFields} fields");
     }
