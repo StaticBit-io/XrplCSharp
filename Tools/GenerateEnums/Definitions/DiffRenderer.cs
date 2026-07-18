@@ -1,4 +1,3 @@
-using System.Linq;
 using System.Text;
 using System.Text.Json;
 
@@ -7,6 +6,8 @@ namespace GenerateEnums;
 /// <summary>Formats a DiffResult as a human table or machine JSON.</summary>
 public static class DiffRenderer
 {
+    private static readonly JsonSerializerOptions IndentedJson = new() { WriteIndented = true };
+
     public static string RenderTable(DiffResult result)
     {
         StringBuilder sb = new();
@@ -33,6 +34,5 @@ public static class DiffRenderer
         return sb.ToString();
     }
 
-    public static string RenderJson(DiffResult result) =>
-        JsonSerializer.Serialize(result, new JsonSerializerOptions { WriteIndented = true });
+    public static string RenderJson(DiffResult result) => JsonSerializer.Serialize(result, IndentedJson);
 }
