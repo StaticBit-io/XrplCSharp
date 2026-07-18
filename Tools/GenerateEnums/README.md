@@ -2,6 +2,35 @@
 
 Генератор C# исходных файлов из `definitions.json` для проекта `Xrpl.BinaryCodec`.
 
+## Commands
+
+### generate (default)
+
+Regenerates the `Xrpl.BinaryCodec` enum partial classes from `definitions.json`.
+
+```
+dotnet run --project Tools/GenerateEnums                 # generate, default path
+dotnet run --project Tools/GenerateEnums -- generate [path-to-definitions.json] [--force]
+```
+
+### diff
+
+Compares the local `definitions.json` against a live node's `server_definitions`.
+
+```
+dotnet run --project Tools/GenerateEnums -- diff <url> [--json] [--definitions <path>] [--timeout <sec>]
+```
+
+- `<url>`: `ws://` / `wss://` (WebSocket) or `http://` / `https://` (JSON-RPC).
+- Exit codes: `0` in sync, `1` drift found (node has entries the SDK lacks, or values differ), `2` tool error (network / arguments).
+- Local-only entries (SDK ahead of a lagging node) are shown but do not affect the exit code.
+
+Example:
+
+```
+dotnet run --project Tools/GenerateEnums -- diff wss://s.devnet.rippletest.net:51233
+```
+
 ## Что генерируется
 
 | Файл | Источник в JSON | Содержимое |
