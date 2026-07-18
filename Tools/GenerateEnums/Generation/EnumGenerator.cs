@@ -97,6 +97,10 @@ public static class EnumGenerator
 
     public static int Run(string[] args)
     {
+        _forceRewrite = false;
+        _filesWritten = 0;
+        _filesUnchanged = 0;
+
         string repoRoot = FindRepoRoot();
         List<string> positionalArgs = new();
 
@@ -115,7 +119,7 @@ public static class EnumGenerator
         if (!File.Exists(definitionsPath))
         {
             Console.Error.WriteLine($"ERROR: definitions.json not found at: {definitionsPath}");
-            Environment.Exit(1);
+            return 1;
         }
 
         string outputDir = Path.Combine(repoRoot, "Base", "Xrpl.BinaryCodec", "Enums");
