@@ -1,0 +1,64 @@
+name: Definitions Watch
+
+# Weekly check that the SDK's definitions.json matches a rippled DEVELOP node's
+# server_definitions. Public networks (devnet/testnet/mainnet) all lag develop,
+# so this queries the nightly stand — a pinned xrpld `develop` build — where a
+# node-only/mismatch genuinely means the SDK is behind develop.
+#
+# "develop" here = the pinned xrpld version in .ci-config/Dockerfile.nightly, not
+# the literal develop tip; the tip moving is covered separately by protocol-watch.
+
+on:
+  schedule:
+    - cron: '0 7 * * 1' # Mondays 07:00 UTC (one hour after protocol-watch)
+  workflow_dispatch:
+
+permissions:
+  contents: read
+
+# Only one develop-drift run at a time
+concurrency:
+  group: definitions-watch
+  cancel-in-progress: false
+
+env:
+  DOTNET_VERSION: '10.0.x'
+
+jobs:
+  watch:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+
+      - name: Start rippled develop stand
+        run: docker compose -f .ci-config/docker-compose.batchv11.yml up -d --build
+
+      - name: Wait for rippled to be ready
+        run: |
+          for i in $(seq 1 30); do
+            if curl -sf http://localhost:5005/ -d '{"method":"server_info"}' > /dev/null 2>&1; then
+              echo "rippled develop stand is ready"
+              exit 0
+            fi
+            echo "Waiting for rippled develop stand... ($i/30)"
+            sleep 2
+          done
+          echo "::error::rippled develop stand did not become ready — dumping diagnostics"
+          docker compose -f .ci-config/docker-compose.batchv11.yml ps
+          docker compose -f .ci-config/docker-compose.batchv11.yml logs --no-color xrpld
+          exit 1
+
+      - name: Use .NET ${{ env.DOTNET_VERSION }}
+        uses: actions/setup-dotnet@v4
+        with:
+          dotnet-version: ${{ env.DOTNET_VERSION }}
+
+      # diff exit codes: 0 in sync (green); 1 node-only/mismatch = SDK behind
+      # develop (red); 2 tool error, e.g. stand not reachable (red). The diff
+      # table is printed to this step's log so the cause is visible.
+      - name: Diff definitions.json against develop
+        run: dotnet run --project Tools/GenerateEnums -- diff http://localhost:5005
+
+      - name: Stop rippled develop stand
+        if: always()
+        run: docker compose -f .ci-config/docker-compose.batchv11.yml down
