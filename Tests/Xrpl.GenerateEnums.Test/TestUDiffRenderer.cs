@@ -29,6 +29,7 @@ public class TestUDiffRenderer
 
         StringAssert.Contains(text, "FIELDS");
         StringAssert.Contains(text, "NewField");
+        StringAssert.Contains(text, "node-only (on node, not local)");
         StringAssert.Contains(text, "OldField");
         StringAssert.Contains(text, "Sponsor");
         StringAssert.Contains(text, "27 -> 28");

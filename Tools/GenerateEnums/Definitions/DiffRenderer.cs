@@ -23,7 +23,7 @@ public static class DiffRenderer
             }
             if (s.NodeOnly.Count > 0 || s.Mismatch.Count > 0) driftSections++;
             sb.AppendLine(s.Section);
-            foreach (string n in s.NodeOnly) { sb.AppendLine($"  node-only (SDK behind):   + {n}"); nodeOnly++; }
+            foreach (string n in s.NodeOnly) { sb.AppendLine($"  node-only (on node, not local):   + {n}"); nodeOnly++; }
             foreach (Mismatch m in s.Mismatch) { sb.AppendLine($"  mismatch:                 ~ {m.Name}: {m.Field} {m.Local} -> {m.Server}"); mismatch++; }
             foreach (string n in s.LocalOnly) { sb.AppendLine($"  local-only (info):        - {n}"); localOnly++; }
         }
