@@ -27,6 +27,11 @@
                 </Compile>
         </ItemGroup>
         <ItemGroup>
+                <None Include="..\..\Base\Xrpl.BinaryCodec\Enums\definitions.json" Link="definitions.json">
+                        <CopyToOutputDirectory>PreserveNewest</CopyToOutputDirectory>
+                </None>
+        </ItemGroup>
+        <ItemGroup>
                 <ProjectReference Include="..\..\Xrpl\Xrpl.csproj" />
         </ItemGroup>
 </Project>
