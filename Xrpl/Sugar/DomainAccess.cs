@@ -81,7 +81,8 @@ namespace Xrpl.Sugar
             LOLedger ledgerResponse = await client.Ledger(ledgerRequest, cancellationToken);
             LedgerEntity ledger = (LedgerEntity)ledgerResponse.LedgerEntity;
             uint ledgerIndex = Convert.ToUInt32(ledger.LedgerIndex);
-            DateTime closeTime = ledger.CloseTime ?? DateTime.UtcNow;
+            DateTime closeTime = ledger.CloseTime
+                ?? throw new RippleException("Validated ledger response did not include a close time.");
             LedgerIndex pinnedIndex = new LedgerIndex(ledgerIndex);
 
             LedgerEntryRequest domainRequest = new LedgerEntryRequest

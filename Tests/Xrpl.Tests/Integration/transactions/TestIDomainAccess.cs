@@ -20,11 +20,22 @@ public class TestIDomainAccess
     public TestContext TestContext { get; set; }
     public static IXrplClient client;
     public static TestNodeType nodeType = TestNodeType.Standalone;
+    private static bool permissionedDomainsActive;
 
     [ClassInitialize]
     public static async Task MyClassInitializeAsync(TestContext testContext)
     {
         client = await IntegrationTestConfig.CreateClientAsync(nodeType);
+        permissionedDomainsActive = await AmendmentGuard.IsEnabledAsync(client, AmendmentGuard.PermissionedDomains);
+    }
+
+    [TestInitialize]
+    public void CheckPermissionedDomainsAmendment()
+    {
+        if (!permissionedDomainsActive)
+        {
+            Assert.Inconclusive("PermissionedDomains amendment is not enabled on the test node.");
+        }
     }
 
     [ClassCleanup]

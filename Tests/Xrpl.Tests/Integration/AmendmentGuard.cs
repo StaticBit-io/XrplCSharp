@@ -31,6 +31,9 @@ public static class AmendmentGuard
     /// <summary>Amendment id of PriceOracle / XLS-47 (sha512half of the name).</summary>
     public const string PriceOracle = "96FD2F293A519AE1DB6F8BED23E4AD9119342DA7CB6BAFD00953D16C54205D8B";
 
+    /// <summary>Amendment id of PermissionedDomains / XLS-80 (sha512half of the name).</summary>
+    public const string PermissionedDomains = "A730EB18A9D4BB52502C898589558B4CCEB4BE10044500EE5581137A2E80E849";
+
     public static async Task<bool> IsEnabledAsync(IXrplClient client, string amendmentId)
     {
         try
@@ -38,18 +41,47 @@ public static class AmendmentGuard
             LedgerEntryRequest request = new LedgerEntryRequest { Index = AmendmentsLedgerIndex };
             JsonNode node = await client.GRequest<JsonNode, LedgerEntryRequest>(request);
             JsonArray amendments = node?["node"]?["Amendments"]?.AsArray();
-            if (amendments == null)
-                return false;
-            foreach (JsonNode amendment in amendments)
+            if (amendments != null)
             {
-                if (string.Equals(amendment?.GetValue<string>(), amendmentId, StringComparison.OrdinalIgnoreCase))
-                    return true;
+                foreach (JsonNode amendment in amendments)
+                {
+                    if (string.Equals(amendment?.GetValue<string>(), amendmentId, StringComparison.OrdinalIgnoreCase))
+                        return true;
+                }
             }
-            return false;
+        }
+        catch
+        {
+            // Fall through to the admin feature check below.
+        }
+
+        // Standalone --start force-enables the [features] amendments without
+        // recording them in the Amendments ledger object (observed on 3.2.0:
+        // the object lists 3 entries while dozens are active). The admin
+        // `feature` command reports the node's actual view.
+        return await IsEnabledViaFeatureCommandAsync(client, amendmentId);
+    }
+
+    private static async Task<bool> IsEnabledViaFeatureCommandAsync(IXrplClient client, string amendmentId)
+    {
+        try
+        {
+            FeatureRequest request = new FeatureRequest { Feature = amendmentId };
+            JsonNode node = await client.GRequest<JsonNode, FeatureRequest>(request);
+            JsonNode entry = node?[amendmentId];
+            return entry?["enabled"]?.GetValue<bool>() == true;
         }
         catch
         {
             return false;
         }
+    }
+
+    private class FeatureRequest : BaseRequest
+    {
+        public FeatureRequest() => Command = "feature";
+
+        [System.Text.Json.Serialization.JsonPropertyName("feature")]
+        public string Feature { get; set; }
     }
 }
