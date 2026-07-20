@@ -1,5 +1,8 @@
 # Changes
 
+### Unreleased
+* **`GetDomainAccess` sugar helper** — client-side implementation of the `domain_access` check proposed in [XRPLF/rippled#7743](https://github.com/XRPLF/rippled/issues/7743): answers whether an account can use a permissioned domain (permissioned DEX, vaults) and why not. One `ledger_entry` domain lookup plus up to 10 parallel keylet `ledger_entry` credential lookups, all pinned to the same validated ledger; result mirrors the proposed API (`HasAccess` + `InvalidCredentials` with `Accepted`/`Expired` diagnostics, empty list = no matching credential). Semantics match rippled `credentials::validDomain`/`checkExpired`: lsfAccepted required, expired only when close time is strictly past `Expiration`, no owner shortcut, client-side expiry check (rippled deletes expired credentials lazily)
+
 ### 10.9.0.0 07/16/2026
 * **Unified hex helpers ([#40](https://github.com/StaticBit-io/XrplCSharp/issues/40))** — seven overlapping implementations consolidated into two canonical utilities; **breaking removals** (no `[Obsolete]` grace period):
   * Canonical byte-level pair: `Xrpl.AddressCodec.Utils.ToHex(byte[])` / `FromHex(string)` (renamed from `FromBytesToHex`/`FromHexToBytes`); canonical string-level: `Xrpl.Utils.StringConversion` (+`Xrpl.Models.Utils.HexStringHelper` for validated/padded VL fields)
