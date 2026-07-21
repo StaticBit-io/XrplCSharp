@@ -197,7 +197,7 @@ Output goes to `docs/` directory. Published to GitHub Pages.
 | `nuget.release.yml` | Push to `release` | Build Release → Pack → Publish to GitHub Packages + NuGet.org |
 | `docs.yml` | Push to `release` | DocFx → GitHub Pages |
 | `protocol-watch.yml` | Weekly cron (Mon 06:00 UTC); manual | Diffs rippled develop `*.macro` protocol files vs the baseline in the `protocol-watch` tracking issue; comments there on changes |
-| `release-watch.yml` | Weekly cron (Mon 06:30 UTC); manual | Checks the CI stand against the latest stable rippled release; when a newer release has a Docker image, regenerates the stand config (`generate-amendments.sh`), smoke-tests it and opens a bump PR (needs `RELEASE_WATCH_PAT`; falls back to a `release-watch` issue comment) |
+| `release-watch.yml` | Weekly cron (Mon 06:30 UTC); manual | Checks the CI stand against the latest stable rippled release; when a newer release has a Docker image, regenerates the stand config (`generate-amendments.sh`), smoke-tests it and opens a bump PR (via GitHub App `RELEASE_WATCH_APP_ID`/`RELEASE_WATCH_APP_PRIVATE_KEY` or `RELEASE_WATCH_PAT`; falls back to a `release-watch` issue comment) |
 
 Integration tests do **not** run on PRs into `dev` — `dev` uses a GitHub merge queue, and the `integration` job runs on the `merge_group` event against the merge result before the merge lands ("Merge when ready" button). Promotion PRs into `release` still run the full suite directly. New pushes to a PR cancel its in-flight CI run (`concurrency`, PR events only).
 

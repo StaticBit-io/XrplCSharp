@@ -3,11 +3,17 @@ name: Release Watch
 # Weekly check: is the CI standalone stand on the latest stable rippled
 # release? When a newer stable release has a published docker image, the
 # workflow regenerates the stand config for it (.ci-config/generate-amendments.sh),
-# smoke-tests the new stand, and opens a bump PR. Opening a PR that triggers CI
-# requires the RELEASE_WATCH_PAT secret (fine-grained PAT, contents:write +
-# pull_requests:write): PRs created with the built-in GITHUB_TOKEN do not
-# trigger workflows. Without the secret — or when the smoke test fails — the
-# run falls back to a comment on the release-watch tracking issue.
+# smoke-tests the new stand, and opens a bump PR.
+#
+# Opening a PR that triggers CI needs a non-GITHUB_TOKEN identity (PRs created
+# with the built-in token do not trigger workflows). Two options, tried in
+# order:
+#   1. GitHub App (dependabot-style, preferred): set the RELEASE_WATCH_APP_ID
+#      repository variable and the RELEASE_WATCH_APP_PRIVATE_KEY secret for an
+#      app installed on this repo with contents:write + pull_requests:write.
+#   2. Fine-grained PAT: the RELEASE_WATCH_PAT secret (same permissions).
+# With neither configured — or when the smoke test fails — the run falls back
+# to a comment on the release-watch tracking issue.
 
 on:
   schedule:
@@ -28,15 +34,24 @@ env:
   COMPOSE: .ci-config/docker-compose.ci.yml
   ISSUE_TITLE: 'Release watch: rippled stable'
   ISSUE_LABEL: release-watch
-  HAS_PAT: ${{ secrets.RELEASE_WATCH_PAT != '' }}
+  HAS_APP: ${{ vars.RELEASE_WATCH_APP_ID != '' && secrets.RELEASE_WATCH_APP_PRIVATE_KEY != '' }}
+  CAN_PR: ${{ (vars.RELEASE_WATCH_APP_ID != '' && secrets.RELEASE_WATCH_APP_PRIVATE_KEY != '') || secrets.RELEASE_WATCH_PAT != '' }}
 
 jobs:
   watch:
     runs-on: ubuntu-latest
     steps:
+      - name: Mint GitHub App token
+        id: app-token
+        if: env.HAS_APP == 'true'
+        uses: actions/create-github-app-token@v2
+        with:
+          app-id: ${{ vars.RELEASE_WATCH_APP_ID }}
+          private-key: ${{ secrets.RELEASE_WATCH_APP_PRIVATE_KEY }}
+
       - uses: actions/checkout@v4
         with:
-          token: ${{ secrets.RELEASE_WATCH_PAT || github.token }}
+          token: ${{ steps.app-token.outputs.token || secrets.RELEASE_WATCH_PAT || github.token }}
 
       - name: Detect release drift
         id: detect
@@ -117,9 +132,9 @@ jobs:
           [ "$ok" = "true" ]
 
       - name: Open bump PR
-        if: steps.detect.outputs.bump == 'true' && steps.smoke.outcome == 'success' && env.HAS_PAT == 'true'
+        if: steps.detect.outputs.bump == 'true' && steps.smoke.outcome == 'success' && env.CAN_PR == 'true'
         env:
-          GH_TOKEN: ${{ secrets.RELEASE_WATCH_PAT }}
+          GH_TOKEN: ${{ steps.app-token.outputs.token || secrets.RELEASE_WATCH_PAT }}
         run: |
           set -euo pipefail
           ver="${{ steps.detect.outputs.latest }}"
@@ -149,8 +164,8 @@ jobs:
             --title "ci: bump standalone stand to rippled $ver" \
             --body-file "$body_file"
 
-      - name: Notify on tracking issue (no PAT or smoke failure)
-        if: steps.detect.outputs.bump == 'true' && (steps.smoke.outcome != 'success' || env.HAS_PAT != 'true')
+      - name: Notify on tracking issue (no PR credentials or smoke failure)
+        if: steps.detect.outputs.bump == 'true' && (steps.smoke.outcome != 'success' || env.CAN_PR != 'true')
         env:
           GH_TOKEN: ${{ secrets.GITHUB_TOKEN }}
           REPO: ${{ github.repository }}
@@ -161,7 +176,7 @@ jobs:
           if [ "${{ steps.smoke.outcome }}" != "success" ]; then
             reason="the smoke test of the regenerated stand FAILED on the runner — the config generation or the new image needs a human look (see the run log)"
           else
-            reason="RELEASE_WATCH_PAT is not configured, so a CI-triggering PR cannot be opened automatically"
+            reason="no PR credentials are configured (RELEASE_WATCH_APP_ID + RELEASE_WATCH_APP_PRIVATE_KEY, or RELEASE_WATCH_PAT), so a CI-triggering PR cannot be opened automatically"
           fi
           number=$(gh issue list --repo "$REPO" --label "$ISSUE_LABEL" --state open \
             --json number --jq '.[0].number // empty')
