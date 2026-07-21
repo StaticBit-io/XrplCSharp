@@ -175,7 +175,7 @@ Amendment-dependent test classes use `Tests/Xrpl.Tests/Integration/AmendmentGuar
 
 Nightly stand specifics (see comments in `Dockerfile.nightly` / `rippled.batchv11.cfg`):
 - rippled was renamed to **xrpld** on `develop`; the nightly apt channel publishes the `xrpld` package. The version must be **pinned**: the build-timestamp format shrank from 14 to 12 digits in mid-2026, so Debian version ordering ranks older builds above newer ones. To bump: pick the latest `xrpld` version from the `jammy nightly` Packages index at repos.ripple.com and update `ARG XRPLD_VERSION`.
-- On `develop` (3.3.x) the `[features]` config section no longer registers genesis up-votes. Genesis amendments come from the `[amendments]` section with lines of the form `<hash> <name>`, where hash = sha512half of the amendment name. In standalone mode there is no amendment voting, so `[amendments]` at `--start` is the only way to activate a DefaultNo amendment.
+- On xrpld (3.2.x and `develop`) the `[features]` config section does not register genesis up-votes — startup logs report every listed amendment as "will be down voted by default". Genesis amendments come from the `[amendments]` section with lines of the form `<hash> <name>`, where hash = sha512half of the amendment name. In standalone mode there is no practical amendment voting path (majority takes ~35 min and DefaultNo amendments never activate), so `[amendments]` at `--start` is the only way to activate amendments. This applies to both the CI stand (`rippled.cfg`) and the nightly stand (`rippled.batchv11.cfg`). An amendment the binary does not support (e.g. MPTokensV2 on 3.2.0) is skipped at genesis rather than enabled — check `feature` output for `supported`.
 
 ### Generate Documentation
 
