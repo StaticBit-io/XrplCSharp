@@ -38,10 +38,11 @@ namespace Xrpl.Tests.ClientLib
             string entryErrorJson = "{\"id\":0,\"status\":\"error\",\"type\":\"response\",\"error\":\"entryNotFound\",\"error_code\":92,\"error_message\":\"Entry not found.\",\"request\":{\"command\":\"ledger_entry\"}}";
             runner.mockedRippled.AddResponse("ledger_entry", JsonSerializer.Deserialize<Dictionary<string, object>>(entryErrorJson));
 
-            await Assert.ThrowsExactlyAsync<RippleException>(() =>
+            RippleException exception = await Assert.ThrowsExactlyAsync<RippleException>(() =>
                 runner.client.GetDomainAccess(
                     "rf1BiGeXwwQoi8Z2ueFYTEXSwuJYfV2Jpn",
                     "A730EB18A9D4BB52502C898589558B4CCEB4BE10044500EE5581137A2E80E849"));
+            StringAssert.Contains(exception.Message, "did not include a close time");
         }
     }
 }

@@ -3,6 +3,7 @@ using System.Text.Json.Nodes;
 using System.Threading.Tasks;
 
 using Xrpl.Client;
+using Xrpl.Client.Exceptions;
 using Xrpl.Models.Methods;
 
 namespace XrplTests.Xrpl.ClientLib.Integration;
@@ -50,9 +51,12 @@ public static class AmendmentGuard
                 }
             }
         }
-        catch
+        catch (RippledException)
         {
-            // Fall through to the admin feature check below.
+            // The node answered with an error (e.g. entryNotFound before the
+            // first flag ledger): fall through to the admin feature check.
+            // Transport/parse failures propagate so infrastructure problems
+            // fail the run loudly instead of skipping tests as "disabled".
         }
 
         // Standalone --start force-enables the [features] amendments without
@@ -71,8 +75,12 @@ public static class AmendmentGuard
             JsonNode entry = node?[amendmentId];
             return entry?["enabled"]?.GetValue<bool>() == true;
         }
-        catch
+        catch (RippledException)
         {
+            // The node rejected the request: the amendment id is unknown to
+            // this build (badFeature) or the connection is not admin
+            // (noPermission). Either way activation cannot be confirmed, so
+            // treat it as disabled. Other exceptions propagate.
             return false;
         }
     }
