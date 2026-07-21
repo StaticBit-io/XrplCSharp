@@ -65,10 +65,13 @@ jobs:
         # transactors return temDISABLED and the affected tests silently skip.
         SENTINEL="8CC0774A3BF66D1D22E76BBDA8E8A232E6B6313834301B3B23E8601196AE6455"
         for i in $(seq 1 30); do
-          if curl -sf http://localhost:5005/ -d '{"method":"server_info"}' > /dev/null 2>&1; then
-            enabled=$(curl -sf http://localhost:5005/ \
+          if curl -sf --max-time 5 http://localhost:5005/ -d '{"method":"server_info"}' > /dev/null 2>&1; then
+            # `|| true`: this step runs under bash -e; a jq parse failure on a
+            # partial/garbage response would otherwise abort the whole step
+            # instead of letting the loop retry.
+            enabled=$(curl -sf --max-time 5 http://localhost:5005/ \
               -d "{\"method\":\"feature\",\"params\":[{\"feature\":\"$SENTINEL\"}]}" \
-              | jq -r ".result.\"$SENTINEL\".enabled" 2>/dev/null)
+              | jq -r ".result.\"$SENTINEL\".enabled" 2>/dev/null || true)
             if [ "$enabled" = "true" ]; then
               echo "rippled is ready, sentinel amendment (AMM) is enabled"
               exit 0
