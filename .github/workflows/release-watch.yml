@@ -57,6 +57,9 @@ jobs:
           # Accepts the numeric App ID as well as the Client ID.
           client-id: ${{ vars.RELEASE_WATCH_APP_ID }}
           private-key: ${{ secrets.RELEASE_WATCH_APP_PRIVATE_KEY }}
+          # Scope the token down even if the installation ever gains more.
+          permission-contents: write
+          permission-pull-requests: write
 
       - uses: actions/checkout@v4
         with:
@@ -222,6 +225,19 @@ jobs:
               --body "Automated notifications from the release-watch workflow (.github/workflows/release-watch.yml)." \
               | grep -oE '[0-9]+$')
           fi
-          comment=$(printf '<!-- release-watch:run-%s -->\nRelease-watch run **failed** before completing (token mint, drift detection, config regeneration or PR creation): %s/%s/actions/runs/%s\n\nThe stand pin was not changed; see the run log.\n' \
-            "${{ github.run_id }}" "$GITHUB_SERVER_URL" "$REPO" "${{ github.run_id }}")
+          # One notification per failure streak: skip only when the latest
+          # comment on the issue is already a failure notification, so a
+          # persistent breakage does not spam weekly while a new failure after
+          # any other activity still notifies.
+          marker='<!-- release-watch:failure -->'
+          last_id=$(gh api "repos/$REPO/issues/$number/comments" --paginate --jq '.[].id' | tail -1)
+          if [ -n "$last_id" ]; then
+            last_body=$(gh api "repos/$REPO/issues/comments/$last_id" --jq .body)
+            if grep -qF "$marker" <<< "$last_body"; then
+              echo "Latest comment is already a failure notification; skipping."
+              exit 0
+            fi
+          fi
+          comment=$(printf '%s\nRelease-watch run **failed** before completing (token mint, drift detection, config regeneration or PR creation): %s/%s/actions/runs/%s\n\nThe stand pin was not changed; see the run log.\n' \
+            "$marker" "$GITHUB_SERVER_URL" "$REPO" "${{ github.run_id }}")
           gh issue comment "$number" --repo "$REPO" --body "$comment"
