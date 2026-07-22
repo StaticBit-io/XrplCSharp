@@ -21,7 +21,18 @@
 # both: they are permanently baked into the protocol and rippled rejects their
 # names in config at startup.
 #
-# Usage: .ci-config/generate-amendments.sh <rippled-tag>   # e.g. 3.2.0
+# Usage: .ci-config/generate-amendments.sh <rippled-ref> [target-cfg]
+#   <rippled-ref>  tag or commit of XRPLF/rippled to read features.macro from
+#   [target-cfg]   config file to rewrite (default: rippled.cfg next to this script)
+#
+# Examples:
+#   .ci-config/generate-amendments.sh 3.2.0
+#   .ci-config/generate-amendments.sh <develop-sha> .ci-config/rippled.batchv11.cfg
+#
+# For rippled.batchv11.cfg the ref MUST match the pinned nightly build
+# (ARG XRPLD_VERSION in Dockerfile.nightly): generating from a newer develop
+# commit can emit feature names unknown to the pinned binary, and rippled
+# rejects unknown names in config at startup.
 
 # Supported::No features the SDK test suite needs ahead of rippled support.
 # They go into [features] (Rules presets) only; introspection still reports
@@ -30,8 +41,12 @@ EXTRA_FEATURES="MPTokensV2"
 
 set -euo pipefail
 
-TAG="${1:?usage: generate-amendments.sh <rippled-tag>}"
-CFG="$(cd "$(dirname "$0")" && pwd)/rippled.cfg"
+TAG="${1:?usage: generate-amendments.sh <rippled-ref> [target-cfg]}"
+CFG="${2:-$(cd "$(dirname "$0")" && pwd)/rippled.cfg}"
+if [ ! -f "$CFG" ]; then
+  echo "error: target config not found: $CFG" >&2
+  exit 1
+fi
 MACRO_URL="https://raw.githubusercontent.com/XRPLF/rippled/$TAG/include/xrpl/protocol/detail/features.macro"
 
 macro=$(curl -sf --max-time 30 "$MACRO_URL")
