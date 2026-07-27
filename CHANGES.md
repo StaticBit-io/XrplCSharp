@@ -1,6 +1,6 @@
 # Changes
 
-### 10.10.0.0 07/27/2026
+### 10.9.1.0 07/27/2026
 * **Fix `account_tx` losing the payment amount and, on API v1, the whole transaction** — a silent regression introduced by the 10.3.0.0 `Newtonsoft.Json` → `System.Text.Json` migration; affects every release from 10.3.0.0 on:
   * `Payment`/`PaymentResponse.DeliverMax` — the private set-only alias that maps API v2's `DeliverMax` onto `Amount` was carried over from Newtonsoft (which deserializes attributed non-public members) but `System.Text.Json` skips non-public members without `[JsonInclude]`. Every Payment read through `AccountTransactions`, `TxV2` or the transaction streams came back with `Amount = null` — no exception, no diagnostic. `Tx()` was unaffected because it pins `ApiVersion = 1`, and `meta.delivered_amount` kept parsing correctly, which is why the loss went unnoticed. The alias stays set-only, so `DeliverMax` is still never serialized back out
   * `TransactionSummary` now accepts both envelopes: rippled wraps the transaction in `tx_json` under API v2 and in `tx` under API v1 — only `tx_json` was mapped, so `Transaction` was `null` for the entire history whenever `ApiVersion = 1` was requested. `Hash` and `LedgerIndex` live inside the envelope under API v1 and fall back to it accordingly (previously `Hash` came back empty, breaking hash-based lookups over the returned list)
