@@ -60,6 +60,13 @@ namespace Xrpl.Models.Transactions
         public Currency Amount { get; set; }
 
         /// <inheritdoc />
+        /// <remarks>
+        /// API v2 renames the ledger's Amount field to DeliverMax on the wire and omits Amount entirely.
+        /// System.Text.Json skips non-public members unless they carry [JsonInclude], so this attribute
+        /// is what keeps the alias wired up — without it Amount silently stays null on every v2 payload.
+        /// The property is set-only, so DeliverMax is never written back out.
+        /// </remarks>
+        [JsonInclude]
         [JsonPropertyName("DeliverMax")]
         [JsonConverter(typeof(CurrencyConverter))]
         private Currency? DeliverMax
@@ -78,7 +85,7 @@ namespace Xrpl.Models.Transactions
         {
             get => base.Flags.HasValue ? (PaymentFlags?)base.Flags.Value : null;
             set => base.Flags = (uint?)value;
-        } 
+        }
         /// <inheritdoc />
         public string InvoiceID { get; set; }
 
@@ -194,6 +201,14 @@ namespace Xrpl.Models.Transactions
         public Currency Amount { get; set; }
 
         /// <inheritdoc />
+        /// <remarks>
+        /// API v2 renames the ledger's Amount field to DeliverMax on the wire and omits Amount entirely.
+        /// System.Text.Json skips non-public members unless they carry [JsonInclude], so this attribute
+        /// is what keeps the alias wired up — without it Amount silently stays null on every v2 payload
+        /// (account_tx, tx with api_version 2, subscription streams). The property is set-only, so
+        /// DeliverMax is never written back out and cannot reach the binary codec.
+        /// </remarks>
+        [JsonInclude]
         [JsonPropertyName("DeliverMax")]
         [JsonConverter(typeof(CurrencyConverter))]
         private Currency? DeliverMax

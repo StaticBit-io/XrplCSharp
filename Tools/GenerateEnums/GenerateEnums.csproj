@@ -4,4 +4,7 @@
     <TargetFramework>net8.0</TargetFramework>
     <Nullable>enable</Nullable>
   </PropertyGroup>
+  <ItemGroup>
+    <InternalsVisibleTo Include="Xrpl.GenerateEnums.Test" />
+  </ItemGroup>
 </Project>
