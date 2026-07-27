@@ -1,0 +1,243 @@
+name: Release Watch
+
+# Weekly check: is the CI standalone stand on the latest stable rippled
+# release? When a newer stable release has a published docker image, the
+# workflow regenerates the stand config for it (.ci-config/generate-amendments.sh),
+# smoke-tests the new stand, and opens a bump PR.
+#
+# Opening a PR that triggers CI needs a non-GITHUB_TOKEN identity (PRs created
+# with the built-in token do not trigger workflows). Two options, tried in
+# order:
+#   1. GitHub App (dependabot-style, preferred): set the RELEASE_WATCH_APP_ID
+#      repository variable and the RELEASE_WATCH_APP_PRIVATE_KEY secret for an
+#      app installed on this repo with contents:write + pull_requests:write.
+#   2. Fine-grained PAT: the RELEASE_WATCH_PAT secret (same permissions).
+# With neither configured — or when the smoke test fails — the run falls back
+# to a comment on the release-watch tracking issue. Any other step failure
+# also lands on the tracking issue via the final failure() step.
+#
+# The nightly stand config (rippled.batchv11.cfg) is intentionally NOT touched
+# here: its amendment lists must match the pinned nightly xrpld build
+# (ARG XRPLD_VERSION in Dockerfile.nightly), not the latest stable tag.
+# Regenerate it manually when bumping the nightly pin:
+#   .ci-config/generate-amendments.sh <develop-ref> .ci-config/rippled.batchv11.cfg
+
+on:
+  schedule:
+    - cron: '30 6 * * 1' # Mondays 06:30 UTC, offset from protocol-watch
+  workflow_dispatch:
+
+permissions:
+  contents: read
+  issues: write
+  pull-requests: read # gh pr list in the drift check runs on GITHUB_TOKEN
+
+concurrency:
+  group: release-watch
+  cancel-in-progress: false
+
+env:
+  UPSTREAM: XRPLF/rippled
+  IMAGE: xrpllabsofficial/xrpld
+  COMPOSE: .ci-config/docker-compose.ci.yml
+  ISSUE_TITLE: 'Release watch: rippled stable'
+  ISSUE_LABEL: release-watch
+  HAS_APP: ${{ vars.RELEASE_WATCH_APP_ID != '' && secrets.RELEASE_WATCH_APP_PRIVATE_KEY != '' }}
+  CAN_PR: ${{ (vars.RELEASE_WATCH_APP_ID != '' && secrets.RELEASE_WATCH_APP_PRIVATE_KEY != '') || secrets.RELEASE_WATCH_PAT != '' }}
+
+jobs:
+  watch:
+    runs-on: ubuntu-latest
+    steps:
+      - name: Mint GitHub App token
+        id: app-token
+        if: env.HAS_APP == 'true'
+        uses: actions/create-github-app-token@v3
+        with:
+          # Accepts the numeric App ID as well as the Client ID.
+          client-id: ${{ vars.RELEASE_WATCH_APP_ID }}
+          private-key: ${{ secrets.RELEASE_WATCH_APP_PRIVATE_KEY }}
+          # Scope the token down even if the installation ever gains more.
+          permission-contents: write
+          permission-pull-requests: write
+
+      - uses: actions/checkout@v4
+        with:
+          token: ${{ steps.app-token.outputs.token || secrets.RELEASE_WATCH_PAT || github.token }}
+
+      - name: Detect release drift
+        id: detect
+        env:
+          GH_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+        run: |
+          set -euo pipefail
+          latest=$(gh api "repos/$UPSTREAM/releases/latest" --jq .tag_name)
+          # Stable releases are plain X.Y.Z; anything else here is unexpected.
+          echo "$latest" | grep -Eq '^[0-9]+\.[0-9]+\.[0-9]+$'
+          pinned=$(sed -n -E "s#.*image: *${IMAGE}:([0-9.]+).*#\1#p" "$COMPOSE")
+          if [ -z "$pinned" ]; then
+            echo "::error::could not parse the pinned $IMAGE tag from $COMPOSE"
+            exit 1
+          fi
+          echo "latest=$latest" >> "$GITHUB_OUTPUT"
+          echo "pinned=$pinned" >> "$GITHUB_OUTPUT"
+          if [ "$latest" = "$pinned" ]; then
+            echo "Stand is on the latest stable release ($pinned)."
+            echo "bump=false" >> "$GITHUB_OUTPUT"
+            exit 0
+          fi
+          # Actionable only once the docker image for the release exists.
+          if ! curl -sf --max-time 15 "https://hub.docker.com/v2/repositories/$IMAGE/tags/$latest" > /dev/null; then
+            echo "::notice::rippled $latest is released but $IMAGE:$latest is not on Docker Hub yet; retrying next run."
+            echo "bump=false" >> "$GITHUB_OUTPUT"
+            exit 0
+          fi
+          # Idempotency: a bump PR for this version is already open.
+          if [ -n "$(gh pr list --repo "$GITHUB_REPOSITORY" --head "release-watch/$latest" --state open --json number --jq '.[0].number // empty')" ]; then
+            echo "Bump PR for $latest is already open."
+            echo "bump=false" >> "$GITHUB_OUTPUT"
+            exit 0
+          fi
+          echo "bump=true" >> "$GITHUB_OUTPUT"
+
+      - name: Regenerate stand config
+        if: steps.detect.outputs.bump == 'true'
+        id: regen
+        run: |
+          set -euo pipefail
+          ver="${{ steps.detect.outputs.latest }}"
+          old_names=$(sed -n -E 's/^[0-9A-F]{64} (.+)$/\1/p' .ci-config/rippled.cfg | LC_ALL=C sort)
+          sed -i -E "s#(image: *${IMAGE}:)[0-9.]+#\1${ver}#" "$COMPOSE"
+          bash .ci-config/generate-amendments.sh "$ver"
+          new_names=$(sed -n -E 's/^[0-9A-F]{64} (.+)$/\1/p' .ci-config/rippled.cfg | LC_ALL=C sort)
+          {
+            echo 'added<<EOF'
+            comm -13 <(echo "$old_names") <(echo "$new_names")
+            echo 'EOF'
+            echo 'removed<<EOF'
+            comm -23 <(echo "$old_names") <(echo "$new_names")
+            echo 'EOF'
+          } >> "$GITHUB_OUTPUT"
+          git diff --stat
+
+      - name: Smoke-test the new stand
+        if: steps.detect.outputs.bump == 'true'
+        id: smoke
+        continue-on-error: true
+        run: |
+          set -euo pipefail
+          docker compose -f "$COMPOSE" up -d
+          # AMM amendment id — same sentinel as the main CI readiness wait.
+          SENTINEL="8CC0774A3BF66D1D22E76BBDA8E8A232E6B6313834301B3B23E8601196AE6455"
+          ok=false
+          for _ in $(seq 1 30); do
+            enabled=$(curl -sf --max-time 5 http://localhost:5005/ \
+              -d "{\"method\":\"feature\",\"params\":[{\"feature\":\"$SENTINEL\"}]}" \
+              | jq -r ".result.\"$SENTINEL\".enabled" 2>/dev/null || true)
+            if [ "$enabled" = "true" ]; then ok=true; break; fi
+            sleep 2
+          done
+          if [ "$ok" != "true" ]; then
+            docker compose -f "$COMPOSE" logs --no-color xrpld | tail -80 || true
+          fi
+          docker compose -f "$COMPOSE" down
+          [ "$ok" = "true" ]
+
+      - name: Open bump PR
+        if: steps.detect.outputs.bump == 'true' && steps.smoke.outcome == 'success' && env.CAN_PR == 'true'
+        env:
+          GH_TOKEN: ${{ steps.app-token.outputs.token || secrets.RELEASE_WATCH_PAT }}
+        run: |
+          set -euo pipefail
+          ver="${{ steps.detect.outputs.latest }}"
+          pinned="${{ steps.detect.outputs.pinned }}"
+          branch="release-watch/$ver"
+          git config user.name "${{ github.actor }}"
+          git config user.email "${{ github.actor }}@users.noreply.github.com"
+          git checkout -b "$branch"
+          git add "$COMPOSE" .ci-config/rippled.cfg
+          git commit -m "ci: bump standalone stand to rippled $ver"
+          git push -u origin "$branch" --force
+          body_file=$(mktemp)
+          {
+            printf '## Summary\n\n'
+            printf 'Automated bump by the release-watch workflow: rippled stable %s -> %s.\n\n' "$pinned" "$ver"
+            printf -- '- `%s`: image tag bump\n' "$COMPOSE"
+            printf -- '- `.ci-config/rippled.cfg`: `[features]`/`[amendments]` regenerated from the `%s` features.macro via `generate-amendments.sh`\n\n' "$ver"
+            printf '## Amendment changes\n\n'
+            printf 'Added:\n```\n%s\n```\n\n' "${{ steps.regen.outputs.added }}"
+            printf 'Removed:\n```\n%s\n```\n\n' "${{ steps.regen.outputs.removed }}"
+            printf '## Verification\n\n'
+            printf 'Smoke test passed on the runner: fresh stand from the new image, AMM sentinel amendment enabled at genesis.\n'
+            printf 'The merge queue runs the full integration suite against this stand before the merge lands.\n\n'
+            printf 'Review checklist: new amendments above may wake up AmendmentGuard-gated tests; release notes: https://github.com/%s/releases/tag/%s\n' "$UPSTREAM" "$ver"
+          } > "$body_file"
+          gh pr create --repo "$GITHUB_REPOSITORY" --base dev --head "$branch" \
+            --title "ci: bump standalone stand to rippled $ver" \
+            --body-file "$body_file"
+
+      - name: Notify on tracking issue (no PR credentials or smoke failure)
+        if: steps.detect.outputs.bump == 'true' && (steps.smoke.outcome != 'success' || env.CAN_PR != 'true')
+        env:
+          GH_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+          REPO: ${{ github.repository }}
+        run: |
+          set -euo pipefail
+          ver="${{ steps.detect.outputs.latest }}"
+          pinned="${{ steps.detect.outputs.pinned }}"
+          if [ "${{ steps.smoke.outcome }}" != "success" ]; then
+            reason="the smoke test of the regenerated stand FAILED on the runner — the config generation or the new image needs a human look (see the run log)"
+          else
+            reason="no PR credentials are configured (RELEASE_WATCH_APP_ID + RELEASE_WATCH_APP_PRIVATE_KEY, or RELEASE_WATCH_PAT), so a CI-triggering PR cannot be opened automatically"
+          fi
+          number=$(gh issue list --repo "$REPO" --label "$ISSUE_LABEL" --state open \
+            --json number --jq '.[0].number // empty')
+          if [ -z "$number" ]; then
+            gh label create "$ISSUE_LABEL" --repo "$REPO" \
+              --description "rippled stable release tracking" --color 0e8a16 2>/dev/null || true
+            number=$(gh issue create --repo "$REPO" --title "$ISSUE_TITLE" --label "$ISSUE_LABEL" \
+              --body "Automated notifications from the release-watch workflow (.github/workflows/release-watch.yml)." \
+              | grep -oE '[0-9]+$')
+          fi
+          marker="<!-- release-watch:$ver -->"
+          existing_comments=$(gh api "repos/$REPO/issues/$number/comments" --paginate --jq '.[].body')
+          if grep -qF "$marker" <<< "$existing_comments"; then
+            echo "Notification for $ver already posted."
+            exit 0
+          fi
+          comment=$(printf '%s\nrippled stable **%s** is out (stand is pinned to %s), docker image `%s:%s` is published, but %s.\n\nManual path: bump the tag in `%s`, run `.ci-config/generate-amendments.sh %s`, verify the stand, open a PR.\nRelease notes: https://github.com/%s/releases/tag/%s\n' \
+            "$marker" "$ver" "$pinned" "$IMAGE" "$ver" "$reason" "$COMPOSE" "$ver" "$UPSTREAM" "$ver")
+          gh issue comment "$number" --repo "$REPO" --body "$comment"
+
+      - name: Notify on tracking issue (workflow failure)
+        if: failure()
+        env:
+          GH_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+          REPO: ${{ github.repository }}
+        run: |
+          set -euo pipefail
+          number=$(gh issue list --repo "$REPO" --label "$ISSUE_LABEL" --state open \
+            --json number --jq '.[0].number // empty')
+          if [ -z "$number" ]; then
+            gh label create "$ISSUE_LABEL" --repo "$REPO" \
+              --description "rippled stable release tracking" --color 0e8a16 2>/dev/null || true
+            number=$(gh issue create --repo "$REPO" --title "$ISSUE_TITLE" --label "$ISSUE_LABEL" \
+              --body "Automated notifications from the release-watch workflow (.github/workflows/release-watch.yml)." \
+              | grep -oE '[0-9]+$')
+          fi
+          # One notification per failure streak: skip only when the latest
+          # comment on the issue is already a failure notification, so a
+          # persistent breakage does not spam weekly while a new failure after
+          # any other activity still notifies.
+          marker='<!-- release-watch:failure -->'
+          last_id=$(gh api "repos/$REPO/issues/$number/comments" --paginate --jq '.[].id' | tail -1)
+          if [ -n "$last_id" ]; then
+            last_body=$(gh api "repos/$REPO/issues/comments/$last_id" --jq .body)
+            if grep -qF "$marker" <<< "$last_body"; then
+              echo "Latest comment is already a failure notification; skipping."
+              exit 0
+            fi
+          fi
+          comment=$(printf '%s\nRelease-watch run **failed** before completing (token mint, drift detection, config regeneration or PR creation): %s/%s/actions/runs/%s\n\nThe stand pin was not changed; see the run log.\n' \
+            "$marker" "$GITHUB_SERVER_URL" "$REPO" "${{ github.run_id }}")
+          gh issue comment "$number" --repo "$REPO" --body "$comment"
