@@ -37,6 +37,12 @@
 # Supported::No features the SDK test suite needs ahead of rippled support.
 # They go into [features] (Rules presets) only; introspection still reports
 # them as disabled. Prune entries once the feature ships as Supported::Yes.
+#
+# This list is shared by every target config, so an entry must be a name BOTH
+# binaries know (a Supported::No declaration counts): a name unknown to one of
+# them lands in that stand's [features] and rippled rejects it at startup.
+# Example of what does NOT belong here: LendingProtocolV1_1 — Supported::No on
+# develop, absent from the 3.2.0 macro entirely.
 EXTRA_FEATURES="MPTokensV2"
 
 set -euo pipefail
