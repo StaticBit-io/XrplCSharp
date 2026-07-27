@@ -92,9 +92,14 @@ namespace Xrpl.Models.Methods
 
     public class TransactionSummary : IAccountTransaction //todo rename to AccountTransaction
     {
+        private TransactionResponse _transaction;
+        private string _hash;
+        private ulong? _ledgerIndex;
+
         /// <summary>
         /// The ledger close time represented in ISO 8601 time format.
         /// </summary>
+        /// <remarks>API v2 only — API v1 does not report the close time on account_tx entries.</remarks>
         [JsonPropertyName("close_time_iso")]
         [JsonConverter(typeof(FromStringDateTimeConverter))]
         public DateTime? CloseTimeIso { get; set; }
@@ -102,13 +107,22 @@ namespace Xrpl.Models.Methods
         /// <summary>
         /// A hex string of the ledger version that included this transaction.
         /// </summary>
+        /// <remarks>API v2 only — API v1 does not report the ledger hash on account_tx entries.</remarks>
         [JsonPropertyName("ledger_hash")]
         public string LedgerHash { get; set; }
         /// <summary>
         /// The ledger index of the ledger version that included this transaction.
         /// </summary>
+        /// <remarks>
+        /// API v1 reports this inside the transaction envelope instead of at the top level,
+        /// so it falls back to the deserialized transaction.
+        /// </remarks>
         [JsonPropertyName("ledger_index")]
-        public ulong? LedgerIndex { get; set; }
+        public ulong? LedgerIndex
+        {
+            get => _ledgerIndex ?? _transaction?.LedgerIndex;
+            set => _ledgerIndex = value;
+        }
         /// <summary>
         /// If binary is True, then this is a hex string of the transaction metadata.<br/>
         /// Otherwise, the transaction metadata is included in JSON format.
@@ -119,14 +133,44 @@ namespace Xrpl.Models.Methods
         /// <summary>
         /// JSON object defining the transaction.
         /// </summary>
+        /// <remarks>
+        /// rippled wraps the transaction in <c>tx_json</c> under API v2 and in <c>tx</c> under API v1;
+        /// both envelopes populate this property.
+        /// </remarks>
         [JsonPropertyName("tx_json")]
-        public TransactionResponse Transaction { get; set; }
+        public TransactionResponse Transaction
+        {
+            get => _transaction;
+            set => _transaction = value ?? _transaction;
+        }
+
+        /// <summary>
+        /// API v1 envelope for <see cref="Transaction"/>.
+        /// </summary>
+        /// <remarks>
+        /// Set-only alias: it never appears in serialized output. [JsonInclude] is required because
+        /// System.Text.Json ignores non-public members without it.
+        /// </remarks>
+        [JsonInclude]
+        [JsonPropertyName("tx")]
+        private TransactionResponse TransactionV1
+        {
+            set => _transaction = value ?? _transaction;
+        }
 
         /// <summary>
         /// Unique hashed String representing the transaction.
         /// </summary>
+        /// <remarks>
+        /// API v1 reports the hash inside the transaction envelope instead of at the top level,
+        /// so it falls back to the deserialized transaction.
+        /// </remarks>
         [JsonPropertyName("hash")]
-        public string Hash { get; set; }
+        public string Hash
+        {
+            get => _hash ?? _transaction?.Hash;
+            set => _hash = value;
+        }
         /// <summary>
         /// Whether or not the transaction is included in a validated ledger.<br/>
         /// Any transaction not yet in a validated ledger is subject to change.
