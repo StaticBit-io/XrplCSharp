@@ -33,6 +33,14 @@ namespace XrplTests.Xrpl.ClientLib.Integration
 
         private static DateTime RippleEpoch => new DateTime(2000, 1, 1, 0, 0, 0, DateTimeKind.Utc);
 
+        /// <summary>Submit responses carry tx_json as a JsonElement on some paths, a JsonObject on others.</summary>
+        private static string HashOf(Submit submitted) => submitted.TxJson switch
+        {
+            System.Text.Json.JsonElement element => element.GetProperty("hash").GetString(),
+            System.Text.Json.Nodes.JsonObject node => node["hash"].GetValue<string>(),
+            _ => throw new InvalidOperationException($"unexpected TxJson type {submitted.TxJson?.GetType()}"),
+        };
+
         [TestMethod]
         [Timeout(120000)]
         public async Task TestICheckCreate_OptionalFieldsLandOnTheLedger()
@@ -56,7 +64,10 @@ namespace XrplTests.Xrpl.ClientLib.Integration
                     Expiration = expiration,
                     InvoiceID = invoiceId,
                 };
-                await Utils.TestTransaction(client, tx.ToDictionary(), sender);
+                Submit submitted = await client.Submit(tx.ToDictionary(), sender);
+                Assert.AreEqual("tesSUCCESS", submitted.EngineResult);
+                string hash = HashOf(submitted);
+                await Utils.LedgerAccept(client);
 
                 AccountObjects objects = await client.AccountObjects(
                     new AccountObjectsRequest(sender.ClassicAddress) { Type = LedgerEntryType.Check });
@@ -65,6 +76,14 @@ namespace XrplTests.Xrpl.ClientLib.Integration
                 Assert.AreEqual(invoiceId, check.InvoiceID, "InvoiceID must survive as a Hash256");
                 Assert.AreEqual(13u, check.DestinationTag);
                 Assert.AreEqual(expiration, check.Expiration);
+
+                // ...and back into the typed transaction model, not just the ledger object:
+                // InvoiceID was uint? until this change and could not round-trip at all
+                CheckCreateResponse readBack = await client.Tx(new TxRequest(hash)) as CheckCreateResponse;
+                Assert.IsNotNull(readBack, "tx must deserialize into CheckCreateResponse");
+                Assert.AreEqual(invoiceId, readBack.InvoiceID);
+                Assert.AreEqual(13u, readBack.DestinationTag);
+                Assert.AreEqual(expiration, readBack.Expiration);
             }
             finally
             {
@@ -179,12 +198,7 @@ namespace XrplTests.Xrpl.ClientLib.Integration
                 Dictionary<string, object> txJson = tx.ToDictionary();
                 Submit submitted = await client.Submit(txJson, wallet);
                 Assert.AreEqual("tesSUCCESS", submitted.EngineResult);
-                string hash = submitted.TxJson switch
-                {
-                    System.Text.Json.JsonElement element => element.GetProperty("hash").GetString(),
-                    System.Text.Json.Nodes.JsonObject node => node["hash"].GetValue<string>(),
-                    _ => throw new InvalidOperationException($"unexpected TxJson type {submitted.TxJson?.GetType()}"),
-                };
+                string hash = HashOf(submitted);
                 await Utils.LedgerAccept(client);
 
                 // Back out of the ledger and into the typed model - the full cycle the models used to break

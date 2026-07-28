@@ -137,4 +137,54 @@ public class TestIDelegateSet
             .ToList();
         CollectionAssert.AreEqual(expectedValues, actualValues);
     }
+
+    /// <summary>
+    /// The other half of delegation: not granting the permission, but exercising it.
+    /// The delegate submits a transaction whose Account is the owner and whose sfDelegate
+    /// names the delegate — the only field that distinguishes a delegated transaction from
+    /// an ordinary one, and the reason it belongs on ITransactionCommon.
+    /// </summary>
+    [TestMethod]
+    public async Task TestDelegatedPayment_DelegateFieldSurvivesTheLedgerRoundTrip()
+    {
+        XrplWallet walletOwner = XrplWallet.Generate();
+        XrplWallet walletDelegate = XrplWallet.Generate();
+        XrplWallet walletDestination = XrplWallet.Generate();
+        await IntegrationTestConfig.TryFundWalletsAsync(client, nodeType, walletOwner, walletDelegate, walletDestination);
+
+        // PermissionValue 1 == ttPAYMENT (0) + 1
+        DelegateSet grant = new DelegateSet
+        {
+            Account = walletOwner.ClassicAddress,
+            Authorize = walletDelegate.ClassicAddress,
+            Permissions = new List<PermissionWrapper>
+            {
+                new PermissionWrapper { Permission = new PermissionEntry { PermissionValue = 1 } },
+            },
+        };
+        grant = await client.Autofill(grant);
+        ValidateResult(await client.SubmitAndWait(grant, walletOwner, true));
+
+        // The delegate signs, but the transaction is the owner's
+        Payment payment = new Payment
+        {
+            Account = walletOwner.ClassicAddress,
+            Destination = walletDestination.ClassicAddress,
+            Amount = new Currency { ValueAsXrp = 1 },
+            Delegate = walletDelegate.ClassicAddress,
+        };
+        payment = await client.Autofill(payment);
+
+        TransactionSummary result = await client.SubmitAndWait(payment, walletDelegate, true);
+        ValidateResult(result);
+
+        // Back out of the ledger into the typed model
+        TransactionResponse readBack = await client.Tx(new TxRequest(result.Hash));
+        Assert.AreEqual(walletDelegate.ClassicAddress, readBack.Delegate, "Delegate must survive the ledger round trip");
+        Assert.AreEqual(walletOwner.ClassicAddress, readBack.Account, "the transaction stays the owner's");
+
+        // And through the interface, which is what generic code holds
+        ITransactionCommon asCommon = readBack;
+        Assert.AreEqual(walletDelegate.ClassicAddress, asCommon.Delegate);
+    }
 }
