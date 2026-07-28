@@ -263,6 +263,68 @@ namespace Xrpl.Tests.Models.Tests
         }
 
         [TestMethod]
+        public void TestUCommonFields_AreReachableThroughTheInterface()
+        {
+            // Delegate/OperationLimit (rippled commonFields) and Sponsor/SponsorFlags (XLS-68)
+            // are common to every transaction, so ITransactionCommon must expose them:
+            // otherwise anything typed by the interface — Batch.RawTransaction,
+            // SimulateRequest.Transaction — can only reach them through a cast.
+            ITransactionCommon request = new AccountSet(Wallet.ClassicAddress)
+            {
+                Delegate = Destination,
+                OperationLimit = 21337,
+                Sponsor = Destination,
+                SponsorFlags = SponsorCoverage.spfSponsorFee,
+            };
+
+            Assert.AreEqual(Destination, request.Delegate);
+            Assert.AreEqual(21337u, request.OperationLimit);
+            Assert.AreEqual(Destination, request.Sponsor);
+            Assert.AreEqual(SponsorCoverage.spfSponsorFee, request.SponsorFlags);
+
+            ITransactionCommon response = new AccountSetResponse
+            {
+                Account = Wallet.ClassicAddress,
+                Delegate = Destination,
+                OperationLimit = 21337,
+                Sponsor = Destination,
+                SponsorFlags = SponsorCoverage.spfSponsorFee,
+            };
+
+            Assert.AreEqual(Destination, response.Delegate);
+            Assert.AreEqual(21337u, response.OperationLimit);
+            Assert.AreEqual(Destination, response.Sponsor);
+            Assert.AreEqual(SponsorCoverage.spfSponsorFee, response.SponsorFlags);
+        }
+
+        [TestMethod]
+        public void TestUBatchInnerTransaction_ExposesDelegateWithoutACast()
+        {
+            // The concrete reason this matters: BatchUtils resolves required signers from an
+            // inner transaction's Delegate, but Batch.RawTransaction is typed ITransactionRequest.
+            IBatch batch = new Batch
+            {
+                Account = Wallet.ClassicAddress,
+                RawTransactions = new List<RawTransactionWrapper>
+                {
+                    new RawTransactionWrapper
+                    {
+                        RawTransaction = new Payment
+                        {
+                            Account = Wallet.ClassicAddress,
+                            Destination = Destination,
+                            Amount = new Currency { ValueAsXrp = 1m },
+                            Delegate = Destination,
+                        },
+                    },
+                },
+            };
+
+            ITransactionRequest inner = batch.RawTransactions[0].RawTransaction;
+            Assert.AreEqual(Destination, inner.Delegate);
+        }
+
+        [TestMethod]
         public void TestUTicketCreate_DoesNotCarryRetiredTargetField()
         {
             // sfTarget is retired in rippled (AccountID nth 7 is marked unused) and absent from
