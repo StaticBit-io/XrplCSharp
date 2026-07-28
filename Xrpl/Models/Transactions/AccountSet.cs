@@ -290,6 +290,17 @@ namespace Xrpl.Models.Transactions
                     throw new ValidationException("AccountSet: out of TickSize");
             }
 
+            // sfWalletLocator is a Hash256, so a string alone is not enough - the same
+            // 256-bit rule the SignerListSet validator applies to a SignerEntry's WalletLocator
+            if (tx.TryGetValue("WalletLocator", out var WalletLocator) && WalletLocator is not null)
+            {
+                if (WalletLocator is not string walletLocator ||
+                    walletLocator.Length != 64 || !walletLocator.All(Uri.IsHexDigit))
+                    throw new ValidationException("AccountSet: invalid WalletLocator");
+            }
+
+            if (tx.TryGetValue("WalletSize", out var WalletSize) && !Common.IsUInt32(WalletSize))
+                throw new ValidationException("AccountSet: invalid WalletSize");
         }
     }
 

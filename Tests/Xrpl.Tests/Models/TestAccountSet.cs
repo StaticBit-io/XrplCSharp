@@ -91,6 +91,33 @@ namespace XrplTests.Xrpl.Models
             await Helper.ThrowsExceptionAsync<ValidationException>(() => Validation.Validate(accountSet), "AccountSet: out of TickSize");
             accountSet.Remove("TickSize");
         }
+
+        [TestMethod]
+        public async Task TestUAccountSet_ValidatesWalletFieldTypes()
+        {
+            Dictionary<string, object> tx = new Dictionary<string, object>
+            {
+                { "TransactionType", "AccountSet" },
+                { "Account", "rUn84CUYbNjRoTQ6mSW7BVJPSVJNLb1QLo" },
+                { "Fee", "12" },
+            };
+
+            // sfWalletLocator is a Hash256: a plain string is not enough, it must be 64 hex chars.
+            // Same rule the SignerListSet validator already applies to WalletLocator in a SignerEntry.
+            tx["WalletLocator"] = new string('A', 64);
+            tx["WalletSize"] = 3u;
+            await Validation.ValidateAccountSet(tx);
+
+            tx["WalletLocator"] = 12345;
+            await Helper.ThrowsExceptionAsync<ValidationException>(() => Validation.ValidateAccountSet(tx), "AccountSet: invalid WalletLocator");
+
+            tx["WalletLocator"] = "not a hash";
+            await Helper.ThrowsExceptionAsync<ValidationException>(() => Validation.ValidateAccountSet(tx), "AccountSet: invalid WalletLocator");
+
+            tx["WalletLocator"] = new string('A', 64);
+            tx["WalletSize"] = "3";
+            await Helper.ThrowsExceptionAsync<ValidationException>(() => Validation.ValidateAccountSet(tx), "AccountSet: invalid WalletSize");
+        }
     }
 }
 
