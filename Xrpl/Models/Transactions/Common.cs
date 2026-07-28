@@ -313,6 +313,14 @@ namespace Xrpl.Models.Transactions
             {
                 throw new ValidationException("BaseTransaction: invalid SponsorFlags");
             }
+            if (tx.TryGetValue("Delegate", out var Delegate) && Delegate is not string { })
+            {
+                throw new ValidationException("BaseTransaction: invalid Delegate");
+            }
+            if (tx.TryGetValue("OperationLimit", out var OperationLimit) && !IsUInt32(OperationLimit))
+            {
+                throw new ValidationException("BaseTransaction: invalid OperationLimit");
+            }
             return Task.CompletedTask;
         }
     }
@@ -384,6 +392,19 @@ namespace Xrpl.Models.Transactions
         /// XLS-68: what the sponsor covers (serialized as the numeric sfSponsorFlags value).
         /// </summary>
         public SponsorCoverage? SponsorFlags { get; set; }
+
+        /// <summary>
+        /// (Optional) The account submitting this transaction on behalf of <see cref="Account"/>,
+        /// under permissions granted by DelegateSet (sfDelegate, a rippled common field).
+        /// </summary>
+        public string Delegate { get; set; }
+
+        /// <summary>
+        /// (Optional) sfOperationLimit, a rippled common field accepted on every transaction type.
+        /// No XRPL transactor reads it; on Xahau a Burn-2-Mint burn carries the destination
+        /// network id here.
+        /// </summary>
+        public uint? OperationLimit { get; set; }
 
         //todo not found fields -  SourceTag?: number, TicketSequence?: number
     }
@@ -768,6 +789,19 @@ namespace Xrpl.Models.Transactions
         /// XLS-68: what the sponsor covers (serialized as the numeric sfSponsorFlags value).
         /// </summary>
         public SponsorCoverage? SponsorFlags { get; set; }
+
+        /// <summary>
+        /// (Optional) The account that submitted this transaction on behalf of <see cref="Account"/>,
+        /// under permissions granted by DelegateSet (sfDelegate, a rippled common field).
+        /// </summary>
+        public string Delegate { get; set; }
+
+        /// <summary>
+        /// (Optional) sfOperationLimit, a rippled common field accepted on every transaction type.
+        /// No XRPL transactor reads it; on Xahau a Burn-2-Mint burn carries the destination
+        /// network id here, which makes it the marker that identifies a burn.
+        /// </summary>
+        public uint? OperationLimit { get; set; }
 
         /// <inheritdoc/>
         public string ToJson()

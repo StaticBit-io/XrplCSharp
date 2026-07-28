@@ -29,7 +29,7 @@ namespace Xrpl.Models.Transactions
         /// <inheritdoc />
         public DateTime? Expiration { get; set; }
         /// <inheritdoc />
-        public uint? InvoiceID { get; set; }
+        public string InvoiceID { get; set; }
     }
 
     /// <summary>
@@ -64,7 +64,7 @@ namespace Xrpl.Models.Transactions
         /// Arbitrary 256-bit hash representing a specific reason or identifier for.<br/>
         /// this Check.
         /// </summary>
-        uint? InvoiceID { get; set; }
+        string InvoiceID { get; set; }
     }
 
     /// <inheritdoc cref="ICheckCreate" />
@@ -79,7 +79,7 @@ namespace Xrpl.Models.Transactions
         /// <inheritdoc />
         public DateTime? Expiration { get; set; }
         /// <inheritdoc />
-        public uint? InvoiceID { get; set; }
+        public string InvoiceID { get; set; }
     }
 
     public partial class Validation

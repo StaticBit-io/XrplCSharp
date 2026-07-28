@@ -139,6 +139,10 @@ namespace Xrpl.Models.Transactions
         public uint? TickSize { get; set; }
         /// <inheritdoc />
         public string NFTokenMinter { get; set; }
+        /// <inheritdoc />
+        public string WalletLocator { get; set; }
+        /// <inheritdoc />
+        public uint? WalletSize { get; set; }
     }
 
     /// <summary>
@@ -187,6 +191,18 @@ namespace Xrpl.Models.Transactions
         /// </summary>
         public string NFTokenMinter { get; set; }
         //todo not found field NFTokenMinter?: string
+
+        /// <summary>
+        /// (Optional) An arbitrary 256-bit value stored on the account root, for use by
+        /// external applications (sfWalletLocator).
+        /// </summary>
+        public string WalletLocator { get; set; }
+
+        /// <summary>
+        /// (Optional) Legacy field, kept in rippled's AccountSet format but not acted on by the
+        /// transactor. Exposed so that transactions carrying it survive a read/write round trip.
+        /// </summary>
+        public uint? WalletSize { get; set; }
     }
 
     /// <inheritdoc cref="IAccountSet" />
@@ -209,6 +225,12 @@ namespace Xrpl.Models.Transactions
 
         /// <inheritdoc />
         public string NFTokenMinter { get; set; }
+
+        /// <inheritdoc />
+        public string WalletLocator { get; set; }
+
+        /// <inheritdoc />
+        public uint? WalletSize { get; set; }
     }
 
     public partial class Validation

@@ -170,19 +170,19 @@ namespace Xrpl.Models.Transaction
                     [Field.OfferSequence] = Requirement.Required
                 },
                 // 9
+                // Since the TicketBatch amendment rippled's TicketCreate carries only sfTicketCount;
+                // the pre-amendment sfTarget/sfExpiration pair is gone (sfTarget is retired outright -
+                // AccountID nth 7 is marked unused in sfields.macro and absent from definitions.json).
                 [BinaryCodec.Types.TransactionType.TicketCreate] = new TxFormat
                 {
-                    [Field.Target] = Requirement.Optional,
-                    [Field.Expiration] = Requirement.Optional,
                     [Field.TicketCount] = Requirement.Required
                 },
                 // 11
+                // WalletLocator belongs to the nested SignerEntry object, not to SignerListSet itself
                 [BinaryCodec.Types.TransactionType.SignerListSet] = new TxFormat
                 {
                     [Field.SignerQuorum] = Requirement.Required,
-                    [Field.SignerEntries] = Requirement.Optional,
-                    [Field.WalletLocator] = Requirement.Optional,
-
+                    [Field.SignerEntries] = Requirement.Optional
                 },
                 [BinaryCodec.Types.TransactionType.PaymentChannelCreate] = new TxFormat()
                 {
@@ -210,27 +210,22 @@ namespace Xrpl.Models.Transaction
                 },
                 [BinaryCodec.Types.TransactionType.CheckCreate] = new TxFormat()
                 {
-                    [Field.Channel] = Requirement.Required,
-                    [Field.Amount] = Requirement.Optional,
-                    [Field.Balance] = Requirement.Optional,
-                    [Field.Signature] = Requirement.Optional,
-                    [Field.PublicKey] = Requirement.Optional
+                    [Field.Destination] = Requirement.Required,
+                    [Field.SendMax] = Requirement.Required,
+                    [Field.Expiration] = Requirement.Optional,
+                    [Field.DestinationTag] = Requirement.Optional,
+                    [Field.InvoiceID] = Requirement.Optional
                 },
+                // Exactly one of Amount / DeliverMin is expected, which the format cannot express
                 [BinaryCodec.Types.TransactionType.CheckCash] = new TxFormat()
                 {
-                    [Field.Channel] = Requirement.Required,
+                    [Field.CheckID] = Requirement.Required,
                     [Field.Amount] = Requirement.Optional,
-                    [Field.Balance] = Requirement.Optional,
-                    [Field.Signature] = Requirement.Optional,
-                    [Field.PublicKey] = Requirement.Optional
+                    [Field.DeliverMin] = Requirement.Optional
                 },
                 [BinaryCodec.Types.TransactionType.CheckCancel] = new TxFormat()
                 {
-                    [Field.Channel] = Requirement.Required,
-                    [Field.Amount] = Requirement.Optional,
-                    [Field.Balance] = Requirement.Optional,
-                    [Field.Signature] = Requirement.Optional,
-                    [Field.PublicKey] = Requirement.Optional
+                    [Field.CheckID] = Requirement.Required
                 },
                 [BinaryCodec.Types.TransactionType.DepositPreauth] = new TxFormat()
                 {
@@ -257,7 +252,11 @@ namespace Xrpl.Models.Transaction
                     [Field.NFTokenTaxon] = Requirement.Required,
                     [Field.Issuer] = Requirement.Optional,
                     [Field.TransferFee] = Requirement.Optional,
-                    [Field.URI] = Requirement.Optional
+                    [Field.URI] = Requirement.Optional,
+                    // NFTokenMintOffer: the model gained these in 10.7.0, the format lagged behind
+                    [Field.Amount] = Requirement.Optional,
+                    [Field.Destination] = Requirement.Optional,
+                    [Field.Expiration] = Requirement.Optional
                 },
                 [BinaryCodec.Types.TransactionType.NFTokenModify] = new TxFormat
                 {
@@ -375,11 +374,8 @@ namespace Xrpl.Models.Transaction
                     [Field.Provider] = Requirement.Optional,
                     [Field.AssetClass] = Requirement.Optional,
                     [Field.URI] = Requirement.Optional,
-
-                    [Field.BaseAsset] = Requirement.Required,
-                    [Field.QuoteAsset] = Requirement.Required,
-                    [Field.AssetPrice] = Requirement.Optional,
-                    [Field.Scale] = Requirement.Optional,
+                    // BaseAsset/QuoteAsset/AssetPrice/Scale belong to the nested PriceData
+                    // entries of PriceDataSeries, not to OracleSet itself
                 },
                 [BinaryCodec.Types.TransactionType.OracleDelete] = new TxFormat
                 {
@@ -500,7 +496,6 @@ namespace Xrpl.Models.Transaction
                 [BinaryCodec.Types.TransactionType.VaultCreate] = new TxFormat
                 {
                     [Field.Asset] = Requirement.Required,
-                    [Field.Amount] = Requirement.Optional,
                     [Field.AssetsMaximum] = Requirement.Optional,
                     [Field.MPTokenMetadata] = Requirement.Optional,
                     [Field.WithdrawalPolicy] = Requirement.Optional,
