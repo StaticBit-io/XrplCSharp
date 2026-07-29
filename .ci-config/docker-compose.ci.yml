@@ -7,6 +7,8 @@ services:
       - "5005:5005"
       - "5006:5006"
       - "6006:6006"
+      # credential-protected admin ws port, see [port_ws_admin_auth] in rippled.cfg
+      - "6007:6007"
     volumes:
       - ./rippled.cfg:/config/rippled.cfg:ro
       - ./validators.txt:/config/validators.txt:ro
