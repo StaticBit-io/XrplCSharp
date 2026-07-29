@@ -59,7 +59,10 @@ namespace Xrpl.Tests.Integration
                 RippledException error = await Helper.ThrowsExceptionAsync<RippledException>(
                     () => client.Request(new Dictionary<string, object>(LedgerAccept)));
 
-                StringAssert.Contains(error.Message, "noPermission");
+                // A port that sets admin_user/admin_password answers Role::FORBID — rippled rejects the
+                // missing credentials outright rather than demoting the client to guest and replying noPermission.
+                StringAssert.Contains(error.Message, "forbidden");
+                StringAssert.Contains(error.Message, "Bad credentials");
             }
             finally
             {
