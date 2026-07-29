@@ -45,8 +45,10 @@ namespace Xrpl.Tests
             ConnectionOptions options = new ConnectionOptions();
             Connection connection = new Connection("url", options);
             Assert.AreEqual("url", connection.GetUrl());
-            Assert.IsNull(connection.config.proxy);
             Assert.IsNull(connection.config.authorization);
+            Assert.IsNull(connection.config.headers);
+            Assert.IsNull(connection.config.AdminUser);
+            Assert.IsNull(connection.config.AdminPassword);
         }
 
         //[TestMethod]

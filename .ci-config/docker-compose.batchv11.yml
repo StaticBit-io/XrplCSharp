@@ -12,6 +12,8 @@ services:
       - "127.0.0.1:5005:5005"
       - "127.0.0.1:5006:5006"
       - "127.0.0.1:6006:6006"
+      # credential-protected admin ws port, see [port_ws_admin_auth] in rippled.batchv11.cfg
+      - "127.0.0.1:6007:6007"
     volumes:
       - ./rippled.batchv11.cfg:/config/rippled.cfg:ro
       - ./validators.txt:/config/validators.txt:ro

@@ -1,6 +1,7 @@
 ﻿
 
 using System;
+using System.Collections.Generic;
 using System.IO;
 using System.Linq;
 using System.Net.WebSockets;
@@ -27,6 +28,7 @@ namespace Xrpl.Client
 
         private ClientWebSocket _ws;
         private readonly Uri _uri;
+        private readonly IReadOnlyDictionary<string, string>? _handshakeHeaders;
         private readonly CancellationTokenSource _cancellationTokenSource = new CancellationTokenSource();
         private readonly CancellationToken _cancellationToken;
         private Task? _receiveTask;
@@ -43,9 +45,10 @@ namespace Xrpl.Client
         private Func<WebSocketCloseStatus?, string?, WebSocketClient, Task> _onDisconnected;
         private Func<WebSocketClient, Task> _onClosed;
 
-        protected WebSocketClient(string uri)
+        protected WebSocketClient(string uri, IReadOnlyDictionary<string, string>? handshakeHeaders = null)
         {
             _uri = new Uri(uri);
+            _handshakeHeaders = handshakeHeaders;
             _cancellationToken = _cancellationTokenSource.Token;
         }
         /// <summary>
@@ -88,10 +91,14 @@ namespace Xrpl.Client
         /// Creates a new instance.
         /// </summary>
         /// <param name="uri">The URI of the WebSocket server.</param>
+        /// <param name="handshakeHeaders">
+        /// Optional HTTP headers to put on the upgrade handshake (e.g. <c>Authorization</c>).
+        /// Ignored under WebAssembly — the browser WebSocket API cannot set request headers.
+        /// </param>
         /// <returns>Instance of the created WebSocketWrapper</returns>
-        public static WebSocketClient Create(string uri)
+        public static WebSocketClient Create(string uri, IReadOnlyDictionary<string, string>? handshakeHeaders = null)
         {
-            return new WebSocketClient(uri);
+            return new WebSocketClient(uri, handshakeHeaders);
         }
 
         /// <summary>
@@ -106,11 +113,25 @@ namespace Xrpl.Client
                 if (!OperatingSystem.IsBrowser())
                 {
                     _ws.Options.KeepAliveInterval = TimeSpan.FromSeconds(20);
+                    ApplyHandshakeHeaders(_ws);
                 }
             }
 
             await ConnectAsync();
             return this;
+        }
+
+        private void ApplyHandshakeHeaders(ClientWebSocket socket)
+        {
+            if (_handshakeHeaders is null)
+            {
+                return;
+            }
+
+            foreach (KeyValuePair<string, string> header in _handshakeHeaders)
+            {
+                socket.Options.SetRequestHeader(header.Key, header.Value);
+            }
         }
 
         /// <summary>

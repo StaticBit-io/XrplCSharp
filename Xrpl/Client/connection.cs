@@ -116,32 +116,41 @@ public class Connection
         return System.Text.Encoding.UTF8.GetString(base64EncodedBytes);
     }
 
-    public class Trace
-    {
-        public string id { get; set; }
-
-        public string message { get; set; }
-    }
-
     public class ConnectionOptions
     {
-        public Trace trace { get; set; }
-
-        public string proxy { get; set; }
-
-        public string proxyAuthorization { get; set; }
-
+        /// <summary>
+        /// Raw <c>user:password</c> pair sent as an HTTP Basic <c>Authorization</c> header on the
+        /// WebSocket upgrade handshake. Matches the <c>authorization</c> option of xrpl.js.
+        /// </summary>
+        /// <remarks>
+        /// rippled itself does not check Basic auth on the ws/wss handshake — its <c>user</c>/<c>password</c>
+        /// port-stanza settings only apply to plain HTTP JSON-RPC. This option is for reaching a node behind a
+        /// reverse proxy or a provider that requires Basic auth. For admin commands over ws/wss use
+        /// <see cref="AdminUser"/>/<see cref="AdminPassword"/> instead.
+        /// Ignored under WebAssembly — the browser WebSocket API cannot set request headers.
+        /// </remarks>
         public string authorization { get; set; }
 
-        public string trustedCertificates { get; set; }
+        /// <summary>
+        /// Extra HTTP headers to put on the WebSocket upgrade handshake.
+        /// </summary>
+        /// <remarks>Ignored under WebAssembly — the browser WebSocket API cannot set request headers.</remarks>
+        public Dictionary<string, string> headers { get; set; }
 
-        public string key { get; set; }
+        /// <summary>
+        /// Admin user for rippled's <c>admin_user</c> port-stanza setting.
+        /// </summary>
+        /// <remarks>
+        /// Unlike <see cref="authorization"/>, these credentials travel inside the JSON body of every
+        /// request — that is the only mechanism rippled accepts for admin commands over ws/wss.
+        /// Both <see cref="AdminUser"/> and <see cref="AdminPassword"/> must be set for them to be sent.
+        /// </remarks>
+        public string AdminUser { get; set; }
 
-        public string passphrase { get; set; }
-
-        public string certificate { get; set; }
-
-        public Dictionary<string, object> headers { get; set; }
+        /// <summary>
+        /// Admin password for rippled's <c>admin_password</c> port-stanza setting. See <see cref="AdminUser"/>.
+        /// </summary>
+        public string AdminPassword { get; set; }
 
         /// <summary>
         /// Timeout for individual API requests after connection is established.
@@ -230,37 +239,36 @@ public class Connection
         }
     }
 
+    // https://github.com/XRPLF/xrpl.js/blob/main/packages/xrpl/src/client/connection.ts createWebSocket
     private static WebSocketClient CreateWebSocket(string url, ConnectionOptions config) =>
+        WebSocketClient.Create(url, BuildHandshakeHeaders(config));
 
-        // Client or Creation...
-        //ClientWebSocketOptions options = new ClientWebSocketOptions()
-        //{
-        //    Proxy = config.proxy,
-        //    Credentials = config.authorization,
-        //    ClientCertificates = config.trustedCertificates
-        //};
-        //options.agent = getAgent(url, config)
-        //WebSocketCreationOptions create = new WebSocketCreationOptions()
-        //{
-        //};
-        //  if (config.authorization != null)
-        //  {
-        //      string base64 = Base64Encode(config.authorization);
-        //      options.headers = {
-        //          ...options.headers,
-        //          Authorization: $"Basic {base64}",
-        //      }
-        //      const optionsOverrides = _.omitBy(
-        //      {
-        //          ca: config.trustedCertificates,
-        //          key: config.key,
-        //          passphrase: config.passphrase,
-        //          cert: config.certificate,
-        //  },
-        //  (value) => value == null,
-        //)
-        //const websocketOptions = { ...options, ...optionsOverrides };
-        WebSocketClient.Create(url); // todo add options
+    /// <summary>
+    /// Builds the HTTP headers put on the WebSocket upgrade handshake: the caller's own
+    /// <see cref="ConnectionOptions.headers"/> plus a Basic <c>Authorization</c> header derived
+    /// from <see cref="ConnectionOptions.authorization"/>.
+    /// </summary>
+    internal static Dictionary<string, string>? BuildHandshakeHeaders(ConnectionOptions config)
+    {
+        bool hasAuthorization = !string.IsNullOrEmpty(config.authorization);
+        bool hasHeaders = config.headers is { Count: > 0 };
+
+        if (!hasAuthorization && !hasHeaders)
+        {
+            return null;
+        }
+
+        Dictionary<string, string> headers = hasHeaders
+            ? new Dictionary<string, string>(config.headers, StringComparer.OrdinalIgnoreCase)
+            : new Dictionary<string, string>(StringComparer.OrdinalIgnoreCase);
+
+        if (hasAuthorization)
+        {
+            headers["Authorization"] = $"Basic {Base64Encode(config.authorization)}";
+        }
+
+        return headers;
+    }
 
     public string url { get; private set; }
 
@@ -1500,6 +1508,14 @@ public class Connection
         }
     }
 
+    /// <summary>
+    /// rippled requires both <c>admin_user</c> and <c>admin_password</c>; a half-configured pair sends neither.
+    /// </summary>
+    private AdminCredentials? GetAdminCredentials() =>
+        string.IsNullOrEmpty(config.AdminUser) || string.IsNullOrEmpty(config.AdminPassword)
+            ? null
+            : new AdminCredentials(config.AdminUser, config.AdminPassword);
+
     public async Task<Dictionary<string, object>> Request(
         Dictionary<string, object> request,
         TimeSpan? timeout = null,
@@ -1508,7 +1524,7 @@ public class Connection
     {
         await EnsureConnectionForRequest(policyOverride, cancellationToken);
 
-        var _request = requestManager.CreateRequest(request, timeout: timeout ?? config.RequestTimeout, cancellationToken: cancellationToken);
+        var _request = requestManager.CreateRequest(request, timeout: timeout ?? config.RequestTimeout, adminCredentials: GetAdminCredentials(), cancellationToken: cancellationToken);
         try
         {
             WebsocketSendAsync(ws, _request.Message);
@@ -1529,7 +1545,7 @@ public class Connection
     {
         await EnsureConnectionForRequest(policyOverride, cancellationToken);
 
-        var _request = requestManager.CreateGRequest<T, R>(request, timeout: timeout ?? config.RequestTimeout, cancellationToken: cancellationToken);
+        var _request = requestManager.CreateGRequest<T, R>(request, timeout: timeout ?? config.RequestTimeout, adminCredentials: GetAdminCredentials(), cancellationToken: cancellationToken);
         try
         {
             WebsocketSendAsync(ws, _request.Message);

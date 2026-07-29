@@ -41,6 +41,9 @@ docker compose -f .ci-config/docker-compose.batchv11.yml down
 | 5005 | JSON-RPC (admin) |
 | 5006 | JSON-RPC (admin, used by the ledger-acceptor) |
 | 6006 | WebSocket (admin) — integration tests connect here (`ws://localhost:6006`) |
+| 6007 | WebSocket with `admin_user`/`admin_password` — used only by `TestIAdminCredentials` |
+
+Port 6007 (`[port_ws_admin_auth]`) exists to prove that admin commands over WS open up only when `ClientOptions.AdminUser`/`AdminPassword` are set. rippled carries those credentials **inside the request JSON** — it never checks a Basic header on the ws handshake (its `user`/`password` port settings apply to plain HTTP JSON-RPC only). No other test uses this port.
 
 ## Why you get `temDISABLED`
 
