@@ -116,6 +116,31 @@ namespace XrplTests.Xrpl.Models
             await Helper.ThrowsExceptionAsync<ValidationException>(() => Validation.ValidateCheckCreate(tx), "CheckCreate: invalid InvoiceID");
             await Helper.ThrowsExceptionAsync<ValidationException>(() => Validation.Validate(tx), "CheckCreate: invalid InvoiceID");
         }
+
+        [TestMethod]
+        public void TestUCheckCreate_InvoiceIDIsAHash256()
+        {
+            // sfInvoiceID is Hash256, and ValidateCheckCreate above already demands a string.
+            // The typed property was uint?, so every non-null value threw on signing:
+            // "Can't decode `InvoiceID` from `123`".
+            const string invoiceId = "6F1DFD1D0FE8A32E40E1F2C05CF1C15545BAB56B617F9C6C2D63A6B704BEF59B";
+            CheckCreate tx = new CheckCreate
+            {
+                Account = "rUn84CUYbNjRoTQ6mSW7BVJPSVJNLb1QLo",
+                Destination = "rfkE1aSy9G8Upk4JssnwBxhEv5p4mn2KTy",
+                SendMax = new global::Xrpl.Models.Common.Currency { ValueAsXrp = 50 },
+                InvoiceID = invoiceId,
+                Sequence = 1,
+                Fee = new global::Xrpl.Models.Common.Currency { Value = "12" },
+                SigningPublicKey = "",
+            };
+
+            System.Text.Json.Nodes.JsonObject json = System.Text.Json.Nodes.JsonNode.Parse(tx.ToJson()).AsObject();
+            System.Text.Json.Nodes.JsonObject decoded = global::Xrpl.BinaryCodec.XrplBinaryCodec
+                .Decode(global::Xrpl.BinaryCodec.XrplBinaryCodec.Encode(json)).AsObject();
+
+            Assert.AreEqual(invoiceId, decoded["InvoiceID"].GetValue<string>());
+        }
     }
 
 }

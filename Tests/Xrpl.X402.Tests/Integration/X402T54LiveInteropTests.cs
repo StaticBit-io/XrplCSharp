@@ -56,6 +56,11 @@ namespace Xrpl.X402.Tests.Integration;
 /// </summary>
 [TestClass]
 [DoNotParallelize] // live tests share one client + treasury; serialize to keep the single faucet dependency clean
+// Excluded from the default integration run: these are the only tests in the suite that need
+// the public XRPL testnet faucet and the hosted t54 facilitator, so a green CI would otherwise
+// depend on two third-party services being up. Run them deliberately:
+//   dotnet test Tests/Xrpl.X402.Tests/Xrpl.X402.Tests.csproj --filter "TestCategory=Live"
+[TestCategory("Live")]
 public class X402T54LiveInteropTests
 {
     private const string TestnetUrl = "wss://s.altnet.rippletest.net:51233";

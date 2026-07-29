@@ -1,4 +1,5 @@
 using System.Collections.Generic;
+using System.Linq;
 using System.Text.Json;
 using System.Text.Json.Nodes;
 using System.Threading.Tasks;
@@ -232,6 +233,74 @@ namespace Xrpl.Tests.Models.Tests
 
             tx["DomainID"] = 12345;
             await Assert.ThrowsExactlyAsync<Xrpl.Client.Exceptions.ValidationException>(() => Validation.ValidateMPTokenIssuanceCreate(tx));
+        }
+
+        /// <summary>
+        /// The fields a format declares on top of the common set shared by every transaction.
+        /// </summary>
+        private static Dictionary<BinaryCodec.Enums.Field, TxFormat.Requirement> TypeSpecificFields(
+            BinaryCodec.Types.TransactionType transactionType)
+        {
+            TxFormat common = new TxFormat();
+            return TxFormat.Formats[transactionType]
+                .Where(entry => !common.ContainsKey(entry.Key))
+                .ToDictionary(entry => entry.Key, entry => entry.Value);
+        }
+
+        private static void AssertFormat(
+            BinaryCodec.Types.TransactionType transactionType,
+            Dictionary<BinaryCodec.Enums.Field, TxFormat.Requirement> expected)
+        {
+            Dictionary<BinaryCodec.Enums.Field, TxFormat.Requirement> actual = TypeSpecificFields(transactionType);
+            CollectionAssert.AreEquivalent(
+                expected.Keys.ToArray(),
+                actual.Keys.ToArray(),
+                $"{transactionType} declares the wrong field set");
+
+            foreach (KeyValuePair<BinaryCodec.Enums.Field, TxFormat.Requirement> field in expected)
+            {
+                Assert.AreEqual(field.Value, actual[field.Key], $"{transactionType}.{field.Key} requirement");
+            }
+        }
+
+        [TestMethod]
+        public void TestUCheckTransactions_DeclareTheirOwnFields()
+        {
+            // All three Check formats used to be a verbatim copy of PaymentChannelClaim
+            // (Channel/Amount/Balance/Signature/PublicKey). Field sets per rippled
+            // include/xrpl/protocol/detail/transactions.macro.
+            AssertFormat(BinaryCodec.Types.TransactionType.CheckCreate, new Dictionary<BinaryCodec.Enums.Field, TxFormat.Requirement>
+            {
+                [BinaryCodec.Enums.Field.Destination] = TxFormat.Requirement.Required,
+                [BinaryCodec.Enums.Field.SendMax] = TxFormat.Requirement.Required,
+                [BinaryCodec.Enums.Field.Expiration] = TxFormat.Requirement.Optional,
+                [BinaryCodec.Enums.Field.DestinationTag] = TxFormat.Requirement.Optional,
+                [BinaryCodec.Enums.Field.InvoiceID] = TxFormat.Requirement.Optional,
+            });
+
+            AssertFormat(BinaryCodec.Types.TransactionType.CheckCash, new Dictionary<BinaryCodec.Enums.Field, TxFormat.Requirement>
+            {
+                [BinaryCodec.Enums.Field.CheckID] = TxFormat.Requirement.Required,
+                [BinaryCodec.Enums.Field.Amount] = TxFormat.Requirement.Optional,
+                [BinaryCodec.Enums.Field.DeliverMin] = TxFormat.Requirement.Optional,
+            });
+
+            AssertFormat(BinaryCodec.Types.TransactionType.CheckCancel, new Dictionary<BinaryCodec.Enums.Field, TxFormat.Requirement>
+            {
+                [BinaryCodec.Enums.Field.CheckID] = TxFormat.Requirement.Required,
+            });
+        }
+
+        [TestMethod]
+        public void TestUSignerListSet_DeclaresNoTopLevelWalletLocator()
+        {
+            // sfWalletLocator is a member of the nested SignerEntry object, not a
+            // top-level SignerListSet field: rippled declares only quorum and entries.
+            AssertFormat(BinaryCodec.Types.TransactionType.SignerListSet, new Dictionary<BinaryCodec.Enums.Field, TxFormat.Requirement>
+            {
+                [BinaryCodec.Enums.Field.SignerQuorum] = TxFormat.Requirement.Required,
+                [BinaryCodec.Enums.Field.SignerEntries] = TxFormat.Requirement.Optional,
+            });
         }
 
         [TestMethod]

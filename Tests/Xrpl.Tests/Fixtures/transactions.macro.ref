@@ -1,0 +1,13 @@
+https://github.com/XRPLF/rippled/blob/develop/include/xrpl/protocol/detail/transactions.macro
+sha  fd2cc6dcb308fb811960380eba7bf4309934d05d
+date 2026-07-10T21:58:19Z
+
+transactions.macro is vendored byte-identical to the ref above so that it can be
+re-verified with a plain diff:
+
+  curl -sSL https://raw.githubusercontent.com/XRPLF/rippled/fd2cc6dcb308fb811960380eba7bf4309934d05d/include/xrpl/protocol/detail/transactions.macro \
+    | diff - Tests/Xrpl.Tests/Fixtures/transactions.macro
+
+Do not hand-edit it. When protocol-watch reports a change to this file upstream,
+replace it wholesale, update the sha above, and let TestUTxFormatConformance
+show which TxFormat entries have to follow.
