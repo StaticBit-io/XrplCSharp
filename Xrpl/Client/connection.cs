@@ -116,23 +116,8 @@ public class Connection
         return System.Text.Encoding.UTF8.GetString(base64EncodedBytes);
     }
 
-    public class Trace
-    {
-        public string id { get; set; }
-
-        public string message { get; set; }
-    }
-
     public class ConnectionOptions
     {
-        public Trace trace { get; set; }
-
-        [Obsolete("Not implemented: the WebSocket transport ignores this option. Configure a proxy at the HttpClient/OS level instead.")]
-        public string proxy { get; set; }
-
-        [Obsolete("Not implemented: the WebSocket transport ignores this option.")]
-        public string proxyAuthorization { get; set; }
-
         /// <summary>
         /// Raw <c>user:password</c> pair sent as an HTTP Basic <c>Authorization</c> header on the
         /// WebSocket upgrade handshake. Matches the <c>authorization</c> option of xrpl.js.
@@ -145,18 +130,6 @@ public class Connection
         /// Ignored under WebAssembly — the browser WebSocket API cannot set request headers.
         /// </remarks>
         public string authorization { get; set; }
-
-        [Obsolete("Not implemented: the WebSocket transport ignores this option.")]
-        public string trustedCertificates { get; set; }
-
-        [Obsolete("Not implemented: the WebSocket transport ignores this option.")]
-        public string key { get; set; }
-
-        [Obsolete("Not implemented: the WebSocket transport ignores this option.")]
-        public string passphrase { get; set; }
-
-        [Obsolete("Not implemented: the WebSocket transport ignores this option.")]
-        public string certificate { get; set; }
 
         /// <summary>
         /// Extra HTTP headers to put on the WebSocket upgrade handshake.
