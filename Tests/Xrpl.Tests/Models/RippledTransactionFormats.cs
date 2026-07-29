@@ -1,7 +1,10 @@
 using System;
 using System.Collections.Generic;
 using System.IO;
+using System.Linq;
 using System.Text.RegularExpressions;
+
+using Xrpl.BinaryCodec.Enums;
 
 using TxFormat = Xrpl.Models.Transaction.TxFormat;
 
@@ -38,7 +41,19 @@ namespace Xrpl.Tests.Models.Tests
             @"\{\s*sf(?<field>\w+)\s*,\s*Soe(?<requirement>\w+)",
             RegexOptions.Compiled);
 
-        private const int MinimumExpectedTransactions = 60;
+        /// <summary>
+        /// Lower bound on how many formats a healthy parse yields. Exposed so the guard test
+        /// asserts against the same number the parser enforces, instead of a second literal
+        /// that would drift when the fixture is re-pinned.
+        /// </summary>
+        internal const int MinimumExpectedTransactions = 60;
+
+        /// <summary>
+        /// Fields shared by every transaction, declared once in the <see cref="TxFormat"/> constructor.
+        /// rippled keeps them in a separate <c>commonFields</c> list, so both conformance surfaces
+        /// exclude them — they read the set from here so the two cannot drift apart.
+        /// </summary>
+        internal static HashSet<Field> CommonFields() => new TxFormat().Keys.ToHashSet();
 
         internal static string FixturePath =>
             Path.Combine(AppContext.BaseDirectory, "Fixtures", "transactions.macro");

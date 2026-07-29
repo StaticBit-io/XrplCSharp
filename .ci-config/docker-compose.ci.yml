@@ -7,8 +7,10 @@ services:
       - "5005:5005"
       - "5006:5006"
       - "6006:6006"
-      # credential-protected admin ws port, see [port_ws_admin_auth] in rippled.cfg
-      - "6007:6007"
+      # credential-protected admin ws port, see [port_ws_admin_auth] in rippled.cfg.
+      # Loopback-only: rippled.cfg carries these credentials in plain text, so the port
+      # must not be reachable from other hosts. Tests connect over localhost.
+      - "127.0.0.1:6007:6007"
     volumes:
       - ./rippled.cfg:/config/rippled.cfg:ro
       - ./validators.txt:/config/validators.txt:ro

@@ -30,7 +30,7 @@
                 <None Include="..\..\Base\Xrpl.BinaryCodec\Enums\definitions.json" Link="definitions.json">
                         <CopyToOutputDirectory>PreserveNewest</CopyToOutputDirectory>
                 </None>
-                <None Include="Fixtures\transactions.macro" Link="Fixtures\transactions.macro">
+                <None Include="Fixtures\transactions.macro">
                         <CopyToOutputDirectory>PreserveNewest</CopyToOutputDirectory>
                 </None>
         </ItemGroup>

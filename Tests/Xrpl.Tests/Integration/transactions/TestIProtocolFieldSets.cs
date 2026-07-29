@@ -166,6 +166,8 @@ namespace XrplTests.Xrpl.ClientLib.Integration
 
                 Assert.AreEqual("5000000", offer.Amount.Value, "the mint-time sell offer must carry Amount");
                 Assert.AreEqual(buyer.ClassicAddress, offer.Destination);
+                Assert.IsNotNull(offer.Expiration, "the mint-time sell offer must carry Expiration");
+                Assert.AreEqual(expiration, offer.Expiration.Value);
             }
             finally
             {

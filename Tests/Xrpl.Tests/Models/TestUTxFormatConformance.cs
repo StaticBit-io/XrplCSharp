@@ -28,11 +28,14 @@ namespace Xrpl.Tests.Models.Tests
     public class TestUTxFormatConformance
     {
         /// <summary>
-        /// Fields shared by every transaction, declared once in the TxFormat constructor.
-        /// rippled keeps them in a separate commonFields list, so they are excluded on both sides.
+        /// Names of the fields shared by every transaction; excluded on both sides of the diff.
+        /// Derived from <see cref="RippledTransactionFormats.CommonFields"/> so this test and
+        /// <c>TestUProtocolCompleteness</c> cannot disagree about what "common" means.
         /// </summary>
         private static HashSet<string> CommonFieldNames() =>
-            new TxFormat().Keys.Select(field => field.Name).ToHashSet(StringComparer.Ordinal);
+            RippledTransactionFormats.CommonFields()
+                .Select(field => field.Name)
+                .ToHashSet(StringComparer.Ordinal);
 
         [TestMethod]
         public void TestUTxFormat_MatchesRippledTransactionsMacro()
@@ -93,7 +96,10 @@ namespace Xrpl.Tests.Models.Tests
             // conformance test above pass against an empty table.
             Dictionary<string, Dictionary<string, TxFormat.Requirement>> parsed = RippledTransactionFormats.Parse();
 
-            Assert.IsGreaterThan(60, parsed.Count, "the vendored macro must yield a full format table");
+            Assert.IsGreaterThanOrEqualTo(
+                RippledTransactionFormats.MinimumExpectedTransactions,
+                parsed.Count,
+                "the vendored macro must yield a full format table");
             Assert.IsTrue(parsed.ContainsKey("Payment"), "Payment must be present — the parser matched nothing sane");
             Assert.IsTrue(parsed["Payment"].ContainsKey("Destination"));
             Assert.AreEqual(TxFormat.Requirement.Required, parsed["Payment"]["Destination"]);

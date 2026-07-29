@@ -141,6 +141,54 @@ namespace XrplTests.Xrpl.Models
 
             Assert.AreEqual(invoiceId, decoded["InvoiceID"].GetValue<string>());
         }
+
+        [TestMethod]
+        public async Task TestUCheckCreate_RejectsInvoiceIDThatIsNotA256BitHexValue()
+        {
+            // sfInvoiceID is Hash256. A string of the wrong length or with non-hex characters is
+            // malformed and must fail validation rather than blow up later inside the codec —
+            // the same rule SignerListSet and AccountSet already apply to WalletLocator.
+            string[] malformed =
+            {
+                "6F1DFD1D0FE8A32E40E1F2C05CF1C15545BAB56B617F9C6C2D63A6B704BEF59",   // 63 chars
+                "6F1DFD1D0FE8A32E40E1F2C05CF1C15545BAB56B617F9C6C2D63A6B704BEF59BA", // 65 chars
+                "6F1DFD1D0FE8A32E40E1F2C05CF1C15545BAB56B617F9C6C2D63A6B704BEF5XZ",  // non-hex
+                "",
+            };
+
+            foreach (string invoiceId in malformed)
+            {
+                Dictionary<string, object> tx = new Dictionary<string, object>
+                {
+                    { "TransactionType", "CheckCreate" },
+                    { "Account", "rUn84CUYbNjRoTQ6mSW7BVJPSVJNLb1QLo" },
+                    { "Destination", "rfkE1aSy9G8Upk4JssnwBxhEv5p4mn2KTy" },
+                    { "SendMax", "100000000" },
+                    { "InvoiceID", invoiceId },
+                    { "Fee", "12" },
+                };
+
+                await Helper.ThrowsExceptionAsync<ValidationException>(
+                    () => Validation.ValidateCheckCreate(tx),
+                    "CheckCreate: invalid InvoiceID");
+            }
+        }
+
+        [TestMethod]
+        public async Task TestUCheckCreate_AcceptsA256BitHexInvoiceID()
+        {
+            Dictionary<string, object> tx = new Dictionary<string, object>
+            {
+                { "TransactionType", "CheckCreate" },
+                { "Account", "rUn84CUYbNjRoTQ6mSW7BVJPSVJNLb1QLo" },
+                { "Destination", "rfkE1aSy9G8Upk4JssnwBxhEv5p4mn2KTy" },
+                { "SendMax", "100000000" },
+                { "InvoiceID", "6f1dfd1d0fe8a32e40e1f2c05cf1c15545bab56b617f9c6c2d63a6b704bef59b" },
+                { "Fee", "12" },
+            };
+
+            await Validation.ValidateCheckCreate(tx);
+        }
     }
 
 }

@@ -204,11 +204,12 @@ Integration tests do **not** run on PRs into `dev` — `dev` uses a GitHub merge
 ### Release Process
 
 1. Ensure all tests pass on `dev`
-2. Update version in all `.csproj` files (`Xrpl`, `Xrpl.AddressCodec`, `Xrpl.BinaryCodec`, `Xrpl.Keypairs`)
-3. Update `CHANGES.md`
-4. Merge `dev` → `release`
-5. NuGet publish triggers automatically on push to `release`
-6. Create GitHub release with tag
+2. Bump `<PackageVersion>` **only in the packages that actually changed** — not in all four. The base packages (`Xrpl.AddressCodec`, `Xrpl.BinaryCodec`, `Xrpl.Keypairs`) are consumed via `ProjectReference`, so a `Xrpl` package built at a newer version keeps depending on the already published base packages at their existing version. Leaving an untouched package behind is correct, not an oversight. Check with `git diff --stat origin/release...origin/dev -- Base/` before deciding
+3. Choose the bump from the nature of the change: patch for a bugfix with no contract change, minor otherwise
+4. Update `CHANGES.md`
+5. Merge `dev` → `release`
+6. NuGet publish triggers automatically on push to `release`
+7. Create GitHub release with tag
 
 ### NuGet Packages Published
 

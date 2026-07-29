@@ -2091,6 +2091,12 @@ public class Connection
                 try
                 {
                     Debug.WriteLine($"{DateTime.Now}[PING-CHECK] Fire-and-forget keepalive ping (active connection)");
+
+                    // Raw send: this bypasses RequestManager, so AdminUser/AdminPassword are NOT attached.
+                    // Safe for ping specifically — rippled resolves the role per command, and a guest-level
+                    // command is answered normally even on a port that sets admin_user/admin_password
+                    // (only commands requiring Role::ADMIN get "forbidden / Bad credentials."). Anything
+                    // needing admin must go through Request/GRequest instead of being added here.
                     currentSocket?.SendMessage("{\"command\":\"ping\",\"id\":\"00000000-0000-0000-0000-000000000000\"}");
                     if (OnPing != null)
                     {
