@@ -237,13 +237,15 @@ namespace Xrpl.Tests.Models.Tests
 
         /// <summary>
         /// The fields a format declares on top of the common set shared by every transaction.
+        /// The common set comes from <see cref="RippledTransactionFormats.CommonFields"/>, which
+        /// <c>TestUTxFormatConformance</c> also reads, so the two conformance surfaces stay in step.
         /// </summary>
         private static Dictionary<BinaryCodec.Enums.Field, TxFormat.Requirement> TypeSpecificFields(
             BinaryCodec.Types.TransactionType transactionType)
         {
-            TxFormat common = new TxFormat();
+            HashSet<BinaryCodec.Enums.Field> common = RippledTransactionFormats.CommonFields();
             return TxFormat.Formats[transactionType]
-                .Where(entry => !common.ContainsKey(entry.Key))
+                .Where(entry => !common.Contains(entry.Key))
                 .ToDictionary(entry => entry.Key, entry => entry.Value);
         }
 

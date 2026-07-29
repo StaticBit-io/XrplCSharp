@@ -140,10 +140,12 @@ public class TestIConnectionStates
         {
         }
 
-        await Task.WhenAny(tcs.Task, Task.Delay(TimeSpan.FromSeconds(30)));
+        Task terminal = await Task.WhenAny(tcs.Task, Task.Delay(TimeSpan.FromSeconds(30)));
+        Assert.AreSame(tcs.Task, terminal, "Reconnect exhaustion was not observed before the 30s timeout");
+        await tcs.Task;
 
         Assert.IsTrue(stateChanges.Contains(XrpConnectionState.Connecting), "Should have Connecting state");
-        Console.WriteLine($"Reconnect attempts: {reconnectAttempts}");
+        Assert.IsTrue(reconnectAttempts >= 1, $"Expected at least one reconnect attempt, got {reconnectAttempts}");
 
         await client.Disconnect();
     }
@@ -270,7 +272,10 @@ public class TestIConnectionStates
         {
         }
 
-        await Task.WhenAny(disconnectedPermanently.Task, Task.Delay(TimeSpan.FromSeconds(30)));
+        Task terminal = await Task.WhenAny(disconnectedPermanently.Task, Task.Delay(TimeSpan.FromSeconds(30)));
+        Assert.AreSame(disconnectedPermanently.Task, terminal,
+            "Permanent disconnect was not observed before the 30s timeout");
+        await disconnectedPermanently.Task;
 
         Assert.AreEqual(XrpConnectionState.Disconnected, client.connection.CurrentConnectionState,
             "Should be Disconnected after max reconnect attempts");
