@@ -4,12 +4,18 @@ services:
     container_name: rippled-service
     command: ["-a", "--start"]
     ports:
-      - "5005:5005"
-      - "5006:5006"
-      - "6006:6006"
-      # credential-protected admin ws port, see [port_ws_admin_auth] in rippled.cfg.
-      # Loopback-only: rippled.cfg carries these credentials in plain text, so the port
-      # must not be reachable from other hosts. Tests connect over localhost.
+      # Publish to loopback only, matching docker-compose.batchv11.yml. Every port below grants
+      # the admin role (rippled.cfg sets `admin = 0.0.0.0` on each stanza), and admin means
+      # `stop`, `connect`, `feature`, `validation_seed` — node control, not just reads. Only
+      # 6007 asks for credentials; the rest accept anyone who can reach them.
+      # Binding wider buys nothing: tests connect over localhost and the ledger-acceptor
+      # reaches the node through the compose network (http://xrpld:5006), not a published port.
+      # A host firewall is not a substitute — Docker's DNAT rules sit ahead of the chains ufw
+      # manages, so a published port stays reachable even with ufw enabled.
+      - "127.0.0.1:5005:5005"
+      - "127.0.0.1:5006:5006"
+      - "127.0.0.1:6006:6006"
+      # credential-protected admin ws port, see [port_ws_admin_auth] in rippled.cfg
       - "127.0.0.1:6007:6007"
     volumes:
       - ./rippled.cfg:/config/rippled.cfg:ro
