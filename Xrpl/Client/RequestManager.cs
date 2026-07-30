@@ -5,6 +5,7 @@ using System.Collections.Concurrent;
 using System.Collections.Generic;
 using System.Diagnostics;
 using System.Text.Json;
+using System.Text.Json.Nodes;
 using System.Threading;
 using System.Threading.Tasks;
 
@@ -19,6 +20,13 @@ using Timer = System.Timers.Timer;
 
 namespace Xrpl.Client
 {
+    /// <summary>
+    /// rippled's <c>admin_user</c>/<c>admin_password</c> port-stanza credentials. They are carried
+    /// inside the JSON body of each request, which is the only mechanism rippled accepts for
+    /// admin commands over ws/wss.
+    /// </summary>
+    public sealed record AdminCredentials(string User, string Password);
+
     /// <summary>
     /// Manage all the requests made to the websocket, and their async responses
     /// that come in from the WebSocket.Responses come in over the WS connection
@@ -157,7 +165,35 @@ namespace Xrpl.Client
             }
         }
 
-        public XrplGRequest CreateGRequest<T, R>(R request, TimeSpan timeout, CancellationToken cancellationToken = default)
+        /// <summary>
+        /// Adds rippled's admin credentials to an already serialized request.
+        /// </summary>
+        /// <remarks>
+        /// Applied to the serialized JSON rather than to the request object so that the credentials
+        /// never end up in the request instance that error messages are built from.
+        /// </remarks>
+        private static string ApplyAdminCredentials(string json, AdminCredentials? credentials)
+        {
+            if (credentials is null)
+            {
+                return json;
+            }
+
+            if (JsonNode.Parse(json) is not JsonObject request)
+            {
+                return json;
+            }
+
+            request["admin_user"] = credentials.User;
+            request["admin_password"] = credentials.Password;
+            return request.ToJsonString();
+        }
+
+        public XrplGRequest CreateGRequest<T, R>(
+            R request,
+            TimeSpan timeout,
+            CancellationToken cancellationToken = default,
+            AdminCredentials? adminCredentials = null)
         {
             if (timeout != System.Threading.Timeout.InfiniteTimeSpan && timeout <= TimeSpan.Zero)
             {
@@ -172,6 +208,7 @@ namespace Xrpl.Client
             info.SetValue(request, newId, null);
 
             string newRequest = JsonSerializer.Serialize(request, serializerOptions);
+            string outgoingRequest = ApplyAdminCredentials(newRequest, adminCredentials);
 
             TaskCompletionSource<object> task = new TaskCompletionSource<object>();
             TaskInfo taskInfo = new TaskInfo();
@@ -223,14 +260,18 @@ namespace Xrpl.Client
             return new XrplGRequest()
             {
                 Id = newId,
-                Message = newRequest,
+                Message = outgoingRequest,
                 Promise = task.Task
             };
         }
 
         /// <summary>
         /// </summary>
-        public XrplRequest CreateRequest(Dictionary<string, object> request, TimeSpan timeout, CancellationToken cancellationToken = default)
+        public XrplRequest CreateRequest(
+            Dictionary<string, object> request,
+            TimeSpan timeout,
+            CancellationToken cancellationToken = default,
+            AdminCredentials? adminCredentials = null)
         {
             if (timeout != System.Threading.Timeout.InfiniteTimeSpan && timeout <= TimeSpan.Zero)
             {
@@ -244,6 +285,7 @@ namespace Xrpl.Client
             request["id"] = newId;
 
             string newRequest = JsonSerializer.Serialize(request, serializerOptions);
+            string outgoingRequest = ApplyAdminCredentials(newRequest, adminCredentials);
 
             TaskCompletionSource<Dictionary<string, object>> task = new TaskCompletionSource<Dictionary<string, object>>();
             TaskInfo taskInfo = new TaskInfo();
@@ -295,7 +337,7 @@ namespace Xrpl.Client
             return new XrplRequest()
             {
                 Id = newId,
-                Message = newRequest,
+                Message = outgoingRequest,
                 Promise = task.Task
             };
         }

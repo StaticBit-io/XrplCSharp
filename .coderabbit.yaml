@@ -5,7 +5,10 @@ reviews:
   review_status: true
 
   auto_review:
-    enabled: true
+    # Automatic review is off: reviews are requested on demand with
+    # "@coderabbitai review" in a PR comment. The settings below still apply
+    # whenever auto_review is switched back on.
+    enabled: false
     auto_incremental_review: true
     auto_pause_after_reviewed_commits: 0
     drafts: false

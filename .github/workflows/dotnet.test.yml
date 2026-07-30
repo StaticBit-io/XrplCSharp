@@ -101,11 +101,14 @@ jobs:
         HOST: localhost
         PORT: 6006
 
-    # x402 integration tests: hermetic E2E (against the standalone rippled above) plus the
-    # live t54 interop tests (TestILive*), which require the public XRPL testnet faucet and
-    # the t54 hosted facilitator.
+    # x402 integration tests: hermetic E2E against the standalone rippled above.
+    # The live t54 interop tests (TestCategory=Live) are excluded — they are the only tests
+    # in the suite that reach outside, needing the public XRPL testnet faucet and the hosted
+    # t54 facilitator, so leaving them in made a green build depend on two third-party
+    # services. Run them deliberately:
+    #   dotnet test Tests/Xrpl.X402.Tests/Xrpl.X402.Tests.csproj --filter "TestCategory=Live"
     - name: Test Integration (Xrpl.X402)
-      run: dotnet test Tests/Xrpl.X402.Tests/Xrpl.X402.Tests.csproj --verbosity normal --settings test.runsettings --filter "TestI"
+      run: dotnet test Tests/Xrpl.X402.Tests/Xrpl.X402.Tests.csproj --verbosity normal --settings test.runsettings --filter "TestI&TestCategory!=Live"
       env:
         HOST: localhost
         PORT: 6006

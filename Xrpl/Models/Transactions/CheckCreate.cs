@@ -1,5 +1,6 @@
 using System;
 using System.Collections.Generic;
+using System.Text.RegularExpressions;
 using System.Threading.Tasks;
 
 using System.Text.Json.Serialization;
@@ -29,7 +30,7 @@ namespace Xrpl.Models.Transactions
         /// <inheritdoc />
         public DateTime? Expiration { get; set; }
         /// <inheritdoc />
-        public uint? InvoiceID { get; set; }
+        public string InvoiceID { get; set; }
     }
 
     /// <summary>
@@ -64,7 +65,7 @@ namespace Xrpl.Models.Transactions
         /// Arbitrary 256-bit hash representing a specific reason or identifier for.<br/>
         /// this Check.
         /// </summary>
-        uint? InvoiceID { get; set; }
+        string InvoiceID { get; set; }
     }
 
     /// <inheritdoc cref="ICheckCreate" />
@@ -79,7 +80,7 @@ namespace Xrpl.Models.Transactions
         /// <inheritdoc />
         public DateTime? Expiration { get; set; }
         /// <inheritdoc />
-        public uint? InvoiceID { get; set; }
+        public string InvoiceID { get; set; }
     }
 
     public partial class Validation
@@ -108,7 +109,11 @@ namespace Xrpl.Models.Transactions
                 throw new ValidationException("CheckCreate: invalid DestinationTag");
             if (tx.TryGetValue("Expiration", out var Expiration) && !Common.IsUInt32(Expiration))
                 throw new ValidationException("CheckCreate: invalid Expiration");
-            if (tx.TryGetValue("InvoiceID", out var InvoiceID) && InvoiceID is not string { })
+            // sfInvoiceID is a Hash256 — the same 256-bit rule SignerListSet and AccountSet apply to
+            // WalletLocator. Without the shape check a malformed string only fails later inside the
+            // codec, which reports an encoding error instead of a ValidationException.
+            if (tx.TryGetValue("InvoiceID", out var InvoiceID) &&
+                (InvoiceID is not string invoiceId || !Regex.IsMatch(invoiceId, @"^[0-9A-Fa-f]{64}$")))
                 throw new ValidationException("CheckCreate: invalid InvoiceID");
 
 

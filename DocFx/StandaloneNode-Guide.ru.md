@@ -41,6 +41,11 @@ docker compose -f .ci-config/docker-compose.batchv11.yml down
 | 5005 | JSON-RPC (admin) |
 | 5006 | JSON-RPC (admin, используется ledger-acceptor) |
 | 6006 | WebSocket (admin) — интеграционные тесты подключаются сюда (`ws://localhost:6006`) |
+| 6007 | WebSocket с `admin_user`/`admin_password` — только для `TestIAdminCredentials` |
+
+Все порты публикуются **только на loopback** (`127.0.0.1`), поэтому стенд доступен с той же машины и недоступен из сети. Так и задумано: каждая станза в конфиге стоит с `admin = 0.0.0.0`, то есть даёт роль администратора (`stop`, `connect`, `feature`, `validation_seed`) любому, кто дотянулся до порта, а креды спрашивает только 6007. Если нужно ходить на ноду с другой машины — правьте привязку в compose-файле осознанно, а не «чтобы заработало».
+
+Порт 6007 (`[port_ws_admin_auth]`) существует, чтобы проверить, что admin-команды по WS открываются только при заданных `ClientOptions.AdminUser`/`AdminPassword`. rippled передаёт эти креды **внутри JSON** запроса — Basic-заголовок на ws-рукопожатии сама нода не проверяет (её `user`/`password` относятся только к HTTP JSON-RPC). Остальные тесты порт не используют.
 
 ## Почему возникает `temDISABLED`
 

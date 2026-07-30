@@ -313,6 +313,14 @@ namespace Xrpl.Models.Transactions
             {
                 throw new ValidationException("BaseTransaction: invalid SponsorFlags");
             }
+            if (tx.TryGetValue("Delegate", out var Delegate) && Delegate is not string { })
+            {
+                throw new ValidationException("BaseTransaction: invalid Delegate");
+            }
+            if (tx.TryGetValue("OperationLimit", out var OperationLimit) && !IsUInt32(OperationLimit))
+            {
+                throw new ValidationException("BaseTransaction: invalid OperationLimit");
+            }
             return Task.CompletedTask;
         }
     }
@@ -375,15 +383,17 @@ namespace Xrpl.Models.Transactions
         /// <inheritdoc />
         public uint? TicketSequence { get; set; }
 
-        /// <summary>
-        /// XLS-68: the account sponsoring this transaction's fee and/or reserve.
-        /// </summary>
+        /// <inheritdoc />
         public string Sponsor { get; set; }
 
-        /// <summary>
-        /// XLS-68: what the sponsor covers (serialized as the numeric sfSponsorFlags value).
-        /// </summary>
+        /// <inheritdoc />
         public SponsorCoverage? SponsorFlags { get; set; }
+
+        /// <inheritdoc />
+        public string Delegate { get; set; }
+
+        /// <inheritdoc />
+        public uint? OperationLimit { get; set; }
 
         //todo not found fields -  SourceTag?: number, TicketSequence?: number
     }
@@ -685,6 +695,30 @@ namespace Xrpl.Models.Transactions
         /// If this is provided, Sequence must be 0. Cannot be used with AccountTxnID.
         /// </summary>
         public uint? TicketSequence { get; set; }
+
+        /// <summary>
+        /// (Optional) The account submitting this transaction on behalf of <see cref="Account"/>,
+        /// under permissions granted by DelegateSet (sfDelegate, a rippled common field).
+        /// </summary>
+        public string Delegate { get; set; }
+
+        /// <summary>
+        /// (Optional) sfOperationLimit, a rippled common field accepted on every transaction type.
+        /// No XRPL transactor reads it; on Xahau a Burn-2-Mint burn carries the destination
+        /// network id here.
+        /// </summary>
+        public uint? OperationLimit { get; set; }
+
+        /// <summary>
+        /// XLS-68: the account sponsoring this transaction's fee and/or reserve.
+        /// </summary>
+        public string Sponsor { get; set; }
+
+        /// <summary>
+        /// XLS-68: what the sponsor covers (serialized as the numeric sfSponsorFlags value).
+        /// </summary>
+        public SponsorCoverage? SponsorFlags { get; set; }
+
         /// <summary>
         /// convert transaction to string json value
         /// </summary>
@@ -759,15 +793,17 @@ namespace Xrpl.Models.Transactions
         [JsonPropertyName("meta")]
         public Meta Meta { get; set; }
 
-        /// <summary>
-        /// XLS-68: the account sponsoring this transaction's fee and/or reserve.
-        /// </summary>
+        /// <inheritdoc />
         public string Sponsor { get; set; }
 
-        /// <summary>
-        /// XLS-68: what the sponsor covers (serialized as the numeric sfSponsorFlags value).
-        /// </summary>
+        /// <inheritdoc />
         public SponsorCoverage? SponsorFlags { get; set; }
+
+        /// <inheritdoc />
+        public string Delegate { get; set; }
+
+        /// <inheritdoc />
+        public uint? OperationLimit { get; set; }
 
         /// <inheritdoc/>
         public string ToJson()
