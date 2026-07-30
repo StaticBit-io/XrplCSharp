@@ -43,6 +43,8 @@ docker compose -f .ci-config/docker-compose.batchv11.yml down
 | 6006 | WebSocket (admin) — integration tests connect here (`ws://localhost:6006`) |
 | 6007 | WebSocket with `admin_user`/`admin_password` — used only by `TestIAdminCredentials` |
 
+All ports are published on **loopback only** (`127.0.0.1`): the stand is reachable from the same machine and not from the network. That is deliberate — every stanza in the config sets `admin = 0.0.0.0`, so each port hands the admin role (`stop`, `connect`, `feature`, `validation_seed`) to anyone who can reach it, and only 6007 asks for credentials. If you genuinely need to reach the node from another host, widen the binding in the compose file as a conscious decision, not to make something work.
+
 Port 6007 (`[port_ws_admin_auth]`) exists to prove that admin commands over WS open up only when `ClientOptions.AdminUser`/`AdminPassword` are set. rippled carries those credentials **inside the request JSON** — it never checks a Basic header on the ws handshake (its `user`/`password` port settings apply to plain HTTP JSON-RPC only). No other test uses this port.
 
 ## Why you get `temDISABLED`
