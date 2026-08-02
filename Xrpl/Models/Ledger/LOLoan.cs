@@ -9,6 +9,28 @@ using static Xrpl.Models.Common.Common;
 namespace Xrpl.Models.Ledger;
 
 /// <summary>
+/// Flags of a Loan ledger object.
+/// </summary>
+[Flags]
+public enum LoanFlags : uint
+{
+    /// <summary>
+    /// The loan is in default: the borrower missed a payment past the grace period.
+    /// </summary>
+    lsfLoanDefault = 0x00010000,
+
+    /// <summary>
+    /// The loan is impaired: the broker expects it not to be repaid in full.
+    /// </summary>
+    lsfLoanImpaired = 0x00020000,
+
+    /// <summary>
+    /// The loan allows overpayments.
+    /// </summary>
+    lsfLoanOverpayment = 0x00040000,
+}
+
+/// <summary>
 /// A Loan ledger object represents a loan between a borrower and a loan broker.
 /// </summary>
 /// <remarks>Requires the Loan amendment (XLS-66d). This feature is in draft and subject to change.</remarks>
@@ -18,6 +40,12 @@ public class LOLoan : BaseLedgerEntry
     {
         LedgerEntryType = LedgerEntryType.Loan;
     }
+
+    /// <summary>
+    /// A bit-map of boolean flags enabled for this loan.
+    /// </summary>
+    [JsonPropertyName("Flags")]
+    public LoanFlags? Flags { get; init; }
 
     /// <summary>
     /// The account address of the Borrower.

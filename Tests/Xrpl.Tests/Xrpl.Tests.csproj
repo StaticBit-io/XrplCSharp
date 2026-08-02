@@ -33,6 +33,9 @@
                 <None Include="Fixtures\transactions.macro">
                         <CopyToOutputDirectory>PreserveNewest</CopyToOutputDirectory>
                 </None>
+                <None Include="Fixtures\LedgerFormats.h">
+                        <CopyToOutputDirectory>PreserveNewest</CopyToOutputDirectory>
+                </None>
         </ItemGroup>
         <ItemGroup>
                 <ProjectReference Include="..\..\Xrpl\Xrpl.csproj" />
