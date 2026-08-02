@@ -21,6 +21,11 @@ namespace Xrpl.Models.Ledger
         /// it can also be "un-set" using a MPTokenAuthorize transaction specifying the tfMPTUnauthorize flag.
         /// </summary>
         lsfMPTAuthorized = 2,
+        /// <summary>
+        /// If set, indicates that this MPToken belongs to an AMM pseudo-account.<br/>
+        /// AMMCreate sets it together with lsfMPTAuthorized to implicitly authorize the MPT asset for the pool.
+        /// </summary>
+        lsfMPTAMM = 4,
     }
     /// <summary>
     /// The MPToken object represents an amount of an MPT held by an account that is not the issuer.

@@ -29,6 +29,9 @@ public static class AmendmentGuard
     /// <summary>Amendment id of ConfidentialTransfer (sha512half of the name).</summary>
     public const string ConfidentialTransfer = "2110E4A19966E2EF517C0A8C56A5F35099D7665B0BB89D7B126B30D50B86AAD5";
 
+    /// <summary>Amendment id of DynamicMPT / XLS-94 (sha512half of the name).</summary>
+    public const string DynamicMPT = "58E92F338758479C06084E1B6BA366BAD8F75E5329A7F0EEAFFFDA51E5106B7F";
+
     /// <summary>Amendment id of PriceOracle / XLS-47 (sha512half of the name).</summary>
     public const string PriceOracle = "96FD2F293A519AE1DB6F8BED23E4AD9119342DA7CB6BAFD00953D16C54205D8B";
 
