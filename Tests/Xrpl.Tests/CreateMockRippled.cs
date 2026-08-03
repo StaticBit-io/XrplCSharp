@@ -68,10 +68,31 @@ namespace Xrpl.Tests
         private Dictionary<string, object> _responses = new Dictionary<string, object>();
         public bool suppressOutput = false;
         private Thread tcpListenerThread;
+        private Server _server;
 
         public CreateMockRippled(int port)
         {
             this._port = port;
+        }
+
+        /// <summary>
+        /// Stops the listen socket. Without this the server keeps accepting for the lifetime of the test
+        /// process, so every test that starts a mock leaks a listener.
+        /// </summary>
+        public void Stop()
+        {
+            try
+            {
+                _server?.Stop();
+            }
+            catch (Exception ex)
+            {
+                Debug.WriteLine($"MockRippled stop error: {ex.Message}");
+            }
+            finally
+            {
+                _server = null;
+            }
         }
 
         string CreateResponse(Dictionary<string, object> request, Dictionary<string, object> response)
@@ -217,6 +238,7 @@ namespace Xrpl.Tests
         {
 
             Server server = new Server(new IPEndPoint(IPAddress.Parse("127.0.0.1"), this._port));
+            _server = server;
 
             // Bind the event for when a client connected
             server.OnClientConnected += (object sender, OnClientConnectedHandler e) =>

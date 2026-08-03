@@ -1980,11 +1980,16 @@ public class Connection
         // Don't reset _reconnectAttempts - this is continuation of existing reconnect sequence
         // Note: _reconnectLoop was already cleared by RetireCurrentSessionAndReconnectAsync
         
-        _reconnectLoop = ReconnectLoopAsync(_reconnectCts.Token);
+        _reconnectLoop = ReconnectLoopAsync(_reconnectCts);
     }
 
-    private async Task ReconnectLoopAsync(CancellationToken ct)
+    private async Task ReconnectLoopAsync(CancellationTokenSource ownCts)
     {
+        // The CTS this loop owns. StopReconnectLoop cancels without awaiting the loop, so a retired loop
+        // can still be running - or reach its tail - after a replacement has been installed. Everything
+        // this loop writes to shared reconnect state is therefore guarded by an ownership check.
+        CancellationToken ct = ownCts.Token;
+
         // Don't reset _reconnectAttempts here - it may be pre-set to 1 by fast reconnect path
         // StartReconnectLoop() sets it to 0 when creating a new CTS
         
@@ -1998,6 +2003,12 @@ public class Connection
 
         while (!ct.IsCancellationRequested)
         {
+            if (!ReferenceEquals(_reconnectCts, ownCts))
+            {
+                // Retired: a newer loop owns the reconnect sequence now.
+                break;
+            }
+
             _reconnectAttempts++;
 
             // Skip delay for first attempt if this is immediate reconnect (ping timeout or network drop)
@@ -2081,7 +2092,11 @@ public class Connection
 
                 if (IsConnected())
                 {
-                    _reconnectAttempts = 0;
+                    if (ReferenceEquals(_reconnectCts, ownCts))
+                    {
+                        _reconnectAttempts = 0;
+                    }
+
                     break;
                 }
             }
@@ -2112,13 +2127,21 @@ public class Connection
         // This ensures late callbacks from ping-timeout socket are still filtered
         // even if reconnect attempts fail
 
+        // A newer loop may already have taken over (this one was retired by StopReconnectLoop, which does
+        // not await it). Its state belongs to that loop: clearing the mode or disposing the CTS here would
+        // strand the live reconnect sequence.
+        if (!ReferenceEquals(_reconnectCts, ownCts))
+        {
+            return;
+        }
+
         // When loop exits (cancelled, max attempts, or success) and connection is not established,
         // clear the reconnect mode. If connected, OnceOpen already cleared it.
         if (!IsConnected())
         {
             _reconnectMode = ReconnectMode.None;
         }
-        
+
         if (config.StopAfterMaxAttempts && _reconnectAttempts >= config.MaxReconnectAttempts)
         {
             _reconnectCts?.Dispose();

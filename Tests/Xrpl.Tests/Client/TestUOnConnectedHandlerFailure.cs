@@ -56,6 +56,8 @@ namespace Xrpl.Tests
                 await _client.Disconnect();
                 _client = null;
             }
+
+            _mockedRippled?.Stop();
         }
 
         private XrplClient CreateClient(int maxReconnectAttempts, bool stopAfterMaxAttempts) =>
