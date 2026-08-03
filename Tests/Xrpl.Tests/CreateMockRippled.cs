@@ -68,7 +68,9 @@ namespace Xrpl.Tests
         private Dictionary<string, object> _responses = new Dictionary<string, object>();
         public bool suppressOutput = false;
         private Thread tcpListenerThread;
+        private readonly object _serverLock = new object();
         private Server _server;
+        private bool _stopped;
 
         public CreateMockRippled(int port)
         {
@@ -78,20 +80,36 @@ namespace Xrpl.Tests
         /// <summary>
         /// Stops the listen socket. Without this the server keeps accepting for the lifetime of the test
         /// process, so every test that starts a mock leaks a listener.
+        /// Start() runs on a background thread, so shutdown is recorded here: a startup that finishes
+        /// afterwards stops its listener instead of leaving it behind.
         /// </summary>
         public void Stop()
         {
+            Server server;
+            lock (_serverLock)
+            {
+                _stopped = true;
+                server = _server;
+                _server = null;
+            }
+
+            StopServer(server);
+        }
+
+        private static void StopServer(Server server)
+        {
+            if (server == null)
+            {
+                return;
+            }
+
             try
             {
-                _server?.Stop();
+                server.Stop();
             }
             catch (Exception ex)
             {
                 Debug.WriteLine($"MockRippled stop error: {ex.Message}");
-            }
-            finally
-            {
-                _server = null;
             }
         }
 
@@ -238,7 +256,18 @@ namespace Xrpl.Tests
         {
 
             Server server = new Server(new IPEndPoint(IPAddress.Parse("127.0.0.1"), this._port));
-            _server = server;
+
+            lock (_serverLock)
+            {
+                if (_stopped)
+                {
+                    // Stop() already ran - do not leave this listener accepting behind the test's back.
+                    StopServer(server);
+                    return;
+                }
+
+                _server = server;
+            }
 
             // Bind the event for when a client connected
             server.OnClientConnected += (object sender, OnClientConnectedHandler e) =>
