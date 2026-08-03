@@ -665,6 +665,15 @@ public class Connection
 
         while (!IsConnected())
         {
+            // Re-checked on every iteration, not only on entry: the client can be disconnected while a
+            // caller is already waiting here (user Disconnect(), or the client giving up on a permanently
+            // failing OnConnected handler). Without this the caller would sit out the whole acquisition
+            // timeout and get a generic TimeoutException instead of the actual reason.
+            if (_permanentlyDisconnected)
+            {
+                throw new NotConnectedException("Client has been disconnected. Call Connect() to reconnect.");
+            }
+
             if (config.StopAfterMaxAttempts &&
                 _reconnectAttempts >= config.MaxReconnectAttempts &&
                 _reconnectCts == null)
@@ -842,6 +851,29 @@ public class Connection
                 catch (Exception ex)
                 {
                     Debug.WriteLine($"{DateTime.Now}OnConnectionError callback error: {ex.Message}");
+                }
+            });
+
+            ws.OnError(async (e, errorSocket) =>
+            {
+                try
+                {
+                    // Report-only: a failed send does not by itself mean the connection is gone, so this
+                    // path never triggers a reconnect. Without it a fire-and-forget send failure would be
+                    // invisible and the request would simply sit until its RequestTimeout expires.
+                    var errorHandler = OnError;
+                    if (errorHandler is not null)
+                    {
+                        await errorHandler.Invoke(
+                            error: "error",
+                            errorMessage: "socketSendError",
+                            e.Message,
+                            data: e);
+                    }
+                }
+                catch (Exception ex)
+                {
+                    Debug.WriteLine($"{DateTime.Now}OnError callback error: {ex.Message}");
                 }
             });
 
@@ -1693,13 +1725,16 @@ public class Connection
             // Terminal state on purpose: the handler is broken, not the connection. Disconnect() gives the
             // consumer an immediate, actionable NotConnectedException instead of a silent 5-minute wait,
             // and Connect() resets the counter so recovery stays possible.
-            await Disconnect();
-
+            // The detailed reason has to be notified BEFORE Disconnect(): Disconnect() moves the state to
+            // Disconnected itself, and SetConnectionState only notifies on a state change, so a call after it
+            // would be swallowed and the consumer would see "Disconnected by user request." instead.
             SetConnectionState(
                 XrpConnectionState.Disconnected,
                 message:
                 $"OnConnected handler failed {failures} time(s) in a row: {error.Message}. Giving up after {config.MaxReconnectAttempts} attempts. Call Connect() to retry.",
                 ConnectionCloseSeverity.Error);
+
+            await Disconnect();
             return;
         }
 
@@ -1713,26 +1748,39 @@ public class Connection
         requestManager.RejectAllWithCancellation();
         await WaitForPingToFinishAsync();
 
-        WebSocketClient socketToClose;
+        // Always tear down the socket the handler actually ran for. WebSocketClient.Connect invokes its
+        // OnConnect callback without awaiting it, so the connect lock can be released while this method is
+        // still running: by now `ws` may already point at a newer socket that must not be touched.
+        bool wasCurrentSocket;
         lock (_disconnectLock)
         {
-            socketToClose = ws ?? failedSocket;
-            ws = null;
+            wasCurrentSocket = ReferenceEquals(ws, failedSocket);
+            if (wasCurrentSocket)
+            {
+                ws = null;
+            }
         }
 
         // The socket is deliberately NOT marked as user-initiated: OnceClose must treat this as a real
         // close so the standard reconnect path runs instead of the "closed permanently" branch.
-        socketToClose.Cancel();
-        socketToClose.Disconnect();
+        failedSocket.Cancel();
+        failedSocket.Disconnect();
 
-        // Safety net: if the close callback cannot run (e.g. the receive loop was cancelled before it
-        // started) nothing else would restart the reconnect loop and the client would sit idle forever.
-        // StartReconnectLoop() is a no-op when a loop is already running.
-        bool loopIsRunning = _reconnectLoop != null && !_reconnectLoop.IsCompleted;
-        if (!loopIsRunning)
+        if (!wasCurrentSocket)
         {
-            StartReconnectLoop();
+            // A newer connection already replaced this socket - it owns the reconnect state now.
+            return;
         }
+
+        // Take ownership of the reconnect state instead of asking "is a loop already running?".
+        // This method can run inside the reconnect loop's own attempt: that loop breaks as soon as the
+        // socket reports Open, which happens before the handler has even finished failing. Both this check
+        // and the one in OnceClose would then race with the loop's exit, and losing the race leaves nobody
+        // reconnecting - the very wedge this path exists to prevent. Cancel whatever is there, start fresh;
+        // the later OnceClose sees a live loop and correctly stands down.
+        StopReconnectLoop();
+        _reconnectLoop = null;
+        StartReconnectLoop();
     }
 
     private async Task OnceClose(int? code, string? description, WebSocketClient closingSocket, long sessionId)

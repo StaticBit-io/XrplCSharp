@@ -308,10 +308,11 @@ namespace Xrpl.Client
                 }
                 catch (Exception e)
                 {
-                    // The send is fire-and-forget (async void), so this exception can be reported to nobody:
-                    // the pending request just sits until its RequestTimeout expires. Trace it so the real
-                    // cause is at least visible in diagnostics instead of being swallowed silently.
+                    // The send is fire-and-forget (async void), so nothing can observe this exception:
+                    // the pending request just sits there until its RequestTimeout expires. Surface it
+                    // through the error callback - report-only, the connection itself is left alone.
                     Debug.WriteLine($"{DateTime.Now}WebSocket send failed: {e.GetType().Name}: {e.Message}");
+                    CallOnError(e);
                     return;
                 }
             }

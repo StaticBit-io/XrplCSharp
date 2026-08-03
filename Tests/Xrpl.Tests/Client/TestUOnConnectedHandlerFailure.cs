@@ -6,6 +6,7 @@ using System.Threading;
 using System.Threading.Tasks;
 
 using Xrpl.Client;
+using Xrpl.Client.Exceptions;
 
 namespace Xrpl.Tests
 {
@@ -173,14 +174,19 @@ namespace Xrpl.Tests
                 throw new InvalidOperationException("handler is permanently broken");
             };
 
+            Exception connectError = null;
             try
             {
                 await _client.Connect();
             }
-            catch (Exception)
+            catch (Exception error)
             {
-                // Expected - the connection never becomes usable.
+                connectError = error;
             }
+
+            Assert.IsInstanceOfType<NotConnectedException>(
+                connectError,
+                $"Giving up must unblock the waiting caller with NotConnectedException, got: {connectError?.GetType().Name ?? "no exception"}.");
 
             await Task.Delay(TimeSpan.FromSeconds(10));
             int settled = Volatile.Read(ref invocations);
