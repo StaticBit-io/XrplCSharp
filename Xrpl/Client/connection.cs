@@ -461,10 +461,16 @@ public class Connection
             ws = null;
         }
 
-        // 7. Mark socket for intentional disconnect
+        // 7. Mark old socket for intentional disconnect (per-socket tracking only)
+        // CRITICAL: Do NOT set global _isIntentionalDisconnect = true here - same rule as the ping/network
+        // recovery path. The global flag was only reset in OnceOpen, so if the NEW server never came up it
+        // stayed set forever: OnConnectionFailed then read the failure of the new socket as a user disconnect,
+        // reported "Connection closed permanently." and started no reconnect loop, leaving the client dead
+        // with the misleading "No connection attempt in progress. Call Connect() first."
+        // Per-socket tracking (_userInitiatedSockets + the socket's own flag, set in RetireOldSessionAsync)
+        // already filters late callbacks from the old socket, and keeps global state clean for the new one.
         if (oldSocket != null)
         {
-            _isIntentionalDisconnect = true;
             Interlocked.Exchange(ref _userInitiatedSocket, oldSocket);
             MarkSocketAsUserInitiated(oldSocket);
 
@@ -486,7 +492,10 @@ public class Connection
         // 8. Reset permanentlyDisconnected for new connection
         _permanentlyDisconnected = false;
 
-        // _isIntentionalDisconnect stays true - reset in OnceOpen
+        // Clear the global intentional-disconnect flag explicitly: it may still be set from an earlier
+        // user Disconnect() (it is only ever reset in OnceOpen), and leaving it set would make a failure
+        // of the NEW connection look intentional and suppress reconnection.
+        _isIntentionalDisconnect = false;
 
         // 9. Immediately connect to new server (new session created in Connect)
         await Connect(cancellationToken);
