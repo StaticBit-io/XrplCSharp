@@ -7,9 +7,11 @@ name: Protocol Watch
 #
 # Coverage is an explicit list of full repo-relative paths (WATCH), so files
 # from any directory can be tracked: the five protocol .macro definition files
-# plus TxFlags.h (transaction flags) and TER.h (result codes), which the SDK
-# mirrors as flag enums and the EngineResult enum but which live outside the
-# macros.
+# plus three headers the SDK mirrors but which live outside the macros —
+# TxFlags.h (transaction flags), TER.h (result codes) and LedgerFormats.h
+# (lsf ledger-object flags, vendored as a test fixture and diffed by
+# TestULedgerFlagsConformance, which compares against a pinned copy and so
+# cannot notice upstream moving on its own).
 #
 # State lives in the tracking issue body (labeled protocol-watch), not in the
 # repo and not in actions cache: no commits through branch protection, no
@@ -40,6 +42,7 @@ env:
     include/xrpl/protocol/detail/transactions.macro
     include/xrpl/protocol/TxFlags.h
     include/xrpl/protocol/TER.h
+    include/xrpl/protocol/LedgerFormats.h
   ISSUE_TITLE: 'Protocol watch: rippled develop'
   ISSUE_LABEL: protocol-watch
 
