@@ -102,12 +102,6 @@ public class LOLoan : BaseLedgerEntry
     public string PrincipalOutstanding { get; init; }
 
     /// <summary>
-    /// The principal amount originally requested (Number type, string representation).
-    /// </summary>
-    [JsonPropertyName("PrincipalRequested")]
-    public string PrincipalRequested { get; init; }
-
-    /// <summary>
     /// The total amount owed including fees (Number type, string representation).
     /// </summary>
     [JsonPropertyName("TotalValueOutstanding")]

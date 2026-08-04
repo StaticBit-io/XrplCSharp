@@ -36,6 +36,9 @@
                 <None Include="Fixtures\LedgerFormats.h">
                         <CopyToOutputDirectory>PreserveNewest</CopyToOutputDirectory>
                 </None>
+                <None Include="Fixtures\ledger_entries.macro">
+                        <CopyToOutputDirectory>PreserveNewest</CopyToOutputDirectory>
+                </None>
         </ItemGroup>
         <ItemGroup>
                 <ProjectReference Include="..\..\Xrpl\Xrpl.csproj" />

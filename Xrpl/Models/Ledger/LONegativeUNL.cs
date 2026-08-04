@@ -25,6 +25,18 @@ namespace Xrpl.Models.Ledger
         /// The public key of a trusted validator in the Negative UNL that is scheduled to be re-enabled in the next flag ledger.
         /// </summary>
         public string ValidatorToReEnable { get; set; }
+
+        /// <summary>
+        /// The identifying hash of the transaction that most recently modified this object.
+        /// </summary>
+        [System.Text.Json.Serialization.JsonPropertyName("PreviousTxnID")]
+        public string PreviousTxnID { get; set; }
+
+        /// <summary>
+        /// The index of the ledger that contains the transaction that most recently modified this object.
+        /// </summary>
+        [System.Text.Json.Serialization.JsonPropertyName("PreviousTxnLgrSeq")]
+        public uint? PreviousTxnLgrSeq { get; set; }
     }
     public interface IDisabledValidator
     {

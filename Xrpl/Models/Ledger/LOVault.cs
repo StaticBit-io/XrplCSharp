@@ -203,12 +203,6 @@ public class LOVault : BaseLedgerEntry
     }
 
     /// <summary>
-    /// The ID of a permissioned domain associated with the vault.
-    /// </summary>
-    [JsonPropertyName("DomainID")]
-    public string DomainID { get; init; }
-
-    /// <summary>
     /// The transaction sequence number that created the vault.
     /// </summary>
     [JsonPropertyName("Sequence")]

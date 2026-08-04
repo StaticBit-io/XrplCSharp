@@ -336,11 +336,9 @@ public class TestILoan : TestILoanBase
         Assert.IsNotNull(loan.LoanBrokerID, "LoanBrokerID should be set");
         Assert.IsNotNull(loan.LoanSequence, "LoanSequence should be set");
 
-        // Number fields — PrincipalRequested was explicitly set to "10000000" in LoanSet,
-        // but rippled may omit zero-value Number fields.
-        // PrincipalOutstanding may be null if no payments have been made yet (depends on rippled behavior).
-        if (loan.PrincipalRequested != null)
-            Assert.IsTrue(loan.PrincipalRequested.Length > 0, "PrincipalRequested should be non-empty if present");
+        // PrincipalRequested is a field of the LoanSet TRANSACTION, not of the Loan object:
+        // rippled records the amount as PrincipalOutstanding, so the object never carries it
+        // (confirmed against a live node — the created object holds PrincipalOutstanding only).
         if (loan.PrincipalOutstanding != null)
             Assert.IsTrue(loan.PrincipalOutstanding.Length > 0, "PrincipalOutstanding should be non-empty if present");
 
