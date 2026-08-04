@@ -10,6 +10,7 @@ namespace Xrpl.BinaryCodec.Enums
         public static readonly Uint8Field Method = new Uint8Field(nameof(Method), 2);
         public static readonly Uint8Field Scale = new Uint8Field(nameof(Scale), 4);
         public static readonly Uint8Field AssetScale = new Uint8Field(nameof(AssetScale), 5);
+        public static readonly Uint8Field LEVersion = new Uint8Field(nameof(LEVersion), 6);
         public static readonly Uint8Field TickSize = new Uint8Field(nameof(TickSize), 16);
         public static readonly Uint8Field UNLModifyDisabling = new Uint8Field(nameof(UNLModifyDisabling), 17);
         public static readonly Uint8Field HookResult = new Uint8Field(nameof(HookResult), 18);
