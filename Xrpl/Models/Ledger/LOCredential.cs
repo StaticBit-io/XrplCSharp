@@ -102,12 +102,6 @@ namespace Xrpl.Models.Ledger
         public new uint Flags { get; set; }
 
         /// <summary>
-        /// A hint indicating which page of the owner directory links to this entry.
-        /// </summary>
-        [JsonPropertyName("OwnerNode")]
-        public string OwnerNode { get; set; }
-
-        /// <summary>
         /// A hint indicating which page of the subject's owner directory links to this entry.
         /// </summary>
         [JsonPropertyName("SubjectNode")]

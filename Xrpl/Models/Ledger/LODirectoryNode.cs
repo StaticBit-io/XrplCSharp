@@ -102,5 +102,17 @@ namespace Xrpl.Models.Ledger
     /// <summary>MPT order books: MPT issuance id on the TakerGets side.</summary>
     [JsonPropertyName("TakerGetsMPT")]
     public string TakerGetsMPT { get; set; }
+
+    /// <summary>
+    /// The identifying hash of the transaction that most recently modified this object.
+    /// </summary>
+    [JsonPropertyName("PreviousTxnID")]
+    public string PreviousTxnID { get; set; }
+
+    /// <summary>
+    /// The index of the ledger that contains the transaction that most recently modified this object.
+    /// </summary>
+    [JsonPropertyName("PreviousTxnLgrSeq")]
+    public uint? PreviousTxnLgrSeq { get; set; }
 }
 }
