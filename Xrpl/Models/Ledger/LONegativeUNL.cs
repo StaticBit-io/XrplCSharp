@@ -1,4 +1,5 @@
 ﻿using System.Collections.Generic;
+using System.Text.Json.Serialization;
 
 namespace Xrpl.Models.Ledger
 {
@@ -29,13 +30,13 @@ namespace Xrpl.Models.Ledger
         /// <summary>
         /// The identifying hash of the transaction that most recently modified this object.
         /// </summary>
-        [System.Text.Json.Serialization.JsonPropertyName("PreviousTxnID")]
+        [JsonPropertyName("PreviousTxnID")]
         public string PreviousTxnID { get; set; }
 
         /// <summary>
         /// The index of the ledger that contains the transaction that most recently modified this object.
         /// </summary>
-        [System.Text.Json.Serialization.JsonPropertyName("PreviousTxnLgrSeq")]
+        [JsonPropertyName("PreviousTxnLgrSeq")]
         public uint? PreviousTxnLgrSeq { get; set; }
     }
     public interface IDisabledValidator

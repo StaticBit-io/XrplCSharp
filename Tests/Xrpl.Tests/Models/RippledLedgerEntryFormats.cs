@@ -128,7 +128,17 @@ namespace Xrpl.Tests.Models.Tests
                     };
                 }
 
-                entries[name] = fields;
+                // Indexer assignment would let a second declaration of the same name replace
+                // the first, dropping that object from the conformance table while the field
+                // count below still grew — the minimum-count guard would not notice
+                if (entries.ContainsKey(name))
+                {
+                    throw new InvalidOperationException(
+                        $"{name}: declared twice in ledger_entries.macro — the parser would drop one " +
+                        "definition, update it before trusting this test");
+                }
+
+                entries.Add(name, fields);
                 fieldCount += fields.Count;
             }
 
