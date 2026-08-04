@@ -322,5 +322,47 @@ namespace Xrpl.Tests.Models.Tests
             Assert.AreEqual(Account1, state.HighSponsor);
             Assert.AreEqual(Account2, state.LowSponsor);
         }
+
+        [TestMethod]
+        public void TestULOVault_LEVersion_Deserialize()
+        {
+            string json = JsonSerializer.Serialize(new Dictionary<string, object>
+            {
+                ["LedgerEntryType"] = "Vault",
+                ["Account"] = Account1,
+                ["Owner"] = Account2,
+                ["ShareMPTID"] = "00000001A407AF5856CCF3C42619DAA925813FC955C72983",
+                ["WithdrawalPolicy"] = 1,
+                ["Scale"] = 6,
+                ["LEVersion"] = (uint)VaultVersion.CashBasis,
+            });
+            LOVault vault = JsonSerializer.Deserialize<LOVault>(json, XrplJsonOptions.Default);
+            Assert.AreEqual((uint)VaultVersion.CashBasis, vault.LEVersion);
+
+            // A vault created before cash-basis accounting carries no LEVersion at all;
+            // rippled resolves that absence as VaultVersion.Legacy rather than an error
+            string legacy = JsonSerializer.Serialize(new Dictionary<string, object>
+            {
+                ["LedgerEntryType"] = "Vault",
+                ["Account"] = Account1,
+                ["Owner"] = Account2,
+            });
+            Assert.IsNull(JsonSerializer.Deserialize<LOVault>(legacy, XrplJsonOptions.Default).LEVersion);
+        }
+
+        [TestMethod]
+        public void TestULEVersion_BinaryRoundTrip()
+        {
+            // The field only travels if definitions.json knows it — this fails with an
+            // encoding error, not an assertion, when the entry is missing.
+            // Parsed from text rather than built from int literals: that is the shape a
+            // node response arrives in, and Uint8.FromJson takes a byte, not an Int32
+            JsonObject json = JsonNode.Parse("""{"LEVersion":1,"Scale":6}""")!.AsObject();
+            string blob = XrplBinaryCodec.Encode(json);
+            JsonObject decoded = XrplBinaryCodec.Decode(blob).AsObject();
+
+            Assert.AreEqual(1u, decoded["LEVersion"]!.GetValue<uint>());
+            Assert.AreEqual(6u, decoded["Scale"]!.GetValue<uint>());
+        }
     }
 }
