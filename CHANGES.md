@@ -1,6 +1,7 @@
 # Changes
 
-## 10.12.0.0 08/04/2026
+## 10.11.0.0 08/04/2026
+
 * **`TestULedgerEntryFieldsConformance` — the third conformance surface**, completing the set next to `TestUTxFormatConformance` (transaction fields) and `TestULedgerFlagsConformance` (ledger flags). `ledger_entries.macro` is the only place the protocol states which fields belong to which ledger object — `definitions.json` carries field codes and object types but not the per-object lists — and nothing checked it. A missing field produces no symptom: reading the object still succeeds and the value is silently dropped, which is how `LOAccountRoot` went without `WalletLocator`/`WalletSize` until a manual pass, and how `sfLEVersion` had to arrive through a protocol-watch notification instead of a red test:
   * `Tests/Xrpl.Tests/Fixtures/ledger_entries.macro`, vendored byte-identical and pinned by sha in the `.ref`. Pinned to a **develop** commit rather than a tag, unlike `LedgerFormats.h`: the models track develop for fields, and `sfLEVersion` exists only after 07/30/2026, so a tag would report it as a field the SDK invented
   * both directions are diffed — a field rippled declares and the model lacks, and a property the model exposes that is not a field of that object — and every ledger object must be registered against a model, so a newly added one fails the build instead of being skipped
@@ -19,7 +20,6 @@
 
 * **Fields declared by the protocol but missing from the models** — `PreviousTxnID`/`PreviousTxnLgrSeq` on `LOAmm`, `LOAmendments`, `LODirectoryNode`, `LOFeeSettings` and `LONegativeUNL`. Both are `SoeOptional` on these objects upstream; without them the transaction that last touched the object could not be read through the typed API
 
-## 10.11.0.0 08/03/2026
 * **`sfLEVersion` — the Vault ledger entry's schema version** ([rippled #7817](https://github.com/XRPLF/rippled/pull/7817), merged into `develop` 07/30/2026, reported by protocol-watch). `UInt8` nth 6, `SoeDefault` on `ltVAULT`: it marks which accounting scheme a vault follows. Vaults created before cash-basis accounting was activated carry no `LEVersion` at all, and rippled resolves that absence as version 0 rather than an error — so an absent value is meaningful, not missing data:
   * `definitions.json` + the generated `Field.Uint8` entry. **Both are required**: `definitions.json` is not read at runtime, it is the input to `Tools/GenerateEnums`, so a field added there alone travels nowhere. `TestULEVersion_BinaryRoundTrip` is what proves the round trip actually works rather than that the JSON was edited
   * `LOVault.LEVersion` (`uint?`, matching the other UInt8 fields of that object) plus a `VaultVersion` enum naming the two values the protocol defines so far (`Legacy` = 0, `CashBasis` = 1)
@@ -48,7 +48,6 @@
   * scenarios were derived from the transactor (`src/libxrpl/tx/transactors/token/MPTokenIssuanceSet.cpp` @ `3.3.0-rc1`), not from the docs — hence `tfMPTCanTransfer` at creation in the fee test: `preclaim` requires `lsfMPTCanTransfer` to be **already** set, and enabling it in the same transaction does not satisfy the rule
   * amendment-gated, so it skips on the CI stand (rippled 3.2.x has `DynamicMPT` as `Supported::No`) and runs for real on the nightly stand
 
-## 10.10.1.0 08/02/2026
 * **An exception from an `OnConnected` handler no longer kills the client forever** — `Connection.OnceOpen` caught anything thrown by a consumer `OnConnected` handler and called `Disconnect()`, i.e. the *user* disconnect path: it set `_permanentlyDisconnected = true` and called `ClearReconnectState()`. After that the client was dead — the reconnect loop was never restarted, no new socket was ever opened, `OnConnected` never fired again, and every later request threw `NotConnectedException("Client has been disconnected. Call Connect() to reconnect.")`. Nothing was logged and nothing was raised, so from the outside the client just went quiet:
   * **The trigger is the most ordinary event there is — a node restart.** `OnConnected` is the natural place to restore subscriptions, because the SDK does not restore them after a reconnect. A restarting node accepts TCP seconds before it starts answering requests, so the first `subscribe` after the reconnect runs into `RequestTimeout` (40 s) and throws. A consumer that lets the exception out — the reasonable "fail loudly, let the SDK reconnect" reaction — got the opposite: a silent, permanent death. Observed in production on a fleet of bots, each wedged for four hours after a node upgrade, one of them dying 69 seconds before the node came back
   * A failing handler is now treated as what it is — a **connection** failure, not a user disconnect. The socket is torn down and the regular reconnect loop takes over with its usual exponential backoff, exactly as for a transport failure. The permanent-disconnect flag is never set on this path
