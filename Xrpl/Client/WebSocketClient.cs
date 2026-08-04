@@ -2,6 +2,7 @@
 
 using System;
 using System.Collections.Generic;
+using System.Diagnostics;
 using System.IO;
 using System.Linq;
 using System.Net.WebSockets;
@@ -307,7 +308,11 @@ namespace Xrpl.Client
                 }
                 catch (Exception e)
                 {
-                    //_onError?.Invoke(e, this);
+                    // The send is fire-and-forget (async void), so nothing can observe this exception:
+                    // the pending request just sits there until its RequestTimeout expires. Surface it
+                    // through the error callback - report-only, the connection itself is left alone.
+                    Debug.WriteLine($"{DateTime.Now}WebSocket send failed: {e.GetType().Name}: {e.Message}");
+                    CallOnError(e);
                     return;
                 }
             }
