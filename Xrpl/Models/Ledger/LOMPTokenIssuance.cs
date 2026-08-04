@@ -50,6 +50,12 @@ namespace Xrpl.Models.Ledger
         /// Issuer can claw back balances from holders.
         /// </summary>
         MPTCanClawback = 0x00000040,
+
+        /// <summary>
+        /// Holders can hold confidential (encrypted) balances of this MPT.
+        /// Requires ConfidentialTransfer amendment.
+        /// </summary>
+        MPTCanHoldConfidentialBalance = 0x00000080,
     }
 
     /// <summary>

@@ -1,4 +1,4 @@
-<Project Sdk="Microsoft.NET.Sdk">
+﻿<Project Sdk="Microsoft.NET.Sdk">
 
   <PropertyGroup>
     <!-- <TargetFramework>netstandard2.0</TargetFramework> -->
@@ -14,7 +14,7 @@
     <PackageLicenseExpression>Apache-2.0</PackageLicenseExpression>
     <PackageProjectUrl>https://github.com/StaticBit-io/XrplCSharp</PackageProjectUrl>
     <Title>XrplCSharp</Title>
-    <PackageVersion>10.10.1.0</PackageVersion>
+    <PackageVersion>10.11.0.0</PackageVersion>
   </PropertyGroup>
 
   <PropertyGroup>
