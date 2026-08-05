@@ -288,9 +288,18 @@ public class Connection
     private static readonly Random _random = new();
 
     /// <summary>
-    /// Guards every read-modify-write over the reconnect session — <see cref="_reconnectCts"/>,
-    /// <see cref="_reconnectLoop"/> and <see cref="_reconnectAttempts"/> together.
+    /// Guards the reconnect session — <see cref="_reconnectCts"/>, <see cref="_reconnectLoop"/> and
+    /// <see cref="_reconnectAttempts"/> — wherever one is read and another written as a unit:
+    /// <see cref="StopReconnectLoop"/>, <see cref="StartReconnectLoop"/>,
+    /// <see cref="RestartReconnectLoop"/>, <see cref="RetireCurrentSessionAndReconnectAsync"/> and
+    /// the ownership-guarded writes in <see cref="ReconnectLoopAsync"/>.
     /// </summary>
+    /// <remarks>
+    /// Not every touch of these fields is covered: the per-iteration <c>_reconnectAttempts++</c> in
+    /// <see cref="ReconnectLoopAsync"/>, and the plain resets in <c>ChangeServer</c> and
+    /// <c>OnceClose</c>, still run outside it. Those predate this lock; do not read the list above
+    /// as "all three fields are always synchronized".
+    /// </remarks>
     /// <remarks>
     /// <para>
     /// <c>volatile</c> alone was not enough: it makes each individual access atomic, not the
@@ -1827,9 +1836,38 @@ public class Connection
         // the backoff at ReconnectBaseDelay. With StopAfterMaxAttempts = false (no give-up branch)
         // that means connect -> handler failure -> teardown forever at a constant 2s, a sustained
         // connection load on a node that accepts TCP but cannot serve requests yet.
-        StopReconnectLoop();
-        _reconnectLoop = null;
-        StartReconnectLoop(initialAttempts: failures);
+        RestartReconnectLoop(initialAttempts: failures);
+    }
+
+    /// <summary>
+    /// Retires the current reconnect session and installs a fresh one in a single transaction,
+    /// seeding the attempt counter with <paramref name="initialAttempts"/>.
+    /// </summary>
+    /// <remarks>
+    /// Doing this as <c>StopReconnectLoop(); _reconnectLoop = null; StartReconnectLoop(seed);</c>
+    /// took the lock twice with a bare write in between, so a concurrent start (from OnceClose or
+    /// OnConnectionFailed) could slip in and install its own loop; the seeded start would then see
+    /// a live loop, return without applying the seed, and the backoff would silently stop growing
+    /// across consecutive handler failures — the very regression the seed exists to prevent.
+    /// </remarks>
+    private void RestartReconnectLoop(int initialAttempts)
+    {
+        CancellationTokenSource retired;
+        lock (_reconnectStateLock)
+        {
+            retired = _reconnectCts;
+            _reconnectMode = ReconnectMode.LoopReconnect;
+            _isFastReconnectActive = false;
+            _reconnectAttempts = initialAttempts;
+            _reconnectCts = new CancellationTokenSource();
+
+            // Safe to start under the lock: ReconnectLoopAsync reads its token and yields before
+            // anything else, so this only schedules the loop - no consumer notification runs inline.
+            _reconnectLoop = ReconnectLoopAsync(_reconnectCts);
+        }
+
+        retired?.Cancel();
+        retired?.Dispose();
     }
 
     private async Task OnceClose(int? code, string? description, WebSocketClient closingSocket, long sessionId)
@@ -2062,15 +2100,22 @@ public class Connection
 
     private async Task ReconnectLoopAsync(CancellationTokenSource ownCts)
     {
-        // Yield first so nothing in this method runs inline on the caller: StartReconnectLoop starts
-        // the loop while holding _reconnectStateLock, and a consumer notification executing under
-        // that lock could deadlock against any path that takes it (Disconnect from a handler, say).
-        await Task.Yield();
-
         // The CTS this loop owns. StopReconnectLoop cancels without awaiting the loop, so a retired loop
         // can still be running - or reach its tail - after a replacement has been installed. Everything
         // this loop writes to shared reconnect state is therefore guarded by an ownership check.
+        //
+        // Read BEFORE the yield below, and deliberately so: the caller still holds
+        // _reconnectStateLock here, so this source cannot yet have been retired. After the yield a
+        // concurrent stop may already have disposed it - Cancel/Dispose of a retired source run
+        // outside the lock - and CancellationTokenSource.Token throws ObjectDisposedException once
+        // disposed. Taken after the yield, that throw would land outside every try below, faulting
+        // the loop before its first attempt and vanishing as an unobserved task exception.
         CancellationToken ct = ownCts.Token;
+
+        // Yield so nothing beyond that read runs inline on the caller: StartReconnectLoop starts the
+        // loop while holding _reconnectStateLock, and a consumer notification executing under that
+        // lock could deadlock against any path that takes it (Disconnect from a handler, say).
+        await Task.Yield();
 
         // Don't reset _reconnectAttempts here - it may be pre-set to 1 by fast reconnect path
         // StartReconnectLoop() sets it to 0 when creating a new CTS
@@ -2132,6 +2177,14 @@ public class Connection
                 }
                 catch (OperationCanceledException)
                 {
+                    break;
+                }
+                catch (ObjectDisposedException)
+                {
+                    // The source this loop owns was retired and disposed while the delay was being
+                    // set up: registering a callback on a token whose source is gone throws instead
+                    // of cancelling. Same meaning as cancellation - a newer sequence owns the
+                    // reconnect state now - so leave quietly rather than fault the task.
                     break;
                 }
             }
