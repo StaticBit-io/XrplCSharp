@@ -719,8 +719,6 @@
             AddStatusMessage($"Changing server to: {newServerUrl}...", MessageType.Info);
             
             await client.ChangeServer(newServerUrl);
-            
-            CurrentServerUrl = client.Url();
         }
         catch (Exception ex)
         {
@@ -730,6 +728,13 @@
         }
         finally
         {
+            // Read the address back whether or not the connection succeeded. ChangeServer switches
+            // the client's target before it starts connecting, so a switch to a server that is down
+            // throws (the acquisition timeout) while the client is already reconnecting to the NEW
+            // address. Updating this only on success left the label showing the previous server, and
+            // the "Already connected to this server" guard above then compared against a stale value
+            // and refused a legitimate switch back.
+            CurrentServerUrl = client.Url();
             IsChangingServer = false;
             StateHasChanged();
         }
