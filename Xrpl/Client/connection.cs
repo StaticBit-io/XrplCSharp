@@ -287,10 +287,28 @@ public class Connection
 
     private static readonly Random _random = new();
 
-    // Volatile: StopReconnectLoop, StartReconnectLoop and RetireCurrentSessionAndReconnectAsync
-    // write this from other threads, and the loop compares it by reference to decide whether it
-    // still owns the reconnect state. A stale read would let a retired loop run one more
-    // iteration, or make the owning loop stand down. Matches the other cross-thread fields here.
+    /// <summary>
+    /// Guards every read-modify-write over the reconnect session — <see cref="_reconnectCts"/>,
+    /// <see cref="_reconnectLoop"/> and <see cref="_reconnectAttempts"/> together.
+    /// </summary>
+    /// <remarks>
+    /// <para>
+    /// <c>volatile</c> alone was not enough: it makes each individual access atomic, not the
+    /// sequence of them. The stop path used to read the field three times in a row (Cancel,
+    /// Dispose, null it), so a start running in between could have its brand-new source disposed
+    /// and cleared by the retiring stop — leaving the loop with a dead source and nobody
+    /// reconnecting, which is exactly the permanent wedge this whole area exists to prevent.
+    /// </para>
+    /// <para>
+    /// Nothing that can call back into consumer code runs while the lock is held: cancellation and
+    /// disposal of a retired source happen after the lock is released, and the loop body starts
+    /// with a yield so that starting it under the lock never runs a notification inline.
+    /// </para>
+    /// </remarks>
+    private readonly object _reconnectStateLock = new object();
+
+    // Volatile so the ownership checks in ReconnectLoopAsync can read it outside the lock:
+    // a single reference read is atomic, and those checks only ever compare, never mutate.
     private volatile CancellationTokenSource _reconnectCts;
 
     private Task _reconnectLoop;
@@ -541,15 +559,20 @@ public class Connection
         _reconnectMode = ReconnectMode.FastReconnect;
         _isFastReconnectActive = true; // Keep for backward compatibility
         
-        // 2. Stop any existing reconnect loop
-        var oldCts = _reconnectCts;
+        // 2-3. Retire the previous reconnect session and install this one as a single transaction,
+        // so a concurrent stop/start cannot dispose the source created here. Cancellation and
+        // disposal of the old source happen after the lock is released.
+        CancellationTokenSource oldCts;
+        lock (_reconnectStateLock)
+        {
+            oldCts = _reconnectCts;
+            _reconnectLoop = null; // Clear old loop reference so StartReconnectLoop can start a new one
+            _reconnectAttempts = 1;
+            _reconnectCts = new CancellationTokenSource();
+        }
+
         oldCts?.Cancel();
         oldCts?.Dispose();
-        _reconnectLoop = null; // Clear old loop reference so StartReconnectLoop can start a new one
-        
-        // 3. Initialize reconnect state BEFORE any notifications
-        _reconnectAttempts = 1;
-        _reconnectCts = new CancellationTokenSource();
         
         // 4. Now send first notification - IsReconnectActive() will return true
         SetConnectionState(
@@ -631,10 +654,17 @@ public class Connection
             // Connect succeeded - cleanup reconnect state
             // Note: _reconnectMode will be cleared in OnceOpen when connection is fully established
             _isFastReconnectActive = false;
-            _reconnectCts?.Cancel();
-            _reconnectCts?.Dispose();
-            _reconnectCts = null;
-            _reconnectAttempts = 0;
+
+            CancellationTokenSource settled;
+            lock (_reconnectStateLock)
+            {
+                settled = _reconnectCts;
+                _reconnectCts = null;
+                _reconnectAttempts = 0;
+            }
+
+            settled?.Cancel();
+            settled?.Dispose();
         }
         catch (Exception ex)
         {
@@ -1942,10 +1972,19 @@ public class Connection
 
     private void StopReconnectLoop()
     {
-        _reconnectCts?.Cancel();
-        _reconnectCts?.Dispose();
-        _reconnectCts = null;
-        _reconnectAttempts = 0;
+        // Detach under the lock, then cancel/dispose outside it: a start racing with this stop can
+        // no longer have its fresh source torn down, and cancellation callbacks never run while the
+        // lock is held.
+        CancellationTokenSource retired;
+        lock (_reconnectStateLock)
+        {
+            retired = _reconnectCts;
+            _reconnectCts = null;
+            _reconnectAttempts = 0;
+        }
+
+        retired?.Cancel();
+        retired?.Dispose();
         // Note: Do NOT clear _reconnectMode here!
         // _reconnectMode is cleared only by:
         // - OnceOpen (connection succeeded)
@@ -1976,41 +2015,58 @@ public class Connection
     {
         // Set reconnect mode to LoopReconnect (upgrades from FastReconnect or sets from None)
         _reconnectMode = ReconnectMode.LoopReconnect;
-        
-        // CRITICAL: If a loop is already running, don't start another or reset the counter
-        // This prevents _reconnectAttempts from being reset mid-loop when callbacks trigger
-        // reconnect logic (OnceClose, OnConnectionFailed, etc.)
-        var loopIsRunning = _reconnectLoop != null && !_reconnectLoop.IsCompleted;
-        if (loopIsRunning)
+
+        // The whole decision — is a loop already running, is the current source reusable, install a
+        // fresh one, hand it to the new loop — is one transaction. Split across the lock it would
+        // race with StopReconnectLoop and with another start: two loops could end up running, or a
+        // loop could be handed a source that a concurrent stop has already disposed.
+        CancellationTokenSource retired = null;
+        lock (_reconnectStateLock)
         {
-            // Loop is already running - let it continue, don't reset _reconnectAttempts
-            return;
+            // CRITICAL: If a loop is already running, don't start another or reset the counter
+            // This prevents _reconnectAttempts from being reset mid-loop when callbacks trigger
+            // reconnect logic (OnceClose, OnConnectionFailed, etc.)
+            var loopIsRunning = _reconnectLoop != null && !_reconnectLoop.IsCompleted;
+            if (loopIsRunning)
+            {
+                // Loop is already running - let it continue, don't reset _reconnectAttempts
+                return;
+            }
+
+            // If we have a valid pre-created CTS (from RetireCurrentSessionAndReconnectAsync),
+            // we should reuse it. Check for this case first.
+            var existingCts = _reconnectCts;
+            var hasValidPreCreatedCts = existingCts != null && !existingCts.IsCancellationRequested;
+
+            // If no valid pre-created CTS, create a new one
+            // Only reset _reconnectAttempts when creating a FRESH CTS (new reconnect sequence)
+            if (!hasValidPreCreatedCts)
+            {
+                // Retire the old CTS after the lock is released - see _reconnectStateLock
+                retired = existingCts;
+                _reconnectCts = new CancellationTokenSource();
+                _reconnectAttempts = initialAttempts;
+            }
+            // else: Reuse existing valid CTS (pre-created for fast reconnect)
+            // Don't reset _reconnectAttempts - this is continuation of existing reconnect sequence
+            // Note: _reconnectLoop was already cleared by RetireCurrentSessionAndReconnectAsync
+
+            // Safe to start under the lock: ReconnectLoopAsync yields before touching anything, so
+            // this call only schedules the loop and returns - no consumer notification runs inline.
+            _reconnectLoop = ReconnectLoopAsync(_reconnectCts);
         }
-        
-        // If we have a valid pre-created CTS (from RetireCurrentSessionAndReconnectAsync),
-        // we should reuse it. Check for this case first.
-        var existingCts = _reconnectCts;
-        var hasValidPreCreatedCts = existingCts != null && !existingCts.IsCancellationRequested;
-        
-        // If no valid pre-created CTS, create a new one
-        // Only reset _reconnectAttempts when creating a FRESH CTS (new reconnect sequence)
-        if (!hasValidPreCreatedCts)
-        {
-            // Cancel/dispose old CTS if any
-            existingCts?.Cancel();
-            existingCts?.Dispose();
-            _reconnectCts = new CancellationTokenSource();
-            _reconnectAttempts = initialAttempts;
-        }
-        // else: Reuse existing valid CTS (pre-created for fast reconnect)
-        // Don't reset _reconnectAttempts - this is continuation of existing reconnect sequence
-        // Note: _reconnectLoop was already cleared by RetireCurrentSessionAndReconnectAsync
-        
-        _reconnectLoop = ReconnectLoopAsync(_reconnectCts);
+
+        retired?.Cancel();
+        retired?.Dispose();
     }
 
     private async Task ReconnectLoopAsync(CancellationTokenSource ownCts)
     {
+        // Yield first so nothing in this method runs inline on the caller: StartReconnectLoop starts
+        // the loop while holding _reconnectStateLock, and a consumer notification executing under
+        // that lock could deadlock against any path that takes it (Disconnect from a handler, say).
+        await Task.Yield();
+
         // The CTS this loop owns. StopReconnectLoop cancels without awaiting the loop, so a retired loop
         // can still be running - or reach its tail - after a replacement has been installed. Everything
         // this loop writes to shared reconnect state is therefore guarded by an ownership check.
@@ -2118,9 +2174,14 @@ public class Connection
 
                 if (IsConnected())
                 {
-                    if (ReferenceEquals(_reconnectCts, ownCts))
+                    // Ownership check and the write it guards belong together: checked outside the
+                    // lock, this loop could be retired in between and reset a live sequence's counter.
+                    lock (_reconnectStateLock)
                     {
-                        _reconnectAttempts = 0;
+                        if (ReferenceEquals(_reconnectCts, ownCts))
+                        {
+                            _reconnectAttempts = 0;
+                        }
                     }
 
                     break;
@@ -2170,8 +2231,19 @@ public class Connection
 
         if (config.StopAfterMaxAttempts && _reconnectAttempts >= config.MaxReconnectAttempts)
         {
-            _reconnectCts?.Dispose();
-            _reconnectCts = null;
+            // Re-check ownership inside the lock: between the check above and here a new sequence
+            // could have installed its own source, and disposing that one would strand it.
+            CancellationTokenSource finished = null;
+            lock (_reconnectStateLock)
+            {
+                if (ReferenceEquals(_reconnectCts, ownCts))
+                {
+                    finished = _reconnectCts;
+                    _reconnectCts = null;
+                }
+            }
+
+            finished?.Dispose();
         }
     }
 
