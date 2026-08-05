@@ -76,9 +76,23 @@ namespace Xrpl.Tests.Models.Tests
             Dictionary<string, Dictionary<string, uint>> objects = new();
             int flagCount = 0;
 
+            // Tracked separately from `objects`, which only holds flagged entries: a name declared
+            // twice must be caught even when one of the two declarations parses to no flags at all,
+            // otherwise the flagless-skip below would let the duplicate through unnoticed.
+            HashSet<string> seenNames = new(StringComparer.Ordinal);
+
             foreach (Match block in ObjectBlock.Matches(header))
             {
                 string name = block.Groups["name"].Value;
+
+                // Same rule as RippledLedgerEntryFormats.Parse, so the two parsers stay consistent
+                if (!seenNames.Add(name))
+                {
+                    throw new InvalidOperationException(
+                        $"{name}: declared twice in LedgerFormats.h — the parser would drop one " +
+                        "definition, update it before trusting this test");
+                }
+
                 Dictionary<string, uint> flags = new();
 
                 foreach (Match flag in FlagEntry.Matches(block.Groups["body"].Value))
@@ -91,17 +105,6 @@ namespace Xrpl.Tests.Models.Tests
                 // those carry nothing to conform to.
                 if (flags.Count == 0)
                     continue;
-
-                // Indexer assignment would let a second block of the same name replace the
-                // first, dropping that object from the conformance table while flagCount still
-                // grew — the minimum-count guard below would not notice. Same rule as
-                // RippledLedgerEntryFormats.Parse, so the two parsers stay consistent
-                if (objects.ContainsKey(name))
-                {
-                    throw new InvalidOperationException(
-                        $"{name}: declared twice in LedgerFormats.h — the parser would drop one " +
-                        "definition, update it before trusting this test");
-                }
 
                 objects.Add(name, flags);
                 flagCount += flags.Count;
