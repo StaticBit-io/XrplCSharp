@@ -247,5 +247,67 @@ namespace Xrpl.Tests
             Assert.AreSame(completed, reported.Task, "OnConnected failure was never reported through OnError.");
             StringAssert.Contains(reported.Task.Result, "subscribe failed after connect");
         }
+
+        /// <summary>
+        /// With <c>StopAfterMaxAttempts = false</c> there is no give-up branch, so a permanently
+        /// failing handler reconnects forever. The delay between attempts must still grow: this
+        /// path tears the reconnect loop down and starts it again on every failure, and the loop
+        /// derives its delay from the attempt counter alone — seeded from zero it would hammer a
+        /// node that accepts TCP but cannot serve requests at a constant ReconnectBaseDelay.
+        /// </summary>
+        [TestMethod]
+        public async Task TestRepeatedOnConnectedFailuresBackOff()
+        {
+            List<DateTime> attempts = new List<DateTime>();
+            TaskCompletionSource<bool> enough =
+                new TaskCompletionSource<bool>(TaskCreationOptions.RunContinuationsAsynchronously);
+
+            _client = CreateClient(maxReconnectAttempts: 50, stopAfterMaxAttempts: false);
+            _client.connection.OnConnected += () =>
+            {
+                lock (attempts)
+                {
+                    attempts.Add(DateTime.UtcNow);
+                    if (attempts.Count >= 4)
+                    {
+                        enough.TrySetResult(true);
+                    }
+                }
+
+                throw new InvalidOperationException("subscribe failed after connect");
+            };
+
+            try
+            {
+                await _client.Connect();
+            }
+            catch (Exception)
+            {
+                // Expected: the first handler invocation throws.
+            }
+
+            Task completed = await Task.WhenAny(enough.Task, Task.Delay(TimeSpan.FromSeconds(30)));
+            Assert.AreSame(completed, enough.Task, "The client stopped retrying a failing handler.");
+
+            List<TimeSpan> gaps = new List<TimeSpan>();
+            lock (attempts)
+            {
+                for (int i = 1; i < attempts.Count; i++)
+                {
+                    gaps.Add(attempts[i] - attempts[i - 1]);
+                }
+            }
+
+            // ReconnectBaseDelay is 100ms and CalcBackoff doubles per attempt with 25% jitter,
+            // so the third gap is ~4x the first even at the extremes of the jitter range.
+            // Comparing first vs last rather than each consecutive pair keeps the assertion
+            // robust: what regressed before was a flat sequence, not the exact multiplier.
+            Assert.IsTrue(
+                gaps.Count >= 3,
+                $"Expected at least 3 gaps between handler invocations, got {gaps.Count}.");
+            Assert.IsTrue(
+                gaps[gaps.Count - 1] > gaps[0],
+                $"Backoff did not grow across consecutive handler failures: {string.Join(", ", gaps)}");
+        }
     }
 }

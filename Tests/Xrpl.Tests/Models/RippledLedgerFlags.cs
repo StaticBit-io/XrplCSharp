@@ -92,7 +92,18 @@ namespace Xrpl.Tests.Models.Tests
                 if (flags.Count == 0)
                     continue;
 
-                objects[name] = flags;
+                // Indexer assignment would let a second block of the same name replace the
+                // first, dropping that object from the conformance table while flagCount still
+                // grew — the minimum-count guard below would not notice. Same rule as
+                // RippledLedgerEntryFormats.Parse, so the two parsers stay consistent
+                if (objects.ContainsKey(name))
+                {
+                    throw new InvalidOperationException(
+                        $"{name}: declared twice in LedgerFormats.h — the parser would drop one " +
+                        "definition, update it before trusting this test");
+                }
+
+                objects.Add(name, flags);
                 flagCount += flags.Count;
             }
 

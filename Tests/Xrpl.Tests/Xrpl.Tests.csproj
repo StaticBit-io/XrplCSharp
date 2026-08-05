@@ -30,13 +30,16 @@
                 <None Include="..\..\Base\Xrpl.BinaryCodec\Enums\definitions.json" Link="definitions.json">
                         <CopyToOutputDirectory>PreserveNewest</CopyToOutputDirectory>
                 </None>
-                <None Include="Fixtures\transactions.macro">
+                <!-- Update, not Include: the SDK's default None glob already picks these up,
+                     so Include would declare them twice. Only the fixtures themselves are
+                     copied — the .ref sidecars document the pin and are never read by tests. -->
+                <None Update="Fixtures\transactions.macro">
                         <CopyToOutputDirectory>PreserveNewest</CopyToOutputDirectory>
                 </None>
-                <None Include="Fixtures\LedgerFormats.h">
+                <None Update="Fixtures\LedgerFormats.h">
                         <CopyToOutputDirectory>PreserveNewest</CopyToOutputDirectory>
                 </None>
-                <None Include="Fixtures\ledger_entries.macro">
+                <None Update="Fixtures\ledger_entries.macro">
                         <CopyToOutputDirectory>PreserveNewest</CopyToOutputDirectory>
                 </None>
         </ItemGroup>
