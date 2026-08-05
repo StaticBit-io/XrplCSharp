@@ -365,17 +365,19 @@ await client.SubmitRequest(fullySigned.TxBlob);
 
 | Поле | Тип | Описание |
 |------|-----|----------|
-| `Account` | AccountID | Аккаунт заёмщика |
-| `Counterparty` | AccountID | Аккаунт брокера |
+| `Borrower` | AccountID | Аккаунт заёмщика |
 | `LoanBrokerID` | Hash256 | Ссылка на кредитного брокера |
-| `PrincipalRequested` | Number | Исходная сумма кредита |
+| `LoanSequence` | UInt32 | Порядковый номер в рамках брокера |
 | `PrincipalOutstanding` | Number | Остаток основной суммы |
 | `TotalValueOutstanding` | Number | Общая задолженность |
+| `PeriodicPayment` | Number | Сумма платежа за интервал |
 | `InterestRate` | UInt32 | Годовая процентная ставка |
 | `PaymentInterval` | UInt32 | Интервал между платежами (секунды) |
-| `PaymentTotal` | UInt32 | Общее количество платежей |
+| `GracePeriod` | UInt32 | Отсрочка до начисления пеней (секунды) |
 | `PaymentRemaining` | UInt32 | Оставшиеся платежи |
 | `StartDate` | UInt32 | Начало кредита (Ripple epoch) |
+
+> `Counterparty`, `PrincipalRequested` и `PaymentTotal` — поля **транзакции `LoanSet`**, а не объекта `Loan`. Запрошенную сумму rippled записывает в `PrincipalOutstanding`, поэтому у ledger-объекта поля `PrincipalRequested` нет — как нет его и у `LOLoan`.
 
 ### Запрос состояния кредита
 

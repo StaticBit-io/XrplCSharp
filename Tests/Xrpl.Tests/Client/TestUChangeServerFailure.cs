@@ -115,6 +115,11 @@ namespace Xrpl.Tests
                 "A ChangeServer target that is down is a connection failure, not a permanent disconnect.");
 
             // The server appears afterwards - exactly the "start the node later" case.
+            // The mock binds on a background thread, so a port taken in the meantime would
+            // surface as a 30s timeout below rather than as a bind error; check first.
+            Assert.IsTrue(
+                TestUtils.IsPortStillFree(secondPort),
+                $"Port {secondPort} was taken by another process while the test held it — rerun.");
             _secondRippled = StartMock(secondPort);
 
             DateTime deadline = DateTime.UtcNow + TimeSpan.FromSeconds(30);
@@ -166,6 +171,9 @@ namespace Xrpl.Tests
                 // Expected - the target is not up yet.
             }
 
+            Assert.IsTrue(
+                TestUtils.IsPortStillFree(secondPort),
+                $"Port {secondPort} was taken by another process while the test held it — rerun.");
             _secondRippled = StartMock(secondPort);
 
             DateTime deadline = DateTime.UtcNow + TimeSpan.FromSeconds(30);

@@ -1,4 +1,4 @@
-using System;
+﻿using System;
 using System.Collections.Generic;
 using System.Diagnostics;
 using System.IO;
@@ -287,7 +287,11 @@ public class Connection
 
     private static readonly Random _random = new();
 
-    private CancellationTokenSource _reconnectCts;
+    // Volatile: StopReconnectLoop, StartReconnectLoop and RetireCurrentSessionAndReconnectAsync
+    // write this from other threads, and the loop compares it by reference to decide whether it
+    // still owns the reconnect state. A stale read would let a retired loop run one more
+    // iteration, or make the owning loop stand down. Matches the other cross-thread fields here.
+    private volatile CancellationTokenSource _reconnectCts;
 
     private Task _reconnectLoop;
 
@@ -1787,9 +1791,15 @@ public class Connection
         // and the one in OnceClose would then race with the loop's exit, and losing the race leaves nobody
         // reconnecting - the very wedge this path exists to prevent. Cancel whatever is there, start fresh;
         // the later OnceClose sees a live loop and correctly stands down.
+        // Seed the attempt counter with the consecutive-failure count. StopReconnectLoop zeroes
+        // _reconnectAttempts and a fresh sequence would zero it again, and CalcBackoff derives the
+        // delay from that counter alone — so without the seed every handler failure would restart
+        // the backoff at ReconnectBaseDelay. With StopAfterMaxAttempts = false (no give-up branch)
+        // that means connect -> handler failure -> teardown forever at a constant 2s, a sustained
+        // connection load on a node that accepts TCP but cannot serve requests yet.
         StopReconnectLoop();
         _reconnectLoop = null;
-        StartReconnectLoop();
+        StartReconnectLoop(initialAttempts: failures);
     }
 
     private async Task OnceClose(int? code, string? description, WebSocketClient closingSocket, long sessionId)
@@ -1955,7 +1965,14 @@ public class Connection
         _reconnectMode = ReconnectMode.None;
     }
 
-    private void StartReconnectLoop()
+    /// <param name="initialAttempts">
+    /// Value to seed <c>_reconnectAttempts</c> with when a fresh reconnect sequence starts.
+    /// Defaults to 0 — a genuine new sequence begins at the base delay. The OnConnected-handler
+    /// path passes its own consecutive-failure count instead: that path tears the loop down and
+    /// starts it again on every failure, so with a 0 seed the backoff would restart at
+    /// ReconnectBaseDelay each time and never grow.
+    /// </param>
+    private void StartReconnectLoop(int initialAttempts = 0)
     {
         // Set reconnect mode to LoopReconnect (upgrades from FastReconnect or sets from None)
         _reconnectMode = ReconnectMode.LoopReconnect;
@@ -1983,7 +2000,7 @@ public class Connection
             existingCts?.Cancel();
             existingCts?.Dispose();
             _reconnectCts = new CancellationTokenSource();
-            _reconnectAttempts = 0;
+            _reconnectAttempts = initialAttempts;
         }
         // else: Reuse existing valid CTS (pre-created for fast reconnect)
         // Don't reset _reconnectAttempts - this is continuation of existing reconnect sequence
