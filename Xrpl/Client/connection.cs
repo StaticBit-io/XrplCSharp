@@ -2019,6 +2019,14 @@ public class Connection
             retired = _reconnectCts;
             _reconnectCts = null;
             _reconnectAttempts = 0;
+
+            // Drop the task reference too, in the same transaction. The retired loop exits
+            // asynchronously - it only notices it lost ownership on its next check - so leaving the
+            // reference behind makes StartReconnectLoop see `!IsCompleted` and return without
+            // starting anything, while the retired loop then stands down on its ownership check.
+            // Nobody would be reconnecting. Reachable whenever Connect or ChangeServer stops a live
+            // loop and the new connection fails.
+            _reconnectLoop = null;
         }
 
         retired?.Cancel();

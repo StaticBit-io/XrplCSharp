@@ -34,6 +34,7 @@ namespace Xrpl.Tests
     public class TestUReconnectSessionRaces
     {
         private CreateMockRippled _mockedRippled;
+        private CreateMockRippled _secondRippled;
         private XrplClient _client;
         private int _port;
 
@@ -59,8 +60,11 @@ namespace Xrpl.Tests
             CreateMockRippled mock = new CreateMockRippled(port) { suppressOutput = true };
             mock.AddResponse("server_info", ServerInfoResponse());
 
-            Thread listenerThread = new Thread(() => mock.Start()) { IsBackground = true };
-            listenerThread.Start();
+            // Called directly rather than on a background thread: Start() binds, listens and hands
+            // off to BeginAccept without blocking, so returning from it means the port is already
+            // accepting. Handing it to a thread only opened a window where a test could connect
+            // before the mock was up.
+            mock.Start();
             return mock;
         }
 
@@ -89,6 +93,7 @@ namespace Xrpl.Tests
             }
 
             _mockedRippled?.Stop();
+            _secondRippled?.Stop();
         }
 
         private XrplClient CreateClient(string url) =>
@@ -189,8 +194,16 @@ namespace Xrpl.Tests
             }
 
             // The client must still be usable: point it back at the live server and connect.
+            // Both calls are tolerated so the assertion below reports the failure, rather than the
+            // test dying on a raw exception from a switch that lost a race.
             await SwitchTo($"ws://127.0.0.1:{_port}");
-            await _client.Connect();
+            try
+            {
+                await _client.Connect();
+            }
+            catch (Exception)
+            {
+            }
 
             DateTime deadline = DateTime.UtcNow + TimeSpan.FromSeconds(30);
             while (!_client.connection.IsConnected() && DateTime.UtcNow < deadline)
@@ -201,6 +214,69 @@ namespace Xrpl.Tests
             Assert.IsTrue(
                 _client.connection.IsConnected(),
                 "Disconnect racing a reconnect sequence left the client unable to connect again.");
+        }
+
+        /// <summary>
+        /// A failed <c>Connect</c> issued while a reconnect loop is already running must leave a
+        /// live loop behind, so the client still comes back on its own once the server returns.
+        /// </summary>
+        /// <remarks>
+        /// Covers the functional path end to end. It does <b>not</b> pin the narrow race that made
+        /// StopReconnectLoop drop the loop reference: that needs the retired task to still be
+        /// running when the restart checks <c>IsCompleted</c>, and by the time a failed Connect gets
+        /// there the task has normally already exited, so the loop is restarted either way — with
+        /// the fix reverted this test still passes. Kept because the path itself (Connect while
+        /// reconnecting, server appears later) is worth guarding.
+        /// </remarks>
+        [TestMethod]
+        public async Task TestFailedConnectDuringReconnectLeavesLoopRunning()
+        {
+            int laterPort = TestUtils.GetFreePort();
+
+            // Short acquisition timeout: the Connect below is expected to fail, and waiting out the
+            // class default would add 20s of nothing to the run.
+            _client = new XrplClient($"ws://127.0.0.1:{_port}", new XrplClient.ClientOptions
+            {
+                RequestPolicy = RequestFailurePolicy.ImmediateFail,
+                ReconnectBaseDelay = TimeSpan.FromMilliseconds(50),
+                ReconnectMaxDelay = TimeSpan.FromMilliseconds(400),
+                MaxReconnectAttempts = 100,
+                StopAfterMaxAttempts = false,
+                ConnectionAcquisitionTimeout = TimeSpan.FromSeconds(3),
+                ConnectionAttemptTimeout = TimeSpan.FromSeconds(2),
+                UseCustomPing = false,
+            });
+            await _client.Connect();
+            Assert.IsTrue(_client.connection.IsConnected(), "Precondition: connected to the live mock.");
+
+            // Point the client at a port where nothing listens: a reconnect loop starts and retries.
+            await SwitchTo($"ws://127.0.0.1:{laterPort}");
+            Assert.IsFalse(_client.connection.IsConnected(), "Precondition: the target port is closed.");
+
+            // A Connect while that loop is running: it stops the loop, then fails because nothing
+            // is listening yet. Something must still be reconnecting afterwards.
+            try
+            {
+                await _client.Connect();
+            }
+            catch (Exception)
+            {
+                // Expected - nothing is listening on that port yet.
+            }
+
+            // The server appears. Nobody touches the client from here on.
+            _secondRippled = StartMock(laterPort);
+
+            DateTime deadline = DateTime.UtcNow + TimeSpan.FromSeconds(40);
+            while (!_client.connection.IsConnected() && DateTime.UtcNow < deadline)
+            {
+                await Task.Delay(TimeSpan.FromMilliseconds(200));
+            }
+
+            Assert.IsTrue(
+                _client.connection.IsConnected(),
+                "The client never reconnected after the server returned - a failed Connect during " +
+                "an active reconnect sequence left no loop running.");
         }
 
         private async Task SwitchTo(string url)
