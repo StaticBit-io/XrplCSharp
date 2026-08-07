@@ -303,7 +303,8 @@ namespace Xrpl.Tests
             // with its consecutive-failure count, so the delays run 400ms, 800ms, then 1s (capped)
             // — first to last is ~2.5x nominally, and still grows at the jitter extremes.
             // This holds only while the configured cap stays above the earlier backoff values: with
-            // a cap at or below 400ms every gap would sit on the cap and compare equal.
+            // a cap at or below 400ms every gap would sit on the cap, and the comparison would come
+            // down to which way the jitter fell — a coin flip, not a stable result.
             // Comparing first vs last rather than each consecutive pair keeps the assertion
             // robust: what regressed before was a flat sequence, not the exact multiplier.
             Assert.IsTrue(

@@ -296,9 +296,11 @@ public class Connection
     /// </summary>
     /// <remarks>
     /// Not every touch of these fields is covered: the per-iteration <c>_reconnectAttempts++</c> in
-    /// <see cref="ReconnectLoopAsync"/>, and the plain resets in <c>ChangeServer</c> and
-    /// <c>OnceClose</c>, still run outside it. Those predate this lock; do not read the list above
-    /// as "all three fields are always synchronized".
+    /// <see cref="ReconnectLoopAsync"/>, the plain resets in <c>ChangeServer</c> and
+    /// <c>OnceClose</c>, and the "is a loop already running" pre-checks in
+    /// <c>OnConnectionFailed</c> and <c>OnceClose</c> (which read <c>_reconnectLoop</c>, a
+    /// non-volatile field, outside the lock) all still run outside it. Those predate this lock; do
+    /// not read the list above as "all three fields are always synchronized".
     /// </remarks>
     /// <remarks>
     /// <para>
@@ -670,6 +672,8 @@ public class Connection
             // path (RestartReconnectLoop from a failing OnConnected handler, say) room to install a
             // newer one; cancelling and disposing that would strand the sequence it belongs to,
             // which is the same wedge the ownership checks in ReconnectLoopAsync guard against.
+            // When ownership is lost, ownCts needs no cleanup here: whoever evicted it from the
+            // field cancelled and disposed it as part of doing so.
             CancellationTokenSource settled = null;
             lock (_reconnectStateLock)
             {
@@ -678,6 +682,15 @@ public class Connection
                     settled = ownCts;
                     _reconnectCts = null;
                     _reconnectAttempts = 0;
+
+                    // Drop the task reference in the same transaction, for the same reason
+                    // StopReconnectLoop does: a loop may have been started on this very source
+                    // while the awaits above were running (OnConnectionFailed sees no live loop -
+                    // the entry above cleared the reference - and StartReconnectLoop reuses a
+                    // still-valid source). Cancelling that source without clearing the reference
+                    // leaves every loopIsRunning check looking at a task that is exiting, so
+                    // nobody starts a replacement and nobody reconnects.
+                    _reconnectLoop = null;
                 }
             }
 
@@ -689,7 +702,12 @@ public class Connection
             // If Connect fails, transition to loop reconnect mode
             // Keep _reconnectMode set (will be LoopReconnect after StartReconnectLoop)
             
-            // _reconnectCts is already set, so StartReconnectLoop will reuse it
+            // StartReconnectLoop reuses the source installed above when it is still there. It may
+            // not be: the awaits could have let another path replace or clear it, the same way the
+            // success branch above can no longer assume it still owns ownCts. Either outcome is
+            // survivable here - a live foreign loop makes the call return early, a cleared source
+            // makes it start a fresh sequence (losing only the seeded first delay) - so this path
+            // does not need an ownership check of its own.
             SetConnectionState(
                 XrpConnectionState.RestoringConnection,
                 message: $"Reconnection failed: {ex.Message}. Retrying...",
@@ -2061,7 +2079,9 @@ public class Connection
 
     /// <summary>
     /// Starts a reconnect loop unless one is already running, reusing a pre-created cancellation
-    /// source when there is one. A fresh sequence always begins at the base delay; the
+    /// source when there is one. A fresh sequence starts its attempt counter at zero, so the first
+    /// delay is <c>CalcBackoff(1)</c> — twice <c>ReconnectBaseDelay</c> — except on the
+    /// ping-timeout and network-drop paths, where the first attempt skips the delay entirely. The
     /// OnConnected-handler path needs a seeded counter instead and uses
     /// <see cref="RestartReconnectLoop"/>.
     /// </summary>
