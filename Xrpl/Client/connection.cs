@@ -588,11 +588,22 @@ public class Connection
         oldCts?.Dispose();
         
         // 4. Now send first notification - IsReconnectActive() will return true
-        SetConnectionState(
-            XrpConnectionState.RestoringConnection,
-            message: $"{reason} Reconnecting immediately...",
-            ConnectionCloseSeverity.Warning,
-            reconnect: BuildReconnectInfo());
+        // Guarded: SetConnectionState invokes the consumer's OnConnectionStatus synchronously, and
+        // this method only ever runs on a ping path whose callers swallow everything. An exception
+        // from a consumer handler would therefore leave the source installed above with no loop and
+        // nobody to dispose it - the client would sit in RestoringConnection forever.
+        try
+        {
+            SetConnectionState(
+                XrpConnectionState.RestoringConnection,
+                message: $"{reason} Reconnecting immediately...",
+                ConnectionCloseSeverity.Warning,
+                reconnect: BuildReconnectInfo());
+        }
+        catch (Exception notifyError)
+        {
+            Debug.WriteLine($"{DateTime.Now}OnConnectionStatus handler threw while entering fast reconnect: {notifyError.Message}");
+        }
 
         // =====================================================
         // FAST RECONNECT with PER-SESSION ISOLATION (same as ChangeServer)
@@ -650,7 +661,34 @@ public class Connection
         _pingTimeoutSocket = null;
         _networkDropSocket = null;
 
-        // 11. Reset permanentlyDisconnected for new connection
+        // 11. Reset permanentlyDisconnected for new connection - unless the user asked to disconnect
+        // while the awaits above were running. Disconnect() sets the flag, clears the reconnect
+        // state and then waits on the ping task this method runs inside, so it is still blocked
+        // here and cannot have finished its teardown. Clearing its flag and reconnecting anyway
+        // would resurrect a client the consumer explicitly took down - and Disconnect() would
+        // return reporting success while a fresh session was being built behind it.
+        if (_permanentlyDisconnected)
+        {
+            CancellationTokenSource abandoned = null;
+            lock (_reconnectStateLock)
+            {
+                if (ReferenceEquals(_reconnectCts, ownCts))
+                {
+                    abandoned = ownCts;
+                    _reconnectCts = null;
+                    _reconnectAttempts = 0;
+                    _reconnectLoop = null;
+                }
+            }
+
+            abandoned?.Cancel();
+            abandoned?.Dispose();
+            _isFastReconnectActive = false;
+
+            Debug.WriteLine($"{DateTime.Now}Fast reconnect abandoned before connecting - the client was disconnected by the user");
+            return;
+        }
+
         _permanentlyDisconnected = false;
 
         // Note: _reconnectAttempts and _reconnectCts already set at the start of this method
@@ -702,18 +740,40 @@ public class Connection
             // If Connect fails, transition to loop reconnect mode
             // Keep _reconnectMode set (will be LoopReconnect after StartReconnectLoop)
             
+            // A user Disconnect() can land while the awaits above are running - and it will wait on
+            // the very ping task this method runs inside, so it cannot have finished yet. Handing
+            // the client back to a reconnect loop then would undo an explicit disconnect. The flag
+            // is the authority: leave the state alone and let Disconnect() finish its teardown.
+            if (_permanentlyDisconnected)
+            {
+                Debug.WriteLine($"{DateTime.Now}Fast reconnect abandoned - the client was disconnected by the user: {ex.Message}");
+                return;
+            }
+
+            // Start the loop BEFORE notifying: SetConnectionState calls into consumer code, and an
+            // exception from a handler must not cost us the reconnect loop. Ordering matters more
+            // than the message here - without the loop the client never comes back.
+            //
             // StartReconnectLoop reuses the source installed above when it is still there. It may
             // not be: the awaits could have let another path replace or clear it, the same way the
             // success branch above can no longer assume it still owns ownCts. Either outcome is
             // survivable here - a live foreign loop makes the call return early, a cleared source
             // makes it start a fresh sequence (losing only the seeded first delay) - so this path
             // does not need an ownership check of its own.
-            SetConnectionState(
-                XrpConnectionState.RestoringConnection,
-                message: $"Reconnection failed: {ex.Message}. Retrying...",
-                ConnectionCloseSeverity.Warning,
-                reconnect: BuildReconnectInfo());
             StartReconnectLoop();
+
+            try
+            {
+                SetConnectionState(
+                    XrpConnectionState.RestoringConnection,
+                    message: $"Reconnection failed: {ex.Message}. Retrying...",
+                    ConnectionCloseSeverity.Warning,
+                    reconnect: BuildReconnectInfo());
+            }
+            catch (Exception notifyError)
+            {
+                Debug.WriteLine($"{DateTime.Now}OnConnectionStatus handler threw while reporting a failed fast reconnect: {notifyError.Message}");
+            }
         }
     }
 
