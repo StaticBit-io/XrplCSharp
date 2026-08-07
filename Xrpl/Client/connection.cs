@@ -213,6 +213,32 @@ public class Connection
         public bool UseCheckHealth { get; set; } = false;
 
         /// <summary>
+        /// Gets or sets how often the background health check runs — the timer that notices a socket
+        /// which is no longer Open and hands the client to the fast-reconnect path.<br/>
+        /// Default: 20 seconds, the interval this check has always used.
+        /// </summary>
+        /// <remarks>
+        /// Exposed primarily so tests can exercise the ping and fast-reconnect paths without waiting
+        /// out the default interval; those paths were previously unreachable from a unit test, which
+        /// is why they went uncovered through several fixes. Lowering it in production only makes the
+        /// state check more frequent — it sends no network requests of its own.
+        /// </remarks>
+        public TimeSpan HealthCheckInterval { get; set; } = TimeSpan.FromSeconds(20);
+
+        /// <summary>
+        /// Gets or sets how long a connection may go without any inbound activity before the health
+        /// check treats it as dead and hands it to the fast-reconnect path.<br/>
+        /// Default: 60 seconds, the threshold this check has always used.
+        /// </summary>
+        /// <remarks>
+        /// A socket whose peer vanished stays <c>Open</c> until the next I/O, so silence is the only
+        /// signal available without sending traffic. Exposed together with
+        /// <see cref="HealthCheckInterval"/> so the fast-reconnect path is reachable from a test in
+        /// under a second instead of over a minute.
+        /// </remarks>
+        public TimeSpan InactivityTimeout { get; set; } = TimeSpan.FromSeconds(60);
+
+        /// <summary>
         /// Gets or sets the policy that determines how failed requests are handled.
         /// </summary>
         /// <remarks>
@@ -2421,8 +2447,8 @@ public class Connection
                 _ = ExecutePingCheckAndReleaseAsync(innerCts, tcs);
             },
             state: cts,
-            dueTime: 20000,
-            period: 20000);
+            dueTime: (int)config.HealthCheckInterval.TotalMilliseconds,
+            period: (int)config.HealthCheckInterval.TotalMilliseconds);
     }
 
     private async Task ExecutePingCheckAndReleaseAsync(CancellationTokenSource cts, TaskCompletionSource<bool> tcs)
@@ -2491,11 +2517,13 @@ public class Connection
                 return;
             }
 
-            if (timeSinceLastActivity > 60)
+            double inactivityLimit = config.InactivityTimeout.TotalSeconds;
+            if (timeSinceLastActivity > inactivityLimit)
             {
                 _pingTimeoutSocket = ws;
 
-                await RetireCurrentSessionAndReconnectAsync("Connection timeout (no activity for 60+ seconds).");
+                await RetireCurrentSessionAndReconnectAsync(
+                    $"Connection timeout (no activity for {inactivityLimit:F0}+ seconds).");
                 return;
             }
 
@@ -2606,7 +2634,7 @@ public class Connection
         }
         else
         {
-            pingTimer = new Timer(20000);
+            pingTimer = new Timer(config.HealthCheckInterval.TotalMilliseconds);
             pingTimer.Elapsed += (sender, e) =>
             {
                 if (cts.IsCancellationRequested)
