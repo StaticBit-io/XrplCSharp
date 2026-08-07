@@ -265,6 +265,12 @@ namespace Xrpl.Tests
             }
 
             // The server appears. Nobody touches the client from here on.
+            // The port was handed out before the awaits above, so confirm it is still free: the mock
+            // binds without throwing to the caller, and a port taken meanwhile would surface as the
+            // reconnect assertion below timing out instead of a clear conflict.
+            Assert.IsTrue(
+                TestUtils.IsPortStillFree(laterPort),
+                $"Port {laterPort} was taken by another process while the test held it — rerun.");
             _secondRippled = StartMock(laterPort);
 
             DateTime deadline = DateTime.UtcNow + TimeSpan.FromSeconds(40);

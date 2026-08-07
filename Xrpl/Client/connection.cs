@@ -572,12 +572,14 @@ public class Connection
         // so a concurrent stop/start cannot dispose the source created here. Cancellation and
         // disposal of the old source happen after the lock is released.
         CancellationTokenSource oldCts;
+        CancellationTokenSource ownCts;
         lock (_reconnectStateLock)
         {
             oldCts = _reconnectCts;
             _reconnectLoop = null; // Clear old loop reference so StartReconnectLoop can start a new one
             _reconnectAttempts = 1;
-            _reconnectCts = new CancellationTokenSource();
+            ownCts = new CancellationTokenSource();
+            _reconnectCts = ownCts;
         }
 
         oldCts?.Cancel();
@@ -664,12 +666,19 @@ public class Connection
             // Note: _reconnectMode will be cleared in OnceOpen when connection is fully established
             _isFastReconnectActive = false;
 
-            CancellationTokenSource settled;
+            // Only tear down the source this method installed. The awaits above give a concurrent
+            // path (RestartReconnectLoop from a failing OnConnected handler, say) room to install a
+            // newer one; cancelling and disposing that would strand the sequence it belongs to,
+            // which is the same wedge the ownership checks in ReconnectLoopAsync guard against.
+            CancellationTokenSource settled = null;
             lock (_reconnectStateLock)
             {
-                settled = _reconnectCts;
-                _reconnectCts = null;
-                _reconnectAttempts = 0;
+                if (ReferenceEquals(_reconnectCts, ownCts))
+                {
+                    settled = ownCts;
+                    _reconnectCts = null;
+                    _reconnectAttempts = 0;
+                }
             }
 
             settled?.Cancel();
@@ -2050,14 +2059,13 @@ public class Connection
         _reconnectMode = ReconnectMode.None;
     }
 
-    /// <param name="initialAttempts">
-    /// Value to seed <c>_reconnectAttempts</c> with when a fresh reconnect sequence starts.
-    /// Defaults to 0 — a genuine new sequence begins at the base delay. The OnConnected-handler
-    /// path passes its own consecutive-failure count instead: that path tears the loop down and
-    /// starts it again on every failure, so with a 0 seed the backoff would restart at
-    /// ReconnectBaseDelay each time and never grow.
-    /// </param>
-    private void StartReconnectLoop(int initialAttempts = 0)
+    /// <summary>
+    /// Starts a reconnect loop unless one is already running, reusing a pre-created cancellation
+    /// source when there is one. A fresh sequence always begins at the base delay; the
+    /// OnConnected-handler path needs a seeded counter instead and uses
+    /// <see cref="RestartReconnectLoop"/>.
+    /// </summary>
+    private void StartReconnectLoop()
     {
         // Set reconnect mode to LoopReconnect (upgrades from FastReconnect or sets from None)
         _reconnectMode = ReconnectMode.LoopReconnect;
@@ -2091,7 +2099,7 @@ public class Connection
                 // Retire the old CTS after the lock is released - see _reconnectStateLock
                 retired = existingCts;
                 _reconnectCts = new CancellationTokenSource();
-                _reconnectAttempts = initialAttempts;
+                _reconnectAttempts = 0;
             }
             // else: Reuse existing valid CTS (pre-created for fast reconnect)
             // Don't reset _reconnectAttempts - this is continuation of existing reconnect sequence
