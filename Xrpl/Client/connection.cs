@@ -263,6 +263,23 @@ public class Connection
             throw new ArgumentException(
                 $"ConnectionAcquisitionTimeout ({config.ConnectionAcquisitionTimeout.TotalSeconds}s) must be >= ConnectionAttemptTimeout ({config.ConnectionAttemptTimeout.TotalSeconds}s) to allow at least one full connection attempt.");
         }
+
+        // The WASM timer takes this as an int of milliseconds: zero fires once and never repeats,
+        // and anything past int.MaxValue or below zero is rejected outright by the timer itself.
+        // Fail here instead, where the message can say which option is wrong.
+        double healthCheckMs = config.HealthCheckInterval.TotalMilliseconds;
+        if (healthCheckMs < 1 || healthCheckMs > int.MaxValue)
+        {
+            throw new ArgumentException(
+                $"HealthCheckInterval ({config.HealthCheckInterval}) must be between 1ms and {int.MaxValue}ms.");
+        }
+
+        if (config.InactivityTimeout <= TimeSpan.Zero)
+        {
+            throw new ArgumentException(
+                $"InactivityTimeout ({config.InactivityTimeout}) must be positive - a non-positive value would " +
+                "treat every connection as dead on the first health check.");
+        }
     }
 
     // https://github.com/XRPLF/xrpl.js/blob/main/packages/xrpl/src/client/connection.ts createWebSocket
@@ -433,14 +450,27 @@ public class Connection
 
         _previousNotifiedMessage = message;
 
-        OnConnectionStatus?.Invoke(
-            new ConnectionStatusInfo
-            {
-                Message = message,
-                Severity = severity,
-                Reconnect = reconnect,
-                ConnectionState = newState,
-            });
+        // Contained here, once, rather than at each call site. Every state notification in this class
+        // funnels through this method, and several call sites are places where an escaping exception
+        // costs the client its reconnect: the fast-reconnect path (running on a ping task whose
+        // callers swallow everything) and ReconnectLoopAsync, which notifies before its first
+        // connection attempt and would fault with _reconnectCts still installed and no live loop.
+        // A consumer's status handler must not be able to take the connection down.
+        try
+        {
+            OnConnectionStatus?.Invoke(
+                new ConnectionStatusInfo
+                {
+                    Message = message,
+                    Severity = severity,
+                    Reconnect = reconnect,
+                    ConnectionState = newState,
+                });
+        }
+        catch (Exception notifyError)
+        {
+            Debug.WriteLine($"{DateTime.Now}OnConnectionStatus handler threw for state {newState}: {notifyError.Message}");
+        }
     }
 
     private ReconnectInfo BuildReconnectInfo(int? explicitAttempt = null, TimeSpan? delay = null)
@@ -614,22 +644,13 @@ public class Connection
         oldCts?.Dispose();
         
         // 4. Now send first notification - IsReconnectActive() will return true
-        // Guarded: SetConnectionState invokes the consumer's OnConnectionStatus synchronously, and
-        // this method only ever runs on a ping path whose callers swallow everything. An exception
-        // from a consumer handler would therefore leave the source installed above with no loop and
-        // nobody to dispose it - the client would sit in RestoringConnection forever.
-        try
-        {
-            SetConnectionState(
-                XrpConnectionState.RestoringConnection,
-                message: $"{reason} Reconnecting immediately...",
-                ConnectionCloseSeverity.Warning,
-                reconnect: BuildReconnectInfo());
-        }
-        catch (Exception notifyError)
-        {
-            Debug.WriteLine($"{DateTime.Now}OnConnectionStatus handler threw while entering fast reconnect: {notifyError.Message}");
-        }
+        // Consumer handler exceptions are contained inside SetConnectionState - an escaping throw
+        // here would leave the source installed above with no loop and nobody to dispose it.
+        SetConnectionState(
+            XrpConnectionState.RestoringConnection,
+            message: $"{reason} Reconnecting immediately...",
+            ConnectionCloseSeverity.Warning,
+            reconnect: BuildReconnectInfo());
 
         // =====================================================
         // FAST RECONNECT with PER-SESSION ISOLATION (same as ChangeServer)
@@ -725,8 +746,12 @@ public class Connection
         // and Connecting would overwrite ReconnectInfo, confusing consuming apps
         try
         {
-            await ConnectInternalAsync().ConfigureAwait(false);
-            await WaitForConnectionAsync(config.ConnectionAcquisitionTimeout, CancellationToken.None).ConfigureAwait(false);
+            // Pass the token of the session this method owns: a user Disconnect() cancels it, so the
+            // attempt below stops instead of opening a socket behind a client that was taken down.
+            // Disconnect() waits only briefly for the ping task, while acquisition can run much
+            // longer, so the flag check above cannot cover this window on its own.
+            await ConnectInternalAsync(ownCts.Token).ConfigureAwait(false);
+            await WaitForConnectionAsync(config.ConnectionAcquisitionTimeout, ownCts.Token).ConfigureAwait(false);
             
             // Connect succeeded - cleanup reconnect state
             // Note: _reconnectMode will be cleared in OnceOpen when connection is fully established
@@ -788,18 +813,11 @@ public class Connection
             // does not need an ownership check of its own.
             StartReconnectLoop();
 
-            try
-            {
-                SetConnectionState(
-                    XrpConnectionState.RestoringConnection,
-                    message: $"Reconnection failed: {ex.Message}. Retrying...",
-                    ConnectionCloseSeverity.Warning,
-                    reconnect: BuildReconnectInfo());
-            }
-            catch (Exception notifyError)
-            {
-                Debug.WriteLine($"{DateTime.Now}OnConnectionStatus handler threw while reporting a failed fast reconnect: {notifyError.Message}");
-            }
+            SetConnectionState(
+                XrpConnectionState.RestoringConnection,
+                message: $"Reconnection failed: {ex.Message}. Retrying...",
+                ConnectionCloseSeverity.Warning,
+                reconnect: BuildReconnectInfo());
         }
     }
 
