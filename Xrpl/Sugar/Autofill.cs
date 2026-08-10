@@ -48,6 +48,26 @@ namespace Xrpl.Sugar
         /// </summary>
         const int BATCH_BASE_FEE_MULTIPLIER = 3;
 
+        /// <summary>
+        /// rippled kConfidentialFeeMultiplier: extra base fee units charged to confidential MPT transactions.
+        /// </summary>
+        const int CONFIDENTIAL_FEE_MULTIPLIER = 9;
+
+        /// <summary>
+        /// rippled lending::kLoanPaymentsPerFeeIncrement: loan payments covered by one base fee increment.
+        /// </summary>
+        const int LOAN_PAYMENTS_PER_FEE_INCREMENT = 5;
+
+        /// <summary>
+        /// rippled lending::kLoanMaximumPaymentsPerTransaction: payments a single LoanPay ever processes.
+        /// </summary>
+        const int LOAN_MAX_PAYMENTS_PER_TRANSACTION = 100;
+
+        /// <summary>
+        /// Upper bound on LoanPay fee increments, mirroring rippled kMaxFeeIncrements.
+        /// </summary>
+        const int LOAN_MAX_FEE_INCREMENTS = LOAN_MAX_PAYMENTS_PER_TRANSACTION / LOAN_PAYMENTS_PER_FEE_INCREMENT;
+
 
         /// <summary>
         /// Autofills fields in a transaction. This will set `Sequence`, `Fee`,
@@ -206,6 +226,14 @@ namespace Xrpl.Sugar
             var sponsorSignerFee = baseFee * GetSponsorSignerCount(tx);
 
             calculatedFee += signerFee + sponsorSignerFee;
+
+            // rippled LoanPay::calculateBaseFee multiplies the whole Transactor cost —
+            // signatures included — by one increment per kLoanPaymentsPerFeeIncrement payments.
+            if (transactionType == nameof(TransactionType.LoanPay))
+            {
+                calculatedFee *= await GetLoanPayFeeIncrements(client, tx, cancellationToken);
+            }
+
             BigInteger totalFee;
             if (!string.IsNullOrWhiteSpace(client.maxFeeXRP))
             {
@@ -234,11 +262,284 @@ namespace Xrpl.Sugar
             {
                 "EscrowFinish" when tx.TryGetValue("Fulfillment", out _) => CalculateEscrowFinishFee(tx, netFeeDrops),
                 "Batch" => await CalculateBatchFee(client, tx, baseFee, cancellationToken),
-                // LoanSet requires CounterpartySignature (~150 bytes extra).
-                // Fee formula: baseFee * (1 + 1 counterparty signer) = baseFee * 2
-                "LoanSet" => baseFee * 2,
+                nameof(TransactionType.LoanSet) => await CalculateLoanSetFee(client, tx, baseFee, cancellationToken),
+                _ when IsConfidentialMPTTx(transactionType) => baseFee * (1 + CONFIDENTIAL_FEE_MULTIPLIER),
                 _ when IsReserveFeeTxNeed(tx) => await FetchReserveFee(client, cancellationToken),
                 _ => baseFee
+            };
+        }
+
+        /// <summary>
+        /// Confidential MPT transactions pay a flat extra multiplier for the cryptographic proofs
+        /// they carry (rippled Transactor::calculateBaseFee with kConfidentialFeeMultiplier).
+        /// </summary>
+        private static bool IsConfidentialMPTTx(string transactionType)
+        {
+            return transactionType
+                is nameof(TransactionType.ConfidentialMPTSend)
+                or nameof(TransactionType.ConfidentialMPTConvert)
+                or nameof(TransactionType.ConfidentialMPTConvertBack)
+                or nameof(TransactionType.ConfidentialMPTMergeInbox)
+                or nameof(TransactionType.ConfidentialMPTClawback);
+        }
+
+        /// <summary>
+        /// Calculates fee for LoanSet, which charges one extra base fee per counterparty signature
+        /// (rippled LoanSet::calculateBaseFee counts CounterpartySignature.Signers, or the single
+        /// signature when present).
+        /// </summary>
+        /// <remarks>
+        /// When the counterparty has not signed yet — the usual case during autofill — the signature
+        /// count is unknown, so the counterparty's signer list size is used to avoid underpaying.
+        /// </remarks>
+        private static async Task<BigInteger> CalculateLoanSetFee(IXrplClient client, Dictionary<string, object> tx, BigInteger baseFee, CancellationToken cancellationToken = default)
+        {
+            int counterpartySigners = GetCounterpartySignerCount(tx);
+            if (counterpartySigners == 0)
+            {
+                counterpartySigners = await FetchCounterpartySignerCount(client, tx, cancellationToken);
+            }
+
+            return baseFee * (1 + counterpartySigners);
+        }
+
+        /// <summary>
+        /// Counts signatures already present in CounterpartySignature: every entry of a nested
+        /// Signers array, or one for a single signature. Returns 0 when the field is absent.
+        /// </summary>
+        private static int GetCounterpartySignerCount(Dictionary<string, object> tx)
+        {
+            if (!tx.TryGetValue("CounterpartySignature", out var counterpartySignature) || counterpartySignature == null)
+                return 0;
+
+            int nestedSigners = CountSigners(GetNestedField(counterpartySignature, "Signers"));
+            if (nestedSigners > 0)
+                return nestedSigners;
+
+            return GetNestedField(counterpartySignature, "TxnSignature") != null ? 1 : 0;
+        }
+
+        /// <summary>
+        /// Fetches the size of the counterparty's signer list, mirroring xrpl.js autofill:
+        /// the counterparty may multi-sign, so the fee has to cover every possible signer.
+        /// Falls back to a single signature when there is no signer list.
+        /// </summary>
+        private static async Task<int> FetchCounterpartySignerCount(IXrplClient client, Dictionary<string, object> tx, CancellationToken cancellationToken = default)
+        {
+            if (!tx.TryGetValue("Counterparty", out var counterparty) || counterparty is not string account || string.IsNullOrWhiteSpace(account))
+                return 1;
+
+            AccountInfoRequest request = new AccountInfoRequest(account)
+            {
+                LedgerIndex = new LedgerIndex(LedgerIndexType.Validated),
+                SignerLists = true,
+            };
+
+            try
+            {
+                AccountInfo data = await client.AccountInfo(request, cancellationToken);
+                int? entries = data?.SignerLists?.Length > 0 ? data.SignerLists[0].SignerEntries?.Count : null;
+                return entries is > 0 ? entries.Value : 1;
+            }
+            catch (Exception)
+            {
+                // The counterparty account may not exist yet; preclaim rejects the transaction anyway.
+                return 1;
+            }
+        }
+
+        /// <summary>
+        /// Number of base fee increments a LoanPay transaction is charged: one per
+        /// kLoanPaymentsPerFeeIncrement payments the transaction is expected to process,
+        /// capped at kLoanMaximumPaymentsPerTransaction / kLoanPaymentsPerFeeIncrement.
+        /// Returns 1 whenever rippled falls back to the normal cost.
+        /// </summary>
+        private static async Task<BigInteger> GetLoanPayFeeIncrements(IXrplClient client, Dictionary<string, object> tx, CancellationToken cancellationToken = default)
+        {
+            uint flags = ParseTransactionFlags(tx);
+            bool isFullPayment = (flags & (uint)LoanPayFlags.tfLoanFullPayment) != 0;
+            bool isLatePayment = (flags & (uint)LoanPayFlags.tfLoanLatePayment) != 0;
+
+            // A full or late payment performs one set of calculations regardless of the amount.
+            if (isFullPayment || isLatePayment)
+                return BigInteger.One;
+
+            if (!tx.TryGetValue("LoanID", out var loanId) || loanId is not string id || string.IsNullOrWhiteSpace(id))
+                return BigInteger.One;
+
+            if (!TryGetLoanPayAmount(tx, out decimal amount, out bool integralAsset) || amount <= 0)
+                return BigInteger.One;
+
+            LOLoan loan = await FetchLoan(client, id, cancellationToken);
+            if (loan == null)
+                return BigInteger.One;
+
+            // Fewer payments left than one increment covers: no extra work to charge for.
+            if (loan.PaymentRemaining is null or <= LOAN_PAYMENTS_PER_FEE_INCREMENT)
+                return BigInteger.One;
+
+            if (!TryParseNumber(loan.PeriodicPayment, out decimal periodicPayment) || periodicPayment <= 0)
+                return BigInteger.One;
+
+            TryParseNumber(loan.LoanServiceFee, out decimal serviceFee);
+            decimal regularPayment = RoundPeriodicPayment(periodicPayment, integralAsset, loan.LoanScale ?? 0) + serviceFee;
+            if (regularPayment <= 0)
+                return BigInteger.One;
+
+            // The payment handler never processes more than kLoanMaximumPaymentsPerTransaction payments.
+            if (amount >= regularPayment * LOAN_MAX_PAYMENTS_PER_TRANSACTION)
+                return LOAN_MAX_FEE_INCREMENTS;
+
+            // Overpayments do about as much work as a full payment, so they round up.
+            bool isOverpayment = (flags & (uint)LoanPayFlags.tfLoanOverpayment) != 0;
+            decimal paymentEstimate = amount / regularPayment;
+            decimal payments = isOverpayment ? Math.Ceiling(paymentEstimate) : Math.Floor(paymentEstimate);
+
+            decimal increments = Math.Ceiling(payments / LOAN_PAYMENTS_PER_FEE_INCREMENT);
+            if (increments < 1)
+                return BigInteger.One;
+
+            return increments > LOAN_MAX_FEE_INCREMENTS ? LOAN_MAX_FEE_INCREMENTS : new BigInteger(increments);
+        }
+
+        /// <summary>
+        /// Reads the Loan ledger object referenced by LoanPay. Returns null when it cannot be
+        /// retrieved — rippled behaves the same way and lets preclaim report the error.
+        /// </summary>
+        private static async Task<LOLoan> FetchLoan(IXrplClient client, string loanId, CancellationToken cancellationToken = default)
+        {
+            try
+            {
+                LedgerEntryRequest request = new LedgerEntryRequest
+                {
+                    Index = loanId,
+                    LedgerIndex = new LedgerIndex(LedgerIndexType.Validated),
+                };
+                LedgerEntryResponse response = await client.LedgerEntry(request, cancellationToken);
+                return response?.Node as LOLoan;
+            }
+            catch (Exception)
+            {
+                return null;
+            }
+        }
+
+        /// <summary>
+        /// rippled roundPeriodicPayment: integral assets (XRP, MPT) round up to whole units,
+        /// IOUs round up to a multiple of 10^scale.
+        /// </summary>
+        private static decimal RoundPeriodicPayment(decimal periodicPayment, bool integralAsset, int scale)
+        {
+            if (integralAsset)
+                return Math.Ceiling(periodicPayment);
+
+            // Outside this range the step cannot be represented as a decimal; leave the value alone.
+            if (scale is < -28 or > 28)
+                return periodicPayment;
+
+            decimal step = scale >= 0
+                ? Pow10(scale)
+                : 1m / Pow10(-scale);
+
+            return Math.Ceiling(periodicPayment / step) * step;
+        }
+
+        private static decimal Pow10(int exponent)
+        {
+            decimal result = 1m;
+            for (int i = 0; i < exponent; i++)
+            {
+                result *= 10m;
+            }
+            return result;
+        }
+
+        /// <summary>
+        /// Extracts the LoanPay amount and whether its asset is integral (XRP drops or MPT units,
+        /// which rippled rounds to whole units) as opposed to an IOU.
+        /// </summary>
+        private static bool TryGetLoanPayAmount(Dictionary<string, object> tx, out decimal amount, out bool integralAsset)
+        {
+            amount = 0m;
+            integralAsset = true;
+
+            if (!tx.TryGetValue("Amount", out var rawAmount) || rawAmount == null)
+                return false;
+
+            if (rawAmount is string xrpDrops)
+                return TryParseNumber(xrpDrops, out amount);
+
+            object value = GetNestedField(rawAmount, "value");
+            if (value == null)
+                return false;
+
+            // MPT amounts are integral like XRP; issued currencies carry decimals.
+            integralAsset = GetNestedField(rawAmount, "mpt_issuance_id") != null;
+            return TryParseNumber(ToPlainValue(value), out amount);
+        }
+
+        private static uint ParseTransactionFlags(Dictionary<string, object> tx)
+        {
+            if (!tx.TryGetValue("Flags", out var flags) || flags == null)
+                return 0;
+
+            return flags switch
+            {
+                uint u => u,
+                int i when i >= 0 => (uint)i,
+                long l when l is >= 0 and <= uint.MaxValue => (uint)l,
+                LoanPayFlags f => (uint)f,
+                JsonValue jv when jv.TryGetValue(out uint u) => u,
+                JsonElement je when je.ValueKind == JsonValueKind.Number && je.TryGetUInt32(out uint u) => u,
+                string s when uint.TryParse(s, NumberStyles.Integer, CultureInfo.InvariantCulture, out uint u) => u,
+                _ => 0
+            };
+        }
+
+        /// <summary>
+        /// Parses a rippled Number field, which is serialized as a decimal string.
+        /// </summary>
+        private static bool TryParseNumber(object value, out decimal result)
+        {
+            result = 0m;
+            return value != null
+                && decimal.TryParse(
+                    value as string ?? value.ToString(),
+                    NumberStyles.Float,
+                    CultureInfo.InvariantCulture,
+                    out result);
+        }
+
+        private static object GetNestedField(object container, string fieldName)
+        {
+            return container switch
+            {
+                Dictionary<string, object> dict => dict.TryGetValue(fieldName, out var value) ? value : null,
+                JsonObject jo => jo.TryGetPropertyValue(fieldName, out var node) ? node : null,
+                JsonElement je when je.ValueKind == JsonValueKind.Object && je.TryGetProperty(fieldName, out var prop) => prop,
+                _ => null
+            };
+        }
+
+        private static object ToPlainValue(object value)
+        {
+            return value switch
+            {
+                JsonNode node => node.ToString(),
+                JsonElement je => je.ValueKind == JsonValueKind.String ? je.GetString() : je.ToString(),
+                _ => value
+            };
+        }
+
+        private static int CountSigners(object signers)
+        {
+            return signers switch
+            {
+                JsonArray ja => ja.Count,
+                JsonElement je when je.ValueKind == JsonValueKind.Array => je.GetArrayLength(),
+                ICollection collection => collection.Count,
+                IEnumerable<object> enumerable => enumerable.Count(),
+                _ => 0
             };
         }
 
@@ -297,20 +598,7 @@ namespace Xrpl.Sugar
             if (!tx.TryGetValue("SponsorSignature", out var sponsorSignature) || sponsorSignature == null)
                 return 0;
 
-            object signers = sponsorSignature switch
-            {
-                Dictionary<string, object> dict => dict.TryGetValue("Signers", out var s) ? s : null,
-                JsonObject jo => jo.TryGetPropertyValue("Signers", out var node) ? (object)node : null,
-                _ => null
-            };
-
-            return signers switch
-            {
-                JsonArray ja => ja.Count,
-                ICollection collection => collection.Count,
-                IEnumerable<object> enumerable => enumerable.Count(),
-                _ => 0
-            };
+            return CountSigners(GetNestedField(sponsorSignature, "Signers"));
         }
 
         private static bool TryGetInnerFieldsAsDict(object item, out Dictionary<string, object> dict)
