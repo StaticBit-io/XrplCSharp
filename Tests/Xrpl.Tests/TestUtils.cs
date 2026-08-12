@@ -1,10 +1,11 @@
-
+﻿
 // https://github.com/XRPLF/xrpl.js/blob/main/packages/xrpl/test/testUtils.ts
 
 using System;
 using System.Collections.Concurrent;
 using System.Net;
 using System.Net.Sockets;
+using System.Text;
 
 namespace Xrpl.Tests
 {
@@ -46,6 +47,50 @@ namespace Xrpl.Tests
 
             throw new InvalidOperationException(
                 "GetFreePort: could not obtain an unclaimed loopback port after 50 attempts");
+        }
+
+        /// <summary>
+        /// Whether a mock server on <paramref name="port"/> still completes a WebSocket handshake.
+        /// </summary>
+        /// <remarks>
+        /// A dead accept loop leaves the listen socket bound, so a plain TCP connect still
+        /// succeeds and proves nothing — only an answered handshake shows the mock is serving.
+        /// Tests use this to say whether a connection failure was the client's doing or the
+        /// mock's, instead of blaming the client for a server that went deaf.
+        /// </remarks>
+        static public bool MockCompletesHandshake(int port, TimeSpan timeout)
+        {
+            try
+            {
+                using TcpClient probe = new TcpClient();
+                if (!probe.ConnectAsync(IPAddress.Loopback, port).Wait(timeout))
+                {
+                    return false;
+                }
+
+                NetworkStream stream = probe.GetStream();
+                stream.WriteTimeout = (int)timeout.TotalMilliseconds;
+                stream.ReadTimeout = (int)timeout.TotalMilliseconds;
+
+                // The mock reads the key by offset from "Sec-WebSocket-Key: ", so the header must
+                // carry a full 24-character value like a real client sends.
+                byte[] request = Encoding.ASCII.GetBytes(
+                    "GET / HTTP/1.1\r\n" +
+                    "Host: 127.0.0.1\r\n" +
+                    "Upgrade: websocket\r\n" +
+                    "Connection: Upgrade\r\n" +
+                    "Sec-WebSocket-Key: dGhlIHNhbXBsZSBub25jZQ==\r\n" +
+                    "Sec-WebSocket-Version: 13\r\n\r\n");
+                stream.Write(request, 0, request.Length);
+
+                byte[] buffer = new byte[256];
+                int read = stream.Read(buffer, 0, buffer.Length);
+                return read > 0 && Encoding.ASCII.GetString(buffer, 0, read).Contains("101");
+            }
+            catch (Exception)
+            {
+                return false;
+            }
         }
 
         /// <summary>
