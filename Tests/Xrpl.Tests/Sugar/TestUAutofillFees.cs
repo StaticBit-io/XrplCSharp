@@ -248,6 +248,226 @@ public class TestUAutofillFees
 
     #endregion
 
+    #region ConfidentialMPT Fee Tests
+
+    [TestMethod]
+    public async Task TestUCalculateFee_ConfidentialMPTSend_AppliesConfidentialMultiplier()
+    {
+        var client = new FeeTestClient(MAINNET_BASE_FEE, RESERVE_INC);
+        var tx = new Dictionary<string, object>
+        {
+            ["TransactionType"] = "ConfidentialMPTSend",
+            ["Account"] = "rTestAccount"
+        };
+
+        await client.CalculateFeePerTransactionType(tx);
+
+        // rippled: Transactor::calculateBaseFee(view, tx, kConfidentialFeeMultiplier)
+        // = base * 1 + base * 9 = base * 10 = 120
+        Assert.AreEqual("120", tx["Fee"]);
+    }
+
+    [TestMethod]
+    public async Task TestUCalculateFee_ConfidentialMPTClawback_Multisig_AddsSignerFee()
+    {
+        var client = new FeeTestClient(MAINNET_BASE_FEE, RESERVE_INC);
+        var tx = new Dictionary<string, object>
+        {
+            ["TransactionType"] = "ConfidentialMPTClawback",
+            ["Account"] = "rTestAccount"
+        };
+
+        await client.CalculateFeePerTransactionType(tx, signersCount: 2);
+
+        // base * (1 + 2 signers) + base * 9 = 36 + 108 = 144
+        Assert.AreEqual("144", tx["Fee"]);
+    }
+
+    #endregion
+
+    #region LoanSet Fee Tests
+
+    [TestMethod]
+    public async Task TestUCalculateFee_LoanSet_UsesCounterpartySignerListSize()
+    {
+        var client = new FeeTestClient(MAINNET_BASE_FEE, RESERVE_INC)
+        {
+            CounterpartySignerLists = CreateSignerList(3)
+        };
+        var tx = CreateLoanSetTx();
+
+        await client.CalculateFeePerTransactionType(tx);
+
+        // base * (1 + 3 counterparty signers) = 48
+        Assert.AreEqual("48", tx["Fee"]);
+        Assert.AreEqual(1, client.AccountInfoCalls);
+        // A signer list set in the last ledger is not in `validated` yet; missing it would underpay.
+        Assert.AreEqual(LedgerIndexType.Current, client.LastAccountInfoRequest?.LedgerIndex?.LedgerIndexType);
+    }
+
+    [TestMethod]
+    public async Task TestUCalculateFee_LoanSet_CounterpartyWithoutSignerList_ChargesOneSignature()
+    {
+        var client = new FeeTestClient(MAINNET_BASE_FEE, RESERVE_INC);
+        var tx = CreateLoanSetTx();
+
+        await client.CalculateFeePerTransactionType(tx);
+
+        // base * (1 + 1 counterparty signature) = 24
+        Assert.AreEqual("24", tx["Fee"]);
+    }
+
+    [TestMethod]
+    public async Task TestUCalculateFee_LoanSet_ExistingCounterpartySignature_CountsActualSigners()
+    {
+        var client = new FeeTestClient(MAINNET_BASE_FEE, RESERVE_INC);
+        var tx = CreateLoanSetTx();
+        tx["CounterpartySignature"] = new JsonObject
+        {
+            ["Signers"] = new JsonArray
+            {
+                new JsonObject { ["Signer"] = new JsonObject { ["Account"] = "rSigner1" } },
+                new JsonObject { ["Signer"] = new JsonObject { ["Account"] = "rSigner2" } }
+            }
+        };
+
+        await client.CalculateFeePerTransactionType(tx);
+
+        // Signature already present: count it instead of querying the counterparty.
+        // base * (1 + 2 signers) = 36
+        Assert.AreEqual("36", tx["Fee"]);
+        Assert.AreEqual(0, client.AccountInfoCalls);
+    }
+
+    #endregion
+
+    #region LoanPay Fee Tests
+
+    [TestMethod]
+    public async Task TestUCalculateFee_LoanPay_FullPaymentFlag_UsesBaseFee()
+    {
+        var client = new FeeTestClient(MAINNET_BASE_FEE, RESERVE_INC) { LoanEntry = CreateLoan(paymentRemaining: 50) };
+        var tx = CreateLoanPayTx(amount: "10000");
+        tx["Flags"] = (uint)LoanPayFlags.tfLoanFullPayment;
+
+        await client.CalculateFeePerTransactionType(tx);
+
+        Assert.AreEqual("12", tx["Fee"]);
+        Assert.AreEqual(0, client.LedgerEntryCalls);
+    }
+
+    [TestMethod]
+    public async Task TestUCalculateFee_LoanPay_FewPaymentsRemaining_UsesBaseFee()
+    {
+        var client = new FeeTestClient(MAINNET_BASE_FEE, RESERVE_INC) { LoanEntry = CreateLoan(paymentRemaining: 5) };
+        var tx = CreateLoanPayTx(amount: "10000");
+
+        await client.CalculateFeePerTransactionType(tx);
+
+        // PaymentRemaining <= kLoanPaymentsPerFeeIncrement: no extra charge
+        Assert.AreEqual("12", tx["Fee"]);
+    }
+
+    [TestMethod]
+    public async Task TestUCalculateFee_LoanPay_ManyPayments_ChargesPerFiveIncrements()
+    {
+        var client = new FeeTestClient(MAINNET_BASE_FEE, RESERVE_INC) { LoanEntry = CreateLoan(paymentRemaining: 50) };
+        var tx = CreateLoanPayTx(amount: "1000"); // 1000 / 100 = 10 payments → ceil(10/5) = 2 increments
+
+        await client.CalculateFeePerTransactionType(tx);
+
+        Assert.AreEqual("24", tx["Fee"]);
+        // A loan created in the last ledger is not in `validated` yet; missing it would underpay.
+        Assert.AreEqual(LedgerIndexType.Current, client.LastLedgerEntryRequest?.LedgerIndex?.LedgerIndexType);
+    }
+
+    [TestMethod]
+    public async Task TestUCalculateFee_LoanPay_FewPaymentsRemainingWithLargeAmount_StillChargesMaxIncrements()
+    {
+        var client = new FeeTestClient(MAINNET_BASE_FEE, RESERVE_INC) { LoanEntry = CreateLoan(paymentRemaining: 6) };
+        var tx = CreateLoanPayTx(amount: "1000000");
+
+        await client.CalculateFeePerTransactionType(tx);
+
+        // rippled reads PaymentRemaining only as the <= 5 short-circuit and never clamps the
+        // estimate by it, so an amount covering 100 regular payments costs the full 20 increments
+        // even with 6 payments left. Clamping here would underpay and hit telINSUF_FEE_P.
+        Assert.AreEqual("240", tx["Fee"]);
+    }
+
+    [TestMethod]
+    public async Task TestUCalculateFee_LoanPay_PeriodicPaymentNearDecimalLimit_DoesNotOverflow()
+    {
+        var client = new FeeTestClient(MAINNET_BASE_FEE, RESERVE_INC)
+        {
+            LoanEntry = CreateLoan(paymentRemaining: 50, periodicPayment: "79000000000000000000000000000")
+        };
+        var tx = CreateLoanPayTx(amount: "1000");
+
+        await client.CalculateFeePerTransactionType(tx);
+
+        // The amount does not even cover one payment: one increment, and no arithmetic overflow.
+        Assert.AreEqual("12", tx["Fee"]);
+    }
+
+    [TestMethod]
+    public async Task TestUCalculateFee_LoanPay_HugeAmount_CapsAtMaxIncrements()
+    {
+        var client = new FeeTestClient(MAINNET_BASE_FEE, RESERVE_INC) { LoanEntry = CreateLoan(paymentRemaining: 500) };
+        var tx = CreateLoanPayTx(amount: "1000000"); // 10000 payments, capped at 100/5 = 20 increments
+
+        await client.CalculateFeePerTransactionType(tx);
+
+        Assert.AreEqual("240", tx["Fee"]);
+    }
+
+    [TestMethod]
+    public async Task TestUCalculateFee_LoanPay_LoanNotFound_UsesBaseFee()
+    {
+        var client = new FeeTestClient(MAINNET_BASE_FEE, RESERVE_INC) { LedgerEntryThrows = true };
+        var tx = CreateLoanPayTx(amount: "1000");
+
+        await client.CalculateFeePerTransactionType(tx);
+
+        // rippled falls back to the normal cost and lets preclaim reject it
+        Assert.AreEqual("12", tx["Fee"]);
+    }
+
+    [TestMethod]
+    public async Task TestUCalculateFee_LoanPay_Multisig_MultipliesWholeCost()
+    {
+        var client = new FeeTestClient(MAINNET_BASE_FEE, RESERVE_INC) { LoanEntry = CreateLoan(paymentRemaining: 50) };
+        var tx = CreateLoanPayTx(amount: "1000");
+
+        await client.CalculateFeePerTransactionType(tx, signersCount: 1);
+
+        // rippled multiplies the full Transactor cost: (base * (1 + 1)) * 2 increments = 48
+        Assert.AreEqual("48", tx["Fee"]);
+    }
+
+    [TestMethod]
+    public async Task TestUCalculateFee_LoanPay_IouAmount_RoundsPeriodicPaymentToLoanScale()
+    {
+        var client = new FeeTestClient(MAINNET_BASE_FEE, RESERVE_INC)
+        {
+            // PeriodicPayment 1.001 rounds up to 1.01 at scale -2, service fee 0.09 → 1.10 per payment
+            LoanEntry = CreateLoan(paymentRemaining: 50, periodicPayment: "1.001", loanServiceFee: "0.09", loanScale: -2)
+        };
+        var tx = CreateLoanPayTx(amount: new Dictionary<string, object>
+        {
+            ["currency"] = "USD",
+            ["issuer"] = "rIssuer",
+            ["value"] = "11"
+        });
+
+        await client.CalculateFeePerTransactionType(tx);
+
+        // 11 / 1.10 = 10 payments → ceil(10/5) = 2 increments = 24
+        Assert.AreEqual("24", tx["Fee"]);
+    }
+
+    #endregion
+
     #region MaxFee Tests
 
     [TestMethod]
@@ -292,6 +512,47 @@ public class TestUAutofillFees
         ["Amount"] = "1000000"
     };
 
+    private static Dictionary<string, object> CreateLoanSetTx() => new()
+    {
+        ["TransactionType"] = "LoanSet",
+        ["Account"] = "rTestAccount",
+        ["LoanBrokerID"] = "0000000000000000000000000000000000000000000000000000000000000001",
+        ["Counterparty"] = "rCounterparty"
+    };
+
+    private static Dictionary<string, object> CreateLoanPayTx(object amount) => new()
+    {
+        ["TransactionType"] = "LoanPay",
+        ["Account"] = "rTestAccount",
+        ["LoanID"] = "0000000000000000000000000000000000000000000000000000000000000002",
+        ["Amount"] = amount
+    };
+
+    private static LOLoan CreateLoan(
+        uint paymentRemaining,
+        string periodicPayment = "100",
+        string loanServiceFee = "0",
+        int loanScale = 0) => new()
+        {
+            PaymentRemaining = paymentRemaining,
+            PeriodicPayment = periodicPayment,
+            LoanServiceFee = loanServiceFee,
+            LoanScale = loanScale
+        };
+
+    private static LOSignerList[] CreateSignerList(int entries)
+    {
+        var list = new LOSignerList { SignerEntries = new List<SignerEntryWrapper>() };
+        for (int i = 0; i < entries; i++)
+        {
+            list.SignerEntries.Add(new SignerEntryWrapper
+            {
+                SignerEntry = new SignerEntry { Account = $"rSigner{i}", SignerWeight = 1 }
+            });
+        }
+        return new[] { list };
+    }
+
     #endregion
 }
 
@@ -316,6 +577,21 @@ internal sealed class FeeTestClient : IXrplClient
     public double feeCushion { get; set; }
     public string maxFeeXRP { get; set; }
     public uint? networkID { get; set; }
+
+    /// <summary>Loan ledger object returned by <see cref="LedgerEntry"/>, if any.</summary>
+    public LOLoan? LoanEntry { get; set; }
+
+    /// <summary>Signer lists returned by <see cref="AccountInfo"/>, if any.</summary>
+    public LOSignerList[]? CounterpartySignerLists { get; set; }
+
+    /// <summary>When true, <see cref="LedgerEntry"/> fails as it would for a missing object.</summary>
+    public bool LedgerEntryThrows { get; set; }
+
+    public int AccountInfoCalls { get; private set; }
+    public int LedgerEntryCalls { get; private set; }
+
+    public AccountInfoRequest? LastAccountInfoRequest { get; private set; }
+    public LedgerEntryRequest? LastLedgerEntryRequest { get; private set; }
 
     public Task<ServerInfo> ServerInfo(ServerInfoRequest request, CancellationToken cancellationToken = default)
     {
@@ -372,7 +648,13 @@ internal sealed class FeeTestClient : IXrplClient
     public Task<object> Unsubscribe(UnsubscribeRequest request, CancellationToken cancellationToken = default) => throw new NotSupportedException();
     public Task<object> Ping(CancellationToken cancellationToken = default) => throw new NotSupportedException();
     public Task<Fee> Fee(CancellationToken cancellationToken = default) => throw new NotSupportedException();
-    public Task<AccountInfo> AccountInfo(AccountInfoRequest request, CancellationToken cancellationToken = default) => throw new NotSupportedException();
+    public Task<AccountInfo> AccountInfo(AccountInfoRequest request, CancellationToken cancellationToken = default)
+    {
+        AccountInfoCalls++;
+        LastAccountInfoRequest = request;
+        return Task.FromResult(new AccountInfo { SignerLists = CounterpartySignerLists });
+    }
+
     public Task<AccountOffers> AccountOffers(AccountOffersRequest request, CancellationToken cancellationToken = default) => throw new NotSupportedException();
     public Task<AccountCurrencies> AccountCurrencies(AccountCurrenciesRequest request, CancellationToken cancellationToken = default) => throw new NotSupportedException();
     public Task<AccountLines> AccountLines(AccountLinesRequest request, CancellationToken cancellationToken = default) => throw new NotSupportedException();
@@ -385,7 +667,15 @@ internal sealed class FeeTestClient : IXrplClient
     public Task<LOBaseLedger> LedgerClosed(LedgerClosedRequest request, CancellationToken cancellationToken = default) => throw new NotSupportedException();
     public Task<LOLedgerCurrentIndex> LedgerCurrent(LedgerCurrentRequest request, CancellationToken cancellationToken = default) => throw new NotSupportedException();
     public Task<LOLedgerData> LedgerData(LedgerDataRequest request, CancellationToken cancellationToken = default) => throw new NotSupportedException();
-    public Task<LedgerEntryResponse> LedgerEntry(LedgerEntryRequest request, CancellationToken cancellationToken = default) => throw new NotSupportedException();
+    public Task<LedgerEntryResponse> LedgerEntry(LedgerEntryRequest request, CancellationToken cancellationToken = default)
+    {
+        LedgerEntryCalls++;
+        LastLedgerEntryRequest = request;
+        if (LedgerEntryThrows)
+            throw new XrplException("entryNotFound");
+        return Task.FromResult(new LedgerEntryResponse { Index = request.Index, Node = LoanEntry });
+    }
+
     public Task<Submit> Submit(Dictionary<string, object> tx, XrplWallet wallet, bool autoFill = true, bool failHard = false, CancellationToken cancellationToken = default) => throw new NotSupportedException();
     public Task<Submit> Submit(ITransactionRequest tx, XrplWallet wallet, bool autoFill = true, bool failHard = false, CancellationToken cancellationToken = default) => throw new NotSupportedException();
     public Task<TransactionResponse> Tx(TxRequest request, CancellationToken cancellationToken = default) => throw new NotSupportedException();
