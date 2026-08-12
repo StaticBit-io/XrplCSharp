@@ -80,7 +80,8 @@ namespace Xrpl.Tests.Models.Tests
             {
                 Account = Account1,
                 MPTokenIssuanceID = "00000001A407AF5856CCF3C42619DAA925813FC955C72983",
-                MutableFlags = MPTokenIssuanceSetMutableFlags.tmfMPTSetCanLock | MPTokenIssuanceSetMutableFlags.tmfMPTSetRequireAuth,
+                Flags = MPTokenIssuanceSetFlags.tfMPTSetCanLock | MPTokenIssuanceSetFlags.tfMPTSetRequireAuth,
+                ImmutableFlags = MPTokenIssuanceImmutableFlags.tifMPTCanTrade | MPTokenIssuanceImmutableFlags.tifMPTMetadata,
                 TransferFee = 250,
                 MPTokenMetadata = "DEADBEEF",
                 DomainID = new string('B', 64),
@@ -94,7 +95,12 @@ namespace Xrpl.Tests.Models.Tests
             string blob = XrplBinaryCodec.Encode(json);
             JsonObject decoded = XrplBinaryCodec.Decode(blob).AsObject();
 
-            Assert.AreEqual(3u, decoded["MutableFlags"]!.GetValue<uint>());
+            Assert.AreEqual(
+                (uint)(MPTokenIssuanceSetFlags.tfMPTSetCanLock | MPTokenIssuanceSetFlags.tfMPTSetRequireAuth),
+                decoded["Flags"]!.GetValue<uint>());
+            Assert.AreEqual(
+                (uint)(MPTokenIssuanceImmutableFlags.tifMPTCanTrade | MPTokenIssuanceImmutableFlags.tifMPTMetadata),
+                decoded["ImmutableFlags"]!.GetValue<uint>());
             Assert.AreEqual(250u, decoded["TransferFee"]!.GetValue<uint>());
             Assert.AreEqual("DEADBEEF", decoded["MPTokenMetadata"]!.GetValue<string>());
             Assert.AreEqual(new string('B', 64), decoded["DomainID"]!.GetValue<string>());
@@ -199,14 +205,19 @@ namespace Xrpl.Tests.Models.Tests
                 ["MPTokenIssuanceID"] = "00000001A407AF5856CCF3C42619DAA925813FC955C72983",
             };
 
-            // MutableFlags: zero and out-of-mask values are temINVALID_FLAG
-            tx["MutableFlags"] = 0u;
+            // ImmutableFlags: zero and out-of-mask values are temINVALID_FLAG
+            tx["ImmutableFlags"] = 0u;
             await Assert.ThrowsExactlyAsync<Xrpl.Client.Exceptions.ValidationException>(() => Validation.ValidateMPTokenIssuanceSet(tx));
-            tx["MutableFlags"] = 0x80u;
+            tx["ImmutableFlags"] = 0x1u; // outside tif* mask (0x2..0x80, 0x10000, 0x20000)
             await Assert.ThrowsExactlyAsync<Xrpl.Client.Exceptions.ValidationException>(() => Validation.ValidateMPTokenIssuanceSet(tx));
 
-            // Non-zero TransferFee combined with enabling confidential balances is temBAD_TRANSFER_FEE
-            tx["MutableFlags"] = (uint)MPTokenIssuanceSetMutableFlags.tmfMPTSetCanHoldConfidentialBalance;
+            tx["ImmutableFlags"] = (uint)MPTokenIssuanceImmutableFlags.tifMPTCanHoldConfidentialBalance;
+            await Validation.ValidateMPTokenIssuanceSet(tx);
+
+            // Non-zero TransferFee combined with enabling confidential balances is temBAD_TRANSFER_FEE.
+            // Since 3.3.0 the capability is enabled through a tf* flag, not through a separate field.
+            tx.Remove("ImmutableFlags");
+            tx["Flags"] = (uint)MPTokenIssuanceSetFlags.tfMPTSetCanHoldConfidentialBalance;
             tx["TransferFee"] = 10u;
             await Assert.ThrowsExactlyAsync<Xrpl.Client.Exceptions.ValidationException>(() => Validation.ValidateMPTokenIssuanceSet(tx));
 
@@ -215,7 +226,7 @@ namespace Xrpl.Tests.Models.Tests
         }
 
         [TestMethod]
-        public async Task TestUMPTokenIssuanceCreate_MutableFlagsMask()
+        public async Task TestUMPTokenIssuanceCreate_ImmutableFlagsMask()
         {
             Dictionary<string, object> tx = new()
             {
@@ -223,12 +234,12 @@ namespace Xrpl.Tests.Models.Tests
                 ["Account"] = Account1,
             };
 
-            tx["MutableFlags"] = 0u;
+            tx["ImmutableFlags"] = 0u;
             await Assert.ThrowsExactlyAsync<Xrpl.Client.Exceptions.ValidationException>(() => Validation.ValidateMPTokenIssuanceCreate(tx));
-            tx["MutableFlags"] = 0x100u; // outside tmf* mask
+            tx["ImmutableFlags"] = 0x100u; // outside tif* mask
             await Assert.ThrowsExactlyAsync<Xrpl.Client.Exceptions.ValidationException>(() => Validation.ValidateMPTokenIssuanceCreate(tx));
 
-            tx["MutableFlags"] = (uint)(MPTokenIssuanceCreateMutableFlags.tmfMPTCanMutateMetadata | MPTokenIssuanceCreateMutableFlags.tmfMPTCanMutateTransferFee);
+            tx["ImmutableFlags"] = (uint)(MPTokenIssuanceImmutableFlags.tifMPTMetadata | MPTokenIssuanceImmutableFlags.tifMPTTransferFee);
             await Validation.ValidateMPTokenIssuanceCreate(tx);
 
             tx["DomainID"] = 12345;

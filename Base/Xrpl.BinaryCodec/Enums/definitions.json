@@ -691,7 +691,7 @@
       }
     ],
     [
-      "MutableFlags",
+      "ImmutableFlags",
       {
         "isSerialized": true,
         "isSigningField": true,
@@ -2491,6 +2491,16 @@
       }
     ],
     [
+      "RemainingOwnerCountDelta",
+      {
+        "isSerialized": true,
+        "isSigningField": true,
+        "isVLEncoded": false,
+        "nth": 2,
+        "type": "Int32"
+      }
+    ],
+    [
       "TransactionMetaData",
       {
         "isSerialized": true,
@@ -3487,6 +3497,16 @@
         "isSigningField": true,
         "isVLEncoded": false,
         "nth": 33,
+        "type": "Amount"
+      }
+    ],
+    [
+      "FeeAmountDelta",
+      {
+        "isSerialized": true,
+        "isSigningField": true,
+        "isVLEncoded": false,
+        "nth": 34,
         "type": "Amount"
       }
     ],

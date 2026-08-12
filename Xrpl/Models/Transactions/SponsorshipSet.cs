@@ -1,5 +1,6 @@
 using System;
 using System.Collections.Generic;
+using System.Globalization;
 using System.Text.Json.Serialization;
 using System.Threading.Tasks;
 
@@ -71,9 +72,11 @@ namespace Xrpl.Models.Transactions
         string CounterpartySponsor { get; set; }
 
         /// <summary>
-        /// The amount of fees the sponsor commits to cover.
+        /// Signed change applied to the FeeAmount held by the Sponsorship object —
+        /// XRP the sponsor adds to (positive) or reclaims from (negative) the fee budget.
+        /// Must be a non-zero XRP amount, and positive when the object is being created.
         /// </summary>
-        Currency FeeAmount { get; set; }
+        Currency FeeAmountDelta { get; set; }
 
         /// <summary>
         /// The maximum fee per transaction the sponsor is willing to cover.
@@ -81,9 +84,11 @@ namespace Xrpl.Models.Transactions
         Currency MaxFee { get; set; }
 
         /// <summary>
-        /// The number of owner-reserve slots the sponsor commits to cover.
+        /// Signed change applied to the RemainingOwnerCount held by the Sponsorship
+        /// object — owner-reserve slots the sponsor adds (positive) or withdraws
+        /// (negative). Must be non-zero, and positive when the object is being created.
         /// </summary>
-        uint? RemainingOwnerCount { get; set; }
+        int? RemainingOwnerCountDelta { get; set; }
     }
 
     /// <inheritdoc cref="ISponsorshipSet" />
@@ -114,9 +119,9 @@ namespace Xrpl.Models.Transactions
         public string CounterpartySponsor { get; set; }
 
         /// <inheritdoc />
-        [JsonPropertyName("FeeAmount")]
+        [JsonPropertyName("FeeAmountDelta")]
         [JsonConverter(typeof(CurrencyConverter))]
-        public Currency FeeAmount { get; set; }
+        public Currency FeeAmountDelta { get; set; }
 
         /// <inheritdoc />
         [JsonPropertyName("MaxFee")]
@@ -124,8 +129,8 @@ namespace Xrpl.Models.Transactions
         public Currency MaxFee { get; set; }
 
         /// <inheritdoc />
-        [JsonPropertyName("RemainingOwnerCount")]
-        public uint? RemainingOwnerCount { get; set; }
+        [JsonPropertyName("RemainingOwnerCountDelta")]
+        public int? RemainingOwnerCountDelta { get; set; }
     }
 
     /// <inheritdoc cref="ISponsorshipSet" />
@@ -151,9 +156,9 @@ namespace Xrpl.Models.Transactions
         public string CounterpartySponsor { get; set; }
 
         /// <inheritdoc />
-        [JsonPropertyName("FeeAmount")]
+        [JsonPropertyName("FeeAmountDelta")]
         [JsonConverter(typeof(CurrencyConverter))]
-        public Currency FeeAmount { get; set; }
+        public Currency FeeAmountDelta { get; set; }
 
         /// <inheritdoc />
         [JsonPropertyName("MaxFee")]
@@ -161,8 +166,8 @@ namespace Xrpl.Models.Transactions
         public Currency MaxFee { get; set; }
 
         /// <inheritdoc />
-        [JsonPropertyName("RemainingOwnerCount")]
-        public uint? RemainingOwnerCount { get; set; }
+        [JsonPropertyName("RemainingOwnerCountDelta")]
+        public int? RemainingOwnerCountDelta { get; set; }
     }
 
     public partial class Validation
@@ -179,10 +184,40 @@ namespace Xrpl.Models.Transactions
             if (hasSponsee == hasCounterpartySponsor)
                 throw new ValidationException("SponsorshipSet: exactly one of Sponsee or CounterpartySponsor must be present");
 
-            if (tx.TryGetValue("RemainingOwnerCount", out var roc) && !Common.IsUInt32(roc))
-                throw new ValidationException("SponsorshipSet: invalid RemainingOwnerCount");
-
             uint flags = ExtractFlags(tx);
+            bool isDelete = (flags & (uint)SponsorshipSetFlags.tfDeleteObject) != 0;
+
+            bool hasFeeAmountDelta = tx.TryGetValue("FeeAmountDelta", out var feeDelta) && feeDelta is not null;
+            bool hasRemainingOwnerCountDelta = tx.TryGetValue("RemainingOwnerCountDelta", out var rocDelta) && rocDelta is not null;
+            bool hasMaxFee = tx.TryGetValue("MaxFee", out var maxFee) && maxFee is not null;
+
+            // rippled SponsorshipSet::preflight: a delete carries no modification fields
+            if (isDelete && (hasFeeAmountDelta || hasRemainingOwnerCountDelta || hasMaxFee))
+                throw new ValidationException("SponsorshipSet: tfDeleteObject cannot be combined with FeeAmountDelta, RemainingOwnerCountDelta or MaxFee");
+
+            if (hasRemainingOwnerCountDelta)
+            {
+                // The field is serialized as Int32 and may be negative, but never zero (temINVALID)
+                if (!Common.TryGetInt32(rocDelta, out int delta))
+                    throw new ValidationException("SponsorshipSet: RemainingOwnerCountDelta must be a number");
+
+                if (delta == 0)
+                    throw new ValidationException("SponsorshipSet: RemainingOwnerCountDelta must not be zero");
+            }
+
+            if (hasFeeAmountDelta)
+            {
+                // rippled SponsorshipSet::preflight: a non-zero XRP amount, so drops
+                // as a string — an issued currency object is temBAD_AMOUNT. The delta
+                // may be negative, which reclaims budget from the Sponsorship object.
+                if (feeDelta is not string drops ||
+                    !long.TryParse(drops, NumberStyles.AllowLeadingSign, CultureInfo.InvariantCulture, out long dropsValue))
+                    throw new ValidationException("SponsorshipSet: FeeAmountDelta must be an XRP amount in drops");
+
+                if (dropsValue == 0)
+                    throw new ValidationException("SponsorshipSet: FeeAmountDelta must not be zero");
+            }
+
             const uint feePair = (uint)(SponsorshipSetFlags.tfSponsorshipSetRequireSignForFee | SponsorshipSetFlags.tfSponsorshipClearRequireSignForFee);
             const uint reservePair = (uint)(SponsorshipSetFlags.tfSponsorshipSetRequireSignForReserve | SponsorshipSetFlags.tfSponsorshipClearRequireSignForReserve);
             if ((flags & feePair) == feePair || (flags & reservePair) == reservePair)

@@ -44,9 +44,10 @@ namespace Xrpl.Tests.Models.Tests
             ["DirNode"] = typeof(DirectoryNodeFlags),
             ["NFTokenOffer"] = typeof(NFTokenOffer),
             ["MPTokenIssuance"] = typeof(MPTokenIssuanceFlags),
-            // rippled declares these as lsmf* ledger flags; TxFlags.h then aliases tmfX = lsmfX,
-            // and the SDK names them after the transaction side (MPTokenIssuanceCreate.MutableFlags)
-            ["MPTokenIssuanceMutable"] = typeof(MPTokenIssuanceCreateMutableFlags),
+            // rippled declares these as lsif* constants rather than a LEDGER_OBJECT block;
+            // TxFlags.h then aliases tifX = lsifX, and the SDK shares one enum between
+            // MPTokenIssuanceCreate.ImmutableFlags and MPTokenIssuanceSet.ImmutableFlags
+            [RippledLedgerFlags.ImmutableFlagsObject] = typeof(MPTokenIssuanceImmutableFlags),
             ["MPToken"] = typeof(MPTokenFlags),
             ["Credential"] = typeof(CredentialFlags),
             ["Vault"] = typeof(VaultLedgerFlags),
@@ -56,11 +57,11 @@ namespace Xrpl.Tests.Models.Tests
 
         /// <summary>
         /// Strips the prefix rippled and the models use for the same bit, so
-        /// <c>lsfMPTLocked</c>, <c>MPTLocked</c> and <c>tmfMPTCanEnableCanLock</c> compare
+        /// <c>lsfMPTLocked</c>, <c>MPTLocked</c> and <c>tifMPTCanLock</c> compare
         /// against their upstream counterparts.
         /// </summary>
         private static string Normalize(string name) =>
-            Regex.Replace(name, "^(lsmf|lsf|tmf)", string.Empty);
+            Regex.Replace(name, "^(lsmf|lsif|lsf|tmf|tif)", string.Empty);
 
         [TestMethod]
         public void TestULedgerFlags_MatchRippledLedgerFormats()
