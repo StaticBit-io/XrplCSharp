@@ -71,8 +71,8 @@ public class TestIBatchSponsorship
         {
             Account = sponsor.ClassicAddress,
             Sponsee = sponsee.ClassicAddress,
-            FeeAmount = new Currency { ValueAsXrp = 10m },
-            RemainingOwnerCount = 3,
+            FeeAmountDelta = new Currency { ValueAsXrp = 10m },
+            RemainingOwnerCountDelta = 3,
         };
         setup = await client.Autofill(setup);
         ValidateResult(await client.SubmitAndWait(setup, sponsor, autofill: false));

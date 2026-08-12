@@ -63,6 +63,11 @@ Created by `SponsorshipSet`, one per sponsor/sponsee pair:
 | `FeeAmount` | Remaining XRP budget for sponsored fees |
 | `RemainingOwnerCount` | How many more objects the sponsor will cover reserves for |
 
+Both are ledger-object fields only. The transaction adjusts them with the signed
+`FeeAmountDelta` / `RemainingOwnerCountDelta` fields — a positive delta tops the budget
+up, a negative one returns it to the sponsor. Sending the absolute names in a
+transaction is rejected outright (`Field 'FeeAmount' found in disallowed location`).
+
 ### Require-signature mode
 
 By default a sponsee can spend the sponsorship budget without the sponsor's participation. `SponsorshipSet` flags flip that per dimension:
@@ -91,14 +96,14 @@ var setup = new SponsorshipSet
 {
     Account = sponsor.ClassicAddress,
     Sponsee = sponsee.ClassicAddress,
-    FeeAmount = new Currency { ValueAsXrp = 5m },
-    RemainingOwnerCount = 3,
+    FeeAmountDelta = new Currency { ValueAsXrp = 5m },
+    RemainingOwnerCountDelta = 3,
 };
 setup = await client.Autofill(setup);
 await client.SubmitAndWait(setup, sponsor, true);
 
 // The sponsee deletes its own sponsorship (names the sponsor);
-// deletion forbids the modification flags and FeeAmount/MaxFee/RemainingOwnerCount:
+// deletion forbids the modification flags and FeeAmountDelta/MaxFee/RemainingOwnerCountDelta:
 var deletion = new SponsorshipSet
 {
     Account = sponsee.ClassicAddress,
@@ -132,8 +137,8 @@ var tx = new SponsorshipSet
 {
     Account = sponsor.ClassicAddress,
     Sponsee = sponsee.ClassicAddress,
-    FeeAmount = new Currency { ValueAsXrp = 5m },
-    RemainingOwnerCount = 3,
+    FeeAmountDelta = new Currency { ValueAsXrp = 5m },
+    RemainingOwnerCountDelta = 3,
 };
 tx = await client.Autofill(tx);
 TransactionSummary result = await client.SubmitAndWait(tx, sponsor, true);

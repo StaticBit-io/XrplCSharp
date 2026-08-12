@@ -32,6 +32,22 @@ namespace Xrpl.Tests.Models.Tests
             RegexOptions.Compiled);
 
         /// <summary>
+        /// MPTokenIssuance ImmutableFlags do not live in a LEDGER_OBJECT block: since 3.3.0
+        /// rippled declares them as plain constants next to the macro list
+        /// (<c>inline constexpr std::uint32_t lsifMPTCanLock = 0x00000002;</c>). They are the
+        /// values of sfImmutableFlags, so the models still have to conform to them.
+        /// </summary>
+        private static readonly Regex ImmutableFlagConstant = new Regex(
+            @"inline\s+constexpr\s+std::uint32_t\s+(?<flag>lsif\w+)\s*=\s*(?<value>0x[0-9a-fA-F]+)\s*;",
+            RegexOptions.Compiled);
+
+        /// <summary>
+        /// The synthetic object name the lsif* constants are reported under, so they take part
+        /// in the same conformance check as the LEDGER_OBJECT flags.
+        /// </summary>
+        internal const string ImmutableFlagsObject = "MPTokenIssuanceImmutable";
+
+        /// <summary>
         /// Catches an LSF_FLAG variant the parser does not know yet — a new macro name would
         /// otherwise drop its flags silently and leave the conformance test passing.
         /// </summary>
@@ -109,6 +125,25 @@ namespace Xrpl.Tests.Models.Tests
                 objects.Add(name, flags);
                 flagCount += flags.Count;
             }
+
+            Dictionary<string, uint> immutableFlags = new();
+            foreach (Match constant in ImmutableFlagConstant.Matches(header))
+            {
+                immutableFlags[constant.Groups["flag"].Value] =
+                    Convert.ToUInt32(constant.Groups["value"].Value.Substring(2), 16);
+            }
+
+            // Fail closed: the constants moved out of LEDGER_OBJECT in 3.3.0 and could move
+            // again, which would drop MPTokenIssuanceImmutable from the guard without a word.
+            if (immutableFlags.Count == 0)
+            {
+                throw new InvalidOperationException(
+                    "No lsif* constants found in LedgerFormats.h — sfImmutableFlags values are no " +
+                    "longer declared the way the parser expects, update it before trusting this test");
+            }
+
+            objects.Add(ImmutableFlagsObject, immutableFlags);
+            flagCount += immutableFlags.Count;
 
             if (objects.Count < MinimumExpectedObjects || flagCount < MinimumExpectedFlags)
             {

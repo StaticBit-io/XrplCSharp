@@ -7,6 +7,9 @@ name: Definitions Watch
 #
 # "develop" here = the pinned xrpld version in .ci-config/Dockerfile.nightly, not
 # the literal develop tip; the tip moving is covered separately by protocol-watch.
+#
+# The pin is therefore this check's horizon: against a stale pin the diff reports
+# "in sync" about the past. nightly-pin-watch.yml keeps it moving.
 
 on:
   schedule:

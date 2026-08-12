@@ -1,12 +1,12 @@
-https://github.com/XRPLF/rippled/blob/3.3.0-rc1/include/xrpl/protocol/LedgerFormats.h
-sha  18e311e1e245bcc1813363bd1771b94931585d80
-date 2026-07-16T13:54:12Z
-tag  3.3.0-rc1
+https://github.com/XRPLF/rippled/blob/3.3.0/include/xrpl/protocol/LedgerFormats.h
+sha  00a178fb92ca49521b937ae1a99d863765ea8a90
+date 2026-08-06T16:34:39Z
+tag  3.3.0
 
 LedgerFormats.h is vendored byte-identical to the ref above so that it can be
 re-verified with a plain diff:
 
-  curl -sSL https://raw.githubusercontent.com/XRPLF/rippled/18e311e1e245bcc1813363bd1771b94931585d80/include/xrpl/protocol/LedgerFormats.h \
+  curl -sSL https://raw.githubusercontent.com/XRPLF/rippled/00a178fb92ca49521b937ae1a99d863765ea8a90/include/xrpl/protocol/LedgerFormats.h \
     | diff - Tests/Xrpl.Tests/Fixtures/LedgerFormats.h
 
 This is the only place the protocol states which lsf flags belong to which ledger

@@ -1,11 +1,11 @@
 https://github.com/XRPLF/rippled/blob/develop/include/xrpl/protocol/detail/ledger_entries.macro
-sha  ecdd457f3598c7286a9af4aff358fbd30039173f
-date 2026-07-30T23:04:38Z
+sha  9859e5cedaffce2f9544d7e2b6aa0e041c3a6f75
+date 2026-08-07T15:00:25Z
 
 ledger_entries.macro is vendored byte-identical to the ref above so that it can be
 re-verified with a plain diff:
 
-  curl -sSL https://raw.githubusercontent.com/XRPLF/rippled/ecdd457f3598c7286a9af4aff358fbd30039173f/include/xrpl/protocol/detail/ledger_entries.macro \
+  curl -sSL https://raw.githubusercontent.com/XRPLF/rippled/9859e5cedaffce2f9544d7e2b6aa0e041c3a6f75/include/xrpl/protocol/detail/ledger_entries.macro \
     | diff - Tests/Xrpl.Tests/Fixtures/ledger_entries.macro
 
 This is the only place the protocol states which fields belong to which ledger
@@ -13,7 +13,7 @@ object: definitions.json carries field codes and object types, but not the
 per-object field lists.
 
 Pinned to a develop commit rather than to a release tag — unlike LedgerFormats.h,
-which is pinned to 3.3.0-rc1 because the two are identical there. The models track
+which is pinned to the 3.3.0 tag. The models track
 develop for fields: sfLEVersion (Vault) exists only after 07/30/2026 and is absent
 from 3.3.0-rc1, so a tag would report it as a field the models invented. This sha
 is the one protocol-watch recorded when it reported the change.

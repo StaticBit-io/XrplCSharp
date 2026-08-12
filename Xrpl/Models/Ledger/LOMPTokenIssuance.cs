@@ -173,10 +173,10 @@ namespace Xrpl.Models.Ledger
         public string? DomainID { get; init; }
 
         /// <summary>
-        /// DynamicMPT: which issuance flags remain mutable.
+        /// DynamicMPT: which issuance capabilities and fields are frozen.
         /// </summary>
-        [JsonPropertyName("MutableFlags")]
-        public uint? MutableFlags { get; init; }
+        [JsonPropertyName("ImmutableFlags")]
+        public uint? ImmutableFlags { get; init; }
 
         /// <summary>
         /// MPTokensV2: the reference holding object for DEX trading.
