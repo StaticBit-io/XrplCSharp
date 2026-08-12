@@ -110,7 +110,16 @@ jobs:
                 ;;
             esac
           fi
-          branch="nightly-watch/$NEW_VERSION"
+          # git refs reject '~' (and a few other characters) — a raw upstream
+          # version like 3.4.0~b0+202608111815.26cc683e-1 cannot be a branch name.
+          # Sanitize by class rather than by the one character today's format
+          # happens to use, so a future version string cannot break the bump.
+          slug=$(printf '%s' "$NEW_VERSION" | sed -E 's/[^A-Za-z0-9._-]+/-/g')
+          branch="nightly-watch/$slug"
+          if ! git check-ref-format "refs/heads/$branch"; then
+            echo "::error::derived branch name is not a valid git ref: $branch"
+            exit 1
+          fi
           if [ -n "$(gh pr list --repo "$GITHUB_REPOSITORY" --head "$branch" --state open --json number --jq '.[0].number // empty')" ]; then
             echo "A bump PR for $NEW_VERSION is already open."
             echo "bump=false" >> "$GITHUB_OUTPUT"
