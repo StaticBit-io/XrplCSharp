@@ -254,10 +254,14 @@ namespace Xrpl.Tests.MockRippled
         /// <param name="AsyncResult">The async operation state</param>
         private void connectionCallback(IAsyncResult AsyncResult)
         {
+            // Held until ownership passes to the MockClient, so a handshake that throws
+            // half-way closes the socket instead of leaking it for the process lifetime.
+            Socket clientSocket = null;
+
             try
             {
                 // Gets the client thats trying to connect to the server
-                Socket clientSocket = GetSocket().EndAccept(AsyncResult);
+                clientSocket = GetSocket().EndAccept(AsyncResult);
 
                 // Read the handshake updgrade request
                 byte[] handshakeBuffer = new byte[1024];
@@ -267,25 +271,55 @@ namespace Xrpl.Tests.MockRippled
                 string requestKey = Helpers.GetHandshakeRequestKey(Encoding.Default.GetString(handshakeBuffer));
                 string hanshakeResponse = Helpers.GetHandshakeResponse(Helpers.HashKey(requestKey));
 
-                // Send the handshake updgrade response to the connecting client 
+                // Send the handshake updgrade response to the connecting client
                 clientSocket.Send(Encoding.Default.GetBytes(hanshakeResponse));
 
-                // Create a new client object and add 
+                // Create a new client object and add
                 // it to the list of connected clients
                 MockClient client = new MockClient(this, clientSocket);
+                clientSocket = null;
                 _clients.Add(client);
 
-                // Call the event when a client has connected to the listen server 
+                // Call the event when a client has connected to the listen server
                 if (OnClientConnected == null) throw new Exception("Server error: event OnClientConnected is not bound!");
                 OnClientConnected(this, new OnClientConnectedHandler(client));
-
-                // Start to accept incomming connections again 
-                GetSocket().BeginAccept(connectionCallback, null);
-
+            }
+            catch (ObjectDisposedException)
+            {
+                // Stop() closed the listen socket: nothing left to accept on, and re-arming
+                // below would only throw again.
+                return;
             }
             catch (Exception Exception)
             {
                 Debug.WriteLine("An error has occured while trying to accept a connecting client.\n\n{0}", Exception.Message);
+
+                try
+                {
+                    clientSocket?.Close();
+                }
+                catch (Exception)
+                {
+                    // The peer is already gone; nothing to salvage.
+                }
+            }
+
+            // Re-arm unconditionally. This call used to be the last statement of the try block,
+            // so a peer that reset the connection during the handshake ended the accept loop for
+            // good: the listen socket stayed bound — the port still looked taken and TCP connects
+            // still completed — while nothing was ever accepted again, and every later client hung
+            // until its own connect timeout. One bad connection must not deafen the mock.
+            try
+            {
+                GetSocket().BeginAccept(connectionCallback, null);
+            }
+            catch (ObjectDisposedException)
+            {
+                // Stop() ran while this callback was in flight.
+            }
+            catch (Exception Exception)
+            {
+                Debug.WriteLine("An error has occured while re-arming the accept loop.\n\n{0}", Exception.Message);
             }
         }
 

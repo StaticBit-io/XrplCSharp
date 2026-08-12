@@ -1,4 +1,4 @@
-using Microsoft.VisualStudio.TestTools.UnitTesting;
+﻿using Microsoft.VisualStudio.TestTools.UnitTesting;
 
 using System;
 using System.Collections.Generic;
@@ -161,10 +161,17 @@ namespace Xrpl.Tests
                 await Task.Delay(TimeSpan.FromMilliseconds(100));
             }
 
-            Assert.IsTrue(
-                _client.connection.IsConnected(),
-                "After concurrent ChangeServer calls the client could not reach a server that is up — " +
-                "the reconnect session was left disposed or orphaned.");
+            if (!_client.connection.IsConnected())
+            {
+                // Say which side failed. A mock whose accept loop died still holds the port, so
+                // "the server is up" is an assumption worth checking before blaming the client —
+                // this test spent a CI run being read as a client bug for exactly that reason.
+                bool mockServing = TestUtils.MockCompletesHandshake(_port, TimeSpan.FromSeconds(2));
+                Assert.Fail(
+                    "After concurrent ChangeServer calls the client could not reach a server that is up — " +
+                    "the reconnect session was left disposed or orphaned. " +
+                    $"(mock still completes a handshake: {mockServing})");
+            }
         }
 
         /// <summary>
