@@ -3,17 +3,18 @@ using Microsoft.VisualStudio.TestTools.UnitTesting;
 using System.Collections.Generic;
 using System.Text.Json;
 
-using Xrpl.BinaryCodec.Enums;
 using Xrpl.Client.Json;
+using Xrpl.Models.Enums;
 using Xrpl.Models.Methods;
 using Xrpl.Models.Transactions;
 
 namespace XrplTests.Xrpl.Models
 {
     /// <summary>
-    /// The path step `type` field is a bitmask (STPathElement in rippled) and is modelled as a
-    /// [Flags] enum. It must stay a number on the wire: XrplJsonOptions deliberately registers no
-    /// global JsonStringEnumConverter, because XRPL protocol enums are numeric.
+    /// The path step `type` field is a bitmask (STPathElement in rippled) and is modelled as the
+    /// [Flags] enum Xrpl.Models.Enums.PathStepType. It must stay a number on the wire:
+    /// XrplJsonOptions deliberately registers no global JsonStringEnumConverter, because XRPL
+    /// protocol enums are numeric.
     /// </summary>
     [TestClass]
     public class TestUPathStep

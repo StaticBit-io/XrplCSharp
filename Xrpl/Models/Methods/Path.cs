@@ -1,6 +1,6 @@
 using System;
 using System.Text.Json.Serialization;
-using Xrpl.BinaryCodec.Enums;
+using Xrpl.Models.Enums;
 //https://github.com/XRPLF/xrpl.js/blob/b20c05c3680d80344006d20c44b4ae1c3b0ffcac/packages/xrpl/src/models/common/index.ts#L62
 //https://xrpl.org/paths.html#path-steps
 namespace Xrpl.Models.Methods

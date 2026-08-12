@@ -3,7 +3,6 @@ using System.Linq;
 using System.Text.Json;
 using System.Text.Json.Nodes;
 using Xrpl.BinaryCodec.Binary;
-using Xrpl.BinaryCodec.Enums;
 
 //https://github.com/XRPLF/xrpl.js/blob/8a9a9bcc28ace65cde46eed5010eb8927374a736/packages/ripple-binary-codec/src/types/path-set.ts
 //https://xrpl.org/serialization.html#pathset-fields
@@ -13,6 +12,20 @@ namespace Xrpl.BinaryCodec.Types
     /// <summary> The object representation of a Hop, an issuer AccountID, an account AccountID, and a Currency or an MPTokenIssuanceID </summary>
     public class PathHop
     {
+        #region Constant for masking types of a Hop
+
+        /// <summary> TypeAccount const byte </summary>
+        public const byte TypeAccount = 0x01;
+        /// <summary> TypeCurrency const byte </summary>
+        public const byte TypeCurrency = 0x10;
+        /// <summary> type issuer const byte </summary>
+        public const byte TypeIssuer = 0x20;
+        /// <summary> MPTokenIssuanceID const byte (rippled 3.2.0+, MPTokensV2 amendment) </summary>
+        public const byte TypeMpt = 0x40;
+        /// <summary> Every bit a hop type byte is allowed to carry </summary>
+        public const byte TypeAll = TypeAccount | TypeCurrency | TypeIssuer | TypeMpt;
+
+        #endregion
         /// <summary> account AccountID </summary>
         public readonly AccountId Account;
         /// <summary> issuer AccountID </summary>
@@ -21,8 +34,8 @@ namespace Xrpl.BinaryCodec.Types
         public readonly Currency Currency;
         /// <summary> MPTokenIssuanceID, mutually exclusive with <see cref="Currency"/> </summary>
         public readonly Hash192 MptIssuanceId;
-        /// <summary> Hop type, synthesized from the fields present </summary>
-        public readonly PathStepType Type;
+        /// <summary> Hop type byte, synthesized from the fields present </summary>
+        public readonly byte Type;
         /// <summary> Create a Hop </summary>
         /// <param name="account">account AccountID</param>
         /// <param name="issuer">issuer AccountID</param>
@@ -79,32 +92,33 @@ namespace Xrpl.BinaryCodec.Types
         /// generate type for current hop
         /// </summary>
         /// <returns></returns>
-        public PathStepType SynthesizeType()
+        public byte SynthesizeType()
         {
-            PathStepType type = PathStepType.None;
+            var type = 0;
 
             if (HasAccount())
             {
-                type |= PathStepType.Account;
+                type |= TypeAccount;
             }
             if (HasCurrency())
             {
-                type |= PathStepType.Currency;
+                type |= TypeCurrency;
             }
             if (HasIssuer())
             {
-                type |= PathStepType.Issuer;
+                type |= TypeIssuer;
             }
             if (HasMpt())
             {
-                type |= PathStepType.MPTokenIssuanceID;
+                type |= TypeMpt;
             }
-            return type;
+            return (byte)type;
         }
         /// <summary> Serialize Hop  </summary>
         /// <returns></returns>
         public JsonObject ToJson()
         {
+            // int, not byte: a JsonValue<byte> would refuse GetValue<int>() for consumers of Decode
             JsonObject hop = new JsonObject { ["type"] = (int)Type };
 
             if (HasAccount())
@@ -201,7 +215,7 @@ namespace Xrpl.BinaryCodec.Types
                 foreach (var hop in path)
                 {
                     // Field order mirrors rippled STPathSet::add(): account, MPT, currency, issuer
-                    buffer.Put((byte)hop.Type);
+                    buffer.Put(hop.Type);
                     if (hop.HasAccount())
                     {
                         buffer.Put(hop.Account.Buffer);
@@ -278,13 +292,11 @@ namespace Xrpl.BinaryCodec.Types
                     path = null;
                     continue;
                 }
-                PathStepType type = (PathStepType)rawType;
-                if ((type & ~PathStepType.All) != PathStepType.None)
+                if ((rawType & ~PathHop.TypeAll) != 0)
                 {
                     throw new BinaryCodecException("Bad path element in pathset: unknown type bits");
                 }
-                if ((type & PathStepType.Currency) != PathStepType.None
-                    && (type & PathStepType.MPTokenIssuanceID) != PathStepType.None)
+                if ((rawType & PathHop.TypeCurrency) != 0 && (rawType & PathHop.TypeMpt) != 0)
                 {
                     throw new BinaryCodecException("Bad path element in pathset: both currency and MPT");
                 }
@@ -294,19 +306,19 @@ namespace Xrpl.BinaryCodec.Types
                 Currency currency = null;
                 Hash192 mptIssuanceId = null;
 
-                if ((type & PathStepType.Account) != PathStepType.None)
+                if ((rawType & PathHop.TypeAccount) != 0)
                 {
                     account = AccountId.FromParser(parser);
                 }
-                if ((type & PathStepType.MPTokenIssuanceID) != PathStepType.None)
+                if ((rawType & PathHop.TypeMpt) != 0)
                 {
                     mptIssuanceId = Hash192.FromParser(parser);
                 }
-                if ((type & PathStepType.Currency) != PathStepType.None)
+                if ((rawType & PathHop.TypeCurrency) != 0)
                 {
                     currency = Currency.FromParser(parser);
                 }
-                if ((type & PathStepType.Issuer) != PathStepType.None)
+                if ((rawType & PathHop.TypeIssuer) != 0)
                 {
                     issuer = AccountId.FromParser(parser);
                 }
