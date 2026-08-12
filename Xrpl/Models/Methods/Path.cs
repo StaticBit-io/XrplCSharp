@@ -1,4 +1,3 @@
-using System;
 using System.Text.Json.Serialization;
 using Xrpl.Models.Enums;
 //https://github.com/XRPLF/xrpl.js/blob/b20c05c3680d80344006d20c44b4ae1c3b0ffcac/packages/xrpl/src/models/common/index.ts#L62
@@ -57,14 +56,5 @@ namespace Xrpl.Models.Methods
         /// </summary>
         [JsonPropertyName("type")]
         public PathStepType? Type { get; set; }
-
-        /// <summary>
-        /// (Optional) Hex representation of the type field.<br/>
-        /// Never populated: rippled removed type_hex from its JSON output in 1.7.0, only the unused
-        /// jss.h declaration remains in the reference implementation.
-        /// </summary>
-        [Obsolete("rippled stopped emitting type_hex in 1.7.0; no server populates this field.")]
-        [JsonPropertyName("type_hex")]
-        public string TypeHex { get; set; }
     }
 }

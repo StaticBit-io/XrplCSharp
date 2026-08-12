@@ -76,6 +76,20 @@ namespace XrplTests.Xrpl.Models
 
         [TestMethod]
         [TestCategory("TestU")]
+        public void TestUPathStepIgnoresLegacyTypeHex()
+        {
+            // rippled dropped type_hex from its JSON output in 1.7.0 and the property is gone from the
+            // model; a response from an ancient server must still deserialize, with the key ignored
+            string json = @"{""currency"":""USD"",""issuer"":""rBitcoiNXev8VoVxV7pwoQx1sSfonVP9i3"",""type"":48,""type_hex"":""0000000000000030""}";
+
+            Path step = JsonSerializer.Deserialize<Path>(json, XrplJsonOptions.Default);
+
+            Assert.AreEqual(PathStepType.Currency | PathStepType.Issuer, step.Type);
+            Assert.AreEqual("USD", step.CurrencyCode);
+        }
+
+        [TestMethod]
+        [TestCategory("TestU")]
         public void TestUPathStepValidationMatchesRippledToStrand()
         {
             // rippled toStrand(): hasAccount && (hasIssuer || hasCurrency) -> temBAD_PATH,
