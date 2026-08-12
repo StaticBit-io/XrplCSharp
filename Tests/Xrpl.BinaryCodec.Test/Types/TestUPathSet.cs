@@ -131,6 +131,30 @@ public class TestUPathSet
 
     [TestMethod]
     [TestCategory("TestU")]
+    public void TestUPathSetEmptyPathThrowsOnEncode()
+    {
+        Assert.ThrowsExactly<BinaryCodecException>(
+            () => XrplBinaryCodec.Encode(JsonNode.Parse(PaymentWithPaths(string.Empty))),
+            "An empty path must not be encoded away silently");
+    }
+
+    [TestMethod]
+    [TestCategory("TestU")]
+    public void TestUPathSetTrailingSeparatorThrowsOnDecode()
+    {
+        string encoded = Encode(@"{ ""currency"": ""4249547800000000000000000000000000000000"", ""issuer"": ""rBitcoiNXev8VoVxV7pwoQx1sSfonVP9i3"" }");
+
+        // append a separator right before the terminator, i.e. a trailing empty path
+        string corrupted = encoded.Replace(IssuerAccountHex + "00", IssuerAccountHex + "FF00");
+        Assert.AreNotEqual(encoded, corrupted, "Test setup should have inserted the trailing separator");
+
+        Assert.ThrowsExactly<BinaryCodecException>(
+            () => XrplBinaryCodec.Decode(corrupted),
+            "A terminator following a separator must be rejected, as rippled does");
+    }
+
+    [TestMethod]
+    [TestCategory("TestU")]
     public void TestUPathSetUnknownTypeBitsThrowOnDecode()
     {
         string encoded = Encode(@"{ ""currency"": ""4249547800000000000000000000000000000000"", ""issuer"": ""rBitcoiNXev8VoVxV7pwoQx1sSfonVP9i3"" }");

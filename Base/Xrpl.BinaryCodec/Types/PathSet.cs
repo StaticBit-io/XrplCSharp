@@ -190,6 +190,10 @@ namespace Xrpl.BinaryCodec.Types
             var n = 0;
             foreach (var path in this)
             {
+                if (path.Count == 0)
+                {
+                    throw new BinaryCodecException("Empty path in pathset");
+                }
                 if (n++ != 0)
                 {
                     buffer.Put(PathSeparatorByte);
@@ -253,6 +257,11 @@ namespace Xrpl.BinaryCodec.Types
                 byte rawType = parser.ReadOne();
                 if (rawType == PathsetEndByte)
                 {
+                    // a terminator right after a separator means a trailing empty path
+                    if (path == null && pathSet.Count > 0)
+                    {
+                        throw new BinaryCodecException("Empty path in pathset");
+                    }
                     break;
                 }
                 if (path == null)

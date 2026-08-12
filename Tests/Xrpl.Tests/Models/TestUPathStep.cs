@@ -1,10 +1,12 @@
 using Microsoft.VisualStudio.TestTools.UnitTesting;
 
+using System.Collections.Generic;
 using System.Text.Json;
 
 using Xrpl.BinaryCodec.Enums;
 using Xrpl.Client.Json;
 using Xrpl.Models.Methods;
+using Xrpl.Models.Transactions;
 
 namespace XrplTests.Xrpl.Models
 {
@@ -69,6 +71,34 @@ namespace XrplTests.Xrpl.Models
 
             Assert.AreEqual(176u, (uint)step.Type.Value);
             Assert.IsTrue(step.Type.Value.HasFlag(PathStepType.Issuer));
+        }
+
+        [TestMethod]
+        [TestCategory("TestU")]
+        public void TestUPathStepValidationMatchesRippledToStrand()
+        {
+            // rippled toStrand(): hasAccount && (hasIssuer || hasCurrency) -> temBAD_PATH,
+            // hasMPT && (hasCurrency || hasAccount) -> temBAD_PATH
+            Assert.IsTrue(Validation.IsPathStep(Step(("account", "rf1BiGeXwwQoi8Z2ueFYTEXSwuJYfV2Jpn"))), "account-only step is valid");
+            Assert.IsTrue(Validation.IsPathStep(Step(("currency", "USD"), ("issuer", "rBitcoiNXev8VoVxV7pwoQx1sSfonVP9i3"))), "currency+issuer step is valid");
+            Assert.IsTrue(Validation.IsPathStep(Step(("mpt_issuance_id", MptIssuanceId))), "MPT step is valid");
+            Assert.IsTrue(Validation.IsPathStep(Step(("mpt_issuance_id", MptIssuanceId), ("issuer", "rBitcoiNXev8VoVxV7pwoQx1sSfonVP9i3"))), "MPT+issuer step is valid");
+
+            Assert.IsFalse(Validation.IsPathStep(Step(("account", "rf1BiGeXwwQoi8Z2ueFYTEXSwuJYfV2Jpn"), ("currency", "USD"))), "account+currency is temBAD_PATH");
+            Assert.IsFalse(Validation.IsPathStep(Step(("account", "rf1BiGeXwwQoi8Z2ueFYTEXSwuJYfV2Jpn"), ("issuer", "rBitcoiNXev8VoVxV7pwoQx1sSfonVP9i3"))), "account+issuer is temBAD_PATH");
+            Assert.IsFalse(Validation.IsPathStep(Step(("account", "rf1BiGeXwwQoi8Z2ueFYTEXSwuJYfV2Jpn"), ("mpt_issuance_id", MptIssuanceId))), "account+MPT is temBAD_PATH");
+            Assert.IsFalse(Validation.IsPathStep(Step(("currency", "USD"), ("mpt_issuance_id", MptIssuanceId))), "currency+MPT is temBAD_PATH");
+            Assert.IsFalse(Validation.IsPathStep(Step()), "an empty step carries no asset and no account");
+        }
+
+        private static Dictionary<string, object> Step(params (string Key, object Value)[] fields)
+        {
+            Dictionary<string, object> step = new Dictionary<string, object>();
+            foreach ((string key, object value) in fields)
+            {
+                step[key] = value;
+            }
+            return step;
         }
 
         [TestMethod]
