@@ -53,7 +53,7 @@ var set = new MPTokenIssuanceSet
 {
     Account = issuer.ClassicAddress,
     MPTokenIssuanceID = issuanceId,
-    MutableFlags = MPTokenIssuanceSetMutableFlags.tmfMPTSetCanHoldConfidentialBalance,
+    Flags = MPTokenIssuanceSetFlags.tfMPTSetCanHoldConfidentialBalance,
     IssuerEncryptionKey = issuerElGamalPubKeyHex,
 };
 ```
@@ -61,7 +61,7 @@ var set = new MPTokenIssuanceSet
 Правила preflight rippled (продублированы клиентской валидацией SDK):
 
 - ненулевой `TransferFee` **несовместим** со включением конфиденциальных балансов (`temBAD_TRANSFER_FEE`);
-- при создании выпуска флаг `tmfMPTCannotEnableCanHoldConfidentialBalance` навсегда запрещает включение приватности в будущем;
+- флаг `tifMPTCanHoldConfidentialBalance` в `ImmutableFlags` — при создании выпуска или в любой последующей транзакции — навсегда запрещает включение приватности;
 - `AuditorEncryptionKey` требует наличия `IssuerEncryptionKey`.
 
 ---
@@ -92,7 +92,7 @@ var set = new MPTokenIssuanceSet
 
 ## Объекты леджера
 
-- `LOMPTokenIssuance`: `IssuerEncryptionKey`, `AuditorEncryptionKey`, `ConfidentialOutstandingAmount` (decimal-строка — base-ten UInt64 поле), `MutableFlags`
+- `LOMPTokenIssuance`: `IssuerEncryptionKey`, `AuditorEncryptionKey`, `ConfidentialOutstandingAmount` (decimal-строка — base-ten UInt64 поле), `ImmutableFlags`
 - `LOMPToken`: поля конфиденциального баланса/inbox (зашифрованные блобы + счётчики)
 
 ---

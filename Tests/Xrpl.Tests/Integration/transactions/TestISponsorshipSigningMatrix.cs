@@ -75,7 +75,7 @@ public class TestISponsorshipSigningMatrix
         {
             Account = sponsor.ClassicAddress,
             Sponsee = sponsee.ClassicAddress,
-            FeeAmount = new Currency { ValueAsXrp = 10m },
+            FeeAmountDelta = new Currency { ValueAsXrp = 10m },
         }, sponsor);
         return (sponsor, sponsee, destination);
     }

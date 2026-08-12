@@ -13,11 +13,12 @@ using Xrpl.Wallet;
 namespace XrplTests.Xrpl.ClientLib.Integration;
 
 /// <summary>
-/// DynamicMPT (XLS-94) end-to-end coverage: an issuance declares at creation
-/// which capabilities and fields may change later (<c>MutableFlags</c>), and a
-/// later MPTokenIssuanceSet performs the mutation. Both directions are checked
-/// against the ledger object, plus the permission rule that makes the feature
-/// meaningful — a mutation the issuance never allowed is rejected.
+/// DynamicMPT (XLS-94) end-to-end coverage: capabilities and fields of an
+/// issuance stay mutable unless the issuer freezes them via <c>ImmutableFlags</c>,
+/// and a later MPTokenIssuanceSet either performs the mutation, enables a
+/// capability through a tfMPTSet* flag, or freezes more of the issuance. Both
+/// directions are checked against the ledger object, plus the permission rule
+/// that makes the feature meaningful — mutating a frozen field is rejected.
 ///
 /// Amendment-gated: DynamicMPT is Supported::No on rippled 3.2.x, so these
 /// tests skip on the CI stand and run for real on the nightly stand, where
@@ -58,22 +59,22 @@ public class TestIDynamicMPT : TestIMPTokenBase
     public static void ClassCleanup() => client?.Dispose();
 
     [TestMethod]
-    public async Task TestDynamicMPT_MutableFlagsOnCreate_ReachTheLedgerObject()
+    public async Task TestDynamicMPT_ImmutableFlagsOnCreate_ReachTheLedgerObject()
     {
         XrplWallet issuer = XrplWallet.Generate();
         await IntegrationTestConfig.TryFundWalletAsync(client, issuer, nodeType);
 
-        MPTokenIssuanceCreateMutableFlags mutable =
-            MPTokenIssuanceCreateMutableFlags.tmfMPTCanMutateMetadata |
-            MPTokenIssuanceCreateMutableFlags.tmfMPTCanMutateTransferFee |
-            MPTokenIssuanceCreateMutableFlags.tmfMPTCanEnableCanLock;
+        MPTokenIssuanceImmutableFlags immutable =
+            MPTokenIssuanceImmutableFlags.tifMPTMetadata |
+            MPTokenIssuanceImmutableFlags.tifMPTTransferFee |
+            MPTokenIssuanceImmutableFlags.tifMPTCanLock;
 
-        string issuanceId = await CreateIssuance(issuer, MPTokenIssuanceCreateFlags.tfMPTCanTransfer, mutable, InitialMetadata);
+        string issuanceId = await CreateIssuance(issuer, MPTokenIssuanceCreateFlags.tfMPTCanTransfer, immutable, InitialMetadata);
 
         LOMPTokenIssuance issuance = await ReadIssuance(issuanceId);
 
-        Assert.IsNotNull(issuance.MutableFlags, "MutableFlags should be present on the issuance");
-        Assert.AreEqual((uint)mutable, issuance.MutableFlags.Value, "MutableFlags should round-trip unchanged");
+        Assert.IsNotNull(issuance.ImmutableFlags, "ImmutableFlags should be present on the issuance");
+        Assert.AreEqual((uint)immutable, issuance.ImmutableFlags.Value, "ImmutableFlags should round-trip unchanged");
         Assert.AreEqual(InitialMetadata, issuance.MPTokenMetadata, "MPTokenMetadata should round-trip unchanged");
     }
 
@@ -83,13 +84,13 @@ public class TestIDynamicMPT : TestIMPTokenBase
         XrplWallet issuer = XrplWallet.Generate();
         await IntegrationTestConfig.TryFundWalletAsync(client, issuer, nodeType);
 
-        // TransferFee > 0 requires lsfMPTCanTransfer to be already set on the
-        // issuance (rippled MPTokenIssuanceSet::preclaim), hence tfMPTCanTransfer here.
+        // No ImmutableFlags: with DynamicMPT everything the amendment covers stays
+        // mutable by default. A TransferFee above zero still requires lsfMPTCanTransfer
+        // on the issuance (rippled MPTokenIssuanceSet::preclaim), hence tfMPTCanTransfer.
         string issuanceId = await CreateIssuance(
             issuer,
             MPTokenIssuanceCreateFlags.tfMPTCanTransfer,
-            MPTokenIssuanceCreateMutableFlags.tmfMPTCanMutateMetadata |
-            MPTokenIssuanceCreateMutableFlags.tmfMPTCanMutateTransferFee,
+            null,
             InitialMetadata);
 
         MPTokenIssuanceSet mutation = new MPTokenIssuanceSet
@@ -108,28 +109,21 @@ public class TestIDynamicMPT : TestIMPTokenBase
         Assert.AreEqual((ushort)500, issuance.TransferFee, "TransferFee should be the mutated value");
         Assert.AreEqual(UpdatedMetadata, issuance.MPTokenMetadata, "MPTokenMetadata should be the mutated value");
 
-        // doApply writes lsf flags, TransferFee and metadata; it never rewrites
-        // sfMutableFlags, so the permission set survives the mutation
-        Assert.IsNotNull(issuance.MutableFlags, "MutableFlags should still be present after a mutation");
-        Assert.AreEqual(
-            (uint)(MPTokenIssuanceCreateMutableFlags.tmfMPTCanMutateMetadata |
-                   MPTokenIssuanceCreateMutableFlags.tmfMPTCanMutateTransferFee),
-            issuance.MutableFlags.Value,
-            "MutableFlags should be unchanged by a mutation");
+        // sfImmutableFlags is soeDEFAULT and this mutation never writes it, so the
+        // issuance stays fully mutable
+        Assert.IsTrue(
+            issuance.ImmutableFlags is null or 0u,
+            "ImmutableFlags should stay unset when the mutation does not freeze anything");
     }
 
     [TestMethod]
-    public async Task TestDynamicMPT_SetMutableFlag_EnablesCapabilityOnTheIssuance()
+    public async Task TestDynamicMPT_SetCapabilityFlag_EnablesCapabilityOnTheIssuance()
     {
         XrplWallet issuer = XrplWallet.Generate();
         await IntegrationTestConfig.TryFundWalletAsync(client, issuer, nodeType);
 
-        // Created WITHOUT tfMPTCanLock — only with the permission to enable it later
-        string issuanceId = await CreateIssuance(
-            issuer,
-            null,
-            MPTokenIssuanceCreateMutableFlags.tmfMPTCanEnableCanLock,
-            null);
+        // Created WITHOUT tfMPTCanLock and without freezing it, so it may be enabled later
+        string issuanceId = await CreateIssuance(issuer, null, null, null);
 
         LOMPTokenIssuance before = await ReadIssuance(issuanceId);
         Assert.IsTrue(
@@ -140,7 +134,7 @@ public class TestIDynamicMPT : TestIMPTokenBase
         {
             Account = issuer.ClassicAddress,
             MPTokenIssuanceID = issuanceId,
-            MutableFlags = MPTokenIssuanceSetMutableFlags.tmfMPTSetCanLock,
+            Flags = MPTokenIssuanceSetFlags.tfMPTSetCanLock,
         };
         enable = await client.Autofill(enable);
         TransactionSummary result = await client.SubmitAndWait(enable, issuer, true);
@@ -149,17 +143,21 @@ public class TestIDynamicMPT : TestIMPTokenBase
         LOMPTokenIssuance after = await ReadIssuance(issuanceId);
         Assert.IsTrue(
             (after.Flags.GetValueOrDefault() & MPTokenIssuanceFlags.MPTCanLock) != 0,
-            "MPTCanLock should be set after tmfMPTSetCanLock");
+            "MPTCanLock should be set after tfMPTSetCanLock");
     }
 
     [TestMethod]
-    public async Task TestDynamicMPT_MutationWithoutPermission_IsRejected()
+    public async Task TestDynamicMPT_MutationOfFrozenField_IsRejected()
     {
         XrplWallet issuer = XrplWallet.Generate();
         await IntegrationTestConfig.TryFundWalletAsync(client, issuer, nodeType);
 
-        // No MutableFlags at all: nothing about this issuance may be changed later
-        string issuanceId = await CreateIssuance(issuer, null, null, InitialMetadata);
+        // Metadata frozen at creation: no later transaction may rewrite it
+        string issuanceId = await CreateIssuance(
+            issuer,
+            null,
+            MPTokenIssuanceImmutableFlags.tifMPTMetadata,
+            InitialMetadata);
 
         MPTokenIssuanceSet mutation = new MPTokenIssuanceSet
         {
@@ -177,17 +175,56 @@ public class TestIDynamicMPT : TestIMPTokenBase
         Assert.AreEqual(InitialMetadata, issuance.MPTokenMetadata, "MPTokenMetadata should be untouched by the rejected mutation");
     }
 
+    [TestMethod]
+    public async Task TestDynamicMPT_FreezeViaSet_BlocksTheNextMutation()
+    {
+        XrplWallet issuer = XrplWallet.Generate();
+        await IntegrationTestConfig.TryFundWalletAsync(client, issuer, nodeType);
+
+        // Created fully mutable, then frozen by a separate MPTokenIssuanceSet:
+        // doApply ORs ImmutableFlags into the ledger object, so a freeze is one-way
+        string issuanceId = await CreateIssuance(issuer, null, null, InitialMetadata);
+
+        MPTokenIssuanceSet freeze = new MPTokenIssuanceSet
+        {
+            Account = issuer.ClassicAddress,
+            MPTokenIssuanceID = issuanceId,
+            ImmutableFlags = MPTokenIssuanceImmutableFlags.tifMPTMetadata,
+        };
+        freeze = await client.Autofill(freeze);
+        ValidateResult(await client.SubmitAndWait(freeze, issuer, true));
+
+        LOMPTokenIssuance frozen = await ReadIssuance(issuanceId);
+        Assert.IsNotNull(frozen.ImmutableFlags, "ImmutableFlags should be present after the freeze");
+        Assert.AreEqual(
+            (uint)MPTokenIssuanceImmutableFlags.tifMPTMetadata,
+            frozen.ImmutableFlags.Value,
+            "ImmutableFlags should carry the freshly frozen bit");
+
+        MPTokenIssuanceSet mutation = new MPTokenIssuanceSet
+        {
+            Account = issuer.ClassicAddress,
+            MPTokenIssuanceID = issuanceId,
+            MPTokenMetadata = UpdatedMetadata,
+        };
+        mutation = await client.Autofill(mutation);
+
+        await Helper.ThrowsExceptionAsync<RippleException>(
+            () => client.SubmitAndWait(mutation, issuer, true),
+            "Final tx result is not success: tecNO_PERMISSION");
+    }
+
     private static async Task<string> CreateIssuance(
         XrplWallet issuer,
         MPTokenIssuanceCreateFlags? flags,
-        MPTokenIssuanceCreateMutableFlags? mutableFlags,
+        MPTokenIssuanceImmutableFlags? immutableFlags,
         string metadata)
     {
         MPTokenIssuanceCreate create = new MPTokenIssuanceCreate
         {
             Account = issuer.ClassicAddress,
             Flags = flags,
-            MutableFlags = mutableFlags,
+            ImmutableFlags = immutableFlags,
             MPTokenMetadata = metadata,
         };
         create = await client.Autofill(create);

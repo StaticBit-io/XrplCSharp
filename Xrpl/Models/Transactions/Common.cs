@@ -172,6 +172,23 @@ namespace Xrpl.Models.Transactions
         }
 
         /// <summary>
+        /// Extracts a signed Int32 from any integral representation produced by the JSON layer.
+        /// Used by delta fields such as SponsorshipSet.RemainingOwnerCountDelta, which are
+        /// serialized as the XRPL Int32 type and may be negative.
+        /// </summary>
+        public static bool TryGetInt32(object value, out int result)
+        {
+            switch (value)
+            {
+                case int i: result = i; return true;
+                case uint u when u <= int.MaxValue: result = (int)u; return true;
+                case long l when l >= int.MinValue && l <= int.MaxValue: result = (int)l; return true;
+                case ulong ul when ul <= int.MaxValue: result = (int)ul; return true;
+                default: result = 0; return false;
+            }
+        }
+
+        /// <summary>
         /// Validates a flags value that must be non-zero and contain only bits
         /// defined by <typeparamref name="TEnum"/> (rippled temINVALID_FLAG pattern).
         /// </summary>

@@ -142,14 +142,14 @@ namespace Xrpl.Tests.Models.Tests
             {
                 Account = Account1,
                 Sponsee = Account2,
-                FeeAmount = new global::Xrpl.Models.Common.Currency { ValueAsXrp = 5m },
-                RemainingOwnerCount = 3,
+                FeeAmountDelta = new global::Xrpl.Models.Common.Currency { ValueAsXrp = 5m },
+                RemainingOwnerCountDelta = 3,
                 Flags = SponsorshipSetFlags.tfSponsorshipSetRequireSignForFee,
             };
             JsonObject decoded = RoundTrip(tx);
             Assert.AreEqual("SponsorshipSet", decoded["TransactionType"]!.GetValue<string>());
             Assert.AreEqual(Account2, decoded["Sponsee"]!.GetValue<string>());
-            Assert.AreEqual(3u, decoded["RemainingOwnerCount"]!.GetValue<uint>());
+            Assert.AreEqual(3, decoded["RemainingOwnerCountDelta"]!.GetValue<int>());
             Assert.AreEqual((uint)SponsorshipSetFlags.tfSponsorshipSetRequireSignForFee, decoded["Flags"]!.GetValue<uint>());
         }
 

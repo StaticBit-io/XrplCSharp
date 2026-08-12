@@ -53,7 +53,7 @@ var set = new MPTokenIssuanceSet
 {
     Account = issuer.ClassicAddress,
     MPTokenIssuanceID = issuanceId,
-    MutableFlags = MPTokenIssuanceSetMutableFlags.tmfMPTSetCanHoldConfidentialBalance,
+    Flags = MPTokenIssuanceSetFlags.tfMPTSetCanHoldConfidentialBalance,
     IssuerEncryptionKey = issuerElGamalPubKeyHex,
 };
 ```
@@ -61,7 +61,7 @@ var set = new MPTokenIssuanceSet
 Rules enforced by rippled preflight (mirrored by SDK validation):
 
 - a non-zero `TransferFee` **cannot** be combined with enabling confidential balances (`temBAD_TRANSFER_FEE`);
-- at issuance creation, `tmfMPTCannotEnableCanHoldConfidentialBalance` permanently forbids enabling privacy later;
+- `tifMPTCanHoldConfidentialBalance` in `ImmutableFlags` — on the create or on any later set — permanently forbids enabling privacy;
 - an `AuditorEncryptionKey` requires an `IssuerEncryptionKey`.
 
 ---
@@ -92,7 +92,7 @@ All amounts encrypted under holder/issuer/auditor keys are supplied by the **pro
 
 ## Ledger Objects
 
-- `LOMPTokenIssuance`: `IssuerEncryptionKey`, `AuditorEncryptionKey`, `ConfidentialOutstandingAmount` (decimal string — a base-ten UInt64 field), `MutableFlags`
+- `LOMPTokenIssuance`: `IssuerEncryptionKey`, `AuditorEncryptionKey`, `ConfidentialOutstandingAmount` (decimal string — a base-ten UInt64 field), `ImmutableFlags`
 - `LOMPToken`: confidential balance/inbox fields (encrypted blobs + counters)
 
 ---

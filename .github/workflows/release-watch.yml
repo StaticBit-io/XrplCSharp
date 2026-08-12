@@ -18,9 +18,10 @@ name: Release Watch
 #
 # The nightly stand config (rippled.batchv11.cfg) is intentionally NOT touched
 # here: its amendment lists must match the pinned nightly xrpld build
-# (ARG XRPLD_VERSION in Dockerfile.nightly), not the latest stable tag.
-# Regenerate it manually when bumping the nightly pin:
-#   .ci-config/generate-amendments.sh <develop-ref> .ci-config/rippled.batchv11.cfg
+# (ARG XRPLD_VERSION in Dockerfile.nightly), not the latest stable tag. That pin
+# has its own weekly watcher, nightly-pin-watch.yml, which bumps it once it is
+# older than the allowance and regenerates the config from the matching develop
+# commit. By hand: .ci-config/bump-nightly-pin.sh
 
 on:
   schedule:
