@@ -48,6 +48,25 @@ public class TestUJsonSerializerOptionsCache
         Assert.IsTrue(keptOthers, "Converters unrelated to the requested type must survive");
     }
 
+    /// <summary>
+    /// The source must be copied, never stripped in place: mutating it would remove LOConverter from the
+    /// process-wide default options and every ledger object would silently degrade to a bare entry.
+    /// </summary>
+    [TestMethod]
+    public void WithoutConverter_LeavesTheSourceOptionsIntact()
+    {
+        JsonSerializerOptionsCache.WithoutConverter<LOConverter>(XrplJsonOptions.Default);
+
+        bool sourceStillHasIt = false;
+        foreach (JsonConverter converter in XrplJsonOptions.Default.Converters)
+        {
+            if (converter is LOConverter)
+                sourceStillHasIt = true;
+        }
+
+        Assert.IsTrue(sourceStillHasIt, "XrplJsonOptions.Default must keep its LOConverter");
+    }
+
     [TestMethod]
     public void WithoutConverter_PreservesSourceSettings()
     {
@@ -84,24 +103,36 @@ public class TestUJsonSerializerOptionsCache
     }
 
     /// <summary>
-    /// The instance handed to converters during a real deserialization must be the cached one —
-    /// this is what keeps the metadata cache warm across the elements of a collection.
+    /// The regression this cache needs guarded is a converter quietly going back to building its own copy
+    /// per call. Options identity cannot detect that — System.Text.Json hands converters the options of the
+    /// pooled caching context, so a per-call copy still shows up as one shared instance. What does detect it
+    /// is the cache entry itself: the run below uses a private options instance no other test touches, so an
+    /// entry for it can only have been created by a converter asking the cache during this deserialization.
     /// </summary>
     [TestMethod]
-    public void Deserialize_ReusesTheCachedOptionsInstance()
+    public void Deserialize_GoesThroughTheCache()
     {
+        JsonSerializerOptions privateOptions = new JsonSerializerOptions
+        {
+            PropertyNameCaseInsensitive = true,
+        };
+        privateOptions.Converters.Add(new LOConverter());
+        privateOptions.Converters.Add(new LedgerEntryTypeConverter());
+
+        Assert.IsFalse(
+            JsonSerializerOptionsCache.HasCachedEntry<LOConverter>(privateOptions),
+            "Fresh options must start with no cache entry");
+
         string json = @"{""account"":""rTest"",""account_objects"":[
             {""LedgerEntryType"":""Offer"",""Account"":""rTest"",""Sequence"":1,""index"":""AA""},
             {""LedgerEntryType"":""Offer"",""Account"":""rTest"",""Sequence"":2,""index"":""BB""}]}";
 
-        JsonSerializerOptions beforeRun = JsonSerializerOptionsCache.WithoutConverter<LOConverter>(XrplJsonOptions.Default);
-
-        AccountObjects response = JsonSerializer.Deserialize<AccountObjects>(json, XrplJsonOptions.Default);
-
-        JsonSerializerOptions afterRun = JsonSerializerOptionsCache.WithoutConverter<LOConverter>(XrplJsonOptions.Default);
+        AccountObjects response = JsonSerializer.Deserialize<AccountObjects>(json, privateOptions);
 
         Assert.HasCount(2, response.AccountObjectList);
         Assert.IsInstanceOfType(response.AccountObjectList[0], typeof(LOOffer));
-        Assert.AreSame(beforeRun, afterRun);
+        Assert.IsTrue(
+            JsonSerializerOptionsCache.HasCachedEntry<LOConverter>(privateOptions),
+            "LOConverter must resolve its inner options through the cache, not build a copy per element");
     }
 }
