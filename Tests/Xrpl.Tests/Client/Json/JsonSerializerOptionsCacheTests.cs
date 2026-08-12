@@ -12,8 +12,10 @@ namespace XrplTests.Client.Json;
 
 /// <summary>
 /// Polymorphic converters re-enter the serializer with their own converter removed. Building those
-/// options per call rebuilt System.Text.Json's per-instance type-metadata cache for every value
-/// converted; the cache makes it once per (source options, converter type).
+/// options per call allocated an options instance, copied the whole converter list and ran its own
+/// structural-equality lookup in System.Text.Json's caching-context pool — for every value converted.
+/// Type metadata was not rebuilt: since .NET 8 that pool shares one caching context between
+/// structurally equal options instances. The cache does the work once per (source options, converter type).
 /// </summary>
 [TestClass]
 public class TestUJsonSerializerOptionsCache
