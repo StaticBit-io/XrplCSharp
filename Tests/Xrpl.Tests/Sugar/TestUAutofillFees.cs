@@ -301,6 +301,8 @@ public class TestUAutofillFees
         // base * (1 + 3 counterparty signers) = 48
         Assert.AreEqual("48", tx["Fee"]);
         Assert.AreEqual(1, client.AccountInfoCalls);
+        // A signer list set in the last ledger is not in `validated` yet; missing it would underpay.
+        Assert.AreEqual(LedgerIndexType.Current, client.LastAccountInfoRequest?.LedgerIndex?.LedgerIndexType);
     }
 
     [TestMethod]
@@ -375,6 +377,37 @@ public class TestUAutofillFees
         await client.CalculateFeePerTransactionType(tx);
 
         Assert.AreEqual("24", tx["Fee"]);
+        // A loan created in the last ledger is not in `validated` yet; missing it would underpay.
+        Assert.AreEqual(LedgerIndexType.Current, client.LastLedgerEntryRequest?.LedgerIndex?.LedgerIndexType);
+    }
+
+    [TestMethod]
+    public async Task TestUCalculateFee_LoanPay_FewPaymentsRemainingWithLargeAmount_StillChargesMaxIncrements()
+    {
+        var client = new FeeTestClient(MAINNET_BASE_FEE, RESERVE_INC) { LoanEntry = CreateLoan(paymentRemaining: 6) };
+        var tx = CreateLoanPayTx(amount: "1000000");
+
+        await client.CalculateFeePerTransactionType(tx);
+
+        // rippled reads PaymentRemaining only as the <= 5 short-circuit and never clamps the
+        // estimate by it, so an amount covering 100 regular payments costs the full 20 increments
+        // even with 6 payments left. Clamping here would underpay and hit telINSUF_FEE_P.
+        Assert.AreEqual("240", tx["Fee"]);
+    }
+
+    [TestMethod]
+    public async Task TestUCalculateFee_LoanPay_PeriodicPaymentNearDecimalLimit_DoesNotOverflow()
+    {
+        var client = new FeeTestClient(MAINNET_BASE_FEE, RESERVE_INC)
+        {
+            LoanEntry = CreateLoan(paymentRemaining: 50, periodicPayment: "79000000000000000000000000000")
+        };
+        var tx = CreateLoanPayTx(amount: "1000");
+
+        await client.CalculateFeePerTransactionType(tx);
+
+        // The amount does not even cover one payment: one increment, and no arithmetic overflow.
+        Assert.AreEqual("12", tx["Fee"]);
     }
 
     [TestMethod]
@@ -557,6 +590,9 @@ internal sealed class FeeTestClient : IXrplClient
     public int AccountInfoCalls { get; private set; }
     public int LedgerEntryCalls { get; private set; }
 
+    public AccountInfoRequest? LastAccountInfoRequest { get; private set; }
+    public LedgerEntryRequest? LastLedgerEntryRequest { get; private set; }
+
     public Task<ServerInfo> ServerInfo(ServerInfoRequest request, CancellationToken cancellationToken = default)
     {
         var info = new ServerInfo
@@ -615,6 +651,7 @@ internal sealed class FeeTestClient : IXrplClient
     public Task<AccountInfo> AccountInfo(AccountInfoRequest request, CancellationToken cancellationToken = default)
     {
         AccountInfoCalls++;
+        LastAccountInfoRequest = request;
         return Task.FromResult(new AccountInfo { SignerLists = CounterpartySignerLists });
     }
 
@@ -633,6 +670,7 @@ internal sealed class FeeTestClient : IXrplClient
     public Task<LedgerEntryResponse> LedgerEntry(LedgerEntryRequest request, CancellationToken cancellationToken = default)
     {
         LedgerEntryCalls++;
+        LastLedgerEntryRequest = request;
         if (LedgerEntryThrows)
             throw new XrplException("entryNotFound");
         return Task.FromResult(new LedgerEntryResponse { Index = request.Index, Node = LoanEntry });

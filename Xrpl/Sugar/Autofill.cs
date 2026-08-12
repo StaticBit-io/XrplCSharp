@@ -329,9 +329,11 @@ namespace Xrpl.Sugar
             if (!tx.TryGetValue("Counterparty", out var counterparty) || counterparty is not string account || string.IsNullOrWhiteSpace(account))
                 return 1;
 
+            // Current, not validated: a signer list set in the last ledger has not been validated
+            // yet, and missing it would underpay the fee.
             AccountInfoRequest request = new AccountInfoRequest(account)
             {
-                LedgerIndex = new LedgerIndex(LedgerIndexType.Validated),
+                LedgerIndex = new LedgerIndex(LedgerIndexType.Current),
                 SignerLists = true,
             };
 
@@ -387,7 +389,9 @@ namespace Xrpl.Sugar
                 return BigInteger.One;
 
             // The payment handler never processes more than kLoanMaximumPaymentsPerTransaction payments.
-            if (amount >= regularPayment * LOAN_MAX_PAYMENTS_PER_TRANSACTION)
+            // Divided rather than multiplied: a periodic payment near decimal.MaxValue overflows when
+            // scaled up, while dividing the amount by a constant never can.
+            if (amount / LOAN_MAX_PAYMENTS_PER_TRANSACTION >= regularPayment)
                 return LOAN_MAX_FEE_INCREMENTS;
 
             // Overpayments do about as much work as a full payment, so they round up.
@@ -410,10 +414,12 @@ namespace Xrpl.Sugar
         {
             try
             {
+                // Current, not validated: a loan created in the last ledger has not been validated
+                // yet, and treating it as missing would underpay the fee.
                 LedgerEntryRequest request = new LedgerEntryRequest
                 {
                     Index = loanId,
-                    LedgerIndex = new LedgerIndex(LedgerIndexType.Validated),
+                    LedgerIndex = new LedgerIndex(LedgerIndexType.Current),
                 };
                 LedgerEntryResponse response = await client.LedgerEntry(request, cancellationToken);
                 return response?.Node as LOLoan;
