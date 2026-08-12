@@ -1,4 +1,4 @@
-<Project Sdk="Microsoft.NET.Sdk">
+﻿<Project Sdk="Microsoft.NET.Sdk">
 
   <PropertyGroup>
     <!-- <TargetFramework>netstandard2.0</TargetFramework> -->
@@ -14,13 +14,16 @@
     <PackageLicenseExpression>Apache-2.0</PackageLicenseExpression>
     <PackageProjectUrl>https://github.com/StaticBit-io/XrplCSharp</PackageProjectUrl>
     <Title>XrplCSharp</Title>
-    <PackageVersion>10.10.0.0</PackageVersion>
+    <PackageVersion>10.11.0.0</PackageVersion>
   </PropertyGroup>
 
   <PropertyGroup>
     <WarningLevel>4</WarningLevel>
     <GenerateDocumentationFile>true</GenerateDocumentationFile>
   </PropertyGroup>
+  <ItemGroup>
+    <InternalsVisibleTo Include="Xrpl.Tests" />
+  </ItemGroup>
   <ItemGroup>
     <PackageReference Include="NBitcoin" Version="8.0.13" />
     <PackageReference Include="Portable.BouncyCastle" Version="1.9.0" />

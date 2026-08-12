@@ -63,6 +63,11 @@
 | `FeeAmount` | Остаток XRP-бюджета на спонсируемые комиссии |
 | `RemainingOwnerCount` | Сколько ещё объектов спонсор покроет резервами |
 
+Оба поля существуют только у объекта леджера. Транзакция меняет их знаковыми полями
+`FeeAmountDelta` / `RemainingOwnerCountDelta`: положительная дельта пополняет бюджет,
+отрицательная возвращает его спонсору. Абсолютные имена в транзакции нода отвергает
+(`Field 'FeeAmount' found in disallowed location`).
+
 ### Режим обязательной подписи
 
 По умолчанию спонсируемый тратит бюджет без участия спонсора. Флаги `SponsorshipSet` переключают это по-измеренно:
@@ -91,14 +96,14 @@ var setup = new SponsorshipSet
 {
     Account = sponsor.ClassicAddress,
     Sponsee = sponsee.ClassicAddress,
-    FeeAmount = new Currency { ValueAsXrp = 5m },
-    RemainingOwnerCount = 3,
+    FeeAmountDelta = new Currency { ValueAsXrp = 5m },
+    RemainingOwnerCountDelta = 3,
 };
 setup = await client.Autofill(setup);
 await client.SubmitAndWait(setup, sponsor, true);
 
 // Спонсируемый сам удаляет своё спонсорство (указывает спонсора);
-// при удалении запрещены модификационные флаги и FeeAmount/MaxFee/RemainingOwnerCount:
+// при удалении запрещены модификационные флаги и FeeAmountDelta/MaxFee/RemainingOwnerCountDelta:
 var deletion = new SponsorshipSet
 {
     Account = sponsee.ClassicAddress,
@@ -132,8 +137,8 @@ var tx = new SponsorshipSet
 {
     Account = sponsor.ClassicAddress,
     Sponsee = sponsee.ClassicAddress,
-    FeeAmount = new Currency { ValueAsXrp = 5m },
-    RemainingOwnerCount = 3,
+    FeeAmountDelta = new Currency { ValueAsXrp = 5m },
+    RemainingOwnerCountDelta = 3,
 };
 tx = await client.Autofill(tx);
 TransactionSummary result = await client.SubmitAndWait(tx, sponsor, true);

@@ -50,6 +50,12 @@ namespace Xrpl.Models.Ledger
         /// Issuer can claw back balances from holders.
         /// </summary>
         MPTCanClawback = 0x00000040,
+
+        /// <summary>
+        /// Holders can hold confidential (encrypted) balances of this MPT.
+        /// Requires ConfidentialTransfer amendment.
+        /// </summary>
+        MPTCanHoldConfidentialBalance = 0x00000080,
     }
 
     /// <summary>
@@ -167,10 +173,10 @@ namespace Xrpl.Models.Ledger
         public string? DomainID { get; init; }
 
         /// <summary>
-        /// DynamicMPT: which issuance flags remain mutable.
+        /// DynamicMPT: which issuance capabilities and fields are frozen.
         /// </summary>
-        [JsonPropertyName("MutableFlags")]
-        public uint? MutableFlags { get; init; }
+        [JsonPropertyName("ImmutableFlags")]
+        public uint? ImmutableFlags { get; init; }
 
         /// <summary>
         /// MPTokensV2: the reference holding object for DEX trading.

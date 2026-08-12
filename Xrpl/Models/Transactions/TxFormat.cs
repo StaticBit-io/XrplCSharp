@@ -623,7 +623,7 @@ namespace Xrpl.Models.Transaction
                     [Field.MaximumAmount] = Requirement.Optional,
                     [Field.MPTokenMetadata] = Requirement.Optional,
                     [Field.DomainID] = Requirement.Optional,
-                    [Field.MutableFlags] = Requirement.Optional,
+                    [Field.ImmutableFlags] = Requirement.Optional,
                 },
                 [BinaryCodec.Types.TransactionType.MPTokenIssuanceDestroy] = new TxFormat
                 {
@@ -636,7 +636,7 @@ namespace Xrpl.Models.Transaction
                     [Field.DomainID] = Requirement.Optional,
                     [Field.MPTokenMetadata] = Requirement.Optional,
                     [Field.TransferFee] = Requirement.Optional,
-                    [Field.MutableFlags] = Requirement.Optional,
+                    [Field.ImmutableFlags] = Requirement.Optional,
                     [Field.IssuerEncryptionKey] = Requirement.Optional,
                     [Field.AuditorEncryptionKey] = Requirement.Optional,
                 },
@@ -651,9 +651,9 @@ namespace Xrpl.Models.Transaction
                 {
                     [Field.CounterpartySponsor] = Requirement.Optional,
                     [Field.Sponsee] = Requirement.Optional,
-                    [Field.FeeAmount] = Requirement.Optional,
+                    [Field.FeeAmountDelta] = Requirement.Optional,
                     [Field.MaxFee] = Requirement.Optional,
-                    [Field.RemainingOwnerCount] = Requirement.Optional,
+                    [Field.RemainingOwnerCountDelta] = Requirement.Optional,
                 },
                 [BinaryCodec.Types.TransactionType.SponsorshipTransfer] = new TxFormat
                 {

@@ -1,0 +1,22 @@
+https://github.com/XRPLF/rippled/blob/3.3.0/include/xrpl/protocol/LedgerFormats.h
+sha  00a178fb92ca49521b937ae1a99d863765ea8a90
+date 2026-08-06T16:34:39Z
+tag  3.3.0
+
+LedgerFormats.h is vendored byte-identical to the ref above so that it can be
+re-verified with a plain diff:
+
+  curl -sSL https://raw.githubusercontent.com/XRPLF/rippled/00a178fb92ca49521b937ae1a99d863765ea8a90/include/xrpl/protocol/LedgerFormats.h \
+    | diff - Tests/Xrpl.Tests/Fixtures/LedgerFormats.h
+
+This is the only place the protocol states which lsf flags belong to which ledger
+object: definitions.json carries field codes and object types but no flag values,
+so it cannot answer this question.
+
+Pinned to a tag rather than to develop on purpose — the same reason
+transactions.macro is pinned: tracking upstream drift is protocol-watch's job, and
+a network-backed test would go red on Ripple's release schedule instead of ours.
+
+Do not hand-edit it. When protocol-watch reports a change to this file upstream,
+replace it wholesale, update the sha above, and let TestULedgerFlagsConformance
+show which model enums have to follow.

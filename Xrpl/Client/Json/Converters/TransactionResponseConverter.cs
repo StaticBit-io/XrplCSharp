@@ -23,12 +23,7 @@ namespace Xrpl.Client.Json.Converters
             }
 
             // Remove this converter to avoid infinite recursion
-            JsonSerializerOptions innerOptions = new JsonSerializerOptions(options);
-            for (int i = innerOptions.Converters.Count - 1; i >= 0; i--)
-            {
-                if (innerOptions.Converters[i] is TransactionResponseConverter)
-                    innerOptions.Converters.RemoveAt(i);
-            }
+            JsonSerializerOptions innerOptions = JsonSerializerOptionsCache.WithoutConverter<TransactionResponseConverter>(options);
 
             JsonSerializer.Serialize(writer, value, value.GetType(), innerOptions);
         }
@@ -169,12 +164,7 @@ namespace Xrpl.Client.Json.Converters
             string rawJson = root.GetRawText();
 
             // Remove this converter to avoid infinite recursion
-            JsonSerializerOptions innerOptions = new JsonSerializerOptions(options);
-            for (int i = innerOptions.Converters.Count - 1; i >= 0; i--)
-            {
-                if (innerOptions.Converters[i] is TransactionResponseConverter)
-                    innerOptions.Converters.RemoveAt(i);
-            }
+            JsonSerializerOptions innerOptions = JsonSerializerOptionsCache.WithoutConverter<TransactionResponseConverter>(options);
 
             try
             {

@@ -12,11 +12,13 @@ namespace Xrpl.Models.Ledger
     {
         public LOAmm()
         {
-            LedgerEntryType = LedgerEntryType.AccountRoot;
+            LedgerEntryType = LedgerEntryType.AMM;
         }
         /// <summary>
-        /// The account that tracks the balance of LPTokens between the AMM instance via Trustline.
+        /// The special account that holds the AMM's assets and issues its LPTokens.
+        /// Serialized as <c>Account</c>, which is the name rippled gives this field.
         /// </summary>
+        [JsonPropertyName("Account")]
         public string AMMAccount { get; set; }
         /// <summary>
         /// Specifies one of the pool assets (XRP or token) of the AMM instance.
@@ -53,21 +55,22 @@ namespace Xrpl.Models.Ledger
         /// A list of vote objects, representing votes on the pool's trading fee..
         /// </summary>
         public List<VoteEntry> VoteSlots { get; set; }
-        /// <summary>
-        /// The ledger index of the current in-progress ledger, which was used when
-        /// retrieving this information.
-        /// </summary>
-        public int? LedgerCurrentIndex { get; set; }
-        /// <summary>
-        /// True if this data is from a validated ledger version;<br/>
-        /// if omitted or set to false, this data is not final.
-        /// </summary>
-        public bool? Validated { get; set; }
 
-    
         /// <summary>Owner directory page hint (hex UInt64).</summary>
         [JsonPropertyName("OwnerNode")]
         public string OwnerNode { get; set; }
+
+        /// <summary>
+        /// The identifying hash of the transaction that most recently modified this object.
+        /// </summary>
+        [JsonPropertyName("PreviousTxnID")]
+        public string PreviousTxnID { get; set; }
+
+        /// <summary>
+        /// The index of the ledger that contains the transaction that most recently modified this object.
+        /// </summary>
+        [JsonPropertyName("PreviousTxnLgrSeq")]
+        public uint? PreviousTxnLgrSeq { get; set; }
 }
 
     public interface IAuthAccount

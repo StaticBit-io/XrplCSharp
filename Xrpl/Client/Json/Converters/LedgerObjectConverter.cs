@@ -229,12 +229,7 @@ public class LOConverter : JsonConverter<BaseLedgerEntry>
         string rawJson = element.Value.GetRawText();
 
         // Remove LOConverter to avoid infinite recursion
-        JsonSerializerOptions innerOptions = new JsonSerializerOptions(options);
-        for (int i = innerOptions.Converters.Count - 1; i >= 0; i--)
-        {
-            if (innerOptions.Converters[i] is LOConverter)
-                innerOptions.Converters.RemoveAt(i);
-        }
+        JsonSerializerOptions innerOptions = JsonSerializerOptionsCache.WithoutConverter<LOConverter>(options);
 
         Type targetType = GetTypeForLedgerEntry(type);
 
@@ -270,12 +265,7 @@ public class LOConverter : JsonConverter<BaseLedgerEntry>
         }
 
         // Serialize the concrete runtime type to avoid infinite recursion
-        JsonSerializerOptions innerOptions = new JsonSerializerOptions(options);
-        for (int i = innerOptions.Converters.Count - 1; i >= 0; i--)
-        {
-            if (innerOptions.Converters[i] is LOConverter)
-                innerOptions.Converters.RemoveAt(i);
-        }
+        JsonSerializerOptions innerOptions = JsonSerializerOptionsCache.WithoutConverter<LOConverter>(options);
 
         JsonSerializer.Serialize(writer, value, value.GetType(), innerOptions);
     }
@@ -329,9 +319,12 @@ public class LOConverter : JsonConverter<BaseLedgerEntry>
             ? letEl.GetString()
             : null;
 
+        // TryParse writes default(LedgerEntryType) — which is AccountRoot — on failure, so an
+        // unrecognized type must be mapped back to Unknown explicitly instead of being read as an
+        // account root with every field silently dropped.
         LedgerEntryType entryType = LedgerEntryType.Unknown;
-        if (ledgerEntryType != null)
-            Enum.TryParse(ledgerEntryType, ignoreCase: true, out entryType);
+        if (ledgerEntryType != null && !Enum.TryParse(ledgerEntryType, ignoreCase: true, out entryType))
+            entryType = LedgerEntryType.Unknown;
 
         return GetTypeForLedgerEntry(entryType);
     }
@@ -346,12 +339,7 @@ public class LOConverter : JsonConverter<BaseLedgerEntry>
         string rawJson = root.GetRawText();
 
         // Remove LOConverter to avoid infinite recursion
-        JsonSerializerOptions innerOptions = new JsonSerializerOptions(options);
-        for (int i = innerOptions.Converters.Count - 1; i >= 0; i--)
-        {
-            if (innerOptions.Converters[i] is LOConverter)
-                innerOptions.Converters.RemoveAt(i);
-        }
+        JsonSerializerOptions innerOptions = JsonSerializerOptionsCache.WithoutConverter<LOConverter>(options);
 
         return (BaseLedgerEntry)JsonSerializer.Deserialize(rawJson, targetType, innerOptions);
     }

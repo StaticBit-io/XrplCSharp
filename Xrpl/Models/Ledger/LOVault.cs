@@ -24,6 +24,27 @@ public enum VaultLedgerFlags : uint
 }
 
 /// <summary>
+/// Values of the Vault ledger entry's <c>LEVersion</c> field (rippled <c>VaultVersion</c>).
+/// </summary>
+/// <remarks>
+/// <see cref="LOVault.LEVersion"/> stays a plain <c>uint?</c>, matching the other UInt8
+/// fields of this object; these constants name the values the protocol defines so far.
+/// </remarks>
+public enum VaultVersion : uint
+{
+    /// <summary>
+    /// Accrual-basis accounting. Vaults created before cash-basis accounting was activated
+    /// carry no LEVersion at all and are treated as this version implicitly.
+    /// </summary>
+    Legacy = 0,
+
+    /// <summary>
+    /// Cash-basis accounting (rippled #7817).
+    /// </summary>
+    CashBasis = 1,
+}
+
+/// <summary>
 /// Recommended structure for the Vault Data field.
 /// The JSON is whitespace-removed and hex-encoded (max 256 bytes).
 /// </summary>
@@ -145,6 +166,14 @@ public class LOVault : BaseLedgerEntry
     public uint? Scale { get; init; }
 
     /// <summary>
+    /// Schema version of this ledger entry (UInt8), see <see cref="VaultVersion"/>.
+    /// Absent on vaults created before cash-basis accounting was activated, which
+    /// rippled resolves as <see cref="VaultVersion.Legacy"/> (0) rather than an error.
+    /// </summary>
+    [JsonPropertyName("LEVersion")]
+    public uint? LEVersion { get; init; }
+
+    /// <summary>
     /// Arbitrary hex-encoded data associated with the vault, limited to 256 bytes.
     /// Use <see cref="DataParsed"/> for a human-readable representation.
     /// </summary>
@@ -172,12 +201,6 @@ public class LOVault : BaseLedgerEntry
             catch { return null; }
         }
     }
-
-    /// <summary>
-    /// The ID of a permissioned domain associated with the vault.
-    /// </summary>
-    [JsonPropertyName("DomainID")]
-    public string DomainID { get; init; }
 
     /// <summary>
     /// The transaction sequence number that created the vault.

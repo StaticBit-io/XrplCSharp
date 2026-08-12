@@ -18,11 +18,6 @@ public class LONFTokenPage : BaseLedgerEntry
     [JsonConverter(typeof(NumberOrStringConverter))]
     public string Flags { get; set; }
     /// <summary>
-    /// The locator of the next page, if any. Details about this field and how it should be used are outlined below.
-    /// </summary>
-    public string NFTokenPage { get; set; }
-
-    /// <summary>
     /// The collection of NFToken objects contained in this NFTokenPage object.
     /// This specification places an upper bound of 32 NFToken objects per page.
     /// Objects are sorted from low to high with the NFTokenID used as the sorting parameter..

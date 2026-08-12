@@ -201,4 +201,32 @@ public class TestULOConverter
         Assert.IsNotNull(result);
         Assert.IsInstanceOfType(result, typeof(LOPermissionedDomain));
     }
+
+    /// <summary>
+    /// A ledger object type this SDK does not know must fall back to the base entry. Enum.TryParse
+    /// writes default(LedgerEntryType) — AccountRoot — when it fails, so the fallback is easy to lose.
+    /// </summary>
+    [TestMethod]
+    public void Read_UnknownLedgerEntryType_ReturnsBaseLedgerEntry()
+    {
+        string json = @"{
+            ""LedgerEntryType"": ""SomethingRippledAddedLater"",
+            ""Owner"": ""rOwner"",
+            ""index"": ""AABB""
+        }";
+        BaseLedgerEntry result = JsonSerializer.Deserialize<BaseLedgerEntry>(json, Options);
+        Assert.IsNotNull(result);
+        Assert.AreEqual(typeof(BaseLedgerEntry), result.GetType());
+        Assert.AreEqual(LedgerEntryType.Unknown, result.LedgerEntryType);
+        Assert.AreEqual("AABB", result.Index);
+    }
+
+    [TestMethod]
+    public void Read_MissingLedgerEntryType_ReturnsBaseLedgerEntry()
+    {
+        string json = @"{ ""Owner"": ""rOwner"" }";
+        BaseLedgerEntry result = JsonSerializer.Deserialize<BaseLedgerEntry>(json, Options);
+        Assert.IsNotNull(result);
+        Assert.AreEqual(typeof(BaseLedgerEntry), result.GetType());
+    }
 }

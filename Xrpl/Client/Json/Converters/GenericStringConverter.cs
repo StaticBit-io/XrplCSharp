@@ -15,12 +15,7 @@ namespace Xrpl.Client.Json.Converters
         {
             if (reader.TokenType == JsonTokenType.StartObject)
             {
-                JsonSerializerOptions innerOptions = new JsonSerializerOptions(options);
-                for (int i = innerOptions.Converters.Count - 1; i >= 0; i--)
-                {
-                    if (innerOptions.Converters[i] is GenericStringConverter<T>)
-                        innerOptions.Converters.RemoveAt(i);
-                }
+                JsonSerializerOptions innerOptions = JsonSerializerOptionsCache.WithoutConverter<GenericStringConverter<T>>(options);
                 return JsonSerializer.Deserialize<T>(ref reader, innerOptions);
             }
 

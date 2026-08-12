@@ -28,8 +28,7 @@ public class LONFTokenConverter : JsonConverter<NFToken>
         writer.WritePropertyName("NFToken");
 
         // Remove this converter to avoid infinite recursion
-        JsonSerializerOptions innerOptions = new JsonSerializerOptions(options);
-        innerOptions.Converters.Remove(this);
+        JsonSerializerOptions innerOptions = JsonSerializerOptionsCache.WithoutConverter<LONFTokenConverter>(options);
         JsonSerializer.Serialize(writer, value, innerOptions);
 
         writer.WriteEndObject();

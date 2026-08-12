@@ -43,6 +43,18 @@ namespace Xrpl.Models.Ledger
         /// No flags are defined for the Amendments object type, so this value is always 0.
         /// </summary>
         public uint Flags { get; set; }
+
+        /// <summary>
+        /// The identifying hash of the transaction that most recently modified this object.
+        /// </summary>
+        [JsonPropertyName("PreviousTxnID")]
+        public string PreviousTxnID { get; set; }
+
+        /// <summary>
+        /// The index of the ledger that contains the transaction that most recently modified this object.
+        /// </summary>
+        [JsonPropertyName("PreviousTxnLgrSeq")]
+        public uint? PreviousTxnLgrSeq { get; set; }
     }
 
     public class Majority

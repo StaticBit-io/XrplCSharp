@@ -365,17 +365,19 @@ The lending protocol creates the following ledger objects:
 
 | Field | Type | Description |
 |-------|------|-------------|
-| `Account` | AccountID | Borrower account |
-| `Counterparty` | AccountID | Broker account |
+| `Borrower` | AccountID | Borrower account |
 | `LoanBrokerID` | Hash256 | Reference to loan broker |
-| `PrincipalRequested` | Number | Original loan amount |
+| `LoanSequence` | UInt32 | Sequence number within the broker |
 | `PrincipalOutstanding` | Number | Remaining principal |
 | `TotalValueOutstanding` | Number | Total amount owed |
+| `PeriodicPayment` | Number | Amount due per interval |
 | `InterestRate` | UInt32 | Annual interest rate |
 | `PaymentInterval` | UInt32 | Seconds between payments |
-| `PaymentTotal` | UInt32 | Total number of payments |
+| `GracePeriod` | UInt32 | Seconds before late fees apply |
 | `PaymentRemaining` | UInt32 | Remaining payments |
 | `StartDate` | UInt32 | Loan start (Ripple epoch) |
+
+> `Counterparty`, `PrincipalRequested` and `PaymentTotal` are fields of the **`LoanSet` transaction**, not of the `Loan` object. rippled records the requested principal as `PrincipalOutstanding`, so the ledger entry carries no `PrincipalRequested` — and neither does `LOLoan`.
 
 ### Querying Loan State
 

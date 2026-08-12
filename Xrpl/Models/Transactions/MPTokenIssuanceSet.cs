@@ -12,36 +12,6 @@ using Xrpl.Utils;
 namespace Xrpl.Models.Transactions
 {
     /// <summary>
-    /// DynamicMPT (XLS-94): MutableFlags values for MPTokenIssuanceSet —
-    /// one-way enabling of capability flags (once enabled, cannot be disabled here).
-    /// Values mirror rippled TxFlags.h tmfMPTSet*.
-    /// </summary>
-    [Flags]
-    public enum MPTokenIssuanceSetMutableFlags : uint
-    {
-        /// <summary>Enable lsfMPTCanLock on the issuance.</summary>
-        tmfMPTSetCanLock = 0x00000001,
-
-        /// <summary>Enable lsfMPTRequireAuth on the issuance.</summary>
-        tmfMPTSetRequireAuth = 0x00000002,
-
-        /// <summary>Enable lsfMPTCanEscrow on the issuance.</summary>
-        tmfMPTSetCanEscrow = 0x00000004,
-
-        /// <summary>Enable lsfMPTCanTrade on the issuance.</summary>
-        tmfMPTSetCanTrade = 0x00000008,
-
-        /// <summary>Enable lsfMPTCanTransfer on the issuance.</summary>
-        tmfMPTSetCanTransfer = 0x00000010,
-
-        /// <summary>Enable lsfMPTCanClawback on the issuance.</summary>
-        tmfMPTSetCanClawback = 0x00000020,
-
-        /// <summary>Enable holding confidential balances (ConfidentialTransfer).</summary>
-        tmfMPTSetCanHoldConfidentialBalance = 0x00000040,
-    }
-
-    /// <summary>
     /// Enum representing flags for MPTokenIssuanceSet transactions.
     /// </summary>
     [Flags]
@@ -50,12 +20,36 @@ namespace Xrpl.Models.Transactions
         /// <summary>
         /// If set, indicates that all MPT balances for this asset should be locked.
         /// </summary>
-        tfMPTLock = 1,
+        tfMPTLock = 0x00000001,
 
         /// <summary>
         /// If set, indicates that all MPT balances for this asset should be unlocked.
         /// </summary>
-        tfMPTUnlock = 2
+        tfMPTUnlock = 0x00000002,
+
+        /// <summary>DynamicMPT: enable lsfMPTCanLock on the issuance.</summary>
+        tfMPTSetCanLock = 0x00000004,
+
+        /// <summary>DynamicMPT: enable lsfMPTRequireAuth on the issuance.</summary>
+        tfMPTSetRequireAuth = 0x00000008,
+
+        /// <summary>DynamicMPT: enable lsfMPTCanEscrow on the issuance.</summary>
+        tfMPTSetCanEscrow = 0x00000010,
+
+        /// <summary>DynamicMPT: enable lsfMPTCanTrade on the issuance.</summary>
+        tfMPTSetCanTrade = 0x00000020,
+
+        /// <summary>DynamicMPT: enable lsfMPTCanTransfer on the issuance.</summary>
+        tfMPTSetCanTransfer = 0x00000040,
+
+        /// <summary>DynamicMPT: enable lsfMPTCanClawback on the issuance.</summary>
+        tfMPTSetCanClawback = 0x00000080,
+
+        /// <summary>
+        /// DynamicMPT: enable lsfMPTCanHoldConfidentialBalance on the issuance.
+        /// Requires the ConfidentialTransfer amendment.
+        /// </summary>
+        tfMPTSetCanHoldConfidentialBalance = 0x00000100
     }
 
     /// <summary>
@@ -76,13 +70,13 @@ namespace Xrpl.Models.Transactions
         public string? Holder { get; set; }
         public new MPTokenIssuanceSetFlags? Flags { get; set; }
 
-        /// <summary>DynamicMPT: capability flags to enable on the issuance (one-way).</summary>
-        public MPTokenIssuanceSetMutableFlags? MutableFlags { get; set; }
+        /// <summary>DynamicMPT: capabilities and fields to freeze on the issuance (one-way).</summary>
+        public MPTokenIssuanceImmutableFlags? ImmutableFlags { get; set; }
 
-        /// <summary>DynamicMPT: new transfer fee (requires tfMPTCanMutateTransferFee).</summary>
+        /// <summary>DynamicMPT: new transfer fee (rejected once tifMPTTransferFee froze the field).</summary>
         public ushort? TransferFee { get; set; }
 
-        /// <summary>DynamicMPT: new metadata blob in hex (requires tfMPTCanMutateMetadata).</summary>
+        /// <summary>DynamicMPT: new metadata blob in hex (rejected once tifMPTMetadata froze the field).</summary>
         public string MPTokenMetadata { get; set; }
 
         /// <summary>PermissionedDomains: domain restricting who may hold this MPT.</summary>
@@ -123,8 +117,8 @@ namespace Xrpl.Models.Transactions
 
     
         /// <inheritdoc />
-        [JsonPropertyName("MutableFlags")]
-        public MPTokenIssuanceSetMutableFlags? MutableFlags { get; set; }
+        [JsonPropertyName("ImmutableFlags")]
+        public MPTokenIssuanceImmutableFlags? ImmutableFlags { get; set; }
 
         /// <inheritdoc />
         [JsonPropertyName("TransferFee")]
@@ -184,8 +178,8 @@ namespace Xrpl.Models.Transactions
 
     
         /// <inheritdoc />
-        [JsonPropertyName("MutableFlags")]
-        public MPTokenIssuanceSetMutableFlags? MutableFlags { get; set; }
+        [JsonPropertyName("ImmutableFlags")]
+        public MPTokenIssuanceImmutableFlags? ImmutableFlags { get; set; }
 
         /// <inheritdoc />
         [JsonPropertyName("TransferFee")]
@@ -247,9 +241,17 @@ namespace Xrpl.Models.Transactions
                 }
             }
 
+            uint flagValue = 0;
             if (tx.TryGetValue("Flags", out var flags) && flags is not null)
             {
-                uint flagValue = Convert.ToUInt32(flags);
+                // Same reporting as the ImmutableFlags check below: a non-numeric value has to
+                // surface as ValidationException, which is what callers of this method catch —
+                // Convert.ToUInt32 would throw FormatException or InvalidCastException instead.
+                if (!Common.TryGetUInt32(flags, out flagValue))
+                {
+                    throw new ValidationException("MPTokenIssuanceSet: Flags must be a number");
+                }
+
                 bool hasLock = (flagValue & (uint)MPTokenIssuanceSetFlags.tfMPTLock) != 0;
                 bool hasUnlock = (flagValue & (uint)MPTokenIssuanceSetFlags.tfMPTUnlock) != 0;
 
@@ -259,17 +261,16 @@ namespace Xrpl.Models.Transactions
                 }
             }
 
-            uint mutable = 0;
-            if (tx.TryGetValue("MutableFlags", out var mutableFlags) && mutableFlags is not null)
+            if (tx.TryGetValue("ImmutableFlags", out var immutableFlags) && immutableFlags is not null)
             {
-                if (!Common.TryGetUInt32(mutableFlags, out mutable))
+                if (!Common.TryGetUInt32(immutableFlags, out uint immutable))
                 {
-                    throw new ValidationException("MPTokenIssuanceSet: MutableFlags must be a number");
+                    throw new ValidationException("MPTokenIssuanceSet: ImmutableFlags must be a number");
                 }
 
                 // rippled MPTokenIssuanceSet::preflight: at least one flag must be
-                // set and only tmfMPTSet* bits are allowed (temINVALID_FLAG otherwise)
-                Common.ValidateNonZeroFlagsMask<MPTokenIssuanceSetMutableFlags>(mutable, "MPTokenIssuanceSet: invalid MutableFlags");
+                // set and only tif* bits are allowed (temINVALID_FLAG otherwise)
+                Common.ValidateNonZeroFlagsMask<MPTokenIssuanceImmutableFlags>(immutable, "MPTokenIssuanceSet: invalid ImmutableFlags");
             }
 
             if (tx.TryGetValue("TransferFee", out var transferFee) && transferFee is not null)
@@ -286,9 +287,9 @@ namespace Xrpl.Models.Transactions
 
                 // rippled MPTokenIssuanceSet::preflight: a non-zero TransferFee combined
                 // with enabling confidential balances is temBAD_TRANSFER_FEE
-                if (fee > 0 && (mutable & (uint)MPTokenIssuanceSetMutableFlags.tmfMPTSetCanHoldConfidentialBalance) != 0)
+                if (fee > 0 && (flagValue & (uint)MPTokenIssuanceSetFlags.tfMPTSetCanHoldConfidentialBalance) != 0)
                 {
-                    throw new ValidationException("MPTokenIssuanceSet: TransferFee must be 0 when tmfMPTSetCanHoldConfidentialBalance is set");
+                    throw new ValidationException("MPTokenIssuanceSet: TransferFee must be 0 when tfMPTSetCanHoldConfidentialBalance is set");
                 }
             }
 

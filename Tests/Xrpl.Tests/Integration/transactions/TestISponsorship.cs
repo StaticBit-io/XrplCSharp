@@ -74,8 +74,8 @@ public class TestISponsorship
         {
             Account = sponsor.ClassicAddress,
             Sponsee = sponsee.ClassicAddress,
-            FeeAmount = new Currency { ValueAsXrp = 5m },
-            RemainingOwnerCount = 3,
+            FeeAmountDelta = new Currency { ValueAsXrp = 5m },
+            RemainingOwnerCountDelta = 3,
         };
         tx = await client.Autofill(tx);
 
@@ -87,6 +87,42 @@ public class TestISponsorship
         Assert.AreEqual(sponsor.ClassicAddress, sponsorship.Owner);
         Assert.AreEqual(sponsee.ClassicAddress, sponsorship.Sponsee);
         Assert.AreEqual((uint)3, sponsorship.RemainingOwnerCount);
+    }
+
+    [TestMethod]
+    public async Task TestSponsorshipSet_NegativeDeltas_ReduceTheBudget()
+    {
+        XrplWallet sponsor = XrplWallet.Generate();
+        XrplWallet sponsee = XrplWallet.Generate();
+        await IntegrationTestConfig.TryFundWalletsAsync(client, nodeType, sponsor, sponsee);
+
+        SponsorshipSet create = new SponsorshipSet
+        {
+            Account = sponsor.ClassicAddress,
+            Sponsee = sponsee.ClassicAddress,
+            FeeAmountDelta = new Currency { ValueAsXrp = 5m },
+            RemainingOwnerCountDelta = 3,
+        };
+        create = await client.Autofill(create);
+        ValidateResult(await client.SubmitAndWait(create, sponsor, true));
+
+        // Since 3.3.0 the transaction carries signed deltas rather than absolute values:
+        // rippled adds them to what the Sponsorship object already holds, moving the XRP
+        // back to the sponsor balance for a negative FeeAmountDelta
+        SponsorshipSet reduce = new SponsorshipSet
+        {
+            Account = sponsor.ClassicAddress,
+            Sponsee = sponsee.ClassicAddress,
+            FeeAmountDelta = new Currency { ValueAsXrp = -2m },
+            RemainingOwnerCountDelta = -1,
+        };
+        reduce = await client.Autofill(reduce);
+        ValidateResult(await client.SubmitAndWait(reduce, sponsor, true));
+
+        LOSponsorship sponsorship = await GetSponsorshipObject(sponsor.ClassicAddress);
+        Assert.IsNotNull(sponsorship, "Sponsorship ledger object should still exist after the reduction");
+        Assert.AreEqual(3m, sponsorship.FeeAmount.ValueAsXrp, "FeeAmount should be 5 XRP + (-2 XRP)");
+        Assert.AreEqual((uint)2, sponsorship.RemainingOwnerCount, "RemainingOwnerCount should be 3 + (-1)");
     }
 
     [TestMethod]
@@ -102,7 +138,7 @@ public class TestISponsorship
         {
             Account = sponsor.ClassicAddress,
             Sponsee = sponsee.ClassicAddress,
-            FeeAmount = new Currency { ValueAsXrp = 5m },
+            FeeAmountDelta = new Currency { ValueAsXrp = 5m },
         };
         setup = await client.Autofill(setup);
         ValidateResult(await client.SubmitAndWait(setup, sponsor, true));
@@ -139,7 +175,7 @@ public class TestISponsorship
         {
             Account = sponsor.ClassicAddress,
             Sponsee = sponsee.ClassicAddress,
-            FeeAmount = new Currency { ValueAsXrp = 5m },
+            FeeAmountDelta = new Currency { ValueAsXrp = 5m },
             Flags = flags,
         };
         setup = await client.Autofill(setup);
@@ -256,7 +292,7 @@ public class TestISponsorship
         {
             Account = sponsor.ClassicAddress,
             Sponsee = sponsee.ClassicAddress,
-            FeeAmount = new Currency { ValueAsXrp = 2m },
+            FeeAmountDelta = new Currency { ValueAsXrp = 2m },
         };
         create = await client.Autofill(create);
         ValidateResult(await client.SubmitAndWait(create, sponsor, true));

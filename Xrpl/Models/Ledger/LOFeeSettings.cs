@@ -47,5 +47,17 @@ namespace Xrpl.Models.Ledger
         /// <summary>XRPFees: owner reserve increment in drops.</summary>
         [JsonPropertyName("ReserveIncrementDrops")]
         public string ReserveIncrementDrops { get; set; }
+
+        /// <summary>
+        /// The identifying hash of the transaction that most recently modified this object.
+        /// </summary>
+        [JsonPropertyName("PreviousTxnID")]
+        public string PreviousTxnID { get; set; }
+
+        /// <summary>
+        /// The index of the ledger that contains the transaction that most recently modified this object.
+        /// </summary>
+        [JsonPropertyName("PreviousTxnLgrSeq")]
+        public uint? PreviousTxnLgrSeq { get; set; }
 }
 }

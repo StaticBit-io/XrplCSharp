@@ -1,4 +1,4 @@
-using System.Collections.Generic;
+﻿using System.Collections.Generic;
 using System.Linq;
 using System.Text.Json;
 using System.Text.Json.Nodes;
@@ -80,7 +80,8 @@ namespace Xrpl.Tests.Models.Tests
             {
                 Account = Account1,
                 MPTokenIssuanceID = "00000001A407AF5856CCF3C42619DAA925813FC955C72983",
-                MutableFlags = MPTokenIssuanceSetMutableFlags.tmfMPTSetCanLock | MPTokenIssuanceSetMutableFlags.tmfMPTSetRequireAuth,
+                Flags = MPTokenIssuanceSetFlags.tfMPTSetCanLock | MPTokenIssuanceSetFlags.tfMPTSetRequireAuth,
+                ImmutableFlags = MPTokenIssuanceImmutableFlags.tifMPTCanTrade | MPTokenIssuanceImmutableFlags.tifMPTMetadata,
                 TransferFee = 250,
                 MPTokenMetadata = "DEADBEEF",
                 DomainID = new string('B', 64),
@@ -94,7 +95,12 @@ namespace Xrpl.Tests.Models.Tests
             string blob = XrplBinaryCodec.Encode(json);
             JsonObject decoded = XrplBinaryCodec.Decode(blob).AsObject();
 
-            Assert.AreEqual(3u, decoded["MutableFlags"]!.GetValue<uint>());
+            Assert.AreEqual(
+                (uint)(MPTokenIssuanceSetFlags.tfMPTSetCanLock | MPTokenIssuanceSetFlags.tfMPTSetRequireAuth),
+                decoded["Flags"]!.GetValue<uint>());
+            Assert.AreEqual(
+                (uint)(MPTokenIssuanceImmutableFlags.tifMPTCanTrade | MPTokenIssuanceImmutableFlags.tifMPTMetadata),
+                decoded["ImmutableFlags"]!.GetValue<uint>());
             Assert.AreEqual(250u, decoded["TransferFee"]!.GetValue<uint>());
             Assert.AreEqual("DEADBEEF", decoded["MPTokenMetadata"]!.GetValue<string>());
             Assert.AreEqual(new string('B', 64), decoded["DomainID"]!.GetValue<string>());
@@ -199,14 +205,25 @@ namespace Xrpl.Tests.Models.Tests
                 ["MPTokenIssuanceID"] = "00000001A407AF5856CCF3C42619DAA925813FC955C72983",
             };
 
-            // MutableFlags: zero and out-of-mask values are temINVALID_FLAG
-            tx["MutableFlags"] = 0u;
+            // A non-numeric Flags value must report as ValidationException like every other
+            // malformed field here, not as a raw conversion exception callers do not catch.
+            tx["Flags"] = "not-a-number";
             await Assert.ThrowsExactlyAsync<Xrpl.Client.Exceptions.ValidationException>(() => Validation.ValidateMPTokenIssuanceSet(tx));
-            tx["MutableFlags"] = 0x80u;
+            tx.Remove("Flags");
+
+            // ImmutableFlags: zero and out-of-mask values are temINVALID_FLAG
+            tx["ImmutableFlags"] = 0u;
+            await Assert.ThrowsExactlyAsync<Xrpl.Client.Exceptions.ValidationException>(() => Validation.ValidateMPTokenIssuanceSet(tx));
+            tx["ImmutableFlags"] = 0x1u; // outside tif* mask (0x2..0x80, 0x10000, 0x20000)
             await Assert.ThrowsExactlyAsync<Xrpl.Client.Exceptions.ValidationException>(() => Validation.ValidateMPTokenIssuanceSet(tx));
 
-            // Non-zero TransferFee combined with enabling confidential balances is temBAD_TRANSFER_FEE
-            tx["MutableFlags"] = (uint)MPTokenIssuanceSetMutableFlags.tmfMPTSetCanHoldConfidentialBalance;
+            tx["ImmutableFlags"] = (uint)MPTokenIssuanceImmutableFlags.tifMPTCanHoldConfidentialBalance;
+            await Validation.ValidateMPTokenIssuanceSet(tx);
+
+            // Non-zero TransferFee combined with enabling confidential balances is temBAD_TRANSFER_FEE.
+            // Since 3.3.0 the capability is enabled through a tf* flag, not through a separate field.
+            tx.Remove("ImmutableFlags");
+            tx["Flags"] = (uint)MPTokenIssuanceSetFlags.tfMPTSetCanHoldConfidentialBalance;
             tx["TransferFee"] = 10u;
             await Assert.ThrowsExactlyAsync<Xrpl.Client.Exceptions.ValidationException>(() => Validation.ValidateMPTokenIssuanceSet(tx));
 
@@ -215,7 +232,7 @@ namespace Xrpl.Tests.Models.Tests
         }
 
         [TestMethod]
-        public async Task TestUMPTokenIssuanceCreate_MutableFlagsMask()
+        public async Task TestUMPTokenIssuanceCreate_ImmutableFlagsMask()
         {
             Dictionary<string, object> tx = new()
             {
@@ -223,12 +240,12 @@ namespace Xrpl.Tests.Models.Tests
                 ["Account"] = Account1,
             };
 
-            tx["MutableFlags"] = 0u;
+            tx["ImmutableFlags"] = 0u;
             await Assert.ThrowsExactlyAsync<Xrpl.Client.Exceptions.ValidationException>(() => Validation.ValidateMPTokenIssuanceCreate(tx));
-            tx["MutableFlags"] = 0x100u; // outside tmf* mask
+            tx["ImmutableFlags"] = 0x100u; // outside tif* mask
             await Assert.ThrowsExactlyAsync<Xrpl.Client.Exceptions.ValidationException>(() => Validation.ValidateMPTokenIssuanceCreate(tx));
 
-            tx["MutableFlags"] = (uint)(MPTokenIssuanceCreateMutableFlags.tmfMPTCanMutateMetadata | MPTokenIssuanceCreateMutableFlags.tmfMPTCanMutateTransferFee);
+            tx["ImmutableFlags"] = (uint)(MPTokenIssuanceImmutableFlags.tifMPTMetadata | MPTokenIssuanceImmutableFlags.tifMPTTransferFee);
             await Validation.ValidateMPTokenIssuanceCreate(tx);
 
             tx["DomainID"] = 12345;
@@ -321,6 +338,48 @@ namespace Xrpl.Tests.Models.Tests
             LORippleState state = JsonSerializer.Deserialize<LORippleState>(json, XrplJsonOptions.Default);
             Assert.AreEqual(Account1, state.HighSponsor);
             Assert.AreEqual(Account2, state.LowSponsor);
+        }
+
+        [TestMethod]
+        public void TestULOVault_LEVersion_Deserialize()
+        {
+            string json = JsonSerializer.Serialize(new Dictionary<string, object>
+            {
+                ["LedgerEntryType"] = "Vault",
+                ["Account"] = Account1,
+                ["Owner"] = Account2,
+                ["ShareMPTID"] = "00000001A407AF5856CCF3C42619DAA925813FC955C72983",
+                ["WithdrawalPolicy"] = 1,
+                ["Scale"] = 6,
+                ["LEVersion"] = (uint)VaultVersion.CashBasis,
+            });
+            LOVault vault = JsonSerializer.Deserialize<LOVault>(json, XrplJsonOptions.Default);
+            Assert.AreEqual((uint)VaultVersion.CashBasis, vault.LEVersion);
+
+            // A vault created before cash-basis accounting carries no LEVersion at all;
+            // rippled resolves that absence as VaultVersion.Legacy rather than an error
+            string legacy = JsonSerializer.Serialize(new Dictionary<string, object>
+            {
+                ["LedgerEntryType"] = "Vault",
+                ["Account"] = Account1,
+                ["Owner"] = Account2,
+            });
+            Assert.IsNull(JsonSerializer.Deserialize<LOVault>(legacy, XrplJsonOptions.Default).LEVersion);
+        }
+
+        [TestMethod]
+        public void TestULEVersion_BinaryRoundTrip()
+        {
+            // The field only travels if definitions.json knows it — this fails with an
+            // encoding error, not an assertion, when the entry is missing.
+            // Parsed from text rather than built from int literals: that is the shape a
+            // node response arrives in, and Uint8.FromJson takes a byte, not an Int32
+            JsonObject json = JsonNode.Parse("""{"LEVersion":1,"Scale":6}""")!.AsObject();
+            string blob = XrplBinaryCodec.Encode(json);
+            JsonObject decoded = XrplBinaryCodec.Decode(blob).AsObject();
+
+            Assert.AreEqual(1u, decoded["LEVersion"]!.GetValue<uint>());
+            Assert.AreEqual(6u, decoded["Scale"]!.GetValue<uint>());
         }
     }
 }

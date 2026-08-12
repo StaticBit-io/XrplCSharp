@@ -8,6 +8,27 @@ using System.Text.Json.Serialization;
 namespace Xrpl.Models.Ledger
 {
     /// <summary>
+    /// Flags of a DirectoryNode ledger object.
+    /// </summary>
+    /// <remarks>
+    /// <see cref="LODirectoryNode.Flags"/> stays a raw <c>uint</c> for backwards compatibility;
+    /// test a bit with <c>(dir.Flags &amp; (uint)DirectoryNodeFlags.lsfNFTokenBuyOffers) != 0</c>.
+    /// </remarks>
+    [System.Flags]
+    public enum DirectoryNodeFlags : uint
+    {
+        /// <summary>
+        /// The directory holds buy offers for an NFToken.
+        /// </summary>
+        lsfNFTokenBuyOffers = 0x00000001,
+
+        /// <summary>
+        /// The directory holds sell offers for an NFToken.
+        /// </summary>
+        lsfNFTokenSellOffers = 0x00000002,
+    }
+
+    /// <summary>
     /// The DirectoryNode object type provides a list of links to other objects in the ledger's state tree.
     /// </summary>
     public class LODirectoryNode : BaseLedgerEntry
@@ -19,8 +40,8 @@ namespace Xrpl.Models.Ledger
         }
 
         /// <summary>
-        /// A bit-map of boolean flags enabled for this directory.Currently,
-        /// the protocol defines no flags for DirectoryNode objects.
+        /// A bit-map of boolean flags enabled for this directory.
+        /// See <see cref="DirectoryNodeFlags"/> for the values the protocol defines.
         /// </summary>
         public uint Flags { get; set; }
         /// <summary>
@@ -81,5 +102,17 @@ namespace Xrpl.Models.Ledger
     /// <summary>MPT order books: MPT issuance id on the TakerGets side.</summary>
     [JsonPropertyName("TakerGetsMPT")]
     public string TakerGetsMPT { get; set; }
+
+    /// <summary>
+    /// The identifying hash of the transaction that most recently modified this object.
+    /// </summary>
+    [JsonPropertyName("PreviousTxnID")]
+    public string PreviousTxnID { get; set; }
+
+    /// <summary>
+    /// The index of the ledger that contains the transaction that most recently modified this object.
+    /// </summary>
+    [JsonPropertyName("PreviousTxnLgrSeq")]
+    public uint? PreviousTxnLgrSeq { get; set; }
 }
 }

@@ -1,4 +1,4 @@
-using System;
+﻿using System;
 using System.Collections.Generic;
 using System.Diagnostics;
 using System.IO;
@@ -213,6 +213,32 @@ public class Connection
         public bool UseCheckHealth { get; set; } = false;
 
         /// <summary>
+        /// Gets or sets how often the background health check runs — the timer that notices a socket
+        /// which is no longer Open and hands the client to the fast-reconnect path.<br/>
+        /// Default: 20 seconds, the interval this check has always used.
+        /// </summary>
+        /// <remarks>
+        /// Exposed primarily so tests can exercise the ping and fast-reconnect paths without waiting
+        /// out the default interval; those paths were previously unreachable from a unit test, which
+        /// is why they went uncovered through several fixes. Lowering it in production only makes the
+        /// state check more frequent — it sends no network requests of its own.
+        /// </remarks>
+        public TimeSpan HealthCheckInterval { get; set; } = TimeSpan.FromSeconds(20);
+
+        /// <summary>
+        /// Gets or sets how long a connection may go without any inbound activity before the health
+        /// check treats it as dead and hands it to the fast-reconnect path.<br/>
+        /// Default: 60 seconds, the threshold this check has always used.
+        /// </summary>
+        /// <remarks>
+        /// A socket whose peer vanished stays <c>Open</c> until the next I/O, so silence is the only
+        /// signal available without sending traffic. Exposed together with
+        /// <see cref="HealthCheckInterval"/> so the fast-reconnect path is reachable from a test in
+        /// under a second instead of over a minute.
+        /// </remarks>
+        public TimeSpan InactivityTimeout { get; set; } = TimeSpan.FromSeconds(60);
+
+        /// <summary>
         /// Gets or sets the policy that determines how failed requests are handled.
         /// </summary>
         /// <remarks>
@@ -236,6 +262,23 @@ public class Connection
         {
             throw new ArgumentException(
                 $"ConnectionAcquisitionTimeout ({config.ConnectionAcquisitionTimeout.TotalSeconds}s) must be >= ConnectionAttemptTimeout ({config.ConnectionAttemptTimeout.TotalSeconds}s) to allow at least one full connection attempt.");
+        }
+
+        // The WASM timer takes this as an int of milliseconds: zero fires once and never repeats,
+        // and anything past int.MaxValue or below zero is rejected outright by the timer itself.
+        // Fail here instead, where the message can say which option is wrong.
+        double healthCheckMs = config.HealthCheckInterval.TotalMilliseconds;
+        if (healthCheckMs < 1 || healthCheckMs > int.MaxValue)
+        {
+            throw new ArgumentException(
+                $"HealthCheckInterval ({config.HealthCheckInterval}) must be between 1ms and {int.MaxValue}ms.");
+        }
+
+        if (config.InactivityTimeout <= TimeSpan.Zero)
+        {
+            throw new ArgumentException(
+                $"InactivityTimeout ({config.InactivityTimeout}) must be positive - a non-positive value would " +
+                "treat every connection as dead on the first health check.");
         }
     }
 
@@ -280,9 +323,47 @@ public class Connection
 
     private int _reconnectAttempts = 0;
 
+    // Number of consecutive times the consumer OnConnected handler threw.
+    // Not part of the reconnect state: OnceOpen clears the reconnect state before invoking the handler,
+    // so this counter is the only thing that can bound an endlessly failing handler.
+    private int _connectHandlerFailures = 0;
+
     private static readonly Random _random = new();
 
-    private CancellationTokenSource _reconnectCts;
+    /// <summary>
+    /// Guards the reconnect session — <see cref="_reconnectCts"/>, <see cref="_reconnectLoop"/> and
+    /// <see cref="_reconnectAttempts"/> — wherever one is read and another written as a unit:
+    /// <see cref="StopReconnectLoop"/>, <see cref="StartReconnectLoop"/>,
+    /// <see cref="RestartReconnectLoop"/>, <see cref="RetireCurrentSessionAndReconnectAsync"/> and
+    /// the ownership-guarded writes in <see cref="ReconnectLoopAsync"/>.
+    /// </summary>
+    /// <remarks>
+    /// Not every touch of these fields is covered: the per-iteration <c>_reconnectAttempts++</c> in
+    /// <see cref="ReconnectLoopAsync"/>, the plain resets in <c>ChangeServer</c> and
+    /// <c>OnceClose</c>, and the "is a loop already running" pre-checks in
+    /// <c>OnConnectionFailed</c> and <c>OnceClose</c> (which read <c>_reconnectLoop</c>, a
+    /// non-volatile field, outside the lock) all still run outside it. Those predate this lock; do
+    /// not read the list above as "all three fields are always synchronized".
+    /// </remarks>
+    /// <remarks>
+    /// <para>
+    /// <c>volatile</c> alone was not enough: it makes each individual access atomic, not the
+    /// sequence of them. The stop path used to read the field three times in a row (Cancel,
+    /// Dispose, null it), so a start running in between could have its brand-new source disposed
+    /// and cleared by the retiring stop — leaving the loop with a dead source and nobody
+    /// reconnecting, which is exactly the permanent wedge this whole area exists to prevent.
+    /// </para>
+    /// <para>
+    /// Nothing that can call back into consumer code runs while the lock is held: cancellation and
+    /// disposal of a retired source happen after the lock is released, and the loop body starts
+    /// with a yield so that starting it under the lock never runs a notification inline.
+    /// </para>
+    /// </remarks>
+    private readonly object _reconnectStateLock = new object();
+
+    // Volatile so the ownership checks in ReconnectLoopAsync can read it outside the lock:
+    // a single reference read is atomic, and those checks only ever compare, never mutate.
+    private volatile CancellationTokenSource _reconnectCts;
 
     private Task _reconnectLoop;
 
@@ -369,14 +450,27 @@ public class Connection
 
         _previousNotifiedMessage = message;
 
-        OnConnectionStatus?.Invoke(
-            new ConnectionStatusInfo
-            {
-                Message = message,
-                Severity = severity,
-                Reconnect = reconnect,
-                ConnectionState = newState,
-            });
+        // Contained here, once, rather than at each call site. Every state notification in this class
+        // funnels through this method, and several call sites are places where an escaping exception
+        // costs the client its reconnect: the fast-reconnect path (running on a ping task whose
+        // callers swallow everything) and ReconnectLoopAsync, which notifies before its first
+        // connection attempt and would fault with _reconnectCts still installed and no live loop.
+        // A consumer's status handler must not be able to take the connection down.
+        try
+        {
+            OnConnectionStatus?.Invoke(
+                new ConnectionStatusInfo
+                {
+                    Message = message,
+                    Severity = severity,
+                    Reconnect = reconnect,
+                    ConnectionState = newState,
+                });
+        }
+        catch (Exception notifyError)
+        {
+            Debug.WriteLine($"{DateTime.Now}OnConnectionStatus handler threw for state {newState}: {notifyError.Message}");
+        }
     }
 
     private ReconnectInfo BuildReconnectInfo(int? explicitAttempt = null, TimeSpan? delay = null)
@@ -456,10 +550,16 @@ public class Connection
             ws = null;
         }
 
-        // 7. Mark socket for intentional disconnect
+        // 7. Mark old socket for intentional disconnect (per-socket tracking only)
+        // CRITICAL: Do NOT set global _isIntentionalDisconnect = true here - same rule as the ping/network
+        // recovery path. The global flag was only reset in OnceOpen, so if the NEW server never came up it
+        // stayed set forever: OnConnectionFailed then read the failure of the new socket as a user disconnect,
+        // reported "Connection closed permanently." and started no reconnect loop, leaving the client dead
+        // with the misleading "No connection attempt in progress. Call Connect() first."
+        // Per-socket tracking (_userInitiatedSockets + the socket's own flag, set in RetireOldSessionAsync)
+        // already filters late callbacks from the old socket, and keeps global state clean for the new one.
         if (oldSocket != null)
         {
-            _isIntentionalDisconnect = true;
             Interlocked.Exchange(ref _userInitiatedSocket, oldSocket);
             MarkSocketAsUserInitiated(oldSocket);
 
@@ -476,11 +576,15 @@ public class Connection
 
         ValidateConfig();
         _reconnectAttempts = 0;
+        Interlocked.Exchange(ref _connectHandlerFailures, value: 0);
 
         // 8. Reset permanentlyDisconnected for new connection
         _permanentlyDisconnected = false;
 
-        // _isIntentionalDisconnect stays true - reset in OnceOpen
+        // Clear the global intentional-disconnect flag explicitly: it may still be set from an earlier
+        // user Disconnect() (it is only ever reset in OnceOpen), and leaving it set would make a failure
+        // of the NEW connection look intentional and suppress reconnection.
+        _isIntentionalDisconnect = false;
 
         // 9. Immediately connect to new server (new session created in Connect)
         await Connect(cancellationToken);
@@ -522,17 +626,26 @@ public class Connection
         _reconnectMode = ReconnectMode.FastReconnect;
         _isFastReconnectActive = true; // Keep for backward compatibility
         
-        // 2. Stop any existing reconnect loop
-        var oldCts = _reconnectCts;
+        // 2-3. Retire the previous reconnect session and install this one as a single transaction,
+        // so a concurrent stop/start cannot dispose the source created here. Cancellation and
+        // disposal of the old source happen after the lock is released.
+        CancellationTokenSource oldCts;
+        CancellationTokenSource ownCts;
+        lock (_reconnectStateLock)
+        {
+            oldCts = _reconnectCts;
+            _reconnectLoop = null; // Clear old loop reference so StartReconnectLoop can start a new one
+            _reconnectAttempts = 1;
+            ownCts = new CancellationTokenSource();
+            _reconnectCts = ownCts;
+        }
+
         oldCts?.Cancel();
         oldCts?.Dispose();
-        _reconnectLoop = null; // Clear old loop reference so StartReconnectLoop can start a new one
-        
-        // 3. Initialize reconnect state BEFORE any notifications
-        _reconnectAttempts = 1;
-        _reconnectCts = new CancellationTokenSource();
         
         // 4. Now send first notification - IsReconnectActive() will return true
+        // Consumer handler exceptions are contained inside SetConnectionState - an escaping throw
+        // here would leave the source installed above with no loop and nobody to dispose it.
         SetConnectionState(
             XrpConnectionState.RestoringConnection,
             message: $"{reason} Reconnecting immediately...",
@@ -595,7 +708,34 @@ public class Connection
         _pingTimeoutSocket = null;
         _networkDropSocket = null;
 
-        // 11. Reset permanentlyDisconnected for new connection
+        // 11. Reset permanentlyDisconnected for new connection - unless the user asked to disconnect
+        // while the awaits above were running. Disconnect() sets the flag, clears the reconnect
+        // state and then waits on the ping task this method runs inside, so it is still blocked
+        // here and cannot have finished its teardown. Clearing its flag and reconnecting anyway
+        // would resurrect a client the consumer explicitly took down - and Disconnect() would
+        // return reporting success while a fresh session was being built behind it.
+        if (_permanentlyDisconnected)
+        {
+            CancellationTokenSource abandoned = null;
+            lock (_reconnectStateLock)
+            {
+                if (ReferenceEquals(_reconnectCts, ownCts))
+                {
+                    abandoned = ownCts;
+                    _reconnectCts = null;
+                    _reconnectAttempts = 0;
+                    _reconnectLoop = null;
+                }
+            }
+
+            abandoned?.Cancel();
+            abandoned?.Dispose();
+            _isFastReconnectActive = false;
+
+            Debug.WriteLine($"{DateTime.Now}Fast reconnect abandoned before connecting - the client was disconnected by the user");
+            return;
+        }
+
         _permanentlyDisconnected = false;
 
         // Note: _reconnectAttempts and _reconnectCts already set at the start of this method
@@ -606,29 +746,78 @@ public class Connection
         // and Connecting would overwrite ReconnectInfo, confusing consuming apps
         try
         {
-            await ConnectInternalAsync().ConfigureAwait(false);
-            await WaitForConnectionAsync(config.ConnectionAcquisitionTimeout, CancellationToken.None).ConfigureAwait(false);
+            // Pass the token of the session this method owns: a user Disconnect() cancels it, so the
+            // attempt below stops instead of opening a socket behind a client that was taken down.
+            // Disconnect() waits only briefly for the ping task, while acquisition can run much
+            // longer, so the flag check above cannot cover this window on its own.
+            await ConnectInternalAsync(ownCts.Token).ConfigureAwait(false);
+            await WaitForConnectionAsync(config.ConnectionAcquisitionTimeout, ownCts.Token).ConfigureAwait(false);
             
             // Connect succeeded - cleanup reconnect state
             // Note: _reconnectMode will be cleared in OnceOpen when connection is fully established
             _isFastReconnectActive = false;
-            _reconnectCts?.Cancel();
-            _reconnectCts?.Dispose();
-            _reconnectCts = null;
-            _reconnectAttempts = 0;
+
+            // Only tear down the source this method installed. The awaits above give a concurrent
+            // path (RestartReconnectLoop from a failing OnConnected handler, say) room to install a
+            // newer one; cancelling and disposing that would strand the sequence it belongs to,
+            // which is the same wedge the ownership checks in ReconnectLoopAsync guard against.
+            // When ownership is lost, ownCts needs no cleanup here: whoever evicted it from the
+            // field cancelled and disposed it as part of doing so.
+            CancellationTokenSource settled = null;
+            lock (_reconnectStateLock)
+            {
+                if (ReferenceEquals(_reconnectCts, ownCts))
+                {
+                    settled = ownCts;
+                    _reconnectCts = null;
+                    _reconnectAttempts = 0;
+
+                    // Drop the task reference in the same transaction, for the same reason
+                    // StopReconnectLoop does: a loop may have been started on this very source
+                    // while the awaits above were running (OnConnectionFailed sees no live loop -
+                    // the entry above cleared the reference - and StartReconnectLoop reuses a
+                    // still-valid source). Cancelling that source without clearing the reference
+                    // leaves every loopIsRunning check looking at a task that is exiting, so
+                    // nobody starts a replacement and nobody reconnects.
+                    _reconnectLoop = null;
+                }
+            }
+
+            settled?.Cancel();
+            settled?.Dispose();
         }
         catch (Exception ex)
         {
             // If Connect fails, transition to loop reconnect mode
             // Keep _reconnectMode set (will be LoopReconnect after StartReconnectLoop)
             
-            // _reconnectCts is already set, so StartReconnectLoop will reuse it
+            // A user Disconnect() can land while the awaits above are running - and it will wait on
+            // the very ping task this method runs inside, so it cannot have finished yet. Handing
+            // the client back to a reconnect loop then would undo an explicit disconnect. The flag
+            // is the authority: leave the state alone and let Disconnect() finish its teardown.
+            if (_permanentlyDisconnected)
+            {
+                Debug.WriteLine($"{DateTime.Now}Fast reconnect abandoned - the client was disconnected by the user: {ex.Message}");
+                return;
+            }
+
+            // Start the loop BEFORE notifying: SetConnectionState calls into consumer code, and an
+            // exception from a handler must not cost us the reconnect loop. Ordering matters more
+            // than the message here - without the loop the client never comes back.
+            //
+            // StartReconnectLoop reuses the source installed above when it is still there. It may
+            // not be: the awaits could have let another path replace or clear it, the same way the
+            // success branch above can no longer assume it still owns ownCts. Either outcome is
+            // survivable here - a live foreign loop makes the call return early, a cleared source
+            // makes it start a fresh sequence (losing only the seeded first delay) - so this path
+            // does not need an ownership check of its own.
+            StartReconnectLoop();
+
             SetConnectionState(
                 XrpConnectionState.RestoringConnection,
                 message: $"Reconnection failed: {ex.Message}. Retrying...",
                 ConnectionCloseSeverity.Warning,
                 reconnect: BuildReconnectInfo());
-            StartReconnectLoop();
         }
     }
 
@@ -659,6 +848,15 @@ public class Connection
 
         while (!IsConnected())
         {
+            // Re-checked on every iteration, not only on entry: the client can be disconnected while a
+            // caller is already waiting here (user Disconnect(), or the client giving up on a permanently
+            // failing OnConnected handler). Without this the caller would sit out the whole acquisition
+            // timeout and get a generic TimeoutException instead of the actual reason.
+            if (_permanentlyDisconnected)
+            {
+                throw new NotConnectedException("Client has been disconnected. Call Connect() to reconnect.");
+            }
+
             if (config.StopAfterMaxAttempts &&
                 _reconnectAttempts >= config.MaxReconnectAttempts &&
                 _reconnectCts == null)
@@ -718,6 +916,7 @@ public class Connection
         }
 
         StopReconnectLoop();
+        Interlocked.Exchange(ref _connectHandlerFailures, value: 0);
         SetConnectionState(XrpConnectionState.Connecting, message: $"Connecting to {url}...");
         await ConnectInternalAsync();
         await WaitForConnectionAsync(config.ConnectionAcquisitionTimeout, cancellationToken);
@@ -835,6 +1034,29 @@ public class Connection
                 catch (Exception ex)
                 {
                     Debug.WriteLine($"{DateTime.Now}OnConnectionError callback error: {ex.Message}");
+                }
+            });
+
+            ws.OnError(async (e, errorSocket) =>
+            {
+                try
+                {
+                    // Report-only: a failed send does not by itself mean the connection is gone, so this
+                    // path never triggers a reconnect. Without it a fire-and-forget send failure would be
+                    // invisible and the request would simply sit until its RequestTimeout expires.
+                    var errorHandler = OnError;
+                    if (errorHandler is not null)
+                    {
+                        await errorHandler.Invoke(
+                            error: "error",
+                            errorMessage: "socketSendError",
+                            e.Message,
+                            data: e);
+                    }
+                }
+                catch (Exception ex)
+                {
+                    Debug.WriteLine($"{DateTime.Now}OnError callback error: {ex.Message}");
                 }
             });
 
@@ -1623,21 +1845,160 @@ public class Connection
                 await OnConnected?.Invoke();
             }
 
+            Interlocked.Exchange(ref _connectHandlerFailures, value: 0);
             SetConnectionState(XrpConnectionState.Connected, message: $"Connected {url}");
         }
         catch (Exception error)
         {
             connectionManager.RejectAllAwaiting(error);
-            await Disconnect();
+            await OnConnectHandlerFailedAsync(connectedSocket, error);
             return; // Don't start ping timer if connection failed
         }
-        
+
         // Start ping timer AFTER connection is fully established and all callbacks completed
         // This is outside try/catch to ensure it always runs on successful connection
         StartPingTimer();
         
         // Start background message processor for stream messages
         StartMessageProcessor();
+    }
+
+    /// <summary>
+    /// Handles an exception thrown by a consumer <see cref="OnConnected"/> handler.
+    /// <para>
+    /// A failing handler is a CONNECTION failure, not a user disconnect. Calling <see cref="Disconnect"/> here
+    /// would set the permanent-disconnect flag and clear the reconnect state, stranding the client forever:
+    /// no reconnect loop is restarted, no new socket is ever opened and every later request fails with
+    /// <see cref="NotConnectedException"/>. This is a very reachable scenario - restoring subscriptions in
+    /// <see cref="OnConnected"/> fails whenever the node accepts TCP before it starts serving requests.
+    /// </para>
+    /// <para>
+    /// Instead the socket is torn down as a transport failure so the regular reconnect loop (with exponential
+    /// backoff) brings the client back. A handler that keeps failing is bounded by
+    /// <see cref="ConnectionOptions.MaxReconnectAttempts"/> when
+    /// <see cref="ConnectionOptions.StopAfterMaxAttempts"/> is set, so a broken consumer cannot spin forever.
+    /// </para>
+    /// </summary>
+    /// <param name="failedSocket">The socket whose <see cref="OnConnected"/> handler threw.</param>
+    /// <param name="error">The exception thrown by the handler.</param>
+    private async Task OnConnectHandlerFailedAsync(WebSocketClient failedSocket, Exception error)
+    {
+        int failures = Interlocked.Increment(ref _connectHandlerFailures);
+
+        Debug.WriteLine($"{DateTime.Now}OnConnected handler failed ({failures}): {error.Message}");
+
+        var errorHandler = OnError;
+        if (errorHandler is not null)
+        {
+            try
+            {
+                await errorHandler
+                    .Invoke(error: "error", errorMessage: "connectHandlerError", error.Message, data: error)
+                    .ConfigureAwait(false);
+            }
+            catch (Exception notifyError)
+            {
+                Debug.WriteLine($"{DateTime.Now}OnError handler threw while reporting OnConnected failure: {notifyError.Message}");
+            }
+        }
+
+        bool giveUp = config.StopAfterMaxAttempts && failures >= config.MaxReconnectAttempts;
+        if (giveUp)
+        {
+            // Terminal state on purpose: the handler is broken, not the connection. Disconnect() gives the
+            // consumer an immediate, actionable NotConnectedException instead of a silent 5-minute wait,
+            // and Connect() resets the counter so recovery stays possible.
+            // The detailed reason has to be notified BEFORE Disconnect(): Disconnect() moves the state to
+            // Disconnected itself, and SetConnectionState only notifies on a state change, so a call after it
+            // would be swallowed and the consumer would see "Disconnected by user request." instead.
+            SetConnectionState(
+                XrpConnectionState.Disconnected,
+                message:
+                $"OnConnected handler failed {failures} time(s) in a row: {error.Message}. Giving up after {config.MaxReconnectAttempts} attempts. Call Connect() to retry.",
+                ConnectionCloseSeverity.Error);
+
+            await Disconnect();
+            return;
+        }
+
+        SetConnectionState(
+            XrpConnectionState.RestoringConnection,
+            message: $"OnConnected handler failed: {error.Message}. Reconnecting...",
+            ConnectionCloseSeverity.Warning,
+            reconnect: BuildReconnectInfo(failures));
+
+        StopPingTimerSync();
+        requestManager.RejectAllWithCancellation();
+        await WaitForPingToFinishAsync();
+
+        // Always tear down the socket the handler actually ran for. WebSocketClient.Connect invokes its
+        // OnConnect callback without awaiting it, so the connect lock can be released while this method is
+        // still running: by now `ws` may already point at a newer socket that must not be touched.
+        bool wasCurrentSocket;
+        lock (_disconnectLock)
+        {
+            wasCurrentSocket = ReferenceEquals(ws, failedSocket);
+            if (wasCurrentSocket)
+            {
+                ws = null;
+            }
+        }
+
+        // The socket is deliberately NOT marked as user-initiated: OnceClose must treat this as a real
+        // close so the standard reconnect path runs instead of the "closed permanently" branch.
+        failedSocket.Cancel();
+        failedSocket.Disconnect();
+
+        if (!wasCurrentSocket)
+        {
+            // A newer connection already replaced this socket - it owns the reconnect state now.
+            return;
+        }
+
+        // Take ownership of the reconnect state instead of asking "is a loop already running?".
+        // This method can run inside the reconnect loop's own attempt: that loop breaks as soon as the
+        // socket reports Open, which happens before the handler has even finished failing. Both this check
+        // and the one in OnceClose would then race with the loop's exit, and losing the race leaves nobody
+        // reconnecting - the very wedge this path exists to prevent. Cancel whatever is there, start fresh;
+        // the later OnceClose sees a live loop and correctly stands down.
+        // Seed the attempt counter with the consecutive-failure count. StopReconnectLoop zeroes
+        // _reconnectAttempts and a fresh sequence would zero it again, and CalcBackoff derives the
+        // delay from that counter alone — so without the seed every handler failure would restart
+        // the backoff at ReconnectBaseDelay. With StopAfterMaxAttempts = false (no give-up branch)
+        // that means connect -> handler failure -> teardown forever at a constant 2s, a sustained
+        // connection load on a node that accepts TCP but cannot serve requests yet.
+        RestartReconnectLoop(initialAttempts: failures);
+    }
+
+    /// <summary>
+    /// Retires the current reconnect session and installs a fresh one in a single transaction,
+    /// seeding the attempt counter with <paramref name="initialAttempts"/>.
+    /// </summary>
+    /// <remarks>
+    /// Doing this as <c>StopReconnectLoop(); _reconnectLoop = null; StartReconnectLoop(seed);</c>
+    /// took the lock twice with a bare write in between, so a concurrent start (from OnceClose or
+    /// OnConnectionFailed) could slip in and install its own loop; the seeded start would then see
+    /// a live loop, return without applying the seed, and the backoff would silently stop growing
+    /// across consecutive handler failures — the very regression the seed exists to prevent.
+    /// </remarks>
+    private void RestartReconnectLoop(int initialAttempts)
+    {
+        CancellationTokenSource retired;
+        lock (_reconnectStateLock)
+        {
+            retired = _reconnectCts;
+            _reconnectMode = ReconnectMode.LoopReconnect;
+            _isFastReconnectActive = false;
+            _reconnectAttempts = initialAttempts;
+            _reconnectCts = new CancellationTokenSource();
+
+            // Safe to start under the lock: ReconnectLoopAsync reads its token and yields before
+            // anything else, so this only schedules the loop - no consumer notification runs inline.
+            _reconnectLoop = ReconnectLoopAsync(_reconnectCts);
+        }
+
+        retired?.Cancel();
+        retired?.Dispose();
     }
 
     private async Task OnceClose(int? code, string? description, WebSocketClient closingSocket, long sessionId)
@@ -1780,10 +2141,27 @@ public class Connection
 
     private void StopReconnectLoop()
     {
-        _reconnectCts?.Cancel();
-        _reconnectCts?.Dispose();
-        _reconnectCts = null;
-        _reconnectAttempts = 0;
+        // Detach under the lock, then cancel/dispose outside it: a start racing with this stop can
+        // no longer have its fresh source torn down, and cancellation callbacks never run while the
+        // lock is held.
+        CancellationTokenSource retired;
+        lock (_reconnectStateLock)
+        {
+            retired = _reconnectCts;
+            _reconnectCts = null;
+            _reconnectAttempts = 0;
+
+            // Drop the task reference too, in the same transaction. The retired loop exits
+            // asynchronously - it only notices it lost ownership on its next check - so leaving the
+            // reference behind makes StartReconnectLoop see `!IsCompleted` and return without
+            // starting anything, while the retired loop then stands down on its ownership check.
+            // Nobody would be reconnecting. Reachable whenever Connect or ChangeServer stops a live
+            // loop and the new connection fails.
+            _reconnectLoop = null;
+        }
+
+        retired?.Cancel();
+        retired?.Dispose();
         // Note: Do NOT clear _reconnectMode here!
         // _reconnectMode is cleared only by:
         // - OnceOpen (connection succeeded)
@@ -1803,45 +2181,82 @@ public class Connection
         _reconnectMode = ReconnectMode.None;
     }
 
+    /// <summary>
+    /// Starts a reconnect loop unless one is already running, reusing a pre-created cancellation
+    /// source when there is one. A fresh sequence starts its attempt counter at zero, so the first
+    /// delay is <c>CalcBackoff(1)</c> — twice <c>ReconnectBaseDelay</c> — except on the
+    /// ping-timeout and network-drop paths, where the first attempt skips the delay entirely. The
+    /// OnConnected-handler path needs a seeded counter instead and uses
+    /// <see cref="RestartReconnectLoop"/>.
+    /// </summary>
     private void StartReconnectLoop()
     {
         // Set reconnect mode to LoopReconnect (upgrades from FastReconnect or sets from None)
         _reconnectMode = ReconnectMode.LoopReconnect;
-        
-        // CRITICAL: If a loop is already running, don't start another or reset the counter
-        // This prevents _reconnectAttempts from being reset mid-loop when callbacks trigger
-        // reconnect logic (OnceClose, OnConnectionFailed, etc.)
-        var loopIsRunning = _reconnectLoop != null && !_reconnectLoop.IsCompleted;
-        if (loopIsRunning)
+
+        // The whole decision — is a loop already running, is the current source reusable, install a
+        // fresh one, hand it to the new loop — is one transaction. Split across the lock it would
+        // race with StopReconnectLoop and with another start: two loops could end up running, or a
+        // loop could be handed a source that a concurrent stop has already disposed.
+        CancellationTokenSource retired = null;
+        lock (_reconnectStateLock)
         {
-            // Loop is already running - let it continue, don't reset _reconnectAttempts
-            return;
+            // CRITICAL: If a loop is already running, don't start another or reset the counter
+            // This prevents _reconnectAttempts from being reset mid-loop when callbacks trigger
+            // reconnect logic (OnceClose, OnConnectionFailed, etc.)
+            var loopIsRunning = _reconnectLoop != null && !_reconnectLoop.IsCompleted;
+            if (loopIsRunning)
+            {
+                // Loop is already running - let it continue, don't reset _reconnectAttempts
+                return;
+            }
+
+            // If we have a valid pre-created CTS (from RetireCurrentSessionAndReconnectAsync),
+            // we should reuse it. Check for this case first.
+            var existingCts = _reconnectCts;
+            var hasValidPreCreatedCts = existingCts != null && !existingCts.IsCancellationRequested;
+
+            // If no valid pre-created CTS, create a new one
+            // Only reset _reconnectAttempts when creating a FRESH CTS (new reconnect sequence)
+            if (!hasValidPreCreatedCts)
+            {
+                // Retire the old CTS after the lock is released - see _reconnectStateLock
+                retired = existingCts;
+                _reconnectCts = new CancellationTokenSource();
+                _reconnectAttempts = 0;
+            }
+            // else: Reuse existing valid CTS (pre-created for fast reconnect)
+            // Don't reset _reconnectAttempts - this is continuation of existing reconnect sequence
+            // Note: _reconnectLoop was already cleared by RetireCurrentSessionAndReconnectAsync
+
+            // Safe to start under the lock: ReconnectLoopAsync yields before touching anything, so
+            // this call only schedules the loop and returns - no consumer notification runs inline.
+            _reconnectLoop = ReconnectLoopAsync(_reconnectCts);
         }
-        
-        // If we have a valid pre-created CTS (from RetireCurrentSessionAndReconnectAsync),
-        // we should reuse it. Check for this case first.
-        var existingCts = _reconnectCts;
-        var hasValidPreCreatedCts = existingCts != null && !existingCts.IsCancellationRequested;
-        
-        // If no valid pre-created CTS, create a new one
-        // Only reset _reconnectAttempts when creating a FRESH CTS (new reconnect sequence)
-        if (!hasValidPreCreatedCts)
-        {
-            // Cancel/dispose old CTS if any
-            existingCts?.Cancel();
-            existingCts?.Dispose();
-            _reconnectCts = new CancellationTokenSource();
-            _reconnectAttempts = 0;
-        }
-        // else: Reuse existing valid CTS (pre-created for fast reconnect)
-        // Don't reset _reconnectAttempts - this is continuation of existing reconnect sequence
-        // Note: _reconnectLoop was already cleared by RetireCurrentSessionAndReconnectAsync
-        
-        _reconnectLoop = ReconnectLoopAsync(_reconnectCts.Token);
+
+        retired?.Cancel();
+        retired?.Dispose();
     }
 
-    private async Task ReconnectLoopAsync(CancellationToken ct)
+    private async Task ReconnectLoopAsync(CancellationTokenSource ownCts)
     {
+        // The CTS this loop owns. StopReconnectLoop cancels without awaiting the loop, so a retired loop
+        // can still be running - or reach its tail - after a replacement has been installed. Everything
+        // this loop writes to shared reconnect state is therefore guarded by an ownership check.
+        //
+        // Read BEFORE the yield below, and deliberately so: the caller still holds
+        // _reconnectStateLock here, so this source cannot yet have been retired. After the yield a
+        // concurrent stop may already have disposed it - Cancel/Dispose of a retired source run
+        // outside the lock - and CancellationTokenSource.Token throws ObjectDisposedException once
+        // disposed. Taken after the yield, that throw would land outside every try below, faulting
+        // the loop before its first attempt and vanishing as an unobserved task exception.
+        CancellationToken ct = ownCts.Token;
+
+        // Yield so nothing beyond that read runs inline on the caller: StartReconnectLoop starts the
+        // loop while holding _reconnectStateLock, and a consumer notification executing under that
+        // lock could deadlock against any path that takes it (Disconnect from a handler, say).
+        await Task.Yield();
+
         // Don't reset _reconnectAttempts here - it may be pre-set to 1 by fast reconnect path
         // StartReconnectLoop() sets it to 0 when creating a new CTS
         
@@ -1855,6 +2270,12 @@ public class Connection
 
         while (!ct.IsCancellationRequested)
         {
+            if (!ReferenceEquals(_reconnectCts, ownCts))
+            {
+                // Retired: a newer loop owns the reconnect sequence now.
+                break;
+            }
+
             _reconnectAttempts++;
 
             // Skip delay for first attempt if this is immediate reconnect (ping timeout or network drop)
@@ -1898,6 +2319,14 @@ public class Connection
                 {
                     break;
                 }
+                catch (ObjectDisposedException)
+                {
+                    // The source this loop owns was retired and disposed while the delay was being
+                    // set up: registering a callback on a token whose source is gone throws instead
+                    // of cancelling. Same meaning as cancellation - a newer sequence owns the
+                    // reconnect state now - so leave quietly rather than fault the task.
+                    break;
+                }
             }
 
             if (ct.IsCancellationRequested)
@@ -1938,7 +2367,16 @@ public class Connection
 
                 if (IsConnected())
                 {
-                    _reconnectAttempts = 0;
+                    // Ownership check and the write it guards belong together: checked outside the
+                    // lock, this loop could be retired in between and reset a live sequence's counter.
+                    lock (_reconnectStateLock)
+                    {
+                        if (ReferenceEquals(_reconnectCts, ownCts))
+                        {
+                            _reconnectAttempts = 0;
+                        }
+                    }
+
                     break;
                 }
             }
@@ -1969,17 +2407,36 @@ public class Connection
         // This ensures late callbacks from ping-timeout socket are still filtered
         // even if reconnect attempts fail
 
+        // A newer loop may already have taken over (this one was retired by StopReconnectLoop, which does
+        // not await it). Its state belongs to that loop: clearing the mode or disposing the CTS here would
+        // strand the live reconnect sequence.
+        if (!ReferenceEquals(_reconnectCts, ownCts))
+        {
+            return;
+        }
+
         // When loop exits (cancelled, max attempts, or success) and connection is not established,
         // clear the reconnect mode. If connected, OnceOpen already cleared it.
         if (!IsConnected())
         {
             _reconnectMode = ReconnectMode.None;
         }
-        
+
         if (config.StopAfterMaxAttempts && _reconnectAttempts >= config.MaxReconnectAttempts)
         {
-            _reconnectCts?.Dispose();
-            _reconnectCts = null;
+            // Re-check ownership inside the lock: between the check above and here a new sequence
+            // could have installed its own source, and disposing that one would strand it.
+            CancellationTokenSource finished = null;
+            lock (_reconnectStateLock)
+            {
+                if (ReferenceEquals(_reconnectCts, ownCts))
+                {
+                    finished = _reconnectCts;
+                    _reconnectCts = null;
+                }
+            }
+
+            finished?.Dispose();
         }
     }
 
@@ -2008,8 +2465,8 @@ public class Connection
                 _ = ExecutePingCheckAndReleaseAsync(innerCts, tcs);
             },
             state: cts,
-            dueTime: 20000,
-            period: 20000);
+            dueTime: (int)config.HealthCheckInterval.TotalMilliseconds,
+            period: (int)config.HealthCheckInterval.TotalMilliseconds);
     }
 
     private async Task ExecutePingCheckAndReleaseAsync(CancellationTokenSource cts, TaskCompletionSource<bool> tcs)
@@ -2078,11 +2535,13 @@ public class Connection
                 return;
             }
 
-            if (timeSinceLastActivity > 60)
+            double inactivityLimit = config.InactivityTimeout.TotalSeconds;
+            if (timeSinceLastActivity > inactivityLimit)
             {
                 _pingTimeoutSocket = ws;
 
-                await RetireCurrentSessionAndReconnectAsync("Connection timeout (no activity for 60+ seconds).");
+                await RetireCurrentSessionAndReconnectAsync(
+                    $"Connection timeout (no activity for {inactivityLimit:F0}+ seconds).");
                 return;
             }
 
@@ -2193,7 +2652,7 @@ public class Connection
         }
         else
         {
-            pingTimer = new Timer(20000);
+            pingTimer = new Timer(config.HealthCheckInterval.TotalMilliseconds);
             pingTimer.Elapsed += (sender, e) =>
             {
                 if (cts.IsCancellationRequested)

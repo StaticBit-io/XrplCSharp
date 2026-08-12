@@ -7,5 +7,6 @@ namespace Xrpl.BinaryCodec.Enums
     public partial class Field
     {
         public static readonly Int32Field LoanScale = new Int32Field(nameof(LoanScale), 1);
+        public static readonly Int32Field RemainingOwnerCountDelta = new Int32Field(nameof(RemainingOwnerCountDelta), 2);
     }
 }

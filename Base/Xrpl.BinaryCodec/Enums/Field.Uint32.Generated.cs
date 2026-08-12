@@ -56,7 +56,7 @@ namespace Xrpl.BinaryCodec.Enums
         public static readonly Uint32Field FirstNFTokenSequence = new Uint32Field(nameof(FirstNFTokenSequence), 50);
         public static readonly Uint32Field OracleDocumentID = new Uint32Field(nameof(OracleDocumentID), 51);
         public static readonly Uint32Field PermissionValue = new Uint32Field(nameof(PermissionValue), 52);
-        public static readonly Uint32Field MutableFlags = new Uint32Field(nameof(MutableFlags), 53);
+        public static readonly Uint32Field ImmutableFlags = new Uint32Field(nameof(ImmutableFlags), 53);
         public static readonly Uint32Field StartDate = new Uint32Field(nameof(StartDate), 54);
         public static readonly Uint32Field PaymentInterval = new Uint32Field(nameof(PaymentInterval), 55);
         public static readonly Uint32Field GracePeriod = new Uint32Field(nameof(GracePeriod), 56);

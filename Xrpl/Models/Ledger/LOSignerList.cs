@@ -10,6 +10,23 @@ using Xrpl.Models.Utils;
 namespace Xrpl.Models.Ledger;
 
 /// <summary>
+/// Flags of a SignerList ledger object.
+/// </summary>
+/// <remarks>
+/// <see cref="LOSignerList.Flags"/> stays a raw <c>uint</c> for backwards compatibility;
+/// test a bit with <c>(list.Flags &amp; (uint)SignerListFlags.lsfOneOwnerCount) != 0</c>.
+/// </remarks>
+[Flags]
+public enum SignerListFlags : uint
+{
+    /// <summary>
+    /// The signer list counts as one item against the owner reserve
+    /// rather than one per signer entry (set on every list created since MultiSignReserve).
+    /// </summary>
+    lsfOneOwnerCount = 0x00010000,
+}
+
+/// <summary>
 /// The SignerList object type represents a list of parties that, as a group,
 /// are authorized to sign a transaction in place of an individual account. <br/>
 /// You can create, replace, or remove a signer list using a SignerListSet transaction.

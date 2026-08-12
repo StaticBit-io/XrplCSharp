@@ -1,4 +1,5 @@
 using System.Text.Json.Serialization;
+using Xrpl.Models.Enums;
 //https://github.com/XRPLF/xrpl.js/blob/b20c05c3680d80344006d20c44b4ae1c3b0ffcac/packages/xrpl/src/models/common/index.ts#L62
 //https://xrpl.org/paths.html#path-steps
 namespace Xrpl.Models.Methods
@@ -20,7 +21,8 @@ namespace Xrpl.Models.Methods
         /// <summary>
         /// (Optional) If present, this path step represents changing currencies through an order book.<br/>
         /// The currency specified indicates the new currency.<br/>
-        /// MUST NOT be provided if this step specifies the account field.
+        /// MUST NOT be provided if this step specifies the account field.<br/>
+        /// MUST NOT be combined with the mpt_issuance_id field.
         /// </summary>
         [JsonPropertyName("currency")]
         public string CurrencyCode { get; set; }
@@ -36,16 +38,23 @@ namespace Xrpl.Models.Methods
         public string Issuer { get; set; }
 
         /// <summary>
-        /// (Optional) An integer bitfield indicating which fields are present in this path step.<br/>
-        /// 0x01 = account, 0x10 = currency, 0x20 = issuer.
+        /// (Optional) If present, this path step represents changing assets through an MPT order book.<br/>
+        /// Requires rippled 3.2.0+ with the MPTokensV2 amendment enabled.<br/>
+        /// MUST NOT be combined with the currency field.
         /// </summary>
-        [JsonPropertyName("type")]
-        public int? Type { get; set; }
+        [JsonPropertyName("mpt_issuance_id")]
+        public string MPTokenIssuanceID { get; set; }
 
         /// <summary>
-        /// (Optional) Hex representation of the type field.
+        /// (Optional) A bitfield indicating which fields are present in this path step.<br/>
+        /// Serialized as the number rippled sends: 0x01 account, 0x10 currency, 0x20 issuer,
+        /// 0x40 mpt_issuance_id — a value the enum does not declare is preserved as-is.<br/>
+        /// The XRPL documentation marks the field as deprecated, but every rippled version still emits it on
+        /// every path step of every response.<br/>
+        /// Read-only in practice: the value is ignored both by rippled when it parses a submitted transaction
+        /// and by the binary codec, which derives the byte from the fields actually present in the step.
         /// </summary>
-        [JsonPropertyName("type_hex")]
-        public string TypeHex { get; set; }
+        [JsonPropertyName("type")]
+        public PathStepType? Type { get; set; }
     }
 }
