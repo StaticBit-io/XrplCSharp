@@ -397,7 +397,7 @@
             await InvokeAsync(async () =>
             {
                 IsConnected = true;
-                CurrentServerUrl = client.connection.GetUrl();
+                CurrentServerUrl = client.Url();
                 CurrentReconnectInfo = null;
                 
                 SessionStartTime = DateTime.Now;
@@ -617,7 +617,7 @@
         client.connection.OnTransaction += _onTransactionHandler;
         client.connection.OnLedgerClosed += _onLedgerClosedHandler;
         
-        CurrentServerUrl = client.connection.GetUrl();
+        CurrentServerUrl = client.Url();
         CurrentConnectionState = client.connection.CurrentConnectionState;
         
         await base.OnInitializedAsync();
@@ -627,7 +627,7 @@
         if (client.connection.IsConnected())
         {
             IsConnected = true;
-            CurrentServerUrl = client.connection.GetUrl();
+            CurrentServerUrl = client.Url();
             CurrentConnectionState = client.connection.CurrentConnectionState;
             StateHasChanged();
         }
