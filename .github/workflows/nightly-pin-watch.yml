@@ -1,0 +1,299 @@
+name: Nightly Pin Watch
+
+# Weekly check that the nightly stand is not pinned to a stale xrpld build.
+#
+# definitions-watch raises its stand from docker-compose.batchv11.yml, i.e. from
+# ARG XRPLD_VERSION in .ci-config/Dockerfile.nightly. While that pin is stale the
+# weekly definitions diff compares definitions.json against a build older than
+# the one CI runs and reports "in sync" about the past — which is how rippled
+# 3.3.0 renaming sfMutableFlags to sfImmutableFlags and moving SponsorshipSet
+# onto delta fields reached the CI bump PR unnoticed.
+#
+# The pin cannot simply be dropped: the nightly apt channel switched its build
+# timestamp from 14 to 12 digits mid-2026, so Debian version ordering ranks old
+# builds above new ones and an unpinned install gets a stale binary. Hence a
+# workflow that moves the pin deliberately instead.
+#
+# Bumping is deliberately NOT done every week: nightly publishes several builds
+# a day and a weekly PR would be noise. MAX_PIN_AGE_DAYS is the staleness the
+# monitor is allowed to carry.
+#
+# Credentials follow the same ladder as release-watch (a PR opened with
+# GITHUB_TOKEN does not trigger CI):
+#   1. GitHub App: RELEASE_WATCH_APP_ID variable + RELEASE_WATCH_APP_PRIVATE_KEY
+#      secret, app installed with contents:write + pull_requests:write
+#   2. Fine-grained PAT: RELEASE_WATCH_PAT secret
+# With neither — or when the stand fails to come up on the new pin — the run
+# falls back to a comment on the tracking issue.
+
+on:
+  schedule:
+    - cron: '0 5 * * 1' # Mondays 05:00 UTC, ahead of the other watchers
+  workflow_dispatch:
+    inputs:
+      force:
+        description: 'Bump even if the pin is younger than MAX_PIN_AGE_DAYS'
+        type: boolean
+        default: false
+
+permissions:
+  contents: read
+  issues: write
+  pull-requests: read # gh pr list in the idempotency check runs on GITHUB_TOKEN
+
+concurrency:
+  group: nightly-pin-watch
+  cancel-in-progress: false
+
+env:
+  COMPOSE: .ci-config/docker-compose.batchv11.yml
+  MAX_PIN_AGE_DAYS: '21'
+  ISSUE_TITLE: 'Nightly pin watch: xrpld develop build'
+  ISSUE_LABEL: nightly-pin-watch
+  DOTNET_VERSION: '10.0.x'
+  HAS_APP: ${{ vars.RELEASE_WATCH_APP_ID != '' && secrets.RELEASE_WATCH_APP_PRIVATE_KEY != '' }}
+  CAN_PR: ${{ (vars.RELEASE_WATCH_APP_ID != '' && secrets.RELEASE_WATCH_APP_PRIVATE_KEY != '') || secrets.RELEASE_WATCH_PAT != '' }}
+
+jobs:
+  watch:
+    runs-on: ubuntu-latest
+    # Cold nightly image build (apt install of the pinned xrpld) plus a genesis
+    # start and the definitions diff; cap well under the 360-min default.
+    timeout-minutes: 30
+    steps:
+      - name: Mint GitHub App token
+        id: app-token
+        if: env.HAS_APP == 'true'
+        uses: actions/create-github-app-token@v3
+        with:
+          client-id: ${{ vars.RELEASE_WATCH_APP_ID }}
+          private-key: ${{ secrets.RELEASE_WATCH_APP_PRIVATE_KEY }}
+          permission-contents: write
+          permission-pull-requests: write
+
+      - uses: actions/checkout@v4
+        with:
+          token: ${{ steps.app-token.outputs.token || secrets.RELEASE_WATCH_PAT || github.token }}
+
+      - name: Check the pin against the nightly channel
+        id: check
+        run: bash .ci-config/bump-nightly-pin.sh --check
+
+      # A pin that is current, or stale by less than the allowance, is left
+      # alone: definitions-watch is still looking at a recent develop build.
+      - name: Decide whether to bump
+        id: decide
+        env:
+          GH_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+          OLD_VERSION: ${{ steps.check.outputs.old_version }}
+          NEW_VERSION: ${{ steps.check.outputs.new_version }}
+          AGE_DAYS: ${{ steps.check.outputs.age_days }}
+          FORCE: ${{ inputs.force }}
+        run: |
+          set -euo pipefail
+          if [ "$OLD_VERSION" = "$NEW_VERSION" ]; then
+            echo "Pin is already the newest published build."
+            echo "bump=false" >> "$GITHUB_OUTPUT"
+            exit 0
+          fi
+          if [ "$FORCE" != "true" ]; then
+            case "$AGE_DAYS" in
+              ''|*[!0-9]*)
+                echo "::warning::pin age could not be derived from '$OLD_VERSION'; bumping so an unparseable pin cannot sit forever"
+                ;;
+              *)
+                if [ "$AGE_DAYS" -lt "$MAX_PIN_AGE_DAYS" ]; then
+                  echo "Pin is ${AGE_DAYS}d old, under the ${MAX_PIN_AGE_DAYS}d allowance; leaving it."
+                  echo "bump=false" >> "$GITHUB_OUTPUT"
+                  exit 0
+                fi
+                ;;
+            esac
+          fi
+          branch="nightly-watch/$NEW_VERSION"
+          if [ -n "$(gh pr list --repo "$GITHUB_REPOSITORY" --head "$branch" --state open --json number --jq '.[0].number // empty')" ]; then
+            echo "A bump PR for $NEW_VERSION is already open."
+            echo "bump=false" >> "$GITHUB_OUTPUT"
+            exit 0
+          fi
+          echo "branch=$branch" >> "$GITHUB_OUTPUT"
+          echo "bump=true" >> "$GITHUB_OUTPUT"
+
+      # Rewrites the pin and regenerates rippled.batchv11.cfg from the develop
+      # commit the new build was made from — the script derives the ref from the
+      # version string, so config and binary cannot drift apart.
+      - name: Bump the pin
+        if: steps.decide.outputs.bump == 'true'
+        id: bump
+        run: |
+          set -euo pipefail
+          old_names=$(sed -n -E 's/^[0-9A-F]{64} (.+)$/\1/p' .ci-config/rippled.batchv11.cfg | LC_ALL=C sort)
+          bash .ci-config/bump-nightly-pin.sh
+          new_names=$(sed -n -E 's/^[0-9A-F]{64} (.+)$/\1/p' .ci-config/rippled.batchv11.cfg | LC_ALL=C sort)
+          {
+            echo 'added<<EOF'
+            comm -13 <(echo "$old_names") <(echo "$new_names")
+            echo 'EOF'
+            echo 'removed<<EOF'
+            comm -23 <(echo "$old_names") <(echo "$new_names")
+            echo 'EOF'
+          } >> "$GITHUB_OUTPUT"
+          git diff --stat
+
+      - name: Start the stand on the new pin
+        if: steps.decide.outputs.bump == 'true'
+        id: smoke
+        continue-on-error: true
+        run: |
+          set -euo pipefail
+          docker compose -f "$COMPOSE" up -d --build
+          # AMM amendment id — the same sentinel the CI readiness wait uses.
+          # Genesis up-votes come from [amendments], so an enabled sentinel means
+          # the regenerated config was accepted rather than silently ignored.
+          SENTINEL="8CC0774A3BF66D1D22E76BBDA8E8A232E6B6313834301B3B23E8601196AE6455"
+          ok=false
+          for _ in $(seq 1 45); do
+            enabled=$(curl -sf --max-time 5 http://localhost:5005/ \
+              -d "{\"method\":\"feature\",\"params\":[{\"feature\":\"$SENTINEL\"}]}" \
+              | jq -r ".result.\"$SENTINEL\".enabled" 2>/dev/null || true)
+            if [ "$enabled" = "true" ]; then ok=true; break; fi
+            sleep 2
+          done
+          if [ "$ok" != "true" ]; then
+            docker compose -f "$COMPOSE" logs --no-color xrpld | tail -80 || true
+          fi
+          [ "$ok" = "true" ]
+
+      - name: Use .NET ${{ env.DOTNET_VERSION }}
+        if: steps.decide.outputs.bump == 'true' && steps.smoke.outcome == 'success'
+        uses: actions/setup-dotnet@v4
+        with:
+          dotnet-version: ${{ env.DOTNET_VERSION }}
+
+      # Informational, never blocking: a definitions drift against the newer
+      # develop build is exactly what the bump exists to reveal, so it belongs in
+      # the PR body rather than stopping the PR from being opened.
+      - name: Diff definitions.json against the new build
+        if: steps.decide.outputs.bump == 'true' && steps.smoke.outcome == 'success'
+        id: definitions
+        continue-on-error: true
+        run: |
+          set -uo pipefail
+          out=$(dotnet run --project Tools/GenerateEnums -- diff http://localhost:5005 2>&1)
+          status=$?
+          echo "$out"
+          {
+            echo 'summary<<EOF'
+            printf '%s\n' "$out" | grep -E 'node-only|mismatch|^Summary' || echo 'no differences reported'
+            echo 'EOF'
+            echo "status=$status"
+          } >> "$GITHUB_OUTPUT"
+          exit 0
+
+      - name: Stop the stand
+        if: always()
+        run: docker compose -f "$COMPOSE" down || true
+
+      - name: Open bump PR
+        if: steps.decide.outputs.bump == 'true' && steps.smoke.outcome == 'success' && env.CAN_PR == 'true'
+        env:
+          GH_TOKEN: ${{ steps.app-token.outputs.token || secrets.RELEASE_WATCH_PAT }}
+          OLD_VERSION: ${{ steps.check.outputs.old_version }}
+          NEW_VERSION: ${{ steps.check.outputs.new_version }}
+          NEW_REF: ${{ steps.check.outputs.new_ref }}
+          AGE_DAYS: ${{ steps.check.outputs.age_days }}
+          BRANCH: ${{ steps.decide.outputs.branch }}
+        run: |
+          set -euo pipefail
+          git config user.name "${{ github.actor }}"
+          git config user.email "${{ github.actor }}@users.noreply.github.com"
+          git checkout -b "$BRANCH"
+          git add .ci-config/Dockerfile.nightly .ci-config/rippled.batchv11.cfg
+          git commit -m "ci: bump nightly stand pin to xrpld $NEW_VERSION"
+          git push -u origin "$BRANCH" --force
+          body_file=$(mktemp)
+          {
+            printf '## Summary\n\n'
+            printf 'Automated bump by the nightly-pin-watch workflow: the nightly stand was pinned to a build **%sd** old.\n\n' "$AGE_DAYS"
+            printf -- '- `.ci-config/Dockerfile.nightly`: `%s` -> `%s`\n' "$OLD_VERSION" "$NEW_VERSION"
+            printf -- '- `.ci-config/rippled.batchv11.cfg`: `[features]`/`[amendments]` regenerated from develop `%s`, the commit that build was made from\n\n' "$NEW_REF"
+            printf '## Amendment changes\n\n'
+            printf 'Added:\n```\n%s\n```\n\n' "${{ steps.bump.outputs.added }}"
+            printf 'Removed:\n```\n%s\n```\n\n' "${{ steps.bump.outputs.removed }}"
+            printf '## definitions.json vs the new build\n\n'
+            printf '```\n%s\n```\n\n' "${{ steps.definitions.outputs.summary }}"
+            printf 'A `node-only` field here means the SDK is behind develop and needs a follow-up; `local-only` entries are informational.\n\n'
+            printf '## Verification\n\n'
+            printf 'The stand was built and started from the new pin on the runner, and the AMM sentinel amendment came up enabled at genesis, so the regenerated config was accepted.\n\n'
+            printf 'Why this matters: definitions-watch raises its stand from this pin, so a stale pin makes the weekly develop-drift check compare against the past.\n'
+          } > "$body_file"
+          gh pr create --repo "$GITHUB_REPOSITORY" --base dev --head "$BRANCH" \
+            --title "ci: bump nightly stand pin to xrpld $NEW_VERSION" \
+            --body-file "$body_file"
+
+      - name: Notify on tracking issue (no PR credentials or stand failure)
+        if: steps.decide.outputs.bump == 'true' && (steps.smoke.outcome != 'success' || env.CAN_PR != 'true')
+        env:
+          GH_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+          REPO: ${{ github.repository }}
+          OLD_VERSION: ${{ steps.check.outputs.old_version }}
+          NEW_VERSION: ${{ steps.check.outputs.new_version }}
+          NEW_REF: ${{ steps.check.outputs.new_ref }}
+          AGE_DAYS: ${{ steps.check.outputs.age_days }}
+          SMOKE: ${{ steps.smoke.outcome }}
+        run: |
+          set -euo pipefail
+          if [ "$SMOKE" != "success" ]; then
+            reason="the stand FAILED to come up on the new pin — the build, the regenerated config or the new binary needs a human look (see the run log)"
+          else
+            reason="no PR credentials are configured (RELEASE_WATCH_APP_ID + RELEASE_WATCH_APP_PRIVATE_KEY, or RELEASE_WATCH_PAT), so a CI-triggering PR cannot be opened automatically"
+          fi
+          number=$(gh issue list --repo "$REPO" --label "$ISSUE_LABEL" --state open \
+            --json number --jq '.[0].number // empty')
+          if [ -z "$number" ]; then
+            gh label create "$ISSUE_LABEL" --repo "$REPO" \
+              --description "nightly xrpld pin tracking" --color 1d76db 2>/dev/null || true
+            number=$(gh issue create --repo "$REPO" --title "$ISSUE_TITLE" --label "$ISSUE_LABEL" \
+              --body "Automated notifications from the nightly-pin-watch workflow (.github/workflows/nightly-pin-watch.yml)." \
+              | grep -oE '[0-9]+$')
+          fi
+          marker="<!-- nightly-pin-watch:$NEW_VERSION -->"
+          existing_comments=$(gh api "repos/$REPO/issues/$number/comments" --paginate --jq '.[].body')
+          if grep -qF "$marker" <<< "$existing_comments"; then
+            echo "Notification for $NEW_VERSION already posted."
+            exit 0
+          fi
+          comment=$(printf '%s\nThe nightly stand is pinned to **%s** (%sd old); the newest published build is **%s**, but %s.\n\nManual path: run `.ci-config/bump-nightly-pin.sh`, start `%s` to check the stand comes up, open a PR.\nThe regenerated config must come from develop `%s` — the commit that build was made from.\n' \
+            "$marker" "$OLD_VERSION" "$AGE_DAYS" "$NEW_VERSION" "$reason" "$COMPOSE" "$NEW_REF")
+          gh issue comment "$number" --repo "$REPO" --body "$comment"
+
+      - name: Notify on tracking issue (workflow failure)
+        if: failure()
+        env:
+          GH_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+          REPO: ${{ github.repository }}
+        run: |
+          set -euo pipefail
+          number=$(gh issue list --repo "$REPO" --label "$ISSUE_LABEL" --state open \
+            --json number --jq '.[0].number // empty')
+          if [ -z "$number" ]; then
+            gh label create "$ISSUE_LABEL" --repo "$REPO" \
+              --description "nightly xrpld pin tracking" --color 1d76db 2>/dev/null || true
+            number=$(gh issue create --repo "$REPO" --title "$ISSUE_TITLE" --label "$ISSUE_LABEL" \
+              --body "Automated notifications from the nightly-pin-watch workflow (.github/workflows/nightly-pin-watch.yml)." \
+              | grep -oE '[0-9]+$')
+          fi
+          # One notification per failure streak, same rule as release-watch:
+          # skip only when the latest comment is already a failure notice.
+          marker='<!-- nightly-pin-watch:failure -->'
+          last_id=$(gh api "repos/$REPO/issues/$number/comments" --paginate --jq '.[].id' | tail -1)
+          if [ -n "$last_id" ]; then
+            last_body=$(gh api "repos/$REPO/issues/comments/$last_id" --jq .body)
+            if grep -qF "$marker" <<< "$last_body"; then
+              echo "Latest comment is already a failure notification; skipping."
+              exit 0
+            fi
+          fi
+          comment=$(printf '%s\nNightly-pin-watch run **failed** before completing: %s/%s/actions/runs/%s\n\nThe pin was not changed; see the run log.\n' \
+            "$marker" "$GITHUB_SERVER_URL" "$REPO" "${{ github.run_id }}")
+          gh issue comment "$number" --repo "$REPO" --body "$comment"
