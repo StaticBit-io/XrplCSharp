@@ -26,8 +26,7 @@ namespace Xrpl.Client.Json.Converters
             }
 
             // Serialize the concrete type to avoid infinite recursion
-            JsonSerializerOptions innerOptions = new JsonSerializerOptions(options);
-            innerOptions.Converters.Remove(this);
+            JsonSerializerOptions innerOptions = JsonSerializerOptionsCache.WithoutConverter<LedgerBinaryConverter>(options);
 
             if (value is LedgerBinaryEntity binaryEntity)
                 JsonSerializer.Serialize(writer, binaryEntity, innerOptions);
@@ -59,8 +58,7 @@ namespace Xrpl.Client.Json.Converters
             string rawJson = root.GetRawText();
 
             // Remove this converter to avoid infinite recursion
-            JsonSerializerOptions innerOptions = new JsonSerializerOptions(options);
-            innerOptions.Converters.Remove(this);
+            JsonSerializerOptions innerOptions = JsonSerializerOptionsCache.WithoutConverter<LedgerBinaryConverter>(options);
 
             Type targetType = DetermineType(root);
             return (IBaseLedgerEntity)JsonSerializer.Deserialize(rawJson, targetType, innerOptions);

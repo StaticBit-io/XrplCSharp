@@ -23,8 +23,7 @@ namespace Xrpl.Client.Json.Converters
             }
 
             // Remove this converter from options to avoid infinite recursion
-            JsonSerializerOptions innerOptions = new JsonSerializerOptions(options);
-            innerOptions.Converters.Remove(this);
+            JsonSerializerOptions innerOptions = JsonSerializerOptionsCache.WithoutConverter<MetaBinaryConverter>(options);
             JsonSerializer.Serialize(writer, value, innerOptions);
         }
 
@@ -46,8 +45,7 @@ namespace Xrpl.Client.Json.Converters
             if (reader.TokenType == JsonTokenType.StartObject)
             {
                 // Remove this converter from options to avoid infinite recursion
-                JsonSerializerOptions innerOptions = new JsonSerializerOptions(options);
-                innerOptions.Converters.Remove(this);
+                JsonSerializerOptions innerOptions = JsonSerializerOptionsCache.WithoutConverter<MetaBinaryConverter>(options);
                 return JsonSerializer.Deserialize<Meta>(ref reader, innerOptions);
             }
 

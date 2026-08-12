@@ -20,10 +20,14 @@ namespace Xrpl.Models.Methods
         public string Account { get; set; }
         /// <summary>
         /// Array of objects owned by this account.<br/>
-        /// Each object is in its raw  ledger format.
+        /// Each object is in its raw  ledger format.<br/>
+        /// Elements are deserialized into the concrete <c>LO*</c> type named by their <c>LedgerEntryType</c>
+        /// discriminator by <see cref="LOConverter"/>, which is registered globally in <see cref="Xrpl.Client.Json.XrplJsonOptions"/>;
+        /// a type the SDK does not know falls back to <see cref="BaseLedgerEntry"/> itself, which is why that
+        /// one stays a concrete class rather than an interface.
         /// </summary>
         [JsonPropertyName("account_objects")]
-        public List<BaseLedgerEntry> AccountObjectList { get; set; } //todo change from class to interface and parse same as transactionResponse
+        public List<BaseLedgerEntry> AccountObjectList { get; set; }
         /// <summary>
         /// The identifying hash of the ledger that was used to generate this  response.
         /// </summary>
