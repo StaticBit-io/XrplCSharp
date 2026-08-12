@@ -244,7 +244,14 @@ namespace Xrpl.Models.Transactions
             uint flagValue = 0;
             if (tx.TryGetValue("Flags", out var flags) && flags is not null)
             {
-                flagValue = Convert.ToUInt32(flags);
+                // Same reporting as the ImmutableFlags check below: a non-numeric value has to
+                // surface as ValidationException, which is what callers of this method catch —
+                // Convert.ToUInt32 would throw FormatException or InvalidCastException instead.
+                if (!Common.TryGetUInt32(flags, out flagValue))
+                {
+                    throw new ValidationException("MPTokenIssuanceSet: Flags must be a number");
+                }
+
                 bool hasLock = (flagValue & (uint)MPTokenIssuanceSetFlags.tfMPTLock) != 0;
                 bool hasUnlock = (flagValue & (uint)MPTokenIssuanceSetFlags.tfMPTUnlock) != 0;
 
