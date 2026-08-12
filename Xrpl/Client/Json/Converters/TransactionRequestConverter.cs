@@ -20,8 +20,7 @@ public class TransactionRequestConverter : JsonConverter<ITransactionRequest>
         }
 
         // Remove this converter to avoid infinite recursion
-        JsonSerializerOptions innerOptions = new JsonSerializerOptions(options);
-        innerOptions.Converters.Remove(this);
+        JsonSerializerOptions innerOptions = JsonSerializerOptionsCache.WithoutConverter<TransactionRequestConverter>(options);
 
         JsonSerializer.Serialize(writer, value, value.GetType(), innerOptions);
     }
@@ -157,12 +156,7 @@ public class TransactionRequestConverter : JsonConverter<ITransactionRequest>
         string rawJson = root.GetRawText();
 
         // Remove this converter to avoid infinite recursion
-        JsonSerializerOptions innerOptions = new JsonSerializerOptions(options);
-        for (int i = innerOptions.Converters.Count - 1; i >= 0; i--)
-        {
-            if (innerOptions.Converters[i] is TransactionRequestConverter)
-                innerOptions.Converters.RemoveAt(i);
-        }
+        JsonSerializerOptions innerOptions = JsonSerializerOptionsCache.WithoutConverter<TransactionRequestConverter>(options);
 
         try
         {
