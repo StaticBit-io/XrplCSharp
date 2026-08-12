@@ -343,9 +343,13 @@ namespace Xrpl.Sugar
                 int? entries = data?.SignerLists?.Length > 0 ? data.SignerLists[0].SignerEntries?.Count : null;
                 return entries is > 0 ? entries.Value : 1;
             }
-            catch (Exception)
+            catch (Exception) when (!cancellationToken.IsCancellationRequested)
             {
                 // The counterparty account may not exist yet; preclaim rejects the transaction anyway.
+                // The filter keeps a caller's cancellation out of that fallback: without it an
+                // OperationCanceledException would be swallowed and autofill would carry on with a
+                // guessed signer count instead of stopping. A timeout inside the client still falls
+                // back, since it does not cancel this token.
                 return 1;
             }
         }
@@ -424,8 +428,10 @@ namespace Xrpl.Sugar
                 LedgerEntryResponse response = await client.LedgerEntry(request, cancellationToken);
                 return response?.Node as LOLoan;
             }
-            catch (Exception)
+            catch (Exception) when (!cancellationToken.IsCancellationRequested)
             {
+                // Same reasoning as FetchCounterpartySignerCount: a missing object is a fallback,
+                // a cancellation asked for by the caller is not.
                 return null;
             }
         }

@@ -1,4 +1,4 @@
-using System.Collections.Generic;
+﻿using System.Collections.Generic;
 using System.Linq;
 using System.Text.Json;
 using System.Text.Json.Nodes;
@@ -204,6 +204,12 @@ namespace Xrpl.Tests.Models.Tests
                 ["Account"] = Account1,
                 ["MPTokenIssuanceID"] = "00000001A407AF5856CCF3C42619DAA925813FC955C72983",
             };
+
+            // A non-numeric Flags value must report as ValidationException like every other
+            // malformed field here, not as a raw conversion exception callers do not catch.
+            tx["Flags"] = "not-a-number";
+            await Assert.ThrowsExactlyAsync<Xrpl.Client.Exceptions.ValidationException>(() => Validation.ValidateMPTokenIssuanceSet(tx));
+            tx.Remove("Flags");
 
             // ImmutableFlags: zero and out-of-mask values are temINVALID_FLAG
             tx["ImmutableFlags"] = 0u;

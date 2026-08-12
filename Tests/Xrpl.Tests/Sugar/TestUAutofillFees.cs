@@ -1,4 +1,4 @@
-using Microsoft.VisualStudio.TestTools.UnitTesting;
+﻿using Microsoft.VisualStudio.TestTools.UnitTesting;
 
 using System.Text.Json.Nodes;
 
@@ -341,6 +341,73 @@ public class TestUAutofillFees
 
     #endregion
 
+    #region Cancellation
+
+    /// <summary>
+    /// A cancelled token must stop fee calculation rather than be absorbed by the fallback that
+    /// exists for a counterparty account which does not exist yet.
+    /// </summary>
+    /// <remarks>
+    /// Both lookups sit behind a broad catch, so without an exception filter the
+    /// OperationCanceledException became a silent "assume one signer" and autofill carried on
+    /// writing a fee the caller never asked for.
+    /// </remarks>
+    [TestMethod]
+    public async Task TestUCalculateFee_LoanSet_CancellationIsNotSwallowedByTheSignerFallback()
+    {
+        var client = new FeeTestClient(MAINNET_BASE_FEE, RESERVE_INC)
+        {
+            CounterpartySignerLists = CreateSignerList(3)
+        };
+        var tx = CreateLoanSetTx();
+
+        using CancellationTokenSource cts = new CancellationTokenSource();
+        cts.Cancel();
+
+        await Assert.ThrowsAsync<OperationCanceledException>(
+            () => client.CalculateFeePerTransactionType(tx, 0, cts.Token));
+
+        Assert.IsFalse(tx.ContainsKey("Fee"), "A cancelled autofill must not leave a fee behind.");
+    }
+
+    /// <summary>The same for the Loan lookup, whose fallback is a null object.</summary>
+    [TestMethod]
+    public async Task TestUCalculateFee_LoanPay_CancellationIsNotSwallowedByTheLoanFallback()
+    {
+        var client = new FeeTestClient(MAINNET_BASE_FEE, RESERVE_INC)
+        {
+            LoanEntry = CreateLoan(paymentRemaining: 50)
+        };
+        var tx = CreateLoanPayTx(amount: "10000");
+
+        using CancellationTokenSource cts = new CancellationTokenSource();
+        cts.Cancel();
+
+        await Assert.ThrowsAsync<OperationCanceledException>(
+            () => client.CalculateFeePerTransactionType(tx, 0, cts.Token));
+
+        Assert.IsFalse(tx.ContainsKey("Fee"), "A cancelled autofill must not leave a fee behind.");
+    }
+
+    /// <summary>
+    /// The filter must not turn every failure into a hard error: a lookup that fails on its own —
+    /// the object is missing — still falls back while the caller's token is untouched.
+    /// </summary>
+    [TestMethod]
+    public async Task TestUCalculateFee_LoanPay_FailedLookupStillFallsBackWhenNotCancelled()
+    {
+        var client = new FeeTestClient(MAINNET_BASE_FEE, RESERVE_INC) { LedgerEntryThrows = true };
+        var tx = CreateLoanPayTx(amount: "10000");
+
+        using CancellationTokenSource cts = new CancellationTokenSource();
+
+        await client.CalculateFeePerTransactionType(tx, 0, cts.Token);
+
+        Assert.IsTrue(tx.ContainsKey("Fee"), "An unreadable Loan object is a fallback, not a failure.");
+    }
+
+    #endregion
+
     #region LoanPay Fee Tests
 
     [TestMethod]
@@ -650,6 +717,9 @@ internal sealed class FeeTestClient : IXrplClient
     public Task<Fee> Fee(CancellationToken cancellationToken = default) => throw new NotSupportedException();
     public Task<AccountInfo> AccountInfo(AccountInfoRequest request, CancellationToken cancellationToken = default)
     {
+        // Honour the token the way a real client does, so tests can assert that a caller's
+        // cancellation reaches autofill instead of being turned into a fee fallback.
+        cancellationToken.ThrowIfCancellationRequested();
         AccountInfoCalls++;
         LastAccountInfoRequest = request;
         return Task.FromResult(new AccountInfo { SignerLists = CounterpartySignerLists });
@@ -669,6 +739,7 @@ internal sealed class FeeTestClient : IXrplClient
     public Task<LOLedgerData> LedgerData(LedgerDataRequest request, CancellationToken cancellationToken = default) => throw new NotSupportedException();
     public Task<LedgerEntryResponse> LedgerEntry(LedgerEntryRequest request, CancellationToken cancellationToken = default)
     {
+        cancellationToken.ThrowIfCancellationRequested();
         LedgerEntryCalls++;
         LastLedgerEntryRequest = request;
         if (LedgerEntryThrows)
