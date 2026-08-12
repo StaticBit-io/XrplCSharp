@@ -1,5 +1,6 @@
 using System;
 using System.Text.Json.Serialization;
+using Xrpl.BinaryCodec.Enums;
 //https://github.com/XRPLF/xrpl.js/blob/b20c05c3680d80344006d20c44b4ae1c3b0ffcac/packages/xrpl/src/models/common/index.ts#L62
 //https://xrpl.org/paths.html#path-steps
 namespace Xrpl.Models.Methods
@@ -46,15 +47,16 @@ namespace Xrpl.Models.Methods
         public string MPTokenIssuanceID { get; set; }
 
         /// <summary>
-        /// (Optional) An integer bitfield indicating which fields are present in this path step.<br/>
-        /// 0x01 = account, 0x10 = currency, 0x20 = issuer, 0x40 = mpt_issuance_id.<br/>
+        /// (Optional) A bitfield indicating which fields are present in this path step.<br/>
+        /// Serialized as the number rippled sends: 0x01 account, 0x10 currency, 0x20 issuer,
+        /// 0x40 mpt_issuance_id — a value the enum does not declare is preserved as-is.<br/>
         /// The XRPL documentation marks the field as deprecated, but every rippled version still emits it on
         /// every path step of every response.<br/>
         /// Read-only in practice: the value is ignored both by rippled when it parses a submitted transaction
         /// and by the binary codec, which derives the byte from the fields actually present in the step.
         /// </summary>
         [JsonPropertyName("type")]
-        public int? Type { get; set; }
+        public PathStepType? Type { get; set; }
 
         /// <summary>
         /// (Optional) Hex representation of the type field.<br/>
