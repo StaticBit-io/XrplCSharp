@@ -342,10 +342,18 @@ namespace Xrpl.Models.Transactions
                 return false;
             if (pathStep.TryGetValue("issuer", out var issuer) && issuer is not string { })
                 return false;
+            if (pathStep.TryGetValue("mpt_issuance_id", out var mptIssuanceId) && mptIssuanceId is not string { })
+                return false;
 
-            if (acc is not null && currency is null && issuer is null)
+            // rippled toStrand(): `hasAccount && (hasIssuer || hasCurrency)` and
+            // `hasMPT && (hasCurrency || hasAccount)` are both temBAD_PATH
+            if (currency is not null && mptIssuanceId is not null)
+                return false;
+            if (acc is not null && (currency is not null || issuer is not null || mptIssuanceId is not null))
+                return false;
+            if (acc is not null)
                 return true;
-            if (currency is not null || issuer is not null)
+            if (currency is not null || issuer is not null || mptIssuanceId is not null)
                 return true;
             return false;
         }
