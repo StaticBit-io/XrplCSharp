@@ -4,6 +4,7 @@ using System;
 using System.Collections.Concurrent;
 using System.Collections.Generic;
 using System.Diagnostics;
+using System.Reflection;
 using System.Text.Json;
 using System.Text.Json.Nodes;
 using System.Threading;
@@ -65,17 +66,16 @@ namespace Xrpl.Client
             if (!promisesAwaitingResponse.TryGetValue(id, out var taskInfo) || taskInfo == null)
             {
                 Debug.WriteLine($"Resolve called for non-existent promise {id} (likely already cancelled/timed out)");
+                DisposeTimeout(id);
                 return;
             }
 
-            if (timeoutsAwaitingResponse.TryRemove(id, out var timer))
-                timer.Stop();
+            DisposeTimeout(id);
 
             try
             {
-                var deserialized = JsonSerializer.Deserialize(response.Result?.ToString() ?? "{}", taskInfo.Type, serializerOptions);
-                var setResult = taskInfo.TaskCompletionResult.GetType().GetMethod("TrySetResult");
-                setResult.Invoke(taskInfo.TaskCompletionResult, new[] { deserialized });
+                object deserialized = JsonSerializer.Deserialize(response.Result?.ToString() ?? "{}", taskInfo.Type, serializerOptions);
+                CompleteWithResult(taskInfo, deserialized);
                 this.DeletePromise(id, taskInfo);
             }
             catch (Exception ex)
@@ -97,34 +97,88 @@ namespace Xrpl.Client
             if (!promisesAwaitingResponse.TryGetValue(id, out var taskInfo) || taskInfo == null)
             {
                 Debug.WriteLine($"Reject called for non-existent promise {id} (likely already resolved)");
+
+                // A timer registered after its request had already finished has no other chance of
+                // being cleaned up: this is the Elapsed callback of exactly such a timer.
+                DisposeTimeout(id);
                 return;
             }
-            if (timeoutsAwaitingResponse.TryRemove(id, out var timer))
-                timer.Stop();
-            var setException = taskInfo.TaskCompletionResult.GetType().GetMethod("TrySetException", new Type[] { typeof(Exception) }, null);
-            setException.Invoke(taskInfo.TaskCompletionResult, new[] { error });
-            
+
+            DisposeTimeout(id);
+            CompleteWithException(taskInfo, error);
+
             // Observe the exception to prevent UnobservedTaskException in consuming apps
             // This is critical for MAUI/mobile apps that have global exception handlers
-            ObserveTaskException(taskInfo.TaskCompletionResult);
+            ObserveTaskException(taskInfo);
             
             this.DeletePromise(id, taskInfo);
         }
         
         /// <summary>
+        /// Removes the timeout timer of <paramref name="id"/> and disposes it.
+        /// Dispose, not Stop: <see cref="Timer"/> is a finalizable Component, and a stopped but
+        /// undisposed one per request piles up on the finalization queue over a long paged run.
+        /// </summary>
+        private void DisposeTimeout(Guid id)
+        {
+            if (timeoutsAwaitingResponse.TryRemove(id, out Timer timer))
+            {
+                timer.Dispose();
+            }
+        }
+
+        /// <summary>
+        /// Completes the pending request with a deserialized result, using the typed delegate
+        /// captured when the request was created and falling back to reflection for
+        /// <see cref="TaskInfo"/> instances built outside this manager.
+        /// </summary>
+        private static void CompleteWithResult(TaskInfo taskInfo, object result)
+        {
+            if (taskInfo.SetResult is not null)
+            {
+                taskInfo.SetResult(result);
+                return;
+            }
+
+            MethodInfo setResult = taskInfo.TaskCompletionResult.GetType().GetMethod("TrySetResult");
+            setResult.Invoke(taskInfo.TaskCompletionResult, new[] { result });
+        }
+
+        /// <summary>
+        /// Faults the pending request. See <see cref="CompleteWithResult"/> for the fallback rules.
+        /// </summary>
+        private static void CompleteWithException(TaskInfo taskInfo, Exception error)
+        {
+            if (taskInfo.SetException is not null)
+            {
+                taskInfo.SetException(error);
+                return;
+            }
+
+            MethodInfo setException = taskInfo.TaskCompletionResult.GetType()
+                .GetMethod("TrySetException", new Type[] { typeof(Exception) }, null);
+            setException.Invoke(taskInfo.TaskCompletionResult, new object[] { error });
+        }
+
+        /// <summary>
         /// Observes the exception on a TaskCompletionSource's Task to prevent UnobservedTaskException.
         /// When a Task faults but is never awaited, .NET raises UnobservedTaskException event.
         /// By adding a ContinueWith that reads the exception, we mark it as "observed".
         /// </summary>
-        private void ObserveTaskException(object taskCompletionSource)
+        private void ObserveTaskException(TaskInfo taskInfo)
         {
             try
             {
-                // Get the Task property from TaskCompletionSource<T>
-                var taskProperty = taskCompletionSource.GetType().GetProperty("Task");
-                if (taskProperty == null) return;
-                
-                var task = taskProperty.GetValue(taskCompletionSource) as Task;
+                Task task = taskInfo.CompletionTask;
+                if (task == null)
+                {
+                    // Externally built TaskInfo: fall back to reading the Task property reflectively.
+                    PropertyInfo taskProperty = taskInfo.TaskCompletionResult.GetType().GetProperty("Task");
+                    if (taskProperty == null) return;
+
+                    task = taskProperty.GetValue(taskInfo.TaskCompletionResult) as Task;
+                }
+
                 if (task == null) return;
                 
                 // Add a continuation that observes the exception (reads it to mark as handled)
@@ -214,6 +268,9 @@ namespace Xrpl.Client
             TaskInfo taskInfo = new TaskInfo();
             taskInfo.TaskId = newId;
             taskInfo.TaskCompletionResult = task;
+            taskInfo.SetResult = result => task.TrySetResult(result);
+            taskInfo.SetException = error => task.TrySetException(error);
+            taskInfo.CompletionTask = task.Task;
             taskInfo.RemoveUponCompletion = true;
             taskInfo.Type = typeof(T);
 
@@ -236,6 +293,14 @@ namespace Xrpl.Client
                     }
                 });
                 taskInfo.CancellationRegistration = registration;
+
+                // An already cancelled token runs its callback inline, so Reject completed and
+                // removed the promise before the registration was stored — nothing would ever
+                // dispose it.
+                if (!promisesAwaitingResponse.ContainsKey(newId))
+                {
+                    _ = registration.DisposeAsync();
+                }
             }
 
             if (timeout != System.Threading.Timeout.InfiniteTimeSpan)
@@ -255,6 +320,15 @@ namespace Xrpl.Client
                 };
                 timer.Start();
                 timeoutsAwaitingResponse.TryAdd(newId, timer);
+
+                // Same inline-cancellation case: the request may already be finished, and the
+                // Reject that finished it ran before this timer existed, so it had nothing to
+                // remove. Whatever is registered under this id now belongs to a request that is
+                // already gone.
+                if (!promisesAwaitingResponse.ContainsKey(newId))
+                {
+                    DisposeTimeout(newId);
+                }
             }
 
             return new XrplGRequest()
@@ -291,6 +365,9 @@ namespace Xrpl.Client
             TaskInfo taskInfo = new TaskInfo();
             taskInfo.TaskId = newId;
             taskInfo.TaskCompletionResult = task;
+            taskInfo.SetResult = result => task.TrySetResult((Dictionary<string, object>)result);
+            taskInfo.SetException = error => task.TrySetException(error);
+            taskInfo.CompletionTask = task.Task;
             taskInfo.RemoveUponCompletion = true;
             taskInfo.Type = typeof(Dictionary<string, object>);
 
@@ -313,6 +390,14 @@ namespace Xrpl.Client
                     }
                 });
                 taskInfo.CancellationRegistration = registration;
+
+                // An already cancelled token runs its callback inline, so Reject completed and
+                // removed the promise before the registration was stored — nothing would ever
+                // dispose it.
+                if (!promisesAwaitingResponse.ContainsKey(newId))
+                {
+                    _ = registration.DisposeAsync();
+                }
             }
 
             if (timeout != System.Threading.Timeout.InfiniteTimeSpan)
@@ -332,6 +417,15 @@ namespace Xrpl.Client
                 };
                 timer.Start();
                 timeoutsAwaitingResponse.TryAdd(newId, timer);
+
+                // Same inline-cancellation case: the request may already be finished, and the
+                // Reject that finished it ran before this timer existed, so it had nothing to
+                // remove. Whatever is registered under this id now belongs to a request that is
+                // already gone.
+                if (!promisesAwaitingResponse.ContainsKey(newId))
+                {
+                    DisposeTimeout(newId);
+                }
             }
 
             return new XrplRequest()
