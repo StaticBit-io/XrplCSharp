@@ -1,10 +1,10 @@
 ﻿
 
 using System;
+using System.Buffers;
 using System.Collections.Generic;
 using System.Diagnostics;
 using System.IO;
-using System.Linq;
 using System.Net.WebSockets;
 using System.Text;
 using System.Threading;
@@ -476,43 +476,66 @@ namespace Xrpl.Client
 
         private async Task ReceiveLoopAsync()
         {
-            byte[] buffer = new byte[ReceiveChunkSize];
+            // One receive buffer per connection, rented rather than allocated: at ReceiveChunkSize
+            // it lands on the large object heap, so a reconnect loop would otherwise burn a fresh
+            // uncompactable megabyte per session. Returned in the finally below, which only runs
+            // once the loop has stopped awaiting the socket.
+            byte[] buffer = ArrayPool<byte>.Shared.Rent(ReceiveChunkSize);
+
+            // Scratch buffer for messages that arrive in more than one chunk. It grows to the
+            // largest message seen on this connection and is then reused, so steady-state assembly
+            // costs nothing beyond the single exact-sized array handed to the callbacks.
+            byte[]? assemblyBuffer = null;
 
             try
             {
                 // Continue receiving while Open OR CloseSent (waiting for server's Close frame after CloseOutputAsync)
-                while (_ws != null && 
-                       (_ws.State == WebSocketState.Open || _ws.State == WebSocketState.CloseSent) && 
+                while (_ws != null &&
+                       (_ws.State == WebSocketState.Open || _ws.State == WebSocketState.CloseSent) &&
                        !_cancellationToken.IsCancellationRequested)
                 {
-                    byte[] byteResult = Array.Empty<byte>();
+                    byte[]? completeMessage = null;
+                    int assembledLength = 0;
 
                     WebSocketReceiveResult result;
-                    bool timedOut = false;
                     do
                     {
-                        result = await _ws.ReceiveAsync(new ArraySegment<byte>(buffer), _cancellationToken).ConfigureAwait(false);
+                        result = await _ws.ReceiveAsync(new ArraySegment<byte>(buffer, 0, ReceiveChunkSize), _cancellationToken).ConfigureAwait(false);
 
                         if (result.MessageType == WebSocketMessageType.Close)
                         {
                             WebSocketCloseStatus? closeStatus = result.CloseStatus;
                             string? closeDescription = result.CloseStatusDescription;
-                            
+
                             _onClosed?.Invoke(this);
                             await CallOnDisconnectedAsync(closeStatus, closeDescription).ConfigureAwait(false);
                             return;
                         }
-                        else
+                        else if (result.EndOfMessage && assembledLength == 0)
                         {
-                            byteResult = byteResult.Concat(buffer.Take(result.Count)).ToArray();
+                            // Whole message arrived in a single chunk - copy it out directly.
+                            completeMessage = new byte[result.Count];
+                            Buffer.BlockCopy(buffer, 0, completeMessage, 0, result.Count);
+                        }
+                        else if (result.Count > 0)
+                        {
+                            EnsureAssemblyCapacity(ref assemblyBuffer, assembledLength + result.Count, assembledLength);
+                            Buffer.BlockCopy(buffer, 0, assemblyBuffer, assembledLength, result.Count);
+                            assembledLength += result.Count;
                         }
 
                     } while (!result.EndOfMessage);
 
-                    if (timedOut)
-                        continue;
+                    if (completeMessage == null)
+                    {
+                        completeMessage = new byte[assembledLength];
+                        if (assembledLength > 0)
+                        {
+                            Buffer.BlockCopy(assemblyBuffer!, 0, completeMessage, 0, assembledLength);
+                        }
+                    }
 
-                    CallOnMessage(byteResult);
+                    CallOnMessage(completeMessage);
                 }
             }
             catch (OperationCanceledException) when (_isIntentionalDisconnect || _cancellationToken.IsCancellationRequested || IsDisposed)
@@ -611,6 +634,37 @@ namespace Xrpl.Client
                 _onConnectionError?.Invoke(ex, this);
                 await CallOnDisconnectedAsync(WebSocketCloseStatus.EndpointUnavailable, "Unknown error: " + ex.Message).ConfigureAwait(false);
             }
+            finally
+            {
+                ArrayPool<byte>.Shared.Return(buffer);
+            }
+        }
+
+        /// <summary>
+        /// Grows <paramref name="assemblyBuffer"/> so it can hold <paramref name="requiredLength"/>
+        /// bytes, doubling the current capacity and carrying over the first
+        /// <paramref name="preserveLength"/> bytes already assembled.
+        /// </summary>
+        private static void EnsureAssemblyCapacity(ref byte[]? assemblyBuffer, int requiredLength, int preserveLength)
+        {
+            if (assemblyBuffer != null && assemblyBuffer.Length >= requiredLength)
+            {
+                return;
+            }
+
+            int capacity = assemblyBuffer?.Length ?? ReceiveChunkSize;
+            while (capacity < requiredLength)
+            {
+                capacity = capacity <= Array.MaxLength / 2 ? capacity * 2 : requiredLength;
+            }
+
+            byte[] grown = new byte[capacity];
+            if (preserveLength > 0)
+            {
+                Buffer.BlockCopy(assemblyBuffer!, 0, grown, 0, preserveLength);
+            }
+
+            assemblyBuffer = grown;
         }
 
         private void CallOnMessage(byte[] result)

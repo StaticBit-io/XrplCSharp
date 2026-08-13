@@ -1,5 +1,4 @@
 using System;
-using System.Collections.Concurrent;
 using System.Collections.Generic;
 using System.Text.Json;
 using System.Threading;
@@ -486,8 +485,6 @@ namespace Xrpl.Client
 
         ///// <summary> Current web socket client state </summary>
         //public WebSocketState SocketState => client.State;
-
-        private readonly ConcurrentDictionary<int, TaskInfo> tasks;
 
         public XrplClient(string server, ClientOptions? options = null)
         {
