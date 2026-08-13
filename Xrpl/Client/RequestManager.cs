@@ -68,8 +68,10 @@ namespace Xrpl.Client
                 return;
             }
 
-            if (timeoutsAwaitingResponse.TryRemove(id, out var timer))
-                timer.Stop();
+            // Dispose, not Stop: Timer is a finalizable Component, and a stopped but undisposed
+            // one per request piles up on the finalization queue over a long paged run.
+            if (timeoutsAwaitingResponse.TryRemove(id, out Timer timer))
+                timer.Dispose();
 
             try
             {
@@ -99,8 +101,10 @@ namespace Xrpl.Client
                 Debug.WriteLine($"Reject called for non-existent promise {id} (likely already resolved)");
                 return;
             }
-            if (timeoutsAwaitingResponse.TryRemove(id, out var timer))
-                timer.Stop();
+            // Dispose, not Stop: Timer is a finalizable Component, and a stopped but undisposed
+            // one per request piles up on the finalization queue over a long paged run.
+            if (timeoutsAwaitingResponse.TryRemove(id, out Timer timer))
+                timer.Dispose();
             var setException = taskInfo.TaskCompletionResult.GetType().GetMethod("TrySetException", new Type[] { typeof(Exception) }, null);
             setException.Invoke(taskInfo.TaskCompletionResult, new[] { error });
             
