@@ -66,13 +66,11 @@ namespace Xrpl.Client
             if (!promisesAwaitingResponse.TryGetValue(id, out var taskInfo) || taskInfo == null)
             {
                 Debug.WriteLine($"Resolve called for non-existent promise {id} (likely already cancelled/timed out)");
+                DisposeTimeout(id);
                 return;
             }
 
-            // Dispose, not Stop: Timer is a finalizable Component, and a stopped but undisposed
-            // one per request piles up on the finalization queue over a long paged run.
-            if (timeoutsAwaitingResponse.TryRemove(id, out Timer timer))
-                timer.Dispose();
+            DisposeTimeout(id);
 
             try
             {
@@ -99,12 +97,14 @@ namespace Xrpl.Client
             if (!promisesAwaitingResponse.TryGetValue(id, out var taskInfo) || taskInfo == null)
             {
                 Debug.WriteLine($"Reject called for non-existent promise {id} (likely already resolved)");
+
+                // A timer registered after its request had already finished has no other chance of
+                // being cleaned up: this is the Elapsed callback of exactly such a timer.
+                DisposeTimeout(id);
                 return;
             }
-            // Dispose, not Stop: Timer is a finalizable Component, and a stopped but undisposed
-            // one per request piles up on the finalization queue over a long paged run.
-            if (timeoutsAwaitingResponse.TryRemove(id, out Timer timer))
-                timer.Dispose();
+
+            DisposeTimeout(id);
             CompleteWithException(taskInfo, error);
 
             // Observe the exception to prevent UnobservedTaskException in consuming apps
@@ -114,6 +114,19 @@ namespace Xrpl.Client
             this.DeletePromise(id, taskInfo);
         }
         
+        /// <summary>
+        /// Removes the timeout timer of <paramref name="id"/> and disposes it.
+        /// Dispose, not Stop: <see cref="Timer"/> is a finalizable Component, and a stopped but
+        /// undisposed one per request piles up on the finalization queue over a long paged run.
+        /// </summary>
+        private void DisposeTimeout(Guid id)
+        {
+            if (timeoutsAwaitingResponse.TryRemove(id, out Timer timer))
+            {
+                timer.Dispose();
+            }
+        }
+
         /// <summary>
         /// Completes the pending request with a deserialized result, using the typed delegate
         /// captured when the request was created and falling back to reflection for
@@ -280,6 +293,14 @@ namespace Xrpl.Client
                     }
                 });
                 taskInfo.CancellationRegistration = registration;
+
+                // An already cancelled token runs its callback inline, so Reject completed and
+                // removed the promise before the registration was stored — nothing would ever
+                // dispose it.
+                if (!promisesAwaitingResponse.ContainsKey(newId))
+                {
+                    _ = registration.DisposeAsync();
+                }
             }
 
             if (timeout != System.Threading.Timeout.InfiniteTimeSpan)
@@ -299,6 +320,15 @@ namespace Xrpl.Client
                 };
                 timer.Start();
                 timeoutsAwaitingResponse.TryAdd(newId, timer);
+
+                // Same inline-cancellation case: the request may already be finished, and the
+                // Reject that finished it ran before this timer existed, so it had nothing to
+                // remove. Whatever is registered under this id now belongs to a request that is
+                // already gone.
+                if (!promisesAwaitingResponse.ContainsKey(newId))
+                {
+                    DisposeTimeout(newId);
+                }
             }
 
             return new XrplGRequest()
@@ -360,6 +390,14 @@ namespace Xrpl.Client
                     }
                 });
                 taskInfo.CancellationRegistration = registration;
+
+                // An already cancelled token runs its callback inline, so Reject completed and
+                // removed the promise before the registration was stored — nothing would ever
+                // dispose it.
+                if (!promisesAwaitingResponse.ContainsKey(newId))
+                {
+                    _ = registration.DisposeAsync();
+                }
             }
 
             if (timeout != System.Threading.Timeout.InfiniteTimeSpan)
@@ -379,6 +417,15 @@ namespace Xrpl.Client
                 };
                 timer.Start();
                 timeoutsAwaitingResponse.TryAdd(newId, timer);
+
+                // Same inline-cancellation case: the request may already be finished, and the
+                // Reject that finished it ran before this timer existed, so it had nothing to
+                // remove. Whatever is registered under this id now belongs to a request that is
+                // already gone.
+                if (!promisesAwaitingResponse.ContainsKey(newId))
+                {
+                    DisposeTimeout(newId);
+                }
             }
 
             return new XrplRequest()

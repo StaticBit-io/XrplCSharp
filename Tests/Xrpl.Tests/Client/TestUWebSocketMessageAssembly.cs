@@ -15,7 +15,10 @@ namespace Xrpl.Tests.ClientLib
     /// both that every message comes out byte-exact and that the cost per message does not grow
     /// with the number of chunks it was split into.
     /// </summary>
+    // GC.GetTotalAllocatedBytes is process-wide, so the allocation assertion below would pick up
+    // whatever other test classes allocate alongside it.
     [TestClass]
+    [DoNotParallelize]
     public class TestUWebSocketMessageAssembly
     {
         private const int WaitSeconds = 120;

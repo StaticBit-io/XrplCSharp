@@ -173,7 +173,9 @@ namespace Xrpl.Tests
 
             for (int fragment = 0; fragment < _fragments; fragment++)
             {
-                int offset = fragment * fragmentBytes;
+                // Ceil division can leave trailing frames past the end; they are sent empty
+                // so the frame count stays exactly as requested.
+                int offset = Math.Min(fragment * fragmentBytes, payload.Length);
                 int length = Math.Min(fragmentBytes, payload.Length - offset);
                 bool isFirst = fragment == 0;
                 bool isLast = fragment == _fragments - 1;
