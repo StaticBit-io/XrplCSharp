@@ -477,7 +477,9 @@ namespace Xrpl.Client
         private async Task ReceiveLoopAsync()
         {
             // One receive buffer per connection, rented rather than allocated: at ReceiveChunkSize
-            // it is a large-object-heap array, and a reconnect loop would otherwise leak one per session.
+            // it lands on the large object heap, so a reconnect loop would otherwise burn a fresh
+            // uncompactable megabyte per session. Returned in the finally below, which only runs
+            // once the loop has stopped awaiting the socket.
             byte[] buffer = ArrayPool<byte>.Shared.Rent(ReceiveChunkSize);
 
             // Scratch buffer for messages that arrive in more than one chunk. It grows to the
@@ -517,7 +519,7 @@ namespace Xrpl.Client
                         }
                         else if (result.Count > 0)
                         {
-                            EnsureAssemblyCapacity(ref assemblyBuffer, assembledLength + result.Count);
+                            EnsureAssemblyCapacity(ref assemblyBuffer, assembledLength + result.Count, assembledLength);
                             Buffer.BlockCopy(buffer, 0, assemblyBuffer, assembledLength, result.Count);
                             assembledLength += result.Count;
                         }
@@ -640,9 +642,10 @@ namespace Xrpl.Client
 
         /// <summary>
         /// Grows <paramref name="assemblyBuffer"/> so it can hold <paramref name="requiredLength"/>
-        /// bytes, doubling the current capacity and preserving what has already been assembled.
+        /// bytes, doubling the current capacity and carrying over the first
+        /// <paramref name="preserveLength"/> bytes already assembled.
         /// </summary>
-        private static void EnsureAssemblyCapacity(ref byte[]? assemblyBuffer, int requiredLength)
+        private static void EnsureAssemblyCapacity(ref byte[]? assemblyBuffer, int requiredLength, int preserveLength)
         {
             if (assemblyBuffer != null && assemblyBuffer.Length >= requiredLength)
             {
@@ -656,9 +659,9 @@ namespace Xrpl.Client
             }
 
             byte[] grown = new byte[capacity];
-            if (assemblyBuffer != null)
+            if (preserveLength > 0)
             {
-                Buffer.BlockCopy(assemblyBuffer, 0, grown, 0, assemblyBuffer.Length);
+                Buffer.BlockCopy(assemblyBuffer!, 0, grown, 0, preserveLength);
             }
 
             assemblyBuffer = grown;
