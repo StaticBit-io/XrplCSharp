@@ -484,7 +484,9 @@ namespace Xrpl.Client
 
             // Scratch buffer for messages that arrive in more than one chunk. It grows to the
             // largest message seen on this connection and is then reused, so steady-state assembly
-            // costs nothing beyond the single exact-sized array handed to the callbacks.
+            // costs nothing beyond the single exact-sized array handed to the callbacks. Rented for
+            // the same reason as the receive buffer above - at these sizes it is a large-object-heap
+            // array that would otherwise be thrown away per connection.
             byte[]? assemblyBuffer = null;
 
             try
@@ -637,6 +639,11 @@ namespace Xrpl.Client
             finally
             {
                 ArrayPool<byte>.Shared.Return(buffer);
+
+                if (assemblyBuffer != null)
+                {
+                    ArrayPool<byte>.Shared.Return(assemblyBuffer);
+                }
             }
         }
 
@@ -658,10 +665,17 @@ namespace Xrpl.Client
                 capacity = capacity <= Array.MaxLength / 2 ? capacity * 2 : requiredLength;
             }
 
-            byte[] grown = new byte[capacity];
+            // Rent may hand back a longer array than asked for; the growth above keys off the
+            // actual length, so the next doubling starts from what we really got.
+            byte[] grown = ArrayPool<byte>.Shared.Rent(capacity);
             if (preserveLength > 0)
             {
                 Buffer.BlockCopy(assemblyBuffer!, 0, grown, 0, preserveLength);
+            }
+
+            if (assemblyBuffer != null)
+            {
+                ArrayPool<byte>.Shared.Return(assemblyBuffer);
             }
 
             assemblyBuffer = grown;
