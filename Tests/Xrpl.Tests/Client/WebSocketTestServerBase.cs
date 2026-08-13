@@ -17,19 +17,25 @@ namespace Xrpl.Tests
     internal abstract class WebSocketTestServerBase : IDisposable
     {
         private readonly TcpListener _listener;
+        private readonly CancellationTokenSource _cts = new CancellationTokenSource();
         private Exception? _fault;
 
         protected WebSocketTestServerBase()
         {
+            // Captured once rather than read from the source on every use: Dispose does not wait for
+            // the accept loop, and reading CancellationTokenSource.Token after Dispose throws
+            // ObjectDisposedException, which would surface as a bogus Fault during teardown. Dispose
+            // always cancels before disposing, so a token captured here stays usable afterwards -
+            // an already cancelled token completes waits without touching its source.
+            Token = _cts.Token;
+
             _listener = new TcpListener(IPAddress.Loopback, 0);
             _listener.Start();
             Port = ((IPEndPoint)_listener.LocalEndpoint).Port;
         }
 
         /// <summary>Token cancelled when the server is disposed.</summary>
-        protected CancellationToken Token => Cts.Token;
-
-        protected CancellationTokenSource Cts { get; } = new CancellationTokenSource();
+        protected CancellationToken Token { get; }
 
         public int Port { get; }
 
@@ -163,6 +169,14 @@ namespace Xrpl.Tests
             return true;
         }
 
+        /// <summary>
+        /// Reads the client's HTTP upgrade request up to the blank line that ends the headers.
+        /// Anything the same read happened to pull in after that terminator is returned as part of
+        /// the string and then dropped by the caller: no client here pipelines a WebSocket frame
+        /// onto the upgrade request, because it has to wait for the 101 before it may send one.
+        /// A server that ever needs to accept such a client has to hand the leftover bytes to
+        /// <see cref="ServeAsync"/> instead.
+        /// </summary>
         private async Task<string> ReadUntilHeadersEndAsync(NetworkStream stream)
         {
             byte[] buffer = new byte[4096];
@@ -191,7 +205,7 @@ namespace Xrpl.Tests
         {
             try
             {
-                Cts.Cancel();
+                _cts.Cancel();
             }
             catch
             {
@@ -207,7 +221,7 @@ namespace Xrpl.Tests
                 // best effort
             }
 
-            Cts.Dispose();
+            _cts.Dispose();
         }
     }
 }
