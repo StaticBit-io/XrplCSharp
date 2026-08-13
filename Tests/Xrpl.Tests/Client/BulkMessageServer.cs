@@ -1,25 +1,19 @@
 using System;
-using System.Net;
 using System.Net.Sockets;
 using System.Text;
-using System.Threading;
 using System.Threading.Tasks;
-
-using Xrpl.Tests.MockRippled;
 
 namespace Xrpl.Tests
 {
     /// <summary>
-    /// Minimal WebSocket server that completes a handshake and then pushes a fixed number of
-    /// large text messages, each split into a controlled number of WebSocket continuation
-    /// frames. Fragmenting at the protocol level (rather than relying on how the socket happens
-    /// to slice the stream) makes the number of client-side receive chunks per message exact and
-    /// reproducible, which is what the assembly path is sensitive to.
+    /// WebSocket server that pushes a fixed number of large text messages once the client says go,
+    /// each split into a controlled number of WebSocket continuation frames. Fragmenting at the
+    /// protocol level (rather than relying on how the socket happens to slice the stream) makes the
+    /// number of client-side receive chunks per message exact and reproducible, which is what the
+    /// assembly path is sensitive to.
     /// </summary>
-    internal sealed class BulkMessageServer : IDisposable
+    internal sealed class BulkMessageServer : WebSocketTestServerBase
     {
-        private readonly TcpListener _listener;
-        private readonly CancellationTokenSource _cts = new();
         private readonly int _messageCount;
         private readonly int _fragments;
         private readonly int[] _lengthCycle;
@@ -45,17 +39,25 @@ namespace Xrpl.Tests
             _payload = BuildPayload(payloadBytes);
             _lengthCycle = lengthCycle is { Length: > 0 } ? lengthCycle : new[] { _payload.Length };
 
-            _listener = new TcpListener(IPAddress.Loopback, 0);
-            _listener.Start();
-            Port = ((IPEndPoint)_listener.LocalEndpoint).Port;
-            _ = AcceptAsync();
+            // Checked here rather than left to fail mid-send: the send loop runs detached, so a bad
+            // length would only surface as the test's receive timeout minutes later.
+            foreach (int length in _lengthCycle)
+            {
+                if (length < 0 || length > _payload.Length)
+                {
+                    // The base constructor has already opened the listener, and a constructor that
+                    // throws leaves nobody to dispose it.
+                    Dispose();
+                    throw new ArgumentOutOfRangeException(
+                        nameof(lengthCycle),
+                        $"length {length} must be between 0 and the payload length {_payload.Length}");
+                }
+            }
+
+            StartAccepting();
         }
 
-        public int Port { get; }
-
-        public string Url => "ws://127.0.0.1:" + Port + "/";
-
-        /// <summary>Payload every message carries, as the client should see it.</summary>
+        /// <summary>Payload every message is a prefix of, as the client should see it.</summary>
         public string PayloadText => Encoding.UTF8.GetString(_payload);
 
         public int PayloadBytes => _payload.Length;
@@ -96,67 +98,37 @@ namespace Xrpl.Tests
             return Encoding.UTF8.GetBytes(builder.ToString(0, payloadBytes));
         }
 
-        private async Task AcceptAsync()
+        protected override async Task ServeAsync(NetworkStream stream)
         {
-            try
+            // Wait for the client's go-ahead before pushing anything, so no message can land
+            // before the caller has opened its measurement window.
+            byte[] goAhead = new byte[256];
+            if (await stream.ReadAsync(goAhead, Token).ConfigureAwait(false) == 0)
             {
-                using TcpClient client = await _listener.AcceptTcpClientAsync(_cts.Token).ConfigureAwait(false);
-                client.NoDelay = true;
-                NetworkStream stream = client.GetStream();
-
-                string request = await ReadUntilHeadersEndAsync(stream).ConfigureAwait(false);
-                string key = Helpers.GetHandshakeRequestKey(request);
-                byte[] response = Encoding.ASCII.GetBytes(Helpers.GetHandshakeResponse(Helpers.HashKey(key)));
-                await stream.WriteAsync(response, _cts.Token).ConfigureAwait(false);
-                await stream.FlushAsync(_cts.Token).ConfigureAwait(false);
-
-                // Wait for the client's go-ahead before pushing anything, so no message can land
-                // before the caller has opened its measurement window.
-                byte[] goAhead = new byte[256];
-                if (await stream.ReadAsync(goAhead, _cts.Token).ConfigureAwait(false) == 0)
-                {
-                    _finished.TrySetResult(0);
-                    return;
-                }
-
-                // Drain and discard whatever the client sends afterwards (keep-alive pings, close
-                // frames) so its socket never blocks on a full send window.
-                _ = DrainAsync(stream);
-
-                for (int i = 0; i < _messageCount; i++)
-                {
-                    int messageLength = _lengthCycle[i % _lengthCycle.Length];
-                    int fragmentBytes = (messageLength + _fragments - 1) / _fragments;
-
-                    for (int fragment = 0; fragment < _fragments; fragment++)
-                    {
-                        // Ceil division can leave trailing frames past the end; they are sent empty
-                        // so the frame count stays exactly as requested.
-                        int offset = Math.Min(fragment * fragmentBytes, messageLength);
-                        int length = Math.Min(fragmentBytes, messageLength - offset);
-                        bool isFirst = fragment == 0;
-                        bool isLast = fragment == _fragments - 1;
-
-                        await stream.WriteAsync(BuildFrameHeader(length, isFirst, isLast), _cts.Token)
-                            .ConfigureAwait(false);
-                        await stream.WriteAsync(_payload.AsMemory(offset, length), _cts.Token)
-                            .ConfigureAwait(false);
-                        await stream.FlushAsync(_cts.Token).ConfigureAwait(false);
-                    }
-                }
-
-                _finished.TrySetResult(_messageCount);
-
-                await Task.Delay(Timeout.InfiniteTimeSpan, _cts.Token).ConfigureAwait(false);
+                _finished.TrySetResult(0);
+                return;
             }
-            catch (OperationCanceledException)
+
+            // Drain and discard whatever the client sends afterwards (keep-alive pings, close
+            // frames) so its socket never blocks on a full send window.
+            _ = DrainAsync(stream);
+
+            for (int i = 0; i < _messageCount; i++)
             {
-                _finished.TrySetCanceled();
+                int messageLength = _lengthCycle[i % _lengthCycle.Length];
+                await WriteFragmentedMessageAsync(stream, _payload.AsMemory(0, messageLength), _fragments)
+                    .ConfigureAwait(false);
             }
-            catch (Exception ex)
-            {
-                _finished.TrySetException(ex);
-            }
+
+            _finished.TrySetResult(_messageCount);
+        }
+
+        protected override void OnCancelled() => _finished.TrySetCanceled();
+
+        protected override void OnFaulted(Exception error)
+        {
+            base.OnFaulted(error);
+            _finished.TrySetException(error);
         }
 
         private async Task DrainAsync(NetworkStream stream)
@@ -165,7 +137,7 @@ namespace Xrpl.Tests
 
             try
             {
-                while (await stream.ReadAsync(sink, _cts.Token).ConfigureAwait(false) > 0)
+                while (await stream.ReadAsync(sink, Token).ConfigureAwait(false) > 0)
                 {
                 }
             }
@@ -173,89 +145,6 @@ namespace Xrpl.Tests
             {
                 // The connection going away is the normal end of this loop.
             }
-        }
-
-        /// <summary>
-        /// Unmasked server-to-client frame header. The first frame of a message carries the text
-        /// opcode (0x1), every following frame carries continuation (0x0); FIN is set on the last.
-        /// </summary>
-        private static byte[] BuildFrameHeader(int payloadLength, bool isFirst, bool isLast)
-        {
-            byte first = (byte)((isLast ? 0x80 : 0x00) | (isFirst ? 0x01 : 0x00));
-
-            if (payloadLength <= 125)
-            {
-                return new byte[] { first, (byte)payloadLength };
-            }
-
-            if (payloadLength <= ushort.MaxValue)
-            {
-                return new byte[]
-                {
-                    first,
-                    126,
-                    (byte)(payloadLength >> 8),
-                    (byte)payloadLength
-                };
-            }
-
-            return new byte[]
-            {
-                first,
-                127,
-                0, 0, 0, 0,
-                (byte)(payloadLength >> 24),
-                (byte)(payloadLength >> 16),
-                (byte)(payloadLength >> 8),
-                (byte)payloadLength
-            };
-        }
-
-        private async Task<string> ReadUntilHeadersEndAsync(NetworkStream stream)
-        {
-            byte[] buffer = new byte[4096];
-            StringBuilder request = new StringBuilder();
-
-            while (true)
-            {
-                int read = await stream.ReadAsync(buffer, _cts.Token).ConfigureAwait(false);
-                if (read == 0)
-                {
-                    break;
-                }
-
-                request.Append(Encoding.ASCII.GetString(buffer, 0, read));
-
-                if (request.ToString().Contains("\r\n\r\n", StringComparison.Ordinal))
-                {
-                    break;
-                }
-            }
-
-            return request.ToString();
-        }
-
-        public void Dispose()
-        {
-            try
-            {
-                _cts.Cancel();
-            }
-            catch
-            {
-                // best effort
-            }
-
-            try
-            {
-                _listener.Stop();
-            }
-            catch
-            {
-                // best effort
-            }
-
-            _cts.Dispose();
         }
     }
 }

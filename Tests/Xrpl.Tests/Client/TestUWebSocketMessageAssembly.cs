@@ -124,7 +124,10 @@ namespace Xrpl.Tests.ClientLib
 
                 Task completed = await Task.WhenAny(done.Task, Task.Delay(TimeSpan.FromSeconds(WaitSeconds)))
                     .ConfigureAwait(false);
-                Assert.AreSame(done.Task, completed, $"only {messages.Count} of {expected} messages arrived");
+                Assert.AreSame(
+                    done.Task,
+                    completed,
+                    $"only {messages.Count} of {expected} messages arrived; server fault: {server.Fault?.ToString() ?? "none"}");
             }
             finally
             {
