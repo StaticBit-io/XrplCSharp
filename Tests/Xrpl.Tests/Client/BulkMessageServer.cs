@@ -45,6 +45,9 @@ namespace Xrpl.Tests
             {
                 if (length < 0 || length > _payload.Length)
                 {
+                    // The base constructor has already opened the listener, and a constructor that
+                    // throws leaves nobody to dispose it.
+                    Dispose();
                     throw new ArgumentOutOfRangeException(
                         nameof(lengthCycle),
                         $"length {length} must be between 0 and the payload length {_payload.Length}");
@@ -122,7 +125,11 @@ namespace Xrpl.Tests
 
         protected override void OnCancelled() => _finished.TrySetCanceled();
 
-        protected override void OnFaulted(Exception error) => _finished.TrySetException(error);
+        protected override void OnFaulted(Exception error)
+        {
+            base.OnFaulted(error);
+            _finished.TrySetException(error);
+        }
 
         private async Task DrainAsync(NetworkStream stream)
         {

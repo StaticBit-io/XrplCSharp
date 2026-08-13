@@ -17,6 +17,7 @@ namespace Xrpl.Tests
     internal abstract class WebSocketTestServerBase : IDisposable
     {
         private readonly TcpListener _listener;
+        private Exception? _fault;
 
         protected WebSocketTestServerBase()
         {
@@ -46,9 +47,16 @@ namespace Xrpl.Tests
         /// <summary>Serves one connected client; the handshake has already completed.</summary>
         protected abstract Task ServeAsync(NetworkStream stream);
 
+        /// <summary>
+        /// The exception that ended the accept loop, if it ended badly. Recorded rather than
+        /// swallowed so a broken server shows up as itself instead of as the caller's timeout.
+        /// </summary>
+        public Exception? Fault => Volatile.Read(ref _fault);
+
         /// <summary>Called when the accept loop ends with an exception the server did not expect.</summary>
         protected virtual void OnFaulted(Exception error)
         {
+            Volatile.Write(ref _fault, error);
         }
 
         /// <summary>Called when the accept loop ends because the server was disposed.</summary>
