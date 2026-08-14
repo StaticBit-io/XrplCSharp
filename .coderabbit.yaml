@@ -2,8 +2,7 @@ language: en-US
 
 reviews:
   profile: chill
-  review_status: true
-
+  review_status: false
   auto_review:
     # Automatic review is off: reviews are requested on demand with
     # "@coderabbitai review" in a PR comment. The settings below still apply
