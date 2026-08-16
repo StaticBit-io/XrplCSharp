@@ -1074,7 +1074,7 @@ public class Connection
                 }
                 catch (Exception ex)
                 {
-                    Debug.WriteLine($"{DateTime.Now}OnMessageReceived callback error: {ex.Message}");
+                    Debug.WriteLine($"{DateTime.Now}OnBinaryMessage callback error: {ex.Message}");
                 }
             });
             ws.OnDisconnect(async (closeStatus, closeDescription, closingSocket) =>
@@ -3176,6 +3176,12 @@ public class Connection
     }
 
     /// <summary>
+    /// Sent to <see cref="OnError"/> in place of a message that could not be turned into text.
+    /// A literal, so reporting the failure needs no allocation of its own.
+    /// </summary>
+    private const string UnavailableMessageText = "<message could not be materialized: out of memory>";
+
+    /// <summary>
     /// Exactly one of <paramref name="message"/> and <paramref name="utf8Message"/> carries the
     /// message; the other is null.
     /// </summary>
@@ -3189,7 +3195,17 @@ public class Connection
     {
         lastActivityTime = DateTime.UtcNow;
 
-        string Text() => message ??= Encoding.UTF8.GetString(utf8Message);
+        // Null in, null out: the string entry point is public, and a null message used to travel
+        // down to the stream processor and be reported through OnError rather than throw here.
+        string Text()
+        {
+            if (message is null && utf8Message is not null)
+            {
+                message = Encoding.UTF8.GetString(utf8Message);
+            }
+
+            return message;
+        }
 
         // Scan message for "id" property to detect response messages
         var isResponse = utf8Message is null ? IsLikelyResponse(message) : IsLikelyResponse(utf8Message);
@@ -3211,7 +3227,26 @@ public class Connection
             catch (Exception error)
             {
                 var errInfo = XrplErrorClassifier.Classify(error);
-                var capturedText = Text();
+                if (OnError is null)
+                {
+                    return;
+                }
+
+                // The report has to survive whatever produced it. A response that fails to parse
+                // is most often a heap that has just run out, and a UTF-16 copy of the whole
+                // message is the largest allocation left on this path - if it cannot be had, the
+                // classification still goes out rather than the notification being lost to a
+                // second failure inside the handler.
+                string capturedText;
+                try
+                {
+                    capturedText = Text();
+                }
+                catch (OutOfMemoryException)
+                {
+                    capturedText = UnavailableMessageText;
+                }
+
                 // Fire-and-forget for error callback - don't block
                 _ = Task.Run(async () =>
                 {

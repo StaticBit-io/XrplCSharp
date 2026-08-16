@@ -216,5 +216,77 @@ namespace Xrpl.Tests.ClientLib
                 $"response parsing allocated {ratio:F2}x the response size, budget is 4x " +
                 "(the pre-fix double round-trip cost about 7x here)");
         }
+
+        /// <summary>
+        /// The same budget one level up, over a real socket, because the budget above cannot see
+        /// which overload <see cref="Connection"/> chooses. Binding the string callback again
+        /// would put a UTF-16 copy of every frame back on the path and nothing else in the suite
+        /// would notice.
+        /// </summary>
+        /// <remarks>
+        /// Allocations here happen on the receive loop's thread, so this has to read the
+        /// process-wide counter, which is why the test is kept out of the parallel pass.
+        /// </remarks>
+        [TestMethod]
+        [DoNotParallelize]
+        public async Task TestSocketPathKeepsResponsesInTheirWireForm()
+        {
+            const int Pages = 20;
+            const int PayloadBytes = 1024 * 1024;
+
+            using PagedResponseServer server = new PagedResponseServer(PayloadBytes, fragments: 8);
+            using XrplClient client = new XrplClient(server.Url);
+
+            await client.Connect().ConfigureAwait(false);
+            await CrawlPageAsync(client).ConfigureAwait(false);
+
+            GC.Collect(2, GCCollectionMode.Forced, blocking: true);
+            GC.WaitForPendingFinalizers();
+            GC.Collect(2, GCCollectionMode.Forced, blocking: true);
+
+            long before = GC.GetTotalAllocatedBytes(precise: true);
+
+            for (int i = 0; i < Pages; i++)
+            {
+                await CrawlPageAsync(client).ConfigureAwait(false);
+            }
+
+            long allocated = GC.GetTotalAllocatedBytes(precise: true) - before;
+            await client.Disconnect().ConfigureAwait(false);
+
+            double ratio = allocated / (double)Pages / PayloadBytes;
+            Console.WriteLine($"socket path: {allocated / (double)Pages / 1024 / 1024:F2} MB allocated per page ({ratio:F2}x)");
+
+            Assert.IsTrue(
+                ratio < 4.0,
+                $"the socket path allocated {ratio:F2}x the payload per page, budget is 4x " +
+                "(binding the string callback instead of the binary one costs about 2x more)");
+        }
+
+        /// <summary>
+        /// The string entry point is public and used by tests and consumers that feed messages in
+        /// by hand. A null there travelled down to the stream processor and was reported through
+        /// <c>OnError</c>; carrying the frame as bytes must not turn that into a throw out of the
+        /// method itself.
+        /// </summary>
+        [TestMethod]
+        public async Task TestNullMessageDoesNotThrowOutOfTheEntryPoint()
+        {
+            Connection connection = new Connection("ws://127.0.0.1:1/");
+
+            await connection.OnMessage(null).ConfigureAwait(false);
+        }
+
+        private static async Task CrawlPageAsync(XrplClient client)
+        {
+            JsonElement page = await client
+                .GRequest<JsonElement, LedgerDataRequest>(new LedgerDataRequest { Binary = true, Limit = 2048 })
+                .ConfigureAwait(false);
+
+            if (page.GetProperty("state").GetArrayLength() == 0)
+            {
+                throw new InvalidOperationException("ledger_data page carried no objects");
+            }
+        }
     }
 }
