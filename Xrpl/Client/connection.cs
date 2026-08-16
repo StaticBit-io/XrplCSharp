@@ -3267,8 +3267,15 @@ public class Connection
             }
 
             // THEN: Handle warnings and errors in background (fire-and-forget)
-            // These are informational and should not delay response processing
-            if (data.Warning != null || data.Warnings is { Count: > 0 })
+            // These are informational and should not delay response processing.
+            // Materialize the text only when something is actually listening: rippled attaches a
+            // warning to every response under load and on a reporting-mode server, so building a
+            // UTF-16 copy for a callback nobody registered would put back, page after page,
+            // exactly the allocation this path exists to avoid.
+            bool warningNeedsText = (data.Warning != null && OnWarning is not null)
+                                    || (data.Warnings is { Count: > 0 } && OnServerWarning is not null);
+
+            if (warningNeedsText)
             {
                 var capturedData = data;
                 var capturedMessage = Text();

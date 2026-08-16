@@ -258,23 +258,121 @@ namespace Xrpl.Tests.ClientLib
             Console.WriteLine($"socket path: {allocated / (double)Pages / 1024 / 1024:F2} MB allocated per page ({ratio:F2}x)");
 
             Assert.IsTrue(
-                ratio < 4.0,
-                $"the socket path allocated {ratio:F2}x the payload per page, budget is 4x " +
-                "(binding the string callback instead of the binary one costs about 2x more)");
+                ratio < 3.0,
+                $"the socket path allocated {ratio:F2}x the payload per page, budget is 3x " +
+                "(2.18x as bound, 4.84x with the string callback bound instead)");
+        }
+
+        /// <summary>
+        /// A response carrying <c>warning</c>/<c>warnings</c> still reaches both callbacks. The
+        /// text they are handed is now built only when one of them is subscribed, so this is the
+        /// side of that condition that must not have been broken.
+        /// </summary>
+        [TestMethod]
+        public async Task TestWarningsStillReachTheirCallbacks()
+        {
+            using PagedResponseServer server = new PagedResponseServer(64 * 1024, fragments: 1, withWarnings: true);
+            using XrplClient client = new XrplClient(server.Url);
+
+            TaskCompletionSource<string> warning = new TaskCompletionSource<string>(
+                TaskCreationOptions.RunContinuationsAsynchronously);
+            TaskCompletionSource<int> serverWarnings = new TaskCompletionSource<int>(
+                TaskCreationOptions.RunContinuationsAsynchronously);
+
+            await client.Connect().ConfigureAwait(false);
+
+            client.connection.OnWarning += (text, message) =>
+            {
+                warning.TrySetResult(text);
+                return Task.CompletedTask;
+            };
+
+            client.connection.OnServerWarning += (warnings, message) =>
+            {
+                serverWarnings.TrySetResult(warnings.Count);
+                return Task.CompletedTask;
+            };
+
+            await CrawlPageAsync(client).ConfigureAwait(false);
+
+            Task both = Task.WhenAll(warning.Task, serverWarnings.Task);
+            Task finished = await Task.WhenAny(both, Task.Delay(TimeSpan.FromSeconds(10))).ConfigureAwait(false);
+            await client.Disconnect().ConfigureAwait(false);
+
+            Assert.AreSame(both, finished, "a warned response did not reach OnWarning/OnServerWarning");
+            Assert.AreEqual("load", await warning.Task.ConfigureAwait(false));
+            Assert.AreEqual(1, await serverWarnings.Task.ConfigureAwait(false));
+        }
+
+        /// <summary>
+        /// And the other side of it: warnings on every page with nothing subscribed must not put
+        /// the UTF-16 copy of each response back on the path.
+        /// </summary>
+        /// <remarks>Reads the process-wide counter, so it stays out of the parallel pass.</remarks>
+        [TestMethod]
+        [DoNotParallelize]
+        public async Task TestUnsubscribedWarningsCostNothing()
+        {
+            const int Pages = 20;
+            const int PayloadBytes = 1024 * 1024;
+
+            using PagedResponseServer server = new PagedResponseServer(PayloadBytes, fragments: 8, withWarnings: true);
+            using XrplClient client = new XrplClient(server.Url);
+
+            await client.Connect().ConfigureAwait(false);
+            await CrawlPageAsync(client).ConfigureAwait(false);
+
+            GC.Collect(2, GCCollectionMode.Forced, blocking: true);
+            GC.WaitForPendingFinalizers();
+            GC.Collect(2, GCCollectionMode.Forced, blocking: true);
+
+            long before = GC.GetTotalAllocatedBytes(precise: true);
+
+            for (int i = 0; i < Pages; i++)
+            {
+                await CrawlPageAsync(client).ConfigureAwait(false);
+            }
+
+            long allocated = GC.GetTotalAllocatedBytes(precise: true) - before;
+            await client.Disconnect().ConfigureAwait(false);
+
+            double ratio = allocated / (double)Pages / PayloadBytes;
+            Console.WriteLine($"warned pages, no subscribers: {allocated / (double)Pages / 1024 / 1024:F2} MB per page ({ratio:F2}x)");
+
+            Assert.IsTrue(
+                ratio < 3.0,
+                $"warned responses allocated {ratio:F2}x the payload per page with nothing subscribed, " +
+                "budget is 3x (2.08x as bound, 4.28x when the text is built regardless of subscribers)");
         }
 
         /// <summary>
         /// The string entry point is public and used by tests and consumers that feed messages in
-        /// by hand. A null there travelled down to the stream processor and was reported through
-        /// <c>OnError</c>; carrying the frame as bytes must not turn that into a throw out of the
-        /// method itself.
+        /// by hand. A null there travelled down to the stream processor and came back out through
+        /// <c>OnError</c> as a <c>badMessage</c>; carrying the frame as bytes must not turn that
+        /// into a throw out of the method itself, and must not turn it into silence either.
         /// </summary>
         [TestMethod]
-        public async Task TestNullMessageDoesNotThrowOutOfTheEntryPoint()
+        public async Task TestNullMessageIsStillReportedThroughOnError()
         {
             Connection connection = new Connection("ws://127.0.0.1:1/");
+            TaskCompletionSource<string> reported = new TaskCompletionSource<string>(
+                TaskCreationOptions.RunContinuationsAsynchronously);
 
+            connection.OnError += (error, errorMessage, message, data) =>
+            {
+                reported.TrySetResult(errorMessage);
+                return Task.CompletedTask;
+            };
+
+            // Must not throw: the entry point is public and a null used to be routed, not raised.
             await connection.OnMessage(null).ConfigureAwait(false);
+
+            // The routing itself is fire-and-forget, so the report arrives after the call returns.
+            Task completed = await Task.WhenAny(reported.Task, Task.Delay(TimeSpan.FromSeconds(5)))
+                .ConfigureAwait(false);
+
+            Assert.AreSame(reported.Task, completed, "a null message was dropped instead of being reported");
+            Assert.AreEqual("badMessage", await reported.Task.ConfigureAwait(false));
         }
 
         private static async Task CrawlPageAsync(XrplClient client)

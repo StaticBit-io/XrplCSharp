@@ -20,14 +20,20 @@ namespace Xrpl.Tests
 
         private readonly int _fragments;
         private readonly string _resultBody;
+        private readonly bool _withWarnings;
         private int _served;
 
         /// <param name="approximatePayloadBytes">Target size of each response, in bytes.</param>
         /// <param name="fragments">Number of WebSocket frames each response is split into.</param>
-        public PagedResponseServer(int approximatePayloadBytes, int fragments)
+        /// <param name="withWarnings">
+        /// Attach <c>warning</c> and <c>warnings</c> to every response, the way rippled does under
+        /// load and on a reporting-mode server.
+        /// </param>
+        public PagedResponseServer(int approximatePayloadBytes, int fragments, bool withWarnings = false)
         {
             _fragments = Math.Max(1, fragments);
             _resultBody = BuildResultBody(approximatePayloadBytes);
+            _withWarnings = withWarnings;
 
             StartAccepting();
         }
@@ -126,7 +132,12 @@ namespace Xrpl.Tests
 
         private string Envelope(string id)
         {
-            return "{\"id\":" + id + ",\"status\":\"success\",\"type\":\"response\",\"result\":" + _resultBody + "}";
+            string warnings = _withWarnings
+                ? ",\"warning\":\"load\",\"warnings\":[{\"id\":1001,\"message\":\"This is a reporting server.\"}]"
+                : string.Empty;
+
+            return "{\"id\":" + id + ",\"status\":\"success\",\"type\":\"response\",\"result\":" + _resultBody +
+                   warnings + "}";
         }
 
         /// <summary>Pulls the JSON string value of the request's "id" property.</summary>
