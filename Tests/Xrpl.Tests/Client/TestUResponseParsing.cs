@@ -274,22 +274,22 @@ namespace Xrpl.Tests.ClientLib
             using PagedResponseServer server = new PagedResponseServer(64 * 1024, fragments: 1, withWarnings: true);
             using XrplClient client = new XrplClient(server.Url);
 
-            TaskCompletionSource<string> warning = new TaskCompletionSource<string>(
-                TaskCreationOptions.RunContinuationsAsynchronously);
-            TaskCompletionSource<int> serverWarnings = new TaskCompletionSource<int>(
-                TaskCreationOptions.RunContinuationsAsynchronously);
+            TaskCompletionSource<(string Warning, string Message)> warning =
+                new TaskCompletionSource<(string, string)>(TaskCreationOptions.RunContinuationsAsynchronously);
+            TaskCompletionSource<(int Count, string Message)> serverWarnings =
+                new TaskCompletionSource<(int, string)>(TaskCreationOptions.RunContinuationsAsynchronously);
 
             await client.Connect().ConfigureAwait(false);
 
             client.connection.OnWarning += (text, message) =>
             {
-                warning.TrySetResult(text);
+                warning.TrySetResult((text, message));
                 return Task.CompletedTask;
             };
 
             client.connection.OnServerWarning += (warnings, message) =>
             {
-                serverWarnings.TrySetResult(warnings.Count);
+                serverWarnings.TrySetResult((warnings.Count, message));
                 return Task.CompletedTask;
             };
 
@@ -300,8 +300,21 @@ namespace Xrpl.Tests.ClientLib
             await client.Disconnect().ConfigureAwait(false);
 
             Assert.AreSame(both, finished, "a warned response did not reach OnWarning/OnServerWarning");
-            Assert.AreEqual("load", await warning.Task.ConfigureAwait(false));
-            Assert.AreEqual(1, await serverWarnings.Task.ConfigureAwait(false));
+
+            (string Warning, string Message) warned = await warning.Task.ConfigureAwait(false);
+            (int Count, string Message) served = await serverWarnings.Task.ConfigureAwait(false);
+
+            Assert.AreEqual("load", warned.Warning);
+            Assert.AreEqual(1, served.Count);
+
+            // The message the callbacks are handed is the point of the condition guarding it: they
+            // must get the response text, not null and not the out-of-memory placeholder.
+            foreach (string text in new[] { warned.Message, served.Message })
+            {
+                Assert.IsNotNull(text, "the warning callbacks were handed no message");
+                StringAssert.Contains(text, "\"warning\":\"load\"");
+                StringAssert.Contains(text, "\"state\":[");
+            }
         }
 
         /// <summary>
