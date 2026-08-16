@@ -55,6 +55,20 @@ namespace Xrpl.Client
         private readonly ConcurrentDictionary<Guid, TaskInfo> promisesAwaitingResponse = new ConcurrentDictionary<Guid, TaskInfo>();
         private readonly JsonSerializerOptions serializerOptions = XrplJsonOptions.Default;
 
+        /// <summary>
+        /// Stands in for a missing <c>result</c>, matching what deserializing the literal
+        /// <c>"{}"</c> used to produce.
+        /// </summary>
+        private static readonly JsonElement EmptyResult = ParseEmptyObject();
+
+        private static JsonElement ParseEmptyObject()
+        {
+            using (JsonDocument document = JsonDocument.Parse("{}"))
+            {
+                return document.RootElement.Clone();
+            }
+        }
+
         public RequestManager()
         {
         }
@@ -74,7 +88,7 @@ namespace Xrpl.Client
 
             try
             {
-                object deserialized = JsonSerializer.Deserialize(response.Result?.ToString() ?? "{}", taskInfo.Type, serializerOptions);
+                object deserialized = DeserializeResult(response.Result, taskInfo.Type);
                 CompleteWithResult(taskInfo, deserialized);
                 this.DeletePromise(id, taskInfo);
             }
@@ -84,6 +98,47 @@ namespace Xrpl.Client
                 this.Reject(id, error);
                 throw;  // re-throw so IOnMessageFastPath also logs via OnError
             }
+        }
+
+        /// <summary>
+        /// Converts the <c>result</c> member of a response into the type the request was created
+        /// with.
+        /// </summary>
+        /// <remarks>
+        /// The member arrives already parsed - <see cref="BaseResponse.Result"/> is typed
+        /// <see cref="object"/>, which System.Text.Json fills with a self-contained
+        /// <see cref="JsonElement"/>. Rendering that element back to a string and parsing the
+        /// string a second time cost two more copies of the whole response per request: a UTF-16
+        /// string at twice the byte length, and a second document on top of it. On a paged walk
+        /// of the ledger both copies are large-object-heap sized and both are pure waste, so the
+        /// element is deserialized directly instead, and handed straight through when the request
+        /// asked for the untyped node in the first place.
+        /// </remarks>
+        private object DeserializeResult(object result, Type type)
+        {
+            JsonElement element;
+
+            if (result is null)
+            {
+                element = EmptyResult;
+            }
+            else if (result is JsonElement parsed)
+            {
+                element = parsed;
+            }
+            else
+            {
+                // A response assembled by hand rather than parsed off the wire: there is no node
+                // to reuse, so this is still the only way in.
+                return JsonSerializer.Deserialize(result.ToString(), type, serializerOptions);
+            }
+
+            if (type == typeof(JsonElement) || type == typeof(object))
+            {
+                return element;
+            }
+
+            return element.Deserialize(type, serializerOptions);
         }
 
         /// <summary>
@@ -444,8 +499,25 @@ namespace Xrpl.Client
         /// </summary>
         public (BaseResponse Response, bool Handled) HandleResponse(string message)
         {
-            var response = JsonSerializer.Deserialize<ErrorResponse>(message, serializerOptions);
+            return HandleResponse(JsonSerializer.Deserialize<ErrorResponse>(message, serializerOptions));
+        }
 
+        /// <summary>
+        /// Same as <see cref="HandleResponse(string)"/> for a message still in its wire form.
+        /// </summary>
+        /// <remarks>
+        /// Preferred on the socket path: transcoding the frame to a UTF-16 string first costs a
+        /// copy at twice the byte length of the message, which for a large response is a
+        /// large-object-heap allocation spent only to hand System.Text.Json something it converts
+        /// straight back to UTF-8.
+        /// </remarks>
+        public (BaseResponse Response, bool Handled) HandleResponse(ReadOnlySpan<byte> utf8Message)
+        {
+            return HandleResponse(JsonSerializer.Deserialize<ErrorResponse>(utf8Message, serializerOptions));
+        }
+
+        private (BaseResponse Response, bool Handled) HandleResponse(ErrorResponse response)
+        {
             if (response.Id == null)
             {
                 return (response, false);
@@ -481,21 +553,13 @@ namespace Xrpl.Client
 
             if (response.Status == "error" )
             {
-                ErrorResponse errorResponse = null;
-                try
-                {
-                    errorResponse = JsonSerializer.Deserialize<ErrorResponse>(message, serializerOptions);
-
-                }
-                catch (Exception e)
-                {
-                    
-                }
+                // The message was already deserialized into an ErrorResponse above, so the error
+                // details are in hand - parsing it a second time only produced an equal copy.
                 string detail = response.ErrorMessage ?? response.ErrorException;
                 var errMessage = response.Error is null
                     ? detail
                     : $"{response.Error} - {detail}";
-                var error = new RippledException(errMessage, errorResponse);
+                var error = new RippledException(errMessage, response);
                 this.Reject(id, error);
                 return (response, true);
             }

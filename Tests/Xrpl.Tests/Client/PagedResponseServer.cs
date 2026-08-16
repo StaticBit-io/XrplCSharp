@@ -15,16 +15,25 @@ namespace Xrpl.Tests
     /// </summary>
     internal sealed class PagedResponseServer : WebSocketTestServerBase
     {
+        /// <summary>The id `Connection` sends: a quoted GUID in `D` format, always 38 characters.</summary>
+        private const int QuotedGuidLength = 38;
+
         private readonly int _fragments;
         private readonly string _resultBody;
+        private readonly bool _withWarnings;
         private int _served;
 
         /// <param name="approximatePayloadBytes">Target size of each response, in bytes.</param>
         /// <param name="fragments">Number of WebSocket frames each response is split into.</param>
-        public PagedResponseServer(int approximatePayloadBytes, int fragments)
+        /// <param name="withWarnings">
+        /// Attach <c>warning</c> and <c>warnings</c> to every response, the way rippled does under
+        /// load and on a reporting-mode server.
+        /// </param>
+        public PagedResponseServer(int approximatePayloadBytes, int fragments, bool withWarnings = false)
         {
             _fragments = Math.Max(1, fragments);
             _resultBody = BuildResultBody(approximatePayloadBytes);
+            _withWarnings = withWarnings;
 
             StartAccepting();
         }
@@ -79,6 +88,9 @@ namespace Xrpl.Tests
 
         protected override async Task ServeAsync(NetworkStream stream)
         {
+            // One frame buffer per connection, so two clients cannot rewrite each other's id.
+            byte[]? frame = null;
+
             while (!Token.IsCancellationRequested)
             {
                 string? message = await ReadTextFrameAsync(stream).ConfigureAwait(false);
@@ -88,13 +100,44 @@ namespace Xrpl.Tests
                 }
 
                 string id = ExtractId(message);
-                string envelope = "{\"id\":" + id + ",\"status\":\"success\",\"type\":\"response\",\"result\":" +
-                                  _resultBody + "}";
 
-                await WriteFragmentedMessageAsync(stream, Encoding.UTF8.GetBytes(envelope), _fragments)
-                    .ConfigureAwait(false);
+                await WriteFragmentedMessageAsync(stream, BuildFrame(id, ref frame), _fragments).ConfigureAwait(false);
                 Interlocked.Increment(ref _served);
             }
+        }
+
+        /// <summary>
+        /// Builds the response frame for <paramref name="id"/>. The usual case - a quoted GUID, the
+        /// only form <c>Connection</c> sends - reuses one buffer and rewrites the id in place, so
+        /// the server contributes nothing to what a caller measures on the client side. Anything
+        /// else falls back to assembling the envelope.
+        /// </summary>
+        private byte[] BuildFrame(string id, ref byte[]? reusable)
+        {
+            if (id.Length != QuotedGuidLength)
+            {
+                return Encoding.UTF8.GetBytes(Envelope(id));
+            }
+
+            reusable ??= Encoding.UTF8.GetBytes(Envelope("\"" + new string('0', QuotedGuidLength - 2) + "\""));
+
+            int idOffset = "{\"id\":".Length;
+            for (int i = 0; i < QuotedGuidLength; i++)
+            {
+                reusable[idOffset + i] = (byte)id[i];
+            }
+
+            return reusable;
+        }
+
+        private string Envelope(string id)
+        {
+            string warnings = _withWarnings
+                ? ",\"warning\":\"load\",\"warnings\":[{\"id\":1001,\"message\":\"This is a reporting server.\"}]"
+                : string.Empty;
+
+            return "{\"id\":" + id + ",\"status\":\"success\",\"type\":\"response\",\"result\":" + _resultBody +
+                   warnings + "}";
         }
 
         /// <summary>Pulls the JSON string value of the request's "id" property.</summary>

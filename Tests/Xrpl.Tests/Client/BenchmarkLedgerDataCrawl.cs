@@ -5,7 +5,11 @@ using System.Collections.Generic;
 using System.Diagnostics;
 using System.Threading.Tasks;
 
+using System.Text.Json;
+
 using Xrpl.Client;
+using Xrpl.Models.Common;
+using Xrpl.Models.Methods;
 
 namespace Xrpl.Tests.ClientLib
 {
@@ -110,6 +114,78 @@ namespace Xrpl.Tests.ClientLib
             Console.WriteLine($"managed heap      : {heapBefore / 1024.0 / 1024.0:F1} -> {heapAfter / 1024.0 / 1024.0:F1} MiB");
             Console.WriteLine($"LOH size          : {lohBefore / 1024.0 / 1024.0:F1} -> {lohAfter / 1024.0 / 1024.0:F1} MiB");
             Console.WriteLine("decile profile (ms/page): " + string.Join(" | ", DecileProfile(pageMs)));
+        }
+
+        /// <summary>
+        /// Same crawl through <c>GRequest&lt;JsonElement, …&gt;</c> — the path a consumer takes when
+        /// it needs the raw ledger objects, because the typed <c>LOLedgerData.State</c> drops
+        /// fields the models do not know. This is where the response path's own cost shows up
+        /// undiluted: nothing is materialized into a model, so what is measured is receive,
+        /// route and parse.
+        /// </summary>
+        [TestMethod]
+        public async Task BenchmarkSequentialPagingUntyped()
+        {
+            int pages = EnvInt("CRAWL_PAGES", 2000);
+            int payloadBytes = EnvInt("CRAWL_PAYLOAD_BYTES", 2 * 1024 * 1024);
+            int fragments = EnvInt("CRAWL_FRAGMENTS", 32);
+
+            using PagedResponseServer server = new PagedResponseServer(payloadBytes, fragments);
+            using XrplClient client = new XrplClient(server.Url);
+
+            await client.Connect().ConfigureAwait(false);
+            await RequestUntypedPageAsync(client).ConfigureAwait(false);
+
+            GC.Collect(2, GCCollectionMode.Forced, blocking: true);
+            GC.WaitForPendingFinalizers();
+            GC.Collect(2, GCCollectionMode.Forced, blocking: true);
+
+            long allocatedBefore = GC.GetTotalAllocatedBytes(precise: true);
+            int gen2Before = GC.CollectionCount(2);
+            long lohBefore = LohBytes();
+            long startTicks = Stopwatch.GetTimestamp();
+
+            for (int i = 0; i < pages; i++)
+            {
+                await RequestUntypedPageAsync(client).ConfigureAwait(false);
+            }
+
+            double totalSeconds = (Stopwatch.GetTimestamp() - startTicks) / (double)Stopwatch.Frequency;
+            long allocated = GC.GetTotalAllocatedBytes(precise: true) - allocatedBefore;
+            long lohAfter = LohBytes();
+
+            await client.Disconnect().ConfigureAwait(false);
+
+            Console.WriteLine("=== ledger_data crawl benchmark (untyped JsonElement result) ===");
+            Console.WriteLine($"pages             : {pages}");
+            Console.WriteLine($"payload           : {payloadBytes / 1024.0 / 1024.0:F2} MiB");
+            Console.WriteLine($"total time        : {totalSeconds:F2} s ({pages / totalSeconds:F2} pages/s)");
+            Console.WriteLine($"allocated per page: {allocated / (double)pages / 1024.0 / 1024.0:F1} MiB " +
+                              $"({allocated / (double)pages / payloadBytes:F1}x payload)");
+            Console.WriteLine($"gen2 collections  : {GC.CollectionCount(2) - gen2Before}");
+            Console.WriteLine($"LOH size          : {lohBefore / 1024.0 / 1024.0:F1} -> {lohAfter / 1024.0 / 1024.0:F1} MiB");
+        }
+
+        private static async Task RequestUntypedPageAsync(XrplClient client)
+        {
+            JsonElement result = await client
+                .GRequest<JsonElement, LedgerDataRequest>(new LedgerDataRequest
+                {
+                    LedgerIndex = new LedgerIndex(96000000),
+                    Binary = true,
+                    Limit = 2048
+                })
+                .ConfigureAwait(false);
+
+            if (result.ValueKind != JsonValueKind.Object || !result.TryGetProperty("state", out JsonElement state))
+            {
+                throw new InvalidOperationException("empty ledger_data response");
+            }
+
+            if (state.GetArrayLength() == 0)
+            {
+                throw new InvalidOperationException("ledger_data page carried no objects");
+            }
         }
 
         private static async Task RequestPageAsync(XrplClient client)
