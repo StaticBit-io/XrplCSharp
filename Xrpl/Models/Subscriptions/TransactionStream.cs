@@ -1,8 +1,6 @@
 ﻿using System;
-using System.Text.Json;
 using System.Text.Json.Serialization;
 
-using Xrpl.Client.Json;
 using Xrpl.Models.Methods;
 using Xrpl.Models.Transactions;
 
@@ -20,6 +18,9 @@ namespace Xrpl.Models.Subscriptions
     /// </summary>
     public class TransactionStream : BaseStream, IAccountTransaction
     {
+        private TransactionResponse _transaction;
+        private string _hash;
+
         /// <summary>
         /// The ledger close time represented in ISO 8601 time format.
         /// </summary>
@@ -48,8 +49,16 @@ namespace Xrpl.Models.Subscriptions
         /// <summary>
         /// The unique hash identifier of the transaction.
         /// </summary>
+        /// <remarks>
+        /// API v1 reports the hash inside the transaction envelope instead of at the top level,
+        /// so it falls back to the deserialized transaction.
+        /// </remarks>
         [JsonPropertyName("hash")]
-        public string Hash { get; set; }
+        public string Hash
+        {
+            get => _hash ?? _transaction?.Hash;
+            set => _hash = value;
+        }
 
         /// <summary>
         /// (Validated transactions only) The identifying hash of the ledger version that includes this transaction
@@ -72,19 +81,33 @@ namespace Xrpl.Models.Subscriptions
         [JsonPropertyName("meta")]
         public Meta Meta { get; set; }
         /// <summary>
-        /// The definition of the transaction in JSON format
+        /// The definition of the transaction in JSON format.
         /// </summary>
-        //[JsonPropertyName("transaction")]
+        /// <remarks>
+        /// rippled wraps the transaction in <c>tx_json</c> under API v2 and in <c>transaction</c>
+        /// under API v1; both envelopes populate this property. It is deserialized once, with the
+        /// message that carries it - reading it back costs nothing.
+        /// </remarks>
         [JsonPropertyName("tx_json")]
-        public object TransactionJson { get; set; }
-        /// <summary>
-        /// The definition of the proposed transaction in JSON format<br/>
-        /// </summary>
-        [JsonPropertyName("transaction")]
-        public object Proposed { get; set; }
+        public TransactionResponse Transaction
+        {
+            get => _transaction;
+            set => _transaction = value ?? _transaction;
+        }
 
-        [JsonIgnore]
-        public TransactionResponse Transaction => JsonSerializer.Deserialize<TransactionResponse>((TransactionJson ?? Proposed).ToString(), XrplJsonOptions.Default);
+        /// <summary>
+        /// API v1 envelope for <see cref="Transaction"/>.
+        /// </summary>
+        /// <remarks>
+        /// Set-only alias: it never appears in serialized output. [JsonInclude] is required because
+        /// System.Text.Json ignores non-public members without it.
+        /// </remarks>
+        [JsonInclude]
+        [JsonPropertyName("transaction")]
+        private TransactionResponse TransactionV1
+        {
+            set => _transaction = value ?? _transaction;
+        }
 
         /// <summary>
         /// If true, this transaction is included in a validated ledger and its outcome is final.<br/>
