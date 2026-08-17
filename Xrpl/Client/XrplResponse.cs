@@ -79,6 +79,29 @@ namespace Xrpl.Client
         /// True when a Reporting Mode server forwarded this request to a P2P server and back.
         /// </summary>
         public bool Forwarded { get; }
+
+        /// <summary>
+        /// True when the node reported a <c>marker</c>, meaning more pages follow.
+        /// </summary>
+        /// <remarks>
+        /// The extension on <see cref="BaseResponse"/> is no longer reachable from here — a caller
+        /// holds this type now, not the envelope — and paging is the case this whole change was
+        /// made for.
+        /// </remarks>
+        public bool HasNextPage => Raw.HasTopLevelProperty("marker"u8);
+
+        /// <summary>
+        /// Lets a caller take both halves at once: <c>var (info, raw) = await client.AccountInfo(request)</c>.
+        /// </summary>
+        /// <remarks>
+        /// The call sites that broke hardest on this change are the ones using <c>var</c>, and this
+        /// is what makes them a one-line edit rather than a restructure.
+        /// </remarks>
+        public void Deconstruct(out T result, out RawJson raw)
+        {
+            result = Result;
+            raw = Raw;
+        }
     }
 
     /// <summary>
@@ -110,10 +133,27 @@ namespace Xrpl.Client
                     $"A resolved request carried {resolved?.GetType().Name ?? "null"} instead of its response envelope.");
             }
 
-            BaseResponse envelope = carried.Envelope;
+            return From<T>(carried);
+        }
+
+        /// <summary>
+        /// Unpacks a <see cref="ResolvedResponse"/> already in hand.
+        /// </summary>
+        /// <remarks>
+        /// The <c>object</c> overload exists because <c>Promise</c> is typed <see
+        /// cref="System.Threading.Tasks.Task{TResult}">Task&lt;object&gt;</see> and cannot hand out
+        /// anything more specific. A caller that already has the <see cref="ResolvedResponse"/> —
+        /// having awaited the promise itself — should use this overload instead: the mismatch this
+        /// type carries the most (a <c>Promise</c> that resolved to something other than what the
+        /// request was created with) becomes a compile error here rather than the
+        /// <see cref="XrplException"/> the other overload has to throw at run time.
+        /// </remarks>
+        public static XrplResponse<T> From<T>(ResolvedResponse resolved)
+        {
+            BaseResponse envelope = resolved.Envelope;
 
             return new XrplResponse<T>(
-                (T)carried.Result,
+                (T)resolved.Result,
                 envelope?.RawResult ?? default,
                 envelope?.ApiVersion,
                 envelope?.Warning,

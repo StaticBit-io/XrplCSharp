@@ -45,6 +45,45 @@ public class TestUXrplResponse
     }
 
     /// <summary>
+    /// <c>var (result, raw) = response</c> must hand back exactly what <see cref="XrplResponse{T}.Result"/>
+    /// and <see cref="XrplResponse{T}.Raw"/> would — this is the one-line escape hatch for the
+    /// <c>var</c> call sites that otherwise have to be restructured for the new return type.
+    /// </summary>
+    [TestMethod]
+    public void TestUDeconstructsIntoResultAndRaw()
+    {
+        byte[] frame = Encoding.UTF8.GetBytes("{\"result\":{\"ledger_index\":9,\"marker\":\"AABB\"}}");
+        RawJson raw = new RawJson(frame, 10, frame.Length - 11);
+        LOLedgerData typed = raw.Deserialize<LOLedgerData>();
+
+        XrplResponse<LOLedgerData> response = new XrplResponse<LOLedgerData>(typed, raw, 2, null, null, false);
+
+        var (result, deconstructedRaw) = response;
+
+        Assert.AreSame(typed, result);
+        Assert.AreEqual("{\"ledger_index\":9,\"marker\":\"AABB\"}", deconstructedRaw.ToString());
+    }
+
+    /// <summary>
+    /// The wrapper's own paging signal, read off <see cref="XrplResponse{T}.Raw"/> rather than a
+    /// parsed projection — the same rule <c>BaseResponse.HasNextPage</c> follows, now reachable from
+    /// the type a caller of the client's own methods actually holds.
+    /// </summary>
+    [TestMethod]
+    public void TestUHasNextPageReflectsTheMarker()
+    {
+        byte[] withMarker = Encoding.UTF8.GetBytes("{\"ledger_index\":9,\"marker\":\"AABB\"}");
+        XrplResponse<LOLedgerData> paged = new XrplResponse<LOLedgerData>(
+            null, new RawJson(withMarker, 0, withMarker.Length), null, null, null, false);
+        Assert.IsTrue(paged.HasNextPage);
+
+        byte[] withoutMarker = Encoding.UTF8.GetBytes("{\"ledger_index\":9}");
+        XrplResponse<LOLedgerData> lastPage = new XrplResponse<LOLedgerData>(
+            null, new RawJson(withoutMarker, 0, withoutMarker.Length), null, null, null, false);
+        Assert.IsFalse(lastPage.HasNextPage);
+    }
+
+    /// <summary>
     /// The whole point of the feature, end to end over a real socket: what the node sent reaches
     /// the caller unchanged. The scripted body carries irregular whitespace and a member no model
     /// knows, so this fails if anything on the path normalizes or reprojects the bytes.

@@ -811,12 +811,12 @@
             
             while (true)
             {
-                var response = await client.AccountTransactions(
+                var response = (await client.AccountTransactions(
                     new Xrpl.Models.Methods.AccountTransactionsRequest(AccountAddress)
                     {
                         Limit = 50,
                         Marker = marker,
-                    });
+                    })).Result;
                 
                 if (response == null)
                     break;

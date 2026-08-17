@@ -29,7 +29,7 @@
 **Создаются:**
 
 - `Xrpl/Client/XrplResponse.cs` — `readonly struct XrplResponse<T>`: `Result`, `Raw`, `ApiVersion`, `Warnings`, `Forwarded`.
-- `Xrpl/Client/ResolvedResponse.cs` — `internal sealed class ResolvedResponse`: пара «типизированный результат + конверт», единственное, что кладётся в промис.
+- `Xrpl/Client/ResolvedResponse.cs` — `public sealed class ResolvedResponse`: пара «типизированный результат + конверт», единственное, что кладётся в промис. Публичный, потому что `RequestManager` и его `Promise` (`Task<object>`) публичны — вызывающему на этом уровне нужно чем распаковать результат.
 - `Tests/Xrpl.Tests/Client/XrplResponseTests.cs` — класс `TestUXrplResponse`, namespace `XrplTests.Client`.
 
 **Изменяются:**
@@ -503,7 +503,7 @@ namespace Xrpl.Client
     /// <see cref="XrplResponse{T}"/> itself. It carries both halves this far and the generic
     /// client assembles them, which keeps the manager free of the generic parameter.
     /// </remarks>
-    internal sealed class ResolvedResponse
+    public sealed class ResolvedResponse
     {
         public ResolvedResponse(object result, BaseResponse envelope)
         {

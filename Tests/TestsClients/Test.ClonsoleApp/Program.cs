@@ -75,7 +75,7 @@ internal class Program
 
             //await SetSigners(walletMultiSign, walletMultiSigner_1, walletMultiSigner_2);
 
-             var features = await client.ServerFeatures();
+             var features = (await client.ServerFeatures()).Result;
             var canBe = features.GetActivated();
             var mpts = features.GetByNameContains("mpt");
             foreach (var mpt in canBe)
@@ -119,13 +119,13 @@ internal class Program
         object marker = null;
         do
         {
-            var all = await client.AccountLines(
+            var all = (await client.AccountLines(
                 new AccountLinesRequest(walletPrimary.ClassicAddress)
                 {
                     Marker = marker,
                     Limit = 200,
                     //IgnoreDefault = true
-                });
+                })).Result;
             lines.AddRange(all.TrustLines);
             marker = all.Marker;
         }
@@ -173,8 +173,8 @@ internal class Program
             TakerPays = payment.DeliverMin,
             Flags = OfferCreateFlags.tfImmediateOrCancel | OfferCreateFlags.tfSell,
         };
-        var simulate = await client.Simulate(new SimulateRequest() { Transaction = payment });
-        var simulate2 = await client.Simulate(new SimulateRequest() { Transaction = offer });
+        var simulate = (await client.Simulate(new SimulateRequest() { Transaction = payment })).Result;
+        var simulate2 = (await client.Simulate(new SimulateRequest() { Transaction = offer })).Result;
         var changes = BalanceChanges.GetBalanceChanges(simulate.Meta);
         var changes2 = BalanceChanges.GetBalanceChanges(simulate2.Meta);
         var jsonSimulate = JsonSerializer.Serialize(simulate2);
@@ -207,13 +207,13 @@ internal class Program
             //.AddRequireAuthTest("ATH", auth: false)
             .BuildAsync();
 
-        var noRippleCheck = await client.NoRippleCheck(
+        var noRippleCheck = (await client.NoRippleCheck(
             new NoRippleCheckRequest(TestAccountBuilder.IssuerAccount.ClassicAddress)
             {
                 Role = RoleType.Gateway,
                 Transactions = true,
                 Limit = 100
-            });
+            })).Result;
         foreach (var request in noRippleCheck.Transactions)
         {
             Console.WriteLine(request.ToJson());
@@ -346,7 +346,7 @@ internal class Program
                     await Task.Run(Console.ReadLine);
 
                     await client.ChangeServer(server);
-                    ServerState? serverInfo = await client.ServerState(new ServerStateRequest());
+                    ServerState? serverInfo = (await client.ServerState(new ServerStateRequest())).Result;
                     string lineReserveFee = serverInfo.State.ValidatedLedger.ReserveInc.ToString();
                     string accReserveFee = serverInfo.State.ValidatedLedger.ReserveBase.ToString();
                     var _lineReserveFee = new Currency
@@ -478,11 +478,11 @@ internal class Program
             },
         };
 
-        var result = await client.Simulate(
+        var result = (await client.Simulate(
             new SimulateRequest()
             {
                 Transaction = tx
-            });
+            })).Result;
         if (result.TxJson is Payment { } payment)
         {
 
@@ -527,7 +527,7 @@ internal class Program
         var wallet = XrplWallet.FromSeed(seed);
 
         var request = new AccountInfoRequest(wallet.ClassicAddress);
-        var accountInfo = await client.AccountInfo(request);
+        var accountInfo = (await client.AccountInfo(request)).Result;
 
         // prepare the transaction
         // the amount is expressed in drops, not XRP
@@ -561,7 +561,7 @@ internal class Program
         Console.WriteLine("NEXT");
 
         var request = new AccountInfoRequest(wallet.ClassicAddress);
-        var accountInfo = await client.AccountInfo(request);
+        var accountInfo = (await client.AccountInfo(request)).Result;
 
         // prepare the transaction
         // the amount is expressed in drops, not XRP
@@ -959,7 +959,7 @@ internal class Program
     private static async Task SetSigners(XrplWallet owner, XrplWallet signer1, XrplWallet signer2)
     {
         // Проверьте: у owner достаточно резерва на SignerList (≈ +2 XRP * на подпись).
-        var acc = await client.AccountInfo(new AccountInfoRequest(owner.ClassicAddress));
+        var acc = (await client.AccountInfo(new AccountInfoRequest(owner.ClassicAddress))).Result;
 
         // Создаём/обновляем список подписантов (2 из 2)
         var sls = new SignerListSet
@@ -981,7 +981,7 @@ internal class Program
     private static async Task DisableMaster(XrplWallet owner)
     {
         AccountInfo acc;
-        acc = await client.AccountInfo(new AccountInfoRequest(owner.ClassicAddress));
+        acc = (await client.AccountInfo(new AccountInfoRequest(owner.ClassicAddress))).Result;
 
         var disableMaster = new AccountSet
         {
