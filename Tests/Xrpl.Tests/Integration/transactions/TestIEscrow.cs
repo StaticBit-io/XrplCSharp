@@ -1,4 +1,4 @@
-using Microsoft.VisualStudio.TestTools.UnitTesting;
+﻿using Microsoft.VisualStudio.TestTools.UnitTesting;
 using System;
 using System.Threading.Tasks;
 using Xrpl.Client;
@@ -20,6 +20,26 @@ public class TestIEscrow
     public static IXrplClient client;
 
     private static TestNodeType nodeType = TestNodeType.Standalone;
+
+    /// <summary>
+    /// How far ahead of the last validated close time an escrow's <c>FinishAfter</c> is placed.
+    /// </summary>
+    /// <remarks>
+    /// rippled rejects an <c>EscrowCreate</c> whose <c>FinishAfter</c> already sits behind the
+    /// close time of the parent of the ledger it lands in — <c>tecNO_PERMISSION</c>, verified
+    /// against the stand. The close time this is measured from is read one round trip earlier, and
+    /// the standalone stand closes a ledger every 4 seconds (see the ledger-acceptor loop in
+    /// .ci-config/docker-compose.ci.yml), so any margin at or below one ledger interval makes the
+    /// create a coin flip. This is three intervals, which covers the read, the autofill and the
+    /// submit with room left over.
+    /// </remarks>
+    private static readonly TimeSpan FinishAfterMargin = TimeSpan.FromSeconds(12);
+
+    /// <summary>
+    /// Same idea for <c>CancelAfter</c>, which rippled requires to be later than
+    /// <see cref="FinishAfterMargin"/> and which the cancel tests wait out in full.
+    /// </summary>
+    private static readonly TimeSpan CancelAfterMargin = TimeSpan.FromSeconds(24);
     //static XrplWallet walletIssuer = XrplWallet.Generate();
     //static XrplWallet walletHolder1 = XrplWallet.Generate();
 
@@ -57,7 +77,7 @@ public class TestIEscrow
             Account = walletHolder1.ClassicAddress,
             Amount = new Currency { ValueAsXrp = 1 },
             Destination = walletHolder2.ClassicAddress,
-            FinishAfter = closeTime + TimeSpan.FromSeconds(2),
+            FinishAfter = closeTime + FinishAfterMargin,
         };
         escrowCreateTx = await client.Autofill(escrowCreateTx);
         uint escrowSequence = (uint)escrowCreateTx.Sequence;
@@ -68,7 +88,7 @@ public class TestIEscrow
         AccountObjects objResp = await client.AccountObjects(objReq);
         Assert.IsTrue(objResp.AccountObjectList.Count >= 1, "At least one escrow should exist after creation");
 
-        await WaitForLedgerCloseTime(client, closeTime.Value + TimeSpan.FromSeconds(2));
+        await WaitForLedgerCloseTime(client, closeTime.Value + FinishAfterMargin);
 
         EscrowFinish finishTx = new EscrowFinish
         {
@@ -96,14 +116,14 @@ public class TestIEscrow
         LedgerEntity ledgerEntity = (LedgerEntity)ledgerResponse.LedgerEntity;
         var closeTime = ledgerEntity.CloseTime;
 
-        var cancelAfterTime = closeTime + TimeSpan.FromSeconds(10);
+        var cancelAfterTime = closeTime + CancelAfterMargin;
         var escrowCreateTx = new EscrowCreate
         {
             Account = walletHolder1.ClassicAddress,
             Amount = new Currency { ValueAsXrp = 1 },
             Destination = walletHolder2.ClassicAddress,
             CancelAfter = cancelAfterTime,
-            FinishAfter = closeTime + TimeSpan.FromSeconds(2),
+            FinishAfter = closeTime + FinishAfterMargin,
         };
         escrowCreateTx = await client.Autofill(escrowCreateTx);
         uint escrowSequence = (uint)escrowCreateTx.Sequence;
@@ -188,7 +208,7 @@ public class TestIEscrow
             Account = walletHolder1.ClassicAddress,
             Amount = new Currency { CurrencyCode = "USD", Issuer = walletIssuer.ClassicAddress, Value = "100" },
             Destination = walletHolder2.ClassicAddress,
-            FinishAfter = closeTime + TimeSpan.FromSeconds(2),
+            FinishAfter = closeTime + FinishAfterMargin,
         };
         escrowCreateTx = await client.Autofill(escrowCreateTx);
         uint escrowSequence = (uint)escrowCreateTx.Sequence;
@@ -199,7 +219,7 @@ public class TestIEscrow
         AccountObjects objResp = await client.AccountObjects(objReq);
         Assert.IsTrue(objResp.AccountObjectList.Count >= 1, "At least one escrow should exist after creation");
 
-        await WaitForLedgerCloseTime(client, closeTime.Value + TimeSpan.FromSeconds(2));
+        await WaitForLedgerCloseTime(client, closeTime.Value + FinishAfterMargin);
 
         EscrowFinish finishTx = new EscrowFinish
         {
@@ -264,14 +284,14 @@ public class TestIEscrow
         LedgerEntity ledgerEntity = (LedgerEntity)ledgerResponse.LedgerEntity;
         var closeTime = ledgerEntity.CloseTime;
 
-        var cancelAfterTime = closeTime + TimeSpan.FromSeconds(10);
+        var cancelAfterTime = closeTime + CancelAfterMargin;
         var escrowCreateTx = new EscrowCreate
         {
             Account = walletHolder1.ClassicAddress,
             Amount = new Currency { CurrencyCode = "USD", Issuer = walletIssuer.ClassicAddress, Value = "100" },
             Destination = walletHolder2.ClassicAddress,
             CancelAfter = cancelAfterTime,
-            FinishAfter = closeTime + TimeSpan.FromSeconds(2),
+            FinishAfter = closeTime + FinishAfterMargin,
         };
         escrowCreateTx = await client.Autofill(escrowCreateTx);
         uint escrowSequence = (uint)escrowCreateTx.Sequence;
@@ -368,7 +388,7 @@ public class TestIEscrow
             Account = walletHolder1.ClassicAddress,
             Amount = new Currency { MPTokenIssuanceID = issuanceId, Value = "1000" },
             Destination = walletHolder2.ClassicAddress,
-            FinishAfter = closeTime + TimeSpan.FromSeconds(2),
+            FinishAfter = closeTime + FinishAfterMargin,
         };
 
         escrowCreateTx = await client.Autofill(escrowCreateTx);
@@ -380,7 +400,7 @@ public class TestIEscrow
         AccountObjects objResp = await client.AccountObjects(objReq);
         Assert.IsTrue(objResp.AccountObjectList.Count >= 1, "At least one escrow should exist after creation");
 
-        await WaitForLedgerCloseTime(client, closeTime.Value + TimeSpan.FromSeconds(2));
+        await WaitForLedgerCloseTime(client, closeTime.Value + FinishAfterMargin);
 
 
         EscrowFinish finishTx = new EscrowFinish
@@ -449,14 +469,14 @@ public class TestIEscrow
         LedgerEntity ledgerEntity = (LedgerEntity)ledgerResponse.LedgerEntity;
         var closeTime = ledgerEntity.CloseTime;
 
-        var cancelAfterTime = closeTime + TimeSpan.FromSeconds(10);
+        var cancelAfterTime = closeTime + CancelAfterMargin;
         var escrowCreateTx = new EscrowCreate
         {
             Account = walletHolder1.ClassicAddress,
             Amount = new Currency { MPTokenIssuanceID = issuanceId, Value = "1000" },
             Destination = walletHolder2.ClassicAddress,
             CancelAfter = cancelAfterTime,
-            FinishAfter = closeTime + TimeSpan.FromSeconds(2),
+            FinishAfter = closeTime + FinishAfterMargin,
         };
         escrowCreateTx = await client.Autofill(escrowCreateTx);
         uint escrowSequence = (uint)escrowCreateTx.Sequence;
