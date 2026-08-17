@@ -290,7 +290,15 @@ git commit -m "fix(models)!: ledger-модели больше не припис�
 
 - [ ] **Step 1: Расширить тест на транзакции**
 
-Добавь в `TestUNullabilityConformance` третий тест по образцу второго, но по моделям транзакций. Маппинг возьми из `TestUTxFormatConformance` тем же приёмом (рефлексия над приватным статическим полем), а требуемость — из `RippledTransactionFormats`.
+Добавь в `TestUNullabilityConformance` третий тест по образцу второго, но по моделям транзакций.
+
+**Готового маппинга «тип транзакции → модель» в репозитории нет** — проверено. `TestUTxFormatConformance` сравнивает `TxFormat.Formats` (реестр `Dictionary<TransactionType, TxFormat>` в самом SDK) с `RippledTransactionFormats.Parse()`, то есть таблицу с таблицей, минуя C#-модели.
+
+Единственный существующий реестр «имя → модель» — switch в `Xrpl/Client/Json/Converters/TransactionResponseConverter.cs` (`"AccountSet" => new AccountSetResponse()`), из которого видно соглашение: response-модель называется `<TxName>Response` в namespace `Xrpl.Models.Transactions`.
+
+Строй маппинг рефлексией по этому соглашению, проходя по именам из `TxFormat.Formats`, и **падай, если модель для объявленного типа не найдена** — иначе новый тип транзакции молча выпадет из проверки, ровно как это уже случалось с полями (см. комментарий в `TestULedgerEntryFieldsConformance` про `sfLEVersion`). Требуемость бери из `RippledTransactionFormats`.
+
+Проверять надо именно response-модели: они приходят от узла и именно они переиспользуются в метаданных.
 
 Отдельно включи `NodeBase.LedgerEntryType`: спека фиксирует его как приписываемый в `PreviousFields`, а сам `NodeBase` не является ledger-моделью и во второй тест не попадает.
 
