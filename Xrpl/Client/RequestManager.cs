@@ -5,6 +5,7 @@ using System.Collections.Concurrent;
 using System.Collections.Generic;
 using System.Diagnostics;
 using System.Reflection;
+using System.Text;
 using System.Text.Json;
 using System.Text.Json.Nodes;
 using System.Threading;
@@ -59,15 +60,7 @@ namespace Xrpl.Client
         /// Stands in for a missing <c>result</c>, matching what deserializing the literal
         /// <c>"{}"</c> used to produce.
         /// </summary>
-        private static readonly JsonElement EmptyResult = ParseEmptyObject();
-
-        private static JsonElement ParseEmptyObject()
-        {
-            using (JsonDocument document = JsonDocument.Parse("{}"))
-            {
-                return document.RootElement.Clone();
-            }
-        }
+        private static readonly byte[] EmptyResult = Encoding.UTF8.GetBytes("{}");
 
         public RequestManager()
         {
@@ -88,7 +81,7 @@ namespace Xrpl.Client
 
             try
             {
-                object deserialized = DeserializeResult(response.Result, taskInfo.Type);
+                object deserialized = DeserializeResult(response.RawResult, taskInfo.Type);
                 CompleteWithResult(taskInfo, deserialized);
                 this.DeletePromise(id, taskInfo);
             }
@@ -102,43 +95,25 @@ namespace Xrpl.Client
 
         /// <summary>
         /// Converts the <c>result</c> member of a response into the type the request was created
-        /// with.
+        /// with, parsing it straight out of the frame.
         /// </summary>
         /// <remarks>
-        /// The member arrives already parsed - <see cref="BaseResponse.Result"/> is typed
-        /// <see cref="object"/>, which System.Text.Json fills with a self-contained
-        /// <see cref="JsonElement"/>. Rendering that element back to a string and parsing the
-        /// string a second time cost two more copies of the whole response per request: a UTF-16
-        /// string at twice the byte length, and a second document on top of it. On a paged walk
-        /// of the ledger both copies are large-object-heap sized and both are pure waste, so the
-        /// element is deserialized directly instead, and handed straight through when the request
-        /// asked for the untyped node in the first place.
+        /// The member is not parsed before this point: the envelope only recorded where it sits.
+        /// That leaves exactly one parse of the response body, against the UTF-8 the node sent,
+        /// with no intermediate document and no pooled array left unreturned.
         /// </remarks>
-        private object DeserializeResult(object result, Type type)
+        private object DeserializeResult(RawJson raw, Type type)
         {
-            JsonElement element;
+            ReadOnlySpan<byte> json = raw.IsEmpty ? EmptyResult : raw.Span;
 
-            if (result is null)
+            // An explicit `"result": null` arrives as a four-byte literal; it used to reach the
+            // requested type as an empty object rather than null, and callers rely on that.
+            if (json.SequenceEqual("null"u8))
             {
-                element = EmptyResult;
-            }
-            else if (result is JsonElement parsed)
-            {
-                element = parsed;
-            }
-            else
-            {
-                // A response assembled by hand rather than parsed off the wire: there is no node
-                // to reuse, so this is still the only way in.
-                return JsonSerializer.Deserialize(result.ToString(), type, serializerOptions);
+                json = EmptyResult;
             }
 
-            if (type == typeof(JsonElement) || type == typeof(object))
-            {
-                return element;
-            }
-
-            return element.Deserialize(type, serializerOptions);
+            return JsonSerializer.Deserialize(json, type, serializerOptions);
         }
 
         /// <summary>
@@ -499,21 +474,23 @@ namespace Xrpl.Client
         /// </summary>
         public (BaseResponse Response, bool Handled) HandleResponse(string message)
         {
-            return HandleResponse(JsonSerializer.Deserialize<ErrorResponse>(message, serializerOptions));
+            return HandleResponse(Encoding.UTF8.GetBytes(message));
         }
 
         /// <summary>
-        /// Same as <see cref="HandleResponse(string)"/> for a message still in its wire form.
+        /// Handles a message still in its wire form. This is the socket path.
         /// </summary>
         /// <remarks>
-        /// Preferred on the socket path: transcoding the frame to a UTF-16 string first costs a
-        /// copy at twice the byte length of the message, which for a large response is a
-        /// large-object-heap allocation spent only to hand System.Text.Json something it converts
-        /// straight back to UTF-8.
+        /// The frame is kept rather than sliced away: the envelope records where <c>result</c> sits
+        /// inside it, and both the typed deserialization and <see cref="BaseResponse.RawResult"/>
+        /// are cut from those bounds. The array is the exact-sized one the receive loop already
+        /// allocated, so keeping it costs nothing over what was allocated anyway.
         /// </remarks>
-        public (BaseResponse Response, bool Handled) HandleResponse(ReadOnlySpan<byte> utf8Message)
+        public (BaseResponse Response, bool Handled) HandleResponse(byte[] frame)
         {
-            return HandleResponse(JsonSerializer.Deserialize<ErrorResponse>(utf8Message, serializerOptions));
+            ErrorResponse response = JsonSerializer.Deserialize<ErrorResponse>(frame, serializerOptions);
+            response.Frame = frame;
+            return HandleResponse(response);
         }
 
         private (BaseResponse Response, bool Handled) HandleResponse(ErrorResponse response)

@@ -2,6 +2,7 @@ using Microsoft.VisualStudio.TestTools.UnitTesting;
 
 using System;
 using System.Collections.Generic;
+using System.IO;
 using System.Text;
 using System.Text.Json;
 using System.Threading;
@@ -9,8 +10,10 @@ using System.Threading.Tasks;
 
 using Xrpl.Client;
 using Xrpl.Client.Exceptions;
+using Xrpl.Client.Json;
 using Xrpl.Models.Ledger;
 using Xrpl.Models.Methods;
+using Xrpl.Models.Subscriptions;
 
 namespace Xrpl.Tests.ClientLib
 {
@@ -167,6 +170,82 @@ namespace Xrpl.Tests.ClientLib
             Assert.IsNotNull(rippled.Response, "the parsed error response must be attached");
             Assert.AreEqual("lgrNotFound", rippled.Response.Error);
             Assert.AreEqual("ledgerNotFound", rippled.Response.ErrorMessage);
+        }
+
+        /// <summary>
+        /// The result member is no longer parsed on the way in — the envelope only records where it
+        /// sits — so the typed deserialization now has to cut it straight out of the frame.
+        /// </summary>
+        [TestMethod]
+        public void TestUTypedResultDeserializesFromTheSlice()
+        {
+            RequestManager manager = new RequestManager();
+            RequestManager.XrplGRequest pending = Pending<LOLedgerData>(manager);
+
+            manager.HandleResponse(Encoding.UTF8.GetBytes(BuildLedgerDataMessage(pending.Id, 3)));
+
+            LOLedgerData result = (LOLedgerData)pending.Promise.GetAwaiter().GetResult();
+            Assert.IsNotNull(result);
+            Assert.IsNotNull(result.Marker);
+            Assert.AreEqual("AABBCCDD", result.Marker.ToString());
+        }
+
+        /// <summary>A response carrying the raw frame must expose the result member byte for byte.</summary>
+        [TestMethod]
+        public void TestURawResultReproducesWhatTheNodeSent()
+        {
+            RequestManager manager = new RequestManager();
+            RequestManager.XrplGRequest pending = Pending<LOLedgerData>(manager);
+
+            string message = BuildLedgerDataMessage(pending.Id, 2);
+            (BaseResponse response, bool handled) = manager.HandleResponse(Encoding.UTF8.GetBytes(message));
+
+            Assert.IsTrue(handled);
+            int start = message.IndexOf("\"result\":", StringComparison.Ordinal) + "\"result\":".Length;
+            string expected = message.Substring(start, message.Length - start - 1);
+            Assert.AreEqual(expected, response.RawResult.ToString());
+        }
+
+        /// <summary>
+        /// Bounds are only meaningful for a reader that covered one contiguous buffer, which the
+        /// Stream overloads do not. That path is disarmed by construction rather than by a check:
+        /// Frame is internal, so it stays null there and the raw result comes back empty instead of
+        /// pointing at bytes that were never checked.
+        /// </summary>
+        [TestMethod]
+        public void TestUEnvelopeParsedFromAStreamExposesNoRawResult()
+        {
+            byte[] frame = Encoding.UTF8.GetBytes("{\"id\":\"7\",\"result\":{\"a\":1}}");
+            using MemoryStream stream = new MemoryStream(frame);
+
+            ErrorResponse envelope = JsonSerializer.Deserialize<ErrorResponse>(stream, XrplJsonOptions.Default);
+
+            Assert.IsTrue(envelope.RawResult.IsEmpty);
+        }
+
+        /// <summary>An envelope built by hand has no frame, so there is nothing to hand out.</summary>
+        [TestMethod]
+        public void TestUEnvelopeWithoutFrameHasEmptyRawResult()
+        {
+            Assert.IsTrue(new ErrorResponse().RawResult.IsEmpty);
+        }
+
+        /// <summary>
+        /// Each response reads from its own frame. The receive loop hands out a fresh exact-sized
+        /// array per message, and nothing downstream may collapse two of them.
+        /// </summary>
+        [TestMethod]
+        public void TestUEnvelopesDoNotShareAFrame()
+        {
+            byte[] first = Encoding.UTF8.GetBytes("{\"id\":\"1\",\"result\":{\"n\":1}}");
+            byte[] second = Encoding.UTF8.GetBytes("{\"id\":\"2\",\"result\":{\"n\":2}}");
+
+            RequestManager manager = new RequestManager();
+            (BaseResponse a, _) = manager.HandleResponse(first);
+            (BaseResponse b, _) = manager.HandleResponse(second);
+
+            Assert.AreEqual("{\"n\":1}", a.RawResult.ToString());
+            Assert.AreEqual("{\"n\":2}", b.RawResult.ToString());
         }
 
         /// <summary>

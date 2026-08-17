@@ -3,6 +3,7 @@
 using System;
 using System.Collections.Generic;
 
+using Xrpl.Client.Json;
 using Xrpl.Client.Json.Converters;
 using Xrpl.Models.Transactions;
 
@@ -31,11 +32,43 @@ namespace Xrpl.Models.Subscriptions
         [JsonPropertyName("type")]
         public string Type { get; set; }
         /// <summary>
-        /// (WebSocket only) The value success indicates the request was successfully received and understood by the server.<br/>
-        /// Some client libraries omit this field on success.
+        /// Where the <c>result</c> member sits inside <see cref="Frame"/>.
         /// </summary>
+        /// <remarks>
+        /// Deliberately not the parsed result: binding it to <see cref="object"/> made
+        /// System.Text.Json build a <see cref="System.Text.Json.JsonElement"/> whose pooled backing
+        /// array is never returned, and the member was then parsed a second time to reach the
+        /// requested type. Recording bounds costs nothing and leaves exactly one parse, cut
+        /// straight from the frame.
+        /// </remarks>
         [JsonPropertyName("result")]
-        public object Result { get; set; }
+        [JsonConverter(typeof(JsonSliceConverter))]
+        public JsonSlice ResultSlice { get; set; }
+
+        /// <summary>
+        /// The frame this response was read from. Set by <c>RequestManager</c> right after parsing;
+        /// null on an envelope built by hand.
+        /// </summary>
+        /// <remarks>
+        /// Must stay internal. The bounds in <see cref="ResultSlice"/> are only meaningful for a
+        /// reader that covered one contiguous buffer, which the Stream overloads of
+        /// System.Text.Json do not: there it parses in chunks and the bounds come out relative to
+        /// its own read buffer, wrong and without an exception to say so. Keeping this internal
+        /// disarms that path by construction — an envelope deserialized from a stream by a
+        /// consumer has no frame, so <see cref="RawResult"/> comes back empty instead of pointing
+        /// at bytes nobody checked.
+        /// </remarks>
+        [JsonIgnore]
+        internal byte[]? Frame { get; set; }
+
+        /// <summary>
+        /// The <c>result</c> member exactly as the node sent it.
+        /// </summary>
+        [JsonIgnore]
+        public RawJson RawResult =>
+            Frame is null || ResultSlice.IsEmpty
+                ? default
+                : new RawJson(Frame, ResultSlice.Offset, ResultSlice.Length);
         /// <summary>
         /// (May be omitted) If this field is provided, the value is the string load.<br/>
         /// This means the client is approaching the rate limiting threshold where the server will disconnect this client.
