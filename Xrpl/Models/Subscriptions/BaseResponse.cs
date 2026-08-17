@@ -15,6 +15,10 @@ namespace Xrpl.Models.Subscriptions
 {
     public class BaseResponse
     {
+        // Not [JsonIgnore]: System.Text.Json never serializes private fields, so the attribute
+        // would be a no-op that misleads a reader into thinking it is load-bearing here.
+        private byte[]? _frame;
+
         /// <summary>
         /// (WebSocket only) ID provided in the request that prompted this response
         /// </summary>
@@ -33,7 +37,8 @@ namespace Xrpl.Models.Subscriptions
         [JsonPropertyName("type")]
         public string Type { get; set; }
         /// <summary>
-        /// Where the <c>result</c> member sits inside <see cref="Frame"/>.
+        /// Where the <c>result</c> member sits inside the frame passed to
+        /// <see cref="AttachFrame(byte[])"/>.
         /// </summary>
         /// <remarks>
         /// Deliberately not the parsed result: binding it to <see cref="object"/> made
@@ -47,9 +52,6 @@ namespace Xrpl.Models.Subscriptions
         [EditorBrowsable(EditorBrowsableState.Never)]
         public JsonSlice ResultSlice { get; set; }
 
-        [JsonIgnore]
-        private byte[]? _frame;
-
         /// <summary>
         /// Pairs this envelope with the frame it was read from.
         /// </summary>
@@ -61,6 +63,9 @@ namespace Xrpl.Models.Subscriptions
         /// buffer, which the Stream overloads of System.Text.Json do not, and keeping this
         /// unreachable disarms that path by construction.
         /// </remarks>
+        /// <exception cref="ArgumentNullException">
+        /// <paramref name="frame"/> is <see langword="null"/>.
+        /// </exception>
         /// <exception cref="ArgumentException">
         /// <paramref name="frame"/> is too short for the recorded slice.
         /// </exception>
@@ -71,8 +76,12 @@ namespace Xrpl.Models.Subscriptions
                 throw new ArgumentNullException(nameof(frame));
             }
 
+            // Unsigned, matching the check in the RawJson constructor: a negative Offset cast to
+            // uint becomes huge and trips the first comparison, instead of making the subtraction
+            // below go negative and comparing wrong.
             if (!ResultSlice.IsEmpty
-                && (ResultSlice.Offset > frame.Length || ResultSlice.Length > frame.Length - ResultSlice.Offset))
+                && ((uint)ResultSlice.Offset > (uint)frame.Length
+                    || (uint)ResultSlice.Length > (uint)(frame.Length - ResultSlice.Offset)))
             {
                 throw new ArgumentException(
                     $"Frame of {frame.Length} bytes does not contain the recorded result at "

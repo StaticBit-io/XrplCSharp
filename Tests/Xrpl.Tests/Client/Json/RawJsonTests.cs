@@ -167,15 +167,22 @@ public class TestURawJson
         Assert.AreNotEqual(new RawJson(frame, 0, 3).GetHashCode(), new RawJson(frame, 3, 3).GetHashCode());
     }
 
+    /// <summary>
+    /// The payload is deliberately awkward: the key differs in case and the number arrives as a
+    /// string. Both are read only because XrplJsonOptions.Default sets PropertyNameCaseInsensitive
+    /// and AllowReadingFromString — under bare options this deserializes to zero, which is what
+    /// makes the test able to tell the two apart.
+    /// </summary>
     [TestMethod]
     public void TestURawJsonDeserializesWithLibraryOptions()
     {
-        byte[] frame = Encoding.UTF8.GetBytes("{\"result\":{\"ledger_index\":9,\"marker\":\"AABB\"}}");
+        byte[] frame = Encoding.UTF8.GetBytes("{\"result\":{\"Ledger_Index\":\"9\",\"marker\":\"AABB\"}}");
         RawJson raw = new RawJson(frame, 10, frame.Length - 11);
 
         LOLedgerData typed = raw.Deserialize<LOLedgerData>();
 
         Assert.IsNotNull(typed);
+        Assert.AreEqual(9u, typed.LedgerIndex);
         Assert.AreEqual("AABB", typed.Marker.ToString());
     }
 
@@ -191,10 +198,10 @@ public class TestURawJson
         byte[] frame = Encoding.UTF8.GetBytes("{\"result\":{\"a\":1}}");
         JsonElement element = new RawJson(frame, 10, 7).ToJsonElement();
 
-        frame[11] = (byte)'z';
-        GC.Collect(2, GCCollectionMode.Forced, blocking: true);
+        // Wipe the whole window the element was parsed from, not just one byte: if the element
+        // aliased the frame instead of copying out of it, this would corrupt every field it reads.
+        Array.Clear(frame, 10, 7);
 
-        // The element is self-contained: it copied out of the frame rather than aliasing it.
         Assert.AreEqual(1, element.GetProperty("a").GetInt32());
     }
 
@@ -204,22 +211,46 @@ public class TestURawJson
         Assert.AreEqual(JsonValueKind.Undefined, default(RawJson).ToJsonElement().ValueKind);
     }
 
+    /// <summary>The property is found whether it comes first or after another top-level member.</summary>
     [TestMethod]
-    public void TestURawJsonFindsTopLevelPropertiesOnly()
+    public void TestURawJsonFindsAPropertyAtTheTopLevel()
     {
         Assert.IsTrue(Window("{\"marker\":1,\"a\":2}").HasTopLevelProperty("marker"u8));
+
+        // Reaching it means the preceding member, itself an object holding an array, was skipped
+        // whole rather than walked into.
         Assert.IsTrue(Window("{\"a\":{\"b\":[1,2]},\"marker\":1}").HasTopLevelProperty("marker"u8));
+    }
+
+    /// <summary>A property of the same name nested inside another member is not the top-level one.</summary>
+    [TestMethod]
+    public void TestURawJsonDoesNotMistakeANestedOccurrenceForTopLevel()
+    {
         Assert.IsFalse(Window("{\"a\":[{\"marker\":1}]}").HasTopLevelProperty("marker"u8));
+    }
+
+    /// <summary>An empty object, a non-object document, and an empty window all answer false.</summary>
+    [TestMethod]
+    public void TestURawJsonHasNoTopLevelPropertyOnANonObjectOrEmptyInput()
+    {
         Assert.IsFalse(Window("{}").HasTopLevelProperty("marker"u8));
         Assert.IsFalse(Window("[1,2]").HasTopLevelProperty("marker"u8));
         Assert.IsFalse(default(RawJson).HasTopLevelProperty("marker"u8));
-        Assert.IsTrue(Window("{\"\\u006darker\":1}").HasTopLevelProperty("marker"u8));
-
-        static RawJson Window(string json)
-        {
-            byte[] frame = Encoding.UTF8.GetBytes(json);
-            return new RawJson(frame, 0, frame.Length);
-        }
     }
 
+    /// <summary>
+    /// Works only because the scan goes through ValueTextEquals, which unescapes. Swapping it for
+    /// a raw byte comparison would pass every other case here and break this one silently.
+    /// </summary>
+    [TestMethod]
+    public void TestURawJsonMatchesAnEscapedTopLevelKey()
+    {
+        Assert.IsTrue(Window("{\"\\u006darker\":1}").HasTopLevelProperty("marker"u8));
+    }
+
+    private static RawJson Window(string json)
+    {
+        byte[] frame = Encoding.UTF8.GetBytes(json);
+        return new RawJson(frame, 0, frame.Length);
+    }
 }

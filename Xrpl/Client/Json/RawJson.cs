@@ -81,9 +81,11 @@ namespace Xrpl.Client.Json
         /// options of their own: the XRPL models depend on the converters in
         /// <see cref="XrplJsonOptions.Default"/>, and bare options silently produce a different
         /// object. Returns <c>default</c> for an empty window rather than throwing — an absent
-        /// member is not a malformed one.
+        /// member is not a malformed one. That default is ambiguous for a value type, where it
+        /// coincides with a legitimately-parsed zero; <see cref="IsEmpty"/> is what tells the two
+        /// apart.
         /// </remarks>
-        public T Deserialize<T>()
+        public T? Deserialize<T>()
         {
             return IsEmpty ? default : JsonSerializer.Deserialize<T>(Span, XrplJsonOptions.Default);
         }
@@ -94,16 +96,20 @@ namespace Xrpl.Client.Json
         /// <remarks>
         /// The element copies out of the frame, so it stays readable after the frame is gone —
         /// unlike <see cref="Span"/>, which aliases it. An empty window yields
-        /// <see cref="JsonValueKind.Undefined"/>.
+        /// <see cref="JsonValueKind.Undefined"/>. Parses over <see cref="ReadOnlyMemory{T}"/>
+        /// directly rather than through <see cref="ToArray"/>: <c>JsonDocument.Parse</c> does not
+        /// copy a memory argument, so going through <c>ToArray</c> first would pay for a copy this
+        /// call does not need — <see cref="JsonElement.Clone"/> is what makes the result
+        /// self-contained, and that is the only copy that has to happen.
         /// </remarks>
         public JsonElement ToJsonElement()
         {
-            if (IsEmpty)
+            if (_frame is null || _length == 0)
             {
                 return default;
             }
 
-            using (JsonDocument document = JsonDocument.Parse(ToArray()))
+            using (JsonDocument document = JsonDocument.Parse(_frame.AsMemory(_offset, _length)))
             {
                 return document.RootElement.Clone();
             }

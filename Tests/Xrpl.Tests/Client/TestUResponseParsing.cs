@@ -606,5 +606,12 @@ namespace Xrpl.Tests.ClientLib
             Assert.ThrowsExactly<ArgumentException>(() => envelope.AttachFrame(Encoding.UTF8.GetBytes("{}")));
         }
 
+        /// <summary>The other half of pairing: a missing frame is rejected too, not just a short one.</summary>
+        [TestMethod]
+        public void TestUAttachFrameRejectsANullFrame()
+        {
+            Assert.ThrowsExactly<ArgumentNullException>(() => new ErrorResponse().AttachFrame(null));
+        }
+
     }
 }
