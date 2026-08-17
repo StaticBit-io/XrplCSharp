@@ -1742,7 +1742,7 @@ public class Connection
             ? null
             : new AdminCredentials(config.AdminUser, config.AdminPassword);
 
-    public async Task<object> Request(
+    public async Task<XrplResponse<Dictionary<string, object>>> Request(
         Dictionary<string, object> request,
         TimeSpan? timeout = null,
         RequestFailurePolicy? policyOverride = null,
@@ -1760,10 +1760,11 @@ public class Connection
             requestManager.Reject(_request.Id, error);
         }
 
-        return await _request.Promise;
+        object resolved = await _request.Promise;
+        return XrplResponse.From<Dictionary<string, object>>(resolved);
     }
 
-    public async Task<object> GRequest<T, R>(
+    public async Task<XrplResponse<T>> GRequest<T, R>(
         R request,
         TimeSpan? timeout = null,
         RequestFailurePolicy? policyOverride = null,
@@ -1781,7 +1782,8 @@ public class Connection
             requestManager.Reject(_request.Id, error);
         }
 
-        return await _request.Promise;
+        object resolved = await _request.Promise;
+        return XrplResponse.From<T>(resolved);
     }
 
     public string GetUrl() => url;

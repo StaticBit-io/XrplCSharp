@@ -903,7 +903,7 @@ namespace Xrpl.Client
         }
 
         /// <inheritdoc />
-        public async Task<XrplResponse<Dictionary<string, object>>> Request(Dictionary<string, object> request, CancellationToken cancellationToken = default)
+        public Task<XrplResponse<Dictionary<string, object>>> Request(Dictionary<string, object> request, CancellationToken cancellationToken = default)
         {
             //string account = request["Account"] ? EnsureClassicAddress((string)request["account"]) : null;
             //request["Account"] = account;
@@ -918,33 +918,14 @@ namespace Xrpl.Client
                 request[ApiVersionField] = ApiVersion;
             }
 
-            object resolved = await this.connection.Request(request, cancellationToken: cancellationToken);
-            return Wrap<Dictionary<string, object>>(resolved);
+            return this.connection.Request(request, cancellationToken: cancellationToken);
         }
 
         /// <inheritdoc />
-        public async Task<XrplResponse<T>> GRequest<T, R>(R request, CancellationToken cancellationToken = default) where R : BaseRequest
+        public Task<XrplResponse<T>> GRequest<T, R>(R request, CancellationToken cancellationToken = default) where R : BaseRequest
         {
             request.ApiVersion ??= ApiVersion;
-            object resolved = await this.connection.GRequest<T, R>(request, cancellationToken: cancellationToken);
-            return Wrap<T>(resolved);
-        }
-
-        /// <summary>
-        /// Turns what the request manager resolved into the response handed to the caller: the
-        /// typed projection, paired with the envelope it was read from.
-        /// </summary>
-        private static XrplResponse<T> Wrap<T>(object resolved)
-        {
-            ResolvedResponse carried = (ResolvedResponse)resolved;
-            BaseResponse envelope = carried.Envelope;
-
-            return new XrplResponse<T>(
-                (T)carried.Result,
-                envelope?.RawResult ?? default,
-                envelope?.ApiVersion,
-                envelope?.Warnings,
-                envelope?.Forwarded ?? false);
+            return this.connection.GRequest<T, R>(request, cancellationToken: cancellationToken);
         }
 
         public string EnsureClassicAddress(string address)

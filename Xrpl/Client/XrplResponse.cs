@@ -1,6 +1,7 @@
 using System;
 using System.Collections.Generic;
 
+using Xrpl.Client.Exceptions;
 using Xrpl.Client.Json;
 using Xrpl.Models.Subscriptions;
 
@@ -32,12 +33,14 @@ namespace Xrpl.Client
             T result,
             RawJson raw,
             uint? apiVersion,
+            string warning,
             IReadOnlyList<RippleResponseWarning> warnings,
             bool forwarded)
         {
             Result = result;
             Raw = raw;
             ApiVersion = apiVersion;
+            Warning = warning;
             _warnings = warnings;
             Forwarded = forwarded;
         }
@@ -54,6 +57,17 @@ namespace Xrpl.Client
         /// <summary>The API version the node answered on, when it reported one.</summary>
         public uint? ApiVersion { get; }
 
+        /// <summary>
+        /// The node's rate-limit signal, when it sent one — the literal <c>"load"</c>, meaning this
+        /// client is approaching the threshold at which the server will disconnect it.
+        /// </summary>
+        /// <remarks>
+        /// A separate member from <see cref="Warnings"/> because rippled reports it separately, and
+        /// it is not reachable through <see cref="Raw"/> either: that is the <c>result</c> member,
+        /// while this lives in the envelope around it.
+        /// </remarks>
+        public string Warning { get; }
+
         /// <summary>Warnings the node attached to this response. Never null.</summary>
         /// <remarks>
         /// rippled attaches these under load and on a reporting-mode server. Before this type they
@@ -65,5 +79,39 @@ namespace Xrpl.Client
         /// True when a Reporting Mode server forwarded this request to a P2P server and back.
         /// </summary>
         public bool Forwarded { get; }
+    }
+
+    /// <summary>
+    /// Builds <see cref="XrplResponse{T}"/> from what a resolved request left in its promise.
+    /// </summary>
+    internal static class XrplResponse
+    {
+        /// <summary>
+        /// Unpacks the pair the request manager put into the promise.
+        /// </summary>
+        /// <remarks>
+        /// The manager knows the target type only as a <see cref="System.Type"/>, so it cannot
+        /// build the generic response itself and carries both halves instead. This is where they
+        /// come back together — inside the connection, so that no public method hands out an
+        /// object the caller has no type to name.
+        /// </remarks>
+        internal static XrplResponse<T> From<T>(object resolved)
+        {
+            if (resolved is not ResolvedResponse carried)
+            {
+                throw new XrplException(
+                    $"A resolved request carried {resolved?.GetType().Name ?? "null"} instead of its response envelope.");
+            }
+
+            BaseResponse envelope = carried.Envelope;
+
+            return new XrplResponse<T>(
+                (T)carried.Result,
+                envelope?.RawResult ?? default,
+                envelope?.ApiVersion,
+                envelope?.Warning,
+                envelope?.Warnings,
+                envelope?.Forwarded ?? false);
+        }
     }
 }
