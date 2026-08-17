@@ -45,8 +45,10 @@ namespace Xrpl.Client.Json
             }
             else if ((uint)offset > (uint)frame.Length || (uint)length > (uint)(frame.Length - offset))
             {
+                // Name the argument actually at fault: an out-of-range offset leaves length blameless,
+                // and reporting it as the culprit sends the reader after the wrong number.
                 throw new ArgumentOutOfRangeException(
-                    nameof(length),
+                    (uint)offset > (uint)frame.Length ? nameof(offset) : nameof(length),
                     $"Window [{offset}, {offset + (long)length}) does not lie inside a frame of {frame.Length} bytes.");
             }
 

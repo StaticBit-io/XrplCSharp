@@ -143,4 +143,27 @@ public class TestURawJson
         Assert.AreEqual("\"é中😀\"", raw.ToString());
         Assert.AreEqual(frame.Length - 6, raw.Length);
     }
+
+    /// <summary>
+    /// Equality is identity of the window, not of the bytes: same frame, same bounds. Comparing
+    /// content is what Span is for. Pinned here because this is a public contract — changing it
+    /// later is a breaking change, and an untested contract drifts just as quietly as an unstated one.
+    /// </summary>
+    [TestMethod]
+    public void TestURawJsonEqualityIsIdentityOfTheWindow()
+    {
+        byte[] frame = Encoding.UTF8.GetBytes("{\"a\":1}");
+        byte[] twin = Encoding.UTF8.GetBytes("{\"a\":1}");
+
+        Assert.IsTrue(new RawJson(frame, 0, 3) == new RawJson(frame, 0, 3));
+        Assert.IsTrue(new RawJson(frame, 0, 3) != new RawJson(frame, 3, 3));
+        Assert.IsTrue(new RawJson(frame, 0, 3) != new RawJson(twin, 0, 3));
+        Assert.IsTrue(default(RawJson) == default(RawJson));
+        Assert.IsFalse(new RawJson(frame, 0, 3).Equals("not a RawJson"));
+
+        // The bounds have to reach the hash: the default struct hash used the frame reference alone,
+        // so two different windows onto one frame collided.
+        Assert.AreNotEqual(new RawJson(frame, 0, 3).GetHashCode(), new RawJson(frame, 3, 3).GetHashCode());
+    }
+
 }
