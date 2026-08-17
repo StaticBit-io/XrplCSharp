@@ -1,4 +1,4 @@
-using Microsoft.VisualStudio.TestTools.UnitTesting;
+﻿using Microsoft.VisualStudio.TestTools.UnitTesting;
 
 using System;
 using System.Collections.Generic;
@@ -311,8 +311,12 @@ namespace Xrpl.Tests.ClientLib
 
             Console.WriteLine($"response {message.Length:N0} bytes, {perResponse / 1024 / 1024:F2} MB allocated per response ({ratio:F2}x)");
 
+            // Measured 1.89x. Note this budget is blind to the change that removed the
+            // intermediate document: asking for JsonElement builds one either way, so the figure
+            // is identical before and after. TestTypedResponseParsingStaysWithinItsAllocationBudget
+            // is the one that sees it.
             Assert.IsTrue(
-                ratio < 4.0,
+                ratio < 2.4,
                 $"response parsing allocated {ratio:F2}x the response size, budget is 4x " +
                 "(the pre-fix double round-trip cost about 7x here)");
         }
@@ -499,5 +503,93 @@ namespace Xrpl.Tests.ClientLib
                 throw new InvalidOperationException("ledger_data page carried no objects");
             }
         }
+
+        /// <summary>
+        /// The typed path is where removing the intermediate document shows: the result member is
+        /// no longer parsed into a JsonElement on the way in, only its bounds are recorded, so the
+        /// only parse is the one that produces the requested type. The JsonElement budget above
+        /// cannot see this - asking for JsonElement builds one either way.
+        /// </summary>
+        [TestMethod]
+        public void TestTypedResponseParsingStaysWithinItsAllocationBudget()
+        {
+            const int Entries = 4096;
+            const int Rounds = 12;
+
+            RequestManager manager = new RequestManager();
+
+            RequestManager.XrplGRequest warmup = Pending<LOLedgerData>(manager);
+            byte[] message = Encoding.UTF8.GetBytes(BuildLedgerDataMessage(warmup.Id, Entries));
+            const int IdOffset = 7;
+            manager.HandleResponse(message);
+            _ = warmup.Promise.GetAwaiter().GetResult();
+
+            GC.Collect(2, GCCollectionMode.Forced, blocking: true);
+            long before = GC.GetAllocatedBytesForCurrentThread();
+
+            for (int i = 0; i < Rounds; i++)
+            {
+                RequestManager.XrplGRequest pending = Pending<LOLedgerData>(manager);
+                WriteId(message, IdOffset, pending.Id);
+                manager.HandleResponse(message);
+                LOLedgerData result = (LOLedgerData)pending.Promise.GetAwaiter().GetResult();
+                Assert.AreEqual(Entries, result.State.Count);
+            }
+
+            long allocated = GC.GetAllocatedBytesForCurrentThread() - before;
+            double perResponse = allocated / (double)Rounds;
+            double ratio = perResponse / message.Length;
+
+            Console.WriteLine($"TYPED response {message.Length:N0} bytes, {perResponse / 1024 / 1024:F2} MB per response ({ratio:F2}x)");
+
+            // Measured 5.57x here against 7.45x on the commit before the result member became a
+            // slice - 1.6 MB less per 889 KB response. The bound sits between the two, so it fails
+            // if the intermediate document comes back and passes through ordinary GC jitter.
+            Assert.IsTrue(ratio < 6.5, $"typed path cost {ratio:F2}x of the message");
+        }
+
+
+        /// <summary>
+        /// An envelope must not retain more than the frame it shares. Before the result member
+        /// became a slice, System.Text.Json built a JsonElement for it whose pooled backing array —
+        /// 65 536 bytes for a 36 691-byte response — was never returned to the pool, and every
+        /// envelope carried its own.
+        /// </summary>
+        [TestMethod]
+        public void TestUEnvelopeRetainsNoMoreThanTheFrame()
+        {
+            byte[] frame = Encoding.UTF8.GetBytes(BuildLedgerDataMessage(Guid.NewGuid(), 200));
+            const int Count = 50;
+
+            GC.Collect(2, GCCollectionMode.Forced, blocking: true);
+            GC.WaitForPendingFinalizers();
+            GC.Collect(2, GCCollectionMode.Forced, blocking: true);
+            long before = GC.GetTotalMemory(true);
+
+            List<BaseResponse> retained = new List<BaseResponse>(Count);
+            for (int i = 0; i < Count; i++)
+            {
+                retained.Add(JsonSerializer.Deserialize<ErrorResponse>(frame, XrplJsonOptions.Default));
+            }
+
+            GC.Collect(2, GCCollectionMode.Forced, blocking: true);
+            GC.WaitForPendingFinalizers();
+            GC.Collect(2, GCCollectionMode.Forced, blocking: true);
+            long perEnvelope = (GC.GetTotalMemory(true) - before) / Count;
+
+            GC.KeepAlive(retained);
+            Console.WriteLine($"envelope retains {perEnvelope} B on its own (frame is {frame.Length} B, shared)");
+
+            // Bound sized against what is actually there, measured: an envelope with an "id"
+            // retains 3 672 B, without one 217 B. The 3 455 B difference is BaseResponse.Id, still
+            // typed object, so System.Text.Json builds a JsonElement for it and its pooled array is
+            // never returned - the same defect as the old result member, one field over. Fixing Id
+            // is a separate task; until then the bound sits above that known remainder and below a
+            // returning result document, which was 65 536 B per response on its own.
+            Assert.IsTrue(
+                perEnvelope < 8192,
+                $"envelope retained {perEnvelope} B on its own; a pooled result document is back");
+        }
+
     }
 }
