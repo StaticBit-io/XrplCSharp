@@ -4,6 +4,31 @@
 
 Level 0 of the raw-response work. The goal of the whole effort: a consumer cannot currently get the text a node actually sent — only the typed model — and re-serializing that model differs from the original in both directions, dropping fields the model lacks and inventing zeros for non-nullable CLR properties. This level lays the foundation and pays for itself; the API that hands the raw text out lands in the next level.
 
+* **Methods now return `XrplResponse<T>`: the typed result and, beside it, the bytes the node sent** (**breaking**) — the point of the whole effort. A consumer could not get what a node actually said, only the model, and re-serializing that model differs from the original in both directions. Measured on live mainnet responses at `api_version = 2`: `close_time_iso`, `ctid`, `tx_json.DeliverMax` and `meta_blob` are dropped; `PreviousFields.Flags = 0`, `LedgerEntryType` and — on a Payment — `TransactionType = "AccountSet"` are invented, 156 fabricated members on a ten-entry `account_tx` alone. For a wallet rendering a transaction so a person can check what they are signing, that is false precision.
+  * `XrplResponse<T>` carries `Result` (the projection), `Raw` (the `result` member exactly as sent), and the envelope the client used to unwrap and discard: `ApiVersion`, `Warning`, `Warnings`, `Forwarded`. `Warnings` is never null
+  * **no implicit conversion to `T`, deliberately.** Measured against this codebase it would carry fewer than half the call sites — 248 with an explicit type against 273 using `var`, which break either way — leaving a partial compatibility harder to migrate than a clean break, and hiding that `Raw` exists at all
+  * `RawJson` gained `Deserialize<T>()`, `ToJsonElement()` and `HasTopLevelProperty()`, so a consumer does not reach for `JsonSerializer` with options of their own — the XRPL models depend on the converters in `XrplJsonOptions.Default`, and bare options silently produce a different object
+  * `BaseResponse.Frame` (settable) became `AttachFrame(byte[])`: bounds are checked once where the frame and the recorded slice meet, instead of lazily inside every read of `RawResult`
+  * `warning` — the literal `"load"`, rippled's rate-limit signal — reaches the caller for the first time. It is not reachable through `Raw` either: that is the `result` member, while `warning` lives in the envelope around it
+
+  **Migrating.** There is no `[Obsolete]` shim, so here is the move:
+
+  ```csharp
+  // was
+  AccountInfo info = await client.AccountInfo(request);
+
+  // now
+  AccountInfo info = (await client.AccountInfo(request)).Result;
+
+  // and what the work was for
+  XrplResponse<AccountInfo> response = await client.AccountInfo(request);
+  string asTheNodeSentIt = response.Raw.ToString();
+  ```
+
+  * **breaking:** 43 members change return type — 41 typed methods, `Request(Dictionary<string, object>)`, and `GRequest<T, R>` itself. `Connection.Request` and `Connection.GRequest<T, R>` change with them, and `RequestManager`'s `XrplRequest.Promise` / `XrplGRequest.Promise` now resolve to `ResolvedResponse` rather than the value directly. `ResolvedResponse` and the `XrplResponse.From<T>` unpacker are public for exactly that reason: `RequestManager` is public, and a caller working at that level has to be able to name what it gets back
+  * `TestUXrplResponse` proves the feature end to end over a socket: a scripted response with irregular whitespace and a member no model knows comes back byte for byte in `Raw`, while the same member is provably absent from the re-serialized `Result`. The envelope is asserted on both the typed and the untyped path
+  * costs nothing measurable: `XrplResponse<T>` is a 48-byte readonly struct that lands directly in the async method's result field, and all three allocation budgets are unchanged after the switch — 1.89x on the `JsonElement` path, 5.57x typed, 2.18x over the socket
+
 * **The `result` member was parsed twice and its intermediate document was never given back** (**breaking**) — `BaseResponse.Result` was typed `object`, which System.Text.Json fills with a self-contained `JsonElement`. Building it costs a `JsonDocument.ParseValue`, which rents its backing array from `ArrayPool` and never returns it: **65 536 bytes rented for a 36 691-byte response**, held for a subtree that was then deserialized a second time to reach the requested type. The envelope now records *where* `result` sits instead of materializing it, and the requested type is cut straight from those bytes — one parse, no intermediate document, nothing left unreturned.
   * `JsonSlice` (byte offset + length) and `JsonSliceConverter`, which reaches the bounds through `Utf8JsonReader.TokenStartIndex` / `Skip()` / `BytesConsumed` without materializing the subtree. `Write` throws `NotSupportedException`: a response envelope describes what a node sent, and re-emitting it from the parsed form is exactly the plausible-but-different document this work exists to remove
   * `RawJson` — a window onto the frame rather than a copy of it. The frame is the exact-sized `new byte[]` the receive loop already allocates per message, so holding the window costs nothing beyond keeping that array alive. UTF-16 is never stored; `ToString()` builds it on demand. `ToArray()` is the documented way to outlive the response without pinning the whole frame
