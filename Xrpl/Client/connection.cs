@@ -3,6 +3,7 @@ using System.Collections.Generic;
 using System.Diagnostics;
 using System.IO;
 using System.Net.WebSockets;
+using System.Text;
 using System.Text.Json;
 using System.Threading;
 using System.Threading.Channels;
@@ -1060,7 +1061,10 @@ public class Connection
                 }
             });
 
-            ws.OnMessageReceived(async (m, ws) =>
+            // Bound to the binary callback rather than the string one: the frame is already UTF-8
+            // and that is what the JSON reader wants, so the UTF-16 copy of every message - twice
+            // the byte length, on the large object heap for a big response - is never made.
+            ws.OnBinaryMessage(async (m, ws) =>
             {
                 try
                 {
@@ -1070,7 +1074,7 @@ public class Connection
                 }
                 catch (Exception ex)
                 {
-                    Debug.WriteLine($"{DateTime.Now}OnMessageReceived callback error: {ex.Message}");
+                    Debug.WriteLine($"{DateTime.Now}OnBinaryMessage callback error: {ex.Message}");
                 }
             });
             ws.OnDisconnect(async (closeStatus, closeDescription, closingSocket) =>
@@ -2864,6 +2868,36 @@ public class Connection
     }
 
     /// <summary>
+    /// <see cref="IsLikelyResponse(string)"/> over the raw frame, so the discriminator scan does
+    /// not force a UTF-16 copy of the message. Byte-wise scanning is equivalent here: the tokens
+    /// looked for are ASCII, and UTF-8 never encodes them inside a multi-byte sequence.
+    /// </summary>
+    private bool IsLikelyResponse(ReadOnlySpan<byte> utf8Message)
+    {
+        if (utf8Message.Length < 10)
+            return false;
+
+        int firstBrace = utf8Message.IndexOf((byte)'{');
+        if (firstBrace < 0 || firstBrace + 10 >= utf8Message.Length)
+            return false;
+
+        ReadOnlySpan<byte> rest = utf8Message.Slice(firstBrace + 1);
+        int idIndex = rest.IndexOf("\"id\""u8);
+        if (idIndex < 0)
+            return false;
+
+        int checkEnd = Math.Min(rest.Length, idIndex + 10);
+        for (int i = idIndex + 4; i < checkEnd; i++)
+        {
+            byte c = rest[i];
+            if (c == (byte)':') return true; // This is a response
+            if (c != (byte)' ' && c != (byte)'\t' && c != (byte)'\n' && c != (byte)'\r') break;
+        }
+
+        return false;
+    }
+
+    /// <summary>
     /// Starts the background message processor for stream messages.
     /// Creates a new session-bound channel and processor task.
     /// Uses Channel&lt;T&gt; for true async support in WebAssembly single-threaded environment.
@@ -3127,13 +3161,55 @@ public class Connection
     /// concurrently from the ThreadPool. Handler implementations MUST be thread-safe
     /// or marshal to their own synchronization context (e.g., UI thread).
     /// </summary>
-    private async Task IOnMessageFastPath(string message)
+    private Task IOnMessageFastPath(string message)
+    {
+        return IOnMessageFastPath(message, null);
+    }
+
+    /// <summary>
+    /// Overload for a message still in its wire form, used by the socket callback. See
+    /// <see cref="IOnMessageFastPath(string, byte[])"/> for why the bytes are kept as they are.
+    /// </summary>
+    private Task IOnMessageFastPath(byte[] utf8Message)
+    {
+        return IOnMessageFastPath(null, utf8Message);
+    }
+
+    /// <summary>
+    /// Sent to <see cref="OnError"/> in place of a message that could not be turned into text.
+    /// A literal, so reporting the failure needs no allocation of its own.
+    /// </summary>
+    private const string UnavailableMessageText = "<message could not be materialized: out of memory>";
+
+    /// <summary>
+    /// Exactly one of <paramref name="message"/> and <paramref name="utf8Message"/> carries the
+    /// message; the other is null.
+    /// </summary>
+    /// <remarks>
+    /// A response is parsed straight out of <paramref name="utf8Message"/> when it is the one
+    /// present, so the UTF-16 copy of the message - twice its byte length - is never made for the
+    /// common case. Everything that genuinely needs text (stream messages, the warning and error
+    /// callbacks) asks for it through <c>Text()</c>, which materializes it once and only then.
+    /// </remarks>
+    private async Task IOnMessageFastPath(string message, byte[] utf8Message)
     {
         lastActivityTime = DateTime.UtcNow;
 
+        // Null in, null out: the string entry point is public, and a null message used to travel
+        // down to the stream processor and be reported through OnError rather than throw here.
+        string Text()
+        {
+            if (message is null && utf8Message is not null)
+            {
+                message = Encoding.UTF8.GetString(utf8Message);
+            }
+
+            return message;
+        }
+
         // Scan message for "id" property to detect response messages
-        var isResponse = IsLikelyResponse(message);
-        
+        var isResponse = utf8Message is null ? IsLikelyResponse(message) : IsLikelyResponse(utf8Message);
+
         if (isResponse)
         {
             // This is a response (including ping/pong) - process immediately with full parsing
@@ -3141,20 +3217,42 @@ public class Connection
             BaseResponse data;
             bool handled;
             try
-            {    
+            {
                 // FIRST: Handle response immediately to unblock any waiting requests (like ping)
                 // This is the most time-critical operation
-                (data, handled) = requestManager.HandleResponse(message);
+                (data, handled) = utf8Message is null
+                    ? requestManager.HandleResponse(message)
+                    : requestManager.HandleResponse(utf8Message);
             }
             catch (Exception error)
             {
                 var errInfo = XrplErrorClassifier.Classify(error);
+                if (OnError is null)
+                {
+                    return;
+                }
+
+                // The report has to survive whatever produced it. A response that fails to parse
+                // is most often a heap that has just run out, and a UTF-16 copy of the whole
+                // message is the largest allocation left on this path - if it cannot be had, the
+                // classification still goes out rather than the notification being lost to a
+                // second failure inside the handler.
+                string capturedText;
+                try
+                {
+                    capturedText = Text();
+                }
+                catch (OutOfMemoryException)
+                {
+                    capturedText = UnavailableMessageText;
+                }
+
                 // Fire-and-forget for error callback - don't block
                 _ = Task.Run(async () =>
                 {
                     if (OnError is not null)
                     {
-                        await OnError.Invoke(error: "error", errorMessage: "badMessage", errInfo.UserMessage, message);
+                        await OnError.Invoke(error: "error", errorMessage: "badMessage", errInfo.UserMessage, capturedText);
                     }
                 });
                 return;
@@ -3164,16 +3262,23 @@ public class Connection
             {
                 // Message has "id" but no matching pending request — this is an async
                 // follow-up (e.g. path_find updates). Route to stream processing.
-                EnqueueStreamMessage(message);
+                EnqueueStreamMessage(Text());
                 return;
             }
 
             // THEN: Handle warnings and errors in background (fire-and-forget)
-            // These are informational and should not delay response processing
-            if (data.Warning != null || data.Warnings is { Count: > 0 })
+            // These are informational and should not delay response processing.
+            // Materialize the text only when something is actually listening: rippled attaches a
+            // warning to every response under load and on a reporting-mode server, so building a
+            // UTF-16 copy for a callback nobody registered would put back, page after page,
+            // exactly the allocation this path exists to avoid.
+            bool warningNeedsText = (data.Warning != null && OnWarning is not null)
+                                    || (data.Warnings is { Count: > 0 } && OnServerWarning is not null);
+
+            if (warningNeedsText)
             {
                 var capturedData = data;
-                var capturedMessage = message;
+                var capturedMessage = Text();
                 _ = Task.Run(async () =>
                 {
                     if (capturedData.Warning != null && OnWarning is not null)
@@ -3192,7 +3297,7 @@ public class Connection
         {
             // This is a stream message (no "id") - process asynchronously
             // to avoid blocking the receive loop and causing ping timeouts
-            EnqueueStreamMessage(message);
+            EnqueueStreamMessage(Text());
         }
     }
 
