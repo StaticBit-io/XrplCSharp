@@ -317,7 +317,7 @@ namespace Xrpl.Tests.ClientLib
             // is the one that sees it.
             Assert.IsTrue(
                 ratio < 2.4,
-                $"response parsing allocated {ratio:F2}x the response size, budget is 4x " +
+                $"response parsing allocated {ratio:F2}x the response size, budget is 2.4x " +
                 "(the pre-fix double round-trip cost about 7x here)");
         }
 
@@ -556,6 +556,7 @@ namespace Xrpl.Tests.ClientLib
         /// envelope carried its own.
         /// </summary>
         [TestMethod]
+        [DoNotParallelize]
         public void TestUEnvelopeRetainsNoMoreThanTheFrame()
         {
             byte[] frame = Encoding.UTF8.GetBytes(BuildLedgerDataMessage(Guid.NewGuid(), 200));

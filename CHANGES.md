@@ -1,4 +1,4 @@
-﻿# Changes
+# Changes
 
 ## Unreleased
 
@@ -11,6 +11,22 @@ Level 0 of the raw-response work. The goal of the whole effort: a consumer canno
   * **breaking:** `BaseResponse.Result` is gone, replaced by `ResultSlice` (bounds) and `RawResult` (the bytes as sent). `RequestManager.HandleResponse(ReadOnlySpan<byte>)` is gone, replaced by `HandleResponse(byte[])` — a span cannot be stored, and the frame must now outlive the call. As a consequence `HandleResponse(null)` no longer compiles: it is ambiguous between the `string` and `byte[]` overloads. No `[Obsolete]` grace period, consistent with `Path.TypeHex` in 10.11.0.0
   * **ownership moved with the signature.** The returned response keeps the array and cuts `RawResult` from it, so a caller must not reuse or mutate the buffer it passed — a pooled or ring buffer would silently rewrite a response already handed out. `TestUResponseAliasesTheFrameItWasGiven` pins this
   * `Frame` is deliberately `internal`. The bounds are only meaningful for a reader that covered one contiguous buffer, which the `Stream` overloads do not — there the offsets come out relative to the chunk, wrong and with no exception to say so (measured: offset 40 012 instead of 40 019 on a 40 KB payload). Keeping the setter internal disarms that path by construction: an envelope a consumer deserializes from a stream has no frame, so `RawResult` comes back empty rather than pointing at bytes nobody checked
+  * **migrating off `Result`.** There is no `[Obsolete]` shim, so here is the whole move. Reading a member:
+
+    ```csharp
+    // was
+    JsonElement result = (JsonElement)response.Result;
+    string marker = result.GetProperty("marker").GetString();
+
+    // now — parse the bytes the node sent
+    using JsonDocument document = JsonDocument.Parse(response.RawResult.Span);
+    string marker = document.RootElement.GetProperty("marker").GetString();
+    ```
+
+    Or, for the whole member as a value: `JsonSerializer.Deserialize<T>(response.RawResult.Span, XrplJsonOptions.Default)`. `response.RawResult.ToString()` gives the text verbatim, and allocates a UTF-16 copy each call — hold the result if you need it twice
+  * **`RawResult` is empty on any envelope you deserialize yourself.** It is populated only by `RequestManager` on the request path. Stream messages, `LedgerStreamResponse` and friends, and anything you hand to `JsonSerializer.Deserialize<BaseResponse>` come back with no frame and therefore an empty `RawResult` — by design, see the `internal Frame` note above. None of those paths read `result` before, either
+  * **behaviour shift on a hand-assembled response.** `RequestManager.Resolve` used to fall back to `JsonSerializer.Deserialize(result.ToString(), type)` for a `BaseResponse` that was built rather than parsed off the wire. Such a response now has no frame, so `DeserializeResult` substitutes `{}` and the promise **completes successfully with a defaulted object** instead of carrying the assembled values. Unreachable through the client — the only caller of `Resolve` always has a frame — but `Resolve` is public, and the old fallback is gone
+  * **the string path trades transit for retention.** Its total allocation drops, but roughly one message-length of that is no longer a transient buffer: the frame is retained for as long as the response is. Consumers holding many responses — a paged crawl kept in memory — should keep `RawResult.ToArray()` and let the frame go
   * measured per message on the socket path — the one production uses, since `Connection` binds `OnBinaryMessage`: **92 736 → 2 432 B, a 38x reduction**. End to end on the typed path, where the removed document actually shows: **7.45x → 5.57x** of the response size, 6.32 → 4.72 MB per 889 KB response
 * **`HasNextPage()` returned false for every response, including paged ones** — it compared `Result` against `Dictionary<string, object>`, which that member never was; it held a `JsonElement`. The method has no callers inside the SDK, which is how it survived. It now scans the raw result with `Utf8JsonReader` for a top-level `marker`, skipping over each non-matching member's value so a nested `marker` cannot be mistaken for the paging one
   * its test file existed as an empty stub — a class with no `[TestClass]` and no tests, a started-and-abandoned port of xrpl.js `hasNextPage.ts`. Worse, its fully qualified name carried no `TestU`, so it would not have run under the CI filter even with tests in it. It is now `TestUHasNextPage` with ten tests, including an escaped `marker` key, near-miss keys, non-object results, and a `marker` nested inside an array of objects

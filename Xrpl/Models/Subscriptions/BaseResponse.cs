@@ -1,4 +1,5 @@
-﻿using System.Text.Json.Serialization;
+﻿using System.ComponentModel;
+using System.Text.Json.Serialization;
 
 using System;
 using System.Collections.Generic;
@@ -43,6 +44,7 @@ namespace Xrpl.Models.Subscriptions
         /// </remarks>
         [JsonPropertyName("result")]
         [JsonConverter(typeof(JsonSliceConverter))]
+        [EditorBrowsable(EditorBrowsableState.Never)]
         public JsonSlice ResultSlice { get; set; }
 
         /// <summary>
