@@ -470,6 +470,13 @@ namespace Xrpl.Client
         public uint? networkID { get; set; }
 
         /// <summary>
+        /// rippled's name for the API version field. Typed requests get it from
+        /// <see cref="BaseRequest.ApiVersion"/>'s <c>[JsonPropertyName]</c>; a dictionary request
+        /// has to spell it out, since its keys reach the wire exactly as written.
+        /// </summary>
+        private const string ApiVersionField = "api_version";
+
+        /// <summary>
         /// The API version to use when making requests.
         /// </summary>
         public uint ApiVersion { get; set; }
@@ -900,10 +907,17 @@ namespace Xrpl.Client
         {
             //string account = request["Account"] ? EnsureClassicAddress((string)request["account"]) : null;
             //request["Account"] = account;
-            if(!request.TryGetValue(nameof(ApiVersion), out var value)){
+
+            // The key has to be the wire name. A dictionary is serialized verbatim, and rippled
+            // knows only `api_version` - it ignores anything else and answers on its default,
+            // API v1. Stamping `nameof(ApiVersion)` here meant this path never delivered the
+            // version at all, so the same client spoke v2 through its typed methods and v1
+            // through this one.
+            if (!request.ContainsKey(ApiVersionField))
             {
-                request[nameof(ApiVersion)] = ApiVersion;
-            }}
+                request[ApiVersionField] = ApiVersion;
+            }
+
             var response = await this.connection.Request(request, cancellationToken: cancellationToken);
 
             // mutates `response` to add warnings

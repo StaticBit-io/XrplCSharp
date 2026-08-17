@@ -1,5 +1,4 @@
-using System;
-using System.Buffers.Binary;
+﻿using System;
 using System.Net.Sockets;
 using System.Text;
 using System.Threading;
@@ -176,75 +175,5 @@ namespace Xrpl.Tests
             return message.Substring(start, stop - start).Trim();
         }
 
-        /// <summary>
-        /// Reads one client frame. Returns the decoded text of the first text frame seen, or null
-        /// once the peer closes. Control frames other than Close are skipped.
-        /// </summary>
-        private async Task<string?> ReadTextFrameAsync(NetworkStream stream)
-        {
-            while (true)
-            {
-                byte[] head = new byte[2];
-                if (!await ReadExactAsync(stream, head, 2).ConfigureAwait(false))
-                {
-                    return null;
-                }
-
-                int opcode = head[0] & 0x0F;
-                bool masked = (head[1] & 0x80) != 0;
-                long length = head[1] & 0x7F;
-
-                if (length == 126)
-                {
-                    byte[] extended = new byte[2];
-                    if (!await ReadExactAsync(stream, extended, 2).ConfigureAwait(false))
-                    {
-                        return null;
-                    }
-
-                    length = BinaryPrimitives.ReadUInt16BigEndian(extended);
-                }
-                else if (length == 127)
-                {
-                    byte[] extended = new byte[8];
-                    if (!await ReadExactAsync(stream, extended, 8).ConfigureAwait(false))
-                    {
-                        return null;
-                    }
-
-                    length = (long)BinaryPrimitives.ReadUInt64BigEndian(extended);
-                }
-
-                byte[] mask = new byte[4];
-                if (masked && !await ReadExactAsync(stream, mask, 4).ConfigureAwait(false))
-                {
-                    return null;
-                }
-
-                byte[] payload = new byte[length];
-                if (length > 0 && !await ReadExactAsync(stream, payload, (int)length).ConfigureAwait(false))
-                {
-                    return null;
-                }
-
-                if (masked)
-                {
-                    for (int i = 0; i < payload.Length; i++)
-                    {
-                        payload[i] ^= mask[i % 4];
-                    }
-                }
-
-                if (opcode == 0x8)
-                {
-                    return null;
-                }
-
-                if (opcode == 0x1 || opcode == 0x2)
-                {
-                    return Encoding.UTF8.GetString(payload);
-                }
-            }
-        }
     }
 }
