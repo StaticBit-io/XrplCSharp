@@ -6,7 +6,10 @@ namespace Xrpl.Client.Json
     /// </summary>
     public readonly struct JsonSlice
     {
-        /// <summary>Byte offset of the first character of the token within the buffer.</summary>
+        /// <summary>
+        /// Byte offset of the first byte of the token, counted from the start of the buffer the
+        /// reader was created over.
+        /// </summary>
         public int Offset { get; }
 
         /// <summary>Length of the token in bytes.</summary>
@@ -15,6 +18,7 @@ namespace Xrpl.Client.Json
         /// <summary>True when no token was recorded — the member was absent from the buffer.</summary>
         public bool IsEmpty => Length == 0;
 
+        /// <summary>Records the token's bounds; does not copy or retain the buffer itself.</summary>
         public JsonSlice(int offset, int length)
         {
             Offset = offset;
