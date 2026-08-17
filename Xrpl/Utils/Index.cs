@@ -3,7 +3,6 @@ using System.Text.Json.Nodes;
 
 using Xrpl.AddressCodec;
 using Xrpl.BinaryCodec;
-using Xrpl.Client.Json;
 using Xrpl.Keypairs;
 using Xrpl.Models.Subscriptions;
 using Xrpl.Models.Transactions;
