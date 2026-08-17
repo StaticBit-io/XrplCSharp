@@ -22,7 +22,7 @@ namespace XrplTests.Xrpl.Utils
         {
             byte[] frame = Encoding.UTF8.GetBytes($"{{\"id\":\"7\",\"status\":\"success\",\"result\":{result}}}");
             ErrorResponse envelope = JsonSerializer.Deserialize<ErrorResponse>(frame, XrplJsonOptions.Default);
-            envelope.Frame = frame;
+            envelope.AttachFrame(frame);
             return envelope;
         }
 
@@ -59,7 +59,7 @@ namespace XrplTests.Xrpl.Utils
         {
             byte[] frame = Encoding.UTF8.GetBytes("{\"id\":\"7\",\"status\":\"success\"}");
             ErrorResponse envelope = JsonSerializer.Deserialize<ErrorResponse>(frame, XrplJsonOptions.Default);
-            envelope.Frame = frame;
+            envelope.AttachFrame(frame);
 
             Assert.IsFalse(envelope.HasNextPage());
         }

@@ -1,5 +1,4 @@
 ﻿using System;
-using System.Text.Json;
 using System.Text.Json.Nodes;
 
 using Xrpl.AddressCodec;
@@ -68,46 +67,7 @@ namespace Xrpl.Utils
         /// </remarks>
         public static bool HasNextPage(this BaseResponse response)
         {
-            if (response is null)
-            {
-                return false;
-            }
-
-            RawJson raw = response.RawResult;
-            if (raw.IsEmpty)
-            {
-                return false;
-            }
-
-            Utf8JsonReader reader = new Utf8JsonReader(raw.Span);
-
-            if (!reader.Read() || reader.TokenType != JsonTokenType.StartObject)
-            {
-                return false;
-            }
-
-            while (reader.Read())
-            {
-                if (reader.TokenType == JsonTokenType.EndObject)
-                {
-                    return false;
-                }
-
-                if (reader.TokenType != JsonTokenType.PropertyName)
-                {
-                    continue;
-                }
-
-                if (reader.ValueTextEquals("marker"u8))
-                {
-                    return true;
-                }
-
-                // Skip() moves off the property name to its value itself, then past the subtree.
-                reader.Skip();
-            }
-
-            return false;
+            return response is not null && response.RawResult.HasTopLevelProperty("marker"u8);
         }
     }
 }

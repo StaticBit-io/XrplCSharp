@@ -6,6 +6,7 @@ using System.Text;
 using System.Text.Json;
 
 using Xrpl.Client.Json;
+using Xrpl.Models.Ledger;
 
 namespace XrplTests.Client.Json;
 
@@ -164,6 +165,61 @@ public class TestURawJson
         // The bounds have to reach the hash: the default struct hash used the frame reference alone,
         // so two different windows onto one frame collided.
         Assert.AreNotEqual(new RawJson(frame, 0, 3).GetHashCode(), new RawJson(frame, 3, 3).GetHashCode());
+    }
+
+    [TestMethod]
+    public void TestURawJsonDeserializesWithLibraryOptions()
+    {
+        byte[] frame = Encoding.UTF8.GetBytes("{\"result\":{\"ledger_index\":9,\"marker\":\"AABB\"}}");
+        RawJson raw = new RawJson(frame, 10, frame.Length - 11);
+
+        LOLedgerData typed = raw.Deserialize<LOLedgerData>();
+
+        Assert.IsNotNull(typed);
+        Assert.AreEqual("AABB", typed.Marker.ToString());
+    }
+
+    [TestMethod]
+    public void TestURawJsonDeserializeOnAnEmptyWindowReturnsDefault()
+    {
+        Assert.IsNull(default(RawJson).Deserialize<LOLedgerData>());
+    }
+
+    [TestMethod]
+    public void TestURawJsonToJsonElementOwnsItsData()
+    {
+        byte[] frame = Encoding.UTF8.GetBytes("{\"result\":{\"a\":1}}");
+        JsonElement element = new RawJson(frame, 10, 7).ToJsonElement();
+
+        frame[11] = (byte)'z';
+        GC.Collect(2, GCCollectionMode.Forced, blocking: true);
+
+        // The element is self-contained: it copied out of the frame rather than aliasing it.
+        Assert.AreEqual(1, element.GetProperty("a").GetInt32());
+    }
+
+    [TestMethod]
+    public void TestURawJsonToJsonElementOnAnEmptyWindowIsUndefined()
+    {
+        Assert.AreEqual(JsonValueKind.Undefined, default(RawJson).ToJsonElement().ValueKind);
+    }
+
+    [TestMethod]
+    public void TestURawJsonFindsTopLevelPropertiesOnly()
+    {
+        Assert.IsTrue(Window("{\"marker\":1,\"a\":2}").HasTopLevelProperty("marker"u8));
+        Assert.IsTrue(Window("{\"a\":{\"b\":[1,2]},\"marker\":1}").HasTopLevelProperty("marker"u8));
+        Assert.IsFalse(Window("{\"a\":[{\"marker\":1}]}").HasTopLevelProperty("marker"u8));
+        Assert.IsFalse(Window("{}").HasTopLevelProperty("marker"u8));
+        Assert.IsFalse(Window("[1,2]").HasTopLevelProperty("marker"u8));
+        Assert.IsFalse(default(RawJson).HasTopLevelProperty("marker"u8));
+        Assert.IsTrue(Window("{\"\\u006darker\":1}").HasTopLevelProperty("marker"u8));
+
+        static RawJson Window(string json)
+        {
+            byte[] frame = Encoding.UTF8.GetBytes(json);
+            return new RawJson(frame, 0, frame.Length);
+        }
     }
 
 }

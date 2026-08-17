@@ -494,7 +494,7 @@ namespace Xrpl.Client
         public (BaseResponse Response, bool Handled) HandleResponse(byte[] frame)
         {
             ErrorResponse response = JsonSerializer.Deserialize<ErrorResponse>(frame, serializerOptions);
-            response.Frame = frame;
+            response.AttachFrame(frame);
             return HandleResponse(response);
         }
 

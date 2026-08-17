@@ -592,5 +592,19 @@ namespace Xrpl.Tests.ClientLib
                 $"envelope retained {perEnvelope} B on its own; a pooled result document is back");
         }
 
+        /// <summary>
+        /// Pairing is done in one call that checks the bounds against the frame, so a frame that
+        /// does not match the recorded slice is rejected where the two meet rather than lazily,
+        /// inside a consumer's read.
+        /// </summary>
+        [TestMethod]
+        public void TestUAttachFrameRejectsAFrameThatDoesNotFitTheSlice()
+        {
+            byte[] frame = Encoding.UTF8.GetBytes("{\"id\":\"7\",\"result\":{\"a\":1}}");
+            ErrorResponse envelope = JsonSerializer.Deserialize<ErrorResponse>(frame, XrplJsonOptions.Default);
+
+            Assert.ThrowsExactly<ArgumentException>(() => envelope.AttachFrame(Encoding.UTF8.GetBytes("{}")));
+        }
+
     }
 }

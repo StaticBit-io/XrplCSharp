@@ -72,6 +72,90 @@ namespace Xrpl.Client.Json
         /// </summary>
         public byte[] ToArray() => _frame is null ? Array.Empty<byte>() : Span.ToArray();
 
+        /// <summary>
+        /// Deserializes the captured JSON into <typeparamref name="T"/> using the library's
+        /// serializer options.
+        /// </summary>
+        /// <remarks>
+        /// Here so that a consumer does not reach for <c>JsonSerializer.Deserialize</c> with
+        /// options of their own: the XRPL models depend on the converters in
+        /// <see cref="XrplJsonOptions.Default"/>, and bare options silently produce a different
+        /// object. Returns <c>default</c> for an empty window rather than throwing — an absent
+        /// member is not a malformed one.
+        /// </remarks>
+        public T Deserialize<T>()
+        {
+            return IsEmpty ? default : JsonSerializer.Deserialize<T>(Span, XrplJsonOptions.Default);
+        }
+
+        /// <summary>
+        /// Parses the captured JSON into a self-contained <see cref="JsonElement"/>.
+        /// </summary>
+        /// <remarks>
+        /// The element copies out of the frame, so it stays readable after the frame is gone —
+        /// unlike <see cref="Span"/>, which aliases it. An empty window yields
+        /// <see cref="JsonValueKind.Undefined"/>.
+        /// </remarks>
+        public JsonElement ToJsonElement()
+        {
+            if (IsEmpty)
+            {
+                return default;
+            }
+
+            using (JsonDocument document = JsonDocument.Parse(ToArray()))
+            {
+                return document.RootElement.Clone();
+            }
+        }
+
+        /// <summary>
+        /// True when the captured JSON is an object carrying <paramref name="name"/> at its top
+        /// level.
+        /// </summary>
+        /// <remarks>
+        /// Each non-matching member's value is skipped whole, so a nested occurrence of the name
+        /// cannot be mistaken for a top-level one. Matching goes through
+        /// <see cref="Utf8JsonReader.ValueTextEquals(ReadOnlySpan{byte})"/>, which unescapes — a
+        /// raw byte comparison would miss <c>marker</c>.
+        /// </remarks>
+        public bool HasTopLevelProperty(ReadOnlySpan<byte> name)
+        {
+            if (IsEmpty)
+            {
+                return false;
+            }
+
+            Utf8JsonReader reader = new Utf8JsonReader(Span);
+
+            if (!reader.Read() || reader.TokenType != JsonTokenType.StartObject)
+            {
+                return false;
+            }
+
+            while (reader.Read())
+            {
+                if (reader.TokenType == JsonTokenType.EndObject)
+                {
+                    return false;
+                }
+
+                if (reader.TokenType != JsonTokenType.PropertyName)
+                {
+                    continue;
+                }
+
+                if (reader.ValueTextEquals(name))
+                {
+                    return true;
+                }
+
+                reader.Skip();
+            }
+
+            return false;
+        }
+
         /// <summary>Writes the captured JSON into <paramref name="writer"/> verbatim.</summary>
         public void WriteTo(Utf8JsonWriter writer)
         {

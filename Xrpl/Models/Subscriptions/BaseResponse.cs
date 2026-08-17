@@ -47,30 +47,50 @@ namespace Xrpl.Models.Subscriptions
         [EditorBrowsable(EditorBrowsableState.Never)]
         public JsonSlice ResultSlice { get; set; }
 
+        [JsonIgnore]
+        private byte[]? _frame;
+
         /// <summary>
-        /// The frame this response was read from. Set by <c>RequestManager</c> right after parsing;
-        /// null on an envelope built by hand.
+        /// Pairs this envelope with the frame it was read from.
         /// </summary>
         /// <remarks>
-        /// Must stay internal. The bounds in <see cref="ResultSlice"/> are only meaningful for a
-        /// reader that covered one contiguous buffer, which the Stream overloads of
-        /// System.Text.Json do not: there it parses in chunks and the bounds come out relative to
-        /// its own read buffer, wrong and without an exception to say so. Keeping this internal
-        /// disarms that path by construction — an envelope deserialized from a stream by a
-        /// consumer has no frame, so <see cref="RawResult"/> comes back empty instead of pointing
-        /// at bytes nobody checked.
+        /// One call instead of a settable property, so the bounds are checked against the buffer
+        /// once, where the two meet — a frame that does not match the recorded slice is rejected
+        /// here rather than lazily, inside a consumer's read of <see cref="RawResult"/>. Internal
+        /// on purpose: the bounds are only meaningful for a reader that covered one contiguous
+        /// buffer, which the Stream overloads of System.Text.Json do not, and keeping this
+        /// unreachable disarms that path by construction.
         /// </remarks>
-        [JsonIgnore]
-        internal byte[]? Frame { get; set; }
+        /// <exception cref="ArgumentException">
+        /// <paramref name="frame"/> is too short for the recorded slice.
+        /// </exception>
+        internal void AttachFrame(byte[] frame)
+        {
+            if (frame is null)
+            {
+                throw new ArgumentNullException(nameof(frame));
+            }
+
+            if (!ResultSlice.IsEmpty
+                && (ResultSlice.Offset > frame.Length || ResultSlice.Length > frame.Length - ResultSlice.Offset))
+            {
+                throw new ArgumentException(
+                    $"Frame of {frame.Length} bytes does not contain the recorded result at "
+                    + $"[{ResultSlice.Offset}, {ResultSlice.Offset + (long)ResultSlice.Length}).",
+                    nameof(frame));
+            }
+
+            _frame = frame;
+        }
 
         /// <summary>
         /// The <c>result</c> member exactly as the node sent it.
         /// </summary>
         [JsonIgnore]
         public RawJson RawResult =>
-            Frame is null || ResultSlice.IsEmpty
+            _frame is null || ResultSlice.IsEmpty
                 ? default
-                : new RawJson(Frame, ResultSlice.Offset, ResultSlice.Length);
+                : new RawJson(_frame, ResultSlice.Offset, ResultSlice.Length);
         /// <summary>
         /// (May be omitted) If this field is provided, the value is the string load.<br/>
         /// This means the client is approaching the rate limiting threshold where the server will disconnect this client.
