@@ -60,7 +60,7 @@ namespace Xrpl.Client
         /// Stands in for a missing <c>result</c>, matching what deserializing the literal
         /// <c>"{}"</c> used to produce.
         /// </summary>
-        private static readonly byte[] EmptyResult = Encoding.UTF8.GetBytes("{}");
+        private static ReadOnlySpan<byte> EmptyResult => "{}"u8;
 
         public RequestManager()
         {
@@ -486,6 +486,11 @@ namespace Xrpl.Client
         /// are cut from those bounds. The array is the exact-sized one the receive loop already
         /// allocated, so keeping it costs nothing over what was allocated anyway.
         /// </remarks>
+        /// <param name="frame">
+        /// The message bytes. Ownership passes to the returned response: it keeps the array and cuts
+        /// <see cref="BaseResponse.RawResult"/> from it, so the caller must not reuse or mutate it —
+        /// a pooled or ring buffer will silently rewrite a response that was already handed out.
+        /// </param>
         public (BaseResponse Response, bool Handled) HandleResponse(byte[] frame)
         {
             ErrorResponse response = JsonSerializer.Deserialize<ErrorResponse>(frame, serializerOptions);

@@ -207,6 +207,27 @@ namespace Xrpl.Tests.ClientLib
         }
 
         /// <summary>
+        /// The response aliases the frame it was handed rather than copying it. Pinned because the
+        /// contract is invisible in the signature: a caller that reuses a pooled buffer would
+        /// rewrite a response it already handed out.
+        /// </summary>
+        [TestMethod]
+        public void TestUResponseAliasesTheFrameItWasGiven()
+        {
+            byte[] frame = Encoding.UTF8.GetBytes("{\"id\":\"1\",\"result\":{\"marker\":1}}");
+            RequestManager manager = new RequestManager();
+            (BaseResponse response, _) = manager.HandleResponse(frame);
+
+            Assert.AreEqual("{\"marker\":1}", response.RawResult.ToString());
+
+            // Index 21 is the 'm' of "marker": {"id":"1","result":{"marker":1}} counts
+            // 0123456789012345678901 up to that byte.
+            frame[21] = (byte)'z';
+
+            Assert.AreEqual("{\"zarker\":1}", response.RawResult.ToString());
+        }
+
+        /// <summary>
         /// Bounds are only meaningful for a reader that covered one contiguous buffer, which the
         /// Stream overloads do not. That path is disarmed by construction rather than by a check:
         /// Frame is internal, so it stays null there and the raw result comes back empty instead of

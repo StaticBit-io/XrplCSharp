@@ -1,10 +1,10 @@
 ﻿using System;
-using System.Collections.Generic;
 using System.Text.Json;
 using System.Text.Json.Nodes;
 
 using Xrpl.AddressCodec;
 using Xrpl.BinaryCodec;
+using Xrpl.Client.Json;
 using Xrpl.Keypairs;
 using Xrpl.Models.Subscriptions;
 using Xrpl.Models.Transactions;
@@ -68,12 +68,18 @@ namespace Xrpl.Utils
         /// </remarks>
         public static bool HasNextPage(this BaseResponse response)
         {
-            if (response is null || response.RawResult.IsEmpty)
+            if (response is null)
             {
                 return false;
             }
 
-            Utf8JsonReader reader = new Utf8JsonReader(response.RawResult.Span);
+            RawJson raw = response.RawResult;
+            if (raw.IsEmpty)
+            {
+                return false;
+            }
+
+            Utf8JsonReader reader = new Utf8JsonReader(raw.Span);
 
             if (!reader.Read() || reader.TokenType != JsonTokenType.StartObject)
             {
@@ -97,7 +103,7 @@ namespace Xrpl.Utils
                     return true;
                 }
 
-                reader.Read();
+                // Skip() moves off the property name to its value itself, then past the subtree.
                 reader.Skip();
             }
 

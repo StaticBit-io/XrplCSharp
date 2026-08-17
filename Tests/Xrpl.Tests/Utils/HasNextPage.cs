@@ -1,4 +1,4 @@
-// https://github.com/XRPLF/xrpl.js/blob/main/packages/xrpl/test/utils/hasNextPage.ts
+﻿// https://github.com/XRPLF/xrpl.js/blob/main/packages/xrpl/test/utils/hasNextPage.ts
 
 using Microsoft.VisualStudio.TestTools.UnitTesting;
 
@@ -69,6 +69,41 @@ namespace XrplTests.Xrpl.Utils
         public void TestUEnvelopeWithoutFrameHasNoNextPage()
         {
             Assert.IsFalse(new ErrorResponse().HasNextPage());
+        }
+
+        /// <summary>The scanner must bail on a non-object result rather than misread it.</summary>
+        [TestMethod]
+        public void TestUNonObjectResultHasNoNextPage()
+        {
+            Assert.IsFalse(Envelope("[1,2]").HasNextPage());
+            Assert.IsFalse(Envelope("\"marker\"").HasNextPage());
+            Assert.IsFalse(Envelope("42").HasNextPage());
+            Assert.IsFalse(Envelope("null").HasNextPage());
+        }
+
+        [TestMethod]
+        public void TestUEmptyResultObjectHasNoNextPage()
+        {
+            Assert.IsFalse(Envelope("{}").HasNextPage());
+        }
+
+        /// <summary>
+        /// Works only because the scan goes through ValueTextEquals, which unescapes. Swapping it
+        /// for a raw byte comparison would pass every other test here and break this one silently.
+        /// </summary>
+        [TestMethod]
+        public void TestUEscapedMarkerKeyIsRecognized()
+        {
+            Assert.IsTrue(Envelope("{\"\\u006darker\":\"AABB\"}").HasNextPage());
+            Assert.IsFalse(Envelope("{\"state\":[{\"\\u006darker\":\"AABB\"}]}").HasNextPage());
+        }
+
+        /// <summary>Prefix and near-miss keys must not count.</summary>
+        [TestMethod]
+        public void TestUNearMissKeysAreNotTheMarker()
+        {
+            Assert.IsFalse(Envelope("{\"markerX\":1}").HasNextPage());
+            Assert.IsFalse(Envelope("{\"marke\":1}").HasNextPage());
         }
     }
 }
