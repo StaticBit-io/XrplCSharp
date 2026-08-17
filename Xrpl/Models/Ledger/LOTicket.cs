@@ -14,7 +14,7 @@ namespace Xrpl.Models.Ledger
     {
         public LOTicket()
         {
-            LedgerEntryType = LedgerEntryType.Ticket;
+            LedgerEntryType = Xrpl.Models.LedgerEntryType.Ticket;
         }
 
         /// <summary>
@@ -45,13 +45,13 @@ namespace Xrpl.Models.Ledger
         /// <summary>
         /// The index of the ledger that contains the transaction that most recently modified this object.
         /// </summary>
-        public uint PreviousTxnLgrSeq { get; set; }
+        public uint? PreviousTxnLgrSeq { get; set; }
 
         /// <summary>
         /// The maximum amount of currency this Check can debit the sender.<br/>
         /// If the Check is successfully cashed, the destination is credited in the same currency for up to this amount.<br/>
         /// The Sequence Number this Ticket sets aside.
         /// </summary>
-        public uint TicketSequence { get; set; }
+        public uint? TicketSequence { get; set; }
     }
 }

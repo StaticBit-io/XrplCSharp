@@ -36,16 +36,16 @@ namespace Xrpl.Models.Ledger
 
         public LODirectoryNode()
         {
-            LedgerEntryType = LedgerEntryType.DirectoryNode;
+            LedgerEntryType = Xrpl.Models.LedgerEntryType.DirectoryNode;
         }
 
         /// <summary>
         /// A bit-map of boolean flags enabled for this directory.
         /// See <see cref="DirectoryNodeFlags"/> for the values the protocol defines.
         /// </summary>
-        public uint Flags { get; set; }
+        public uint? Flags { get; set; }
         /// <summary>
-        /// The ID of root object for this directory. 
+        /// The ID of root object for this directory.
         /// </summary>
         public string RootIndex { get; set; }
         /// <summary>

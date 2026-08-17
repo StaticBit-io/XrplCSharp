@@ -21,7 +21,7 @@ namespace Xrpl.Models.Ledger
         /// </summary>
         public LOOracle()
         {
-            LedgerEntryType = LedgerEntryType.Oracle;
+            LedgerEntryType = Xrpl.Models.LedgerEntryType.Oracle;
         }
 
         /// <summary>
@@ -87,14 +87,14 @@ namespace Xrpl.Models.Ledger
         /// The ledger index that this object was most recently modified or created in.
         /// </summary>
         [JsonPropertyName("PreviousTxnLgrSeq")]
-        public uint PreviousTxnLgrSeq { get; set; }
+        public uint? PreviousTxnLgrSeq { get; set; }
 
         /// <summary>
         /// A bit-map of boolean flags. No flags are defined for the Oracle object type,
         /// so this value is always 0.
         /// </summary>
         [JsonPropertyName("Flags")]
-        public uint Flags { get; set; }
+        public uint? Flags { get; set; }
     
         /// <summary>The document id distinguishing this oracle among the owner's oracles.</summary>
         [JsonPropertyName("OracleDocumentID")]

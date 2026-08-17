@@ -14,7 +14,7 @@ public class LOXChainOwnedClaimID : BaseLedgerEntry
 {
     public LOXChainOwnedClaimID()
     {
-        LedgerEntryType = LedgerEntryType.XChainOwnedClaimID;
+        LedgerEntryType = Xrpl.Models.LedgerEntryType.XChainOwnedClaimID;
     }
 
     /// <summary>

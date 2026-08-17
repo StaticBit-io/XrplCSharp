@@ -18,7 +18,7 @@ namespace Xrpl.Models.Ledger
     {
         public LOCheck()
         {
-            LedgerEntryType = LedgerEntryType.Check;
+            LedgerEntryType = Xrpl.Models.LedgerEntryType.Check;
         }
 
         /// <summary>
@@ -48,7 +48,7 @@ namespace Xrpl.Models.Ledger
         /// <summary>
         /// The index of the ledger that contains the transaction that most recently modified this object.
         /// </summary>
-        public uint PreviousTxnLgrSeq { get; set; }
+        public uint? PreviousTxnLgrSeq { get; set; }
         /// <summary>
         /// The maximum amount of currency this Check can debit the sender.<br/>
         /// If the Check is successfully cashed,
@@ -59,7 +59,7 @@ namespace Xrpl.Models.Ledger
         /// <summary>
         /// The sequence number of the CheckCreate transaction that created this check.
         /// </summary>
-        public uint Sequence { get; set; }
+        public uint? Sequence { get; set; }
         /// <summary>
         /// A hint indicating which page of the destination's owner directory links to this object,
         /// in case the directory consists of multiple pages.

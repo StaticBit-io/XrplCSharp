@@ -19,7 +19,7 @@ namespace Xrpl.Models.Ledger
     {
         public LODepositPreauth()
         {
-            LedgerEntryType = LedgerEntryType.DepositPreauth;
+            LedgerEntryType = Xrpl.Models.LedgerEntryType.DepositPreauth;
         }
 
         /// <summary>
@@ -61,7 +61,7 @@ namespace Xrpl.Models.Ledger
         /// <summary>
         /// The index of the ledger that contains the transaction that most recently modified this object.
         /// </summary>
-        public uint PreviousTxnLgrSeq { get; set; }
+        public uint? PreviousTxnLgrSeq { get; set; }
     }
 
     /// <summary>

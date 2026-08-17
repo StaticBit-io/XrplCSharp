@@ -38,7 +38,7 @@ public class LOLoan : BaseLedgerEntry
 {
     public LOLoan()
     {
-        LedgerEntryType = LedgerEntryType.Loan;
+        LedgerEntryType = Xrpl.Models.LedgerEntryType.Loan;
     }
 
     /// <summary>

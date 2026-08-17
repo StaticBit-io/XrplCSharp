@@ -34,13 +34,13 @@ public enum SignerListFlags : uint
 public class LOSignerList : BaseLedgerEntry
 {
     /// <summary> create base object </summary>
-    public LOSignerList() => LedgerEntryType = LedgerEntryType.SignerList;
+    public LOSignerList() => LedgerEntryType = Xrpl.Models.LedgerEntryType.SignerList;
 
     /// <summary>
     /// A bit-map of Boolean flags enabled for this signer list.<br/>
     /// For more information, see SignerList Flags.
     /// </summary>
-    public uint Flags { get; set; }
+    public uint? Flags { get; set; }
 
     /// <summary>
     /// A hint indicating which page of the owner directory links to this object, in case the directory consists of multiple pages.
@@ -52,7 +52,7 @@ public class LOSignerList : BaseLedgerEntry
     /// To produce a valid signature for the owner of this SignerList,
     /// the signers must provide valid signatures whose weights sum to this value or more.
     /// </summary>
-    public uint SignerQuorum { get; set; }
+    public uint? SignerQuorum { get; set; }
 
     /// <summary>
     /// An array of Signer Entry objects representing the parties who are part of this signer list.
@@ -65,7 +65,7 @@ public class LOSignerList : BaseLedgerEntry
     /// If a future amendment allows multiple signer lists for an account, this may change.
     /// </summary>
     [JsonPropertyName("SignerListID")]
-    public uint SignerListId { get; set; }
+    public uint? SignerListId { get; set; }
 
     /// <summary>
     /// The identifying hash of the transaction that most recently modified this object.
@@ -75,7 +75,7 @@ public class LOSignerList : BaseLedgerEntry
     /// <summary>
     /// The index of the ledger that contains the transaction that most recently modified this object.
     /// </summary>
-    public uint PreviousTxnLgrSeq { get; set; }
+    public uint? PreviousTxnLgrSeq { get; set; }
 
         /// <summary>Owner of the signer list (present in some historical entries).</summary>
         [JsonPropertyName("Owner")]

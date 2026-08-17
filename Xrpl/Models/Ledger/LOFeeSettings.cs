@@ -11,13 +11,13 @@ namespace Xrpl.Models.Ledger
     {
         public LOFeeSettings()
         {
-            LedgerEntryType = LedgerEntryType.FeeSettings;
+            LedgerEntryType = Xrpl.Models.LedgerEntryType.FeeSettings;
         }
         /// <summary>
         /// A bit-map of boolean flags for this object.<br/>
         /// No flags are defined for this type
         /// </summary>
-        public uint Flags { get; set; }
+        public uint? Flags { get; set; }
 
         /// <summary>
         /// The transaction cost of the "reference transaction" in drops of XRP as hexadecimal.
@@ -26,15 +26,15 @@ namespace Xrpl.Models.Ledger
         /// <summary>
         /// The BaseFee translated into "fee units".
         /// </summary>
-        public uint ReferenceFeeUnits { get; set; }
+        public uint? ReferenceFeeUnits { get; set; }
         /// <summary>
         /// The base reserve for an account in the XRP Ledger, as drops of XRP.
         /// </summary>
-        public uint ReserveBase { get; set; }
+        public uint? ReserveBase { get; set; }
         /// <summary>
         /// The incremental owner reserve for owning objects, as drops of XRP.
         /// </summary>
-        public uint ReserveIncrement { get; set; }
+        public uint? ReserveIncrement { get; set; }
     
         /// <summary>XRPFees: base fee in drops.</summary>
         [JsonPropertyName("BaseFeeDrops")]

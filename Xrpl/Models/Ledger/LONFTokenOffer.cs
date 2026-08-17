@@ -23,12 +23,12 @@ namespace Xrpl.Models.Methods
         public LONFTokenOffer()
         {
             //The type of ledger object (0x0074).
-            LedgerEntryType = LedgerEntryType.NFTokenOffer;
+            LedgerEntryType = Xrpl.Models.LedgerEntryType.NFTokenOffer;
         }
         /// <summary>
         /// A set of flags associated with this object, used to specify various options or settings. Flags are listed in the table below.
         /// </summary>
-        public uint Flags { get; set; }
+        public uint? Flags { get; set; }
 
         /// <summary>
         /// Amount expected or offered for the NFToken. If the token has the lsfOnlyXRP flag set, the amount must be specified in XRP.<br/>
@@ -76,7 +76,7 @@ namespace Xrpl.Models.Methods
         /// Index of the ledger that contains the transaction that most recently modified this object.
         /// </summary>
         [JsonPropertyName("PreviousTxnLgrSeq")]
-        public uint PreviousTransactionLedgerSequence { get; set; }
+        public uint? PreviousTransactionLedgerSequence { get; set; }
 
     }
 }

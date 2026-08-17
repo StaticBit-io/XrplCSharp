@@ -13,7 +13,7 @@ public class LODelegate : BaseLedgerEntry
 {
     public LODelegate()
     {
-        LedgerEntryType = LedgerEntryType.Delegate;
+        LedgerEntryType = Xrpl.Models.LedgerEntryType.Delegate;
     }
 
     /// <summary>

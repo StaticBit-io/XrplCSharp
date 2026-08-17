@@ -3,6 +3,7 @@ using System.Collections.Generic;
 using System.Linq;
 using System.Text.Json.Nodes;
 
+using Xrpl.Client.Exceptions;
 using Xrpl.Models.Ledger;
 
 namespace Xrpl.Wallet;
@@ -132,7 +133,13 @@ public static class BatchSigningHelper
         LOSignerList signerList,
         IDictionary<string, XrplWallet> walletByAddr)
     {
-        var need = signerList.SignerQuorum;
+        // SignerQuorum is a required field of a live SignerList ledger entry (never legitimately absent);
+        // a null here means the caller passed a malformed/partial object, so fail loudly rather than let
+        // the quorum check below silently never trip and over-pick wallets.
+        if (signerList.SignerQuorum is not { } need)
+        {
+            throw new ValidationException("SignerList is missing SignerQuorum; cannot determine quorum for wallet selection.");
+        }
         var candidates = signerList.SignerEntries
             .Select(se => (addr: se.SignerEntry.Account, w: se.SignerEntry.SignerWeight))
             .OrderByDescending(x => x.w)

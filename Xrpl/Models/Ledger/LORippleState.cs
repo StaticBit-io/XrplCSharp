@@ -49,12 +49,12 @@ namespace Xrpl.Models.Ledger
     {
         public LORippleState()
         {
-            LedgerEntryType = LedgerEntryType.RippleState;
+            LedgerEntryType = Xrpl.Models.LedgerEntryType.RippleState;
         }
         /// <summary>
         /// A bit-map of boolean options enabled for this object. 
         /// </summary>
-        public RippleStateFlags Flags { get; set; }
+        public RippleStateFlags? Flags { get; set; }
         /// <summary>
         /// The balance of the trust line, from the perspective of the low account.<br/>
         /// A negative balance indicates that the low account has issued currency to the high account.<br/>
@@ -78,7 +78,7 @@ namespace Xrpl.Models.Ledger
         /// <summary>
         /// The index of the ledger that contains the transaction that most recently modified this object.
         /// </summary>
-        public uint PreviousTxnLgrSeq { get; set; }
+        public uint? PreviousTxnLgrSeq { get; set; }
         /// <summary>
         ///  A hint indicating which page of the low account's owner directory links to this object,
         /// in case the directory consists of multiple pages.

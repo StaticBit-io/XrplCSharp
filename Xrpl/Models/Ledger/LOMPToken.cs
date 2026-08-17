@@ -34,7 +34,7 @@ namespace Xrpl.Models.Ledger
     {
         public LOMPToken()
         {
-            LedgerEntryType = LedgerEntryType.MPToken;
+            LedgerEntryType = Xrpl.Models.LedgerEntryType.MPToken;
         }
 
         /// <summary>

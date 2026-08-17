@@ -187,8 +187,15 @@ namespace Xrpl.Sugar
             LedgerIndex index = new LedgerIndex(LedgerIndexType.Current);
             AccountInfoRequest request = new AccountInfoRequest((string)tx["Account"]) { LedgerIndex = index };
             AccountInfo data = (await client.AccountInfo(request, cancellationToken)).Result;
-            tx.TryAdd("Sequence", data.AccountData.Sequence);
-            return data.AccountData.Sequence;
+            // account_info returns the full AccountRoot for a live "current" ledger request, so Sequence is always present;
+            // a missing value here means the node response is malformed and should fail loudly rather than autofill 0.
+            uint? sequence = data.AccountData.Sequence;
+            if (sequence == null)
+            {
+                throw new XrplException("account_info response did not include the account's Sequence.");
+            }
+            tx.TryAdd("Sequence", sequence.Value);
+            return sequence.Value;
         }
 
         public static async Task<BigInteger> FetchReserveFee(this IXrplClient client, CancellationToken cancellationToken = default)

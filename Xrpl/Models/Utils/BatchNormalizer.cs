@@ -100,9 +100,15 @@ public static class BatchNormalizer
             {
                 LedgerIndex = new LedgerIndex(LedgerIndexType.Current)
             }, cancellationToken)).Result;
-            var start = ai.AccountData.Sequence;
-            nextSeqByAccount[account] = start;
-            return start;
+            // account_info for the current ledger always returns a full AccountRoot, so Sequence is always present;
+            // a missing value would mean a malformed node response and must not be silently treated as 0.
+            uint? start = ai.AccountData.Sequence;
+            if (start == null)
+            {
+                throw new ValidationException($"account_info response for '{account}' did not include the account's Sequence.");
+            }
+            nextSeqByAccount[account] = start.Value;
+            return start.Value;
         }
 
         void Bump(string account)

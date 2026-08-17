@@ -12,7 +12,7 @@ namespace Xrpl.Models.Ledger
     {
         public LOAmm()
         {
-            LedgerEntryType = LedgerEntryType.AMM;
+            LedgerEntryType = Xrpl.Models.LedgerEntryType.AMM;
         }
         /// <summary>
         /// The special account that holds the AMM's assets and issues its LPTokens.
@@ -50,7 +50,7 @@ namespace Xrpl.Models.Ledger
         /// between 0% and 1%.<br/>
         /// This field is required.
         /// </summary>
-        public uint TradingFee { get; set; }
+        public uint? TradingFee { get; set; }
         /// <summary>
         /// A list of vote objects, representing votes on the pool's trading fee..
         /// </summary>

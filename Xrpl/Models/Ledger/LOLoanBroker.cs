@@ -12,7 +12,7 @@ public class LOLoanBroker : BaseLedgerEntry
 {
     public LOLoanBroker()
     {
-        LedgerEntryType = LedgerEntryType.LoanBroker;
+        LedgerEntryType = Xrpl.Models.LedgerEntryType.LoanBroker;
     }
 
     /// <summary>

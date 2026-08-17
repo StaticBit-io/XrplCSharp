@@ -8,8 +8,9 @@ namespace Xrpl.Models.Ledger
     public class BaseLedgerEntry
     {
 
+        // Nullable: this model also represents PreviousFields/FinalFields content, where the node omits LedgerEntryType.
         [JsonConverter(typeof(LedgerEntryTypeConverter))]
-        public LedgerEntryType LedgerEntryType { get; set; }
+        public LedgerEntryType? LedgerEntryType { get; set; }
 
         /// <summary>
         /// The unique ID for this ledger entry.<br/>

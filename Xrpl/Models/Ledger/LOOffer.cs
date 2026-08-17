@@ -48,7 +48,7 @@ namespace Xrpl.Models.Ledger
         
         public LOOffer()
         {
-            LedgerEntryType = LedgerEntryType.Offer;
+            LedgerEntryType = Xrpl.Models.LedgerEntryType.Offer;
         }
         /// <summary>
         /// The address of the account that placed this Offer. 
@@ -58,12 +58,12 @@ namespace Xrpl.Models.Ledger
         /// A bit-map of boolean flags enabled for this Offer.
         /// Uses OfferFlags enum which includes lsfPassive, lsfSell, and lsfHybrid flags.
         /// </summary>
-        public OfferFlags Flags { get; set; }
+        public OfferFlags? Flags { get; set; }
         /// <summary>
         /// The Sequence value of the OfferCreate transaction that created this Offer object.<br/>
         /// Used in combination with the Account to identify this Offer.
         /// </summary>
-        public uint Sequence { get; set; }
+        public uint? Sequence { get; set; }
         /// <summary>
         /// The remaining amount and type of currency requested by the Offer creator.
         /// </summary>
@@ -96,7 +96,7 @@ namespace Xrpl.Models.Ledger
         /// The index of the ledger that contains the transaction that most recently modified this object.
         /// </summary>
         [JsonPropertyName("PreviousTxnLgrSeq")]
-        public uint PreviousTxnLgrSeq { get; set; }
+        public uint? PreviousTxnLgrSeq { get; set; }
         /// <summary>
         /// The time this Offer expires, in seconds since the Ripple Epoch.
         /// </summary>

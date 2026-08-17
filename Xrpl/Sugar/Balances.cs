@@ -4,6 +4,7 @@ using System.Threading;
 using System.Threading.Tasks;
 
 using Xrpl.Client;
+using Xrpl.Client.Exceptions;
 using Xrpl.Models.Common;
 using Xrpl.Models.Ledger;
 using Xrpl.Models.Methods;
@@ -100,8 +101,14 @@ namespace Xrpl.Sugar
                 Value = FaccReserveFee
             }.ValueAsXrp;
 
-            var numLines = accountInfo.AccountData.OwnerCount;
-            var totalReserve = accReserveFee + (lineReserveFee * numLines);
+            // account_info for a live account always returns OwnerCount; a missing value means a malformed
+            // node response and must fail loudly rather than be treated as 0 owned objects.
+            uint? numLines = accountInfo.AccountData.OwnerCount;
+            if (numLines == null)
+            {
+                throw new ValidationException($"account_info response for '{address}' did not include the account's OwnerCount.");
+            }
+            var totalReserve = accReserveFee + (lineReserveFee * numLines.Value);
             var freeBalance = (decimal)accountInfo.AccountData.Balance.ValueAsXrp - totalReserve;
             return freeBalance;
         }

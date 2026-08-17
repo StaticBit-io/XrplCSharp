@@ -65,7 +65,7 @@ namespace Xrpl.Models.Ledger
     {
         public LOMPTokenIssuance()
         {
-            LedgerEntryType = LedgerEntryType.MPTokenIssuance;
+            LedgerEntryType = Xrpl.Models.LedgerEntryType.MPTokenIssuance;
         }
 
         [JsonPropertyName("Flags")]
@@ -83,7 +83,7 @@ namespace Xrpl.Models.Ledger
         /// UInt8
         /// </summary>
         [JsonPropertyName("AssetScale")]
-        public byte AssetScale { get; init; }
+        public byte? AssetScale { get; init; }
 
         /// <summary>
         /// Maximum number of tokens that can exist.
@@ -100,7 +100,7 @@ namespace Xrpl.Models.Ledger
         /// </summary>
         [JsonPropertyName("OutstandingAmount")]
         [JsonConverter(typeof(UInt64StringJsonConverter))]
-        public ulong OutstandingAmount { get; init; }
+        public ulong? OutstandingAmount { get; init; }
 
         /// <summary>
         /// Amount of tokens currently locked (included in OutstandingAmount).
@@ -157,14 +157,14 @@ namespace Xrpl.Models.Ledger
         /// UInt32
         /// </summary>
         [JsonPropertyName("PreviousTxnLgrSeq")]
-        public uint PreviousTxnLgrSeq { get; init; }
+        public uint? PreviousTxnLgrSeq { get; init; }
 
         /// <summary>
         /// Sequence or Ticket number that created this issuance.
         /// UInt32
         /// </summary>
         [JsonPropertyName("Sequence")]
-        public uint Sequence { get; init; }
+        public uint? Sequence { get; init; }
 
         /// <summary>
         /// PermissionedDomain restricting who may hold this MPT.
@@ -208,8 +208,10 @@ namespace Xrpl.Models.Ledger
         /// Computed 192-bit MPTokenIssuanceID (48 hex chars, uppercase).
         /// Derived from <see cref="Sequence"/> and <see cref="Issuer"/> per XLS-33.
         /// </summary>
+        // Null when Sequence is absent (e.g. this model represents PreviousFields content):
+        // the deterministic ID formula requires the creating Sequence and would be wrong to fabricate.
         [JsonIgnore]
-        public string MPTokenIssuanceID =>
-            ParseMPTID.GenerateMPTokenIssuanceID(Sequence, Issuer);
+        public string? MPTokenIssuanceID =>
+            Sequence.HasValue ? ParseMPTID.GenerateMPTokenIssuanceID(Sequence.Value, Issuer) : null;
     }
 }

@@ -28,14 +28,14 @@ public class LOSponsorship : BaseLedgerEntry
 {
     public LOSponsorship()
     {
-        LedgerEntryType = LedgerEntryType.Sponsorship;
+        LedgerEntryType = Xrpl.Models.LedgerEntryType.Sponsorship;
     }
 
     /// <summary>
     /// A bit-map of boolean flags (see <see cref="SponsorshipFlags"/>).
     /// </summary>
     [JsonPropertyName("Flags")]
-    public SponsorshipFlags Flags { get; init; }
+    public SponsorshipFlags? Flags { get; init; }
 
     /// <summary>
     /// The sponsoring account.

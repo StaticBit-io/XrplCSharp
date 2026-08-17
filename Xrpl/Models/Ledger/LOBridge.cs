@@ -13,7 +13,7 @@ public class LOBridge : BaseLedgerEntry
 {
     public LOBridge()
     {
-        LedgerEntryType = LedgerEntryType.Bridge;
+        LedgerEntryType = Xrpl.Models.LedgerEntryType.Bridge;
     }
 
     /// <summary>

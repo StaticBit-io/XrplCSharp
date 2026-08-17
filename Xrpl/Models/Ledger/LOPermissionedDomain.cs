@@ -20,7 +20,7 @@ namespace Xrpl.Models.Ledger
         /// </summary>
         public LOPermissionedDomain()
         {
-            LedgerEntryType = LedgerEntryType.PermissionedDomain;
+            LedgerEntryType = Xrpl.Models.LedgerEntryType.PermissionedDomain;
         }
 
         /// <summary>
@@ -40,7 +40,7 @@ namespace Xrpl.Models.Ledger
         /// The Sequence value of the transaction that created this entry.
         /// </summary>
         [JsonPropertyName("Sequence")]
-        public uint Sequence { get; set; }
+        public uint? Sequence { get; set; }
 
         /// <summary>
         /// A list of 1 to 10 Credential objects that grant access to this domain.
@@ -59,6 +59,6 @@ namespace Xrpl.Models.Ledger
         /// The index of the ledger that contains the transaction that most recently modified this object.
         /// </summary>
         [JsonPropertyName("PreviousTxnLgrSeq")]
-        public uint PreviousTxnLgrSeq { get; set; }
+        public uint? PreviousTxnLgrSeq { get; set; }
     }
 }

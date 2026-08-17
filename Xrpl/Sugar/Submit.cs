@@ -632,8 +632,10 @@ public static class SubmitSugar
         if (sponsorship is null)
             return false;
 
-        bool requireForFee = sponsorship.Flags.HasFlag(Models.Ledger.SponsorshipFlags.lsfSponsorshipRequireSignForFee);
-        bool requireForReserve = sponsorship.Flags.HasFlag(Models.Ledger.SponsorshipFlags.lsfSponsorshipRequireSignForReserve);
+        // A missing Flags value is equivalent to "no flags set" for a bitmask check, so false is the correct
+        // (not a fabricated) default here - unlike numeric fields (Sequence, balances) where 0 would be a lie.
+        bool requireForFee = sponsorship.Flags?.HasFlag(Models.Ledger.SponsorshipFlags.lsfSponsorshipRequireSignForFee) ?? false;
+        bool requireForReserve = sponsorship.Flags?.HasFlag(Models.Ledger.SponsorshipFlags.lsfSponsorshipRequireSignForReserve) ?? false;
 
         return ((coverage & (uint)SponsorCoverage.spfSponsorFee) != 0 && requireForFee)
             || ((coverage & (uint)SponsorCoverage.spfSponsorReserve) != 0 && requireForReserve);

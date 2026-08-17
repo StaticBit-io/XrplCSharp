@@ -33,7 +33,7 @@ namespace Xrpl.Models.Ledger
     {
         public LOCredential()
         {
-            LedgerEntryType = LedgerEntryType.Credential;
+            LedgerEntryType = Xrpl.Models.LedgerEntryType.Credential;
         }
 
         /// <summary>
@@ -99,7 +99,7 @@ namespace Xrpl.Models.Ledger
         /// A bit-map of boolean flags. See <see cref="CredentialFlags"/>.
         /// </summary>
         [JsonPropertyName("Flags")]
-        public new uint Flags { get; set; }
+        public new uint? Flags { get; set; }
 
         /// <summary>
         /// A hint indicating which page of the subject's owner directory links to this entry.
@@ -123,6 +123,6 @@ namespace Xrpl.Models.Ledger
         /// The index of the ledger that contains the transaction that most recently modified this entry.
         /// </summary>
         [JsonPropertyName("PreviousTxnLgrSeq")]
-        public uint PreviousTxnLgrSeq { get; set; }
+        public uint? PreviousTxnLgrSeq { get; set; }
     }
 }

@@ -17,7 +17,7 @@ namespace Xrpl.Models.Ledger
     {
         public LOEscrow()
         {
-            LedgerEntryType = LedgerEntryType.Escrow;
+            LedgerEntryType = Xrpl.Models.LedgerEntryType.Escrow;
         }
 
 
@@ -104,7 +104,7 @@ namespace Xrpl.Models.Ledger
         /// <summary>
         /// The index of the ledger that contains the transaction that most recently modified this object.
         /// </summary>
-        public uint PreviousTxnLgrSeq { get; set; }
+        public uint? PreviousTxnLgrSeq { get; set; }
 
         //todo not found field Flags: number
         //A bit-map of boolean flags. No flags are defined for the Escrow type, so

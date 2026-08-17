@@ -119,6 +119,8 @@ namespace Xrpl.Sugar
                 if (credential is null)
                     continue;
 
+                // Flags is nullable; a missing value lifts through the bitwise AND/comparison to false,
+                // which is correct here (absence means "not accepted"), not a fabricated default.
                 bool accepted = (credential.Flags & (uint)CredentialFlags.lsfAccepted) != 0;
                 bool expired = credential.Expiration is DateTime expiration && closeTime > expiration;
                 if (accepted && !expired)

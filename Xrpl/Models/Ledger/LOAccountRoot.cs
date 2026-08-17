@@ -92,7 +92,7 @@ namespace Xrpl.Models.Ledger
     {
         public LOAccountRoot()
         {
-            LedgerEntryType = LedgerEntryType.AccountRoot;
+            LedgerEntryType = Xrpl.Models.LedgerEntryType.AccountRoot;
         }
         /// <summary>
         /// Identifier of the associated AMM (Automated Market Maker) instance.
@@ -131,11 +131,11 @@ namespace Xrpl.Models.Ledger
         /// <summary>
         /// A bit-map of boolean flags enabled for this account.
         /// </summary>
-        public AccountRootFlags Flags { get; set; }
+        public AccountRootFlags? Flags { get; set; }
         /// <summary>
         /// The sequence number of the next valid transaction for this account.
         /// </summary>
-        public uint Sequence { get; set; }
+        public uint? Sequence { get; set; }
         /// <summary>
         /// The account's current XRP balance in drops, represented as a string.
         /// </summary>
@@ -144,7 +144,7 @@ namespace Xrpl.Models.Ledger
         /// <summary>
         /// The number of objects this account owns in the ledger, which contributes to its owner reserve.
         /// </summary>
-        public uint OwnerCount { get; set; }
+        public uint? OwnerCount { get; set; }
         /// <summary>
         /// The identifying hash of the transaction that most recently modified this object.
         /// </summary>
@@ -152,7 +152,7 @@ namespace Xrpl.Models.Ledger
         /// <summary>
         /// The index of the ledger that contains the transaction that most recently modified this object.
         /// </summary>
-        public uint PreviousTxnLgrSeq { get; set; }
+        public uint? PreviousTxnLgrSeq { get; set; }
         /// <summary>
         /// The identifying hash of the transaction most recently sent by this account.<br/>
         /// This field must be enabled to use the AccountTxnID transaction field.<br/>

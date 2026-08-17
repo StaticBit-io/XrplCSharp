@@ -100,7 +100,7 @@ public class LOVault : BaseLedgerEntry
 {
     public LOVault()
     {
-        LedgerEntryType = LedgerEntryType.Vault;
+        LedgerEntryType = Xrpl.Models.LedgerEntryType.Vault;
     }
 
     /// <summary>

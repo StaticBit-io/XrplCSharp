@@ -15,7 +15,7 @@ namespace Xrpl.Models.Ledger
         /// </summary>
         public LODID()
         {
-            LedgerEntryType = LedgerEntryType.DID;
+            LedgerEntryType = Xrpl.Models.LedgerEntryType.DID;
         }
 
         /// <summary>
@@ -59,6 +59,6 @@ namespace Xrpl.Models.Ledger
         /// The index of the ledger that contains the transaction that most recently modified this entry.
         /// </summary>
         [JsonPropertyName("PreviousTxnLgrSeq")]
-        public uint PreviousTxnLgrSeq { get; set; }
+        public uint? PreviousTxnLgrSeq { get; set; }
     }
 }
