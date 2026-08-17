@@ -116,8 +116,9 @@ namespace Xrpl.Client.Json
         /// <remarks>
         /// Each non-matching member's value is skipped whole, so a nested occurrence of the name
         /// cannot be mistaken for a top-level one. Matching goes through
-        /// <see cref="Utf8JsonReader.ValueTextEquals(ReadOnlySpan{byte})"/>, which unescapes — a
-        /// raw byte comparison would miss <c>marker</c>.
+        /// <see cref="Utf8JsonReader.ValueTextEquals(ReadOnlySpan{byte})"/>, which unescapes the
+        /// key first: a key a node spelled with a unicode escape still matches, where a raw byte
+        /// comparison against the plain name would silently miss it.
         /// </remarks>
         public bool HasTopLevelProperty(ReadOnlySpan<byte> name)
         {
