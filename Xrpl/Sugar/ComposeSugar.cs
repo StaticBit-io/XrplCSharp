@@ -150,7 +150,7 @@ namespace Xrpl.Sugar
             {
                 Type = LedgerEntryType.SignerList,
             };
-            AccountObjects response = await client.AccountObjects(request, cancellationToken).ConfigureAwait(false);
+            AccountObjects response = (await client.AccountObjects(request, cancellationToken).ConfigureAwait(false)).Result;
             return response?.AccountObjectList?.OfType<LOSignerList>().FirstOrDefault();
         }
 

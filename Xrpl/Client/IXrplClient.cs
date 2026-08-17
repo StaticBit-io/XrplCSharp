@@ -78,26 +78,26 @@ namespace Xrpl.Client
         /// <summary> The subscribe method requests periodic notifications from the server when certain events happen. </summary>
         /// <param name="request">An <see cref="SubscribeRequest"/> request.</param>
         /// <returns></returns>
-        Task<object> Subscribe(SubscribeRequest request, CancellationToken cancellationToken = default);
+        Task<XrplResponse<object>> Subscribe(SubscribeRequest request, CancellationToken cancellationToken = default);
         /// <summary> The unsubscribe command tells the server to stop sending messages for a particular subscription or set of subscriptions.</summary>
         /// <param name="request">An <see cref="UnsubscribeRequest"/> request.</param>
         /// <returns></returns>
-        Task<object> Unsubscribe(UnsubscribeRequest request, CancellationToken cancellationToken = default);
+        Task<XrplResponse<object>> Unsubscribe(UnsubscribeRequest request, CancellationToken cancellationToken = default);
         /// <summary>
         /// The ping command returns an acknowledgement,
         /// so that clients can test the connection status and latency
         /// </summary>
         /// <param name="request">An <see cref="PingRequest"/> request.</param>
         /// <returns></returns>
-        Task<object> Ping(CancellationToken cancellationToken = default);
+        Task<XrplResponse<object>> Ping(CancellationToken cancellationToken = default);
         /// <summary> The server_info command asks the server for a human-readable version of various information about the rippled server being queried. </summary>
         /// <param name="request">An <see cref="ServerInfoRequest"/> request.</param>
         /// <returns>A <see cref="ServerInfo"/> response.</returns>
-        Task<ServerInfo> ServerInfo(ServerInfoRequest request, CancellationToken cancellationToken = default);
+        Task<XrplResponse<ServerInfo>> ServerInfo(ServerInfoRequest request, CancellationToken cancellationToken = default);
         /// <summary> The server_state command asks the server for a human-readable version of various information about the rippled server being queried. </summary>
         /// <param name="request">An <see cref="ServerStateRequest"/> request.</param>
         /// <returns>A <see cref="ServerState"/> response.</returns>
-        Task<ServerState> ServerState(ServerStateRequest request, CancellationToken cancellationToken = default);
+        Task<XrplResponse<ServerState>> ServerState(ServerStateRequest request, CancellationToken cancellationToken = default);
 
         /// <summary>
         /// The feature command returns information about amendments this server knows about,<br/>
@@ -112,12 +112,12 @@ namespace Xrpl.Client
         /// If provided, limits the response to one amendment. Otherwise, the response lists all amendments.
         /// </param>
         /// <returns>A <see cref="ServerFeatures"/> response. Feature and their states</returns>
-        Task<ServerFeatures> ServerFeatures(string feature = null, CancellationToken cancellationToken = default);
+        Task<XrplResponse<ServerFeatures>> ServerFeatures(string feature = null, CancellationToken cancellationToken = default);
 
         /// <summary> The fee command reports the current state of the open-ledger requirements for the transaction cost. </summary>
         /// <param name="request">An <see cref="FeeRequest"/> request.</param>
         /// <returns>An <see cref="Models.Methods.Fee"/> response.</returns>
-        Task<Fee> Fee(CancellationToken cancellationToken = default);
+        Task<XrplResponse<Fee>> Fee(CancellationToken cancellationToken = default);
 
         /// <summary>
         /// The <c>server_definitions</c> method retrieves the definition enums used by the server.
@@ -125,7 +125,7 @@ namespace Xrpl.Client
         /// <param name="request">A <see cref="ServerDefinitionsRequest"/>.</param>
         /// <param name="cancellationToken">Cancellation token.</param>
         /// <returns>A <see cref="ServerDefinitionsResponse"/>.</returns>
-        Task<ServerDefinitionsResponse> ServerDefinitions(ServerDefinitionsRequest request, CancellationToken cancellationToken = default);
+        Task<XrplResponse<ServerDefinitionsResponse>> ServerDefinitions(ServerDefinitionsRequest request, CancellationToken cancellationToken = default);
 
         /// <summary>
         /// The <c>vault_info</c> method retrieves information about a vault.
@@ -133,7 +133,7 @@ namespace Xrpl.Client
         /// <param name="request">A <see cref="VaultInfoRequest"/>.</param>
         /// <param name="cancellationToken">Cancellation token.</param>
         /// <returns>A <see cref="VaultInfoResponse"/>.</returns>
-        Task<VaultInfoResponse> VaultInfo(VaultInfoRequest request, CancellationToken cancellationToken = default);
+        Task<XrplResponse<VaultInfoResponse>> VaultInfo(VaultInfoRequest request, CancellationToken cancellationToken = default);
 
         #endregion
 
@@ -142,18 +142,18 @@ namespace Xrpl.Client
         /// <summary> The account_info command retrieves information about an account, its activity, and its XRP balance. </summary>
         /// <param name="request">An <see cref="AccountInfoRequest"/> request.</param>
         /// <returns>An <see cref="Models.Methods.AccountInfo"/> response.</returns>
-        Task<AccountInfo> AccountInfo(AccountInfoRequest request, CancellationToken cancellationToken = default);
+        Task<XrplResponse<AccountInfo>> AccountInfo(AccountInfoRequest request, CancellationToken cancellationToken = default);
 
 
         /// <summary> The account_offers method retrieves a list of offers made by a given account that are outstanding as of a particular ledger version </summary>
         /// <param name="request">An <see cref="AccountOffersRequest"/> request.</param>
         /// <returns>An <see cref="Models.Methods.AccountOffers"/> response.</returns>
-        Task<AccountOffers> AccountOffers(AccountOffersRequest request, CancellationToken cancellationToken = default);
+        Task<XrplResponse<AccountOffers>> AccountOffers(AccountOffersRequest request, CancellationToken cancellationToken = default);
 
         /// <summary> The account_currencies command retrieves a list of currencies that an account can send or receive, based on its trust lines. </summary>
         /// <param name="request">An <see cref="AccountCurrenciesRequest"/> request.</param>
         /// <returns>An <see cref="Models.Methods.AccountCurrencies"/> response.</returns>
-        Task<AccountCurrencies> AccountCurrencies(AccountCurrenciesRequest request, CancellationToken cancellationToken = default);
+        Task<XrplResponse<AccountCurrencies>> AccountCurrencies(AccountCurrenciesRequest request, CancellationToken cancellationToken = default);
 
 
         /// <summary>
@@ -161,7 +161,7 @@ namespace Xrpl.Client
         /// </summary>
         /// <param name="request">An <see cref="AccountLinesRequest"/> request.</param>
         /// <returns>An <see cref="Models.Methods.AccountLines"/> response.</returns>
-        Task<AccountLines> AccountLines(AccountLinesRequest request, CancellationToken cancellationToken = default);
+        Task<XrplResponse<AccountLines>> AccountLines(AccountLinesRequest request, CancellationToken cancellationToken = default);
 
 
         /// <summary>
@@ -169,7 +169,7 @@ namespace Xrpl.Client
         /// </summary>
         /// <param name="request">An <see cref="AccountObjectsRequest"/> request.</param>
         /// <returns>An <see cref="Models.Methods.AccountObjects"/> response.</returns>
-        Task<AccountObjects> AccountObjects(AccountObjectsRequest request, CancellationToken cancellationToken = default);
+        Task<XrplResponse<AccountObjects>> AccountObjects(AccountObjectsRequest request, CancellationToken cancellationToken = default);
 
 
         /// <summary>
@@ -178,25 +178,25 @@ namespace Xrpl.Client
         /// </summary>
         /// <returns>An <see cref="NoRippleCheckRequest"/> response.</returns>
         /// <returns>An <see cref="Models.Methods.NoRippleCheck"/> response.</returns>
-        Task<NoRippleCheck> NoRippleCheck(NoRippleCheckRequest request, CancellationToken cancellationToken = default);
+        Task<XrplResponse<NoRippleCheck>> NoRippleCheck(NoRippleCheckRequest request, CancellationToken cancellationToken = default);
 
 
         /// <summary> The gateway_balances command calculates the total balances issued by a given account,
         /// optionally excluding amounts held by operational addresses. </summary>
         /// <param name="request">An <see cref="GatewayBalancesRequest"/> request.</param>
         /// <returns>An <see cref="GatewayBalancesResponse"/> response.</returns>
-        Task<GatewayBalancesResponse> GatewayBalances(GatewayBalancesRequest request, CancellationToken cancellationToken = default);
+        Task<XrplResponse<GatewayBalancesResponse>> GatewayBalances(GatewayBalancesRequest request, CancellationToken cancellationToken = default);
 
 
         /// <summary> The account_tx method retrieves a list of transactions that involved the specified account </summary>
         /// <param name="request">An <see cref="AccountTransactionsRequest"/> request.</param>
         /// <returns>An <see cref="Models.Methods.AccountTransactions"/> response.</returns>
-        Task<AccountTransactions> AccountTransactions(AccountTransactionsRequest request, CancellationToken cancellationToken = default);
+        Task<XrplResponse<AccountTransactions>> AccountTransactions(AccountTransactionsRequest request, CancellationToken cancellationToken = default);
         /// <summary> The account_channels method returns information about an account's Payment Channels.
         /// This includes only channels where the specified account is the channel's source, not the destination. </summary>
         /// <param name="request">An <see cref="AccountChannelsRequest"/> request.</param>
         /// <returns>An <see cref="Models.Methods.AccountChannels"/> response.</returns>
-        Task<AccountChannels> AccountChannels(AccountChannelsRequest request, CancellationToken cancellationToken = default);
+        Task<XrplResponse<AccountChannels>> AccountChannels(AccountChannelsRequest request, CancellationToken cancellationToken = default);
 
         /// <summary>
         /// The simulate method executes a dry run of any transaction type,
@@ -206,7 +206,7 @@ namespace Xrpl.Client
         /// </summary>
         /// <param name="request"></param>
         /// <returns></returns>
-        Task<SimulateResponse> Simulate(SimulateRequest request, CancellationToken cancellationToken = default);
+        Task<XrplResponse<SimulateResponse>> Simulate(SimulateRequest request, CancellationToken cancellationToken = default);
         #endregion
 
         #region NFT
@@ -215,18 +215,18 @@ namespace Xrpl.Client
         /// <summary> The nft_buy_offers method returns a list of buy offers for a given NFToken object. </summary>
         /// <param name="request">An <see cref="NFTBuyOffersRequest"/> request.</param>
         /// <returns>An <see cref="Models.Methods.NFTBuyOffers"/> response.</returns>
-        Task<NFTBuyOffers> NFTBuyOffers(NFTBuyOffersRequest request, CancellationToken cancellationToken = default);
+        Task<XrplResponse<NFTBuyOffers>> NFTBuyOffers(NFTBuyOffersRequest request, CancellationToken cancellationToken = default);
 
         /// <summary> The nft_sell_offers method returns a list of sell offers for a given NFToken object</summary>
         /// <param name="request">An <see cref="NFTSellOffersRequest"/> request.</param>
         /// <returns>An <see cref="Models.Methods.NFTSellOffers"/> response.</returns>
-        Task<NFTSellOffers> NFTSellOffers(NFTSellOffersRequest request, CancellationToken cancellationToken = default);
+        Task<XrplResponse<NFTSellOffers>> NFTSellOffers(NFTSellOffersRequest request, CancellationToken cancellationToken = default);
 
 
         /// <summary> The account_nfts method returns a list of NFToken objects for the specified account.</summary>
         /// <param name="request">An <see cref="AccountNFTsRequest"/> request.</param>
         /// <returns>An <see cref="Models.Methods.AccountNFTs"/> response.</returns>
-        Task<AccountNFTs> AccountNFTs(AccountNFTsRequest request, CancellationToken cancellationToken = default);
+        Task<XrplResponse<AccountNFTs>> AccountNFTs(AccountNFTsRequest request, CancellationToken cancellationToken = default);
 
 
         #endregion
@@ -268,9 +268,9 @@ namespace Xrpl.Client
         /// </summary>
         /// <param name="request">An <see cref="TxRequest"/> request.</param>
         /// <returns>An <see cref="TransactionResponse"/> response.</returns>
-        Task<TransactionResponse> Tx(TxRequest request, CancellationToken cancellationToken = default);
+        Task<XrplResponse<TransactionResponse>> Tx(TxRequest request, CancellationToken cancellationToken = default);
 
-        Task<TransactionSummary> TxV2(TxRequest request, CancellationToken cancellationToken = default);
+        Task<XrplResponse<TransactionSummary>> TxV2(TxRequest request, CancellationToken cancellationToken = default);
 
         /// <summary>
         /// The <c>transaction_entry</c> method retrieves information on a single transaction
@@ -279,7 +279,7 @@ namespace Xrpl.Client
         /// <param name="request">A <see cref="TransactionEntryRequest"/>.</param>
         /// <param name="cancellationToken">Cancellation token.</param>
         /// <returns>A <see cref="TransactionEntryResponse"/>.</returns>
-        Task<TransactionEntryResponse> TransactionEntry(TransactionEntryRequest request, CancellationToken cancellationToken = default);
+        Task<XrplResponse<TransactionEntryResponse>> TransactionEntry(TransactionEntryRequest request, CancellationToken cancellationToken = default);
         #endregion
 
         #region Channels
@@ -291,7 +291,7 @@ namespace Xrpl.Client
         /// <param name="request">A <see cref="ChannelAuthorizeRequest"/>.</param>
         /// <param name="cancellationToken">Cancellation token.</param>
         /// <returns>A <see cref="ChannelAuthorizeResponse"/> containing the signature.</returns>
-        Task<ChannelAuthorizeResponse> ChannelAuthorize(ChannelAuthorizeRequest request, CancellationToken cancellationToken = default);
+        Task<XrplResponse<ChannelAuthorizeResponse>> ChannelAuthorize(ChannelAuthorizeRequest request, CancellationToken cancellationToken = default);
 
         /// <summary>
         /// The <c>channel_verify</c> method checks the validity of a signature that can be
@@ -300,7 +300,7 @@ namespace Xrpl.Client
         /// <param name="request">A <see cref="ChannelVerifyRequest"/>.</param>
         /// <param name="cancellationToken">Cancellation token.</param>
         /// <returns>A <see cref="ChannelVerifyResponse"/> indicating whether the signature is valid.</returns>
-        Task<ChannelVerifyResponse> ChannelVerify(ChannelVerifyRequest request, CancellationToken cancellationToken = default);
+        Task<XrplResponse<ChannelVerifyResponse>> ChannelVerify(ChannelVerifyRequest request, CancellationToken cancellationToken = default);
 
         #endregion
 
@@ -314,7 +314,7 @@ namespace Xrpl.Client
         /// </summary>
         /// <param name="request">An <see cref="LedgerRequest"/> request.</param>
         /// <returns>An <see cref="LOLedger"/> response.</returns>
-        Task<LOLedger> Ledger(LedgerRequest request, CancellationToken cancellationToken = default);
+        Task<XrplResponse<LOLedger>> Ledger(LedgerRequest request, CancellationToken cancellationToken = default);
 
         /// <summary>
         /// The ledger_data method retrieves contents of the specified ledger.
@@ -322,25 +322,25 @@ namespace Xrpl.Client
         /// </summary>
         /// <param name="request">An <see cref="LedgerDataRequest"/> request.</param>
         /// <returns>An <see cref="LOLedgerData"/> response.</returns>
-        Task<LOLedgerData> LedgerData(LedgerDataRequest request, CancellationToken cancellationToken = default);
+        Task<XrplResponse<LOLedgerData>> LedgerData(LedgerDataRequest request, CancellationToken cancellationToken = default);
         /// <summary> The ledger_closed method returns the unique identifiers of the most recently closed ledger. </summary>
         /// <param name="request">An <see cref="LedgerClosedRequest"/> response.</param>
         /// <returns>An <see cref="LOBaseLedger"/> response.</returns>
-        Task<LOBaseLedger> LedgerClosed(LedgerClosedRequest request, CancellationToken cancellationToken = default);
+        Task<XrplResponse<LOBaseLedger>> LedgerClosed(LedgerClosedRequest request, CancellationToken cancellationToken = default);
         /// <summary>
         /// The ledger_current method returns the unique identifiers of the current in-progress ledger.<br/>
         /// This command is mostly useful for testing, because the ledger returned is still in flux.
         /// </summary>
         /// <param name="request">An <see cref="LedgerCurrentRequest"/> response.</param>
         /// <returns>An <see cref="LOLedgerCurrentIndex"/> response.</returns>
-        Task<LOLedgerCurrentIndex> LedgerCurrent(LedgerCurrentRequest request, CancellationToken cancellationToken = default);
+        Task<XrplResponse<LOLedgerCurrentIndex>> LedgerCurrent(LedgerCurrentRequest request, CancellationToken cancellationToken = default);
         /// <summary>
         /// The ledger_entry method returns a single ledger object from the XRP Ledger in its raw format.<br/>
         /// See ledger format for information on the different types of objects you can retrieve.
         /// </summary>
         /// <param name="request">An <see cref="LedgerEntryRequest"/> response.</param>
         /// <returns>An <see cref="LedgerEntryResponse"/> response.</returns>
-        Task<LedgerEntryResponse> LedgerEntry(LedgerEntryRequest request, CancellationToken cancellationToken = default);
+        Task<XrplResponse<LedgerEntryResponse>> LedgerEntry(LedgerEntryRequest request, CancellationToken cancellationToken = default);
 
 
         #endregion
@@ -350,20 +350,20 @@ namespace Xrpl.Client
         /// </summary>
         /// <param name="request">An <see cref="AMMInfoRequest"/> request.</param>
         /// <returns>An <see cref="AMMInfoResponse"/> response.</returns>
-        Task<AMMInfoResponse> AmmInfo(AMMInfoRequest request, CancellationToken cancellationToken = default);
+        Task<XrplResponse<AMMInfoResponse>> AmmInfo(AMMInfoRequest request, CancellationToken cancellationToken = default);
         /// <summary>
         /// The book_offers method retrieves a list of offers, also known as the order book , between two currencies
         /// </summary>
         /// <param name="request">An <see cref="BookOffersRequest"/> request.</param>
         /// <returns>An <see cref="Models.Transactions.BookOffers"/> response.</returns>
-        Task<BookOffers> BookOffers(BookOffersRequest request, CancellationToken cancellationToken = default);
+        Task<XrplResponse<BookOffers>> BookOffers(BookOffersRequest request, CancellationToken cancellationToken = default);
         /// <summary>
         /// The random command provides a random number to be used as a source of entropy for random number generation by clients.<br/>
         /// https://xrpl.org/random.html#random
         /// </summary>
         /// <param name="request">An <see cref="RandomRequest"/> request.</param>
         /// <returns></returns>
-        Task<object> Random(CancellationToken cancellationToken = default);
+        Task<XrplResponse<object>> Random(CancellationToken cancellationToken = default);
 
         /// <summary>
         /// The <c>deposit_authorized</c> command indicates whether one account is authorized to send payments
@@ -372,7 +372,7 @@ namespace Xrpl.Client
         /// <param name="request">A <see cref="DepositAuthorizedRequest"/>.</param>
         /// <param name="cancellationToken">Cancellation token.</param>
         /// <returns>A <see cref="DepositAuthorized"/> response.</returns>
-        Task<DepositAuthorized> DepositAuthorized(DepositAuthorizedRequest request, CancellationToken cancellationToken = default);
+        Task<XrplResponse<DepositAuthorized>> DepositAuthorized(DepositAuthorizedRequest request, CancellationToken cancellationToken = default);
 
         /// <summary>
         /// The <c>path_find</c> create sub-command creates an ongoing request to find possible paths
@@ -383,7 +383,7 @@ namespace Xrpl.Client
         /// <param name="request">A <see cref="PathFindCreateRequest"/>.</param>
         /// <param name="cancellationToken">Cancellation token.</param>
         /// <returns>A <see cref="PathFindResponse"/> with initial path alternatives.</returns>
-        Task<PathFindResponse> PathFind(PathFindCreateRequest request, CancellationToken cancellationToken = default);
+        Task<XrplResponse<PathFindResponse>> PathFind(PathFindCreateRequest request, CancellationToken cancellationToken = default);
 
         /// <summary>
         /// The <c>path_find</c> close sub-command instructs the server to stop sending information
@@ -392,7 +392,7 @@ namespace Xrpl.Client
         /// <param name="request">A <see cref="PathFindCloseRequest"/>.</param>
         /// <param name="cancellationToken">Cancellation token.</param>
         /// <returns>A <see cref="PathFindResponse"/>.</returns>
-        Task<PathFindResponse> PathFindClose(PathFindCloseRequest request, CancellationToken cancellationToken = default);
+        Task<XrplResponse<PathFindResponse>> PathFindClose(PathFindCloseRequest request, CancellationToken cancellationToken = default);
 
         /// <summary>
         /// The <c>path_find</c> status sub-command requests an immediate update about the client's
@@ -401,7 +401,7 @@ namespace Xrpl.Client
         /// <param name="request">A <see cref="PathFindStatusRequest"/>.</param>
         /// <param name="cancellationToken">Cancellation token.</param>
         /// <returns>A <see cref="PathFindResponse"/>.</returns>
-        Task<PathFindResponse> PathFindStatus(PathFindStatusRequest request, CancellationToken cancellationToken = default);
+        Task<XrplResponse<PathFindResponse>> PathFindStatus(PathFindStatusRequest request, CancellationToken cancellationToken = default);
 
         /// <summary>
         /// The <c>ripple_path_find</c> method is a simplified version of the path_find method
@@ -411,12 +411,12 @@ namespace Xrpl.Client
         /// <param name="request">A <see cref="RipplePathFindRequest"/>.</param>
         /// <param name="cancellationToken">Cancellation token.</param>
         /// <returns>A <see cref="RipplePathFindResponse"/>.</returns>
-        Task<RipplePathFindResponse> RipplePathFind(RipplePathFindRequest request, CancellationToken cancellationToken = default);
+        Task<XrplResponse<RipplePathFindResponse>> RipplePathFind(RipplePathFindRequest request, CancellationToken cancellationToken = default);
 
-        Task<object> AnyRequest(BaseRequest request, CancellationToken cancellationToken = default);
+        Task<XrplResponse<object>> AnyRequest(BaseRequest request, CancellationToken cancellationToken = default);
 
-        Task<Dictionary<string, object>> Request(Dictionary<string, object> request, CancellationToken cancellationToken = default);
-        Task<T> GRequest<T, R>(R request, CancellationToken cancellationToken = default) where R : BaseRequest;
+        Task<XrplResponse<Dictionary<string, object>>> Request(Dictionary<string, object> request, CancellationToken cancellationToken = default);
+        Task<XrplResponse<T>> GRequest<T, R>(R request, CancellationToken cancellationToken = default) where R : BaseRequest;
 
 
         #region Sugars
@@ -554,7 +554,7 @@ namespace Xrpl.Client
         private async Task SetNetworkId()
         {
             var server = await ServerInfo(new ServerInfoRequest());
-            if (server?.Info?.NetworkID is { } id and > 1024)
+            if (server.Result?.Info?.NetworkID is { } id and > 1024)
             {
                 SetNetworkId(id);
             }
@@ -639,199 +639,199 @@ namespace Xrpl.Client
 
         // REQUESTS
         /// <inheritdoc />
-        public Task<AccountChannels> AccountChannels(AccountChannelsRequest request, CancellationToken cancellationToken = default)
+        public Task<XrplResponse<AccountChannels>> AccountChannels(AccountChannelsRequest request, CancellationToken cancellationToken = default)
         {
             return this.GRequest<AccountChannels, AccountChannelsRequest>(request, cancellationToken);
         }
 
         /// <inheritdoc />
-        public Task<ChannelAuthorizeResponse> ChannelAuthorize(ChannelAuthorizeRequest request, CancellationToken cancellationToken = default)
+        public Task<XrplResponse<ChannelAuthorizeResponse>> ChannelAuthorize(ChannelAuthorizeRequest request, CancellationToken cancellationToken = default)
         {
             return this.GRequest<ChannelAuthorizeResponse, ChannelAuthorizeRequest>(request, cancellationToken);
         }
 
         /// <inheritdoc />
-        public Task<ChannelVerifyResponse> ChannelVerify(ChannelVerifyRequest request, CancellationToken cancellationToken = default)
+        public Task<XrplResponse<ChannelVerifyResponse>> ChannelVerify(ChannelVerifyRequest request, CancellationToken cancellationToken = default)
         {
             return this.GRequest<ChannelVerifyResponse, ChannelVerifyRequest>(request, cancellationToken);
         }
 
-        public Task<SimulateResponse> Simulate(SimulateRequest request, CancellationToken cancellationToken = default)
+        public Task<XrplResponse<SimulateResponse>> Simulate(SimulateRequest request, CancellationToken cancellationToken = default)
         {
             return this.GRequest<SimulateResponse, SimulateRequest>(request, cancellationToken);
         }
 
         /// <inheritdoc />
-        public Task<AccountCurrencies> AccountCurrencies(AccountCurrenciesRequest request, CancellationToken cancellationToken = default)
+        public Task<XrplResponse<AccountCurrencies>> AccountCurrencies(AccountCurrenciesRequest request, CancellationToken cancellationToken = default)
         {
             return this.GRequest<AccountCurrencies, AccountCurrenciesRequest>(request, cancellationToken);
         }
 
         /// <inheritdoc />
-        public Task<AccountInfo> AccountInfo(AccountInfoRequest request, CancellationToken cancellationToken = default)
+        public Task<XrplResponse<AccountInfo>> AccountInfo(AccountInfoRequest request, CancellationToken cancellationToken = default)
         {
             return this.GRequest<AccountInfo, AccountInfoRequest>(request, cancellationToken);
         }
 
         /// <inheritdoc />
-        public Task<AccountLines> AccountLines(AccountLinesRequest request, CancellationToken cancellationToken = default)
+        public Task<XrplResponse<AccountLines>> AccountLines(AccountLinesRequest request, CancellationToken cancellationToken = default)
         {
             return this.GRequest<AccountLines, AccountLinesRequest>(request, cancellationToken);
         }
 
         /// <inheritdoc />
-        public Task<AccountNFTs> AccountNFTs(AccountNFTsRequest request, CancellationToken cancellationToken = default)
+        public Task<XrplResponse<AccountNFTs>> AccountNFTs(AccountNFTsRequest request, CancellationToken cancellationToken = default)
         {
             return this.GRequest<AccountNFTs, AccountNFTsRequest>(request, cancellationToken);
         }
 
         /// <inheritdoc />
-        public Task<AccountObjects> AccountObjects(AccountObjectsRequest request, CancellationToken cancellationToken = default)
+        public Task<XrplResponse<AccountObjects>> AccountObjects(AccountObjectsRequest request, CancellationToken cancellationToken = default)
         {
             return this.GRequest<AccountObjects, AccountObjectsRequest>(request, cancellationToken);
         }
 
         /// <inheritdoc />
-        public Task<AccountOffers> AccountOffers(AccountOffersRequest request, CancellationToken cancellationToken = default)
+        public Task<XrplResponse<AccountOffers>> AccountOffers(AccountOffersRequest request, CancellationToken cancellationToken = default)
         {
             return this.GRequest<AccountOffers, AccountOffersRequest>(request, cancellationToken);
         }
 
         /// <inheritdoc />
-        public Task<AccountTransactions> AccountTransactions(AccountTransactionsRequest request, CancellationToken cancellationToken = default)
+        public Task<XrplResponse<AccountTransactions>> AccountTransactions(AccountTransactionsRequest request, CancellationToken cancellationToken = default)
         {
             return this.GRequest<AccountTransactions, AccountTransactionsRequest>(request, cancellationToken);
         }
 
         /// <inheritdoc />
-        public Task<AMMInfoResponse> AmmInfo(AMMInfoRequest request, CancellationToken cancellationToken = default)
+        public Task<XrplResponse<AMMInfoResponse>> AmmInfo(AMMInfoRequest request, CancellationToken cancellationToken = default)
         {
             return this.GRequest<AMMInfoResponse, AMMInfoRequest>(request, cancellationToken);
         }
 
         /// <inheritdoc />
-        public Task<BookOffers> BookOffers(BookOffersRequest request, CancellationToken cancellationToken = default)
+        public Task<XrplResponse<BookOffers>> BookOffers(BookOffersRequest request, CancellationToken cancellationToken = default)
         {
             return this.GRequest<BookOffers, BookOffersRequest>(request, cancellationToken);
         }
 
         /// <inheritdoc />
-        public Task<DepositAuthorized> DepositAuthorized(DepositAuthorizedRequest request, CancellationToken cancellationToken = default)
+        public Task<XrplResponse<DepositAuthorized>> DepositAuthorized(DepositAuthorizedRequest request, CancellationToken cancellationToken = default)
         {
             return this.GRequest<DepositAuthorized, DepositAuthorizedRequest>(request, cancellationToken);
         }
 
         /// <inheritdoc />
-        public Task<LOLedger> Ledger(LedgerRequest request, CancellationToken cancellationToken = default)
+        public Task<XrplResponse<LOLedger>> Ledger(LedgerRequest request, CancellationToken cancellationToken = default)
         {
             return this.GRequest<LOLedger, LedgerRequest>(request, cancellationToken);
         }
 
         /// <inheritdoc />
-        public Task<LOBaseLedger> LedgerClosed(LedgerClosedRequest request, CancellationToken cancellationToken = default)
+        public Task<XrplResponse<LOBaseLedger>> LedgerClosed(LedgerClosedRequest request, CancellationToken cancellationToken = default)
         {
             return this.GRequest<LOBaseLedger, LedgerClosedRequest>(request, cancellationToken);
         }
 
         /// <inheritdoc />
-        public Task<LOLedgerCurrentIndex> LedgerCurrent(LedgerCurrentRequest request, CancellationToken cancellationToken = default)
+        public Task<XrplResponse<LOLedgerCurrentIndex>> LedgerCurrent(LedgerCurrentRequest request, CancellationToken cancellationToken = default)
         {
             return this.GRequest<LOLedgerCurrentIndex, LedgerCurrentRequest>(request, cancellationToken);
         }
         /// <inheritdoc />
-        public Task<LOLedgerData> LedgerData(LedgerDataRequest request, CancellationToken cancellationToken = default)
+        public Task<XrplResponse<LOLedgerData>> LedgerData(LedgerDataRequest request, CancellationToken cancellationToken = default)
         {
             return this.GRequest<LOLedgerData, LedgerDataRequest>(request, cancellationToken);
         }
 
         /// <inheritdoc />
-        public Task<LedgerEntryResponse> LedgerEntry(LedgerEntryRequest request, CancellationToken cancellationToken = default)
+        public Task<XrplResponse<LedgerEntryResponse>> LedgerEntry(LedgerEntryRequest request, CancellationToken cancellationToken = default)
         {
             return this.GRequest<LedgerEntryResponse, LedgerEntryRequest>(request, cancellationToken);
         }
 
         /// <inheritdoc />
-        public Task<Fee> Fee(CancellationToken cancellationToken = default)
+        public Task<XrplResponse<Fee>> Fee(CancellationToken cancellationToken = default)
         {
             FeeRequest request = new FeeRequest();
             return this.GRequest<Fee, FeeRequest>(request, cancellationToken);
         }
 
         /// <inheritdoc />
-        public Task<GatewayBalancesResponse> GatewayBalances(GatewayBalancesRequest request, CancellationToken cancellationToken = default)
+        public Task<XrplResponse<GatewayBalancesResponse>> GatewayBalances(GatewayBalancesRequest request, CancellationToken cancellationToken = default)
         {
             return this.GRequest<GatewayBalancesResponse, GatewayBalancesRequest>(request, cancellationToken);
         }
 
         /// <inheritdoc />
-        public Task<NFTBuyOffers> NFTBuyOffers(NFTBuyOffersRequest request, CancellationToken cancellationToken = default)
+        public Task<XrplResponse<NFTBuyOffers>> NFTBuyOffers(NFTBuyOffersRequest request, CancellationToken cancellationToken = default)
         {
             return this.GRequest<NFTBuyOffers, NFTBuyOffersRequest>(request, cancellationToken);
         }
 
         /// <inheritdoc />
-        public Task<NFTSellOffers> NFTSellOffers(NFTSellOffersRequest request, CancellationToken cancellationToken = default)
+        public Task<XrplResponse<NFTSellOffers>> NFTSellOffers(NFTSellOffersRequest request, CancellationToken cancellationToken = default)
         {
             return this.GRequest<NFTSellOffers, NFTSellOffersRequest>(request, cancellationToken);
         }
 
         /// <inheritdoc />
-        public Task<NoRippleCheck> NoRippleCheck(NoRippleCheckRequest request, CancellationToken cancellationToken = default)
+        public Task<XrplResponse<NoRippleCheck>> NoRippleCheck(NoRippleCheckRequest request, CancellationToken cancellationToken = default)
         {
             return this.GRequest<NoRippleCheck, NoRippleCheckRequest>(request, cancellationToken);
         }
 
         /// <inheritdoc />
-        public Task<PathFindResponse> PathFind(PathFindCreateRequest request, CancellationToken cancellationToken = default)
+        public Task<XrplResponse<PathFindResponse>> PathFind(PathFindCreateRequest request, CancellationToken cancellationToken = default)
         {
             return this.GRequest<PathFindResponse, PathFindCreateRequest>(request, cancellationToken);
         }
 
         /// <inheritdoc />
-        public Task<PathFindResponse> PathFindClose(PathFindCloseRequest request, CancellationToken cancellationToken = default)
+        public Task<XrplResponse<PathFindResponse>> PathFindClose(PathFindCloseRequest request, CancellationToken cancellationToken = default)
         {
             return this.GRequest<PathFindResponse, PathFindCloseRequest>(request, cancellationToken);
         }
 
         /// <inheritdoc />
-        public Task<PathFindResponse> PathFindStatus(PathFindStatusRequest request, CancellationToken cancellationToken = default)
+        public Task<XrplResponse<PathFindResponse>> PathFindStatus(PathFindStatusRequest request, CancellationToken cancellationToken = default)
         {
             return this.GRequest<PathFindResponse, PathFindStatusRequest>(request, cancellationToken);
         }
 
         /// <inheritdoc />
-        public Task<object> Ping(CancellationToken cancellationToken = default)
+        public Task<XrplResponse<object>> Ping(CancellationToken cancellationToken = default)
         {
             PingRequest request = new PingRequest();
             return this.GRequest<object, PingRequest>(request, cancellationToken);
         }
 
         /// <inheritdoc />
-        public Task<object> Random(CancellationToken cancellationToken = default)
+        public Task<XrplResponse<object>> Random(CancellationToken cancellationToken = default)
         {
             RandomRequest request = new RandomRequest();
             return this.GRequest<object, RandomRequest>(request, cancellationToken);
         }
 
         /// <inheritdoc />
-        public Task<RipplePathFindResponse> RipplePathFind(RipplePathFindRequest request, CancellationToken cancellationToken = default)
+        public Task<XrplResponse<RipplePathFindResponse>> RipplePathFind(RipplePathFindRequest request, CancellationToken cancellationToken = default)
         {
             return this.GRequest<RipplePathFindResponse, RipplePathFindRequest>(request, cancellationToken);
         }
 
         /// <inheritdoc />
-        public Task<ServerInfo> ServerInfo(ServerInfoRequest request, CancellationToken cancellationToken = default)
+        public Task<XrplResponse<ServerInfo>> ServerInfo(ServerInfoRequest request, CancellationToken cancellationToken = default)
         {
             return this.GRequest<ServerInfo, ServerInfoRequest>(request, cancellationToken);
         }
 
         /// <inheritdoc />
-        public Task<ServerState> ServerState(ServerStateRequest request, CancellationToken cancellationToken = default)
+        public Task<XrplResponse<ServerState>> ServerState(ServerStateRequest request, CancellationToken cancellationToken = default)
         {
             return this.GRequest<ServerState, ServerStateRequest>(request, cancellationToken);
         }
         /// <inheritdoc />
-        public Task<ServerFeatures> ServerFeatures(string feature = null, CancellationToken cancellationToken = default)
+        public Task<XrplResponse<ServerFeatures>> ServerFeatures(string feature = null, CancellationToken cancellationToken = default)
         {
             var request = new ServerFeaturesRequest()
             {
@@ -841,13 +841,13 @@ namespace Xrpl.Client
         }
 
         /// <inheritdoc />
-        public Task<ServerDefinitionsResponse> ServerDefinitions(ServerDefinitionsRequest request, CancellationToken cancellationToken = default)
+        public Task<XrplResponse<ServerDefinitionsResponse>> ServerDefinitions(ServerDefinitionsRequest request, CancellationToken cancellationToken = default)
         {
             return this.GRequest<ServerDefinitionsResponse, ServerDefinitionsRequest>(request, cancellationToken);
         }
 
         /// <inheritdoc />
-        public Task<VaultInfoResponse> VaultInfo(VaultInfoRequest request, CancellationToken cancellationToken = default)
+        public Task<XrplResponse<VaultInfoResponse>> VaultInfo(VaultInfoRequest request, CancellationToken cancellationToken = default)
         {
             return this.GRequest<VaultInfoResponse, VaultInfoRequest>(request, cancellationToken);
         }
@@ -864,46 +864,46 @@ namespace Xrpl.Client
         //}
 
         /// <inheritdoc />
-        public Task<object> Subscribe(SubscribeRequest request, CancellationToken cancellationToken = default)
+        public Task<XrplResponse<object>> Subscribe(SubscribeRequest request, CancellationToken cancellationToken = default)
         {
 
             return this.GRequest<object, SubscribeRequest>(request, cancellationToken);
         }
 
         /// <inheritdoc />
-        public Task<object> Unsubscribe(UnsubscribeRequest request, CancellationToken cancellationToken = default)
+        public Task<XrplResponse<object>> Unsubscribe(UnsubscribeRequest request, CancellationToken cancellationToken = default)
         {
 
             return this.GRequest<object, UnsubscribeRequest>(request, cancellationToken);
         }
 
         /// <inheritdoc />
-        public Task<TransactionEntryResponse> TransactionEntry(TransactionEntryRequest request, CancellationToken cancellationToken = default)
+        public Task<XrplResponse<TransactionEntryResponse>> TransactionEntry(TransactionEntryRequest request, CancellationToken cancellationToken = default)
         {
             return this.GRequest<TransactionEntryResponse, TransactionEntryRequest>(request, cancellationToken);
         }
 
         /// <inheritdoc />
-        public Task<TransactionResponse> Tx(TxRequest request, CancellationToken cancellationToken = default)
+        public Task<XrplResponse<TransactionResponse>> Tx(TxRequest request, CancellationToken cancellationToken = default)
         {
             request.ApiVersion = 1;
             return this.GRequest<TransactionResponse, TxRequest>(request, cancellationToken);
         }
 
-        public Task<TransactionSummary> TxV2(TxRequest request, CancellationToken cancellationToken = default)
+        public Task<XrplResponse<TransactionSummary>> TxV2(TxRequest request, CancellationToken cancellationToken = default)
         {
             request.ApiVersion = 2;
             return this.GRequest<TransactionSummary, TxRequest>(request, cancellationToken);
         }
 
         /// <inheritdoc />
-        public Task<object> AnyRequest(BaseRequest request, CancellationToken cancellationToken = default)
+        public Task<XrplResponse<object>> AnyRequest(BaseRequest request, CancellationToken cancellationToken = default)
         {
             return this.GRequest<object, BaseRequest>(request, cancellationToken);
         }
 
         /// <inheritdoc />
-        public async Task<Dictionary<string, object>> Request(Dictionary<string, object> request, CancellationToken cancellationToken = default)
+        public async Task<XrplResponse<Dictionary<string, object>>> Request(Dictionary<string, object> request, CancellationToken cancellationToken = default)
         {
             //string account = request["Account"] ? EnsureClassicAddress((string)request["account"]) : null;
             //request["Account"] = account;
@@ -918,24 +918,33 @@ namespace Xrpl.Client
                 request[ApiVersionField] = ApiVersion;
             }
 
-            var response = await this.connection.Request(request, cancellationToken: cancellationToken);
-
-            // mutates `response` to add warnings
-            //handlePartialPayment(req.command, response)
-            return response;
-
+            object resolved = await this.connection.Request(request, cancellationToken: cancellationToken);
+            return Wrap<Dictionary<string, object>>(resolved);
         }
 
         /// <inheritdoc />
-        public async Task<T> GRequest<T, R>(R request, CancellationToken cancellationToken = default) where R : BaseRequest
+        public async Task<XrplResponse<T>> GRequest<T, R>(R request, CancellationToken cancellationToken = default) where R : BaseRequest
         {
             request.ApiVersion ??= ApiVersion;
-            object response = await this.connection.GRequest<T, R>(request, cancellationToken: cancellationToken);
-            
-            // mutates `response` to add warnings
-            //handlePartialPayment(req.command, response)
-            
-            return (T)response;
+            object resolved = await this.connection.GRequest<T, R>(request, cancellationToken: cancellationToken);
+            return Wrap<T>(resolved);
+        }
+
+        /// <summary>
+        /// Turns what the request manager resolved into the response handed to the caller: the
+        /// typed projection, paired with the envelope it was read from.
+        /// </summary>
+        private static XrplResponse<T> Wrap<T>(object resolved)
+        {
+            ResolvedResponse carried = (ResolvedResponse)resolved;
+            BaseResponse envelope = carried.Envelope;
+
+            return new XrplResponse<T>(
+                (T)carried.Result,
+                envelope?.RawResult ?? default,
+                envelope?.ApiVersion,
+                envelope?.Warnings,
+                envelope?.Forwarded ?? false);
         }
 
         public string EnsureClassicAddress(string address)

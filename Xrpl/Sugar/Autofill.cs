@@ -186,7 +186,7 @@ namespace Xrpl.Sugar
         {
             LedgerIndex index = new LedgerIndex(LedgerIndexType.Current);
             AccountInfoRequest request = new AccountInfoRequest((string)tx["Account"]) { LedgerIndex = index };
-            AccountInfo data = await client.AccountInfo(request, cancellationToken);
+            AccountInfo data = (await client.AccountInfo(request, cancellationToken)).Result;
             tx.TryAdd("Sequence", data.AccountData.Sequence);
             return data.AccountData.Sequence;
         }
@@ -194,7 +194,7 @@ namespace Xrpl.Sugar
         public static async Task<BigInteger> FetchReserveFee(this IXrplClient client, CancellationToken cancellationToken = default)
         {
             ServerStateRequest request = new ServerStateRequest();
-            ServerState data = await client.ServerState(request, cancellationToken);
+            ServerState data = (await client.ServerState(request, cancellationToken)).Result;
             uint? fee = data.State.ValidatedLedger.ReserveInc;
 
             if (fee == null)
@@ -339,7 +339,7 @@ namespace Xrpl.Sugar
 
             try
             {
-                AccountInfo data = await client.AccountInfo(request, cancellationToken);
+                AccountInfo data = (await client.AccountInfo(request, cancellationToken)).Result;
                 int? entries = data?.SignerLists?.Length > 0 ? data.SignerLists[0].SignerEntries?.Count : null;
                 return entries is > 0 ? entries.Value : 1;
             }
@@ -425,7 +425,7 @@ namespace Xrpl.Sugar
                     Index = loanId,
                     LedgerIndex = new LedgerIndex(LedgerIndexType.Current),
                 };
-                LedgerEntryResponse response = await client.LedgerEntry(request, cancellationToken);
+                LedgerEntryResponse response = (await client.LedgerEntry(request, cancellationToken)).Result;
                 return response?.Node as LOLoan;
             }
             catch (Exception) when (!cancellationToken.IsCancellationRequested)
@@ -664,7 +664,7 @@ namespace Xrpl.Sugar
                 LedgerIndex = index,
                 DeletionBlockersOnly = true,
             };
-            AccountObjects response = await client.AccountObjects(request, cancellationToken);
+            AccountObjects response = (await client.AccountObjects(request, cancellationToken)).Result;
             TaskCompletionSource task = new TaskCompletionSource();
             if (response.AccountObjectList.Count > 0)
             {

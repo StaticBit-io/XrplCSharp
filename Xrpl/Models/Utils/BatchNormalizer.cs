@@ -96,10 +96,10 @@ public static class BatchNormalizer
                 return seq;
 
             var probe = new Dictionary<string, object> { ["Account"] = account };
-            var ai = await client.AccountInfo(new AccountInfoRequest(account)
+            var ai = (await client.AccountInfo(new AccountInfoRequest(account)
             {
                 LedgerIndex = new LedgerIndex(LedgerIndexType.Current)
-            }, cancellationToken);
+            }, cancellationToken)).Result;
             var start = ai.AccountData.Sequence;
             nextSeqByAccount[account] = start;
             return start;

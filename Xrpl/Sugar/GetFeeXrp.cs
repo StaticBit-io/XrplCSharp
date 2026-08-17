@@ -27,7 +27,7 @@ namespace Xrpl.Sugar
         {
             double feeCushion = cushion ?? client.feeCushion;
             ServerInfoRequest request = new ServerInfoRequest();
-            ServerInfo serverInfo = await client.ServerInfo(request, cancellationToken);
+            ServerInfo serverInfo = (await client.ServerInfo(request, cancellationToken)).Result;
             decimal? baseFee = serverInfo.Info.ValidatedLedger?.BaseFeeXrp;
             if (baseFee == null)
             {

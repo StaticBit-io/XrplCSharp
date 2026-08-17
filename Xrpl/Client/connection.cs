@@ -1742,7 +1742,7 @@ public class Connection
             ? null
             : new AdminCredentials(config.AdminUser, config.AdminPassword);
 
-    public async Task<Dictionary<string, object>> Request(
+    public async Task<object> Request(
         Dictionary<string, object> request,
         TimeSpan? timeout = null,
         RequestFailurePolicy? policyOverride = null,

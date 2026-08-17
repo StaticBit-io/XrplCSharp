@@ -58,7 +58,7 @@ namespace Xrpl.Sugar
                 LedgerIndex = lederIndex ?? index,
                 Strict = true
             };
-            AccountInfo accountInfo = await client.AccountInfo(xrpRequest, cancellationToken);
+            AccountInfo accountInfo = (await client.AccountInfo(xrpRequest, cancellationToken)).Result;
             return accountInfo.AccountData.Balance.ValueAsXrp.ToString();
         }
 
@@ -86,9 +86,9 @@ namespace Xrpl.Sugar
                 LedgerIndex = lederIndex ?? index,
                 Strict = true
             };
-            AccountInfo accountInfo = await client.AccountInfo(xrpRequest, cancellationToken);
+            AccountInfo accountInfo = (await client.AccountInfo(xrpRequest, cancellationToken)).Result;
 
-            var serverInfo = await client.ServerState(new ServerStateRequest(), cancellationToken);
+            var serverInfo = (await client.ServerState(new ServerStateRequest(), cancellationToken)).Result;
             var FlineReserveFee = serverInfo.State.ValidatedLedger.ReserveInc.ToString();
             var FaccReserveFee = serverInfo.State.ValidatedLedger.ReserveBase.ToString();
             var lineReserveFee = (decimal)new Currency()
@@ -118,12 +118,12 @@ namespace Xrpl.Sugar
                 Limit = options?.Limit
             };
 
-            var response = await client.AccountLines(linesRequest, cancellationToken);
+            var response = (await client.AccountLines(linesRequest, cancellationToken)).Result;
             var lines = response.TrustLines;
             while (response.Marker is not null && lines.Count > 0)
             {
                 linesRequest.Marker = response.Marker;
-                response = await client.AccountLines(linesRequest, cancellationToken);
+                response = (await client.AccountLines(linesRequest, cancellationToken)).Result;
                 if (response.TrustLines.Count > 0)
                     lines.AddRange(response.TrustLines);
                 if (options?.Limit is not null && lines.Count >= options.Limit)

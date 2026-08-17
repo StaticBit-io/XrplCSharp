@@ -78,7 +78,7 @@ namespace Xrpl.Sugar
             // read-path check must compare Expiration itself instead of trusting
             // the entry's existence.
             LedgerRequest ledgerRequest = new LedgerRequest { LedgerIndex = new LedgerIndex(LedgerIndexType.Validated) };
-            LOLedger ledgerResponse = await client.Ledger(ledgerRequest, cancellationToken);
+            LOLedger ledgerResponse = (await client.Ledger(ledgerRequest, cancellationToken)).Result;
             LedgerEntity ledger = (LedgerEntity)ledgerResponse.LedgerEntity;
             uint ledgerIndex = Convert.ToUInt32(ledger.LedgerIndex);
             DateTime closeTime = ledger.CloseTime
@@ -90,7 +90,7 @@ namespace Xrpl.Sugar
                 Index = domainId,
                 LedgerIndex = pinnedIndex
             };
-            LedgerEntryResponse domainResponse = await client.LedgerEntry(domainRequest, cancellationToken);
+            LedgerEntryResponse domainResponse = (await client.LedgerEntry(domainRequest, cancellationToken)).Result;
             if (domainResponse.Node is not LOPermissionedDomain domain)
                 throw new RippleException($"Ledger entry {domainId} is not a PermissionedDomain.");
 
@@ -154,7 +154,7 @@ namespace Xrpl.Sugar
             };
             try
             {
-                LedgerEntryResponse response = await client.LedgerEntry(request, cancellationToken);
+                LedgerEntryResponse response = (await client.LedgerEntry(request, cancellationToken)).Result;
                 return response.Node as LOCredential;
             }
             catch (RippledException ex) when (ex.Response?.Error == XrplErrorCodes.EntryNotFound)

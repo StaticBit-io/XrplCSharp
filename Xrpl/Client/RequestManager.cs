@@ -42,7 +42,7 @@ namespace Xrpl.Client
         {
             public Guid Id { get; set; }
             public string Message { get; set; }
-            public Task<Dictionary<string, object>> Promise { get; set; }
+            public Task<object> Promise { get; set; }
         }
 
         public class XrplGRequest
@@ -82,7 +82,7 @@ namespace Xrpl.Client
             try
             {
                 object deserialized = DeserializeResult(response.RawResult, taskInfo.Type);
-                CompleteWithResult(taskInfo, deserialized);
+                CompleteWithResult(taskInfo, new ResolvedResponse(deserialized, response));
                 this.DeletePromise(id, taskInfo);
             }
             catch (Exception ex)
@@ -391,11 +391,11 @@ namespace Xrpl.Client
             string newRequest = JsonSerializer.Serialize(request, serializerOptions);
             string outgoingRequest = ApplyAdminCredentials(newRequest, adminCredentials);
 
-            TaskCompletionSource<Dictionary<string, object>> task = new TaskCompletionSource<Dictionary<string, object>>();
+            TaskCompletionSource<object> task = new TaskCompletionSource<object>();
             TaskInfo taskInfo = new TaskInfo();
             taskInfo.TaskId = newId;
             taskInfo.TaskCompletionResult = task;
-            taskInfo.SetResult = result => task.TrySetResult((Dictionary<string, object>)result);
+            taskInfo.SetResult = result => task.TrySetResult(result);
             taskInfo.SetException = error => task.TrySetException(error);
             taskInfo.CompletionTask = task.Task;
             taskInfo.RemoveUponCompletion = true;
