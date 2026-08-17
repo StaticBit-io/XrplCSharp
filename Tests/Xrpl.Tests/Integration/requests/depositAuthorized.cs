@@ -43,7 +43,7 @@ namespace XrplTests.Xrpl.ClientLib.Integration
                 DestinationAccount = wallet2.ClassicAddress,
             };
 
-            DepositAuthorized response = await runner.client.DepositAuthorized(request);
+            DepositAuthorized response = (await runner.client.DepositAuthorized(request)).Result;
 
             Assert.IsNotNull(response);
             Assert.AreEqual(runner.wallet.ClassicAddress, response.SourceAccount);
@@ -92,7 +92,7 @@ namespace XrplTests.Xrpl.ClientLib.Integration
                 Credentials = new List<string> { credentialId },
             };
 
-            DepositAuthorized response = await runner.client.DepositAuthorized(request);
+            DepositAuthorized response = (await runner.client.DepositAuthorized(request)).Result;
 
             Assert.IsNotNull(response);
             Assert.AreEqual(walletSubject.ClassicAddress, response.SourceAccount);

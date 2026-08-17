@@ -105,7 +105,7 @@ public class TestIMultisign
         var owner = walletMultiSign;
 
         var request = new AccountInfoRequest(owner.ClassicAddress);
-        var accountInfo = await runner.client.AccountInfo(request);
+        var accountInfo = (await runner.client.AccountInfo(request)).Result;
 
         var payment = new Payment
         {
@@ -151,7 +151,7 @@ public class TestIMultisign
 
     private static async Task<bool> SetSigners(XrplWallet owner, XrplWallet signer1, XrplWallet signer2)
     {
-        var acc = await runner.client.AccountInfo(new AccountInfoRequest(owner.ClassicAddress) { SignerLists = true });
+        var acc = (await runner.client.AccountInfo(new AccountInfoRequest(owner.ClassicAddress) { SignerLists = true })).Result;
         if (acc.SignerLists is { Length: > 0 })
         {
             return true;
@@ -180,7 +180,7 @@ public class TestIMultisign
 
     private static async Task<bool> DisableMaster(XrplWallet owner)
     {
-        var acc = await runner.client.AccountInfo(new AccountInfoRequest(owner.ClassicAddress));
+        var acc = (await runner.client.AccountInfo(new AccountInfoRequest(owner.ClassicAddress))).Result;
         if (acc.AccountFlags.DisableMasterKey)
         {
             return true;

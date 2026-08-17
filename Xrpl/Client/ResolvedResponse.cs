@@ -11,8 +11,14 @@ namespace Xrpl.Client
     /// type only as a <see cref="System.Type"/>, so it cannot build a
     /// <see cref="XrplResponse{T}"/> itself. It carries both halves this far and the generic
     /// client assembles them, which keeps the manager free of the generic parameter.
+    /// <para>
+    /// Public because <see cref="RequestManager"/> and its request objects are: their
+    /// <c>Promise</c> is a <c>Task&lt;object&gt;</c> that resolves to this, and a caller working at
+    /// that level has to be able to name the type it gets back. Callers of the client's own
+    /// methods never see this — they get <see cref="XrplResponse{T}"/>.
+    /// </para>
     /// </remarks>
-    internal sealed class ResolvedResponse
+    public sealed class ResolvedResponse
     {
         public ResolvedResponse(object result, BaseResponse envelope)
         {

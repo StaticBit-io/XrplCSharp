@@ -28,7 +28,7 @@ namespace XrplTests.Xrpl.ClientLib.Integration
         {
             LedgerIndex index = new LedgerIndex(LedgerIndexType.Validated);
             AccountObjectsRequest request = new AccountObjectsRequest(runner.wallet.ClassicAddress) { LedgerIndex = index };
-            AccountObjects response = await runner.client.AccountObjects(request);
+            AccountObjects response = (await runner.client.AccountObjects(request)).Result;
             Assert.IsNotNull(response);
         }
     }

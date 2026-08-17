@@ -25,7 +25,7 @@ namespace XrplTests.Xrpl.ClientLib.Integration
         public async Task TestRequestMethod()
         {
             ServerInfoRequest request = new ServerInfoRequest();
-            ServerInfo response = await runner.client.ServerInfo(request);
+            ServerInfo response = (await runner.client.ServerInfo(request)).Result;
             Assert.IsNotNull(response);
         }
     }

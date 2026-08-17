@@ -26,7 +26,7 @@ namespace XrplTests.Xrpl.ClientLib.Integration
         {
             LedgerIndex index = new LedgerIndex(LedgerIndexType.Validated);
             AccountChannelsRequest request = new AccountChannelsRequest(runner.wallet.ClassicAddress) { LedgerIndex = index };
-            AccountChannels response = await runner.client.AccountChannels(request);
+            AccountChannels response = (await runner.client.AccountChannels(request)).Result;
             Assert.IsNotNull(response);
         }
     }

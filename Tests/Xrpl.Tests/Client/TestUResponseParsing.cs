@@ -79,7 +79,7 @@ namespace Xrpl.Tests.ClientLib
 
             manager.HandleResponse(BuildLedgerDataMessage(pending.Id, 4));
 
-            JsonElement result = (JsonElement)pending.Promise.GetAwaiter().GetResult();
+            JsonElement result = XrplResponse.From<JsonElement>(pending.Promise.GetAwaiter().GetResult()).Result;
             Assert.AreEqual(JsonValueKind.Object, result.ValueKind);
             Assert.AreEqual(4, result.GetProperty("state").GetArrayLength());
             Assert.AreEqual(96000000, result.GetProperty("ledger_index").GetInt32());
@@ -99,7 +99,7 @@ namespace Xrpl.Tests.ClientLib
 
             manager.HandleResponse(BuildLedgerDataMessage(pending.Id, 3));
 
-            LOLedgerData result = (LOLedgerData)pending.Promise.GetAwaiter().GetResult();
+            LOLedgerData result = XrplResponse.From<LOLedgerData>(pending.Promise.GetAwaiter().GetResult()).Result;
             Assert.IsNotNull(result);
             Assert.AreEqual(96000000u, result.LedgerIndex);
             Assert.AreEqual("842B57C1CC0613299A686D3E9F310EC0422C84D3911E5056389AA7E5808A93C8", result.LedgerHash);
@@ -119,8 +119,8 @@ namespace Xrpl.Tests.ClientLib
             RequestManager.XrplGRequest viaBytes = Pending<LOLedgerData>(manager);
             manager.HandleResponse(Encoding.UTF8.GetBytes(BuildLedgerDataMessage(viaBytes.Id, 5)));
 
-            LOLedgerData fromString = (LOLedgerData)viaString.Promise.GetAwaiter().GetResult();
-            LOLedgerData fromBytes = (LOLedgerData)viaBytes.Promise.GetAwaiter().GetResult();
+            LOLedgerData fromString = XrplResponse.From<LOLedgerData>(viaString.Promise.GetAwaiter().GetResult()).Result;
+            LOLedgerData fromBytes = XrplResponse.From<LOLedgerData>(viaBytes.Promise.GetAwaiter().GetResult()).Result;
 
             Assert.AreEqual(fromString.LedgerIndex, fromBytes.LedgerIndex);
             Assert.AreEqual(fromString.LedgerHash, fromBytes.LedgerHash);
@@ -134,13 +134,13 @@ namespace Xrpl.Tests.ClientLib
 
             RequestManager.XrplGRequest untyped = Pending<JsonElement>(manager);
             manager.HandleResponse($"{{\"id\":\"{untyped.Id:D}\",\"status\":\"success\",\"type\":\"response\",\"result\":null}}");
-            JsonElement empty = (JsonElement)untyped.Promise.GetAwaiter().GetResult();
+            JsonElement empty = XrplResponse.From<JsonElement>(untyped.Promise.GetAwaiter().GetResult()).Result;
             Assert.AreEqual(JsonValueKind.Object, empty.ValueKind);
             Assert.IsFalse(empty.TryGetProperty("state", out _));
 
             RequestManager.XrplGRequest typed = Pending<LOLedgerData>(manager);
             manager.HandleResponse($"{{\"id\":\"{typed.Id:D}\",\"status\":\"success\",\"type\":\"response\"}}");
-            LOLedgerData defaults = (LOLedgerData)typed.Promise.GetAwaiter().GetResult();
+            LOLedgerData defaults = XrplResponse.From<LOLedgerData>(typed.Promise.GetAwaiter().GetResult()).Result;
             Assert.IsNotNull(defaults);
             Assert.IsNull(defaults.State);
         }
@@ -184,7 +184,7 @@ namespace Xrpl.Tests.ClientLib
 
             manager.HandleResponse(Encoding.UTF8.GetBytes(BuildLedgerDataMessage(pending.Id, 3)));
 
-            LOLedgerData result = (LOLedgerData)pending.Promise.GetAwaiter().GetResult();
+            LOLedgerData result = XrplResponse.From<LOLedgerData>(pending.Promise.GetAwaiter().GetResult()).Result;
             Assert.IsNotNull(result);
             Assert.IsNotNull(result.Marker);
             Assert.AreEqual("AABBCCDD", result.Marker.ToString());
@@ -301,7 +301,7 @@ namespace Xrpl.Tests.ClientLib
                 RequestManager.XrplGRequest pending = Pending<JsonElement>(manager);
                 WriteId(message, IdOffset, pending.Id);
                 manager.HandleResponse(message);
-                JsonElement result = (JsonElement)pending.Promise.GetAwaiter().GetResult();
+                JsonElement result = XrplResponse.From<JsonElement>(pending.Promise.GetAwaiter().GetResult()).Result;
                 Assert.AreEqual(Entries, result.GetProperty("state").GetArrayLength());
             }
 
@@ -494,9 +494,9 @@ namespace Xrpl.Tests.ClientLib
 
         private static async Task CrawlPageAsync(XrplClient client)
         {
-            JsonElement page = await client
+            JsonElement page = (await client
                 .GRequest<JsonElement, LedgerDataRequest>(new LedgerDataRequest { Binary = true, Limit = 2048 })
-                .ConfigureAwait(false);
+                .ConfigureAwait(false)).Result;
 
             if (page.GetProperty("state").GetArrayLength() == 0)
             {
@@ -532,7 +532,7 @@ namespace Xrpl.Tests.ClientLib
                 RequestManager.XrplGRequest pending = Pending<LOLedgerData>(manager);
                 WriteId(message, IdOffset, pending.Id);
                 manager.HandleResponse(message);
-                LOLedgerData result = (LOLedgerData)pending.Promise.GetAwaiter().GetResult();
+                LOLedgerData result = XrplResponse.From<LOLedgerData>(pending.Promise.GetAwaiter().GetResult()).Result;
                 Assert.AreEqual(Entries, result.State.Count);
             }
 

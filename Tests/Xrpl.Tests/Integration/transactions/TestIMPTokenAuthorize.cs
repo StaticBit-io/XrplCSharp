@@ -243,7 +243,7 @@ public class TestIMPTokenAuthorize : TestIMPTokenBase
                 MPTokenIssuanceID = issuanceId,
             },
         };
-        var ledgerEntryResponse = await client.LedgerEntry(ledgerEntryRequest);
+        var ledgerEntryResponse = (await client.LedgerEntry(ledgerEntryRequest)).Result;
 
         Assert.IsNotNull(ledgerEntryResponse, "LedgerEntry response should not be null");
         Assert.IsNotNull(ledgerEntryResponse.Node, "LedgerEntry node should not be null");

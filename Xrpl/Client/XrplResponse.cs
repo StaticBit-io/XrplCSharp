@@ -84,7 +84,7 @@ namespace Xrpl.Client
     /// <summary>
     /// Builds <see cref="XrplResponse{T}"/> from what a resolved request left in its promise.
     /// </summary>
-    internal static class XrplResponse
+    public static class XrplResponse
     {
         /// <summary>
         /// Unpacks the pair the request manager put into the promise.
@@ -94,8 +94,15 @@ namespace Xrpl.Client
         /// build the generic response itself and carries both halves instead. This is where they
         /// come back together — inside the connection, so that no public method hands out an
         /// object the caller has no type to name.
+        /// <para>
+        /// Public because <see cref="ResolvedResponse"/> is: a caller working directly against
+        /// <see cref="RequestManager"/> — rather than through the client's own methods, which
+        /// already return <see cref="XrplResponse{T}"/> — gets a <c>Promise</c> that resolves to a
+        /// <see cref="ResolvedResponse"/>, and this is the supported way to turn that back into a
+        /// typed <see cref="XrplResponse{T}"/>.
+        /// </para>
         /// </remarks>
-        internal static XrplResponse<T> From<T>(object resolved)
+        public static XrplResponse<T> From<T>(object resolved)
         {
             if (resolved is not ResolvedResponse carried)
             {

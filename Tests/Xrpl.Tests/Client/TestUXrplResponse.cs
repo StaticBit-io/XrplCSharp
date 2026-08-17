@@ -23,7 +23,7 @@ public class TestUXrplResponse
         RawJson raw = new RawJson(frame, 10, frame.Length - 11);
         LOLedgerData typed = raw.Deserialize<LOLedgerData>();
 
-        XrplResponse<LOLedgerData> response = new XrplResponse<LOLedgerData>(typed, raw, 2, null, false);
+        XrplResponse<LOLedgerData> response = new XrplResponse<LOLedgerData>(typed, raw, 2, null, null, false);
 
         Assert.AreSame(typed, response.Result);
         Assert.AreEqual("{\"ledger_index\":9,\"marker\":\"AABB\"}", response.Raw.ToString());
@@ -33,7 +33,7 @@ public class TestUXrplResponse
     [TestMethod]
     public void TestUWarningsAreNeverNull()
     {
-        XrplResponse<LOLedgerData> response = new XrplResponse<LOLedgerData>(null, default, null, null, false);
+        XrplResponse<LOLedgerData> response = new XrplResponse<LOLedgerData>(null, default, null, null, null, false);
 
         Assert.IsNotNull(response.Warnings);
         Assert.AreEqual(0, response.Warnings.Count);

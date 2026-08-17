@@ -28,7 +28,7 @@ namespace XrplTests.Xrpl.ClientLib.Integration
         {
             LedgerIndex index = new LedgerIndex(LedgerIndexType.Validated);
             LedgerCurrentRequest request = new LedgerCurrentRequest();
-            LOLedgerCurrentIndex response = await runner.client.LedgerCurrent(request);
+            LOLedgerCurrentIndex response = (await runner.client.LedgerCurrent(request)).Result;
             Assert.IsNotNull(response);
         }
     }

@@ -28,7 +28,7 @@ namespace XrplTests.Xrpl.ClientLib.Integration
         {
             LedgerIndex index = new LedgerIndex(LedgerIndexType.Validated);
             NoRippleCheckRequest request = new NoRippleCheckRequest(runner.wallet.ClassicAddress);
-            NoRippleCheck response = await runner.client.NoRippleCheck(request);
+            NoRippleCheck response = (await runner.client.NoRippleCheck(request)).Result;
             Assert.IsNotNull(response);
         }
     }

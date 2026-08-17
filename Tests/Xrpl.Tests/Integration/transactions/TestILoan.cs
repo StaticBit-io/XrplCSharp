@@ -270,7 +270,7 @@ public class TestILoan : TestILoanBase
 
         // Fetch LoanBroker via ledger_entry
         LedgerEntryRequest entryRequest = new LedgerEntryRequest { Index = brokerId };
-        LedgerEntryResponse entryResponse = await client.LedgerEntry(entryRequest);
+        LedgerEntryResponse entryResponse = (await client.LedgerEntry(entryRequest)).Result;
 
         Assert.IsNotNull(entryResponse?.Node, "LedgerEntry node should not be null");
         Assert.IsInstanceOfType(entryResponse.Node, typeof(LOLoanBroker), "Node should deserialize to LOLoanBroker");
@@ -324,7 +324,7 @@ public class TestILoan : TestILoanBase
 
         // Fetch Loan via ledger_entry
         LedgerEntryRequest entryRequest = new LedgerEntryRequest { Index = loanId };
-        LedgerEntryResponse entryResponse = await client.LedgerEntry(entryRequest);
+        LedgerEntryResponse entryResponse = (await client.LedgerEntry(entryRequest)).Result;
 
         Assert.IsNotNull(entryResponse?.Node, "LedgerEntry node should not be null");
         Assert.IsInstanceOfType(entryResponse.Node, typeof(LOLoan), "Node should deserialize to LOLoan");

@@ -42,7 +42,7 @@ namespace XrplTests.Xrpl.ClientLib.Integration
             await Utils.TestTransaction(runner.client, setupJson, runner.wallet);
 
             AccountOffersRequest request2 = new AccountOffersRequest(runner.wallet.ClassicAddress);
-            AccountOffers response2 = await runner.client.AccountOffers(request2);
+            AccountOffers response2 = (await runner.client.AccountOffers(request2)).Result;
             Assert.HasCount(1, response2.Offers);
         }
     }

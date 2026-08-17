@@ -78,7 +78,7 @@ namespace Xrpl.Tests.Integration
             try
             {
                 Dictionary<string, object> response =
-                    await client.Request(new Dictionary<string, object>(LedgerAccept));
+                    (await client.Request(new Dictionary<string, object>(LedgerAccept))).Result;
 
                 Assert.IsTrue(
                     response.ContainsKey("ledger_current_index"),

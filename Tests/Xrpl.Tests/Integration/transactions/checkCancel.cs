@@ -40,7 +40,7 @@ namespace XrplTests.Xrpl.ClientLib.Integration
                 await Utils.TestTransaction(client, setupJson, wallet1);
 
                 AccountObjectsRequest request1 = new AccountObjectsRequest(wallet1.ClassicAddress) { Type = LedgerEntryType.Check };
-                AccountObjects response1 = await client.AccountObjects(request1);
+                AccountObjects response1 = (await client.AccountObjects(request1)).Result;
                 string checkId = response1.AccountObjectList[0].Index;
 
                 CheckCancel tx = new CheckCancel
@@ -52,7 +52,7 @@ namespace XrplTests.Xrpl.ClientLib.Integration
                 await Utils.TestTransaction(client, txJson, wallet1);
 
                 AccountObjectsRequest request2 = new AccountObjectsRequest(wallet1.ClassicAddress) { Type = LedgerEntryType.Check };
-                AccountObjects response2 = await client.AccountObjects(request2);
+                AccountObjects response2 = (await client.AccountObjects(request2)).Result;
                 Assert.IsEmpty(response2.AccountObjectList);
             }
             finally

@@ -31,7 +31,7 @@ namespace XrplTests.Xrpl.ClientLib.Integration
             {
                 LedgerIndex = index,
             };
-            LOLedger response = await runner.client.Ledger(request);
+            LOLedger response = (await runner.client.Ledger(request)).Result;
             Assert.IsNotNull(response);
         }
     }

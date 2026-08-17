@@ -168,14 +168,14 @@ namespace Xrpl.Tests.ClientLib
 
         private static async Task RequestUntypedPageAsync(XrplClient client)
         {
-            JsonElement result = await client
+            JsonElement result = (await client
                 .GRequest<JsonElement, LedgerDataRequest>(new LedgerDataRequest
                 {
                     LedgerIndex = new LedgerIndex(96000000),
                     Binary = true,
                     Limit = 2048
                 })
-                .ConfigureAwait(false);
+                .ConfigureAwait(false)).Result;
 
             if (result.ValueKind != JsonValueKind.Object || !result.TryGetProperty("state", out JsonElement state))
             {
@@ -198,7 +198,7 @@ namespace Xrpl.Tests.ClientLib
                 ["limit"] = 2048
             };
 
-            Dictionary<string, object> response = await client.Request(request).ConfigureAwait(false);
+            Dictionary<string, object> response = (await client.Request(request).ConfigureAwait(false)).Result;
             if (response == null)
             {
                 throw new InvalidOperationException("empty ledger_data response");

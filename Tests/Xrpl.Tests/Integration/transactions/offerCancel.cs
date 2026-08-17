@@ -43,7 +43,7 @@ namespace XrplTests.Xrpl.ClientLib.Integration
 
             // sequence
             AccountOffersRequest request1 = new AccountOffersRequest(runner.wallet.ClassicAddress);
-            AccountOffers response1 = await runner.client.AccountOffers(request1);
+            AccountOffers response1 = (await runner.client.AccountOffers(request1)).Result;
             uint sequence = (uint)response1.Offers[0].Sequence;
             
             // actually test OfferCancel
@@ -56,7 +56,7 @@ namespace XrplTests.Xrpl.ClientLib.Integration
             await Utils.TestTransaction(runner.client, txJson, runner.wallet);
 
             AccountOffersRequest request2 = new AccountOffersRequest(runner.wallet.ClassicAddress);
-            AccountOffers response2 = await runner.client.AccountOffers(request1);
+            AccountOffers response2 = (await runner.client.AccountOffers(request1)).Result;
             Assert.IsEmpty(response2.Offers);
         }
     }

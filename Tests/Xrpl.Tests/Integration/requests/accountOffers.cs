@@ -25,7 +25,7 @@ namespace XrplTests.Xrpl.ClientLib.Integration
         public async Task TestRequestMethod()
         {
             AccountOffersRequest request = new AccountOffersRequest(runner.wallet.ClassicAddress) { Strict = true };
-            AccountOffers response = await runner.client.AccountOffers(request);
+            AccountOffers response = (await runner.client.AccountOffers(request)).Result;
             Assert.IsNotNull(response);
         }
     }

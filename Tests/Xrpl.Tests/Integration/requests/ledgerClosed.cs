@@ -28,7 +28,7 @@ namespace XrplTests.Xrpl.ClientLib.Integration
         {
             LedgerIndex index = new LedgerIndex(LedgerIndexType.Validated);
             LedgerClosedRequest request = new LedgerClosedRequest();
-            LOBaseLedger response = await runner.client.LedgerClosed(request);
+            LOBaseLedger response = (await runner.client.LedgerClosed(request)).Result;
             Assert.IsNotNull(response);
         }
     }

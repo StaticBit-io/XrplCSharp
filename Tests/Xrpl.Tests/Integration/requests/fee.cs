@@ -24,7 +24,7 @@ namespace XrplTests.Xrpl.ClientLib.Integration
         [TestMethod]
         public async Task TestRequestMethod()
         {
-            Fee response = await runner.client.Fee();
+            Fee response = (await runner.client.Fee()).Result;
             Assert.IsNotNull(response);
         }
     }

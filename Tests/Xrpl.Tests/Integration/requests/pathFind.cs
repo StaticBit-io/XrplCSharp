@@ -57,7 +57,7 @@ namespace XrplTests.Xrpl.ClientLib.Integration
                     destinationAmount: destinationAmount
                 );
 
-                PathFindResponse response = await pfClient.PathFind(request);
+                PathFindResponse response = (await pfClient.PathFind(request)).Result;
                 Assert.IsNotNull(response);
                 Assert.IsNotNull(response.Alternatives);
                 Assert.AreEqual(wallet.ClassicAddress, response.DestinationAccount);
@@ -94,7 +94,7 @@ namespace XrplTests.Xrpl.ClientLib.Integration
                 await pfClient.PathFind(createRequest);
 
                 PathFindCloseRequest closeRequest = new PathFindCloseRequest();
-                PathFindResponse closeResponse = await pfClient.PathFindClose(closeRequest);
+                PathFindResponse closeResponse = (await pfClient.PathFindClose(closeRequest)).Result;
                 Assert.IsNotNull(closeResponse);
                 Assert.IsTrue(closeResponse.Closed.HasValue && closeResponse.Closed.Value);
             }
@@ -129,7 +129,7 @@ namespace XrplTests.Xrpl.ClientLib.Integration
                 await pfClient.PathFind(createRequest);
 
                 PathFindStatusRequest statusRequest = new PathFindStatusRequest();
-                PathFindResponse statusResponse = await pfClient.PathFindStatus(statusRequest);
+                PathFindResponse statusResponse = (await pfClient.PathFindStatus(statusRequest)).Result;
                 Assert.IsNotNull(statusResponse);
                 Assert.IsNotNull(statusResponse.Alternatives);
             }
@@ -178,7 +178,7 @@ namespace XrplTests.Xrpl.ClientLib.Integration
                     destinationAmount: destinationAmount
                 );
 
-                PathFindResponse response = await streamClient.PathFind(request);
+                PathFindResponse response = (await streamClient.PathFind(request)).Result;
                 Assert.IsNotNull(response, "Initial path_find create response should not be null");
                 Console.WriteLine($"[PathFind RPC] destination={response.DestinationAccount}, alternatives={response.Alternatives?.Count}");
 
@@ -317,7 +317,7 @@ namespace XrplTests.Xrpl.ClientLib.Integration
                     SendMax = sendMax
                 };
 
-                PathFindResponse response = await pfClient.PathFind(request);
+                PathFindResponse response = (await pfClient.PathFind(request)).Result;
 
                 Assert.IsNotNull(response, "path_find create response should not be null");
                 Assert.IsNotNull(response.Alternatives, "Alternatives should not be null");
@@ -440,7 +440,7 @@ namespace XrplTests.Xrpl.ClientLib.Integration
                     SendMax = sendMax
                 };
 
-                PathFindResponse response = await pfClient.PathFind(request);
+                PathFindResponse response = (await pfClient.PathFind(request)).Result;
 
                 Assert.IsNotNull(response, "path_find create response should not be null");
                 Assert.IsNotNull(response.Alternatives, "Alternatives should not be null");
