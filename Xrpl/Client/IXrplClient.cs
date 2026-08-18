@@ -87,7 +87,6 @@ namespace Xrpl.Client
         /// The ping command returns an acknowledgement,
         /// so that clients can test the connection status and latency
         /// </summary>
-        /// <param name="request">An <see cref="PingRequest"/> request.</param>
         /// <returns></returns>
         Task<XrplResponse<object>> Ping(CancellationToken cancellationToken = default);
         /// <summary> The server_info command asks the server for a human-readable version of various information about the rippled server being queried. </summary>
@@ -115,7 +114,6 @@ namespace Xrpl.Client
         Task<XrplResponse<ServerFeatures>> ServerFeatures(string feature = null, CancellationToken cancellationToken = default);
 
         /// <summary> The fee command reports the current state of the open-ledger requirements for the transaction cost. </summary>
-        /// <param name="request">An <see cref="FeeRequest"/> request.</param>
         /// <returns>An <see cref="Models.Methods.Fee"/> response.</returns>
         Task<XrplResponse<Fee>> Fee(CancellationToken cancellationToken = default);
 
@@ -381,7 +379,6 @@ namespace Xrpl.Client
         /// The random command provides a random number to be used as a source of entropy for random number generation by clients.<br/>
         /// https://xrpl.org/random.html#random
         /// </summary>
-        /// <param name="request">An <see cref="RandomRequest"/> request.</param>
         /// <returns></returns>
         Task<XrplResponse<object>> Random(CancellationToken cancellationToken = default);
 
