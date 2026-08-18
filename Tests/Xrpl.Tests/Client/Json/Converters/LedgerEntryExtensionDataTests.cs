@@ -3,6 +3,7 @@ using System.Text.Json;
 using Microsoft.VisualStudio.TestTools.UnitTesting;
 
 using Xrpl.Client.Json;
+using Xrpl.Models;
 using Xrpl.Models.Ledger;
 using Xrpl.Models.Transactions;
 
@@ -139,5 +140,81 @@ public class TestULedgerEntryExtensionData
         JsonElement finalFields = doc.RootElement.GetProperty("FinalFields");
         Assert.IsTrue(finalFields.TryGetProperty("NewAmendmentField", out JsonElement value));
         Assert.AreEqual("final-value", value.GetString());
+    }
+
+    // A ledger object type this SDK's LedgerEntryType enum does not know (e.g. added by an
+    // amendment ahead of this SDK's release) falls back to bare BaseLedgerEntry in
+    // LOConverter.GetTypeForLedgerEntry - previously that meant every field but the three
+    // BaseLedgerEntry declares (LedgerEntryType, Index, LedgerIndex) was lost. UnknownFields on
+    // BaseLedgerEntry itself should now catch them, same as it does for a known type's extra
+    // field; these tests are the guard so a future converter change cannot silently regress that.
+    private const string UnknownLedgerEntryTypeJson = @"{
+        ""LedgerEntryType"": ""SomeFutureAmendmentObject"",
+        ""index"": ""ABCDEF0123456789"",
+        ""Owner"": ""rHb9CJAWyB4rj91VRWn96DkukG4bwdtyTh"",
+        ""SomeNewAmount"": ""1000000"",
+        ""SomeNewFlag"": true
+    }";
+
+    [TestMethod]
+    public void Deserialize_UnknownLedgerEntryType_ThroughLOConverter_CapturesUnknownFields()
+    {
+        BaseLedgerEntry result = JsonSerializer.Deserialize<BaseLedgerEntry>(UnknownLedgerEntryTypeJson, Options);
+
+        Assert.AreEqual(typeof(BaseLedgerEntry), result.GetType());
+        Assert.AreEqual(LedgerEntryType.Unknown, result.LedgerEntryType);
+        Assert.AreEqual("ABCDEF0123456789", result.Index);
+        Assert.IsNotNull(result.UnknownFields);
+        Assert.IsTrue(result.UnknownFields.ContainsKey("Owner"));
+        Assert.IsTrue(result.UnknownFields.ContainsKey("SomeNewAmount"));
+        Assert.IsTrue(result.UnknownFields.ContainsKey("SomeNewFlag"));
+        Assert.AreEqual("1000000", result.UnknownFields["SomeNewAmount"].GetString());
+        Assert.IsTrue(result.UnknownFields["SomeNewFlag"].GetBoolean());
+    }
+
+    [TestMethod]
+    public void Serialize_UnknownLedgerEntryType_RoundTripsUnknownFields()
+    {
+        BaseLedgerEntry result = JsonSerializer.Deserialize<BaseLedgerEntry>(UnknownLedgerEntryTypeJson, Options);
+
+        string output = JsonSerializer.Serialize(result, Options);
+
+        using JsonDocument doc = JsonDocument.Parse(output);
+        Assert.IsTrue(doc.RootElement.TryGetProperty("Owner", out JsonElement owner));
+        Assert.AreEqual("rHb9CJAWyB4rj91VRWn96DkukG4bwdtyTh", owner.GetString());
+        Assert.IsTrue(doc.RootElement.TryGetProperty("SomeNewAmount", out JsonElement amount));
+        Assert.AreEqual("1000000", amount.GetString());
+        Assert.IsTrue(doc.RootElement.TryGetProperty("SomeNewFlag", out JsonElement flag));
+        Assert.IsTrue(flag.GetBoolean());
+    }
+
+    [TestMethod]
+    public void Deserialize_ModifiedNode_FinalFields_UnknownLedgerEntryType_CapturesUnknownFields()
+    {
+        string json = @"{
+            ""LedgerEntryType"": ""SomeFutureAmendmentObject"",
+            ""LedgerIndex"": ""ABCDEF"",
+            ""PreviousTxnID"": ""DEADBEEF"",
+            ""PreviousTxnLgrSeq"": 12345,
+            ""FinalFields"": {
+                ""Owner"": ""rHb9CJAWyB4rj91VRWn96DkukG4bwdtyTh"",
+                ""SomeNewAmount"": ""1000000""
+            }
+        }";
+
+        ModifiedNode node = JsonSerializer.Deserialize<ModifiedNode>(json, Options);
+
+        Assert.AreEqual(typeof(BaseLedgerEntry), node.FinalFields.GetType());
+        Assert.IsNotNull(node.FinalFields.UnknownFields);
+        Assert.IsTrue(node.FinalFields.UnknownFields.ContainsKey("Owner"));
+        Assert.IsTrue(node.FinalFields.UnknownFields.ContainsKey("SomeNewAmount"));
+
+        string output = JsonSerializer.Serialize(node, Options);
+        using JsonDocument doc = JsonDocument.Parse(output);
+        JsonElement finalFields = doc.RootElement.GetProperty("FinalFields");
+        Assert.IsTrue(finalFields.TryGetProperty("Owner", out JsonElement owner));
+        Assert.AreEqual("rHb9CJAWyB4rj91VRWn96DkukG4bwdtyTh", owner.GetString());
+        Assert.IsTrue(finalFields.TryGetProperty("SomeNewAmount", out JsonElement amount));
+        Assert.AreEqual("1000000", amount.GetString());
     }
 }
