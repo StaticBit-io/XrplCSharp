@@ -174,9 +174,146 @@ namespace Xrpl.Tests.ClientLib
 
             // Raw is the whole event; RawTransaction is only the transaction inside it - the two
             // must not collapse into the same thing, or a wallet asking for "just the tx" would get
-            // engine_result/meta/etc. along with it.
+            // engine_result/meta/etc. along with it. Checked directly, not through
+            // Assert.AreNotEqual(Raw.ToString(), RawTransaction.ToString()) - that held on any two
+            // differently-sized strings regardless of what either one actually contained, so it
+            // would still pass even if RawTransaction picked up the wrong slice entirely.
             Assert.AreEqual(TransactionStreamApiV2, result.Raw.ToString());
-            Assert.AreNotEqual(result.Raw.ToString(), result.RawTransaction.ToString());
+            StringAssert.Contains(result.Raw.ToString(), "engine_result",
+                "sanity: the outer event carries fields RawTransaction must not");
+            Assert.IsFalse(
+                result.RawTransaction.ToString().Contains("engine_result", StringComparison.Ordinal),
+                "RawTransaction must be only the tx_json object, not the event it sits inside");
+        }
+
+        private const string TransactionStreamDuplicateTxJson = """
+        {
+          "type": "transaction",
+          "status": "closed",
+          "validated": true,
+          "tx_json": {
+            "TransactionType": "Payment",
+            "Account": "rP9jPyP5kyvFRb6ZiRghAGw5u8SGAmU4bd",
+            "Destination": "rBTwLga3i2gz3doX6Gva3MgEV8ZCD8jjah",
+            "Amount": "1000000",
+            "Fee": "12",
+            "Sequence": 1
+          },
+          "engine_result": "tesSUCCESS",
+          "engine_result_code": 0,
+          "tx_json": {
+            "TransactionType": "Payment",
+            "Account": "rP9jPyP5kyvFRb6ZiRghAGw5u8SGAmU4bd",
+            "Destination": "rBTwLga3i2gz3doX6Gva3MgEV8ZCD8jjah",
+            "Amount": "999999999",
+            "Fee": "99",
+            "Sequence": 42
+          },
+          "meta": {
+            "AffectedNodes": [],
+            "TransactionIndex": 3,
+            "TransactionResult": "tesSUCCESS"
+          }
+        }
+        """;
+
+        /// <summary>
+        /// rippled never sends a duplicate top-level <c>tx_json</c>, but the frame arrives over a
+        /// network path this library does not control - an intermediate proxy or a compromised
+        /// link is not prevented from sending one. <see cref="Utf8JsonReader"/>-based deserializer
+        /// and <see cref="JsonSlice.FindTopLevelMember"/> must then agree on which occurrence wins,
+        /// or a wallet showing <see cref="TransactionStream.RawTransaction"/> to a person and then
+        /// signing <see cref="TransactionStream.Transaction"/> would show one transaction and sign
+        /// a different one.
+        /// </summary>
+        [TestMethod]
+        public async Task TestTransactionStreamRawTransactionUsesTheLastOccurrenceOfADuplicateTxJson()
+        {
+            TaskCompletionSource<TransactionStream> received = new TaskCompletionSource<TransactionStream>(
+                TaskCreationOptions.RunContinuationsAsynchronously);
+
+            runner.client.connection.OnTransaction += r =>
+            {
+                received.TrySetResult(r);
+                return Task.CompletedTask;
+            };
+
+            await runner.client.connection.OnMessage(TransactionStreamDuplicateTxJson);
+
+            Task completed = await Task.WhenAny(received.Task, Task.Delay(TimeSpan.FromSeconds(5)));
+            Assert.AreSame(received.Task, completed, "OnTransaction was not invoked within timeout");
+
+            TransactionStream result = await received.Task;
+
+            // Sanity check on the typed side first: System.Text.Json's own last-value-wins
+            // behavior for a duplicate JSON member feeding one POCO property means Transaction
+            // already reflects the second occurrence (Sequence 42), not the first (Sequence 1).
+            Assert.AreEqual(42u, result.Transaction.Sequence, "sanity: the typed side must already reflect the second occurrence");
+
+            string rawTransaction = result.RawTransaction.ToString();
+            StringAssert.Contains(rawTransaction, "\"Sequence\": 42");
+            Assert.IsFalse(rawTransaction.Contains("\"Sequence\": 1,", StringComparison.Ordinal),
+                "RawTransaction picked the first occurrence instead of the last - it would show a wallet a different transaction than the one Transaction/signing would use");
+        }
+
+        private const string TransactionStreamUppercaseTxJson = """
+        {
+          "type": "transaction",
+          "status": "closed",
+          "validated": true,
+          "engine_result": "tesSUCCESS",
+          "TX_JSON": {
+            "TransactionType": "Payment",
+            "Account": "rP9jPyP5kyvFRb6ZiRghAGw5u8SGAmU4bd",
+            "Destination": "rBTwLga3i2gz3doX6Gva3MgEV8ZCD8jjah",
+            "Amount": "1000000",
+            "Fee": "12",
+            "Sequence": 7
+          },
+          "meta": {
+            "AffectedNodes": [],
+            "TransactionIndex": 3,
+            "TransactionResult": "tesSUCCESS"
+          }
+        }
+        """;
+
+        /// <summary>
+        /// <see cref="XrplJsonOptions.Default"/> sets
+        /// <see cref="System.Text.Json.JsonSerializerOptions.PropertyNameCaseInsensitive"/>, so the
+        /// deserializer binds a differently-cased <c>"TX_JSON"</c> to
+        /// <see cref="TransactionStream.Transaction"/> same as it would <c>"tx_json"</c>.
+        /// <see cref="JsonSlice.FindTopLevelMember"/> has to match the same way, or
+        /// <see cref="TransactionStream.RawTransaction"/> would come back empty on exactly the
+        /// frame whose typed <see cref="TransactionStream.Transaction"/> is populated.
+        /// </summary>
+        [TestMethod]
+        public async Task TestTransactionStreamRawTransactionMatchesTxJsonCaseInsensitively()
+        {
+            TaskCompletionSource<TransactionStream> received = new TaskCompletionSource<TransactionStream>(
+                TaskCreationOptions.RunContinuationsAsynchronously);
+
+            runner.client.connection.OnTransaction += r =>
+            {
+                received.TrySetResult(r);
+                return Task.CompletedTask;
+            };
+
+            await runner.client.connection.OnMessage(TransactionStreamUppercaseTxJson);
+
+            Task completed = await Task.WhenAny(received.Task, Task.Delay(TimeSpan.FromSeconds(5)));
+            Assert.AreSame(received.Task, completed, "OnTransaction was not invoked within timeout");
+
+            TransactionStream result = await received.Task;
+
+            // Sanity check first: confirms the fixture actually exercises case-insensitive binding
+            // rather than accidentally matching some other way.
+            Assert.IsNotNull(result.Transaction, "sanity: the typed side must bind \"TX_JSON\" case-insensitively");
+            Assert.AreEqual(7u, result.Transaction.Sequence);
+
+            Assert.IsFalse(result.RawTransaction.IsEmpty,
+                "FindTopLevelMember must match \"TX_JSON\" case-insensitively, the same way the deserializer bound it to Transaction");
+            StringAssert.Contains(result.RawTransaction.ToString(), "\"Sequence\": 7");
         }
 
         [TestMethod]

@@ -121,10 +121,15 @@ namespace Xrpl.Client.Json
         /// </summary>
         /// <remarks>
         /// Each non-matching member's value is skipped whole, so a nested occurrence of the name
-        /// cannot be mistaken for a top-level one. Matching goes through
-        /// <see cref="Utf8JsonReader.ValueTextEquals(ReadOnlySpan{byte})"/>, which unescapes the
-        /// key first: a key a node spelled with a unicode escape still matches, where a raw byte
-        /// comparison against the plain name would silently miss it.
+        /// cannot be mistaken for a top-level one. Matching decodes the property name through
+        /// <see cref="Utf8JsonReader.GetString"/> - which unescapes it, so a key a node spelled
+        /// with a unicode escape still matches, where a raw byte comparison against the plain name
+        /// would silently miss it - and compares with <see cref="StringComparison.OrdinalIgnoreCase"/>,
+        /// mirroring <see cref="XrplJsonOptions.Default"/>'s
+        /// <see cref="JsonSerializerOptions.PropertyNameCaseInsensitive"/> = <see langword="true"/>.
+        /// Presence does not depend on which occurrence is meant, unlike a value lookup, so unlike
+        /// <see cref="JsonSlice.FindTopLevelMember"/> this still returns as soon as a match is
+        /// found instead of scanning to the end for the last one.
         /// </remarks>
         public bool HasTopLevelProperty(ReadOnlySpan<byte> name)
         {
@@ -140,6 +145,8 @@ namespace Xrpl.Client.Json
                 return false;
             }
 
+            string nameText = Encoding.UTF8.GetString(name);
+
             while (reader.Read())
             {
                 if (reader.TokenType == JsonTokenType.EndObject)
@@ -152,7 +159,7 @@ namespace Xrpl.Client.Json
                     continue;
                 }
 
-                if (reader.ValueTextEquals(name))
+                if (string.Equals(reader.GetString(), nameText, StringComparison.OrdinalIgnoreCase))
                 {
                     return true;
                 }

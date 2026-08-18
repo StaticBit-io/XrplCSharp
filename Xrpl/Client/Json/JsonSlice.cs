@@ -1,4 +1,5 @@
 using System;
+using System.Text;
 using System.Text.Json;
 
 namespace Xrpl.Client.Json
@@ -65,10 +66,35 @@ namespace Xrpl.Client.Json
         /// alias both bind to a name the other also claims — this is the only way to record where
         /// the value sits: registering a second <see cref="Converters.JsonSliceConverter"/> member
         /// under the same name is not an option, since System.Text.Json rejects two members
-        /// mapped to one JSON name outright. Matching goes through
-        /// <see cref="Utf8JsonReader.ValueTextEquals(ReadOnlySpan{byte})"/>, same as
-        /// <see cref="RawJson.HasTopLevelProperty"/>, and each non-matching member's value is
-        /// skipped whole so a nested occurrence of the name is never mistaken for a top-level one.
+        /// mapped to one JSON name outright.
+        /// </remarks>
+        /// <remarks>
+        /// The scan does not stop at the first match: on a duplicate top-level key it keeps going
+        /// to <see cref="JsonTokenType.EndObject"/> and returns the <em>last</em> one, matching
+        /// <see cref="JsonSerializer"/>'s own last-value-wins behavior for a POCO property fed by a
+        /// duplicate JSON member (the default unless a caller opts into
+        /// <see cref="JsonSerializerOptions.AllowDuplicateProperties"/> = <see langword="false"/>,
+        /// which this library's <see cref="XrplJsonOptions.Default"/> does not). Without this, a
+        /// frame with two top-level <c>tx_json</c> members - not something rippled sends, but not
+        /// something a proxy or a compromised link is prevented from sending either - would leave
+        /// <see cref="Xrpl.Models.Subscriptions.TransactionStream.RawTransaction"/> pointing at the
+        /// first occurrence while the deserializer-fed <see cref="Xrpl.Models.Subscriptions.TransactionStream.Transaction"/>
+        /// reflects the last: a wallet would display one transaction and sign the other.
+        /// </remarks>
+        /// <remarks>
+        /// Matching is case-insensitive, mirroring <see cref="XrplJsonOptions.Default"/>'s
+        /// <see cref="JsonSerializerOptions.PropertyNameCaseInsensitive"/> = <see langword="true"/>:
+        /// a frame that spells the member <c>"TX_JSON"</c> still has to populate
+        /// <see cref="Xrpl.Models.Subscriptions.TransactionStream.RawTransaction"/>, because the
+        /// same frame already populated the case-insensitively-matched
+        /// <see cref="Xrpl.Models.Subscriptions.TransactionStream.Transaction"/> through ordinary
+        /// deserialization. <see cref="Utf8JsonReader.ValueTextEquals(ReadOnlySpan{byte})"/> has no
+        /// case-insensitive overload, so this decodes the property name through
+        /// <see cref="Utf8JsonReader.GetString"/> (which unescapes it, same as the property-name
+        /// matching System.Text.Json itself does internally) and compares with
+        /// <see cref="StringComparison.OrdinalIgnoreCase"/>. See
+        /// <see cref="RawJson.HasTopLevelProperty"/> for the same rule applied to presence rather
+        /// than value.
         /// </remarks>
         public static JsonSlice FindTopLevelMember(byte[] buffer, ReadOnlySpan<byte> name)
         {
@@ -79,11 +105,14 @@ namespace Xrpl.Client.Json
                 return default;
             }
 
+            string nameText = Encoding.UTF8.GetString(name);
+            JsonSlice result = default;
+
             while (reader.Read())
             {
                 if (reader.TokenType == JsonTokenType.EndObject)
                 {
-                    return default;
+                    return result;
                 }
 
                 if (reader.TokenType != JsonTokenType.PropertyName)
@@ -91,7 +120,7 @@ namespace Xrpl.Client.Json
                     continue;
                 }
 
-                bool isMatch = reader.ValueTextEquals(name);
+                bool isMatch = string.Equals(reader.GetString(), nameText, StringComparison.OrdinalIgnoreCase);
                 reader.Read();
                 long start = reader.TokenStartIndex;
                 reader.Skip();
@@ -99,11 +128,11 @@ namespace Xrpl.Client.Json
 
                 if (isMatch)
                 {
-                    return new JsonSlice(checked((int)start), checked((int)(end - start)));
+                    result = new JsonSlice(checked((int)start), checked((int)(end - start)));
                 }
             }
 
-            return default;
+            return result;
         }
     }
 }
