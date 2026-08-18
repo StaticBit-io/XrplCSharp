@@ -652,6 +652,8 @@ Expected: `IXrplClient.cs` исчез из списка; остались `Sugar
 
 Файлы (по `grep`): `Sugar/Autofill.cs`, `Sugar/Balances.cs`, `Sugar/ComposeSugar.cs`, `Sugar/DomainAccess.cs`, `Sugar/GetFeeXrp.cs`, `Sugar/GetLedgerIndex.cs`, `Sugar/Submit.cs`, `Wallet/FundWallet.cs`, `Wallet/LoanSigningHelper.cs`, `Wallet/SponsorSigningHelper.cs`.
 
+**Список неполон — это выяснилось при исполнении.** Сборка вскрыла ещё два файла: `Sugar/GetOrderBook.cs` (два вызова `BookOffers`) и `Models/Utils/BatchNormalizer.cs` (`AccountInfo`). А `Wallet/*` правок не потребовал вовсе — там имена методов встречаются только в XML-doc. Мораль для будущих планов: список, полученный `grep`-ом по одному шаблону вызова, — гипотеза, а не инвентарь; авторитетен список ошибок компилятора.
+
 **Не менять при этом семантику.** Если вызов был в составе выражения (`(await client.X(...)).Field`), скобки уже есть — добавляется только `.Result`.
 
 - [ ] **Step 2: Собрать всю библиотеку**
