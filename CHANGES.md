@@ -47,11 +47,14 @@ The entries below are grouped by what changed, not by the order the levels were 
   // was
   uint sequence = accountRoot.Sequence;
 
-  // now — and think about the default
-  uint sequence = accountRoot.Sequence ?? 0;
+  // now — decide what absence means before you write anything
+  if (accountRoot.Sequence is not { } sequence)
+  {
+      throw new InvalidOperationException("account_info returned no Sequence");
+  }
   ```
 
-  Substituting zero where zero is not a meaningful value puts back exactly the defect this change removes, just moved from serialization into your logic. Two places inside the SDK showed why this matters, both found while migrating and both fixed with an explicit failure instead of a default:
+  Reach for `?? 0` only where zero is a legitimate value of the field, not merely a way to make the code compile. Substituting zero elsewhere puts back exactly the defect this change removes — it just moves the lie out of serialization and into your logic. Two places inside the SDK showed why this matters, both found while migrating and both fixed with an explicit failure instead of a default:
 
   * a lifted `collected < SignerQuorum` returns **false** when the quorum is absent, so the "insufficient signatures" check silently stopped firing
   * a lifted `(Flags & lsfAccepted) != 0` returns **true** when `Flags` is absent — the opposite direction from `<` — so a credential that was never accepted read as accepted. That one was a fail-open in a permissioned-domain access check
