@@ -30,6 +30,13 @@ namespace Xrpl.Tests.Models.Tests
         {
             FieldInfo field = typeof(TestULedgerEntryFieldsConformance)
                 .GetField("Models", BindingFlags.NonPublic | BindingFlags.Static);
+
+            // Reached by name, so a rename over there would otherwise surface here as a
+            // NullReferenceException from an unrelated-looking test rather than as the real cause.
+            Assert.IsNotNull(
+                field,
+                "TestULedgerEntryFieldsConformance no longer has a private static 'Models' field; "
+                    + "this test reads it by name and has to be pointed at the new one.");
             return (Dictionary<string, Type>)field.GetValue(null);
         }
 
