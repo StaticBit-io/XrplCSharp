@@ -3,16 +3,6 @@ language: en-US
 reviews:
   profile: chill
   review_status: false
-  # TEMPORARY, remove entirely once PR #102 is merged.
-  # That PR touches 166 files and CodeRabbit reviews at most 150, so it is split
-  # into two passes. The first covered the library (86 files) with Tests/ excluded
-  # and is done. This is the second pass: only Tests/ (80 files), which is what
-  # the first one could not reach. Delete this whole block after it lands —
-  # leaving it would silently narrow every later review to tests alone.
-  path_filters:
-    - "Tests/**"
-
-
   auto_review:
     # Automatic review is off: reviews are requested on demand with
     # "@coderabbitai review" in a PR comment. The settings below still apply
