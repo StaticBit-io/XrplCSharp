@@ -291,7 +291,21 @@ public static class SubmitSugar
                 {
                     SignerLists = true
                 }, cancellationToken)).Result;
-            var hasSL = ai.SignerLists?.Length > 0 && ai.AccountFlags!.DisableMasterKey;
+            // Both are read below to decide how this account signs, and a response missing either
+            // is malformed rather than a signer with no flags: the master-key check would otherwise
+            // throw NullReferenceException here, and the RegularKey lookup further down would do
+            // the same. Failing with the account named beats either.
+            if (ai.AccountData is null)
+            {
+                throw new ValidationException($"account_info response for '{acct}' did not include account_data.");
+            }
+
+            if (ai.AccountFlags is null)
+            {
+                throw new ValidationException($"account_info response for '{acct}' did not include the account's flags.");
+            }
+
+            var hasSL = ai.SignerLists?.Length > 0 && ai.AccountFlags.DisableMasterKey;
             if (hasSL)
             {
                 var sl = ai.SignerLists[0];
@@ -308,7 +322,7 @@ public static class SubmitSugar
             }
             else
             {
-                if (walletByAddr.TryGetValue(acct, out var owner) && !ai.AccountFlags!.DisableMasterKey)
+                if (walletByAddr.TryGetValue(acct, out var owner) && !ai.AccountFlags.DisableMasterKey)
                     partialBlobs.Add(owner.SignAsBatchPart(txJson, multisign: false, signingFor: acct).TxBlob);
                 else if (!string.IsNullOrEmpty(ai.AccountData.RegularKey) &&
                          walletByAddr.TryGetValue(ai.AccountData.RegularKey, out var rk))
@@ -327,7 +341,14 @@ public static class SubmitSugar
             {
                 SignerLists = true
             }, cancellationToken)).Result;
-        var rootHasSL = aiRoot.SignerLists?.Length > 0 && aiRoot.AccountFlags!.DisableMasterKey;
+        // Same shape as the per-account check above: the master-key flag decides how the root
+        // signs, and a response without flags is malformed rather than an account with none.
+        if (aiRoot.AccountFlags is null)
+        {
+            throw new ValidationException($"account_info response for '{mainAcc}' did not include the account's flags.");
+        }
+
+        var rootHasSL = aiRoot.SignerLists?.Length > 0 && aiRoot.AccountFlags.DisableMasterKey;
         if (!rootHasSL)
         {
             // обычная подпись плательщика комиссии (должен быть в wallets)
