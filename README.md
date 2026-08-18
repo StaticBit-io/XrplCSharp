@@ -27,8 +27,20 @@ Debug.WriteLine(testWallet);
 // look up account info
 string account = "rBtXmAdEYcno9LWRnAGfT9qBxCeDvuVRZo";
 AccountInfoRequest request = new AccountInfoRequest(account);
-AccountInfo accountInfo = await client.AccountInfo(request);
+AccountInfo accountInfo = (await client.AccountInfo(request)).Result;
 Debug.WriteLine(accountInfo);
+```
+
+Every request also hands back the bytes the node actually sent, beside the typed
+projection. The typed model is lossy by nature — it drops members it has no property
+for — so anything that has to *show* or *verify* what a node said reads the raw text:
+
+```csharp
+XrplResponse<AccountInfo> response = await client.AccountInfo(request);
+
+AccountInfo typed = response.Result;      // the projection
+string asTheNodeSentIt = response.Raw.ToString();   // byte-for-byte
+string status = response.Status;          // the envelope, too
 ```
 
 ## Installation and supported versions
@@ -143,7 +155,7 @@ using Xrpl.Sugar;
 
 string classicAddress = "rBtXmAdEYcno9LWRnAGfT9qBxCeDvuVRZo";
 AccountInfoRequest request = new AccountInfoRequest(wallet.ClassicAddress);
-AccountInfo accountInfo = await client.AccountInfo(request);
+AccountInfo accountInfo = (await client.AccountInfo(request)).Result;
 
 Payment tx = new Payment()
 {
@@ -164,7 +176,7 @@ In most cases, you can specify the minimum [transaction cost](https://xrpl.org/t
 using System.Diagnostics;
 using Xrpl.Models.Transactions;
 FeeRequest feeRequest = new FeeRequest();
-Fee fee = await client.Fee(feeRequest);
+Fee fee = (await client.Fee(feeRequest)).Result;
 Debug.WriteLine(fee);
 // 10
 ```
