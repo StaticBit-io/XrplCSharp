@@ -64,7 +64,15 @@ namespace Xrpl.Models.Transactions
         /// API v2 renames the ledger's Amount field to DeliverMax on the wire and omits Amount entirely.
         /// System.Text.Json skips non-public members unless they carry [JsonInclude], so this attribute
         /// is what keeps the alias wired up — without it Amount silently stays null on every v2 payload.
-        /// The property is set-only, so DeliverMax is never written back out.
+        /// The property is deliberately set-only, so DeliverMax is never written back out, unlike its
+        /// counterpart on <see cref="PaymentResponse"/>. That asymmetry is intentional: "DeliverMax" is a
+        /// presentation-layer rename that exists only in API v2 responses — it has no binary field code
+        /// of its own in definitions.json. A <see cref="PaymentResponse"/> is read-only display data, so
+        /// preserving the wire name it arrived under is safe and correct for reconciliation UIs. This
+        /// class instead feeds <c>ToJson()</c> → <c>EncodeForSigning</c> (see <c>XrplWallet.Sign</c>):
+        /// if it ever re-emitted "DeliverMax", the binary codec would not recognize the field and would
+        /// silently drop the amount from the signed blob. So Amount is always written here, regardless
+        /// of which name it came in under.
         /// </remarks>
         [JsonInclude]
         [JsonPropertyName("DeliverMax")]
@@ -196,24 +204,69 @@ namespace Xrpl.Models.Transactions
     /// <inheritdoc cref="IPayment" />
     public class PaymentResponse : TransactionResponse, IPayment, IDestination
     {
+        /// <summary>
+        /// True once a value has been assigned through the <see cref="DeliverMax"/> alias below —
+        /// i.e. the node sent it under the API v2 name. Selects which JSON key <see cref="Amount"/>
+        /// is written back under: preserving the wire name matters here because this response is
+        /// what a reconciliation screen shows the signer as "what is being signed" — a value shown
+        /// under a different, only superficially-equivalent protocol field name isn't covered by a
+        /// "(reconstructed)" disclaimer the way a lost field would be.
+        /// </summary>
+        private bool _amountReceivedAsDeliverMax;
+
         /// <inheritdoc />
-        [JsonConverter(typeof(CurrencyConverter))]
+        /// <remarks>
+        /// The single value callers read, regardless of whether the node sent it as "Amount" (API v1)
+        /// or "DeliverMax" (API v2). Excluded from JSON directly: <see cref="AmountAlias"/> and
+        /// <see cref="DeliverMax"/> below own the wire representation, so the field name a value came
+        /// in under is the one it goes back out under — callers never have to guess which one fired.
+        /// </remarks>
+        [JsonIgnore]
         public Currency Amount { get; set; }
+
+        /// <summary>
+        /// JSON view of <see cref="Amount"/> under its API v1 wire name "Amount". Deserializing through
+        /// this alias marks the value as not-DeliverMax. Serializing stays silent
+        /// (<see cref="JsonIgnoreCondition.WhenWritingNull"/>) whenever the value arrived as DeliverMax
+        /// instead, so <see cref="DeliverMax"/> emits it under that name and this property does not
+        /// duplicate it under "Amount".
+        /// </summary>
+        [JsonInclude]
+        [JsonPropertyName("Amount")]
+        [JsonConverter(typeof(CurrencyConverter))]
+        [JsonIgnore(Condition = JsonIgnoreCondition.WhenWritingNull)]
+        private Currency AmountAlias
+        {
+            get => _amountReceivedAsDeliverMax ? null : Amount;
+            set
+            {
+                Amount = value;
+                _amountReceivedAsDeliverMax = false;
+            }
+        }
 
         /// <inheritdoc />
         /// <remarks>
         /// API v2 renames the ledger's Amount field to DeliverMax on the wire and omits Amount entirely.
         /// System.Text.Json skips non-public members unless they carry [JsonInclude], so this attribute
         /// is what keeps the alias wired up — without it Amount silently stays null on every v2 payload
-        /// (account_tx, tx with api_version 2, subscription streams). The property is set-only, so
-        /// DeliverMax is never written back out and cannot reach the binary codec.
+        /// (account_tx, tx with api_version 2, subscription streams).
+        /// No longer set-only: a value that arrived as DeliverMax is now written back out as DeliverMax,
+        /// not silently renamed to Amount — the node never sent "Amount" for this transaction, and a
+        /// round-trip must not manufacture a different, only superficially-equivalent field name for it.
         /// </remarks>
         [JsonInclude]
         [JsonPropertyName("DeliverMax")]
         [JsonConverter(typeof(CurrencyConverter))]
-        private Currency? DeliverMax
+        [JsonIgnore(Condition = JsonIgnoreCondition.WhenWritingNull)]
+        private Currency DeliverMax
         {
-            set => Amount = value;
+            get => _amountReceivedAsDeliverMax ? Amount : null;
+            set
+            {
+                Amount = value;
+                _amountReceivedAsDeliverMax = true;
+            }
         }
 
         /// <inheritdoc />
