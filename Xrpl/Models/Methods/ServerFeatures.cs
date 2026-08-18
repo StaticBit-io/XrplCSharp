@@ -33,7 +33,8 @@ public class ServerFeatures
     /// </remarks>
     [JsonPropertyName("ledger_index")]
     public ulong? LedgerIndex { get; set; }
-    public bool Validated { get; set; }
+    /// <remarks>See <see cref="LedgerIndex"/> remarks - the <c>feature</c> handler never emits it.</remarks>
+    public bool? Validated { get; set; }
 
     /// <summary>
     /// Returns features that are currently in voting state

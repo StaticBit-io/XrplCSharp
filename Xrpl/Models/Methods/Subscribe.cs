@@ -1,4 +1,4 @@
-using System.Text.Json.Serialization;
+﻿using System.Text.Json.Serialization;
 
 using System;
 using System.Collections.Generic;
@@ -195,8 +195,14 @@ namespace Xrpl.Models.Methods
         /// <summary>
         /// The reference transaction cost in "fee units".
         /// </summary>
+        /// <remarks>
+        /// rippled's <c>NetworkOpsImp::pubLedger</c> emits this only when the <c>XRPFees</c>
+        /// amendment is NOT enabled. That amendment is active on mainnet, so a current node never
+        /// sends the field at all - modelling it as non-nullable fabricated <c>fee_ref: 0</c> into
+        /// every round-trip.
+        /// </remarks>
         [JsonPropertyName("fee_ref")]
-        public uint FeeRef { get; set; }
+        public uint? FeeRef { get; set; }
         /// <summary>
         /// The identifying hash of the ledger version that was closed.
         /// </summary>
@@ -257,13 +263,19 @@ namespace Xrpl.Models.Methods
         /// The reference transaction cost as of this ledger version, in drops of XRP.<br/>
         /// If this ledger version includes a SetFee pseudo-transaction the new transaction cost applies starting with the following ledger version.
         /// </summary>
+        /// <remarks>See <see cref="LedgerIndex"/> remarks - same conditional gate.</remarks>
         [JsonPropertyName("fee_base")]
-        public uint FeeBase { get; set; }
+        public uint? FeeBase { get; set; }
         /// <summary>
         /// The reference transaction cost in "fee units".
         /// </summary>
+        /// <remarks>
+        /// Doubly conditional in <c>NetworkOpsImp::subLedger</c>: inside the
+        /// <c>getValidatedLedger()</c> gate AND only when the <c>XRPFees</c> amendment is disabled.
+        /// Since that amendment is active on mainnet, a current node never sends this field.
+        /// </remarks>
         [JsonPropertyName("fee_ref")]
-        public uint FeeRef { get; set; }
+        public uint? FeeRef { get; set; }
         /// <summary>
         /// The identifying hash of the ledger version that was closed.
         /// </summary>
@@ -283,8 +295,9 @@ namespace Xrpl.Models.Methods
         /// <summary>
         /// The time this ledger was closed, in seconds since the Ripple Epoch
         /// </summary>
+        /// <remarks>See <see cref="LedgerIndex"/> remarks - same conditional gate.</remarks>
         [JsonPropertyName("ledger_time")]
-        public ulong LedgerTime { get; set; }
+        public ulong? LedgerTime { get; set; }
         /// <summary>
         /// The minimum reserve, in drops of XRP, that is required for an account.<br/>
         /// If this ledger version includes a SetFee pseudo-transaction the new base reserve applies starting with the following ledger version.
@@ -302,8 +315,13 @@ namespace Xrpl.Models.Methods
         /// <summary>
         /// Number of new transactions included in this ledger version.
         /// </summary>
+        /// <remarks>
+        /// Never sent on this path at all: <c>NetworkOpsImp::subLedger</c> emits no
+        /// <c>txn_count</c>, which is what this type's own summary says. Only the asynchronous
+        /// <c>ledgerClosed</c> push (<see cref="LedgerStream"/>) carries it.
+        /// </remarks>
         [JsonPropertyName("txn_count")]
-        public uint TxnCount { get; set; }
+        public uint? TxnCount { get; set; }
         /// <summary>
         /// (May be omitted) Range of ledgers that the server has available.<br/>
         /// This may be a disjoint sequence such as 24900901-24900984,24901116-24901158.<br/>

@@ -179,6 +179,10 @@ namespace XrplTests.Xrpl.Models
             Assert.IsNull(result.LedgerIndex, "subLedger omits ledger_index with no validated ledger yet - must not fabricate 0");
             Assert.IsNull(result.ReserveBase, "subLedger omits reserve_base with no validated ledger yet - must not fabricate 0");
             Assert.IsNull(result.ReserveInc, "subLedger omits reserve_inc with no validated ledger yet - must not fabricate 0");
+            Assert.IsNull(result.FeeBase, "subLedger omits fee_base with no validated ledger yet - must not fabricate 0");
+            Assert.IsNull(result.LedgerTime, "subLedger omits ledger_time with no validated ledger yet - must not fabricate 0");
+            Assert.IsNull(result.FeeRef, "subLedger emits fee_ref only when XRPFees is disabled, and never outside the validated-ledger gate - must not fabricate 0");
+            Assert.IsNull(result.TxnCount, "subLedger never emits txn_count on this path at all - must not fabricate 0");
         }
 
         [TestMethod]
@@ -192,6 +196,10 @@ namespace XrplTests.Xrpl.Models
             Assert.IsFalse(doc.RootElement.TryGetProperty("ledger_index", out _), "re-serialized output must not fabricate ledger_index the node never sent");
             Assert.IsFalse(doc.RootElement.TryGetProperty("reserve_base", out _), "re-serialized output must not fabricate reserve_base the node never sent");
             Assert.IsFalse(doc.RootElement.TryGetProperty("reserve_inc", out _), "re-serialized output must not fabricate reserve_inc the node never sent");
+            Assert.IsFalse(doc.RootElement.TryGetProperty("fee_base", out _), "re-serialized output must not fabricate fee_base the node never sent");
+            Assert.IsFalse(doc.RootElement.TryGetProperty("fee_ref", out _), "re-serialized output must not fabricate fee_ref the node never sent");
+            Assert.IsFalse(doc.RootElement.TryGetProperty("ledger_time", out _), "re-serialized output must not fabricate ledger_time the node never sent");
+            Assert.IsFalse(doc.RootElement.TryGetProperty("txn_count", out _), "re-serialized output must not fabricate txn_count the node never sent");
         }
 
         // rippled NetworkOpsImp::pubValidation sets ledger_index only when the underlying
@@ -228,6 +236,48 @@ namespace XrplTests.Xrpl.Models
             using JsonDocument doc = JsonDocument.Parse(output);
 
             Assert.IsFalse(doc.RootElement.TryGetProperty("ledger_index", out _), "re-serialized output must not fabricate ledger_index the node never sent");
+        }
+
+        // rippled NetworkOpsImp::pubLedger guards fee_ref with `if (!rules().enabled(featureXRPFees))`.
+        // XRPFees is active on mainnet, so no current node sends the member at all - which makes
+        // this the one omission below that is not an edge case but the everyday shape of the
+        // ledgerClosed stream. Captured from a real mainnet subscription.
+        private const string LedgerClosedFromMainnet = """
+        {
+          "type": "ledgerClosed",
+          "fee_base": 10,
+          "ledger_hash": "1BF9F0D8B2C1F94BF9C69AC1E2A34DEE1AAB68A9D1CDBD6B9E7EF0A5C0C0F3E1",
+          "ledger_index": 106384960,
+          "ledger_time": 837719525,
+          "network_id": 0,
+          "reserve_base": 1000000,
+          "reserve_inc": 200000,
+          "txn_count": 42,
+          "validated_ledgers": "32570-106384960"
+        }
+        """;
+
+        [TestMethod]
+        public void Deserialize_LedgerStream_XrpFeesEnabled_FeeRefIsNull()
+        {
+            LedgerStream result = JsonSerializer.Deserialize<LedgerStream>(LedgerClosedFromMainnet, Options);
+
+            Assert.IsNotNull(result);
+            Assert.IsNull(result.FeeRef, "XRPFees is active on mainnet, so pubLedger never sends fee_ref - the property must stay null, not fabricate 0");
+            Assert.AreEqual(10u, result.FeeBase, "fee_base is unconditional in pubLedger and must still round-trip");
+            Assert.AreEqual(42u, result.TxnCount, "txn_count is unconditional in pubLedger, unlike the subLedger reply");
+        }
+
+        [TestMethod]
+        public void Serialize_LedgerStream_XrpFeesEnabled_OmitsFeeRef()
+        {
+            LedgerStream result = JsonSerializer.Deserialize<LedgerStream>(LedgerClosedFromMainnet, Options);
+
+            string output = JsonSerializer.Serialize(result, Options);
+            using JsonDocument doc = JsonDocument.Parse(output);
+
+            Assert.IsFalse(doc.RootElement.TryGetProperty("fee_ref", out _), "re-serialized output must not fabricate fee_ref into every mainnet ledgerClosed event");
+            Assert.IsTrue(doc.RootElement.TryGetProperty("fee_base", out _), "fee_base was sent by the node and must survive the round-trip");
         }
     }
 }
