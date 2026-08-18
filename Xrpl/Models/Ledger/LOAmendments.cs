@@ -24,10 +24,6 @@ namespace Xrpl.Models.Ledger
     /// </summary>
     public class LOAmendments : BaseLedgerEntry
     {
-        public LOAmendments()
-        {
-            LedgerEntryType = Xrpl.Models.LedgerEntryType.Amendments;
-        }
         /// <summary>
         /// Array of objects describing the status of amendments that have majority support but are not yet enabled.<br/>
         /// If omitted, there are no pending amendments with majority support.

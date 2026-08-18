@@ -144,5 +144,30 @@ namespace XrplTests.Xrpl.Models
             Assert.IsFalse(result.HasAccess);
             Assert.AreEqual(2, result.InvalidCredentials.Count);
         }
+
+        [TestMethod]
+        public void TestEvaluate_MissingFlags_TreatedAsNotAccepted_NoAccess()
+        {
+            // Regression guard: Flags is nullable (e.g. a caller assembling a credential from
+            // NewFields/PreviousFields, where absence is normal). A missing Flags value must not
+            // be read as "accepted" - a lifted `!=` returns true when either side is null, unlike
+            // a lifted `<`, which returns false, so this is a distinct failure mode from the
+            // SignerQuorum case and must be checked explicitly rather than relying on the operator.
+            LOCredential credential = new LOCredential
+            {
+                Subject = "rf1BiGeXwwQoi8Z2ueFYTEXSwuJYfV2Jpn",
+                Issuer = Issuer,
+                CredentialType = CredentialTypeHex,
+                Expiration = null,
+                Flags = null
+            };
+            List<LOCredential> credentials = new List<LOCredential> { credential };
+
+            DomainAccessResult result = DomainAccessSugar.EvaluateDomainAccess(credentials, CloseTime, LedgerIndex);
+
+            Assert.IsFalse(result.HasAccess);
+            Assert.AreEqual(1, result.InvalidCredentials.Count);
+            Assert.IsFalse(result.InvalidCredentials[0].Accepted);
+        }
     }
 }

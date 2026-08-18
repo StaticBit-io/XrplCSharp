@@ -11,8 +11,9 @@ namespace Xrpl.Models.Ledger
     /// Flags of a DirectoryNode ledger object.
     /// </summary>
     /// <remarks>
-    /// <see cref="LODirectoryNode.Flags"/> stays a raw <c>uint</c> for backwards compatibility;
-    /// test a bit with <c>(dir.Flags &amp; (uint)DirectoryNodeFlags.lsfNFTokenBuyOffers) != 0</c>.
+    /// <see cref="LODirectoryNode.Flags"/> stays a raw <c>uint</c> for backwards compatibility, but is
+    /// nullable (absent e.g. inside PreviousFields). A lifted <c>!=</c> returns true when either side
+    /// is null, so check presence explicitly: <c>dir.Flags is { } f &amp;&amp; (f &amp; (uint)DirectoryNodeFlags.lsfNFTokenBuyOffers) != 0</c>.
     /// </remarks>
     [System.Flags]
     public enum DirectoryNodeFlags : uint
@@ -33,11 +34,6 @@ namespace Xrpl.Models.Ledger
     /// </summary>
     public class LODirectoryNode : BaseLedgerEntry
     {
-
-        public LODirectoryNode()
-        {
-            LedgerEntryType = Xrpl.Models.LedgerEntryType.DirectoryNode;
-        }
 
         /// <summary>
         /// A bit-map of boolean flags enabled for this directory.

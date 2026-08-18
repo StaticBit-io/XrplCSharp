@@ -10,10 +10,6 @@ namespace Xrpl.Models.Ledger
 {
     public class LOAmm : BaseLedgerEntry
     {
-        public LOAmm()
-        {
-            LedgerEntryType = Xrpl.Models.LedgerEntryType.AMM;
-        }
         /// <summary>
         /// The special account that holds the AMM's assets and issues its LPTokens.
         /// Serialized as <c>Account</c>, which is the name rippled gives this field.

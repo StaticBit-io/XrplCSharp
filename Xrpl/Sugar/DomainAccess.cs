@@ -119,9 +119,12 @@ namespace Xrpl.Sugar
                 if (credential is null)
                     continue;
 
-                // Flags is nullable; a missing value lifts through the bitwise AND/comparison to false,
-                // which is correct here (absence means "not accepted"), not a fabricated default.
-                bool accepted = (credential.Flags & (uint)CredentialFlags.lsfAccepted) != 0;
+                // Flags is nullable because these models double as metadata projections, where a
+                // member can be absent. Absence must not read as accepted: a lifted `!=` returns
+                // true when either side is null — unlike a lifted `<`, which returns false — so the
+                // presence check has to be explicit.
+                bool accepted = credential.Flags is { } flags
+                    && (flags & (uint)CredentialFlags.lsfAccepted) != 0;
                 bool expired = credential.Expiration is DateTime expiration && closeTime > expiration;
                 if (accepted && !expired)
                 {

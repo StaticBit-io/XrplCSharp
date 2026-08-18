@@ -13,8 +13,9 @@ namespace Xrpl.Models.Ledger;
 /// Flags of a SignerList ledger object.
 /// </summary>
 /// <remarks>
-/// <see cref="LOSignerList.Flags"/> stays a raw <c>uint</c> for backwards compatibility;
-/// test a bit with <c>(list.Flags &amp; (uint)SignerListFlags.lsfOneOwnerCount) != 0</c>.
+/// <see cref="LOSignerList.Flags"/> stays a raw <c>uint</c> for backwards compatibility, but is
+/// nullable (absent e.g. inside PreviousFields). A lifted <c>!=</c> returns true when either side
+/// is null, so check presence explicitly: <c>list.Flags is { } f &amp;&amp; (f &amp; (uint)SignerListFlags.lsfOneOwnerCount) != 0</c>.
 /// </remarks>
 [Flags]
 public enum SignerListFlags : uint
@@ -33,9 +34,6 @@ public enum SignerListFlags : uint
 /// </summary>
 public class LOSignerList : BaseLedgerEntry
 {
-    /// <summary> create base object </summary>
-    public LOSignerList() => LedgerEntryType = Xrpl.Models.LedgerEntryType.SignerList;
-
     /// <summary>
     /// A bit-map of Boolean flags enabled for this signer list.<br/>
     /// For more information, see SignerList Flags.

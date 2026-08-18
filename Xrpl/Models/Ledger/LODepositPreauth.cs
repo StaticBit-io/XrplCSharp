@@ -17,11 +17,6 @@ namespace Xrpl.Models.Ledger
     /// </summary>
     public class LODepositPreauth : BaseLedgerEntry
     {
-        public LODepositPreauth()
-        {
-            LedgerEntryType = Xrpl.Models.LedgerEntryType.DepositPreauth;
-        }
-
         /// <summary>
         /// The account that granted the preauthorization (the destination of the future payments).
         /// </summary>

@@ -16,11 +16,6 @@ namespace Xrpl.Models.Ledger
     /// </summary>
     public class LOCheck : BaseLedgerEntry, IDestination
     {
-        public LOCheck()
-        {
-            LedgerEntryType = Xrpl.Models.LedgerEntryType.Check;
-        }
-
         /// <summary>
         /// The sender of the Check. Cashing the Check debits this address's balance. 
         /// </summary>

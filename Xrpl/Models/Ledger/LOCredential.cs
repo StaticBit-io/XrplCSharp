@@ -31,11 +31,6 @@ namespace Xrpl.Models.Ledger
     /// </summary>
     public class LOCredential : BaseLedgerEntry
     {
-        public LOCredential()
-        {
-            LedgerEntryType = Xrpl.Models.LedgerEntryType.Credential;
-        }
-
         /// <summary>
         /// The account that is the subject (holder) of the credential.
         /// </summary>

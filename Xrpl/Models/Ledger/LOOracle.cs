@@ -17,14 +17,6 @@ namespace Xrpl.Models.Ledger
     public class LOOracle : BaseLedgerEntry
     {
         /// <summary>
-        /// Initializes a new instance of the LOOracle class.
-        /// </summary>
-        public LOOracle()
-        {
-            LedgerEntryType = Xrpl.Models.LedgerEntryType.Oracle;
-        }
-
-        /// <summary>
         /// The XRPL account with update and delete privileges for the oracle.
         /// It's recommended to set up multi-signing on this account.
         /// </summary>

@@ -11,11 +11,6 @@ namespace Xrpl.Models.Ledger;
 /// </summary>
 public class LOXChainOwnedCreateAccountClaimID : BaseLedgerEntry
 {
-    public LOXChainOwnedCreateAccountClaimID()
-    {
-        LedgerEntryType = Xrpl.Models.LedgerEntryType.XChainOwnedCreateAccountClaimID;
-    }
-
     /// <summary>
     /// The account that owns this object.
     /// </summary>

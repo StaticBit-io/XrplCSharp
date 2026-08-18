@@ -16,10 +16,6 @@ namespace Xrpl.Models.Ledger
     /// </summary>
     public class LOPayChannel : BaseLedgerEntry, IDestination
     {
-        public LOPayChannel()
-        {
-            LedgerEntryType = Xrpl.Models.LedgerEntryType.PayChannel;
-        }
         /// <summary>
         /// A bit-map of boolean flags enabled for this payment channel.<br/>
         /// Currently, the protocol defines no flags for PayChannel objects.

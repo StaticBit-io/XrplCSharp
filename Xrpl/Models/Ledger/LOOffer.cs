@@ -46,10 +46,6 @@ namespace Xrpl.Models.Ledger
     public class LOOffer : BaseLedgerEntry
     {
         
-        public LOOffer()
-        {
-            LedgerEntryType = Xrpl.Models.LedgerEntryType.Offer;
-        }
         /// <summary>
         /// The address of the account that placed this Offer. 
         /// </summary>

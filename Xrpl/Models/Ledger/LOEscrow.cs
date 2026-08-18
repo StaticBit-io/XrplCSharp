@@ -15,12 +15,6 @@ namespace Xrpl.Models.Ledger
     /// </summary>
     public class LOEscrow : BaseLedgerEntry, IDestination
     {
-        public LOEscrow()
-        {
-            LedgerEntryType = Xrpl.Models.LedgerEntryType.Escrow;
-        }
-
-
         /// <summary>
         /// The address of the owner (sender) of this held payment.<br/>
         /// This is the account that provided the funds, and gets it back if the held payment is

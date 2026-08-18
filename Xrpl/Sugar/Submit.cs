@@ -295,9 +295,9 @@ public static class SubmitSugar
             if (hasSL)
             {
                 var sl = ai.SignerLists[0];
-                var (picked, sum) = BatchSigningHelper.PickWalletsForQuorum(sl, walletByAddr);
+                var (picked, sum, quorum) = BatchSigningHelper.PickWalletsForQuorum(sl, walletByAddr);
 
-                if (sum < sl.SignerQuorum)
+                if (sum < quorum)
                 {
                     throw new ValidationException($"Not enough signer wallets for multisig account {acct}.");
                 }
@@ -342,9 +342,9 @@ public static class SubmitSugar
         {
             // мультисиг корня: берём из wallets только тех, кто входит в SignerList(main)
             var sl = aiRoot.SignerLists[0];
-            var (picked, sum) = BatchSigningHelper.PickWalletsForQuorum(sl, walletByAddr);
+            var (picked, sum, quorum) = BatchSigningHelper.PickWalletsForQuorum(sl, walletByAddr);
 
-            if (sum < sl.SignerQuorum) throw new ValidationException($"Not enough signer wallets for root multisig {mainAcc}.");
+            if (sum < quorum) throw new ValidationException($"Not enough signer wallets for root multisig {mainAcc}.");
 
             //// корневой мультисиг: обязательно пустой SPK и без TxnSignature
             //combinedJson.Remove("TxnSignature");

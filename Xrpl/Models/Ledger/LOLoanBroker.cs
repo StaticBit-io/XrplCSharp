@@ -10,11 +10,6 @@ namespace Xrpl.Models.Ledger;
 /// <remarks>Requires the Loan amendment (XLS-66d). This feature is in draft and subject to change.</remarks>
 public class LOLoanBroker : BaseLedgerEntry
 {
-    public LOLoanBroker()
-    {
-        LedgerEntryType = Xrpl.Models.LedgerEntryType.LoanBroker;
-    }
-
     /// <summary>
     /// The address of the LoanBroker pseudo-account.
     /// </summary>

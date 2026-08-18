@@ -11,11 +11,6 @@ namespace Xrpl.Models.Ledger
     /// </summary>
     public class LOLedgerHashes : BaseLedgerEntry
     {
-        public LOLedgerHashes()
-        {
-            LedgerEntryType = Xrpl.Models.LedgerEntryType.LedgerHashes;
-        }
-        
         public uint? FirstLedgerSequence { get; set; } //todo unknown field
         /// <summary>
         /// The Ledger Index of the last entry in this object's Hashes array.

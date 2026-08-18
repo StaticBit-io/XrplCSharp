@@ -12,11 +12,6 @@ namespace Xrpl.Models.Ledger
     /// </summary>
     public class LOTicket : BaseLedgerEntry
     {
-        public LOTicket()
-        {
-            LedgerEntryType = Xrpl.Models.LedgerEntryType.Ticket;
-        }
-
         /// <summary>
         /// The sender of the Check. Cashing the Check debits this address's balance.<br/>
         /// The account that owns this Ticket.

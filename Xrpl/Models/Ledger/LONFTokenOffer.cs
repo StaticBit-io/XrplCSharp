@@ -20,11 +20,6 @@ namespace Xrpl.Models.Methods
     public class LONFTokenOffer : BaseLedgerEntry, IDestination
     {
 
-        public LONFTokenOffer()
-        {
-            //The type of ledger object (0x0074).
-            LedgerEntryType = Xrpl.Models.LedgerEntryType.NFTokenOffer;
-        }
         /// <summary>
         /// A set of flags associated with this object, used to specify various options or settings. Flags are listed in the table below.
         /// </summary>

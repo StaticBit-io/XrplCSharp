@@ -9,12 +9,6 @@ namespace Xrpl.Models.Methods;
 
 public class LONFTokenPage : BaseLedgerEntry
 {
-
-    public LONFTokenPage()
-    {
-        //The type of ledger object (0x0074).
-        LedgerEntryType = Xrpl.Models.LedgerEntryType.NFTokenPage;
-    }
     [JsonConverter(typeof(NumberOrStringConverter))]
     public string Flags { get; set; }
     /// <summary>

@@ -128,14 +128,17 @@ public static class BatchSigningHelper
     /// Picks wallets from a dictionary that satisfy the quorum of a SignerList.
     /// Wallets are selected by descending weight until the quorum is met.
     /// </summary>
-    /// <returns>A tuple of (selected wallets, total weight achieved)</returns>
-    public static (List<XrplWallet> picked, uint totalWeight) PickWalletsForQuorum(
+    /// <returns>A tuple of (selected wallets, total weight achieved, the quorum they were selected against).</returns>
+    public static (List<XrplWallet> picked, uint totalWeight, uint quorum) PickWalletsForQuorum(
         LOSignerList signerList,
         IDictionary<string, XrplWallet> walletByAddr)
     {
         // SignerQuorum is a required field of a live SignerList ledger entry (never legitimately absent);
         // a null here means the caller passed a malformed/partial object, so fail loudly rather than let
-        // the quorum check below silently never trip and over-pick wallets.
+        // the quorum check below silently never trip and over-pick wallets. The resolved quorum is
+        // returned so callers compare against the exact value used here instead of re-reading
+        // signerList.SignerQuorum themselves, which would silently depend on this method having
+        // already validated it.
         if (signerList.SignerQuorum is not { } need)
         {
             throw new ValidationException("SignerList is missing SignerQuorum; cannot determine quorum for wallet selection.");
@@ -158,7 +161,7 @@ public static class BatchSigningHelper
             }
         }
 
-        return (picked, sum);
+        return (picked, sum, need);
     }
 
 }

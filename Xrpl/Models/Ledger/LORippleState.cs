@@ -47,10 +47,6 @@ namespace Xrpl.Models.Ledger
     /// </summary>
     public class LORippleState : BaseLedgerEntry
     {
-        public LORippleState()
-        {
-            LedgerEntryType = Xrpl.Models.LedgerEntryType.RippleState;
-        }
         /// <summary>
         /// A bit-map of boolean options enabled for this object. 
         /// </summary>

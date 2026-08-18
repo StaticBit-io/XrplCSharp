@@ -36,11 +36,6 @@ public enum LoanFlags : uint
 /// <remarks>Requires the Loan amendment (XLS-66d). This feature is in draft and subject to change.</remarks>
 public class LOLoan : BaseLedgerEntry
 {
-    public LOLoan()
-    {
-        LedgerEntryType = Xrpl.Models.LedgerEntryType.Loan;
-    }
-
     /// <summary>
     /// A bit-map of boolean flags enabled for this loan.
     /// </summary>

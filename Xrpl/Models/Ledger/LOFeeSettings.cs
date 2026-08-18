@@ -9,10 +9,6 @@ namespace Xrpl.Models.Ledger
     /// </summary>
     public class LOFeeSettings : BaseLedgerEntry
     {
-        public LOFeeSettings()
-        {
-            LedgerEntryType = Xrpl.Models.LedgerEntryType.FeeSettings;
-        }
         /// <summary>
         /// A bit-map of boolean flags for this object.<br/>
         /// No flags are defined for this type

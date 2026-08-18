@@ -98,11 +98,6 @@ public class VaultDataFormat
 /// <remarks>Requires the Vault amendment (XLS-65d). This feature is in draft and subject to change.</remarks>
 public class LOVault : BaseLedgerEntry
 {
-    public LOVault()
-    {
-        LedgerEntryType = Xrpl.Models.LedgerEntryType.Vault;
-    }
-
     /// <summary>
     /// The address of the vault's pseudo-account.
     /// </summary>

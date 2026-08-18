@@ -63,11 +63,6 @@ namespace Xrpl.Models.Ledger
     /// </summary>
     public class LOMPTokenIssuance : BaseLedgerEntry
     {
-        public LOMPTokenIssuance()
-        {
-            LedgerEntryType = Xrpl.Models.LedgerEntryType.MPTokenIssuance;
-        }
-
         [JsonPropertyName("Flags")]
         public MPTokenIssuanceFlags? Flags { get; init; }
 

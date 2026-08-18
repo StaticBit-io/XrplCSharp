@@ -90,10 +90,6 @@ namespace Xrpl.Models.Ledger
     /// </summary>
     public class LOAccountRoot : BaseLedgerEntry
     {
-        public LOAccountRoot()
-        {
-            LedgerEntryType = Xrpl.Models.LedgerEntryType.AccountRoot;
-        }
         /// <summary>
         /// Identifier of the associated AMM (Automated Market Maker) instance.
         /// </summary>

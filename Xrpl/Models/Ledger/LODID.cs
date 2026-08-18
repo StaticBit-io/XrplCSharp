@@ -11,14 +11,6 @@ namespace Xrpl.Models.Ledger
     public class LODID : BaseLedgerEntry
     {
         /// <summary>
-        /// Initializes a new instance of the LODID class.
-        /// </summary>
-        public LODID()
-        {
-            LedgerEntryType = Xrpl.Models.LedgerEntryType.DID;
-        }
-
-        /// <summary>
         /// The account that controls the DID.
         /// </summary>
         [JsonPropertyName("Account")]

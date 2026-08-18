@@ -80,7 +80,7 @@ namespace Xrpl.Models.Transactions
     {
         public Offer()
         {
-            LedgerEntryType = Xrpl.Models.LedgerEntryType.Offer;
+            LedgerEntryType = LedgerEntryType.Offer;
         }
         /// <summary>
         /// The value 0x006F, mapped to the string Offer, indicates that this object describes an order to trade currency.

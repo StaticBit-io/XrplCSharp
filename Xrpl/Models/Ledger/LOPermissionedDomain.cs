@@ -16,14 +16,6 @@ namespace Xrpl.Models.Ledger
     public class LOPermissionedDomain : BaseLedgerEntry
     {
         /// <summary>
-        /// Initializes a new instance of the LOPermissionedDomain class.
-        /// </summary>
-        public LOPermissionedDomain()
-        {
-            LedgerEntryType = Xrpl.Models.LedgerEntryType.PermissionedDomain;
-        }
-
-        /// <summary>
         /// The address of the account that owns this domain.
         /// </summary>
         [JsonPropertyName("Owner")]

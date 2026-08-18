@@ -26,11 +26,6 @@ public enum SponsorshipFlags : uint
 /// <remarks>Requires the Sponsor amendment (XLS-68).</remarks>
 public class LOSponsorship : BaseLedgerEntry
 {
-    public LOSponsorship()
-    {
-        LedgerEntryType = Xrpl.Models.LedgerEntryType.Sponsorship;
-    }
-
     /// <summary>
     /// A bit-map of boolean flags (see <see cref="SponsorshipFlags"/>).
     /// </summary>
