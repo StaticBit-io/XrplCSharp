@@ -62,9 +62,21 @@ public class FromStringDateTimeConverter : JsonConverter<DateTime?>
     {
         if (value is DateTime dateTime)
         {
-            // "K" mirrors the Read side: a UTC-kind value (the only kind Read ever produces)
-            // writes back with the "Z" suffix rippled itself sends, instead of "+00:00".
-            writer.WriteStringValue(dateTime.ToString("yyyy-MM-ddTHH:mm:ssK", CultureInfo.InvariantCulture));
+            // "K" emits nothing at all for DateTimeKind.Unspecified - it is neither "Z" nor a
+            // numeric offset, so the value would round-trip with no zone marker whatsoever. Read
+            // only ever produces Utc, but a caller can assign a DateTime by hand, so Kind must be
+            // normalized before formatting: Unspecified is treated as UTC (mirrors
+            // DateTimeStyles.AssumeUniversal on the Read side), and Local is converted to UTC
+            // rather than emitting a local offset that Read would then normalize away, making the
+            // written value differ from the one an unchanged round trip would produce.
+            DateTime normalized = dateTime.Kind switch
+            {
+                DateTimeKind.Unspecified => DateTime.SpecifyKind(dateTime, DateTimeKind.Utc),
+                DateTimeKind.Local => dateTime.ToUniversalTime(),
+                _ => dateTime
+            };
+
+            writer.WriteStringValue(normalized.ToString("yyyy-MM-ddTHH:mm:ssK", CultureInfo.InvariantCulture));
         }
         else
         {

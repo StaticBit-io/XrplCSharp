@@ -121,4 +121,51 @@ public class TestUFromStringDateTimeConverter
         Assert.AreEqual(original.Month, deserialized.Timestamp.Value.Month);
         Assert.AreEqual(original.Day, deserialized.Timestamp.Value.Day);
     }
+
+    /// <summary>
+    /// A Utc-kind value is the baseline Read itself always produces: "K" must emit the "Z" suffix,
+    /// not a "+00:00" offset.
+    /// </summary>
+    [TestMethod]
+    public void Write_UtcKind_WritesZSuffix()
+    {
+        DateTime date = new DateTime(2024, 6, 15, 12, 30, 0, DateTimeKind.Utc);
+        Model model = new Model { Timestamp = date };
+        string json = JsonSerializer.Serialize(model, XrplJsonOptions.Default);
+        StringAssert.Contains(json, "2024-06-15T12:30:00Z");
+    }
+
+    /// <summary>
+    /// "K" emits no zone marker at all for DateTimeKind.Unspecified - neither "Z" nor a numeric
+    /// offset - so an unset Kind must be normalized to UTC before formatting, mirroring
+    /// DateTimeStyles.AssumeUniversal on the Read side. A caller assigning a DateTime by hand
+    /// (Read itself never produces Unspecified) is exactly the case this covers.
+    /// </summary>
+    [TestMethod]
+    public void Write_UnspecifiedKind_TreatedAsUtc()
+    {
+        DateTime date = new DateTime(2024, 6, 15, 12, 30, 0, DateTimeKind.Unspecified);
+        Model model = new Model { Timestamp = date };
+        string json = JsonSerializer.Serialize(model, XrplJsonOptions.Default);
+        StringAssert.Contains(json, "2024-06-15T12:30:00Z");
+    }
+
+    /// <summary>
+    /// A Local-kind value must be converted to UTC before formatting, not written out with a local
+    /// offset that Read (which always normalizes to UTC) would then interpret differently on the
+    /// way back in.
+    /// </summary>
+    [TestMethod]
+    public void Write_LocalKind_ConvertsToUtc()
+    {
+        DateTime utc = new DateTime(2024, 6, 15, 12, 30, 0, DateTimeKind.Utc);
+        DateTime local = utc.ToLocalTime();
+        Model model = new Model { Timestamp = local };
+        string json = JsonSerializer.Serialize(model, XrplJsonOptions.Default);
+
+        Model deserialized = JsonSerializer.Deserialize<Model>(json, XrplJsonOptions.Default);
+        Assert.IsNotNull(deserialized.Timestamp);
+        Assert.AreEqual(DateTimeKind.Utc, deserialized.Timestamp.Value.Kind);
+        Assert.AreEqual(utc, deserialized.Timestamp.Value);
+    }
 }

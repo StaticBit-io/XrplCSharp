@@ -162,10 +162,30 @@ namespace Xrpl.Client
         /// </remarks>
         public static XrplResponse<T> From<T>(ResolvedResponse resolved)
         {
+            T typed;
+            switch (resolved.Result)
+            {
+                case T match:
+                    typed = match;
+                    break;
+                // A null Result is a legitimate match for a reference type or Nullable<T> - the
+                // pattern above cannot express that, so it is handled separately rather than
+                // folded into the mismatch case below.
+                case null when default(T) is null:
+                    typed = default!;
+                    break;
+                default:
+                    // Same failure the object overload above raises for a mismatched Promise -
+                    // unified here instead of leaving this overload to throw a bare
+                    // InvalidCastException from an unchecked (T) cast.
+                    throw new XrplException(
+                        $"A resolved request carried {resolved.Result?.GetType().Name ?? "null"} instead of the expected {typeof(T).Name}.");
+            }
+
             BaseResponse envelope = resolved.Envelope;
 
             return new XrplResponse<T>(
-                (T)resolved.Result,
+                typed,
                 envelope?.RawResult ?? default,
                 envelope?.ApiVersion,
                 envelope?.Status,

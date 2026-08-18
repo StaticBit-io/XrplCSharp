@@ -495,6 +495,16 @@ namespace Xrpl.Client
         public (BaseResponse Response, bool Handled) HandleResponse(byte[] frame)
         {
             ErrorResponse response = JsonSerializer.Deserialize<ErrorResponse>(frame, serializerOptions);
+            // A frame that is the bare JSON literal `null` deserializes to a null ErrorResponse
+            // rather than throwing - System.Text.Json's contract for a reference type. That is a
+            // malformed protocol response (a node or intermediary proxy sending no object at all),
+            // not an internal bug, so it must surface as a typed protocol error instead of an NRE
+            // out of the next line.
+            if (response is null)
+            {
+                throw new XrplException("Response frame did not contain a JSON object (received JSON null).");
+            }
+
             response.AttachFrame(frame);
             return HandleResponse(response);
         }

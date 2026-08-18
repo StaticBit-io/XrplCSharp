@@ -100,8 +100,14 @@ public static class BatchNormalizer
             {
                 LedgerIndex = new LedgerIndex(LedgerIndexType.Current)
             }, cancellationToken)).Result;
-            // account_info for the current ledger always returns a full AccountRoot, so Sequence is always present;
-            // a missing value would mean a malformed node response and must not be silently treated as 0.
+            // account_info for the current ledger always returns a full AccountRoot with a Sequence;
+            // a missing AccountData (or a missing Sequence within it) means a malformed node response
+            // and must fail loudly rather than dereference a null AccountData or silently treat it as 0.
+            if (ai.AccountData is null)
+            {
+                throw new ValidationException($"account_info response for '{account}' did not include account_data.");
+            }
+
             uint? start = ai.AccountData.Sequence;
             if (start == null)
             {

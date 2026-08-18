@@ -615,5 +615,23 @@ namespace Xrpl.Tests.ClientLib
             Assert.ThrowsExactly<ArgumentNullException>(() => new ErrorResponse().AttachFrame(null));
         }
 
+        /// <summary>
+        /// A frame holding the bare JSON literal <c>null</c> (not an empty/missing frame - the byte
+        /// content of the frame itself is the four characters "null") deserializes to a null
+        /// <see cref="ErrorResponse"/> rather than throwing. <see cref="RequestManager.HandleResponse(byte[])"/>
+        /// must catch that and raise a typed protocol error instead of letting the next line's
+        /// <c>response.AttachFrame(frame)</c> throw a bare <see cref="NullReferenceException"/>.
+        /// </summary>
+        [TestMethod]
+        public void TestUHandleResponseRejectsAJsonNullFrame()
+        {
+            RequestManager manager = new RequestManager();
+
+            XrplException raised = Assert.ThrowsExactly<XrplException>(
+                () => manager.HandleResponse(Encoding.UTF8.GetBytes("null")));
+
+            StringAssert.Contains(raised.Message, "null");
+        }
+
     }
 }

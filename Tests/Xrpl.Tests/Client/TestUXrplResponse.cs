@@ -6,6 +6,7 @@ using System.Text.Json;
 using System.Threading.Tasks;
 
 using Xrpl.Client;
+using Xrpl.Client.Exceptions;
 using Xrpl.Client.Json;
 using Xrpl.Models.Ledger;
 using Xrpl.Models.Subscriptions;
@@ -211,6 +212,36 @@ public class TestUXrplResponse
 
         string stream = JsonSerializer.Serialize(new LedgerStreamResponse(), XrplJsonOptions.Default);
         StringAssert.Contains(stream, "ledger_index");
+    }
+
+    /// <summary>
+    /// A <see cref="ResolvedResponse"/> carrying a <c>Result</c> of the wrong type used to throw a
+    /// bare <see cref="System.InvalidCastException"/> from the unchecked <c>(T)</c> cast — unlike
+    /// the sibling <see cref="XrplResponse.From{T}(object)"/> overload a few lines up, which raises
+    /// a typed <see cref="XrplException"/> for its own kind of mismatch. Both overloads now fail
+    /// the same way.
+    /// </summary>
+    [TestMethod]
+    public void TestUFromResolvedResponseRejectsAMismatchedResultType()
+    {
+        ResolvedResponse resolved = new ResolvedResponse("not a LOLedgerData", null);
+
+        XrplException raised = Assert.ThrowsExactly<XrplException>(
+            () => XrplResponse.From<LOLedgerData>(resolved));
+
+        StringAssert.Contains(raised.Message, "String");
+        StringAssert.Contains(raised.Message, nameof(LOLedgerData));
+    }
+
+    /// <summary>A null <c>Result</c> is a legitimate value for a reference-typed T, not a mismatch.</summary>
+    [TestMethod]
+    public void TestUFromResolvedResponseAcceptsANullResultForAReferenceType()
+    {
+        ResolvedResponse resolved = new ResolvedResponse(null, null);
+
+        XrplResponse<LOLedgerData> response = XrplResponse.From<LOLedgerData>(resolved);
+
+        Assert.IsNull(response.Result);
     }
 
 }
