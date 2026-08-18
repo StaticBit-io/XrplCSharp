@@ -158,6 +158,14 @@ namespace XrplTests.Xrpl.Models
 
             Assert.IsNotNull(result);
             Assert.IsNull(result.LedgerIndex, "the feature command never sends ledger_index - the property must stay null, not fabricate 0");
+
+            // ServerFeaturesConverter reads Validated with the same ternary shape as LedgerIndex
+            // (TryGetProperty(...) ? v.GetBoolean() : null), but nothing asserted on it: reverting
+            // just that one line to TryGetProperty(...) && v.GetBoolean() - which still compiles,
+            // since bool converts to bool? - left the entire 1083-test suite green. That mutation
+            // defaults an absent "validated" to false instead of leaving it null, exactly the
+            // fabrication this file exists to catch.
+            Assert.IsNull(result.Validated, "the feature command never sends validated - the property must stay null, not fabricate false");
         }
 
         // rippled NetworkOpsImp::subLedger gates ledger_index/reserve_base/reserve_inc on
