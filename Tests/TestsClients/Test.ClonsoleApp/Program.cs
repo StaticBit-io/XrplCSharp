@@ -347,8 +347,16 @@ internal class Program
 
                     await client.ChangeServer(server);
                     ServerState? serverInfo = (await client.ServerState(new ServerStateRequest())).Result;
-                    string lineReserveFee = serverInfo.State.ValidatedLedger.ReserveInc.ToString();
-                    string accReserveFee = serverInfo.State.ValidatedLedger.ReserveBase.ToString();
+                    // server_state.validated_ledger.reserve_base/reserve_inc are now nullable (see
+                    // Balances.GetXrpFreeBalance) — a missing value means a malformed node response.
+                    uint? reserveInc = serverInfo.State.ValidatedLedger.ReserveInc;
+                    uint? reserveBase = serverInfo.State.ValidatedLedger.ReserveBase;
+                    if (reserveInc == null || reserveBase == null)
+                    {
+                        throw new ValidationException("server_state response did not include the validated ledger's reserve_base/reserve_inc.");
+                    }
+                    string lineReserveFee = reserveInc.Value.ToString();
+                    string accReserveFee = reserveBase.Value.ToString();
                     var _lineReserveFee = new Currency
                     {
                         Value = lineReserveFee,

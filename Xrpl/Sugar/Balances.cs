@@ -60,6 +60,14 @@ namespace Xrpl.Sugar
                 Strict = true
             };
             AccountInfo accountInfo = (await client.AccountInfo(xrpRequest, cancellationToken)).Result;
+
+            // account_info for a live account always returns account_data; a missing value means a
+            // malformed node response and must fail loudly rather than dereference a null AccountData.
+            if (accountInfo.AccountData is null)
+            {
+                throw new ValidationException($"account_info response for '{address}' did not include account_data.");
+            }
+
             return accountInfo.AccountData.Balance.ValueAsXrp.ToString();
         }
 
@@ -89,16 +97,32 @@ namespace Xrpl.Sugar
             };
             AccountInfo accountInfo = (await client.AccountInfo(xrpRequest, cancellationToken)).Result;
 
+            // account_info for a live account always returns account_data; a missing value means a
+            // malformed node response and must fail loudly rather than dereference a null AccountData.
+            if (accountInfo.AccountData is null)
+            {
+                throw new ValidationException($"account_info response for '{address}' did not include account_data.");
+            }
+
             var serverInfo = (await client.ServerState(new ServerStateRequest(), cancellationToken)).Result;
-            var FlineReserveFee = serverInfo.State.ValidatedLedger.ReserveInc.ToString();
-            var FaccReserveFee = serverInfo.State.ValidatedLedger.ReserveBase.ToString();
+
+            // server_state for a live node always returns validated_ledger.reserve_base/reserve_inc;
+            // a missing value means a malformed node response and must fail loudly rather than be
+            // treated as a zero reserve, which would overstate the free balance.
+            uint? reserveInc = serverInfo.State.ValidatedLedger.ReserveInc;
+            uint? reserveBase = serverInfo.State.ValidatedLedger.ReserveBase;
+            if (reserveInc == null || reserveBase == null)
+            {
+                throw new ValidationException("server_state response did not include the validated ledger's reserve_base/reserve_inc.");
+            }
+
             var lineReserveFee = (decimal)new Currency()
             {
-                Value = FlineReserveFee
+                Value = reserveInc.Value.ToString()
             }.ValueAsXrp;
             var accReserveFee = (decimal)new Currency()
             {
-                Value = FaccReserveFee
+                Value = reserveBase.Value.ToString()
             }.ValueAsXrp;
 
             // account_info for a live account always returns OwnerCount; a missing value means a malformed

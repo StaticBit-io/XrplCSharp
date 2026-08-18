@@ -195,17 +195,17 @@ namespace Xrpl.Models.Methods
         public string Hash { get; set; }
 
         /// <summary>
-        /// Minimum amount of XRP (not drops) necessary for every account to.<br/>
+        /// (May be omitted) Minimum amount of XRP (not drops) necessary for every account to.<br/>
         /// Keep in reserve.
         /// </summary>
         [JsonPropertyName("reserve_base")]
-        public uint ReserveBase { get; set; }
+        public uint? ReserveBase { get; set; }
 
         /// <summary>
-        /// Amount of XRP (not drops) added to the account reserve for each  object an account owns in the ledger.
+        /// (May be omitted) Amount of XRP (not drops) added to the account reserve for each  object an account owns in the ledger.
         /// </summary>
         [JsonPropertyName("reserve_inc")]
-        public uint ReserveInc { get; set; }
+        public uint? ReserveInc { get; set; }
 
         /// <summary>
         /// The ledger index of the latest validated ledger.
