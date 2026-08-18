@@ -9,7 +9,7 @@ namespace Xrpl.Models.Methods
     /// Each member of the path set is another array that represents an individual path.<br/>
     /// Each member of a path is an object that specifies the step.
     /// </summary>
-    public class Path //todo rename to path steps?
+    public class Path : BaseMethodResult//todo rename to path steps?
     {
         /// <summary>
         /// (Optional) If present, this path step represents rippling through the specified address.<br/>

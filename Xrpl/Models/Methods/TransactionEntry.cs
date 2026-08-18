@@ -27,7 +27,7 @@ namespace Xrpl.Models.Methods
     /// <summary>
     /// Response expected from a <see cref="TransactionEntryRequest"/>.
     /// </summary>
-    public class TransactionEntryResponse
+    public class TransactionEntryResponse : BaseMethodResult
     {
         /// <summary>
         /// The transaction object in JSON format.

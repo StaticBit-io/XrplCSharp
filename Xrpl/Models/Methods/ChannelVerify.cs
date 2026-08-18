@@ -73,7 +73,7 @@ namespace Xrpl.Models.Methods
     /// <summary>
     /// Response expected from a <see cref="ChannelVerifyRequest"/>.
     /// </summary>
-    public class ChannelVerifyResponse
+    public class ChannelVerifyResponse : BaseMethodResult
     {
         /// <summary>
         /// If true, the signature is valid for the stated amount, channel, and public key.

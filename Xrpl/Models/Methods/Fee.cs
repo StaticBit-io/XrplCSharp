@@ -25,7 +25,7 @@ namespace Xrpl.Models.Methods
     /// <summary>
     /// Response expected from a  <see cref="FeeRequest"/>.
     /// </summary>
-    public class Fee //todo rename to FeeResponse : BaseResponse
+    public class Fee : BaseMethodResult//todo rename to FeeResponse : BaseResponse
     {
         /// <summary>
         /// Number of transactions provisionally included in the in-progress ledger.
@@ -72,7 +72,7 @@ namespace Xrpl.Models.Methods
     /// <summary>
     /// The transaction cost 
     /// </summary>
-    public class Drops
+    public class Drops : BaseMethodResult
     {
         /// <summary>
         /// The transaction cost required for a reference transaction to be included in a ledger under minimum load, represented in drops of XRP.
@@ -104,7 +104,7 @@ namespace Xrpl.Models.Methods
     /// <summary>
     /// required transaction cost level
     /// </summary>
-    public class Levels
+    public class Levels : BaseMethodResult
     {
         /// <summary>
         /// The median transaction cost among transactions in the previous validated ledger, represented in fee levels.

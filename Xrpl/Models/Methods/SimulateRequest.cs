@@ -40,7 +40,7 @@ public class SimulateRequest : BaseRequest
     [JsonPropertyName("binary")]
     public bool? Binary { get; set; }
 }
-public class SimulateResponse
+public class SimulateResponse : BaseMethodResult
 {
     [JsonPropertyName("applied")]
     public bool Applied { get; set; }

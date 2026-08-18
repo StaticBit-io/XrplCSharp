@@ -29,7 +29,7 @@ namespace Xrpl.Models.Methods
     /// <summary>
     /// Response expected from a <see cref="ServerDefinitionsRequest"/>.
     /// </summary>
-    public class ServerDefinitionsResponse
+    public class ServerDefinitionsResponse : BaseMethodResult
     {
         /// <summary>
         /// An array of field definitions used in binary serialization.

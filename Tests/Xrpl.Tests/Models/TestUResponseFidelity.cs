@@ -97,38 +97,11 @@ namespace Xrpl.Tests.Models.Tests
         private static readonly Dictionary<string, Dictionary<string, string>> KnownLostMembers =
             new(StringComparer.Ordinal)
             {
-                ["tx_raw.json"] = new Dictionary<string, string>(StringComparer.Ordinal)
-                {
-                    ["$.status"] = StatusReason,
-                },
-                ["tx_binary_raw.json"] = new Dictionary<string, string>(StringComparer.Ordinal)
-                {
-                    ["$.status"] = StatusReason,
-                },
+                // Empty, and that is the finding: every member of every captured response now
+                // survives the round trip. The table stays because it is the mechanism that keeps
+                // it that way - a future model that stops carrying a field fails this test until
+                // someone writes down why, rather than the loss passing unnoticed.
             };
-
-        /// <summary>
-        /// Why <c>tx_raw.json</c>/<c>tx_binary_raw.json</c> still drop <c>$.status</c> even after
-        /// <see cref="Methods.BaseMethodResult"/> and <see cref="Ledger.LOLedger.UnknownFields"/>
-        /// stopped account_info/account_objects/account_tx/ledger from dropping it: both files
-        /// deserialize into <see cref="Methods.TransactionSummary"/> (see <see cref="Models"/>
-        /// above), which has no <c>[JsonExtensionData]</c> of its own - it models a `tx`/`account_tx`
-        /// entry, not a full command result, and was out of scope for the unknown-field pass that
-        /// added the other four. Verified experimentally (not assumed): removing every other file's
-        /// entry from this table left <see cref="TestUCorpusRoundTripIsFaithful"/> green, proving
-        /// `status` now round-trips there through <c>UnknownFields</c> instead of vanishing - status
-        /// genuinely still lives outside `result` on the WebSocket envelope
-        /// (<c>XrplResponse&lt;T&gt;.Status</c>), but these HTTP JSON-RPC fixtures nest it inside
-        /// `result`, and a model with extension-data capture now keeps it rather than dropping it.
-        /// </summary>
-        private const string StatusReason =
-            "Lives outside `result` on the WebSocket envelope XrplClient actually parses - it "
-            + "arrives through XrplResponse<T>.Status, a sibling of Result, not a member of it. "
-            + "These fixtures were captured over HTTP JSON-RPC, where rippled nests status inside "
-            + "result instead. TransactionSummary (what tx_raw.json/tx_binary_raw.json deserialize "
-            + "into) has no [JsonExtensionData] of its own, so status is genuinely dropped here - "
-            + "unlike account_info/account_objects/account_tx/ledger, which now carry it through "
-            + "BaseMethodResult.UnknownFields / LOLedger.UnknownFields instead of losing it.";
 
         /// <summary>
         /// Guards <see cref="Models"/> itself: a corpus file with no entry here would otherwise

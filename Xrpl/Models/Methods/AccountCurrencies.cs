@@ -9,7 +9,7 @@ namespace Xrpl.Models.Methods
     /// <summary>
     /// The expected response from an <see cref="AccountCurrenciesRequest"/>.
     /// </summary>
-    public class AccountCurrencies //todo rename to AccountCurrenciesResponse
+    public class AccountCurrencies : BaseMethodResult//todo rename to AccountCurrenciesResponse
     {
         /// <summary>
         /// The identifying hash of the ledger version used to retrieve this data as hex.

@@ -11,7 +11,7 @@ namespace Xrpl.Models.Methods
     /// <summary>
     /// Response expected from an form an <see cref="AccountOffersRequest"/>.
     /// </summary>
-    public class AccountOffers //todo rename to response
+    public class AccountOffers : BaseMethodResult//todo rename to response
     {
         /// <summary>
         /// Unique Address identifying the account that made the offers.
@@ -50,7 +50,7 @@ namespace Xrpl.Models.Methods
     /// <summary>
     /// offer made by account that is outstanding as of the requested ledger version.
     /// </summary>
-    public class Offer
+    public class Offer : BaseMethodResult
     {
         /// <summary>
         /// Options set for this offer entry as bit-flags.

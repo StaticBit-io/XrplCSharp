@@ -25,7 +25,7 @@ namespace Xrpl.Models.Methods
     /// <summary>
     /// Response expected by a  <see cref="NoRippleCheckRequest"/> .
     /// </summary>
-    public class NoRippleCheck //todo rename to NoRippleCheckResponse extends BaseResponse
+    public class NoRippleCheck : BaseMethodResult//todo rename to NoRippleCheckResponse extends BaseResponse
     {
         /// <summary>
         /// The ledger index of the current in-progress ledger, if the resolved ledger is open.

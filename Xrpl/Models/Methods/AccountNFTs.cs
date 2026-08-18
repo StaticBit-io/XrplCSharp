@@ -12,7 +12,7 @@ namespace Xrpl.Models.Methods
     /// <summary>
     /// Response expected from an <see cref="AccountNFTsRequest"/>.
     /// </summary>
-    public class AccountNFTs //todo rename to response
+    public class AccountNFTs : BaseMethodResult//todo rename to response
     {
         /// <summary>
         /// The account requested.
@@ -51,7 +51,7 @@ namespace Xrpl.Models.Methods
     /// One NFToken that might be returned from an <see cref="AccountNFTsRequest"/>.
     /// https://xrpl.org/account_nfts.html#account_nfts
     /// </summary>
-    public class NFT
+    public class NFT : BaseMethodResult
     {
         /// <summary>
         /// A bit-map of boolean flags enabled for this NFToken.<br/>

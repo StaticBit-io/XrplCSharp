@@ -90,7 +90,7 @@ namespace Xrpl.Models.Methods
         public bool Validated { get; set; }
     }
 
-    public class TransactionSummary : IAccountTransaction //todo rename to AccountTransaction
+    public class TransactionSummary : BaseMethodResult, IAccountTransaction //todo rename to AccountTransaction
     {
         private TransactionResponse _transaction;
         private string _hash;

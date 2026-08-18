@@ -18,13 +18,13 @@ namespace Xrpl.Models.Methods
         }
     }
 
-    public class ServerState //todo rename to ServerInfoResponse extends BaseResponse 
+    public class ServerState : BaseMethodResult//todo rename to ServerInfoResponse extends BaseResponse 
     {
         [JsonPropertyName("state")]
         public State State { get; set; }
     }
 
-    public class State
+    public class State : BaseMethodResult
     {
         /// <summary>
         /// The version number of the running rippled version.
@@ -169,7 +169,7 @@ namespace Xrpl.Models.Methods
     /// <summary>
     /// Information about the most recent fully-validated ledger.
     /// </summary>
-    public class StateLedger
+    public class StateLedger : BaseMethodResult
     {
         /// <summary>
         /// The time since the ledger was closed, in seconds.

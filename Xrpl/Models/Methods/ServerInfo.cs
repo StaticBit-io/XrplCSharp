@@ -68,13 +68,13 @@ namespace Xrpl.Models.Methods
         Proposing
     }
     
-    public class ServerInfo //todo rename to ServerInfoResponse extends BaseResponse 
+    public class ServerInfo : BaseMethodResult//todo rename to ServerInfoResponse extends BaseResponse 
     {
         [JsonPropertyName("info")]
         public Info Info { get; set; }
     }
 
-    public class Info
+    public class Info : BaseMethodResult
     {
         /// <summary>
         /// The version number of the running rippled version.
@@ -214,7 +214,7 @@ namespace Xrpl.Models.Methods
     /// Information about the last time the server closed a ledger,
     /// including the amount of time it took to reach a consensus and the number of trusted validators participating.
     /// </summary>
-    public class LastClose
+    public class LastClose : BaseMethodResult
     {
         /// <summary>
         /// The amount of time it took to reach a consensus on the most recently  validated ledger version, in seconds.
@@ -233,7 +233,7 @@ namespace Xrpl.Models.Methods
     /// <summary>
     /// (Admin only) Detailed information about the current load state of the server.
     /// </summary>
-    public class JobType
+    public class JobType : BaseMethodResult
     {
         [JsonPropertyName("job_type")]
         public string JobTypeDescription { get; set; }
@@ -251,7 +251,7 @@ namespace Xrpl.Models.Methods
     /// <summary>
     /// (Admin only) Detailed information about the current load state of the   server.
     /// </summary>
-    public class Load
+    public class Load : BaseMethodResult
     {
         /// <summary>
         /// (Admin only) Information about the rate of different types of jobs  the server is doing and how much time it spends on each.
@@ -266,7 +266,7 @@ namespace Xrpl.Models.Methods
         public int Threads { get; set; }
     }
 
-    public class AccountingStateInfo
+    public class AccountingStateInfo : BaseMethodResult
     {
         [JsonPropertyName("duration_us")]
         public string DurationUs { get; set; }
@@ -293,7 +293,7 @@ namespace Xrpl.Models.Methods
     /// A map of various server states with information about the time the   server spends in each.<br/>
     /// This can be useful for tracking the long-term   health of your server's connectivity to the network.
     /// </summary>
-    public class AccountingStateSummary
+    public class AccountingStateSummary : BaseMethodResult
     {
         [JsonPropertyName("connected")]
         public AccountingStateInfo Connected { get; set; }
@@ -320,7 +320,7 @@ namespace Xrpl.Models.Methods
     /// <summary>
     /// Information about the most recent fully-validated ledger.
     /// </summary>
-    public class ValidatedLedger
+    public class ValidatedLedger : BaseMethodResult
     {
         /// <summary>
         /// The time since the ledger was closed, in seconds.

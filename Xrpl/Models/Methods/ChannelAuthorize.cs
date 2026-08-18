@@ -108,7 +108,7 @@ namespace Xrpl.Models.Methods
     /// <summary>
     /// Response expected from a <see cref="ChannelAuthorizeRequest"/>.
     /// </summary>
-    public class ChannelAuthorizeResponse
+    public class ChannelAuthorizeResponse : BaseMethodResult
     {
         /// <summary>
         /// The signature for this claim, as a hexadecimal value.

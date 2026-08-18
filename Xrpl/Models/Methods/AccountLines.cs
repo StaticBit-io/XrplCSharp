@@ -13,7 +13,7 @@ namespace Xrpl.Models.Methods;
 /// <summary>
 /// Response expected from an <see cref="AccountLinesRequest"/>.
 /// </summary>
-public class AccountLines //todo rename to AccountLinesResponse
+public class AccountLines : BaseMethodResult//todo rename to AccountLinesResponse
 {
     /// <summary>
     /// Unique Address of the account this request corresponds to.<br/>
@@ -62,7 +62,7 @@ public class AccountLines //todo rename to AccountLinesResponse
 /// <summary>
 /// Trust line objects.
 /// </summary>
-public class TrustLine
+public class TrustLine : BaseMethodResult
 {
     /// <summary>
     /// The unique Address of the counterparty to this trust line.
