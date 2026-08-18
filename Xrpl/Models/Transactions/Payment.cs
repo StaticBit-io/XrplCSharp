@@ -64,15 +64,23 @@ namespace Xrpl.Models.Transactions
         /// API v2 renames the ledger's Amount field to DeliverMax on the wire and omits Amount entirely.
         /// System.Text.Json skips non-public members unless they carry [JsonInclude], so this attribute
         /// is what keeps the alias wired up — without it Amount silently stays null on every v2 payload.
+        /// <para>
         /// The property is deliberately set-only, so DeliverMax is never written back out, unlike its
-        /// counterpart on <see cref="PaymentResponse"/>. That asymmetry is intentional: "DeliverMax" is a
-        /// presentation-layer rename that exists only in API v2 responses — it has no binary field code
-        /// of its own in definitions.json. A <see cref="PaymentResponse"/> is read-only display data, so
-        /// preserving the wire name it arrived under is safe and correct for reconciliation UIs. This
-        /// class instead feeds <c>ToJson()</c> → <c>EncodeForSigning</c> (see <c>XrplWallet.Sign</c>):
-        /// if it ever re-emitted "DeliverMax", the binary codec would not recognize the field and would
-        /// silently drop the amount from the signed blob. So Amount is always written here, regardless
-        /// of which name it came in under.
+        /// counterpart on <see cref="PaymentResponse"/>. <b>Do not "fix" this asymmetry by copying
+        /// PaymentResponse's read/write alias pair here</b> — it would be a signing-safety regression, not
+        /// a cleanup. The reason: <c>DeliverMax</c> has no entry of its own in
+        /// <c>Base/Xrpl.BinaryCodec/Enums/definitions.json</c> — checked directly: <c>Amount</c>,
+        /// <c>DeliverMin</c> and <c>SendMax</c> are all present there, <c>DeliverMax</c> is not, because it
+        /// is a JSON API v2 presentation-layer rename with no binary field code of its own. A
+        /// <see cref="PaymentResponse"/> is read-only display data, so preserving the wire name it arrived
+        /// under is safe and correct for a reconciliation UI. This class instead feeds
+        /// <c>ToJson()</c> → <c>EncodeForSigning</c> (see <c>XrplWallet.Sign</c>, which calls
+        /// <c>ITransactionRequest.ToJson()</c> before handing the dictionary to the binary codec): the
+        /// codec looks fields up by name in <c>definitions.json</c>, so an object that re-emitted
+        /// "DeliverMax" would have the codec fail to find it there and silently drop the amount from the
+        /// signed blob — a transaction signed with no amount in it. So Amount is always written here,
+        /// regardless of which name it came in under.
+        /// </para>
         /// </remarks>
         [JsonInclude]
         [JsonPropertyName("DeliverMax")]
