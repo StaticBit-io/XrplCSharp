@@ -166,14 +166,26 @@ namespace Xrpl.Models.Methods
     /// The message identifies the ledger and provides some information about its contents.
     /// <see href="https://xrpl.org/subscribe.html#ledger-stream"/>
     /// </summary>
-    public class LedgerStream
+    public class LedgerStream : BaseStream
     {
         /// <summary>
-        /// ledgerClosed indicates this is from the ledger stream
+        /// Always <see cref="ResponseStreamType.ledgerClosed"/> once parsed off the wire.
         /// </summary>
-        [JsonPropertyName("type")]
-        [JsonConverter(typeof(JsonStringEnumConverter))]
-        public ResponseStreamType Type = ResponseStreamType.ledgerClosed;
+        /// <remarks>
+        /// Was a plain field with a default-value initializer rather than a property inherited
+        /// from <see cref="BaseStream"/> - System.Text.Json does not serialize public fields
+        /// without <c>IncludeFields</c> or an explicit <c>[JsonInclude]</c>, neither of which this
+        /// library sets, so the field was never actually assigned by deserialization; every
+        /// instance silently kept the initializer's value. Harmless in practice, since this type
+        /// is only ever produced from a <c>ledgerClosed</c> message, but not by design. Promoting
+        /// it to the inherited property both fixes that and is what lets <see cref="LedgerStream"/>
+        /// carry <see cref="BaseStream.Raw"/> the same way every other stream event does.
+        /// </remarks>
+        public LedgerStream()
+        {
+            Type = ResponseStreamType.ledgerClosed;
+        }
+
         /// <summary>
         /// The reference transaction cost as of this ledger version, in drops of XRP.<br/>
         /// If this ledger version includes a SetFee pseudo-transaction the new transaction cost applies starting with the following ledger version.

@@ -400,7 +400,10 @@ public class Connection
     // to prevent head-of-line blocking that causes ping timeouts under high stream load
     // Channel is created per-session to prevent cross-session message leakage
     // Using Channel<T> instead of BlockingCollection for true async support in WebAssembly
-    private Channel<string>? _streamMessageChannel = null;
+    // Carries the raw frame (byte[]), not text: stream events pair themselves with it the same
+    // way a query response does, through AttachFrame, so their Raw/RawTransaction is available
+    // without a second UTF-8 encode of a string that was itself decoded from these same bytes.
+    private Channel<byte[]>? _streamMessageChannel = null;
     private CancellationTokenSource? _messageProcessorCts = null;
     private Task? _messageProcessorTask = null;
     private readonly object _messageProcessorLock = new();
@@ -2913,17 +2916,17 @@ public class Connection
             
             // Create new session-bound channel and CTS
             // Using bounded channel to prevent memory issues under high load
-            _streamMessageChannel = System.Threading.Channels.Channel.CreateBounded<string>(new BoundedChannelOptions(10000)
+            _streamMessageChannel = System.Threading.Channels.Channel.CreateBounded<byte[]>(new BoundedChannelOptions(10000)
             {
                 SingleReader = true,
                 SingleWriter = false,
                 FullMode = BoundedChannelFullMode.DropOldest
             });
             _messageProcessorCts = new CancellationTokenSource();
-            
+
             var channel = _streamMessageChannel;
             var cts = _messageProcessorCts;
-            
+
             // Use truly async reader - works correctly in WebAssembly single-threaded environment
             _messageProcessorTask = Task.Run(async () =>
             {
@@ -2932,18 +2935,18 @@ public class Connection
                     var reader = channel.Reader;
                     while (await reader.WaitToReadAsync(cts.Token).ConfigureAwait(false))
                     {
-                        while (reader.TryRead(out var message))
+                        while (reader.TryRead(out var frame))
                         {
                             if (cts.Token.IsCancellationRequested)
                                 return;
 
                             try
                             {
-                                await ProcessStreamMessageAsync(message).ConfigureAwait(false);
+                                await ProcessStreamMessageAsync(frame).ConfigureAwait(false);
                             }
                             catch (Exception ex)
                             {
-                                await NotifyStreamProcessingErrorAsync(ex, message).ConfigureAwait(false);
+                                await NotifyStreamProcessingErrorAsync(ex, frame).ConfigureAwait(false);
                             }
                         }
                     }
@@ -3011,32 +3014,49 @@ public class Connection
     /// Processes a single stream message (transaction, ledger, etc.) in the background.
     /// This is the async version of stream handling, decoupled from the receive loop.
     /// </summary>
-    private async Task ProcessStreamMessageAsync(string message)
+    /// <remarks>
+    /// Takes the frame rather than text for the same reason the response path does: a stream
+    /// message is not wrapped in a "result" envelope, so the frame IS the event, and each typed
+    /// event pairs itself with it through <see cref="BaseStream.AttachFrame(byte[])"/> - the same
+    /// mechanism <see cref="RequestManager.HandleResponse(byte[])"/> uses for <see cref="BaseResponse"/>
+    /// - so a consumer's <see cref="BaseStream.Raw"/> is the exact bytes rippled sent, not a
+    /// re-encode of a string that was itself decoded from them. Text is materialized only for
+    /// <see cref="OnWarning"/>/<see cref="OnServerWarning"/>/<see cref="OnError"/>, which predate
+    /// this change and still take a string, and only when something is listening.
+    /// </remarks>
+    private async Task ProcessStreamMessageAsync(byte[] frame)
     {
         lastActivityTime = DateTime.UtcNow;
+
+        // Lazily materialized, and shared by every caller below: rippled can attach both warnings
+        // to the same message, and a null frame - OnMessage(null), routed rather than raised at
+        // the entry point - must not throw again here, out of the very report that is supposed to
+        // surface it.
+        string text = null;
+        string Text() => text ??= (frame is null ? null : Encoding.UTF8.GetString(frame));
 
         BaseResponse data;
         try
         {
-            data = JsonSerializer.Deserialize<BaseResponse>(message, XrplJsonOptions.Default);
+            data = JsonSerializer.Deserialize<BaseResponse>(frame, XrplJsonOptions.Default);
         }
         catch (Exception error)
         {
             if (OnError is not null)
             {
-                await OnError?.Invoke(error: "error", errorMessage: "badMessage", error.Message, message)!;
+                await OnError?.Invoke(error: "error", errorMessage: "badMessage", error.Message, Text())!;
             }
             return;
         }
 
         if (data.Warning != null && OnWarning is not null)
         {
-            await OnWarning.Invoke(data.Warning, message);
+            await OnWarning.Invoke(data.Warning, Text());
         }
 
         if (data.Warnings is { Count: > 0, } && OnServerWarning is not null)
         {
-            await OnServerWarning.Invoke(data.Warnings, message);
+            await OnServerWarning.Invoke(data.Warnings, Text());
         }
 
         // Process stream messages by type
@@ -3047,7 +3067,8 @@ public class Connection
             {
                 case ResponseStreamType.ledgerClosed:
                 {
-                    var response = JsonSerializer.Deserialize<LedgerStream>(message, XrplJsonOptions.Default);
+                    var response = JsonSerializer.Deserialize<LedgerStream>(frame, XrplJsonOptions.Default);
+                    response.AttachFrame(frame);
                     if (OnLedgerClosed is not null)
                     {
                         await OnLedgerClosed.Invoke(response)!;
@@ -3057,7 +3078,8 @@ public class Connection
 
                 case ResponseStreamType.validationReceived:
                 {
-                    var response = JsonSerializer.Deserialize<ValidationStream>(message, XrplJsonOptions.Default);
+                    var response = JsonSerializer.Deserialize<ValidationStream>(frame, XrplJsonOptions.Default);
+                    response.AttachFrame(frame);
                     if (OnValidationReceived is not null)
                     {
                         await OnValidationReceived.Invoke(response)!;
@@ -3067,7 +3089,8 @@ public class Connection
 
                 case ResponseStreamType.transaction:
                 {
-                    var response = JsonSerializer.Deserialize<TransactionStream>(message, XrplJsonOptions.Default);
+                    var response = JsonSerializer.Deserialize<TransactionStream>(frame, XrplJsonOptions.Default);
+                    response.AttachFrame(frame);
                     if (OnTransaction is not null)
                     {
                         await OnTransaction.Invoke(response)!;
@@ -3077,7 +3100,8 @@ public class Connection
 
                 case ResponseStreamType.peerStatusChange:
                 {
-                    var response = JsonSerializer.Deserialize<PeerStatusStream>(message, XrplJsonOptions.Default);
+                    var response = JsonSerializer.Deserialize<PeerStatusStream>(frame, XrplJsonOptions.Default);
+                    response.AttachFrame(frame);
                     if (OnPeerStatusChange is not null)
                     {
                         await OnPeerStatusChange.Invoke(response)!;
@@ -3087,7 +3111,8 @@ public class Connection
 
                 case ResponseStreamType.consensusPhase:
                 {
-                    var response = JsonSerializer.Deserialize<ConsensusStream>(message, XrplJsonOptions.Default);
+                    var response = JsonSerializer.Deserialize<ConsensusStream>(frame, XrplJsonOptions.Default);
+                    response.AttachFrame(frame);
                     if (OnConsensusPhase is not null)
                     {
                         await OnConsensusPhase.Invoke(response)!;
@@ -3097,7 +3122,8 @@ public class Connection
 
                 case ResponseStreamType.path_find:
                 {
-                    var response = JsonSerializer.Deserialize<PathFindStream>(message, XrplJsonOptions.Default);
+                    var response = JsonSerializer.Deserialize<PathFindStream>(frame, XrplJsonOptions.Default);
+                    response.AttachFrame(frame);
                     if (OnPathFind is not null)
                     {
                         await OnPathFind.Invoke(response)!;
@@ -3107,7 +3133,8 @@ public class Connection
 
                 case ResponseStreamType.manifestReceived:
                 {
-                    var response = JsonSerializer.Deserialize<ManifestStream>(message, XrplJsonOptions.Default);
+                    var response = JsonSerializer.Deserialize<ManifestStream>(frame, XrplJsonOptions.Default);
+                    response.AttachFrame(frame);
                     if (OnManifestReceived is not null)
                     {
                         await OnManifestReceived.Invoke(response)!;
@@ -3117,7 +3144,8 @@ public class Connection
 
                 case ResponseStreamType.bookChanges:
                 {
-                    var response = JsonSerializer.Deserialize<BookChangesStream>(message, XrplJsonOptions.Default);
+                    var response = JsonSerializer.Deserialize<BookChangesStream>(frame, XrplJsonOptions.Default);
+                    response.AttachFrame(frame);
                     if (OnBookChanges is not null)
                     {
                         await OnBookChanges.Invoke(response)!;
@@ -3127,7 +3155,8 @@ public class Connection
 
                 case ResponseStreamType.serverStatus:
                 {
-                    var response = JsonSerializer.Deserialize<ServerStatusStream>(message, XrplJsonOptions.Default);
+                    var response = JsonSerializer.Deserialize<ServerStatusStream>(frame, XrplJsonOptions.Default);
+                    response.AttachFrame(frame);
                     if (OnServerStatus is not null)
                     {
                         await OnServerStatus.Invoke(response)!;
@@ -3137,7 +3166,8 @@ public class Connection
 
                 case ResponseStreamType.error:
                 {
-                    var response = JsonSerializer.Deserialize<ErrorResponse>(message, XrplJsonOptions.Default);
+                    var response = JsonSerializer.Deserialize<ErrorResponse>(frame, XrplJsonOptions.Default);
+                    response.AttachFrame(frame);
                     if (OnError is not null)
                     {
                         await OnError.Invoke(response.Error, response.ErrorMessage, response.ErrorCode?.ToString(), response);
@@ -3190,8 +3220,11 @@ public class Connection
     /// <remarks>
     /// A response is parsed straight out of <paramref name="utf8Message"/> when it is the one
     /// present, so the UTF-16 copy of the message - twice its byte length - is never made for the
-    /// common case. Everything that genuinely needs text (stream messages, the warning and error
-    /// callbacks) asks for it through <c>Text()</c>, which materializes it once and only then.
+    /// common case. Stream messages are routed on through <c>Frame()</c>, which likewise reuses
+    /// <paramref name="utf8Message"/> when present rather than encoding a fresh copy of
+    /// <paramref name="message"/> - the frame stream events pair themselves with is exactly the
+    /// bytes the socket produced. Only the warning and error callbacks, which still take a string,
+    /// ask for text at all, through <c>Text()</c>, and materialize it once and only then.
     /// </remarks>
     private async Task IOnMessageFastPath(string message, byte[] utf8Message)
     {
@@ -3208,6 +3241,16 @@ public class Connection
 
             return message;
         }
+
+        // The stream path now runs on the frame, not on text: encodes only when the binary
+        // callback did not already hand one over, mirroring RequestManager.HandleResponse(string)'s
+        // own Encoding.UTF8.GetBytes fallback for the same reason - so OnMessage(string), still a
+        // public entry point, keeps working without a frame of its own to reuse. A null message
+        // stays null rather than throwing out of Encoding.UTF8.GetBytes here: OnMessage(null) used
+        // to travel down to the stream processor and be reported through OnError as a bad message
+        // rather than raised at the entry point, and that must keep being true now that the
+        // pipeline carries bytes instead of text.
+        byte[] Frame() => utf8Message ?? (message is null ? null : Encoding.UTF8.GetBytes(message));
 
         // Scan message for "id" property to detect response messages
         var isResponse = utf8Message is null ? IsLikelyResponse(message) : IsLikelyResponse(utf8Message);
@@ -3264,7 +3307,7 @@ public class Connection
             {
                 // Message has "id" but no matching pending request — this is an async
                 // follow-up (e.g. path_find updates). Route to stream processing.
-                EnqueueStreamMessage(Text());
+                EnqueueStreamMessage(Frame());
                 return;
             }
 
@@ -3299,7 +3342,7 @@ public class Connection
         {
             // This is a stream message (no "id") - process asynchronously
             // to avoid blocking the receive loop and causing ping timeouts
-            EnqueueStreamMessage(Text());
+            EnqueueStreamMessage(Frame());
         }
     }
 
@@ -3308,42 +3351,42 @@ public class Connection
     /// Used for both regular stream messages (no "id") and async follow-ups
     /// that have "id" but no matching pending request (e.g. path_find updates).
     /// </summary>
-    private void EnqueueStreamMessage(string message)
+    private void EnqueueStreamMessage(byte[] frame)
     {
         if (OperatingSystem.IsBrowser())
         {
-            _ = ProcessStreamMessageFireAndForgetAsync(message);
+            _ = ProcessStreamMessageFireAndForgetAsync(frame);
         }
         else
         {
             var channel = _streamMessageChannel;
             if (channel != null)
             {
-                if (!channel.Writer.TryWrite(message))
+                if (!channel.Writer.TryWrite(frame))
                 {
                     Debug.WriteLine($"{DateTime.Now}Warning: Stream message channel full, message dropped");
                 }
             }
             else
             {
-                _ = ProcessStreamMessageFireAndForgetAsync(message);
+                _ = ProcessStreamMessageFireAndForgetAsync(frame);
             }
         }
     }
-    
+
     /// <summary>
     /// Fire-and-forget stream message processing for single-threaded environments like WebAssembly.
     /// Uses ConfigureAwait(false) to prevent deadlocks and allow proper continuation scheduling.
     /// </summary>
-    private async Task ProcessStreamMessageFireAndForgetAsync(string message)
+    private async Task ProcessStreamMessageFireAndForgetAsync(byte[] frame)
     {
         try
         {
-            await ProcessStreamMessageAsync(message).ConfigureAwait(false);
+            await ProcessStreamMessageAsync(frame).ConfigureAwait(false);
         }
         catch (Exception ex)
         {
-            await NotifyStreamProcessingErrorAsync(ex, message).ConfigureAwait(false);
+            await NotifyStreamProcessingErrorAsync(ex, frame).ConfigureAwait(false);
         }
     }
 
@@ -3354,7 +3397,7 @@ public class Connection
     /// bugs are observable. The message loop is always kept alive: cancellation is ignored, and an
     /// exception thrown by the <see cref="OnError"/> handler itself is contained.
     /// </summary>
-    private async Task NotifyStreamProcessingErrorAsync(Exception ex, string message)
+    private async Task NotifyStreamProcessingErrorAsync(Exception ex, byte[] frame)
     {
         Debug.WriteLine($"{DateTime.Now}Stream message processing error: {ex.Message}");
 
@@ -3371,7 +3414,12 @@ public class Connection
 
         try
         {
-            await handler.Invoke(error: "error", errorMessage: "streamHandlerError", message: ex.Message, data: message).ConfigureAwait(false);
+            // Materialized only here, on the failure path: OnError's data parameter predates the
+            // frame and still takes text, and nothing before this point needed a string at all.
+            // Guarded against a null frame - OnMessage(null) reaches this path too - so the report
+            // itself cannot throw and swallow the very failure it exists to surface.
+            string text = frame is null ? null : Encoding.UTF8.GetString(frame);
+            await handler.Invoke(error: "error", errorMessage: "streamHandlerError", message: ex.Message, data: text).ConfigureAwait(false);
         }
         catch (Exception notifyEx)
         {

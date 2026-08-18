@@ -1,6 +1,7 @@
 ﻿using System;
 using System.Text.Json.Serialization;
 
+using Xrpl.Client.Json;
 using Xrpl.Models.Methods;
 using Xrpl.Models.Transactions;
 
@@ -107,6 +108,44 @@ namespace Xrpl.Models.Subscriptions
         private TransactionResponse TransactionV1
         {
             set => _transaction = value ?? _transaction;
+        }
+
+        private JsonSlice _transactionSlice;
+
+        /// <summary>
+        /// The transaction exactly as the node sent it — <c>tx_json</c> under API v2,
+        /// <c>transaction</c> under API v1.
+        /// </summary>
+        /// <remarks>
+        /// Empty when this event was never paired with a frame, or the message carried neither
+        /// envelope (a stream message reporting neither <c>tx_json</c> nor <c>transaction</c>).
+        /// </remarks>
+        [JsonIgnore]
+        public RawJson RawTransaction =>
+            _frame is null || _transactionSlice.IsEmpty
+                ? default
+                : new RawJson(_frame, _transactionSlice.Offset, _transactionSlice.Length);
+
+        /// <inheritdoc/>
+        /// <remarks>
+        /// <see cref="Transaction"/> and its API v1 alias already claim <c>tx_json</c> and
+        /// <c>transaction</c> - System.Text.Json rejects a second member bound to a name another
+        /// member already owns, so <see cref="_transactionSlice"/> cannot be filled the way
+        /// <see cref="BaseResponse.ResultSlice"/> is, through a converter-backed property. Instead
+        /// this scans the frame directly with <see cref="JsonSlice.FindTopLevelMember"/>, after the
+        /// object graph (<see cref="Transaction"/> included) has already been built from it -
+        /// finding no more than what deserialization itself just read.
+        /// </remarks>
+        internal override void AttachFrame(byte[] frame)
+        {
+            if (frame is null)
+            {
+                throw new ArgumentNullException(nameof(frame));
+            }
+
+            JsonSlice slice = JsonSlice.FindTopLevelMember(frame, "tx_json"u8);
+            _transactionSlice = slice.IsEmpty ? JsonSlice.FindTopLevelMember(frame, "transaction"u8) : slice;
+            base.AttachFrame(frame);
         }
 
         /// <summary>
