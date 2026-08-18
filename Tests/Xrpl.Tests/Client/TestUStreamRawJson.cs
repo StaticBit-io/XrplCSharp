@@ -380,6 +380,50 @@ namespace Xrpl.Tests.ClientLib
         }
 
         /// <summary>
+        /// All the tests above drive <c>OnMessage(string)</c>, where <c>Frame()</c> always
+        /// synthesizes a fresh byte array from the string via <c>Encoding.UTF8.GetBytes</c> - the
+        /// <c>utf8Message ??</c> branch of <c>Frame()</c>, which is what
+        /// <c>ws.OnBinaryMessage</c> actually feeds in production and the entire reason the
+        /// stream pipeline was moved onto bytes in the first place, is never exercised by any of
+        /// them. This drives <see cref="Connection.IOnMessageFastPath(byte[])"/> directly - the
+        /// same overload the socket callback calls - with a frame the test owns, and checks that
+        /// the frame reaching <see cref="BaseStream.Raw"/>/<see cref="TransactionStream.RawTransaction"/>
+        /// is that literal array, not a re-encoded copy of it.
+        /// </summary>
+        [TestMethod]
+        public async Task TestBinaryFramePathRetainsTheSameArrayNotACopy()
+        {
+            TaskCompletionSource<TransactionStream> received = new TaskCompletionSource<TransactionStream>(
+                TaskCreationOptions.RunContinuationsAsynchronously);
+
+            runner.client.connection.OnTransaction += r =>
+            {
+                received.TrySetResult(r);
+                return Task.CompletedTask;
+            };
+
+            byte[] frame = Encoding.UTF8.GetBytes(TransactionStreamApiV2);
+
+            await runner.client.connection.IOnMessageFastPath(frame);
+
+            Task completed = await Task.WhenAny(received.Task, Task.Delay(TimeSpan.FromSeconds(5)));
+            Assert.AreSame(received.Task, completed, "OnTransaction was not invoked within timeout");
+
+            TransactionStream result = await received.Task;
+
+            // _frame is internal on BaseStream specifically so a test can check this directly,
+            // rather than inferring aliasing indirectly (e.g. by mutating the source array and
+            // checking whether Raw sees the change) the way TestURawJsonToJsonElementOwnsItsData
+            // proves the opposite (copying) contract for JsonElement.
+            Assert.AreSame(frame, result._frame,
+                "the byte[] entry point must retain the very same array the socket handed over, not a copy of it");
+            Assert.AreEqual(TransactionStreamApiV2, result.Raw.ToString());
+            Assert.AreEqual(
+                TopLevelMemberRawText(TransactionStreamApiV2, "tx_json"),
+                result.RawTransaction.ToString());
+        }
+
+        /// <summary>
         /// The frame the byte[] channel carries is shared, not copied per event: pairing
         /// <see cref="TransactionStream"/> with it through <see cref="BaseStream.AttachFrame(byte[])"/>
         /// must add no more than a couple of reference fields per instance on top of what

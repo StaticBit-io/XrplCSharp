@@ -3202,7 +3202,14 @@ public class Connection
     /// Overload for a message still in its wire form, used by the socket callback. See
     /// <see cref="IOnMessageFastPath(string, byte[])"/> for why the bytes are kept as they are.
     /// </summary>
-    private Task IOnMessageFastPath(byte[] utf8Message)
+    /// <remarks>
+    /// Internal rather than private so a test can drive the actual production entry point - the
+    /// one <see cref="WebSocketClient.OnBinaryMessage"/> calls with the frame the socket produced -
+    /// instead of only <see cref="OnMessage(string)"/>, where <c>Frame()</c> always synthesizes a
+    /// fresh byte array from the string rather than reusing one. <c>InternalsVisibleTo</c> to
+    /// <c>Xrpl.Tests</c> is already declared in the project file for this reason.
+    /// </remarks>
+    internal Task IOnMessageFastPath(byte[] utf8Message)
     {
         return IOnMessageFastPath(null, utf8Message);
     }
