@@ -20,7 +20,7 @@ namespace Xrpl.Models.Subscriptions
         // Protected, not private: ErrorResponse adds its own slice-based member (RequestSlice)
         // over the same frame, and needs this to build RawRequest the same way RawResult is built
         // here.
-        protected byte[]? _frame;
+        internal byte[]? _frame;
 
         /// <summary>
         /// (WebSocket only) ID provided in the request that prompted this response.
@@ -35,8 +35,8 @@ namespace Xrpl.Models.Subscriptions
         /// </remarks>
         [JsonPropertyName("id")]
         [JsonConverter(typeof(JsonSliceConverter))]
-        [EditorBrowsable(EditorBrowsableState.Never)]
-        public JsonSlice IdSlice { get; set; }
+        [JsonInclude]
+        internal JsonSlice IdSlice { get; set; }
 
         /// <summary>
         /// The <c>id</c> member exactly as the node sent it.
@@ -71,8 +71,8 @@ namespace Xrpl.Models.Subscriptions
         /// </remarks>
         [JsonPropertyName("result")]
         [JsonConverter(typeof(JsonSliceConverter))]
-        [EditorBrowsable(EditorBrowsableState.Never)]
-        public JsonSlice ResultSlice { get; set; }
+        [JsonInclude]
+        internal JsonSlice ResultSlice { get; set; }
 
         /// <summary>
         /// Pairs this envelope with the frame it was read from.
@@ -112,7 +112,7 @@ namespace Xrpl.Models.Subscriptions
         /// same way, before <see cref="_frame"/> is set for any of them.
         /// </summary>
         /// <exception cref="ArgumentException"><paramref name="slice"/> does not fit.</exception>
-        protected static void ValidateSliceFitsFrame(JsonSlice slice, byte[] frame)
+        internal static void ValidateSliceFitsFrame(JsonSlice slice, byte[] frame)
         {
             // Unsigned, matching the check in the RawJson constructor: a negative Offset cast to
             // uint becomes huge and trips the first comparison, instead of making the subtraction

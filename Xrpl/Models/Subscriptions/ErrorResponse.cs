@@ -42,8 +42,8 @@ public class ErrorResponse : BaseResponse
     /// </remarks>
     [JsonPropertyName("request")]
     [JsonConverter(typeof(JsonSliceConverter))]
-    [EditorBrowsable(EditorBrowsableState.Never)]
-    public JsonSlice RequestSlice { get; set; }
+    [JsonInclude]
+    internal JsonSlice RequestSlice { get; set; }
 
     /// <summary>
     /// A copy of the request that prompted this error, exactly as the node echoed it back.

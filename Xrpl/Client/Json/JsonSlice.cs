@@ -4,7 +4,7 @@ namespace Xrpl.Client.Json
     /// Where a JSON token sits inside the buffer it was read from, as a byte offset and length.
     /// Carries no reference to the buffer: the envelope that owns the frame pairs the two.
     /// </summary>
-    public readonly struct JsonSlice
+    internal readonly struct JsonSlice
     {
         /// <summary>
         /// Byte offset of the first byte of the token, counted from the start of the buffer the

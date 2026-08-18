@@ -29,7 +29,7 @@ namespace Xrpl.Client.Json.Converters
     /// over as one contiguous span, which is what makes the bounds meaningful.
     /// </para>
     /// </remarks>
-    public sealed class JsonSliceConverter : JsonConverter<JsonSlice>
+    internal sealed class JsonSliceConverter : JsonConverter<JsonSlice>
     {
         /// <inheritdoc />
         public override JsonSlice Read(ref Utf8JsonReader reader, Type typeToConvert, JsonSerializerOptions options)
