@@ -560,58 +560,54 @@ namespace Xrpl.Tests.ClientLib
         public void TestUEnvelopeRetainsNoMoreThanTheFrame()
         {
             byte[] frame = Encoding.UTF8.GetBytes(BuildLedgerDataMessage(Guid.NewGuid(), 200));
-            const int Count = 50;
-            const int Repeats = 5;
 
-            // GC.GetTotalMemory is a process-wide counter: [DoNotParallelize] only keeps other
-            // tests in this assembly from running concurrently, it does nothing about background
-            // threads, live WebSocket server instances left over from earlier tests, or finalizer
-            // work landing inside the measurement window. Measured directly: an isolated run of
-            // just this test gave 3 265-4 261 B; the same test inside the full suite gave 465 B -
-            // over an order of magnitude of swing from process noise alone, in both directions.
-            // Taking the minimum across several repeats is the fix, not raising the threshold:
-            // noise only ever adds bytes to a sample (a stray allocation landing in the window),
-            // it never removes the real retained bytes, so the smallest sample is the one closest
-            // to the true per-envelope cost. A regression (the pooled result document coming back,
-            // 65 536 B per response) dwarfs the noise band and still fails every repeat.
-            long minPerEnvelope = long.MaxValue;
+            // Two thousand envelopes, not fifty. GC.GetTotalMemory is a process-wide counter and
+            // [DoNotParallelize] only keeps other tests in this assembly off the CPU - it does
+            // nothing about background threads, WebSocket servers left running by earlier tests, or
+            // finalizers landing inside the window. Measured directly, the noise band is on the
+            // order of a few kilobytes in both directions, which swamps a per-envelope cost of a
+            // couple of hundred bytes if the sample is small.
+            //
+            // Raising the sample size is what makes the measurement mean something: the signal
+            // scales with Count, the noise does not. Averaging over 2 000 envelopes puts the real
+            // per-envelope figure far above the per-sample jitter, and a regression - the pooled
+            // result document returning at 65 536 B per response - misses the bound by three
+            // orders of magnitude rather than hiding inside it.
+            //
+            // Filtering the noise instead of outgrowing it does not work here, and was tried:
+            // taking the minimum across repeats drove the reading to zero, at which point the test
+            // stayed green with 10 000 bytes of deliberate ballast added to every envelope.
+            const int Count = 2000;
 
-            for (int repeat = 0; repeat < Repeats; repeat++)
+            GC.Collect(2, GCCollectionMode.Forced, blocking: true);
+            GC.WaitForPendingFinalizers();
+            GC.Collect(2, GCCollectionMode.Forced, blocking: true);
+            long before = GC.GetTotalMemory(true);
+
+            List<BaseResponse> retained = new List<BaseResponse>(Count);
+            for (int i = 0; i < Count; i++)
             {
-                GC.Collect(2, GCCollectionMode.Forced, blocking: true);
-                GC.WaitForPendingFinalizers();
-                GC.Collect(2, GCCollectionMode.Forced, blocking: true);
-                long before = GC.GetTotalMemory(true);
-
-                List<BaseResponse> retained = new List<BaseResponse>(Count);
-                for (int i = 0; i < Count; i++)
-                {
-                    retained.Add(JsonSerializer.Deserialize<ErrorResponse>(frame, XrplJsonOptions.Default));
-                }
-
-                GC.Collect(2, GCCollectionMode.Forced, blocking: true);
-                GC.WaitForPendingFinalizers();
-                GC.Collect(2, GCCollectionMode.Forced, blocking: true);
-                long perEnvelope = (GC.GetTotalMemory(true) - before) / Count;
-
-                GC.KeepAlive(retained);
-                minPerEnvelope = Math.Min(minPerEnvelope, perEnvelope);
+                retained.Add(JsonSerializer.Deserialize<ErrorResponse>(frame, XrplJsonOptions.Default));
             }
 
-            Console.WriteLine(
-                $"envelope retains {minPerEnvelope} B on its own, min of {Repeats} runs (frame is {frame.Length} B, shared)");
+            GC.Collect(2, GCCollectionMode.Forced, blocking: true);
+            GC.WaitForPendingFinalizers();
+            GC.Collect(2, GCCollectionMode.Forced, blocking: true);
+            long perEnvelope = (GC.GetTotalMemory(true) - before) / Count;
 
-            // Bound sized against what is actually there, measured over eight consecutive runs at
-            // 2 996-3 994 B before the minimum-of-repeats change (the swing is GC segment/heap
-            // rounding and process noise, not a new allocation showing up). BaseResponse.Id and
-            // ErrorResponse.Request are slices now, same as result, so neither builds a JsonElement
-            // with an unreturned ArrayPool rental any more; the 3 455 B known remainder that used
-            // to sit here is gone. The bound sits with headroom above the measured noise ceiling
-            // and well below a returning result document, which was 65 536 B per response on its
-            // own.
+            GC.KeepAlive(retained);
+
+            Console.WriteLine(
+                $"envelope retains {perEnvelope} B on its own, averaged over {Count} (frame is {frame.Length} B, shared)");
+
+            // BaseResponse.Id and ErrorResponse.Request are slices now, same as result, so neither
+            // builds a JsonElement with an unreturned ArrayPool rental any more - the 3 455 B
+            // remainder that used to sit here is gone. The bound has headroom over the real
+            // per-envelope cost and sits far below a returning result document, which was 65 536 B
+            // per response on its own.
             Assert.IsTrue(
-                minPerEnvelope < 6144,
-                $"envelope retained {minPerEnvelope} B on its own (min of {Repeats} runs); a pooled result document is back");
+                perEnvelope < 6144,
+                $"envelope retained {perEnvelope} B on its own, averaged over {Count}; a pooled result document is back");
         }
 
         /// <summary>
