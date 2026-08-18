@@ -270,6 +270,75 @@ namespace Xrpl.Tests.ClientLib
                 "RawTransaction picked the first occurrence instead of the last - it would show a wallet a different transaction than the one Transaction/signing would use");
         }
 
+        private const string TransactionStreamBothEnvelopes = """
+        {
+          "type": "transaction",
+          "status": "closed",
+          "validated": true,
+          "tx_json": {
+            "TransactionType": "Payment",
+            "Account": "rP9jPyP5kyvFRb6ZiRghAGw5u8SGAmU4bd",
+            "Destination": "rBTwLga3i2gz3doX6Gva3MgEV8ZCD8jjah",
+            "Amount": "1000000",
+            "Fee": "12",
+            "Sequence": 11
+          },
+          "engine_result": "tesSUCCESS",
+          "transaction": {
+            "TransactionType": "Payment",
+            "Account": "rP9jPyP5kyvFRb6ZiRghAGw5u8SGAmU4bd",
+            "Destination": "rBTwLga3i2gz3doX6Gva3MgEV8ZCD8jjah",
+            "Amount": "222222222",
+            "Fee": "22",
+            "Sequence": 22
+          },
+          "meta": {
+            "AffectedNodes": [],
+            "TransactionIndex": 3,
+            "TransactionResult": "tesSUCCESS"
+          }
+        }
+        """;
+
+        /// <summary>
+        /// rippled sends one envelope or the other, never both - <c>NetworkOpsImp::transJson</c>
+        /// moves <c>transaction</c> to <c>tx_json</c> under API v2 rather than adding it. But the
+        /// frame reaches this library over the network through arbitrary infrastructure, and a
+        /// wallet showing <see cref="TransactionStream.RawTransaction"/> while signing what
+        /// <see cref="TransactionStream.Transaction"/> holds must never be shown one transaction
+        /// and sign another. Both views therefore resolve the same envelope: the one later in the
+        /// document, which is what the typed side's pair of `value ?? _transaction` setters leaves
+        /// behind after running in document order.
+        /// </summary>
+        [TestMethod]
+        public async Task TestTransactionStreamRawTransactionAgreesWithTypedWhenBothEnvelopesArePresent()
+        {
+            TaskCompletionSource<TransactionStream> received = new TaskCompletionSource<TransactionStream>(
+                TaskCreationOptions.RunContinuationsAsynchronously);
+
+            runner.client.connection.OnTransaction += r =>
+            {
+                received.TrySetResult(r);
+                return Task.CompletedTask;
+            };
+
+            await runner.client.connection.OnMessage(TransactionStreamBothEnvelopes);
+
+            Task completed = await Task.WhenAny(received.Task, Task.Delay(TimeSpan.FromSeconds(5)));
+            Assert.AreSame(received.Task, completed, "OnTransaction was not invoked within timeout");
+
+            TransactionStream result = await received.Task;
+
+            // Sanity check on the typed side first: "transaction" sits after "tx_json" here, so the
+            // second setter to run wins and Transaction holds Sequence 22.
+            Assert.AreEqual(22u, result.Transaction.Sequence, "sanity: the typed side must reflect the envelope that appears later");
+
+            string rawTransaction = result.RawTransaction.ToString();
+            StringAssert.Contains(rawTransaction, "\"Sequence\": 22");
+            Assert.IsFalse(rawTransaction.Contains("\"Sequence\": 11", StringComparison.Ordinal),
+                "RawTransaction resolved tx_json while the typed Transaction resolved the later \"transaction\" envelope - a wallet would display one transaction and sign another");
+        }
+
         private const string TransactionStreamUppercaseTxJson = """
         {
           "type": "transaction",

@@ -158,8 +158,23 @@ namespace Xrpl.Models.Subscriptions
                 throw new ArgumentNullException(nameof(frame));
             }
 
-            JsonSlice slice = JsonSlice.FindTopLevelMember(frame, "tx_json"u8);
-            _transactionSlice = slice.IsEmpty ? JsonSlice.FindTopLevelMember(frame, "transaction"u8) : slice;
+            JsonSlice txJson = JsonSlice.FindTopLevelMember(frame, "tx_json"u8);
+            JsonSlice legacy = JsonSlice.FindTopLevelMember(frame, "transaction"u8);
+
+            // Whichever envelope sits later in the frame wins, because that is what the typed
+            // Transaction ends up holding: its two setters both do `value ?? _transaction` and run
+            // in document order, so the last non-null one assigned is the one that survives.
+            // Preferring tx_json unconditionally would let RawTransaction show the caller one
+            // transaction while Transaction carried another - the same show-one/sign-another split
+            // that duplicate keys were already fixed for in JsonSlice.FindTopLevelMember. rippled
+            // never sends both (NetworkOPs.cpp transJson moves transaction to tx_json under API v2
+            // rather than adding it), but the frame arrives over the network through arbitrary
+            // infrastructure, so the two views must not be able to disagree.
+            _transactionSlice =
+                txJson.IsEmpty ? legacy
+                : legacy.IsEmpty ? txJson
+                : legacy.Offset > txJson.Offset ? legacy : txJson;
+
             base.AttachFrame(frame);
         }
 
