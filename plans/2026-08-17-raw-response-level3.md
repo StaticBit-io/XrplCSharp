@@ -70,7 +70,7 @@
 
 - [ ] **Step 1: Тесты на живых данных**
 
-В `C:\Users\Evril\AppData\Local\Temp\claude\...\scratchpad` лежат реальные ответы mainnet (`tx_raw.json`, `account_tx_raw.json`). Возьми из них фактические значения `close_time_iso` и `ctid` и напиши тесты: десериализация ответа сохраняет оба поля, round-trip их не теряет.
+В `Tests/Xrpl.Tests/Fixtures/Responses/` лежат реальные ответы mainnet (`tx_raw.json`, `account_tx_raw.json`). Возьми из них фактические значения `close_time_iso` и `ctid` и напиши тесты: десериализация ответа сохраняет оба поля, round-trip их не теряет.
 
 - [ ] **Step 2: Добавить свойства**
 

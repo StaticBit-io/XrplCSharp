@@ -55,7 +55,7 @@
 
 - [ ] **Step 1: Перенести снятые ответы**
 
-Файлы лежат в `C:\Users\Evril\AppData\Local\Temp\claude\E--Claude-XrplCSharp-rippled-issue-6629-analysis-c51436\423199fc-a670-4252-80f2-4fbbd491f408\scratchpad`:
+Файлы лежат в `Tests/Xrpl.Tests/Fixtures/Responses/`:
 
 | Файл | Что это |
 |---|---|
