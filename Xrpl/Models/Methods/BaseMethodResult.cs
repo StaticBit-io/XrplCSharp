@@ -22,6 +22,25 @@ namespace Xrpl.Models.Methods
     /// </remarks>
     public class BaseMethodResult
     {
+        /// <summary>
+        /// Members of the result that no declared property on the concrete response type claims -
+        /// a field an amendment adds before this SDK models it, or anything else unrecognized.
+        /// Declared here rather than repeated on every subclass, mirroring
+        /// <see cref="Xrpl.Models.Ledger.BaseLedgerEntry.UnknownFields"/> and
+        /// <see cref="Xrpl.Models.Transactions.BaseTransactionResponse.UnknownFields"/> for their
+        /// own families.
+        /// </summary>
+        /// <remarks>
+        /// Values here have already gone through JSON parsing - see the class remarks above for
+        /// how that differs from <c>XrplResponse&lt;T&gt;.Raw</c>. That parsing has a real
+        /// retention cost, out of proportion to the unknown member's own size: a single large
+        /// unrecognized value held here alone raised one captured response's retained size from
+        /// roughly 36 700 B to 65 704 B - about 1.79x, not merely the member's bytes added on top -
+        /// because a <see cref="JsonElement"/> keeps a reference into the pooled buffer backing the
+        /// <see cref="JsonDocument"/> it was parsed from rather than owning a right-sized copy.
+        /// Accepted anyway: the alternative is losing the field outright, which is worse for a
+        /// caller relying on this to read a member the model does not yet declare.
+        /// </remarks>
         [JsonExtensionData]
         public Dictionary<string, JsonElement> UnknownFields { get; set; }
     }
