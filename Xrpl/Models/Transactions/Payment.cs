@@ -213,31 +213,43 @@ namespace Xrpl.Models.Transactions
     public class PaymentResponse : TransactionResponse, IPayment, IDestination
     {
         /// <summary>
-        /// True once a value has been assigned through the <see cref="DeliverMax"/> alias below —
-        /// i.e. the node sent it under the API v2 name. Selects which JSON key <see cref="Amount"/>
-        /// is written back under: preserving the wire name matters here because this response is
-        /// what a reconciliation screen shows the signer as "what is being signed" — a value shown
-        /// under a different, only superficially-equivalent protocol field name isn't covered by a
-        /// "(reconstructed)" disclaimer the way a lost field would be.
+        /// True once a value has been assigned through the <see cref="AmountAlias"/> setter below —
+        /// i.e. the node sent (or an earlier deserialize pass already saw) the field under its API v1
+        /// name "Amount". Independent of <see cref="_receivedAsDeliverMax"/>: rippled's <c>tx</c>
+        /// method with <c>api_version: 1</c> sends BOTH "Amount" and "DeliverMax" for the same
+        /// transaction (confirmed live against mainnet — see
+        /// <c>Fixtures/Responses/tx_v1_raw.json</c>), and <see cref="System.Text.Json"/> calls both
+        /// property setters in the order the members appear in the source JSON. A single bool here
+        /// could only remember whichever setter ran last, so the earlier one's presence would be
+        /// lost — exactly the defect this pair of flags exists to avoid.
         /// </summary>
-        private bool _amountReceivedAsDeliverMax;
+        private bool _receivedAsAmount;
+
+        /// <summary>
+        /// True once a value has been assigned through the <see cref="DeliverMax"/> setter below —
+        /// i.e. the node sent the field under its API v2 name "DeliverMax". See
+        /// <see cref="_receivedAsAmount"/> for why this is a second, independent flag rather than a
+        /// single "which one" bool.
+        /// </summary>
+        private bool _receivedAsDeliverMax;
 
         /// <inheritdoc />
         /// <remarks>
-        /// The single value callers read, regardless of whether the node sent it as "Amount" (API v1)
-        /// or "DeliverMax" (API v2). Excluded from JSON directly: <see cref="AmountAlias"/> and
-        /// <see cref="DeliverMax"/> below own the wire representation, so the field name a value came
-        /// in under is the one it goes back out under — callers never have to guess which one fired.
+        /// The single value callers read, regardless of whether the node sent it as "Amount" (API v1),
+        /// "DeliverMax" (API v2), or both (API v1, confirmed live - see
+        /// <see cref="_receivedAsAmount"/>). Excluded from JSON directly: <see cref="AmountAlias"/> and
+        /// <see cref="DeliverMax"/> below own the wire representation, so every field name a value came
+        /// in under is one it goes back out under — callers never have to guess which one(s) fired.
         /// </remarks>
         [JsonIgnore]
         public Currency Amount { get; set; }
 
         /// <summary>
-        /// JSON view of <see cref="Amount"/> under its API v1 wire name "Amount". Deserializing through
-        /// this alias marks the value as not-DeliverMax. Serializing stays silent
-        /// (<see cref="JsonIgnoreCondition.WhenWritingNull"/>) whenever the value arrived as DeliverMax
-        /// instead, so <see cref="DeliverMax"/> emits it under that name and this property does not
-        /// duplicate it under "Amount".
+        /// JSON view of <see cref="Amount"/> under its API v1 wire name "Amount". Serialized whenever
+        /// the value arrived under this name, or under neither name (an object assembled by
+        /// application code defaults to "Amount") - i.e. whenever it was NOT received exclusively as
+        /// DeliverMax. That "received both" case is what keeps this alias and <see cref="DeliverMax"/>
+        /// both emitting instead of one silently winning over the other.
         /// </summary>
         [JsonInclude]
         [JsonPropertyName("Amount")]
@@ -245,11 +257,11 @@ namespace Xrpl.Models.Transactions
         [JsonIgnore(Condition = JsonIgnoreCondition.WhenWritingNull)]
         private Currency AmountAlias
         {
-            get => _amountReceivedAsDeliverMax ? null : Amount;
+            get => _receivedAsAmount || !_receivedAsDeliverMax ? Amount : null;
             set
             {
                 Amount = value;
-                _amountReceivedAsDeliverMax = false;
+                _receivedAsAmount = true;
             }
         }
 
@@ -259,9 +271,9 @@ namespace Xrpl.Models.Transactions
         /// System.Text.Json skips non-public members unless they carry [JsonInclude], so this attribute
         /// is what keeps the alias wired up — without it Amount silently stays null on every v2 payload
         /// (account_tx, tx with api_version 2, subscription streams).
-        /// No longer set-only: a value that arrived as DeliverMax is now written back out as DeliverMax,
-        /// not silently renamed to Amount — the node never sent "Amount" for this transaction, and a
-        /// round-trip must not manufacture a different, only superficially-equivalent field name for it.
+        /// Serialized only when the node actually sent "DeliverMax" - a value that arrived as DeliverMax
+        /// is written back out as DeliverMax, not silently renamed to Amount, and an object the node
+        /// never sent this field for does not gain it on round-trip.
         /// </remarks>
         [JsonInclude]
         [JsonPropertyName("DeliverMax")]
@@ -269,11 +281,11 @@ namespace Xrpl.Models.Transactions
         [JsonIgnore(Condition = JsonIgnoreCondition.WhenWritingNull)]
         private Currency DeliverMax
         {
-            get => _amountReceivedAsDeliverMax ? Amount : null;
+            get => _receivedAsDeliverMax ? Amount : null;
             set
             {
                 Amount = value;
-                _amountReceivedAsDeliverMax = true;
+                _receivedAsDeliverMax = true;
             }
         }
 

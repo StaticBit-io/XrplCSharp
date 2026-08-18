@@ -1,6 +1,6 @@
 # Live mainnet response corpus
 
-Six JSON-RPC responses captured from mainnet (`https://xrplcluster.com`), used by
+Seven JSON-RPC responses captured from mainnet (`https://xrplcluster.com`), used by
 `TestUResponseFidelity` (`Tests/Xrpl.Tests/Models/TestUResponseFidelity.cs`) to guard the
 round-trip accuracy this SDK reached at levels 0–3: zero fabricated members, and every
 dropped member accounted for by name and reason.
@@ -14,10 +14,11 @@ turns the manual diff into something CI runs on every push.
 
 ## Provenance
 
-- **Snapshot date:** 2026-08-17
+- **Snapshot date:** 2026-08-17 (six files), 2026-08-18 (`tx_v1_raw.json`)
 - **Node:** `https://xrplcluster.com`
 - **Transport:** HTTP JSON-RPC (`POST /`, `Content-Type: application/json`)
-- **`api_version`:** 2 for every request
+- **`api_version`:** 2 for every request, except `tx_v1_raw.json` which is deliberately `1`
+  (see its row below)
 - **Envelope:** each file is the full HTTP response body — `{"result": {...}}` — exactly as
   the node returned it, with no reformatting or field removal.
 
@@ -25,7 +26,10 @@ This is why `status` sits *inside* `result` in every file here: that is where HT
 puts it. The WebSocket envelope `XrplClient` normally talks to carries `status` as a sibling
 of `result` instead, surfaced through `XrplResponse<T>.Status` — so a fidelity check driven
 by these files must not expect the model to carry `status` at all (see the exceptions table
-in `TestUResponseFidelity`).
+in `TestUResponseFidelity`). `TransactionResponse`/`BaseTransactionResponse`, the model
+`tx_v1_raw.json` deserializes into, is the one exception: it carries a
+`[JsonExtensionData]` catch-all, so `status` round-trips there without needing a
+`KnownLostMembers` entry — see that file's row below.
 
 ## Files
 
@@ -33,6 +37,7 @@ in `TestUResponseFidelity`).
 |---|---|---|
 | `tx_raw.json` | `tx`, hash `E08D6E9754...`, `api_version: 2` | A `Payment` with `DeliverMax`, an issued-currency amount, a multi-path `Paths` array, and metadata with `PreviousFields`/`FinalFields` on both an `AccountRoot` and a `RippleState` — the exact shape the API v1→v2 `Amount`/`DeliverMax` rename (level 3) targets. |
 | `tx_binary_raw.json` | Same transaction, `binary: true` | Same transaction as `tx_raw.json`, but rippled's binary-mode envelope: `meta_blob`/`tx_blob` hex strings replace `meta`/`tx_json` entirely. Exercises the sibling-field branch `TransactionSummary` reads separately from the JSON-mode fields. |
+| `tx_v1_raw.json` | Same transaction, `api_version: 1` | The gap level 3's fix missed: on `api_version: 1`, rippled sends **both** `Amount` and `DeliverMax` for this transaction, not just `Amount`. Level 3's single `_amountReceivedAsDeliverMax` bool could only remember whichever of the two field setters ran last, so the other one silently vanished on round-trip. Deserializes as `TransactionResponse` (`PaymentResponse` once `TransactionResponseConverter` dispatches on `TransactionType`), the model behind `IXrplClient.TxV1` — not `TransactionSummary`, which only ever serves `TxV2`/`account_tx`. Added to catch exactly this: a v1 corpus made of `TransactionSummary` files alone can't, because `api_version: 2` never sends both names for one payment. |
 | `account_tx_raw.json` | `account_tx`, 10 results, `api_version: 2` | The richest file (36 KB): ten transactions mixing `EscrowCreate`, `EscrowCancel` and `Payment`, with `ModifiedNode`/`CreatedNode`/`DeletedNode` entries touching `AccountRoot`, `RippleState`, `Escrow` and `DirectoryNode`, plus `Memos`, `Condition`, `CancelAfter`/`FinishAfter`. This is the file the original 156-member count was measured against. |
 | `account_info_raw.json` | `account_info` | `account_data` (`AccountRoot`) plus the full `account_flags` object — every named account flag in one response. |
 | `account_objects_raw.json` | `account_objects` | Ten `RippleState` objects, paginated (`marker` present) and returned with `warning: "load"` — the one other exception besides `status` (see below). |

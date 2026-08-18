@@ -10,6 +10,7 @@ using System.Text.Json.Nodes;
 using Xrpl.Client.Json;
 using Xrpl.Models.Ledger;
 using Xrpl.Models.Methods;
+using Xrpl.Models.Transactions;
 
 namespace Xrpl.Tests.Models.Tests
 {
@@ -70,6 +71,14 @@ namespace Xrpl.Tests.Models.Tests
             // it verbatim (GRequest<TransactionSummary, TxRequest> in Client/IXrplClient.cs).
             ["tx_raw.json"] = typeof(TransactionSummary),
             ["tx_binary_raw.json"] = typeof(TransactionSummary),
+            // api_version: 1. rippled's `tx` method has no dedicated v1 response shape either - a v1
+            // result is the transaction's own fields (Account, Amount, Destination, meta, ...) sitting
+            // directly at the top of `result`, which is exactly what TransactionResponse models (see
+            // IXrplClient.TxV1, GRequest<TransactionResponse, TxRequest>). TransactionResponse itself
+            // carries [JsonConverter(typeof(TransactionResponseConverter))] and dispatches on
+            // TransactionType, so a Payment here deserializes as PaymentResponse - the class this file
+            // was captured to exercise (see the table below).
+            ["tx_v1_raw.json"] = typeof(TransactionResponse),
             ["account_tx_raw.json"] = typeof(AccountTransactions),
             ["account_info_raw.json"] = typeof(AccountInfo),
             ["account_objects_raw.json"] = typeof(AccountObjects),

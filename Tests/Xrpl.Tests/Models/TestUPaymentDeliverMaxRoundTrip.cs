@@ -54,6 +54,27 @@ namespace XrplTests.Xrpl.Models
         }
         """;
 
+        // rippled's `tx` method with api_version: 1 still sends BOTH "Amount" and "DeliverMax" for
+        // the same transaction - confirmed live against mainnet on the hash above
+        // (Fixtures/Responses/tx_v1_raw.json). Level 3's binary flag ("came in as DeliverMax: yes/no")
+        // could only remember one of the two, so the second field silently vanished on round-trip -
+        // by count not a regression (v1 used to lose DeliverMax, this lost Amount instead), but a
+        // node that sent two fields getting one back out contradicts this class's whole point.
+        private const string PaymentResponseV1BothNames = """
+        {
+          "TransactionType": "Payment",
+          "Account": "r3PDtZSa5LiYp1Ysn1vMuMzB59RzV3W9QH",
+          "Destination": "r9cZA1mLK5R5Am25ArfXFmqgNwjZgnfk59",
+          "Amount": { "currency": "USD", "issuer": "r9cZA1mLK5R5Am25ArfXFmqgNwjZgnfk59", "value": "1" },
+          "DeliverMax": { "currency": "USD", "issuer": "r9cZA1mLK5R5Am25ArfXFmqgNwjZgnfk59", "value": "1" },
+          "Fee": "10",
+          "Sequence": 88,
+          "hash": "E08D6E9754025BA2534A78707605E0601F03ACE063687A0CA1BDDACFCD1698C7",
+          "ledger_index": 348734,
+          "validated": true
+        }
+        """;
+
         [TestMethod]
         public void Serialize_PaymentResponse_V2_RoundTripsDeliverMax_NotAmount()
         {
@@ -88,6 +109,25 @@ namespace XrplTests.Xrpl.Models
             Assert.AreEqual("USD", amount.GetProperty("currency").GetString());
             Assert.IsFalse(doc.RootElement.TryGetProperty("DeliverMax", out _),
                 "must not invent a field the node never sent");
+        }
+
+        [TestMethod]
+        public void Serialize_PaymentResponse_V1_WithBothNames_RoundTripsBoth()
+        {
+            PaymentResponse payment = JsonSerializer.Deserialize<PaymentResponse>(PaymentResponseV1BothNames, Options);
+            Assert.IsNotNull(payment);
+            Assert.IsNotNull(payment.Amount);
+            Assert.AreEqual("1", payment.Amount.Value);
+
+            string output = JsonSerializer.Serialize(payment, Options);
+
+            using JsonDocument doc = JsonDocument.Parse(output);
+            Assert.IsTrue(doc.RootElement.TryGetProperty("Amount", out JsonElement amount),
+                "the node sent Amount; deserializing under DeliverMax's setter afterwards must not erase it");
+            Assert.AreEqual("USD", amount.GetProperty("currency").GetString());
+            Assert.IsTrue(doc.RootElement.TryGetProperty("DeliverMax", out JsonElement deliverMax),
+                "the node also sent DeliverMax; it must not be dropped just because Amount already fired");
+            Assert.AreEqual("USD", deliverMax.GetProperty("currency").GetString());
         }
 
         [TestMethod]
