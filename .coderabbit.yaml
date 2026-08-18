@@ -3,6 +3,15 @@ language: en-US
 reviews:
   profile: chill
   review_status: false
+  # TEMPORARY, remove after the first pass on PR #102.
+  # That PR touches 166 files and CodeRabbit reviews at most 150, so tests are
+  # held back for a second pass: 80 of the 166 are under Tests/, and excluding
+  # them leaves 86 — the library itself, which is what the first pass is for.
+  # Revert this block once the production code has been reviewed, then request
+  # a review again to cover the tests.
+  path_filters:
+    - "!Tests/**"
+
   auto_review:
     # Automatic review is off: reviews are requested on demand with
     # "@coderabbitai review" in a PR comment. The settings below still apply
