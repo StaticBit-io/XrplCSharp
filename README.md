@@ -9,12 +9,12 @@ A pure C# implementation for interacting with the XRP Ledger, the `XrplCSharp` l
 // create a network client
 using System.Diagnostics;
 using Xrpl.Client;
+using Xrpl.Models.Methods;
+using Xrpl.Wallet;
+
 var client = new XrplClient("wss://s.altnet.rippletest.net:51233");
-client.OnConnected += async () =>
-{
-    Debug.WriteLine("CONNECTED");
-};
 await client.Connect();
+Debug.WriteLine("CONNECTED");
 
 // create a wallet on the testnet
 XrplWallet testWallet = XrplWallet.Generate();
@@ -36,11 +36,12 @@ projection. The typed model is lossy by nature — it drops members it has no pr
 for — so anything that has to *show* or *verify* what a node said reads the raw text:
 
 ```csharp
+// continuing from the example above
 XrplResponse<AccountInfo> response = await client.AccountInfo(request);
 
-AccountInfo typed = response.Result;      // the projection
-string asTheNodeSentIt = response.Raw.ToString();   // byte-for-byte
-string status = response.Status;          // the envelope, too
+AccountInfo typed = response.Result;                // the projection
+string asTheNodeSentIt = response.Raw.ToString();   // byte for byte, as the node sent it
+string status = response.Status;                    // the envelope reaches you too
 ```
 
 ## Installation and supported versions
@@ -83,12 +84,12 @@ Use the `Xrpl.Client` library to create a network client for connecting to the X
 ```csharp
 using System.Diagnostics;
 using Xrpl.Client;
+using Xrpl.Models.Methods;
+using Xrpl.Wallet;
+
 var client = new XrplClient("wss://s.altnet.rippletest.net:51233");
-client.OnConnected += async () =>
-{
-    Debug.WriteLine("CONNECTED");
-};
 await client.Connect();
+Debug.WriteLine("CONNECTED");
 ```
 
 ### Manage keys and wallets
@@ -174,7 +175,7 @@ In most cases, you can specify the minimum [transaction cost](https://xrpl.org/t
 
 ```csharp
 using System.Diagnostics;
-using Xrpl.Models.Transactions;
+using Xrpl.Models.Methods;
 FeeRequest feeRequest = new FeeRequest();
 Fee fee = (await client.Fee(feeRequest)).Result;
 Debug.WriteLine(fee);
