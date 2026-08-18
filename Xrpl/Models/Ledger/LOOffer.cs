@@ -1,4 +1,5 @@
-﻿using System;
+﻿using System.Text.Json;
+using System;
 using System.Collections.Generic;
 
 using System.Text.Json.Serialization;
@@ -19,6 +20,16 @@ namespace Xrpl.Models.Ledger
     public class BookReference
     {
         /// <summary>
+        /// Members the node sent that no declared property here claims. Mirrors
+        /// <see cref="BaseLedgerEntry.UnknownFields"/> for ledger entries and
+        /// <see cref="Xrpl.Models.Methods.BaseMethodResult.UnknownFields"/> for command results:
+        /// without it, anything this model does not yet know about is dropped between the node and
+        /// the caller instead of surviving the round trip.
+        /// </summary>
+        [JsonExtensionData]
+        public Dictionary<string, JsonElement> UnknownFields { get; set; }
+
+        /// <summary>
         /// The ID of the offer directory that links to this offer.
         /// </summary>
         [JsonPropertyName("BookDirectory")]
@@ -36,6 +47,16 @@ namespace Xrpl.Models.Ledger
     /// </summary>
     public class BookWrapper
     {
+        /// <summary>
+        /// Members the node sent that no declared property here claims. Mirrors
+        /// <see cref="BaseLedgerEntry.UnknownFields"/> for ledger entries and
+        /// <see cref="Xrpl.Models.Methods.BaseMethodResult.UnknownFields"/> for command results:
+        /// without it, anything this model does not yet know about is dropped between the node and
+        /// the caller instead of surviving the round trip.
+        /// </summary>
+        [JsonExtensionData]
+        public Dictionary<string, JsonElement> UnknownFields { get; set; }
+
         /// <summary>
         /// The inner Book object containing directory reference.
         /// </summary>

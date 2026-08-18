@@ -17,8 +17,10 @@ namespace XrplTests.Client;
 
 /// <summary>
 /// The envelope a caller gets back: the typed projection and, beside it, the bytes the node sent.
-/// The point of the pair is that the projection cannot be mistaken for the source — re-serializing
-/// it drops members the model lacks and invents defaults for non-nullable CLR properties.
+/// The point of the pair is that the projection cannot be mistaken for the source — it has been
+/// through a parse and re-emit, so member order, number formatting and whitespace are the
+/// serializer's, not the node's. It no longer drops what the model does not declare (extension-data
+/// capture keeps those), but only Raw is what actually arrived on the wire.
 /// </summary>
 [TestClass]
 public class TestUXrplResponse
@@ -107,15 +109,22 @@ public class TestUXrplResponse
         // Byte for byte, whitespace included.
         Assert.AreEqual(Result, response.Raw.ToString());
 
-        // The member the model does not know is in the raw text and absent from the projection —
-        // this is the loss the raw bytes exist to make visible.
+        // The member the model has no declared property for reaches the caller twice over: as the
+        // literal bytes in Raw, and — since extension-data capture was extended to every response
+        // projection — as a parsed value on the typed side too, rather than being dropped. This
+        // assertion used to be its mirror image, pinning the loss as expected behavior.
         StringAssert.Contains(response.Raw.ToString(), "a_field_no_model_knows");
-        StringAssert.Contains(
-            JsonSerializer.Serialize(response.Result, XrplJsonOptions.Default),
-            "ledger_current_index");
-        Assert.IsFalse(
-            JsonSerializer.Serialize(response.Result, XrplJsonOptions.Default).Contains("a_field_no_model_knows"),
-            "the typed projection cannot carry a member its model has no property for");
+
+        string projection = JsonSerializer.Serialize(response.Result, XrplJsonOptions.Default);
+        StringAssert.Contains(projection, "ledger_current_index");
+        StringAssert.Contains(projection, "a_field_no_model_knows");
+        Assert.IsNotNull(response.Result.UnknownFields);
+        Assert.IsTrue(response.Result.UnknownFields.ContainsKey("a_field_no_model_knows"),
+            "a member the model does not declare must land in UnknownFields, not vanish");
+
+        // Raw still earns its place: it is the exact bytes, whitespace included, while the
+        // projection above has been through a parse and re-emit.
+        Assert.AreNotEqual(Result, projection);
 
         Assert.AreEqual(96000000u, response.Result.CurrentIndex);
 

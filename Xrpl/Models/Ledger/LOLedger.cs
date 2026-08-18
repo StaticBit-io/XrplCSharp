@@ -57,6 +57,16 @@ namespace Xrpl.Models.Ledger
     public abstract class BaseLedgerEntity : IBaseLedgerEntity
     {
         /// <summary>
+        /// Members the node sent that no declared property here claims. Mirrors
+        /// <see cref="BaseLedgerEntry.UnknownFields"/> for ledger entries and
+        /// <see cref="Xrpl.Models.Methods.BaseMethodResult.UnknownFields"/> for command results:
+        /// without it, anything this model does not yet know about is dropped between the node and
+        /// the caller instead of surviving the round trip.
+        /// </summary>
+        [JsonExtensionData]
+        public Dictionary<string, JsonElement> UnknownFields { get; set; }
+
+        /// <summary>
         /// Whether or not this ledger has been closed.
         /// </summary>
         /// <remarks>
@@ -76,6 +86,16 @@ namespace Xrpl.Models.Ledger
 
     public class LedgerBinaryEntity : BaseLedgerEntity
     {
+        /// <summary>
+        /// Members the node sent that no declared property here claims. Mirrors
+        /// <see cref="BaseLedgerEntry.UnknownFields"/> for ledger entries and
+        /// <see cref="Xrpl.Models.Methods.BaseMethodResult.UnknownFields"/> for command results:
+        /// without it, anything this model does not yet know about is dropped between the node and
+        /// the caller instead of surviving the round trip.
+        /// </summary>
+        [JsonExtensionData]
+        public Dictionary<string, JsonElement> UnknownFields { get; set; }
+
         [JsonPropertyName("ledger_data")]
         public string LedgerData { get; set; }
 
@@ -88,6 +108,16 @@ namespace Xrpl.Models.Ledger
     /// </summary>
     public class LedgerEntity : BaseLedgerEntity //todo rename to Ledger https://github.com/XRPLF/xrpl.js/blob/b20c05c3680d80344006d20c44b4ae1c3b0ffcac/packages/xrpl/src/models/ledger/Ledger.ts#L11
     {
+        /// <summary>
+        /// Members the node sent that no declared property here claims. Mirrors
+        /// <see cref="BaseLedgerEntry.UnknownFields"/> for ledger entries and
+        /// <see cref="Xrpl.Models.Methods.BaseMethodResult.UnknownFields"/> for command results:
+        /// without it, anything this model does not yet know about is dropped between the node and
+        /// the caller instead of surviving the round trip.
+        /// </summary>
+        [JsonExtensionData]
+        public Dictionary<string, JsonElement> UnknownFields { get; set; }
+
         /// <summary>
         /// The SHA-512Half of this ledger's state tree information.
         /// </summary>
@@ -175,6 +205,16 @@ namespace Xrpl.Models.Ledger
     public class QueuedTransaction
     //todo Rename to LedgerQueueData https://github.com/XRPLF/xrpl.js/blob/b20c05c3680d80344006d20c44b4ae1c3b0ffcac/packages/xrpl/src/models/methods/ledger.ts#L87
     {
+        /// <summary>
+        /// Members the node sent that no declared property here claims. Mirrors
+        /// <see cref="BaseLedgerEntry.UnknownFields"/> for ledger entries and
+        /// <see cref="Xrpl.Models.Methods.BaseMethodResult.UnknownFields"/> for command results:
+        /// without it, anything this model does not yet know about is dropped between the node and
+        /// the caller instead of surviving the round trip.
+        /// </summary>
+        [JsonExtensionData]
+        public Dictionary<string, JsonElement> UnknownFields { get; set; }
+
         /// <summary>
         /// The Address of the sender for this queued transaction.
         /// </summary>
