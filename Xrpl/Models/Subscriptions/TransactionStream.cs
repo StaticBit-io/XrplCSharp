@@ -36,6 +36,21 @@ namespace Xrpl.Models.Subscriptions
 
         [JsonPropertyName("status")]
         public string Status { get; set; }
+
+        /// <summary>
+        /// The compact transaction identifier of this transaction, when rippled reports one.
+        /// </summary>
+        /// <remarks>
+        /// rippled's <c>NetworkOpsImp::transJson</c> writes this at the top level of the stream
+        /// event (<c>jvObj[jss::ctid]</c> in NetworkOPs.cpp), not inside <c>tx_json</c>/<c>transaction</c>
+        /// - unlike <c>account_tx</c>, which nests it inside the transaction envelope and lands on
+        /// <see cref="Methods.TransactionSummary.Ctid"/> instead. A dedicated property rather than
+        /// leaving it to <see cref="UnknownFields"/>: a wallet identifying "which transaction is
+        /// this" needs it typed, the same way <see cref="Hash"/> is, not fished out of a dictionary.
+        /// </remarks>
+        [JsonPropertyName("ctid")]
+        public string Ctid { get; set; }
+
         /// <summary>
         /// Numeric transaction response code, if applicable.
         /// </summary>

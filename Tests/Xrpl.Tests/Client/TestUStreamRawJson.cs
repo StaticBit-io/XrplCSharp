@@ -116,9 +116,19 @@ namespace Xrpl.Tests.ClientLib
         /// <summary>
         /// The event exactly as the node sent it must survive the trip through <c>OnMessage</c>,
         /// the byte[] channel and <c>AttachFrame</c> byte for byte - including a field
-        /// (<c>network_id</c>) that <see cref="LedgerStream"/> has no property for at all, which is
-        /// exactly what distinguishes Raw from a re-serialization of the typed model.
+        /// (<c>network_id</c>) that <see cref="LedgerStream"/> has no *declared* property for,
+        /// which is exactly what distinguishes Raw (the literal bytes) from a re-serialization of
+        /// the typed model (parsed values, round-tripped through <see cref="BaseStream.UnknownFields"/>).
         /// </summary>
+        /// <remarks>
+        /// Before <see cref="BaseStream.UnknownFields"/> existed, <c>network_id</c> - which
+        /// <c>NetworkOpsImp::pubLedger</c> (NetworkOPs.cpp) sends unconditionally on every
+        /// <c>ledgerClosed</c> push - silently vanished from the typed projection entirely: this
+        /// test used to assert the re-serialization did NOT contain it, pinning the loss as
+        /// expected behavior. Extension-data capture on the shared stream base fixed that, so the
+        /// field now survives a full round trip the same way Raw always did - the assertion below
+        /// was flipped to prove it stays, not that it disappears.
+        /// </remarks>
         [TestMethod]
         public async Task TestLedgerClosedRawSurvivesTheStreamPipelineByteForByte()
         {
@@ -141,12 +151,16 @@ namespace Xrpl.Tests.ClientLib
             Assert.AreEqual(LedgerClosedMessage, result.Raw.ToString(),
                 "Raw must be the exact bytes of the message, not a re-encoded copy");
 
-            // The member the model has no place for: present in Raw, absent from a re-serialization
-            // of the typed projection. This is the whole point of Raw existing.
+            // The member the model has no *declared* property for: present in Raw (the literal
+            // bytes) and, since UnknownFields captures it, also present in a re-serialization of
+            // the typed projection - it must not be dropped on the way back out.
             StringAssert.Contains(result.Raw.ToString(), "network_id");
+            Assert.IsTrue(result.UnknownFields.ContainsKey("network_id"),
+                "network_id has no declared property on LedgerStream - it must land in UnknownFields instead of vanishing");
+            Assert.AreEqual(9999u, result.UnknownFields["network_id"].GetUInt32());
             string reserialized = JsonSerializer.Serialize(result, XrplJsonOptions.Default);
-            Assert.IsFalse(reserialized.Contains("network_id", StringComparison.Ordinal),
-                "the typed model has no property for network_id and must not invent one on the way back out");
+            StringAssert.Contains(reserialized, "network_id",
+                "UnknownFields round-trips on serialization - network_id must survive, not be silently dropped");
         }
 
         [TestMethod]

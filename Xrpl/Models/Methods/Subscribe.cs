@@ -2,6 +2,7 @@
 
 using System;
 using System.Collections.Generic;
+using System.Text.Json;
 
 using Xrpl.Models.Enums;
 using Xrpl.Models.Subscriptions;
@@ -320,6 +321,16 @@ namespace Xrpl.Models.Methods
         [JsonPropertyName("validated_ledgers")]
         public string ValidatedLedgers { get; set; }
 
+        /// <summary>
+        /// Members of the <c>subscribe</c> reply's <c>result</c> that no declared property claims
+        /// - for example <c>network_id</c>, which <c>NetworkOpsImp::subLedger</c> sets unconditionally
+        /// (NetworkOPs.cpp) alongside <c>ledger_hash</c>/<c>ledger_index</c>. <see cref="BaseResponse"/>
+        /// carries no capture of its own (its <c>id</c>/<c>result</c> members are byte-range slices,
+        /// not parsed values), so this class declares one directly rather than inheriting it -
+        /// mirroring <see cref="Methods.BaseMethodResult.UnknownFields"/> for the RPC-result family.
+        /// </summary>
+        [JsonExtensionData]
+        public Dictionary<string, JsonElement> UnknownFields { get; set; }
     }
 
     /// <summary>

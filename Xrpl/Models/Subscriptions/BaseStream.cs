@@ -1,4 +1,6 @@
 ﻿using System;
+using System.Collections.Generic;
+using System.Text.Json;
 using System.Text.Json.Serialization;
 
 using Xrpl.Client.Json;
@@ -70,5 +72,28 @@ namespace Xrpl.Models.Subscriptions
             _documentSlice = JsonSlice.OfDocument(frame);
             _frame = frame;
         }
+
+        /// <summary>
+        /// Members of this stream event that no declared property on the concrete subclass claims
+        /// - rippled sends several fields unconditionally on every push of a given stream
+        /// (<c>network_id</c> on <c>ledgerClosed</c>/the <c>ledger</c> stream's subscribe reply,
+        /// <c>ctid</c> and the <c>account_history_*</c> trio on <c>transaction</c> events) that no
+        /// model here declared a property for, and they vanished on the way to a caller. Declared
+        /// on the shared base, mirroring <see cref="Ledger.BaseLedgerEntry.UnknownFields"/>,
+        /// <see cref="Transactions.BaseTransactionResponse.UnknownFields"/> and
+        /// <see cref="Methods.BaseMethodResult.UnknownFields"/> for their own families, so every
+        /// stream type - <see cref="Methods.LedgerStream"/>, <see cref="Methods.ValidationStream"/>,
+        /// <see cref="TransactionStream"/> - picks it up without repeating the attribute per class.
+        /// </summary>
+        /// <remarks>
+        /// This is not a substitute for <see cref="Raw"/>: values here have already gone through
+        /// JSON parsing (numbers, strings, nested objects as <see cref="JsonElement"/>), while
+        /// <see cref="Raw"/> is the exact bytes the node sent. Use <see cref="Raw"/> when
+        /// byte-for-byte fidelity matters; use this when a caller just needs to read a field the
+        /// model does not yet declare - see <see cref="Methods.BaseMethodResult.UnknownFields"/>'s
+        /// remarks for the retention cost of doing so.
+        /// </remarks>
+        [JsonExtensionData]
+        public Dictionary<string, JsonElement> UnknownFields { get; set; }
     }
 }
