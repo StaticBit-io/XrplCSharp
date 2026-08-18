@@ -9,8 +9,8 @@ namespace Xrpl.Models.Subscriptions
     {
         // Not [JsonIgnore]: System.Text.Json never serializes private fields, so the attribute
         // would be a no-op that misleads a reader into thinking it is load-bearing here.
-        // Internal, not private: TransactionStream records its own slice (tx_json/transaction)
-        // over the same frame and validates it against this the same way AttachFrame does below.
+        // Internal, not private: TransactionStream.RawTransaction reads this directly to build its
+        // own RawJson window over the tx_json/transaction slice, the same way Raw does below.
         internal byte[]? _frame;
 
         private JsonSlice _documentSlice;
@@ -19,9 +19,16 @@ namespace Xrpl.Models.Subscriptions
         /// consensusPhase indicates this is from the consensus stream<br/>
         /// consensusPhase - type
         /// </summary>
+        /// <remarks>
+        /// Nullable because absence is meaningful: an event built by hand rather than deserialized
+        /// off the wire never had a <c>type</c> member to read. A non-nullable enum defaults to
+        /// <see cref="ResponseStreamType.UNKNOWN"/> (0), which <c>JsonSerializer.Serialize</c> then
+        /// wrote back out as the literal member <c>"type":"UNKNOWN"</c> - a value the node never
+        /// sent, fabricated purely because the CLR type could not represent "no type at all".
+        /// </remarks>
         [JsonPropertyName("type")]
         [JsonConverter(typeof(JsonStringEnumConverter))]
-        public ResponseStreamType Type { get; set; }
+        public ResponseStreamType? Type { get; set; }
 
         /// <summary>
         /// This event exactly as the node sent it.
@@ -43,10 +50,14 @@ namespace Xrpl.Models.Subscriptions
         /// Pairs this event with the frame it was read from.
         /// </summary>
         /// <remarks>
-        /// Virtual so <see cref="TransactionStream"/> can validate its own tx_json/transaction
-        /// slice against the same frame before deferring here, matching how
-        /// <see cref="ErrorResponse.AttachFrame(byte[])"/> checks its own slice before deferring to
-        /// <see cref="BaseResponse.AttachFrame(byte[])"/>.
+        /// Virtual so <see cref="TransactionStream"/> can compute its own tx_json/transaction
+        /// slice from the same frame before deferring here. Unlike
+        /// <see cref="ErrorResponse.AttachFrame(byte[])"/>, which validates a slice that arrived
+        /// through deserialization before deferring to <see cref="BaseResponse.AttachFrame(byte[])"/>,
+        /// there is nothing to validate on this path: <see cref="TransactionStream"/> derives its
+        /// slice by scanning this same frame directly, via
+        /// <see cref="Xrpl.Client.Json.JsonSlice.FindTopLevelMember"/>, so slice and frame cannot
+        /// disagree.
         /// </remarks>
         /// <exception cref="ArgumentNullException"><paramref name="frame"/> is <see langword="null"/>.</exception>
         internal virtual void AttachFrame(byte[] frame)

@@ -166,26 +166,16 @@ namespace Xrpl.Models.Methods
     /// The message identifies the ledger and provides some information about its contents.
     /// <see href="https://xrpl.org/subscribe.html#ledger-stream"/>
     /// </summary>
+    /// <remarks>
+    /// <see cref="BaseStream.Type"/> reads as <see cref="ResponseStreamType.ledgerClosed"/> once
+    /// this is deserialized off a real <c>ledgerClosed</c> message, the same way every property
+    /// here does - there used to be a constructor that stamped it unconditionally, which meant an
+    /// instance built by hand (rather than through the deserializer) reported a type it was never
+    /// actually given. Removed once <see cref="BaseStream.Type"/> became nullable, so absence now
+    /// reads as absence instead of being papered over.
+    /// </remarks>
     public class LedgerStream : BaseStream
     {
-        /// <summary>
-        /// Always <see cref="ResponseStreamType.ledgerClosed"/> once parsed off the wire.
-        /// </summary>
-        /// <remarks>
-        /// Was a plain field with a default-value initializer rather than a property inherited
-        /// from <see cref="BaseStream"/> - System.Text.Json does not serialize public fields
-        /// without <c>IncludeFields</c> or an explicit <c>[JsonInclude]</c>, neither of which this
-        /// library sets, so the field was never actually assigned by deserialization; every
-        /// instance silently kept the initializer's value. Harmless in practice, since this type
-        /// is only ever produced from a <c>ledgerClosed</c> message, but not by design. Promoting
-        /// it to the inherited property both fixes that and is what lets <see cref="LedgerStream"/>
-        /// carry <see cref="BaseStream.Raw"/> the same way every other stream event does.
-        /// </remarks>
-        public LedgerStream()
-        {
-            Type = ResponseStreamType.ledgerClosed;
-        }
-
         /// <summary>
         /// The reference transaction cost as of this ledger version, in drops of XRP.<br/>
         /// If this ledger version includes a SetFee pseudo-transaction the new transaction cost applies starting with the following ledger version.
