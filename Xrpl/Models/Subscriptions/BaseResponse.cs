@@ -17,13 +17,35 @@ namespace Xrpl.Models.Subscriptions
     {
         // Not [JsonIgnore]: System.Text.Json never serializes private fields, so the attribute
         // would be a no-op that misleads a reader into thinking it is load-bearing here.
-        private byte[]? _frame;
+        // Protected, not private: ErrorResponse adds its own slice-based member (RequestSlice)
+        // over the same frame, and needs this to build RawRequest the same way RawResult is built
+        // here.
+        protected byte[]? _frame;
 
         /// <summary>
-        /// (WebSocket only) ID provided in the request that prompted this response
+        /// (WebSocket only) ID provided in the request that prompted this response.
         /// </summary>
+        /// <remarks>
+        /// Deliberately not the parsed id: binding it to <see cref="object"/> made
+        /// System.Text.Json build a <see cref="System.Text.Json.JsonElement"/> whose pooled backing
+        /// array is never returned, and it was then formatted back to a string on every response
+        /// just to be matched against a pending request's <see cref="System.Guid"/>. Recording
+        /// bounds costs nothing, and <see cref="RequestManager"/> parses the Guid straight out of
+        /// the bytes.
+        /// </remarks>
         [JsonPropertyName("id")]
-        public object? Id { get; set; }
+        [JsonConverter(typeof(JsonSliceConverter))]
+        [EditorBrowsable(EditorBrowsableState.Never)]
+        public JsonSlice IdSlice { get; set; }
+
+        /// <summary>
+        /// The <c>id</c> member exactly as the node sent it.
+        /// </summary>
+        [JsonIgnore]
+        public RawJson RawId =>
+            _frame is null || IdSlice.IsEmpty
+                ? default
+                : new RawJson(_frame, IdSlice.Offset, IdSlice.Length);
 
         /// <summary>
         /// "error" if the request caused an error
@@ -57,39 +79,53 @@ namespace Xrpl.Models.Subscriptions
         /// </summary>
         /// <remarks>
         /// One call instead of a settable property, so the bounds are checked against the buffer
-        /// once, where the two meet — a frame that does not match the recorded slice is rejected
-        /// here rather than lazily, inside a consumer's read of <see cref="RawResult"/>. Internal
-        /// on purpose: the bounds are only meaningful for a reader that covered one contiguous
-        /// buffer, which the Stream overloads of System.Text.Json do not, and keeping this
-        /// unreachable disarms that path by construction.
+        /// once, where the two meet — a frame that does not match a recorded slice is rejected
+        /// here rather than lazily, inside a consumer's read of <see cref="RawResult"/> or
+        /// <see cref="RawId"/>. Internal on purpose: the bounds are only meaningful for a reader
+        /// that covered one contiguous buffer, which the Stream overloads of System.Text.Json do
+        /// not, and keeping this unreachable disarms that path by construction. Virtual so
+        /// <see cref="ErrorResponse"/> can check its own <c>RequestSlice</c> the same way before
+        /// deferring here.
         /// </remarks>
         /// <exception cref="ArgumentNullException">
         /// <paramref name="frame"/> is <see langword="null"/>.
         /// </exception>
         /// <exception cref="ArgumentException">
-        /// <paramref name="frame"/> is too short for the recorded slice.
+        /// <paramref name="frame"/> is too short for a recorded slice.
         /// </exception>
-        internal void AttachFrame(byte[] frame)
+        internal virtual void AttachFrame(byte[] frame)
         {
             if (frame is null)
             {
                 throw new ArgumentNullException(nameof(frame));
             }
 
+            ValidateSliceFitsFrame(ResultSlice, frame);
+            ValidateSliceFitsFrame(IdSlice, frame);
+
+            _frame = frame;
+        }
+
+        /// <summary>
+        /// Checks that <paramref name="slice"/> lies inside <paramref name="frame"/>. Shared so
+        /// every slice-based member — here and in <see cref="ErrorResponse"/> — is checked the
+        /// same way, before <see cref="_frame"/> is set for any of them.
+        /// </summary>
+        /// <exception cref="ArgumentException"><paramref name="slice"/> does not fit.</exception>
+        protected static void ValidateSliceFitsFrame(JsonSlice slice, byte[] frame)
+        {
             // Unsigned, matching the check in the RawJson constructor: a negative Offset cast to
             // uint becomes huge and trips the first comparison, instead of making the subtraction
             // below go negative and comparing wrong.
-            if (!ResultSlice.IsEmpty
-                && ((uint)ResultSlice.Offset > (uint)frame.Length
-                    || (uint)ResultSlice.Length > (uint)(frame.Length - ResultSlice.Offset)))
+            if (!slice.IsEmpty
+                && ((uint)slice.Offset > (uint)frame.Length
+                    || (uint)slice.Length > (uint)(frame.Length - slice.Offset)))
             {
                 throw new ArgumentException(
-                    $"Frame of {frame.Length} bytes does not contain the recorded result at "
-                    + $"[{ResultSlice.Offset}, {ResultSlice.Offset + (long)ResultSlice.Length}).",
+                    $"Frame of {frame.Length} bytes does not contain the recorded slice at "
+                    + $"[{slice.Offset}, {slice.Offset + (long)slice.Length}).",
                     nameof(frame));
             }
-
-            _frame = frame;
         }
 
         /// <summary>

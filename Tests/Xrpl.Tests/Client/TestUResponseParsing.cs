@@ -581,14 +581,16 @@ namespace Xrpl.Tests.ClientLib
             GC.KeepAlive(retained);
             Console.WriteLine($"envelope retains {perEnvelope} B on its own (frame is {frame.Length} B, shared)");
 
-            // Bound sized against what is actually there, measured: an envelope with an "id"
-            // retains 3 672 B, without one 217 B. The 3 455 B difference is BaseResponse.Id, still
-            // typed object, so System.Text.Json builds a JsonElement for it and its pooled array is
-            // never returned - the same defect as the old result member, one field over. Fixing Id
-            // is a separate task; until then the bound sits above that known remainder and below a
-            // returning result document, which was 65 536 B per response on its own.
+            // Bound sized against what is actually there, measured over eight consecutive runs at
+            // 2 996-3 994 B (the swing is GC segment/heap rounding, not a new allocation showing
+            // up - this reads GC.GetTotalMemory, a process-wide counter, hence [DoNotParallelize]).
+            // BaseResponse.Id and ErrorResponse.Request are slices now, same as result, so neither
+            // builds a JsonElement with an unreturned ArrayPool rental any more; the 3 455 B known
+            // remainder that used to sit here is gone. The bound sits with headroom above the
+            // measured noise ceiling and well below a returning result document, which was
+            // 65 536 B per response on its own.
             Assert.IsTrue(
-                perEnvelope < 8192,
+                perEnvelope < 6144,
                 $"envelope retained {perEnvelope} B on its own; a pooled result document is back");
         }
 

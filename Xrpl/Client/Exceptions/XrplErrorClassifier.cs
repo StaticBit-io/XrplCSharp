@@ -3,6 +3,7 @@ using System.Collections.Generic;
 using System.Text.Json;
 using System.Text.Json.Nodes;
 
+using Xrpl.Client.Json;
 using Xrpl.Models.Common;
 using Xrpl.Models.Subscriptions;
 
@@ -59,7 +60,7 @@ public static class XrplErrorClassifier
 
         var error = response.Error?.Trim() ?? string.Empty;
         var rawMessage = response.ErrorMessage ?? response.ErrorException;
-        var request = ToJsonObjectSafe(response.Request);
+        var request = ToJsonObjectSafe(response.RawRequest);
 
         var command = GetString(request, "command");
         var warnings = ExtractWarnings(response);
@@ -755,27 +756,25 @@ public static class XrplErrorClassifier
         };
     }
 
-    private static JsonObject? ToJsonObjectSafe(object? request)
+    /// <summary>
+    /// Parses the request echo straight out of its captured bytes.
+    /// </summary>
+    /// <remarks>
+    /// <paramref name="request"/> used to arrive as a <see cref="JsonElement"/> (or, for a
+    /// hand-built response, an arbitrary object serialized to reach one); now it is the raw
+    /// window <see cref="ErrorResponse.RawRequest"/> captured off the wire, parsed once here
+    /// instead of once by System.Text.Json to build the element and again by this method.
+    /// </remarks>
+    private static JsonObject? ToJsonObjectSafe(RawJson request)
     {
-        if (request == null)
+        if (request.IsEmpty)
             return null;
-
-        if (request is JsonObject jsonObject)
-            return jsonObject;
-
-        if (request is JsonElement jsonElement)
-        {
-            if (jsonElement.ValueKind == JsonValueKind.Object)
-                return JsonNode.Parse(jsonElement.GetRawText())?.AsObject();
-            return null;
-        }
 
         try
         {
-            string json = JsonSerializer.Serialize(request);
-            return JsonNode.Parse(json)?.AsObject();
+            return JsonNode.Parse(request.Span) as JsonObject;
         }
-        catch
+        catch (JsonException)
         {
             return null;
         }

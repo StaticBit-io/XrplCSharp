@@ -1,6 +1,7 @@
 using NBitcoin.Protocol;
 
 using System;
+using System.Buffers.Text;
 using System.Collections.Concurrent;
 using System.Collections.Generic;
 using System.Diagnostics;
@@ -498,14 +499,50 @@ namespace Xrpl.Client
             return HandleResponse(response);
         }
 
-        private (BaseResponse Response, bool Handled) HandleResponse(ErrorResponse response)
+        /// <summary>
+        /// Parses the <c>id</c> member straight out of its recorded bytes - no intermediate
+        /// string, matching how <see cref="DeserializeResult"/> reads <c>result</c> straight out
+        /// of the frame.
+        /// </summary>
+        /// <remarks>
+        /// This SDK always sends a <see cref="Guid"/>, which System.Text.Json serializes as a
+        /// quoted "D"-format string - the shape <see cref="Utf8Parser"/> expects by default. A
+        /// bare JSON number is protocol-legal but never sent by this SDK; it fails the leading-
+        /// quote check below and falls through as "not matched", the same outcome
+        /// <c>Guid.TryParse</c> on the id's formatted text used to produce for it. An absent or
+        /// explicit-null <c>id</c> both leave <see cref="BaseResponse.RawId"/> either empty or not
+        /// starting with a quote, so both land here too.
+        /// </remarks>
+        private static bool TryParseIdAsGuid(RawJson rawId, out Guid id)
         {
-            if (response.Id == null)
+            id = default;
+
+            if (rawId.IsEmpty)
             {
-                return (response, false);
+                return false;
             }
 
-            if(!Guid.TryParse($"{response.Id}", out var id))
+            ReadOnlySpan<byte> span = rawId.Span;
+
+            // The slice includes the surrounding quotes of a JSON string token (see
+            // JsonSliceConverter) - strip them before handing the content to Utf8Parser, which
+            // expects bare Guid text, not a JSON string literal.
+            if (span.Length < 2 || span[0] != (byte)'"' || span[^1] != (byte)'"')
+            {
+                return false;
+            }
+
+            ReadOnlySpan<byte> content = span[1..^1];
+
+            // bytesConsumed must equal the whole content, not just a valid prefix of it - a
+            // partial match (e.g. trailing garbage) is not a real id.
+            return Utf8Parser.TryParse(content, out id, out int bytesConsumed)
+                && bytesConsumed == content.Length;
+        }
+
+        private (BaseResponse Response, bool Handled) HandleResponse(ErrorResponse response)
+        {
+            if (!TryParseIdAsGuid(response.RawId, out Guid id))
             {
                 return (response, false);
             }
