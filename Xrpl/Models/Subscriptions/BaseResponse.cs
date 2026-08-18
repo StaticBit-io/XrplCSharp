@@ -17,10 +17,14 @@ namespace Xrpl.Models.Subscriptions
     {
         // Not [JsonIgnore]: System.Text.Json never serializes private fields, so the attribute
         // would be a no-op that misleads a reader into thinking it is load-bearing here.
-        // Protected, not private: ErrorResponse adds its own slice-based member (RequestSlice)
+        // Internal, not private: ErrorResponse adds its own slice-based member (RequestSlice)
         // over the same frame, and needs this to build RawRequest the same way RawResult is built
         // here.
         internal byte[]? _frame;
+
+        private JsonSlice _idSlice;
+
+        private JsonSlice _resultSlice;
 
         /// <summary>
         /// (WebSocket only) ID provided in the request that prompted this response.
@@ -36,16 +40,24 @@ namespace Xrpl.Models.Subscriptions
         [JsonPropertyName("id")]
         [JsonConverter(typeof(JsonSliceConverter))]
         [JsonInclude]
-        internal JsonSlice IdSlice { get; set; }
+        internal JsonSlice IdSlice
+        {
+            // Set-only, like the DeliverMax alias on PaymentResponse: System.Text.Json fills it on
+            // read but never asks for it on write, so the converter's Write - which refuses, because
+            // an envelope rebuilt from bounds would be a different document - is never reached.
+            // Without this, serializing any envelope model threw, including the public subscription
+            // types a consumer may well log.
+            set => _idSlice = value;
+        }
 
         /// <summary>
         /// The <c>id</c> member exactly as the node sent it.
         /// </summary>
         [JsonIgnore]
         public RawJson RawId =>
-            _frame is null || IdSlice.IsEmpty
+            _frame is null || _idSlice.IsEmpty
                 ? default
-                : new RawJson(_frame, IdSlice.Offset, IdSlice.Length);
+                : new RawJson(_frame, _idSlice.Offset, _idSlice.Length);
 
         /// <summary>
         /// "error" if the request caused an error
@@ -72,7 +84,10 @@ namespace Xrpl.Models.Subscriptions
         [JsonPropertyName("result")]
         [JsonConverter(typeof(JsonSliceConverter))]
         [JsonInclude]
-        internal JsonSlice ResultSlice { get; set; }
+        internal JsonSlice ResultSlice
+        {
+            set => _resultSlice = value;
+        }
 
         /// <summary>
         /// Pairs this envelope with the frame it was read from.
@@ -100,8 +115,8 @@ namespace Xrpl.Models.Subscriptions
                 throw new ArgumentNullException(nameof(frame));
             }
 
-            ValidateSliceFitsFrame(ResultSlice, frame);
-            ValidateSliceFitsFrame(IdSlice, frame);
+            ValidateSliceFitsFrame(_resultSlice, frame);
+            ValidateSliceFitsFrame(_idSlice, frame);
 
             _frame = frame;
         }
@@ -133,9 +148,9 @@ namespace Xrpl.Models.Subscriptions
         /// </summary>
         [JsonIgnore]
         public RawJson RawResult =>
-            _frame is null || ResultSlice.IsEmpty
+            _frame is null || _resultSlice.IsEmpty
                 ? default
-                : new RawJson(_frame, ResultSlice.Offset, ResultSlice.Length);
+                : new RawJson(_frame, _resultSlice.Offset, _resultSlice.Length);
         /// <summary>
         /// (May be omitted) If this field is provided, the value is the string load.<br/>
         /// This means the client is approaching the rate limiting threshold where the server will disconnect this client.

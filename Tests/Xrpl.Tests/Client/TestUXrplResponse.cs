@@ -8,6 +8,7 @@ using System.Threading.Tasks;
 using Xrpl.Client;
 using Xrpl.Client.Json;
 using Xrpl.Models.Ledger;
+using Xrpl.Models.Subscriptions;
 using Xrpl.Models.Methods;
 using Xrpl.Tests;
 
@@ -192,6 +193,24 @@ public class TestUXrplResponse
         Assert.IsTrue(response.Result.ContainsKey("unknown"));
 
         await client.Disconnect();
+    }
+
+
+    /// <summary>
+    /// Envelope models must stay serializable. The slice members are set-only for exactly this
+    /// reason: they carry bounds, not bytes, and the converter refuses to write them — an envelope
+    /// rebuilt from bounds would be a different document. If they ever regain a getter, System.Text.Json
+    /// asks for one on write and every envelope throws, including the public subscription types a
+    /// consumer may well be logging.
+    /// </summary>
+    [TestMethod]
+    public void TestUEnvelopeModelsStaySerializable()
+    {
+        Assert.AreEqual("{}", JsonSerializer.Serialize(new BaseResponse(), XrplJsonOptions.Default));
+        Assert.AreEqual("{}", JsonSerializer.Serialize(new ErrorResponse(), XrplJsonOptions.Default));
+
+        string stream = JsonSerializer.Serialize(new LedgerStreamResponse(), XrplJsonOptions.Default);
+        StringAssert.Contains(stream, "ledger_index");
     }
 
 }

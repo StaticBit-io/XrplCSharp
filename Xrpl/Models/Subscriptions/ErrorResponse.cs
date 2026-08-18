@@ -43,7 +43,12 @@ public class ErrorResponse : BaseResponse
     [JsonPropertyName("request")]
     [JsonConverter(typeof(JsonSliceConverter))]
     [JsonInclude]
-    internal JsonSlice RequestSlice { get; set; }
+    internal JsonSlice RequestSlice
+    {
+        set => _requestSlice = value;
+    }
+
+    private JsonSlice _requestSlice;
 
     /// <summary>
     /// A copy of the request that prompted this error, exactly as the node echoed it back.
@@ -54,9 +59,9 @@ public class ErrorResponse : BaseResponse
     /// </remarks>
     [JsonIgnore]
     public RawJson RawRequest =>
-        _frame is null || RequestSlice.IsEmpty
+        _frame is null || _requestSlice.IsEmpty
             ? default
-            : new RawJson(_frame, RequestSlice.Offset, RequestSlice.Length);
+            : new RawJson(_frame, _requestSlice.Offset, _requestSlice.Length);
 
     /// <inheritdoc/>
     /// <remarks>
@@ -72,7 +77,7 @@ public class ErrorResponse : BaseResponse
             throw new ArgumentNullException(nameof(frame));
         }
 
-        ValidateSliceFitsFrame(RequestSlice, frame);
+        ValidateSliceFitsFrame(_requestSlice, frame);
         base.AttachFrame(frame);
     }
 }
