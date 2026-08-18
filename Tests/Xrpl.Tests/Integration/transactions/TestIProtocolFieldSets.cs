@@ -79,7 +79,7 @@ namespace XrplTests.Xrpl.ClientLib.Integration
 
                 // ...and back into the typed transaction model, not just the ledger object:
                 // InvoiceID was uint? until this change and could not round-trip at all
-                CheckCreateResponse readBack = (await client.Tx(new TxRequest(hash))).Result as CheckCreateResponse;
+                CheckCreateResponse readBack = (await client.TxV1(new TxRequest(hash))).Result as CheckCreateResponse;
                 Assert.IsNotNull(readBack, "tx must deserialize into CheckCreateResponse");
                 Assert.AreEqual(invoiceId, readBack.InvoiceID);
                 Assert.AreEqual(13u, readBack.DestinationTag);
@@ -204,7 +204,7 @@ namespace XrplTests.Xrpl.ClientLib.Integration
                 await Utils.LedgerAccept(client);
 
                 // Back out of the ledger and into the typed model - the full cycle the models used to break
-                TransactionResponse readBack = (await client.Tx(new TxRequest(hash))).Result;
+                TransactionResponse readBack = (await client.TxV1(new TxRequest(hash))).Result;
                 Assert.AreEqual(operationLimit, readBack.OperationLimit, "OperationLimit must survive the ledger round trip");
 
                 AccountSetResponse typed = readBack as AccountSetResponse;

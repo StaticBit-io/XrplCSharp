@@ -95,7 +95,7 @@ public class TestIXrplErrorClassifier
 
         TxRequest request = new TxRequest(transactionHash);
 
-        RippledException exception = await CatchRippledException(() => client.Tx(request));
+        RippledException exception = await CatchRippledException(() => client.TxV1(request));
         XrplErrorInfo info = XrplErrorClassifier.Classify(exception);
 
         Assert.AreEqual(XrplErrorCodes.TxnNotFound, info.RawError);

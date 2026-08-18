@@ -441,7 +441,7 @@ namespace XrplTests.Xrpl.ClientLib.Integration
                 hash = HashLedger.HashSignedTx(JsonNode.Parse(
                     JsonSerializer.Serialize(tx, global::Xrpl.Client.Json.XrplJsonOptions.Default)));
             TxRequest request = new TxRequest(hash);
-            TransactionResponse data = (await client.Tx(request)).Result;
+            TransactionResponse data = (await client.TxV1(request)).Result;
         }
 
         public static async Task TestTransaction(IXrplClient client, Dictionary<string, object> transaction, XrplWallet wallet)

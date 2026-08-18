@@ -264,12 +264,32 @@ namespace Xrpl.Client
         /// <returns>An <see cref="Models.Transactions.Submit"/> response.</returns>
         Task<Submit> Submit(ITransactionRequest tx, XrplWallet wallet, bool autoFill = true, bool failHard = false, CancellationToken cancellationToken = default);
         /// <summary>
-        /// The tx method retrieves information on a single transaction, by its identifying hash
+        /// The tx method retrieves information on a single transaction, by its identifying hash, using
+        /// the API v1 wire shape: the transaction's own fields (Account, Amount, TransactionType, ...)
+        /// sit at the top level of <see cref="TransactionResponse"/>, alongside meta.
         /// </summary>
+        /// <remarks>
+        /// Always requests API v1 regardless of <see cref="ClientOptions.ApiVersion"/> — this is the one
+        /// place in the SDK where the choice of method, not a setting, decides the protocol version. It
+        /// cannot honor <see cref="ClientOptions.ApiVersion"/> instead: <see cref="TransactionResponse"/>
+        /// has no field for API v2's <c>tx_json</c>, so handing it a v2 payload would lose the transaction
+        /// wholesale rather than just its field names. Use <see cref="TxV2"/> for the v2 shape.
+        /// </remarks>
         /// <param name="request">An <see cref="TxRequest"/> request.</param>
         /// <returns>An <see cref="TransactionResponse"/> response.</returns>
-        Task<XrplResponse<TransactionResponse>> Tx(TxRequest request, CancellationToken cancellationToken = default);
+        Task<XrplResponse<TransactionResponse>> TxV1(TxRequest request, CancellationToken cancellationToken = default);
 
+        /// <summary>
+        /// The tx method retrieves information on a single transaction, by its identifying hash, using
+        /// the API v2 wire shape: <see cref="TransactionSummary.Transaction"/> (from <c>tx_json</c>) and
+        /// <see cref="TransactionSummary.Meta"/> sit side by side, as rippled's v2 response actually sends
+        /// them.
+        /// </summary>
+        /// <remarks>
+        /// Always requests API v2 regardless of <see cref="ClientOptions.ApiVersion"/> — like
+        /// <see cref="TxV1"/>, the choice of method decides the protocol version here, not the client
+        /// setting. Use <see cref="TxV1"/> for the v1 shape.
+        /// </remarks>
         Task<XrplResponse<TransactionSummary>> TxV2(TxRequest request, CancellationToken cancellationToken = default);
 
         /// <summary>
@@ -884,12 +904,13 @@ namespace Xrpl.Client
         }
 
         /// <inheritdoc />
-        public Task<XrplResponse<TransactionResponse>> Tx(TxRequest request, CancellationToken cancellationToken = default)
+        public Task<XrplResponse<TransactionResponse>> TxV1(TxRequest request, CancellationToken cancellationToken = default)
         {
             request.ApiVersion = 1;
             return this.GRequest<TransactionResponse, TxRequest>(request, cancellationToken);
         }
 
+        /// <inheritdoc />
         public Task<XrplResponse<TransactionSummary>> TxV2(TxRequest request, CancellationToken cancellationToken = default)
         {
             request.ApiVersion = 2;
