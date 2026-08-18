@@ -347,10 +347,19 @@ internal class Program
 
                     await client.ChangeServer(server);
                     ServerState? serverInfo = (await client.ServerState(new ServerStateRequest())).Result;
-                    // server_state.validated_ledger.reserve_base/reserve_inc are now nullable (see
-                    // Balances.GetXrpFreeBalance) — a missing value means a malformed node response.
-                    uint? reserveInc = serverInfo.State.ValidatedLedger.ReserveInc;
-                    uint? reserveBase = serverInfo.State.ValidatedLedger.ReserveBase;
+                    // Check the whole path, not just the leaves: server_state.validated_ledger is the
+                    // only place these live, and a response missing any level of it is malformed the
+                    // same way a missing reserve is. Dereferencing first would turn that into a
+                    // NullReferenceException instead of the validation error below.
+                    if (serverInfo?.State?.ValidatedLedger is not { } validatedLedger)
+                    {
+                        throw new ValidationException("server_state response did not include a validated ledger.");
+                    }
+
+                    // reserve_base/reserve_inc are nullable (see Balances.GetXrpFreeBalance) — a
+                    // missing value means a malformed node response, not a zero reserve.
+                    uint? reserveInc = validatedLedger.ReserveInc;
+                    uint? reserveBase = validatedLedger.ReserveBase;
                     if (reserveInc == null || reserveBase == null)
                     {
                         throw new ValidationException("server_state response did not include the validated ledger's reserve_base/reserve_inc.");
