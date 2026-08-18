@@ -66,7 +66,7 @@ namespace Xrpl.Models.Transactions
         /// A boolean representing the chain where the event occurred.
         /// 0 represents the issuing chain, 1 represents the locking chain.
         /// </summary>
-        byte WasLockingChainSend { get; set; }
+        byte? WasLockingChainSend { get; set; }
     }
 
     /// <inheritdoc cref="IXChainAddClaimAttestation" />
@@ -116,7 +116,7 @@ namespace Xrpl.Models.Transactions
 
         /// <inheritdoc />
         [JsonPropertyName("WasLockingChainSend")]
-        public byte WasLockingChainSend { get; set; }
+        public byte? WasLockingChainSend { get; set; }
     }
 
     /// <inheritdoc cref="IXChainAddClaimAttestation" />
@@ -161,7 +161,7 @@ namespace Xrpl.Models.Transactions
 
         /// <inheritdoc />
         [JsonPropertyName("WasLockingChainSend")]
-        public byte WasLockingChainSend { get; set; }
+        public byte? WasLockingChainSend { get; set; }
     }
 
     public partial class Validation

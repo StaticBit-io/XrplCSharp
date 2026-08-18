@@ -17,16 +17,16 @@ namespace Xrpl.Models.Transactions
         public string BaseFee { get; set; }
 
         /// <inheritdoc />
-        public uint ReferenceFeeUnits { get; set; }
+        public uint? ReferenceFeeUnits { get; set; }
 
         /// <inheritdoc />
-        public uint ReserveBase { get; set; }
+        public uint? ReserveBase { get; set; }
 
         /// <inheritdoc />
-        public uint ReserveIncrement { get; set; }
+        public uint? ReserveIncrement { get; set; }
 
         /// <inheritdoc />
-        public uint LedgerSequence { get; set; }
+        public uint? LedgerSequence { get; set; }
     
         /// <summary>XRPFees: base fee in drops.</summary>
         [JsonConverter(typeof(CurrencyConverter))]
@@ -53,19 +53,19 @@ namespace Xrpl.Models.Transactions
         /// The index of the ledger version where this pseudo-transaction appears.<br/>
         /// This distinguishes the pseudo-transaction from other occurrences of the same change.
         /// </summary>
-        uint LedgerSequence { get; set; }
+        uint? LedgerSequence { get; set; }
         /// <summary>
         /// The cost, in fee units, of the reference transaction
         /// </summary>
-        uint ReferenceFeeUnits { get; set; }
+        uint? ReferenceFeeUnits { get; set; }
         /// <summary>
         /// The base reserve, in drops
         /// </summary>
-        uint ReserveBase { get; set; }
+        uint? ReserveBase { get; set; }
         /// <summary>
         /// The incremental reserve, in drops
         /// </summary>
-        uint ReserveIncrement { get; set; }
+        uint? ReserveIncrement { get; set; }
     }
 
     public class SetFeeResponse : TransactionResponse, ISetFee
@@ -73,13 +73,13 @@ namespace Xrpl.Models.Transactions
         /// <inheritdoc />
         public string BaseFee { get; set; }
         /// <inheritdoc />
-        public uint LedgerSequence { get; set; }
+        public uint? LedgerSequence { get; set; }
         /// <inheritdoc />
-        public uint ReferenceFeeUnits { get; set; }
+        public uint? ReferenceFeeUnits { get; set; }
         /// <inheritdoc />
-        public uint ReserveBase { get; set; }
+        public uint? ReserveBase { get; set; }
         /// <inheritdoc />
-        public uint ReserveIncrement { get; set; }
+        public uint? ReserveIncrement { get; set; }
     
         /// <summary>XRPFees: base fee in drops.</summary>
         [JsonConverter(typeof(CurrencyConverter))]

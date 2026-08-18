@@ -31,7 +31,7 @@ namespace Xrpl.Models.Transactions
         public string Owner { get; set; }
 
         /// <inheritdoc />
-        public uint OfferSequence { get; set; }
+        public uint? OfferSequence { get; set; }
 
         /// <inheritdoc />
         public string Condition { get; set; }
@@ -64,7 +64,7 @@ namespace Xrpl.Models.Transactions
         /// Transaction sequence of EscrowCreate transaction that created the held.<br/>
         /// payment to finish.
         /// </summary>
-        uint OfferSequence { get; set; }
+        uint? OfferSequence { get; set; }
         /// <summary>
         /// Address of the source account that funded the escrow.
         /// </summary>
@@ -86,7 +86,7 @@ namespace Xrpl.Models.Transactions
         /// <inheritdoc />
         public string Fulfillment { get; set; }
         /// <inheritdoc />
-        public uint OfferSequence { get; set; }
+        public uint? OfferSequence { get; set; }
         /// <inheritdoc />
         public string Owner { get; set; }
 

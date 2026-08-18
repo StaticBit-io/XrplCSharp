@@ -22,7 +22,7 @@ namespace Xrpl.Models.Transactions
         [JsonConverter(typeof(IssuedCurrencyConverter))]
         public IssuedCurrency Asset2 { get; set; }
         /// <inheritdoc />
-        public uint TradingFee { get; set; }
+        public uint? TradingFee { get; set; }
     }
 
     public interface IAMMVote : ITransactionCommon
@@ -41,7 +41,7 @@ namespace Xrpl.Models.Transactions
         /// A value of 1 is equivalent to 1/10 bps or 0.001%, allowing trading fee
         /// between 0% and 1%. This field is required.
         /// </summary>
-        public uint TradingFee { get; set; }
+        public uint? TradingFee { get; set; }
     }
 
     /// <inheritdoc cref="IAMMVote" />
@@ -56,7 +56,7 @@ namespace Xrpl.Models.Transactions
         [JsonConverter(typeof(IssuedCurrencyConverter))]
         public IssuedCurrency Asset2 { get; set; }
         /// <inheritdoc />
-        public uint TradingFee { get; set; }
+        public uint? TradingFee { get; set; }
 
         #endregion
     }

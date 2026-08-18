@@ -20,7 +20,7 @@ namespace Xrpl.Models.Transactions
         /// <summary>
         /// A unique identifier of the price oracle for the Account.
         /// </summary>
-        uint OracleDocumentID { get; set; }
+        uint? OracleDocumentID { get; set; }
 
         /// <summary>
         /// The time the data was last updated, represented as a unix timestamp in seconds.
@@ -69,7 +69,7 @@ namespace Xrpl.Models.Transactions
 
         /// <inheritdoc />
         [JsonPropertyName("OracleDocumentID")]
-        public uint OracleDocumentID { get; set; }
+        public uint? OracleDocumentID { get; set; }
 
         /// <inheritdoc />
         [JsonPropertyName("LastUpdateTime")]
@@ -101,7 +101,7 @@ namespace Xrpl.Models.Transactions
     {
         /// <inheritdoc />
         [JsonPropertyName("OracleDocumentID")]
-        public uint OracleDocumentID { get; set; }
+        public uint? OracleDocumentID { get; set; }
 
         /// <inheritdoc />
         [JsonPropertyName("LastUpdateTime")]

@@ -20,7 +20,7 @@ namespace Xrpl.Models.Methods
         /// The ledger index of the ledger version used to retrieve this data.
         /// </summary>
         [JsonPropertyName("ledger_index")]
-        public int LedgerIndex { get; set; }
+        public int? LedgerIndex { get; set; }
         /// <summary>
         /// Array of Currency Codes for currencies that this account can receive.
         /// </summary>

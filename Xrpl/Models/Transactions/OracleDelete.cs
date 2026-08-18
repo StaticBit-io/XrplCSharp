@@ -17,7 +17,7 @@ namespace Xrpl.Models.Transactions
         /// <summary>
         /// A unique identifier of the price oracle for the Account.
         /// </summary>
-        uint OracleDocumentID { get; set; }
+        uint? OracleDocumentID { get; set; }
     }
 
     /// <inheritdoc cref="IOracleDelete" />
@@ -33,7 +33,7 @@ namespace Xrpl.Models.Transactions
 
         /// <inheritdoc />
         [JsonPropertyName("OracleDocumentID")]
-        public uint OracleDocumentID { get; set; }
+        public uint? OracleDocumentID { get; set; }
     }
 
     /// <inheritdoc cref="IOracleDelete" />
@@ -41,7 +41,7 @@ namespace Xrpl.Models.Transactions
     {
         /// <inheritdoc />
         [JsonPropertyName("OracleDocumentID")]
-        public uint OracleDocumentID { get; set; }
+        public uint? OracleDocumentID { get; set; }
     }
 
     public partial class Validation
