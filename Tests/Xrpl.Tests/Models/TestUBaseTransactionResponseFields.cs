@@ -187,6 +187,8 @@ namespace XrplTests.Xrpl.Models
             TransactionSummary summary = JsonSerializer.Deserialize<TransactionSummary>(TxV2BinaryResult, Options);
 
             Assert.IsNotNull(summary);
+            Assert.IsNotNull(summary.MetaBlob, "meta_blob did not bind to TransactionSummary.MetaBlob");
+            Assert.IsNotNull(summary.TxBlob, "tx_blob did not bind to TransactionSummary.TxBlob");
             Assert.IsTrue(summary.MetaBlob.StartsWith("201C00000000F8E5", StringComparison.Ordinal));
             Assert.IsTrue(summary.TxBlob.StartsWith("1200002200000000", StringComparison.Ordinal));
             Assert.IsNull(summary.Transaction, "tx_json is absent from a binary response");
@@ -200,10 +202,14 @@ namespace XrplTests.Xrpl.Models
             string output = JsonSerializer.Serialize(summary, Options);
 
             using JsonDocument doc = JsonDocument.Parse(output);
-            Assert.IsTrue(doc.RootElement.TryGetProperty("meta_blob", out JsonElement metaBlob));
-            Assert.IsTrue(metaBlob.GetString().StartsWith("201C00000000F8E5", StringComparison.Ordinal));
-            Assert.IsTrue(doc.RootElement.TryGetProperty("tx_blob", out JsonElement txBlob));
-            Assert.IsTrue(txBlob.GetString().StartsWith("1200002200000000", StringComparison.Ordinal));
+            Assert.IsTrue(doc.RootElement.TryGetProperty("meta_blob", out JsonElement metaBlob), "output is missing meta_blob");
+            string metaBlobValue = metaBlob.GetString();
+            Assert.IsNotNull(metaBlobValue, "meta_blob serialized as JSON null instead of the blob string");
+            Assert.IsTrue(metaBlobValue.StartsWith("201C00000000F8E5", StringComparison.Ordinal));
+            Assert.IsTrue(doc.RootElement.TryGetProperty("tx_blob", out JsonElement txBlob), "output is missing tx_blob");
+            string txBlobValue = txBlob.GetString();
+            Assert.IsNotNull(txBlobValue, "tx_blob serialized as JSON null instead of the blob string");
+            Assert.IsTrue(txBlobValue.StartsWith("1200002200000000", StringComparison.Ordinal));
         }
 
         // Real "result" of a ledger response (ledger 106359162). ledger.close_time_iso was

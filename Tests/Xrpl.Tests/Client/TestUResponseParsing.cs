@@ -561,37 +561,57 @@ namespace Xrpl.Tests.ClientLib
         {
             byte[] frame = Encoding.UTF8.GetBytes(BuildLedgerDataMessage(Guid.NewGuid(), 200));
             const int Count = 50;
+            const int Repeats = 5;
 
-            GC.Collect(2, GCCollectionMode.Forced, blocking: true);
-            GC.WaitForPendingFinalizers();
-            GC.Collect(2, GCCollectionMode.Forced, blocking: true);
-            long before = GC.GetTotalMemory(true);
+            // GC.GetTotalMemory is a process-wide counter: [DoNotParallelize] only keeps other
+            // tests in this assembly from running concurrently, it does nothing about background
+            // threads, live WebSocket server instances left over from earlier tests, or finalizer
+            // work landing inside the measurement window. Measured directly: an isolated run of
+            // just this test gave 3 265-4 261 B; the same test inside the full suite gave 465 B -
+            // over an order of magnitude of swing from process noise alone, in both directions.
+            // Taking the minimum across several repeats is the fix, not raising the threshold:
+            // noise only ever adds bytes to a sample (a stray allocation landing in the window),
+            // it never removes the real retained bytes, so the smallest sample is the one closest
+            // to the true per-envelope cost. A regression (the pooled result document coming back,
+            // 65 536 B per response) dwarfs the noise band and still fails every repeat.
+            long minPerEnvelope = long.MaxValue;
 
-            List<BaseResponse> retained = new List<BaseResponse>(Count);
-            for (int i = 0; i < Count; i++)
+            for (int repeat = 0; repeat < Repeats; repeat++)
             {
-                retained.Add(JsonSerializer.Deserialize<ErrorResponse>(frame, XrplJsonOptions.Default));
+                GC.Collect(2, GCCollectionMode.Forced, blocking: true);
+                GC.WaitForPendingFinalizers();
+                GC.Collect(2, GCCollectionMode.Forced, blocking: true);
+                long before = GC.GetTotalMemory(true);
+
+                List<BaseResponse> retained = new List<BaseResponse>(Count);
+                for (int i = 0; i < Count; i++)
+                {
+                    retained.Add(JsonSerializer.Deserialize<ErrorResponse>(frame, XrplJsonOptions.Default));
+                }
+
+                GC.Collect(2, GCCollectionMode.Forced, blocking: true);
+                GC.WaitForPendingFinalizers();
+                GC.Collect(2, GCCollectionMode.Forced, blocking: true);
+                long perEnvelope = (GC.GetTotalMemory(true) - before) / Count;
+
+                GC.KeepAlive(retained);
+                minPerEnvelope = Math.Min(minPerEnvelope, perEnvelope);
             }
 
-            GC.Collect(2, GCCollectionMode.Forced, blocking: true);
-            GC.WaitForPendingFinalizers();
-            GC.Collect(2, GCCollectionMode.Forced, blocking: true);
-            long perEnvelope = (GC.GetTotalMemory(true) - before) / Count;
-
-            GC.KeepAlive(retained);
-            Console.WriteLine($"envelope retains {perEnvelope} B on its own (frame is {frame.Length} B, shared)");
+            Console.WriteLine(
+                $"envelope retains {minPerEnvelope} B on its own, min of {Repeats} runs (frame is {frame.Length} B, shared)");
 
             // Bound sized against what is actually there, measured over eight consecutive runs at
-            // 2 996-3 994 B (the swing is GC segment/heap rounding, not a new allocation showing
-            // up - this reads GC.GetTotalMemory, a process-wide counter, hence [DoNotParallelize]).
-            // BaseResponse.Id and ErrorResponse.Request are slices now, same as result, so neither
-            // builds a JsonElement with an unreturned ArrayPool rental any more; the 3 455 B known
-            // remainder that used to sit here is gone. The bound sits with headroom above the
-            // measured noise ceiling and well below a returning result document, which was
-            // 65 536 B per response on its own.
+            // 2 996-3 994 B before the minimum-of-repeats change (the swing is GC segment/heap
+            // rounding and process noise, not a new allocation showing up). BaseResponse.Id and
+            // ErrorResponse.Request are slices now, same as result, so neither builds a JsonElement
+            // with an unreturned ArrayPool rental any more; the 3 455 B known remainder that used
+            // to sit here is gone. The bound sits with headroom above the measured noise ceiling
+            // and well below a returning result document, which was 65 536 B per response on its
+            // own.
             Assert.IsTrue(
-                perEnvelope < 6144,
-                $"envelope retained {perEnvelope} B on its own; a pooled result document is back");
+                minPerEnvelope < 6144,
+                $"envelope retained {minPerEnvelope} B on its own (min of {Repeats} runs); a pooled result document is back");
         }
 
         /// <summary>

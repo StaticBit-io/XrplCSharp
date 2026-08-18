@@ -163,6 +163,12 @@ public class TestUFromStringDateTimeConverter
         Model model = new Model { Timestamp = local };
         string json = JsonSerializer.Serialize(model, XrplJsonOptions.Default);
 
+        // A round-trip alone would still pass if Write emitted a numeric offset ("+00:00")
+        // instead of "Z": Read normalizes either shape back to the same UTC instant, and on a
+        // UTC test agent the local offset can even be zero, so the round-trip gives no signal at
+        // all. Assert on the wire format directly - "Z" is what rippled actually sends.
+        StringAssert.Contains(json, "2024-06-15T12:30:00Z");
+
         Model deserialized = JsonSerializer.Deserialize<Model>(json, XrplJsonOptions.Default);
         Assert.IsNotNull(deserialized.Timestamp);
         Assert.AreEqual(DateTimeKind.Utc, deserialized.Timestamp.Value.Kind);

@@ -121,7 +121,13 @@ public class TestURawJson
     [TestMethod]
     public void TestURawJsonWriteToRejectsANullWriter()
     {
-        Assert.ThrowsExactly<ArgumentNullException>(() => new RawJson(null, 0, 0).WriteTo(null));
+        // Constructed on its own line so the assert below targets only WriteTo: a (null, 0, 0)
+        // window is the valid empty-frame shape and does not throw, but folding construction into
+        // the assert expression would let a future constructor regression pass this test for the
+        // wrong reason.
+        RawJson raw = new RawJson(null, 0, 0);
+
+        Assert.ThrowsExactly<ArgumentNullException>(() => raw.WriteTo(null));
     }
 
     [TestMethod]

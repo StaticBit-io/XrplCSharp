@@ -56,7 +56,7 @@ namespace XrplTests.Xrpl.ClientLib.Integration
             await Utils.TestTransaction(runner.client, txJson, runner.wallet);
 
             AccountOffersRequest request2 = new AccountOffersRequest(runner.wallet.ClassicAddress);
-            AccountOffers response2 = (await runner.client.AccountOffers(request1)).Result;
+            AccountOffers response2 = (await runner.client.AccountOffers(request2)).Result;
             Assert.IsEmpty(response2.Offers);
         }
     }
