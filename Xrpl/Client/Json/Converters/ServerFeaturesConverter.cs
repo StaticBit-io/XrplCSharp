@@ -27,7 +27,7 @@ public sealed class ServerFeaturesConverter : JsonConverter<ServerFeatures>
         ServerFeatures response = new ServerFeatures
         {
             LedgerHash = root.TryGetProperty("ledger_hash", out JsonElement lh) ? lh.GetString() : null,
-            LedgerIndex = root.TryGetProperty("ledger_index", out JsonElement li) ? li.GetUInt32() : 0,
+            LedgerIndex = root.TryGetProperty("ledger_index", out JsonElement li) ? li.GetUInt64() : null,
             Validated = root.TryGetProperty("validated", out JsonElement v) && v.GetBoolean()
         };
 

@@ -18,7 +18,15 @@ namespace Xrpl.Models.Ledger
         /// The ledger index of the ledger.<br/>
         /// Some API methods display this as a quoted integer; some display it as a native JSON number.
         /// </summary>
-        [JsonPropertyName("ledger_index")] 
-        public uint LedgerIndex { get; set; }
+        /// <remarks>
+        /// Unconditional for the dedicated <c>ledger_closed</c> command (rippled
+        /// LedgerClosed.cpp), but this class is also the base of <see cref="LOLedger"/> for the
+        /// general <c>ledger</c> command, where the shared <c>lookupLedger</c> helper
+        /// (RPCLedgerHelpers.cpp) sets this field only when the resolved ledger is closed —
+        /// an open/current ledger response carries <c>ledger_current_index</c> instead and omits
+        /// this member entirely.
+        /// </remarks>
+        [JsonPropertyName("ledger_index")]
+        public uint? LedgerIndex { get; set; }
     }
 }

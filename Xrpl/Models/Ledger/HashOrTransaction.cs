@@ -63,8 +63,13 @@ namespace Xrpl.Models.Ledger
         /// Whether or not the transaction is included in a validated ledger.<br/>
         /// Any transaction not yet in a validated ledger is subject to change.
         /// </summary>
+        /// <remarks>
+        /// Structurally absent for API version &lt;= 1: rippled's LedgerToJson.cpp only adds this
+        /// member inside the <c>apiVersion &gt; 1</c> branch of its per-transaction JSON; the legacy
+        /// v1 branch copies the flat transaction JSON and never writes it at all.
+        /// </remarks>
         [JsonPropertyName("validated")]
-        public bool Validated { get; set; }
+        public bool? Validated { get; set; }
     }
 
 }

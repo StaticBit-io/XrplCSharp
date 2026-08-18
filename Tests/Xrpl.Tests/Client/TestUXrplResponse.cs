@@ -210,8 +210,13 @@ public class TestUXrplResponse
         Assert.AreEqual("{}", JsonSerializer.Serialize(new BaseResponse(), XrplJsonOptions.Default));
         Assert.AreEqual("{}", JsonSerializer.Serialize(new ErrorResponse(), XrplJsonOptions.Default));
 
+        // fee_base, not ledger_index: ledger_index/reserve_base/reserve_inc are now nullable
+        // (rippled's subLedger omits them when there is no validated ledger yet - see
+        // LedgerStreamResponse.LedgerIndex remarks), so a blank instance legitimately omits them.
+        // fee_base stays non-nullable and is unrelated to that gate, so it still proves ordinary
+        // members serialize.
         string stream = JsonSerializer.Serialize(new LedgerStreamResponse(), XrplJsonOptions.Default);
-        StringAssert.Contains(stream, "ledger_index");
+        StringAssert.Contains(stream, "fee_base");
     }
 
     /// <summary>

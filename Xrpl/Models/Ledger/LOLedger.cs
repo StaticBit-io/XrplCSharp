@@ -56,14 +56,22 @@ namespace Xrpl.Models.Ledger
 
     public abstract class BaseLedgerEntity : IBaseLedgerEntity
     {
-        /// <summary> Whether or not this ledger has been closed. </summary>
+        /// <summary>
+        /// Whether or not this ledger has been closed.
+        /// </summary>
+        /// <remarks>
+        /// rippled's LedgerToJson.cpp <c>fillJson</c> omits this member entirely for a non-binary
+        /// response when the ledger is open (<c>closed == false</c>) and the request asked for
+        /// <c>full: true</c> — the only combination where the field is dropped instead of written
+        /// as <c>true</c>/<c>false</c>.
+        /// </remarks>
         [JsonPropertyName("closed")]
-        public bool Closed { get; set; }
+        public bool? Closed { get; set; }
     }
     public interface IBaseLedgerEntity
     {
         /// <summary> Whether or not this ledger has been closed. </summary>
-        public bool Closed { get; set; }
+        public bool? Closed { get; set; }
     }
 
     public class LedgerBinaryEntity : BaseLedgerEntity

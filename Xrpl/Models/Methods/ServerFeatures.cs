@@ -25,8 +25,14 @@ public class ServerFeatures
     /// <summary>
     /// The ledger index of the ledger that was closed.
     /// </summary>
+    /// <remarks>
+    /// rippled's <c>feature</c> handler (Feature.cpp) never writes <c>ledger_hash</c>,
+    /// <c>ledger_index</c> or <c>validated</c> at all - unlike most RPC commands it does not call
+    /// the shared <c>lookupLedger</c> helper, so this member is unconditionally absent from every
+    /// real response.
+    /// </remarks>
     [JsonPropertyName("ledger_index")]
-    public ulong LedgerIndex { get; set; }
+    public ulong? LedgerIndex { get; set; }
     public bool Validated { get; set; }
 
     /// <summary>
