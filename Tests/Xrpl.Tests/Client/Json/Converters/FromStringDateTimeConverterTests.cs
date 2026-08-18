@@ -48,6 +48,48 @@ public class TestUFromStringDateTimeConverter
         Assert.AreEqual(15, result.Timestamp.Value.Day);
     }
 
+    /// <summary>
+    /// Real mainnet close_time_iso values are "Z"-suffixed (Zulu time), not the numeric-offset
+    /// form covered by <see cref="Read_IsoString_ReturnsDateTime"/>. Value captured from a live
+    /// tx response (rippled hash E08D6E9754025BA2534A78707605E0601F03ACE063687A0CA1BDDACFCD1698C7).
+    /// Before the converter accepted "K" instead of "zzz", TryParseExact failed on this shape and
+    /// the converter silently returned null — every close_time_iso on a real response was lost,
+    /// even on the models that already declared the property.
+    /// </summary>
+    [TestMethod]
+    public void Read_ZSuffixedIsoString_ReturnsDateTime()
+    {
+        string json = "{\"Timestamp\": \"2013-03-12T23:16:50Z\"}";
+        Model result = JsonSerializer.Deserialize<Model>(json, XrplJsonOptions.Default);
+        Assert.IsNotNull(result.Timestamp, "\"Z\"-suffixed timestamps must parse, not silently become null");
+        Assert.AreEqual(new DateTime(2013, 3, 12, 23, 16, 50, DateTimeKind.Utc), result.Timestamp.Value);
+        Assert.AreEqual(DateTimeKind.Utc, result.Timestamp.Value.Kind);
+    }
+
+    /// <summary>
+    /// A numeric offset that is not already UTC must be converted, not merely reinterpreted as UTC.
+    /// </summary>
+    [TestMethod]
+    public void Read_NonUtcOffset_AdjustsToUtc()
+    {
+        string json = "{\"Timestamp\": \"2013-03-12T23:16:50+02:00\"}";
+        Model result = JsonSerializer.Deserialize<Model>(json, XrplJsonOptions.Default);
+        Assert.IsNotNull(result.Timestamp);
+        Assert.AreEqual(new DateTime(2013, 3, 12, 21, 16, 50, DateTimeKind.Utc), result.Timestamp.Value);
+    }
+
+    /// <summary>Round-trip must not regress to the old "+00:00" write format silently losing "Z" input.</summary>
+    [TestMethod]
+    public void RoundTrip_ZSuffixedIsoString_WritesZSuffixBack()
+    {
+        string json = "{\"Timestamp\": \"2013-03-12T23:16:50Z\"}";
+        Model result = JsonSerializer.Deserialize<Model>(json, XrplJsonOptions.Default);
+
+        string output = JsonSerializer.Serialize(result, XrplJsonOptions.Default);
+
+        StringAssert.Contains(output, "2013-03-12T23:16:50Z");
+    }
+
     [TestMethod]
     public void Read_InvalidString_ReturnsNull()
     {

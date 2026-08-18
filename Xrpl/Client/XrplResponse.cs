@@ -33,6 +33,7 @@ namespace Xrpl.Client
             T result,
             RawJson raw,
             uint? apiVersion,
+            string status,
             string warning,
             IReadOnlyList<RippleResponseWarning> warnings,
             bool forwarded)
@@ -40,6 +41,7 @@ namespace Xrpl.Client
             Result = result;
             Raw = raw;
             ApiVersion = apiVersion;
+            Status = status;
             Warning = warning;
             _warnings = warnings;
             Forwarded = forwarded;
@@ -56,6 +58,16 @@ namespace Xrpl.Client
 
         /// <summary>The API version the node answered on, when it reported one.</summary>
         public uint? ApiVersion { get; }
+
+        /// <summary>
+        /// <c>"success"</c>, or <c>"error"</c> if the request caused one.
+        /// </summary>
+        /// <remarks>
+        /// A separate member for the same reason <see cref="Warning"/> is: <c>status</c> sits
+        /// beside <c>result</c> in the envelope, not inside it, so it is not reachable through
+        /// <see cref="Raw"/> — <see cref="Raw"/> is a slice of <c>result</c> alone.
+        /// </remarks>
+        public string Status { get; }
 
         /// <summary>
         /// The node's rate-limit signal, when it sent one — the literal <c>"load"</c>, meaning this
@@ -156,6 +168,7 @@ namespace Xrpl.Client
                 (T)resolved.Result,
                 envelope?.RawResult ?? default,
                 envelope?.ApiVersion,
+                envelope?.Status,
                 envelope?.Warning,
                 envelope?.Warnings,
                 envelope?.Forwarded ?? false);

@@ -673,7 +673,7 @@ internal sealed class FeeTestClient : IXrplClient
                 }
             }
         };
-        return Task.FromResult(new XrplResponse<ServerInfo>(info, default, null, null, null, false));
+        return Task.FromResult(new XrplResponse<ServerInfo>(info, default, null, null, null, null, false));
     }
 
     public Task<XrplResponse<ServerState>> ServerState(ServerStateRequest request, CancellationToken cancellationToken = default)
@@ -688,7 +688,7 @@ internal sealed class FeeTestClient : IXrplClient
                 }
             }
         };
-        return Task.FromResult(new XrplResponse<ServerState>(state, default, null, null, null, false));
+        return Task.FromResult(new XrplResponse<ServerState>(state, default, null, null, null, null, false));
     }
 
     public Task<XrplResponse<ServerFeatures>> ServerFeatures(string feature = null, CancellationToken cancellationToken = default) => throw new NotImplementedException();
@@ -723,7 +723,7 @@ internal sealed class FeeTestClient : IXrplClient
         AccountInfoCalls++;
         LastAccountInfoRequest = request;
         AccountInfo info = new AccountInfo { SignerLists = CounterpartySignerLists };
-        return Task.FromResult(new XrplResponse<AccountInfo>(info, default, null, null, null, false));
+        return Task.FromResult(new XrplResponse<AccountInfo>(info, default, null, null, null, null, false));
     }
 
     public Task<XrplResponse<AccountOffers>> AccountOffers(AccountOffersRequest request, CancellationToken cancellationToken = default) => throw new NotSupportedException();
@@ -746,7 +746,7 @@ internal sealed class FeeTestClient : IXrplClient
         if (LedgerEntryThrows)
             throw new XrplException("entryNotFound");
         LedgerEntryResponse response = new LedgerEntryResponse { Index = request.Index, Node = LoanEntry };
-        return Task.FromResult(new XrplResponse<LedgerEntryResponse>(response, default, null, null, null, false));
+        return Task.FromResult(new XrplResponse<LedgerEntryResponse>(response, default, null, null, null, null, false));
     }
 
     public Task<Submit> Submit(Dictionary<string, object> tx, XrplWallet wallet, bool autoFill = true, bool failHard = false, CancellationToken cancellationToken = default) => throw new NotSupportedException();

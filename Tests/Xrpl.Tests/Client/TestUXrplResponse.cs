@@ -28,7 +28,7 @@ public class TestUXrplResponse
         RawJson raw = new RawJson(frame, 10, frame.Length - 11);
         LOLedgerData typed = raw.Deserialize<LOLedgerData>();
 
-        XrplResponse<LOLedgerData> response = new XrplResponse<LOLedgerData>(typed, raw, 2, null, null, false);
+        XrplResponse<LOLedgerData> response = new XrplResponse<LOLedgerData>(typed, raw, 2, null, null, null, false);
 
         Assert.AreSame(typed, response.Result);
         Assert.AreEqual("{\"ledger_index\":9,\"marker\":\"AABB\"}", response.Raw.ToString());
@@ -38,7 +38,7 @@ public class TestUXrplResponse
     [TestMethod]
     public void TestUWarningsAreNeverNull()
     {
-        XrplResponse<LOLedgerData> response = new XrplResponse<LOLedgerData>(null, default, null, null, null, false);
+        XrplResponse<LOLedgerData> response = new XrplResponse<LOLedgerData>(null, default, null, null, null, null, false);
 
         Assert.IsNotNull(response.Warnings);
         Assert.AreEqual(0, response.Warnings.Count);
@@ -56,7 +56,7 @@ public class TestUXrplResponse
         RawJson raw = new RawJson(frame, 10, frame.Length - 11);
         LOLedgerData typed = raw.Deserialize<LOLedgerData>();
 
-        XrplResponse<LOLedgerData> response = new XrplResponse<LOLedgerData>(typed, raw, 2, null, null, false);
+        XrplResponse<LOLedgerData> response = new XrplResponse<LOLedgerData>(typed, raw, 2, null, null, null, false);
 
         var (result, deconstructedRaw) = response;
 
@@ -74,12 +74,12 @@ public class TestUXrplResponse
     {
         byte[] withMarker = Encoding.UTF8.GetBytes("{\"ledger_index\":9,\"marker\":\"AABB\"}");
         XrplResponse<LOLedgerData> paged = new XrplResponse<LOLedgerData>(
-            null, new RawJson(withMarker, 0, withMarker.Length), null, null, null, false);
+            null, new RawJson(withMarker, 0, withMarker.Length), null, null, null, null, false);
         Assert.IsTrue(paged.HasNextPage);
 
         byte[] withoutMarker = Encoding.UTF8.GetBytes("{\"ledger_index\":9}");
         XrplResponse<LOLedgerData> lastPage = new XrplResponse<LOLedgerData>(
-            null, new RawJson(withoutMarker, 0, withoutMarker.Length), null, null, null, false);
+            null, new RawJson(withoutMarker, 0, withoutMarker.Length), null, null, null, null, false);
         Assert.IsFalse(lastPage.HasNextPage);
     }
 
@@ -143,6 +143,31 @@ public class TestUXrplResponse
         Assert.IsTrue(response.Forwarded);
         Assert.AreEqual(1, response.Warnings.Count);
         Assert.AreEqual(1004u, response.Warnings[0].Id);
+
+        await client.Disconnect();
+    }
+
+    /// <summary>
+    /// <c>status</c> sits beside <c>result</c> in the envelope, the same as <c>warning</c> — before
+    /// <see cref="XrplResponse{T}.Status"/> existed, <see cref="XrplResponse.From{T}(ResolvedResponse)"/>
+    /// read every other envelope member off <c>BaseResponse</c> except this one, so it was
+    /// unreachable from a caller holding only the typed response: not part of <c>Result</c> (no
+    /// model declares it) and not part of <see cref="XrplResponse{T}.Raw"/> either (that is a slice
+    /// of <c>result</c> alone). Value matches a real mainnet account_info response.
+    /// </summary>
+    [TestMethod]
+    public async Task TestUStatusReachesTheCaller()
+    {
+        using ScriptedResponseServer server = new ScriptedResponseServer(
+            "{\"id\":__ID__,\"status\":\"success\",\"type\":\"response\","
+            + "\"result\":{\"ledger_current_index\":106359163}}");
+        using XrplClient client = new XrplClient(server.Url, new XrplClient.ClientOptions { ApiVersion = 2 });
+        await client.Connect();
+
+        XrplResponse<LOLedgerCurrentIndex> response =
+            await client.LedgerCurrent(new LedgerCurrentRequest());
+
+        Assert.AreEqual("success", response.Status);
 
         await client.Disconnect();
     }
