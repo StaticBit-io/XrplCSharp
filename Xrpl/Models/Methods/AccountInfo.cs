@@ -11,7 +11,7 @@ namespace Xrpl.Models.Methods
     /// <summary>
     /// Response expected from an <see cref="AccountInfoRequest"/>.
     /// </summary>
-    public class AccountInfo //todo rename to AccountInfoResponse
+    public class AccountInfo : BaseMethodResult //todo rename to AccountInfoResponse
     {
         /// <summary>
         /// The AccountRoot ledger object with this account's information, as stored in the ledger.

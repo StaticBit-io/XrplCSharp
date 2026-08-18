@@ -1,4 +1,5 @@
-﻿using System.Text.Json.Serialization;
+﻿using System.Text.Json;
+using System.Text.Json.Serialization;
 
 using System;
 using System.Collections.Generic;
@@ -38,6 +39,19 @@ namespace Xrpl.Models.Ledger
         /// </summary>
         [JsonPropertyName("validated")]
         public bool Validated { get; set; }
+
+        /// <summary>
+        /// Members of the <c>ledger</c> command's result that no declared property claims - a field
+        /// an amendment adds before this SDK models it, or anything else unrecognized. Declared
+        /// here directly rather than on <see cref="Methods.BaseMethodResult"/> (the shared base for
+        /// account_objects/account_info/account_tx): this class already inherits <see cref="LOBaseLedger"/>
+        /// for the ledger_hash/ledger_index fields it shares with the ledger_closed and
+        /// ledger_current commands, and C# does not allow a second base to add unknown-field
+        /// capture on top of that without either multiple inheritance or making the shared Ledger
+        /// family depend back on the Methods namespace.
+        /// </summary>
+        [JsonExtensionData]
+        public Dictionary<string, JsonElement> UnknownFields { get; set; }
     }
 
     public abstract class BaseLedgerEntity : IBaseLedgerEntity

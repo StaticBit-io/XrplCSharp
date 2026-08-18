@@ -11,7 +11,7 @@ namespace Xrpl.Models.Methods
     /// <summary>
     /// Expected response from an  <see cref="AccountTransactionsRequest"/>.
     /// </summary>
-    public class AccountTransactions  //todo rename to response
+    public class AccountTransactions : BaseMethodResult //todo rename to response
     {
         /// <summary>
         /// Unique Address identifying the related account.
