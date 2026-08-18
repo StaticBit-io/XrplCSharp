@@ -4,6 +4,31 @@
 
 Level 0 and level 1 of the raw-response work, landing together. The goal of the whole effort: a consumer cannot currently get the text a node actually sent — only the typed model — and re-serializing that model differs from the original in both directions, dropping fields the model lacks and inventing zeros for non-nullable CLR properties. Level 1, the first entry below, is the API the effort was for: methods return `XrplResponse<T>`, pairing the typed projection with `Raw` — the `result` member exactly as the node sent it — so a consumer no longer has to choose between the model and the truth. Level 0, the entry after it, is the foundation `Raw` is built on and pays for itself on its own: the envelope now records where `result` sits in the frame instead of materializing it twice.
 
+* **The model stopped inventing values it was never sent, and stopped losing ones it does not know** (**breaking**) — the second half of the raw-response work. Re-serializing a typed response used to differ from what arrived in both directions. Measured on live mainnet responses at `api_version = 2`: a ten-entry `account_tx` gained **156 fabricated members** and dropped 28. After this level the same capture gains **4** and drops 15, and every fabricated member left is the `Amount`/`DeliverMax` rename, which is the next level.
+  * **Scope came from the protocol, not from a hand count.** The repository already vendors rippled's `ledger_entries.macro` and parses which fields are Required, Optional or Default. A new conformance test, `TestUNullabilityConformance`, reads it: a field the protocol allows to be absent must map to a property that can express absence. It found **9 direct violations** — `AMM.TradingFee`, `FeeSettings.ReferenceFeeUnits/ReserveBase/ReserveIncrement`, `LedgerHashes.FirstLedgerSequence/LastLedgerSequence`, `MPTokenIssuance.AssetScale`, `PayChannel.SourceTag/DestinationTag`
+  * **A second, broader rule applies to the same models.** rippled's requirement flag describes the ledger object, but these models double as the contents of `PreviousFields`, `FinalFields` and `NewFields` — and `PreviousFields` carries only the members a transaction changed, so there even a Required field can be missing. Hence every value-typed property of a ledger-entry model is now nullable: **80 properties across 31 models**, plus 21 on transaction models and `AccountInfo.LedgerIndex`/`LedgerCurrentIndex`
+  * `LedgerEntryType` became nullable too, and the constructors that stamped it were removed along with the unconditional stamp in `LedgerObjectConverter`. Without both, the property stayed non-null by construction and the change would have been decorative — round-trip on a `ModifiedNode` went from 6 fabricated members to 2 to **0**
+  * `LONFTokenPage.PreviousTxnLgrSeq` was `long` while `definitions.json` declares the field `UInt32` and every other model uses `uint`. Corrected to `uint?` — unrelated to nullability, found while surveying
+  * **`[JsonExtensionData]` on `BaseLedgerEntry` and `BaseTransactionResponse`.** A member no model knows — a field arriving with a new amendment — used to vanish silently. It now lands in `UnknownFields` and survives a round trip. Verified that the hand-written converters (`LOConverter`, `ModifiedNodeConverter`, `TransactionResponseConverter` and the rest) do not swallow it: they parse only the envelope and delegate the fields to the reflection path, which honours the attribute
+  * **`BaseResponse.Id` and `ErrorResponse.Request` left `object`** — the known remainder of the first level. Both were filled with a `JsonElement` whose pooled array is never returned; measured at **3 672 B retained per envelope carrying an `id` against 217 B without one**, on every response. Both now record bounds, exposed as `RawId` and `RawRequest`, and the request id is parsed straight from the bytes with `Utf8Parser` instead of being formatted into a string first. The retention budget tightened from 8 192 to 6 144 bytes
+
+  **Migrating.** The common case:
+
+  ```csharp
+  // was
+  uint sequence = accountRoot.Sequence;
+
+  // now — and think about the default
+  uint sequence = accountRoot.Sequence ?? 0;
+  ```
+
+  Substituting zero where zero is not a meaningful value puts back exactly the defect this change removes, just moved from serialization into your logic. Two places inside the SDK showed why this matters, both found while migrating and both fixed with an explicit failure instead of a default:
+
+  * a lifted `collected < SignerQuorum` returns **false** when the quorum is absent, so the "insufficient signatures" check silently stopped firing
+  * a lifted `(Flags & lsfAccepted) != 0` returns **true** when `Flags` is absent — the opposite direction from `<` — so a credential that was never accepted read as accepted. That one was a fail-open in a permissioned-domain access check
+
+  If a value is genuinely required, fail loudly; if absence is legitimate, branch on it. Do not reach for `?? 0` by reflex.
+
 * **Methods now return `XrplResponse<T>`: the typed result and, beside it, the bytes the node sent** (**breaking**) — the point of the whole effort. A consumer could not get what a node actually said, only the model, and re-serializing that model differs from the original in both directions. Measured on live mainnet responses at `api_version = 2`: `close_time_iso`, `ctid`, `tx_json.DeliverMax` and `meta_blob` are dropped; `PreviousFields.Flags = 0`, `LedgerEntryType` and — on a Payment — `TransactionType = "AccountSet"` are invented, 156 fabricated members on a ten-entry `account_tx` alone. For a wallet rendering a transaction so a person can check what they are signing, that is false precision.
   * `XrplResponse<T>` carries `Result` (the projection), `Raw` (the `result` member exactly as sent), and the envelope the client used to unwrap and discard: `ApiVersion`, `Warning`, `Warnings`, `Forwarded`. `Warnings` is never null
   * **no implicit conversion to `T`, deliberately.** Measured against this codebase it would carry fewer than half the call sites — 248 with an explicit type against 273 using `var`, which break either way — leaving a partial compatibility harder to migrate than a clean break, and hiding that `Raw` exists at all
