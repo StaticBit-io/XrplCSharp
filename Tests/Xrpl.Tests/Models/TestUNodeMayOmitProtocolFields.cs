@@ -168,6 +168,35 @@ namespace XrplTests.Xrpl.Models
             Assert.IsNull(result.Validated, "the feature command never sends validated - the property must stay null, not fabricate false");
         }
 
+        /// <summary>
+        /// A member present with a JSON <c>null</c> reads as absent rather than throwing.
+        /// </summary>
+        /// <remarks>
+        /// <c>TryGetProperty</c> answers true for <c>"ledger_index": null</c>, and the
+        /// <c>GetUInt64()</c>/<c>GetBoolean()</c> that followed raised <c>JsonException</c> — the
+        /// whole response failed over a member the <c>feature</c> handler does not even emit. A
+        /// node saying null is saying it has no value, which is what null means on this side too.
+        /// </remarks>
+        [TestMethod]
+        public void Deserialize_ServerFeatures_ExplicitJsonNulls_ReadAsAbsent()
+        {
+            ServerFeatures result = JsonSerializer.Deserialize<ServerFeatures>(
+                """{"ledger_index":null,"validated":null,"ledger_hash":null}""", Options);
+
+            Assert.IsNotNull(result);
+            Assert.IsNull(result.LedgerIndex);
+            Assert.IsNull(result.Validated);
+            Assert.IsNull(result.LedgerHash);
+
+            // A real value still reads as itself - the guard must not swallow everything.
+            ServerFeatures present = JsonSerializer.Deserialize<ServerFeatures>(
+                """{"ledger_index":9,"validated":true,"ledger_hash":"ABC"}""", Options);
+
+            Assert.AreEqual(9ul, present.LedgerIndex);
+            Assert.AreEqual(true, present.Validated);
+            Assert.AreEqual("ABC", present.LedgerHash);
+        }
+
         // rippled NetworkOpsImp::subLedger gates ledger_index/reserve_base/reserve_inc on
         // ledgerMaster_.getValidatedLedger() returning non-null; a node with no validated ledger
         // yet (e.g. just started) sends none of them in the subscribe command's own reply.

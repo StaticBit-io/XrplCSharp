@@ -73,6 +73,18 @@ namespace Xrpl.Models.Ledger
     }
     public interface IBaseLedgerEntity
     {
+        /// <summary>
+        /// Members the node sent that no declared property claims - see
+        /// <see cref="BaseLedgerEntry.UnknownFields"/> for what capture is and what it costs.
+        /// </summary>
+        /// <remarks>
+        /// On the interface, not only on <see cref="BaseLedgerEntity"/>: <see cref="LOLedger.LedgerEntity"/>
+        /// is typed as this interface, so without it a caller holding the ledger of a <c>ledger</c>
+        /// response cannot read a captured field without casting to a concrete type - and which
+        /// concrete type it is depends on whether the request asked for binary.
+        /// </remarks>
+        public Dictionary<string, JsonElement> UnknownFields { get; set; }
+
         /// <summary> Whether or not this ledger has been closed. </summary>
         public bool? Closed { get; set; }
     }

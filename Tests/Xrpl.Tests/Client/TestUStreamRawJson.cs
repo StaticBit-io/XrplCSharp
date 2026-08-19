@@ -266,7 +266,11 @@ namespace Xrpl.Tests.ClientLib
 
             string rawTransaction = result.RawTransaction.ToString();
             StringAssert.Contains(rawTransaction, "\"Sequence\": 42");
-            Assert.IsFalse(rawTransaction.Contains("\"Sequence\": 1,", StringComparison.Ordinal),
+            // Discriminates on Fee, not Sequence: "Sequence": 1 is the last member of the first
+            // envelope, so no comma follows it and a search for `"Sequence": 1,` matched nothing
+            // either way - the assertion passed even when RawTransaction picked the first
+            // occurrence. Fee differs between the two envelopes and sits mid-object in both.
+            Assert.IsFalse(rawTransaction.Contains("\"Fee\": \"12\"", StringComparison.Ordinal),
                 "RawTransaction picked the first occurrence instead of the last - it would show a wallet a different transaction than the one Transaction/signing would use");
         }
 
