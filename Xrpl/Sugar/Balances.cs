@@ -109,6 +109,14 @@ namespace Xrpl.Sugar
             // server_state for a live node always returns validated_ledger.reserve_base/reserve_inc;
             // a missing value means a malformed node response and must fail loudly rather than be
             // treated as a zero reserve, which would overstate the free balance.
+            // The containers are checked first: testing only the leaf values, as this did, means a
+            // response missing "state" or "validated_ledger" faults with a NullReferenceException
+            // on the way to the check rather than reaching it.
+            if (serverInfo.State?.ValidatedLedger is null)
+            {
+                throw new ValidationException("server_state response did not include the validated ledger.");
+            }
+
             uint? reserveInc = serverInfo.State.ValidatedLedger.ReserveInc;
             uint? reserveBase = serverInfo.State.ValidatedLedger.ReserveBase;
             if (reserveInc == null || reserveBase == null)

@@ -196,9 +196,16 @@ namespace Xrpl.Client.Json
 
             // The payload was already validated as JSON when the envelope was parsed - the
             // converter reached these bounds through reader.Skip(). Re-validating here would mean
-            // parsing the subtree a second time, which is the cost this type exists to remove.
-            // The premise is the window's correctness, which the constructor enforces; without
-            // that check a desynced window emits a malformed document with no exception at all.
+            // parsing the subtree a second time, which is the cost this type exists to remove:
+            // measured at 0.20 -> 2.16 us on a 1 KB window and 3.26 -> 29.45 us on a 36 KB one,
+            // about 10x, on a path a paged crawl runs per response.
+            //
+            // The premise is therefore the window's correctness. For any RawJson the SDK produced
+            // that holds by construction. For one built through the public constructor over
+            // arbitrary bytes it does not: bounds are checked, contents are not, so a window over
+            // malformed or partial JSON is written through verbatim and silently corrupts the
+            // containing document. Validate before constructing if the bytes did not come from a
+            // parsed response.
             writer.WriteRawValue(Span, skipInputValidation: true);
         }
 

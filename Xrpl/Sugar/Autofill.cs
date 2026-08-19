@@ -209,6 +209,15 @@ namespace Xrpl.Sugar
         {
             ServerStateRequest request = new ServerStateRequest();
             ServerState data = await client.ServerState(request, cancellationToken).Typed();
+
+            // Checked before dereferencing, not after: reading through State.ValidatedLedger and
+            // testing only the leaf turns a response missing either container into a
+            // NullReferenceException, which says nothing about what the node returned.
+            if (data.State?.ValidatedLedger is null)
+            {
+                throw new XrplException("server_state response did not include the validated ledger.");
+            }
+
             uint? fee = data.State.ValidatedLedger.ReserveInc;
 
             if (fee == null)

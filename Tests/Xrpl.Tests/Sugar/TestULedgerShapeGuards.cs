@@ -58,6 +58,34 @@ public class TestULedgerShapeGuards
         StringAssert.Contains(failure.Message, "did not include a JSON ledger object");
     }
 
+    private const string ServerStateReplyWithoutValidatedLedger =
+        "{\"id\":__ID__,\"status\":\"success\",\"type\":\"response\",\"api_version\":2,"
+        + "\"result\":{\"state\":{\"build_version\":\"3.3.0\",\"server_state\":\"full\"}}}";
+
+    /// <summary>
+    /// The reserve helpers read through <c>State.ValidatedLedger</c> and used to test only the
+    /// leaf values, so a response missing either container faulted on the way to the check rather
+    /// than reaching it.
+    /// </summary>
+    [TestMethod]
+    public async Task TestUFetchReserveFeeRejectsAServerStateWithoutAValidatedLedger()
+    {
+        using ScriptedResponseServer server = new ScriptedResponseServer(ServerStateReplyWithoutValidatedLedger);
+        using XrplClient client = new XrplClient(server.Url, new XrplClient.ClientOptions { ApiVersion = 2 });
+        await client.Connect();
+
+        try
+        {
+            XrplException failure = await Assert.ThrowsExactlyAsync<XrplException>(() => client.FetchReserveFee());
+
+            StringAssert.Contains(failure.Message, "validated ledger");
+        }
+        finally
+        {
+            await client.Disconnect();
+        }
+    }
+
     /// <summary>
     /// A binary reply deserializes to a different concrete type; the caller is told which, since
     /// the fix is on their side - drop <c>binary</c> from the request.

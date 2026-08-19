@@ -54,6 +54,15 @@ namespace Xrpl.Client.Json
             long start = reader.TokenStartIndex;
             reader.Skip();
             long end = reader.BytesConsumed;
+
+            // A frame holds one value. Anything after it means the buffer is not the single
+            // document this slice claims to span, and returning the first value's bounds would
+            // quietly describe part of the input as the whole of it.
+            if (reader.Read())
+            {
+                throw new JsonException("The buffer holds more than one top-level JSON value; a frame must contain exactly one.");
+            }
+
             return new JsonSlice(checked((int)start), checked((int)(end - start)));
         }
 
