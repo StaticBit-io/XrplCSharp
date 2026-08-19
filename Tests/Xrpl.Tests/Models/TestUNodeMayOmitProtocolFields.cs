@@ -197,6 +197,29 @@ namespace XrplTests.Xrpl.Models
             Assert.AreEqual("ABC", present.LedgerHash);
         }
 
+        /// <summary>
+        /// A number that cannot be a <see cref="ulong"/> reads as absent instead of failing the
+        /// whole response.
+        /// </summary>
+        /// <remarks>
+        /// Checking <c>ValueKind == Number</c> is not sufficient: <c>GetUInt64</c> still raises
+        /// <c>FormatException</c> for a negative value or one past <c>ulong.MaxValue</c>. Both are
+        /// malformed rather than meaningful, and neither is worth losing the rest of the response
+        /// over.
+        /// </remarks>
+        [TestMethod]
+        public void Deserialize_ServerFeatures_OutOfRangeLedgerIndex_ReadsAsAbsent()
+        {
+            foreach (string value in new[] { "-1", "18446744073709551616", "1.5" })
+            {
+                ServerFeatures result = JsonSerializer.Deserialize<ServerFeatures>(
+                    "{\"ledger_index\":" + value + "}", Options);
+
+                Assert.IsNotNull(result, "ledger_index of " + value + " must not fail the whole response");
+                Assert.IsNull(result.LedgerIndex, "ledger_index of " + value + " cannot be a ulong - it must read as absent, not throw");
+            }
+        }
+
         // rippled NetworkOpsImp::subLedger gates ledger_index/reserve_base/reserve_inc on
         // ledgerMaster_.getValidatedLedger() returning non-null; a node with no validated ledger
         // yet (e.g. just started) sends none of them in the subscribe command's own reply.
