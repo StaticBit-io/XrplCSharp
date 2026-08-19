@@ -147,14 +147,64 @@ namespace Xrpl.Client.Json
         /// <see cref="StringComparison.OrdinalIgnoreCase"/> matching System.Text.Json performs
         /// under <c>PropertyNameCaseInsensitive</c>.
         /// </remarks>
-        private static bool NameMatches(ref Utf8JsonReader reader, ReadOnlySpan<byte> name)
+        internal static bool NameMatches(ref Utf8JsonReader reader, ReadOnlySpan<byte> name)
         {
             if (reader.ValueTextEquals(name))
             {
                 return true;
             }
 
-            return string.Equals(reader.GetString(), Encoding.UTF8.GetString(name), StringComparison.OrdinalIgnoreCase);
+            // An escaped name has to be unescaped before it can be compared, and only GetString()
+            // does that - but escaped keys are vanishingly rare, so that path pays alone.
+            if (reader.ValueIsEscaped)
+            {
+                return string.Equals(reader.GetString(), Encoding.UTF8.GetString(name), StringComparison.OrdinalIgnoreCase);
+            }
+
+            return AsciiEqualsIgnoreCase(reader.ValueSpan, name);
         }
+
+        /// <summary>
+        /// Compares two UTF-8 spans, folding ASCII letters, without allocating.
+        /// </summary>
+        /// <remarks>
+        /// The names looked up here are ASCII <c>u8</c> literals (<c>tx_json</c>, <c>transaction</c>,
+        /// <c>marker</c>), so folding only ASCII is exactly as permissive as the serializer's
+        /// <see cref="StringComparison.OrdinalIgnoreCase"/> for anything that could match one:
+        /// a key differing outside ASCII cannot be case-insensitively equal to an ASCII literal.
+        ///
+        /// Doing this in place matters because it runs for every *non-matching* member too.
+        /// Decoding those cost 1 056 - 1 136 B per scan on an ordinary stream frame - the fast
+        /// path only helped when the key happened to come first, which for <c>marker</c> (absent
+        /// on a last page, so every member is walked) was never.
+        /// </remarks>
+        private static bool AsciiEqualsIgnoreCase(ReadOnlySpan<byte> left, ReadOnlySpan<byte> right)
+        {
+            if (left.Length != right.Length)
+            {
+                return false;
+            }
+
+            for (int i = 0; i < left.Length; i++)
+            {
+                byte a = left[i];
+                byte b = right[i];
+
+                if (a == b)
+                {
+                    continue;
+                }
+
+                // Fold only letters: without this guard '_' (0x5F) would match '?' (0x3F).
+                int lowered = a | 0x20;
+                if (lowered < 'a' || lowered > 'z' || lowered != (b | 0x20))
+                {
+                    return false;
+                }
+            }
+
+            return true;
+        }
+
     }
 }

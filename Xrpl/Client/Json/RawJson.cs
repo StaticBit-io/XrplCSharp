@@ -161,8 +161,7 @@ namespace Xrpl.Client.Json
                 // or escaped key pays for a string. This runs on every paged response through
                 // HasNextPage, so the fast path is the point - see JsonSlice.NameMatches, which
                 // carries the same rule for locating a member rather than proving one is present.
-                if (reader.ValueTextEquals(name)
-                    || string.Equals(reader.GetString(), Encoding.UTF8.GetString(name), StringComparison.OrdinalIgnoreCase))
+                if (JsonSlice.NameMatches(ref reader, name))
                 {
                     return true;
                 }
