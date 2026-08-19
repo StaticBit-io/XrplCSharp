@@ -3369,10 +3369,11 @@ public class Connection
             var channel = _streamMessageChannel;
             if (channel != null)
             {
-                if (!channel.Writer.TryWrite(frame))
-                {
-                    Debug.WriteLine($"{DateTime.Now}Warning: Stream message channel full, message dropped");
-                }
+                // No failure branch on purpose: the channel is bounded with DropOldest, so
+                // TryWrite always succeeds and silently evicts the oldest frame instead. A
+                // consumer falling 10 000 messages behind loses the oldest events with nothing
+                // reported - worth knowing, but a log line here would never fire.
+                channel.Writer.TryWrite(frame);
             }
             else
             {

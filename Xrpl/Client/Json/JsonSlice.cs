@@ -38,16 +38,18 @@ namespace Xrpl.Client.Json
         /// <em>is</em> the event, so there is no named member for a per-property converter like
         /// <see cref="Converters.JsonSliceConverter"/> to bind to. This computes the same bounds
         /// that converter would, for the document as a whole, so a stream event can hand out a
-        /// <see cref="RawJson"/> the same way an envelope's <c>result</c> does. Returns
-        /// <c>default</c> (empty) for a buffer that holds no value at all.
+        /// <see cref="RawJson"/> the same way an envelope's <c>result</c> does.
         /// </remarks>
+        /// <exception cref="System.Text.Json.JsonException">
+        /// The buffer holds no JSON value at all - empty, or nothing but whitespace.
+        /// <see cref="Utf8JsonReader.Read"/> raises on that rather than returning <c>false</c>,
+        /// so there is no empty result to hand back. Unreachable through the pipeline, which only
+        /// attaches a frame it has already deserialized, but the method is reachable directly.
+        /// </exception>
         public static JsonSlice OfDocument(byte[] buffer)
         {
             Utf8JsonReader reader = new Utf8JsonReader(buffer);
-            if (!reader.Read())
-            {
-                return default;
-            }
+            reader.Read();
 
             long start = reader.TokenStartIndex;
             reader.Skip();

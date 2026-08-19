@@ -121,16 +121,21 @@ namespace Xrpl.Client.Json
         /// </summary>
         /// <remarks>
         /// Each non-matching member's value is skipped whole, so a nested occurrence of the name
-        /// cannot be mistaken for a top-level one. Matching decodes the property name through
-        /// <see cref="Utf8JsonReader.GetString"/> - which unescapes it, so a key a node spelled
-        /// with a unicode escape still matches, where a raw byte comparison against the plain name
-        /// would silently miss it - and compares with <see cref="StringComparison.OrdinalIgnoreCase"/>,
-        /// mirroring <see cref="XrplJsonOptions.Default"/>'s
-        /// <see cref="JsonSerializerOptions.PropertyNameCaseInsensitive"/> = <see langword="true"/>.
+        /// cannot be mistaken for a top-level one. Names are matched by
+        /// <see cref="JsonSlice.NameMatches"/>: case-insensitively, mirroring
+        /// <see cref="XrplJsonOptions.Default"/>'s
+        /// <see cref="JsonSerializerOptions.PropertyNameCaseInsensitive"/> = <see langword="true"/>,
+        /// and without allocating for anything but an escaped name - this runs on every paged
+        /// response through <c>HasNextPage</c>.
         /// Presence does not depend on which occurrence is meant, unlike a value lookup, so unlike
         /// <see cref="JsonSlice.FindTopLevelMember"/> this still returns as soon as a match is
         /// found instead of scanning to the end for the last one.
         /// </remarks>
+        /// <exception cref="System.Text.Json.JsonException">
+        /// The window does not hold well-formed JSON. Unreachable for a <see cref="RawJson"/> the
+        /// SDK produced - those windows come from a document it already parsed - but this type is
+        /// public and constructible over arbitrary bytes.
+        /// </exception>
         public bool HasTopLevelProperty(ReadOnlySpan<byte> name)
         {
             if (IsEmpty)
