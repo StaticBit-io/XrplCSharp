@@ -158,14 +158,11 @@ public class TransactionRequestConverter : JsonConverter<ITransactionRequest>
         // Remove this converter to avoid infinite recursion
         JsonSerializerOptions innerOptions = JsonSerializerOptionsCache.WithoutConverter<TransactionRequestConverter>(options);
 
-        try
-        {
-            return (ITransactionRequest)JsonSerializer.Deserialize(rawJson, transactionRequest.GetType(), innerOptions);
-        }
-        catch (JsonException)
-        {
-            return transactionRequest;
-        }
+        // The JsonException is deliberately not caught. It used to be, returning the bare
+        // instance created above - a transaction with nothing but its TransactionType set. That
+        // object is indistinguishable from a real one to everything downstream, including Sign:
+        // malformed input became a signable, empty transaction instead of an error.
+        return (ITransactionRequest)JsonSerializer.Deserialize(rawJson, transactionRequest.GetType(), innerOptions);
     }
 
     /// <inheritdoc />

@@ -45,6 +45,18 @@ namespace Xrpl.Models.Transactions
         /// See Limit Quality for details.
         /// </summary>
         tfLimitQuality = 262144,
+
+        /// <summary>
+        /// The sponsor covers the reserve of an account this payment creates (XLS-68).
+        /// </summary>
+        /// <remarks>
+        /// rippled declares it in the Payment block of TxFlags.h as 0x00080000. The rest of
+        /// XLS-68 was already modelled here - the Sponsor fields, SponsorshipSet, SponsorshipFlags
+        /// - and only this flag was missing, which is what a conformance check over TxFlags.h
+        /// would have caught. No such check exists: ledger flags are verified against
+        /// LedgerFormats.h, transaction flags against nothing at all.
+        /// </remarks>
+        tfSponsorCreatedAccount = 524288,
     }
 
     /// <inheritdoc cref="IPayment" />

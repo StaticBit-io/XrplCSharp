@@ -48,14 +48,53 @@ namespace Xrpl.Wallet
             return JsonSerializer.Deserialize<Dictionary<string, object>>(dic.ToString(), XrplJsonOptions.Default);
         }
 
+        /// <summary>
+        /// The signed blob decoded back into a typed transaction.
+        /// </summary>
+        /// <exception cref="ValidationException">
+        /// The blob carries a top-level field no model property claims, so the returned object
+        /// would not represent it. Signing that object again produces a blob missing the field -
+        /// which is how a co-signature could be dropped: <c>CounterpartySignature</c> and
+        /// <c>SponsorSignature</c> exist in <c>definitions.json</c> and survive the codec, but no
+        /// request model declares them, so a round trip through here used to discard them
+        /// silently. Failing loudly is the point: the caller is told what would have been lost
+        /// rather than submitting a transaction the node will reject for a missing signature.
+        /// For those two flows use the blob-level helpers (<c>LoanSigningHelper.BrokerSign</c>,
+        /// <c>SponsorSigningHelper.SubmitterSign</c>), which never leave the blob.
+        /// </exception>
         public ITransactionRequest GetTx()
         {
             if (TxBlob == null)
             {
                 throw new NullReferenceException(nameof(TxBlob));
             }
-            return JsonSerializer.Deserialize<TransactionRequest>(
-                XrplBinaryCodec.Decode(TxBlob).ToString(), XrplJsonOptions.Default);
+
+            JsonObject decoded = XrplBinaryCodec.Decode(TxBlob).AsObject();
+            ITransactionRequest transaction = JsonSerializer.Deserialize<TransactionRequest>(
+                decoded.ToString(), XrplJsonOptions.Default);
+
+            string reemitted = JsonSerializer.Serialize(transaction, transaction.GetType(), XrplJsonOptions.Default);
+            using JsonDocument roundTripped = JsonDocument.Parse(reemitted);
+
+            List<string> dropped = new List<string>();
+            foreach (KeyValuePair<string, JsonNode> member in decoded)
+            {
+                if (!roundTripped.RootElement.TryGetProperty(member.Key, out _))
+                {
+                    dropped.Add(member.Key);
+                }
+            }
+
+            if (dropped.Count > 0)
+            {
+                throw new ValidationException(
+                    "Decoding this blob into a typed transaction would drop "
+                    + string.Join(", ", dropped)
+                    + " - no model property carries it, so signing the result would produce a blob without it. "
+                    + "Work from TxBlob instead (see LoanSigningHelper/SponsorSigningHelper for the co-signing flows).");
+            }
+
+            return transaction;
         }
     }
     public enum TextWalletKdf
@@ -1072,9 +1111,14 @@ namespace Xrpl.Wallet
         /// <b>V3 (sequential) — borrower signs first, passes to broker:</b>
         /// <code>
         /// var withCounterparty = borrowerWallet.SignAsLoanCounterparty(preparedTx);
-        /// var final = brokerWallet.Sign(withCounterparty.GetTx());
+        /// var final = LoanSigningHelper.BrokerSign(withCounterparty.TxBlob, brokerWallet);
         /// await client.SubmitRequest(final.TxBlob);
         /// </code>
+        /// Note the blob, not <c>GetTx()</c>: no request model declares
+        /// <c>CounterpartySignature</c>, so decoding into a typed transaction and signing that
+        /// would produce a blob without the co-signature. <c>BrokerSign</c> stays at the blob
+        /// level, stripping the co-signature to compute the preimage and restoring it afterwards.
+        /// <see cref="SignatureResult.GetTx"/> now refuses such a blob rather than losing it.
         ///
         /// <b>V2 (parallel) — both sign independently, then combine:</b>
         /// <code>
