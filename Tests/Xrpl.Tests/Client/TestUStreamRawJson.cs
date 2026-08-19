@@ -339,6 +339,85 @@ namespace Xrpl.Tests.ClientLib
                 "RawTransaction resolved tx_json while the typed Transaction resolved the later \"transaction\" envelope - a wallet would display one transaction and sign another");
         }
 
+        private const string TransactionStreamNullLegacyEnvelope = """
+        {
+          "type": "transaction",
+          "status": "closed",
+          "validated": true,
+          "tx_json": {
+            "TransactionType": "Payment",
+            "Account": "rP9jPyP5kyvFRb6ZiRghAGw5u8SGAmU4bd",
+            "Destination": "rBTwLga3i2gz3doX6Gva3MgEV8ZCD8jjah",
+            "Amount": "1000000",
+            "Fee": "12",
+            "Sequence": 33
+          },
+          "engine_result": "tesSUCCESS",
+          "transaction": null,
+          "meta": {
+            "AffectedNodes": [],
+            "TransactionIndex": 3,
+            "TransactionResult": "tesSUCCESS"
+          }
+        }
+        """;
+
+        /// <summary>
+        /// An envelope explicitly set to JSON <c>null</c> is not an envelope. The typed setters
+        /// discard it (<c>value ?? _transaction</c>), so the slice must too — otherwise the later
+        /// position of a null <c>transaction</c> would win the tie-break and hand
+        /// <see cref="TransactionStream.RawTransaction"/> four bytes of literal while
+        /// <see cref="TransactionStream.Transaction"/> held the real payment.
+        /// </summary>
+        [TestMethod]
+        public async Task TestTransactionStreamIgnoresAnEnvelopeExplicitlySetToNull()
+        {
+            TaskCompletionSource<TransactionStream> received = new TaskCompletionSource<TransactionStream>(
+                TaskCreationOptions.RunContinuationsAsynchronously);
+
+            runner.client.connection.OnTransaction += r =>
+            {
+                received.TrySetResult(r);
+                return Task.CompletedTask;
+            };
+
+            await runner.client.connection.OnMessage(TransactionStreamNullLegacyEnvelope);
+
+            Task completed = await Task.WhenAny(received.Task, Task.Delay(TimeSpan.FromSeconds(5)));
+            Assert.AreSame(received.Task, completed, "OnTransaction was not invoked within timeout");
+
+            TransactionStream result = await received.Task;
+
+            Assert.AreEqual(33u, result.Transaction.Sequence, "sanity: the typed side ignores the null envelope");
+
+            string rawTransaction = result.RawTransaction.ToString();
+            Assert.AreNotEqual("null", rawTransaction,
+                "RawTransaction took the null envelope while Transaction took the real one - the two views must not disagree");
+            StringAssert.Contains(rawTransaction, "\"Sequence\": 33");
+        }
+
+        /// <summary>
+        /// An event that arrived without a <c>type</c> must not report one. The property is
+        /// nullable precisely so absence round-trips as absence rather than as
+        /// <c>ResponseStreamType.UNKNOWN</c>, the enum's zero value — the same fabrication this
+        /// branch removes everywhere else. Was untested: reverting the property to non-nullable
+        /// left the whole suite green.
+        /// </summary>
+        [TestMethod]
+        public void TestStreamEventWithoutATypeDoesNotInventOne()
+        {
+            TransactionStream blank = new TransactionStream();
+            Assert.IsNull(blank.Type, "no message assigned a type - the property must stay null, not read as UNKNOWN");
+
+            string serialized = JsonSerializer.Serialize(blank, XrplJsonOptions.Default);
+            Assert.IsFalse(serialized.Contains("\"type\"", StringComparison.Ordinal),
+                "re-serializing an event that carried no type must not emit one: " + serialized);
+
+            TransactionStream parsed = JsonSerializer.Deserialize<TransactionStream>(
+                "{\"status\":\"closed\",\"validated\":true}", XrplJsonOptions.Default);
+            Assert.IsNull(parsed.Type, "the message carried no type member - the property must stay null");
+        }
+
         private const string TransactionStreamUppercaseTxJson = """
         {
           "type": "transaction",

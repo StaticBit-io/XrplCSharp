@@ -235,6 +235,20 @@ public class TestURawJson
         Assert.IsFalse(Window("{\"a\":[{\"marker\":1}]}").HasTopLevelProperty("marker"u8));
     }
 
+    /// <summary>
+    /// Matching follows the serializer, which reads the same document with
+    /// <c>PropertyNameCaseInsensitive = true</c> — a key that fills a typed property must not read
+    /// as absent here. Was untested: the only case-insensitivity test in this branch went through
+    /// <c>JsonSlice</c>, so reverting this method alone to an ordinal comparison broke nothing.
+    /// </summary>
+    [TestMethod]
+    public void TestURawJsonMatchesTheTopLevelPropertyRegardlessOfCase()
+    {
+        Assert.IsTrue(Window("{\"MARKER\":1}").HasTopLevelProperty("marker"u8));
+        Assert.IsTrue(Window("{\"Marker\":1}").HasTopLevelProperty("marker"u8));
+        Assert.IsFalse(Window("{\"marker_extra\":1}").HasTopLevelProperty("marker"u8));
+    }
+
     /// <summary>An empty object, a non-object document, and an empty window all answer false.</summary>
     [TestMethod]
     public void TestURawJsonHasNoTopLevelPropertyOnANonObjectOrEmptyInput()

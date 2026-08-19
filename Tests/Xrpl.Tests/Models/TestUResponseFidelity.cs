@@ -98,9 +98,16 @@ namespace Xrpl.Tests.Models.Tests
             new(StringComparer.Ordinal)
             {
                 // Empty, and that is the finding: every member of every captured response now
-                // survives the round trip. The table stays because it is the mechanism that keeps
-                // it that way - a future model that stops carrying a field fails this test until
-                // someone writes down why, rather than the loss passing unnoticed.
+                // survives the round trip.
+                //
+                // Read it for exactly that and no more. Since unknown-field capture reached every
+                // response projection, this test can no longer tell "the model declares a
+                // property for this field" from "the field fell into UnknownFields and was
+                // written back out" - deleting a declared property outright leaves the whole
+                // suite green (verified by mutation, not assumed). What stays guarded is the wire
+                // contract: nothing the node sent is dropped, and nothing it did not send is
+                // invented. Guarding the typed surface is a different job, and this table is not
+                // it.
             };
 
         /// <summary>

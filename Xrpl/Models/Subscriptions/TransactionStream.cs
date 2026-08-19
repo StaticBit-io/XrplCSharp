@@ -45,11 +45,45 @@ namespace Xrpl.Models.Subscriptions
         /// event (<c>jvObj[jss::ctid]</c> in NetworkOPs.cpp), not inside <c>tx_json</c>/<c>transaction</c>
         /// - unlike <c>account_tx</c>, which nests it inside the transaction envelope and lands on
         /// <see cref="Methods.TransactionSummary.Ctid"/> instead. A dedicated property rather than
-        /// leaving it to <see cref="UnknownFields"/>: a wallet identifying "which transaction is
+        /// leaving it to <see cref="BaseStream.UnknownFields"/>: a wallet identifying "which transaction is
         /// this" needs it typed, the same way <see cref="Hash"/> is, not fished out of a dictionary.
         /// </remarks>
         [JsonPropertyName("ctid")]
         public string Ctid { get; set; }
+
+        /// <summary>
+        /// Position of this transaction within an <c>account_history</c> subscription, when the
+        /// event comes from one.
+        /// </summary>
+        /// <remarks>
+        /// Signed on purpose. rippled counts forward from zero while streaming new transactions
+        /// (<c>forwardTxIndex++</c>, a <c>uint32</c>) and counts *down* through the same zero while
+        /// backfilling history (<c>txHistoryIndex--</c>, NetworkOPs.cpp), so a backfilled event
+        /// carries a negative index.
+        ///
+        /// Declared rather than left to <see cref="BaseStream.UnknownFields"/> along with the two
+        /// flags below: rippled sends all three on every event of such a subscription, and capture
+        /// costs about 464 B per member because each unknown value is parsed into its own
+        /// <see cref="System.Text.Json.JsonDocument"/>. Measured at ~796 B per event for the three
+        /// together - paid on every transaction a wallet receives, which is the one path where
+        /// that is least affordable.
+        /// </remarks>
+        [JsonPropertyName("account_history_tx_index")]
+        public long? AccountHistoryTxIndex { get; set; }
+
+        /// <summary>
+        /// Present and <c>true</c> when this transaction is the last one of its ledger within an
+        /// <c>account_history</c> stream - the marker a consumer batches on.
+        /// </summary>
+        [JsonPropertyName("account_history_boundary")]
+        public bool? AccountHistoryBoundary { get; set; }
+
+        /// <summary>
+        /// Present and <c>true</c> on the earliest transaction that ever touched the subscribed
+        /// account, which is how a consumer knows the backfill has reached the end.
+        /// </summary>
+        [JsonPropertyName("account_history_tx_first")]
+        public bool? AccountHistoryTxFirst { get; set; }
 
         /// <summary>
         /// Numeric transaction response code, if applicable.
@@ -158,8 +192,8 @@ namespace Xrpl.Models.Subscriptions
                 throw new ArgumentNullException(nameof(frame));
             }
 
-            JsonSlice txJson = JsonSlice.FindTopLevelMember(frame, "tx_json"u8);
-            JsonSlice legacy = JsonSlice.FindTopLevelMember(frame, "transaction"u8);
+            JsonSlice txJson = WithoutJsonNull(frame, JsonSlice.FindTopLevelMember(frame, "tx_json"u8));
+            JsonSlice legacy = WithoutJsonNull(frame, JsonSlice.FindTopLevelMember(frame, "transaction"u8));
 
             // Whichever envelope sits later in the frame wins, because that is what the typed
             // Transaction ends up holding: its two setters both do `value ?? _transaction` and run
@@ -176,6 +210,26 @@ namespace Xrpl.Models.Subscriptions
                 : legacy.Offset > txJson.Offset ? legacy : txJson;
 
             base.AttachFrame(frame);
+        }
+
+        /// <summary>
+        /// Treats an envelope explicitly set to JSON <c>null</c> as absent.
+        /// </summary>
+        /// <remarks>
+        /// A member present with a <c>null</c> value still produces a non-empty slice - four bytes
+        /// of literal - while the typed setters discard it (`value ?? _transaction`). Left as-is,
+        /// `{"tx_json":{...},"transaction":null}` gave RawTransaction the null and Transaction the
+        /// object: the two views disagreeing again, in the one case the position rule above cannot
+        /// see.
+        /// </remarks>
+        private static JsonSlice WithoutJsonNull(byte[] frame, JsonSlice slice)
+        {
+            if (slice.IsEmpty || slice.Length != 4)
+            {
+                return slice;
+            }
+
+            return frame.AsSpan(slice.Offset, 4).SequenceEqual("null"u8) ? default : slice;
         }
 
         /// <summary>

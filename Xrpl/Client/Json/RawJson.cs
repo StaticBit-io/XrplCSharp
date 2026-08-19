@@ -145,8 +145,6 @@ namespace Xrpl.Client.Json
                 return false;
             }
 
-            string nameText = Encoding.UTF8.GetString(name);
-
             while (reader.Read())
             {
                 if (reader.TokenType == JsonTokenType.EndObject)
@@ -159,7 +157,12 @@ namespace Xrpl.Client.Json
                     continue;
                 }
 
-                if (string.Equals(reader.GetString(), nameText, StringComparison.OrdinalIgnoreCase))
+                // Zero-allocation on the spelling a node actually sends; only a differently-cased
+                // or escaped key pays for a string. This runs on every paged response through
+                // HasNextPage, so the fast path is the point - see JsonSlice.NameMatches, which
+                // carries the same rule for locating a member rather than proving one is present.
+                if (reader.ValueTextEquals(name)
+                    || string.Equals(reader.GetString(), Encoding.UTF8.GetString(name), StringComparison.OrdinalIgnoreCase))
                 {
                     return true;
                 }

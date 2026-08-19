@@ -40,18 +40,11 @@ namespace Xrpl.Models.Ledger
         [JsonPropertyName("validated")]
         public bool Validated { get; set; }
 
-        /// <summary>
-        /// Members of the <c>ledger</c> command's result that no declared property claims - a field
-        /// an amendment adds before this SDK models it, or anything else unrecognized. Declared
-        /// here directly rather than on <see cref="Methods.BaseMethodResult"/> (the shared base for
-        /// account_objects/account_info/account_tx): this class already inherits <see cref="LOBaseLedger"/>
-        /// for the ledger_hash/ledger_index fields it shares with the ledger_closed and
-        /// ledger_current commands, and C# does not allow a second base to add unknown-field
-        /// capture on top of that without either multiple inheritance or making the shared Ledger
-        /// family depend back on the Methods namespace.
-        /// </summary>
-        [JsonExtensionData]
-        public Dictionary<string, JsonElement> UnknownFields { get; set; }
+        // Unknown-field capture is inherited from LOBaseLedger. It was declared here too, back
+        // when the base carried none: two declarations in one hierarchy compile - the derived one
+        // hides the base (CS0108) and System.Text.Json binds the derived one - so nothing failed
+        // visibly, while the base property stayed null forever. LedgerClosed hands callers an
+        // LOBaseLedger, which would have read empty with the data sitting on the subclass.
     }
 
     public abstract class BaseLedgerEntity : IBaseLedgerEntity
@@ -86,15 +79,7 @@ namespace Xrpl.Models.Ledger
 
     public class LedgerBinaryEntity : BaseLedgerEntity
     {
-        /// <summary>
-        /// Members the node sent that no declared property here claims. Mirrors
-        /// <see cref="BaseLedgerEntry.UnknownFields"/> for ledger entries and
-        /// <see cref="Xrpl.Models.Methods.BaseMethodResult.UnknownFields"/> for command results:
-        /// without it, anything this model does not yet know about is dropped between the node and
-        /// the caller instead of surviving the round trip.
-        /// </summary>
-        [JsonExtensionData]
-        public Dictionary<string, JsonElement> UnknownFields { get; set; }
+        // Unknown-field capture is inherited from BaseLedgerEntity - see the note on LOLedger.
 
         [JsonPropertyName("ledger_data")]
         public string LedgerData { get; set; }
@@ -108,15 +93,7 @@ namespace Xrpl.Models.Ledger
     /// </summary>
     public class LedgerEntity : BaseLedgerEntity //todo rename to Ledger https://github.com/XRPLF/xrpl.js/blob/b20c05c3680d80344006d20c44b4ae1c3b0ffcac/packages/xrpl/src/models/ledger/Ledger.ts#L11
     {
-        /// <summary>
-        /// Members the node sent that no declared property here claims. Mirrors
-        /// <see cref="BaseLedgerEntry.UnknownFields"/> for ledger entries and
-        /// <see cref="Xrpl.Models.Methods.BaseMethodResult.UnknownFields"/> for command results:
-        /// without it, anything this model does not yet know about is dropped between the node and
-        /// the caller instead of surviving the round trip.
-        /// </summary>
-        [JsonExtensionData]
-        public Dictionary<string, JsonElement> UnknownFields { get; set; }
+        // Unknown-field capture is inherited from BaseLedgerEntity - see the note on LOLedger.
 
         /// <summary>
         /// The SHA-512Half of this ledger's state tree information.

@@ -40,6 +40,14 @@ namespace Xrpl.Models.Methods
         /// <see cref="JsonDocument"/> it was parsed from rather than owning a right-sized copy.
         /// Accepted anyway: the alternative is losing the field outright, which is worse for a
         /// caller relying on this to read a member the model does not yet declare.
+        ///
+        /// The figure above is for one large member; the cost that actually bites is per-member
+        /// and multiplies by nesting. Each captured member costs about 464 B regardless of how
+        /// small its JSON is, so a page of 1 000 nested objects each carrying one unmodelled field
+        /// retains 792 KB against 320 KB when the field was dropped - 4.33x the JSON's own size
+        /// rather than 1.75x. Where a field is known to arrive on every message of a busy stream,
+        /// declare a property for it instead of relying on this - see
+        /// <see cref="Xrpl.Models.Subscriptions.TransactionStream.AccountHistoryTxIndex"/>.
         /// </remarks>
         [JsonExtensionData]
         public Dictionary<string, JsonElement> UnknownFields { get; set; }

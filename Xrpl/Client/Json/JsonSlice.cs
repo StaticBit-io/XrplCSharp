@@ -73,7 +73,7 @@ namespace Xrpl.Client.Json
         /// to <see cref="JsonTokenType.EndObject"/> and returns the <em>last</em> one, matching
         /// <see cref="JsonSerializer"/>'s own last-value-wins behavior for a POCO property fed by a
         /// duplicate JSON member (the default unless a caller opts into
-        /// <see cref="JsonSerializerOptions.AllowDuplicateProperties"/> = <see langword="false"/>,
+        /// <c>JsonSerializerOptions.AllowDuplicateProperties</c> = <see langword="false"/>,
         /// which this library's <see cref="XrplJsonOptions.Default"/> does not). Without this, a
         /// frame with two top-level <c>tx_json</c> members - not something rippled sends, but not
         /// something a proxy or a compromised link is prevented from sending either - would leave
@@ -105,7 +105,6 @@ namespace Xrpl.Client.Json
                 return default;
             }
 
-            string nameText = Encoding.UTF8.GetString(name);
             JsonSlice result = default;
 
             while (reader.Read())
@@ -120,7 +119,7 @@ namespace Xrpl.Client.Json
                     continue;
                 }
 
-                bool isMatch = string.Equals(reader.GetString(), nameText, StringComparison.OrdinalIgnoreCase);
+                bool isMatch = NameMatches(ref reader, name);
                 reader.Read();
                 long start = reader.TokenStartIndex;
                 reader.Skip();
@@ -133,6 +132,29 @@ namespace Xrpl.Client.Json
             }
 
             return result;
+        }
+
+        /// <summary>
+        /// Case-insensitive property-name match that allocates nothing on the ordinary path.
+        /// </summary>
+        /// <remarks>
+        /// This runs for every top-level member of every frame - a stream event passes through it
+        /// twice - so materializing the name as a string cost ~760 B per scan, on a struct whose
+        /// entire purpose is to record where a value sits without materializing it. The exact
+        /// spelling is what a node actually sends, and <see cref="Utf8JsonReader.ValueTextEquals(ReadOnlySpan{byte})"/>
+        /// answers that against the raw bytes; only a differently-cased or escaped name falls
+        /// through to the allocating comparison, which is what keeps the result identical to the
+        /// <see cref="StringComparison.OrdinalIgnoreCase"/> matching System.Text.Json performs
+        /// under <c>PropertyNameCaseInsensitive</c>.
+        /// </remarks>
+        private static bool NameMatches(ref Utf8JsonReader reader, ReadOnlySpan<byte> name)
+        {
+            if (reader.ValueTextEquals(name))
+            {
+                return true;
+            }
+
+            return string.Equals(reader.GetString(), Encoding.UTF8.GetString(name), StringComparison.OrdinalIgnoreCase);
         }
     }
 }
