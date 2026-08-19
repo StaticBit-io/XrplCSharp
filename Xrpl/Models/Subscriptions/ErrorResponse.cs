@@ -61,7 +61,7 @@ public class ErrorResponse : BaseResponse
     public RawJson RawRequest =>
         _frame is null || _requestSlice.IsEmpty
             ? default
-            : new RawJson(_frame, _requestSlice.Offset, _requestSlice.Length);
+            : RawJson.Trusted(_frame, _requestSlice.Offset, _requestSlice.Length);
 
     /// <inheritdoc/>
     /// <remarks>

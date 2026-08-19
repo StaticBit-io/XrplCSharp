@@ -46,7 +46,7 @@ namespace Xrpl.Models.Subscriptions
         public RawJson Raw =>
             _frame is null || _documentSlice.IsEmpty
                 ? default
-                : new RawJson(_frame, _documentSlice.Offset, _documentSlice.Length);
+                : RawJson.Trusted(_frame, _documentSlice.Offset, _documentSlice.Length);
 
         /// <summary>
         /// Pairs this event with the frame it was read from.

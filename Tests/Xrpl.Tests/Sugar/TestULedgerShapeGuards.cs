@@ -62,6 +62,36 @@ public class TestULedgerShapeGuards
         "{\"id\":__ID__,\"status\":\"success\",\"type\":\"response\",\"api_version\":2,"
         + "\"result\":{\"state\":{\"build_version\":\"3.3.0\",\"server_state\":\"full\"}}}";
 
+    private const string AccountInfoThenIncompleteServerState =
+        "{\"id\":__ID__,\"status\":\"success\",\"type\":\"response\",\"api_version\":2,"
+        + "\"result\":{\"account_data\":{\"Account\":\"rP9jPyP5kyvFRb6ZiRghAGw5u8SGAmU4bd\","
+        + "\"Balance\":\"100000000\",\"OwnerCount\":2,\"Sequence\":7},"
+        + "\"state\":{\"build_version\":\"3.3.0\"}}}";
+
+    /// <summary>
+    /// The second reserve helper needs its own case: the guard in <c>Balances</c> is a separate
+    /// one, and a test that only exercises <c>FetchReserveFee</c> stays green when it is removed.
+    /// </summary>
+    [TestMethod]
+    public async Task TestUGetXrpFreeBalanceRejectsAServerStateWithoutAValidatedLedger()
+    {
+        using ScriptedResponseServer server = new ScriptedResponseServer(AccountInfoThenIncompleteServerState);
+        using XrplClient client = new XrplClient(server.Url, new XrplClient.ClientOptions { ApiVersion = 2 });
+        await client.Connect();
+
+        try
+        {
+            ValidationException failure = await Assert.ThrowsExactlyAsync<ValidationException>(
+                () => client.GetXrpFreeBalance("rP9jPyP5kyvFRb6ZiRghAGw5u8SGAmU4bd"));
+
+            StringAssert.Contains(failure.Message, "validated ledger");
+        }
+        finally
+        {
+            await client.Disconnect();
+        }
+    }
+
     /// <summary>
     /// The reserve helpers read through <c>State.ValidatedLedger</c> and used to test only the
     /// leaf values, so a response missing either container faulted on the way to the check rather

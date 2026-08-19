@@ -57,7 +57,7 @@ namespace Xrpl.Models.Subscriptions
         public RawJson RawId =>
             _frame is null || _idSlice.IsEmpty
                 ? default
-                : new RawJson(_frame, _idSlice.Offset, _idSlice.Length);
+                : RawJson.Trusted(_frame, _idSlice.Offset, _idSlice.Length);
 
         /// <summary>
         /// "error" if the request caused an error
@@ -150,7 +150,7 @@ namespace Xrpl.Models.Subscriptions
         public RawJson RawResult =>
             _frame is null || _resultSlice.IsEmpty
                 ? default
-                : new RawJson(_frame, _resultSlice.Offset, _resultSlice.Length);
+                : RawJson.Trusted(_frame, _resultSlice.Offset, _resultSlice.Length);
         /// <summary>
         /// (May be omitted) If this field is provided, the value is the string load.<br/>
         /// This means the client is approaching the rate limiting threshold where the server will disconnect this client.

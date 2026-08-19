@@ -173,7 +173,7 @@ namespace Xrpl.Models.Subscriptions
         public RawJson RawTransaction =>
             _frame is null || _transactionSlice.IsEmpty
                 ? default
-                : new RawJson(_frame, _transactionSlice.Offset, _transactionSlice.Length);
+                : RawJson.Trusted(_frame, _transactionSlice.Offset, _transactionSlice.Length);
 
         /// <inheritdoc/>
         /// <remarks>

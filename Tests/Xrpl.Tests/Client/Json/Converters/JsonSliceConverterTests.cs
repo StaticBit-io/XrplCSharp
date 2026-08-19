@@ -123,4 +123,25 @@ public class TestUJsonSliceConverter
 
         Assert.AreEqual("{\"a\":1}", Encoding.UTF8.GetString(frame, probe.Result.Offset, probe.Result.Length));
     }
+    /// <summary>
+    /// <see cref="JsonSlice.OfDocument"/> spans the one value a frame holds, and refuses a buffer
+    /// holding more than one.
+    /// </summary>
+    /// <remarks>
+    /// Returning the first value's bounds for a two-value buffer would describe part of the input
+    /// as the whole of it. Unreachable through the pipeline - the deserializer rejects such a
+    /// frame before <c>AttachFrame</c> runs - but the method is the definition of "the frame's
+    /// bounds", so it should not quietly answer for half of one.
+    /// </remarks>
+    [TestMethod]
+    public void TestUJsonSliceOfDocumentRejectsASecondTopLevelValue()
+    {
+        Assert.Throws<JsonException>(() => JsonSlice.OfDocument(Encoding.UTF8.GetBytes("{} {}")));
+        Assert.Throws<JsonException>(() => JsonSlice.OfDocument(Encoding.UTF8.GetBytes("{}[]")));
+
+        // Trailing whitespace is not a second value.
+        JsonSlice padded = JsonSlice.OfDocument(Encoding.UTF8.GetBytes("{\"a\":1}   "));
+        Assert.AreEqual(0, padded.Offset);
+        Assert.AreEqual(7, padded.Length);
+    }
 }

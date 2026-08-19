@@ -26,10 +26,43 @@ namespace Xrpl.Client.Json
         private readonly int _length;
 
         /// <summary>Records the window; does not copy the frame.</summary>
+        /// <remarks>
+        /// The window is checked to hold exactly one JSON value, because
+        /// <see cref="WriteTo"/> writes it through without validating - a partial or malformed
+        /// window would silently corrupt the document it is written into. The check happens here,
+        /// once, rather than on every write: <see cref="WriteTo"/> runs per response on a paged
+        /// crawl, and validating there costs about 10x (measured 3.26 -> 29.45 us on a 36 KB
+        /// window).
+        /// <para>
+        /// Note the frame is aliased, not copied. Mutating the array after construction changes
+        /// what this window reads, and no check can catch that - use <see cref="ToArray"/> to
+        /// detach if the buffer is not yours alone.
+        /// </para>
+        /// </remarks>
         /// <exception cref="ArgumentOutOfRangeException">
         /// The window does not lie inside <paramref name="frame"/>.
         /// </exception>
+        /// <exception cref="JsonException">
+        /// The window is not exactly one well-formed JSON value.
+        /// </exception>
         public RawJson(byte[]? frame, int offset, int length)
+            : this(frame, offset, length, validate: true)
+        {
+        }
+
+        /// <summary>
+        /// Records a window the SDK already parsed, skipping the well-formedness check.
+        /// </summary>
+        /// <remarks>
+        /// For bounds produced by <see cref="Converters.JsonSliceConverter"/> or
+        /// <see cref="JsonSlice"/>, which reach them through <c>Utf8JsonReader.Skip()</c> - the
+        /// value is well-formed by construction, and these run on every property read. Bounds are
+        /// still checked; only the content scan is skipped.
+        /// </remarks>
+        internal static RawJson Trusted(byte[]? frame, int offset, int length)
+            => new RawJson(frame, offset, length, validate: false);
+
+        private RawJson(byte[]? frame, int offset, int length, bool validate)
         {
             // Bounds come from JsonSliceConverter and are relative to the buffer its reader was
             // created over, not to the array behind it. Pairing a slice with a different buffer is
@@ -55,6 +88,31 @@ namespace Xrpl.Client.Json
             _frame = frame;
             _offset = offset;
             _length = length;
+
+            if (validate && frame is not null && length > 0)
+            {
+                ValidateSingleValue(frame.AsSpan(offset, length));
+            }
+        }
+
+        /// <summary>
+        /// Verifies the window holds exactly one JSON value - no trailing content beyond it.
+        /// </summary>
+        private static void ValidateSingleValue(ReadOnlySpan<byte> window)
+        {
+            Utf8JsonReader reader = new Utf8JsonReader(window);
+
+            if (!reader.Read())
+            {
+                throw new JsonException("The window holds no JSON value.");
+            }
+
+            reader.Skip();
+
+            if (reader.Read())
+            {
+                throw new JsonException("The window holds more than one JSON value; it must hold exactly one.");
+            }
         }
 
         /// <summary>True when nothing was captured.</summary>
