@@ -43,7 +43,7 @@ public static class AmendmentGuard
         try
         {
             LedgerEntryRequest request = new LedgerEntryRequest { Index = AmendmentsLedgerIndex };
-            JsonNode node = (await client.GRequest<JsonNode, LedgerEntryRequest>(request)).Result;
+            JsonNode node = await client.GRequest<JsonNode, LedgerEntryRequest>(request).Typed();
             JsonArray amendments = node?["node"]?["Amendments"]?.AsArray();
             if (amendments != null)
             {
@@ -74,7 +74,7 @@ public static class AmendmentGuard
         try
         {
             FeatureRequest request = new FeatureRequest { Feature = amendmentId };
-            JsonNode node = (await client.GRequest<JsonNode, FeatureRequest>(request)).Result;
+            JsonNode node = await client.GRequest<JsonNode, FeatureRequest>(request).Typed();
             JsonNode entry = node?[amendmentId];
             return entry?["enabled"]?.GetValue<bool>() == true;
         }

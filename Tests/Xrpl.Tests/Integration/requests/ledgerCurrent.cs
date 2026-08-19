@@ -8,6 +8,7 @@ using Xrpl.Models.Common;
 using Xrpl.Models.Ledger;
 using Xrpl.Models.Methods;
 
+using Xrpl.Client;
 namespace XrplTests.Xrpl.ClientLib.Integration
 {
     [TestClass]
@@ -28,7 +29,7 @@ namespace XrplTests.Xrpl.ClientLib.Integration
         {
             LedgerIndex index = new LedgerIndex(LedgerIndexType.Validated);
             LedgerCurrentRequest request = new LedgerCurrentRequest();
-            LOLedgerCurrentIndex response = (await runner.client.LedgerCurrent(request)).Result;
+            LOLedgerCurrentIndex response = await runner.client.LedgerCurrent(request).Typed();
             Assert.IsNotNull(response);
         }
     }

@@ -6,6 +6,7 @@ using System.Threading.Tasks;
 using Microsoft.VisualStudio.TestTools.UnitTesting;
 using Xrpl.Models.Methods;
 
+using Xrpl.Client;
 namespace XrplTests.Xrpl.ClientLib.Integration
 {
     [TestClass]
@@ -25,7 +26,7 @@ namespace XrplTests.Xrpl.ClientLib.Integration
         public async Task TestRequestMethod()
         {
             AccountOffersRequest request = new AccountOffersRequest(runner.wallet.ClassicAddress) { Strict = true };
-            AccountOffers response = (await runner.client.AccountOffers(request)).Result;
+            AccountOffers response = await runner.client.AccountOffers(request).Typed();
             Assert.IsNotNull(response);
         }
     }

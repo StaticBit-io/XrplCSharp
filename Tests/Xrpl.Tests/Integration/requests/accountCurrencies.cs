@@ -3,6 +3,7 @@ using Microsoft.VisualStudio.TestTools.UnitTesting;
 using Xrpl.Models.Common;
 using Xrpl.Models.Ledger;
 using Xrpl.Models.Methods;
+using Xrpl.Client;
 //using XrplTests.Xrpl.ClientLib;
 
 // https://github.com/XRPLF/xrpl.js/blob/main/packages/xrpl/test/integration/requests/accountCurrencies.ts
@@ -28,7 +29,7 @@ namespace XrplTests.Xrpl.ClientLib.Integration
         {
             LedgerIndex index = new LedgerIndex(LedgerIndexType.Validated);
             AccountCurrenciesRequest request = new AccountCurrenciesRequest(runner.wallet.ClassicAddress) { LedgerIndex = index, Strict = true };
-            AccountCurrencies response = (await runner.client.AccountCurrencies(request)).Result;
+            AccountCurrencies response = await runner.client.AccountCurrencies(request).Typed();
             Assert.IsNotNull(response);
         }
     }

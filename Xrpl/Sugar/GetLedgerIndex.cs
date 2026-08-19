@@ -22,7 +22,7 @@ namespace Xrpl.Sugar
         {
             LedgerIndex index = new LedgerIndex(LedgerIndexType.Current);
             LedgerRequest request = new LedgerRequest() { LedgerIndex = index };
-            LOLedger ledgerResponse = (await client.Ledger(request, cancellationToken)).Result;
+            LOLedger ledgerResponse = await client.Ledger(request, cancellationToken).Typed();
             LedgerEntity ledger = (LedgerEntity)ledgerResponse.LedgerEntity;
             return Convert.ToUInt32(ledger.LedgerIndex);
         }

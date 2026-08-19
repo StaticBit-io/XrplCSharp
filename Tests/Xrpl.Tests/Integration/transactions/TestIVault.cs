@@ -458,7 +458,7 @@ public class TestIVault : TestIVaultBase
 
         // Fetch the Vault LO via ledger_entry
         LedgerEntryRequest entryRequest = new LedgerEntryRequest { Index = vaultId };
-        LedgerEntryResponse entryResponse = (await client.LedgerEntry(entryRequest)).Result;
+        LedgerEntryResponse entryResponse = await client.LedgerEntry(entryRequest).Typed();
 
         Assert.IsNotNull(entryResponse?.Node, "LedgerEntry node should not be null");
         Assert.IsInstanceOfType(entryResponse.Node, typeof(LOVault), "Node should deserialize to LOVault");
@@ -615,7 +615,7 @@ public class TestIVault : TestIVaultBase
         Assert.IsNotNull(vaultId, "VaultCreate should produce a Vault ledger object");
 
         // Query vault_info
-        VaultInfoResponse vaultInfo = (await client.VaultInfo(new VaultInfoRequest { VaultID = vaultId })).Result;
+        VaultInfoResponse vaultInfo = await client.VaultInfo(new VaultInfoRequest { VaultID = vaultId }).Typed();
         Assert.IsNotNull(vaultInfo, "vault_info should return a response");
         Assert.IsNotNull(vaultInfo.Vault, "vault_info response should contain a Vault object");
         Assert.AreEqual(wallet.ClassicAddress, vaultInfo.Vault.Owner, "Vault owner should match the creator");

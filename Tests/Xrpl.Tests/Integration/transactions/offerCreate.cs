@@ -6,6 +6,7 @@ using Xrpl.Models.Methods;
 using Xrpl.Models.Transactions;
 using Xrpl.Wallet;
 
+using Xrpl.Client;
 // https://github.com/XRPLF/xrpl.js/blob/main/packages/xrpl/test/integration/transactions/offerCreate.ts
 
 namespace XrplTests.Xrpl.ClientLib.Integration
@@ -42,7 +43,7 @@ namespace XrplTests.Xrpl.ClientLib.Integration
             await Utils.TestTransaction(runner.client, setupJson, runner.wallet);
 
             AccountOffersRequest request2 = new AccountOffersRequest(runner.wallet.ClassicAddress);
-            AccountOffers response2 = (await runner.client.AccountOffers(request2)).Result;
+            AccountOffers response2 = await runner.client.AccountOffers(request2).Typed();
             Assert.HasCount(1, response2.Offers);
         }
     }

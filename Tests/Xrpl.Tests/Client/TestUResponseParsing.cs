@@ -494,9 +494,9 @@ namespace Xrpl.Tests.ClientLib
 
         private static async Task CrawlPageAsync(XrplClient client)
         {
-            JsonElement page = (await client
+            JsonElement page = await client
                 .GRequest<JsonElement, LedgerDataRequest>(new LedgerDataRequest { Binary = true, Limit = 2048 })
-                .ConfigureAwait(false)).Result;
+                .Typed().ConfigureAwait(false);
 
             if (page.GetProperty("state").GetArrayLength() == 0)
             {

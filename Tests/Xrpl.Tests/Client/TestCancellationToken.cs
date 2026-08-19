@@ -266,7 +266,7 @@ public class TestUCancellationToken
             {
                 ["command"] = "server_info"
             };
-            Dictionary<string, object> result = (await runner.client.connection.Request(normalRequest)).Result;
+            Dictionary<string, object> result = await runner.client.connection.Request(normalRequest).Typed();
             Assert.IsNotNull(result, "Request after cancelled request should succeed");
         }
         finally

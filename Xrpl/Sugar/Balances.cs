@@ -59,7 +59,7 @@ namespace Xrpl.Sugar
                 LedgerIndex = lederIndex ?? index,
                 Strict = true
             };
-            AccountInfo accountInfo = (await client.AccountInfo(xrpRequest, cancellationToken)).Result;
+            AccountInfo accountInfo = await client.AccountInfo(xrpRequest, cancellationToken).Typed();
 
             // account_info for a live account always returns account_data; a missing value means a
             // malformed node response and must fail loudly rather than dereference a null AccountData.
@@ -95,7 +95,7 @@ namespace Xrpl.Sugar
                 LedgerIndex = lederIndex ?? index,
                 Strict = true
             };
-            AccountInfo accountInfo = (await client.AccountInfo(xrpRequest, cancellationToken)).Result;
+            AccountInfo accountInfo = await client.AccountInfo(xrpRequest, cancellationToken).Typed();
 
             // account_info for a live account always returns account_data; a missing value means a
             // malformed node response and must fail loudly rather than dereference a null AccountData.
@@ -104,7 +104,7 @@ namespace Xrpl.Sugar
                 throw new ValidationException($"account_info response for '{address}' did not include account_data.");
             }
 
-            var serverInfo = (await client.ServerState(new ServerStateRequest(), cancellationToken)).Result;
+            var serverInfo = await client.ServerState(new ServerStateRequest(), cancellationToken).Typed();
 
             // server_state for a live node always returns validated_ledger.reserve_base/reserve_inc;
             // a missing value means a malformed node response and must fail loudly rather than be
@@ -149,12 +149,12 @@ namespace Xrpl.Sugar
                 Limit = options?.Limit
             };
 
-            var response = (await client.AccountLines(linesRequest, cancellationToken)).Result;
+            var response = await client.AccountLines(linesRequest, cancellationToken).Typed();
             var lines = response.TrustLines;
             while (response.Marker is not null && lines.Count > 0)
             {
                 linesRequest.Marker = response.Marker;
-                response = (await client.AccountLines(linesRequest, cancellationToken)).Result;
+                response = await client.AccountLines(linesRequest, cancellationToken).Typed();
                 if (response.TrustLines.Count > 0)
                     lines.AddRange(response.TrustLines);
                 if (options?.Limit is not null && lines.Count >= options.Limit)

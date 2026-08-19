@@ -149,7 +149,7 @@ public static class SubmitSugar
             TxBlob = signedTxEncoded,
             FailHard = failHard,
         };
-        var response = (await client.GRequest<Submit, SubmitRequest>(request, cancellationToken)).Result;
+        var response = await client.GRequest<Submit, SubmitRequest>(request, cancellationToken).Typed();
         return response;
     }
 
@@ -286,11 +286,11 @@ public static class SubmitSugar
             }
 
             // account_info со списком подписантов
-            var ai = (await client.AccountInfo(
+            var ai = await client.AccountInfo(
                 new AccountInfoRequest(acct)
                 {
                     SignerLists = true
-                }, cancellationToken)).Result;
+                }, cancellationToken).Typed();
             // Both are read below to decide how this account signs, and a response missing either
             // is malformed rather than a signer with no flags: the master-key check would otherwise
             // throw NullReferenceException here, and the RegularKey lookup further down would do
@@ -336,11 +336,11 @@ public static class SubmitSugar
         var combined = XrplWallet.CombineBatchSigners(partialBlobs.ToArray());
         var combinedJson = JsonNode.Parse(XrplBinaryCodec.Decode(combined.TxBlob).ToJsonString())?.AsObject();
         // 3) корневая подпись: single-sig ИЛИ multi-sig по наличию SignerList у корня
-        var aiRoot = (await client.AccountInfo(
+        var aiRoot = await client.AccountInfo(
             new AccountInfoRequest(mainAcc)
             {
                 SignerLists = true
-            }, cancellationToken)).Result;
+            }, cancellationToken).Typed();
         // Same shape as the per-account check above: the master-key flag decides how the root
         // signs, and a response without flags is malformed rather than an account with none.
         if (aiRoot.AccountFlags is null)
@@ -437,11 +437,11 @@ public static class SubmitSugar
 
             try
             {
-                txResponse = (await client.TxV2(
+                txResponse = await client.TxV2(
                     new TxRequest(txHash)
                     {
                         ApiVersion = 2,
-                    }, cancellationToken)).Result;
+                    }, cancellationToken).Typed();
             }
             catch (RippledException ex) when (ex.Response?.Error == XrplErrorCodes.TxnNotFound)
             {
@@ -646,7 +646,7 @@ public static class SubmitSugar
         {
             Type = Models.LedgerEntryType.Sponsorship,
         };
-        var response = (await client.AccountObjects(request, cancellationToken).ConfigureAwait(false)).Result;
+        var response = await client.AccountObjects(request, cancellationToken).Typed().ConfigureAwait(false);
         var sponsorship = response?.AccountObjectList?
             .OfType<Models.Ledger.LOSponsorship>()
             .FirstOrDefault(s => string.Equals(s.Sponsee, account, StringComparison.Ordinal));

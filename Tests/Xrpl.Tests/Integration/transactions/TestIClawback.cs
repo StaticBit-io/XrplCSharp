@@ -189,7 +189,7 @@ public class TestIClawback
             {
                 Peer = walletIssuer.ClassicAddress
             };
-            var response = (await client.AccountLines(request)).Result;
+            var response = await client.AccountLines(request).Typed();
 
             if (response?.TrustLines == null) return 0;
 

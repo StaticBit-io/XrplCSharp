@@ -96,10 +96,10 @@ public static class BatchNormalizer
                 return seq;
 
             var probe = new Dictionary<string, object> { ["Account"] = account };
-            var ai = (await client.AccountInfo(new AccountInfoRequest(account)
+            var ai = await client.AccountInfo(new AccountInfoRequest(account)
             {
                 LedgerIndex = new LedgerIndex(LedgerIndexType.Current)
-            }, cancellationToken)).Result;
+            }, cancellationToken).Typed();
             // account_info for the current ledger always returns a full AccountRoot with a Sequence;
             // a missing AccountData (or a missing Sequence within it) means a malformed node response
             // and must fail loudly rather than dereference a null AccountData or silently treat it as 0.

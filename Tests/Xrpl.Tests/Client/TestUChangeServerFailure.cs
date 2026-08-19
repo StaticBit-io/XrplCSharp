@@ -134,7 +134,7 @@ namespace Xrpl.Tests
             Assert.AreEqual($"ws://127.0.0.1:{secondPort}", _client.connection.GetUrl());
 
             Dictionary<string, object> response =
-                (await _client.Request(new Dictionary<string, object> { { "command", "server_info" } })).Result;
+                await _client.Request(new Dictionary<string, object> { { "command", "server_info" } }).Typed();
             Assert.IsNotNull(response, "Client must be usable on the new server.");
         }
 

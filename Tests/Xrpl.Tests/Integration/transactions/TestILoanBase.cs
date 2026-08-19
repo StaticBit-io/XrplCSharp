@@ -241,7 +241,7 @@ public abstract class TestILoanBase
             await Task.Delay(1000);
             try
             {
-                txResponse = (await client.TxV1(txReq)).Result;
+                txResponse = await client.TxV1(txReq).Typed();
                 if (txResponse?.Meta != null) break;
             }
             catch

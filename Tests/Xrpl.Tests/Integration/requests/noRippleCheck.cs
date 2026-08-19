@@ -8,6 +8,7 @@ using Xrpl.Models.Common;
 using Xrpl.Models.Ledger;
 using Xrpl.Models.Methods;
 
+using Xrpl.Client;
 namespace XrplTests.Xrpl.ClientLib.Integration
 {
     [TestClass]
@@ -28,7 +29,7 @@ namespace XrplTests.Xrpl.ClientLib.Integration
         {
             LedgerIndex index = new LedgerIndex(LedgerIndexType.Validated);
             NoRippleCheckRequest request = new NoRippleCheckRequest(runner.wallet.ClassicAddress);
-            NoRippleCheck response = (await runner.client.NoRippleCheck(request)).Result;
+            NoRippleCheck response = await runner.client.NoRippleCheck(request).Typed();
             Assert.IsNotNull(response);
         }
     }

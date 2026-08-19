@@ -37,10 +37,10 @@ namespace Xrpl.Sugar
                 Limit = limit,
                 Taker = taker
             };
-            var directOfferResults = (await Client.BookOffers(request, cancellationToken)).Result;
+            var directOfferResults = await Client.BookOffers(request, cancellationToken).Typed();
             request.TakerGets = takerPays;
             request.TakerPays = takerGets;
-            var reverseOfferResults = (await Client.BookOffers(request, cancellationToken)).Result;
+            var reverseOfferResults = await Client.BookOffers(request, cancellationToken).Typed();
             var directOffers = directOfferResults.Offers;
             var reverseOffers = reverseOfferResults.Offers;
             var orders = directOffers.Concat(reverseOffers).ToList();

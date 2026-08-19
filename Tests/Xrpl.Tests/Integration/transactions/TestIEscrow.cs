@@ -68,7 +68,7 @@ public class TestIEscrow
         await IntegrationTestConfig.TryFundWalletAsync(client, walletHolder2, nodeType);
 
         LedgerRequest ledgerReq = new LedgerRequest() { LedgerIndex = new LedgerIndex(LedgerIndexType.Validated) };
-        LOLedger ledgerResponse = (await client.Ledger(ledgerReq)).Result;
+        LOLedger ledgerResponse = await client.Ledger(ledgerReq).Typed();
         LedgerEntity ledgerEntity = (LedgerEntity)ledgerResponse.LedgerEntity;
         var closeTime = ledgerEntity.CloseTime;
 
@@ -85,7 +85,7 @@ public class TestIEscrow
         ValidateResult(escrowCreateResult);
 
         AccountObjectsRequest objReq = new AccountObjectsRequest(walletHolder1.ClassicAddress) { Type = LedgerEntryType.Escrow };
-        AccountObjects objResp = (await client.AccountObjects(objReq)).Result;
+        AccountObjects objResp = await client.AccountObjects(objReq).Typed();
         Assert.IsTrue(objResp.AccountObjectList.Count >= 1, "At least one escrow should exist after creation");
 
         await WaitForLedgerCloseTime(client, closeTime.Value + FinishAfterMargin);
@@ -112,7 +112,7 @@ public class TestIEscrow
         await IntegrationTestConfig.TryFundWalletAsync(client, walletHolder2, nodeType);
 
         LedgerRequest ledgerReq = new LedgerRequest() { LedgerIndex = new LedgerIndex(LedgerIndexType.Validated) };
-        LOLedger ledgerResponse = (await client.Ledger(ledgerReq)).Result;
+        LOLedger ledgerResponse = await client.Ledger(ledgerReq).Typed();
         LedgerEntity ledgerEntity = (LedgerEntity)ledgerResponse.LedgerEntity;
         var closeTime = ledgerEntity.CloseTime;
 
@@ -131,7 +131,7 @@ public class TestIEscrow
         ValidateResult(escrowCreateResult);
 
         AccountObjectsRequest objReq = new AccountObjectsRequest(walletHolder1.ClassicAddress) { Type = LedgerEntryType.Escrow };
-        AccountObjects objResp = (await client.AccountObjects(objReq)).Result;
+        AccountObjects objResp = await client.AccountObjects(objReq).Typed();
         Assert.IsTrue(objResp.AccountObjectList.Count >= 1, "At least one escrow should exist after creation");
 
         await WaitForLedgerCloseTime(client, cancelAfterTime.Value);
@@ -199,7 +199,7 @@ public class TestIEscrow
         ValidateResult(trustResult2);
 
         LedgerRequest ledgerReq = new LedgerRequest() { LedgerIndex = new LedgerIndex(LedgerIndexType.Validated) };
-        LOLedger ledgerResponse = (await client.Ledger(ledgerReq)).Result;
+        LOLedger ledgerResponse = await client.Ledger(ledgerReq).Typed();
         LedgerEntity ledgerEntity = (LedgerEntity)ledgerResponse.LedgerEntity;
         var closeTime = ledgerEntity.CloseTime;
 
@@ -216,7 +216,7 @@ public class TestIEscrow
         ValidateResult(escrowCreateResult);
 
         AccountObjectsRequest objReq = new AccountObjectsRequest(walletHolder1.ClassicAddress) { Type = LedgerEntryType.Escrow };
-        AccountObjects objResp = (await client.AccountObjects(objReq)).Result;
+        AccountObjects objResp = await client.AccountObjects(objReq).Typed();
         Assert.IsTrue(objResp.AccountObjectList.Count >= 1, "At least one escrow should exist after creation");
 
         await WaitForLedgerCloseTime(client, closeTime.Value + FinishAfterMargin);
@@ -280,7 +280,7 @@ public class TestIEscrow
         ValidateResult(trustResult2);
 
         LedgerRequest ledgerReq = new LedgerRequest() { LedgerIndex = new LedgerIndex(LedgerIndexType.Validated) };
-        LOLedger ledgerResponse = (await client.Ledger(ledgerReq)).Result;
+        LOLedger ledgerResponse = await client.Ledger(ledgerReq).Typed();
         LedgerEntity ledgerEntity = (LedgerEntity)ledgerResponse.LedgerEntity;
         var closeTime = ledgerEntity.CloseTime;
 
@@ -299,7 +299,7 @@ public class TestIEscrow
         ValidateResult(escrowCreateResult);
 
         AccountObjectsRequest objReq = new AccountObjectsRequest(walletHolder1.ClassicAddress) { Type = LedgerEntryType.Escrow };
-        AccountObjects objResp = (await client.AccountObjects(objReq)).Result;
+        AccountObjects objResp = await client.AccountObjects(objReq).Typed();
         Assert.IsTrue(objResp.AccountObjectList.Count >= 1, "At least one escrow should exist after creation");
 
         await WaitForLedgerCloseTime(client, cancelAfterTime.Value);
@@ -379,7 +379,7 @@ public class TestIEscrow
         ValidateResult(authResult2);
 
         LedgerRequest ledgerReq = new LedgerRequest() { LedgerIndex = new LedgerIndex(LedgerIndexType.Validated) };
-        LOLedger ledgerResponse = (await client.Ledger(ledgerReq)).Result;
+        LOLedger ledgerResponse = await client.Ledger(ledgerReq).Typed();
         LedgerEntity ledgerEntity = (LedgerEntity)ledgerResponse.LedgerEntity;
         var closeTime = ledgerEntity.CloseTime;
 
@@ -397,7 +397,7 @@ public class TestIEscrow
         ValidateResult(escrowCreateResult);
 
         AccountObjectsRequest objReq = new AccountObjectsRequest(walletHolder1.ClassicAddress) { Type = LedgerEntryType.Escrow };
-        AccountObjects objResp = (await client.AccountObjects(objReq)).Result;
+        AccountObjects objResp = await client.AccountObjects(objReq).Typed();
         Assert.IsTrue(objResp.AccountObjectList.Count >= 1, "At least one escrow should exist after creation");
 
         await WaitForLedgerCloseTime(client, closeTime.Value + FinishAfterMargin);
@@ -465,7 +465,7 @@ public class TestIEscrow
         ValidateResult(payResult);
 
         LedgerRequest ledgerReq = new LedgerRequest() { LedgerIndex = new LedgerIndex(LedgerIndexType.Validated) };
-        LOLedger ledgerResponse = (await client.Ledger(ledgerReq)).Result;
+        LOLedger ledgerResponse = await client.Ledger(ledgerReq).Typed();
         LedgerEntity ledgerEntity = (LedgerEntity)ledgerResponse.LedgerEntity;
         var closeTime = ledgerEntity.CloseTime;
 
@@ -484,7 +484,7 @@ public class TestIEscrow
         ValidateResult(escrowCreateResult);
 
         AccountObjectsRequest objReq = new AccountObjectsRequest(walletHolder1.ClassicAddress) { Type = LedgerEntryType.Escrow };
-        AccountObjects objResp = (await client.AccountObjects(objReq)).Result;
+        AccountObjects objResp = await client.AccountObjects(objReq).Typed();
         Assert.IsTrue(objResp.AccountObjectList.Count >= 1, "At least one escrow should exist after creation");
 
         await WaitForLedgerCloseTime(client, cancelAfterTime.Value);
@@ -511,7 +511,7 @@ public class TestIEscrow
         {
             await Task.Delay(3000);
             LedgerRequest req = new LedgerRequest() { LedgerIndex = new LedgerIndex(LedgerIndexType.Validated) };
-            LOLedger resp = (await client.Ledger(req)).Result;
+            LOLedger resp = await client.Ledger(req).Typed();
             LedgerEntity entity = (LedgerEntity)resp.LedgerEntity;
             if (entity.CloseTime > targetTime)
                 return;

@@ -157,7 +157,7 @@ public class TestIBatchSponsorship
         for (int attempt = 0; attempt < 10 && line is null; attempt++)
         {
             await Task.Delay(2000);
-            AccountObjects objects = (await client.AccountObjects(request)).Result;
+            AccountObjects objects = await client.AccountObjects(request).Typed();
             line = objects?.AccountObjectList?.OfType<LORippleState>().FirstOrDefault();
         }
         Assert.IsNotNull(line, "the sponsored trust line must appear in the ledger");
@@ -256,7 +256,7 @@ public class TestIBatchSponsorship
         for (int attempt = 0; attempt < 10 && line is null; attempt++)
         {
             await Task.Delay(2000);
-            AccountObjects objects = (await client.AccountObjects(request)).Result;
+            AccountObjects objects = await client.AccountObjects(request).Typed();
             line = objects?.AccountObjectList?.OfType<LORippleState>().FirstOrDefault();
         }
         Assert.IsNotNull(line, "the sponsored trust line must appear in the ledger");

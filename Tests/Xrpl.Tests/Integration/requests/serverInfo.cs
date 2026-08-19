@@ -6,6 +6,7 @@ using System.Threading.Tasks;
 using Microsoft.VisualStudio.TestTools.UnitTesting;
 using Xrpl.Models.Methods;
 
+using Xrpl.Client;
 namespace XrplTests.Xrpl.ClientLib.Integration
 {
     [TestClass]
@@ -25,7 +26,7 @@ namespace XrplTests.Xrpl.ClientLib.Integration
         public async Task TestRequestMethod()
         {
             ServerInfoRequest request = new ServerInfoRequest();
-            ServerInfo response = (await runner.client.ServerInfo(request)).Result;
+            ServerInfo response = await runner.client.ServerInfo(request).Typed();
             Assert.IsNotNull(response);
         }
     }

@@ -132,11 +132,11 @@ public abstract class TestIAMMBase
 
     protected async Task<AMMInfoResponse> GetAmmInfo()
     {
-        return (await GetClient().AmmInfo(new AMMInfoRequest
+        return await GetClient().AmmInfo(new AMMInfoRequest
         {
             Asset = TokenAsset,
             Asset2 = XrpAsset
-        })).Result;
+        }).Typed();
     }
 
     protected static void AssertSuccess(TransactionSummary res, string context)

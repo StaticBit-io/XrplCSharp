@@ -104,7 +104,7 @@ namespace Xrpl.Tests.ClientLib
 
         [TestMethod]
         //[ExpectedException(typeof(NotConnectedException))]
-        public void TestAutofillDeteteBlockers()
+        public async Task TestAutofillDeteteBlockers()
         {
             Dictionary<string, object> tx = new Dictionary<string, object>
             {
@@ -133,7 +133,7 @@ namespace Xrpl.Tests.ClientLib
             runner.mockedRippled.AddResponse("server_info", serverInfoData);
             runner.mockedRippled.AddResponse("account_objects", accountObjectsData);
 
-            Dictionary<string, object> txResult = runner.client.Autofill(tx).Result;
+            Dictionary<string, object> txResult = await runner.client.Autofill(tx);
         }
 
         [TestMethod]

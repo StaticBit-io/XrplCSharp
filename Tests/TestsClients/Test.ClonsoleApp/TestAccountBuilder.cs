@@ -383,7 +383,7 @@ public class TestAccountBuilder
         try
         {
             AccountInfoRequest infoRequest = new AccountInfoRequest(IssuerAccount.ClassicAddress);
-            AccountInfo info = (await _client.AccountInfo(infoRequest)).Result;
+            AccountInfo info = await _client.AccountInfo(infoRequest).Typed();
             if (info.AccountFlags.DefaultRipple)
             {
                 Console.WriteLine("[TestAccountBuilder] DefaultRipple: already enabled, skipping");
@@ -421,7 +421,7 @@ public class TestAccountBuilder
         try
         {
             AccountInfoRequest infoRequest = new AccountInfoRequest(Issuer2Account.ClassicAddress);
-            AccountInfo info = (await _client.AccountInfo(infoRequest)).Result;
+            AccountInfo info = await _client.AccountInfo(infoRequest).Typed();
             needDefaultRipple = !info.AccountFlags.DefaultRipple;
             needTrustLineLocking = !info.AccountFlags.AllowTrustLineLocking;
         }
@@ -475,7 +475,7 @@ public class TestAccountBuilder
         try
         {
             AccountInfoRequest infoRequest = new AccountInfoRequest(Issuer3Account.ClassicAddress);
-            AccountInfo info = (await _client.AccountInfo(infoRequest)).Result;
+            AccountInfo info = await _client.AccountInfo(infoRequest).Typed();
             needDefaultRipple = !info.AccountFlags.DefaultRipple;
             needRequireAuth = !info.AccountFlags.RequireAuthorization;
             needTrustLineLocking = !info.AccountFlags.AllowTrustLineLocking;
@@ -576,7 +576,7 @@ public class TestAccountBuilder
                 Asset = new Xrpl.Models.Common.Common.IssuedCurrency { Currency = "XRP" },
                 Asset2 = new Xrpl.Models.Common.Common.IssuedCurrency { Currency = currencyCode, Issuer = issuer }
             };
-            var response = (await _client.AmmInfo(request)).Result;
+            var response = await _client.AmmInfo(request).Typed();
             return response?.Amm != null;
         }
         catch
@@ -590,7 +590,7 @@ public class TestAccountBuilder
         try
         {
             var request = new AccountInfoRequest(_primaryAccount.ClassicAddress) { SignerLists = true };
-            var response = (await _client.AccountInfo(request)).Result;
+            var response = await _client.AccountInfo(request).Typed();
             return response.SignerLists != null && response.SignerLists.Length > 0;
         }
         catch
@@ -604,7 +604,7 @@ public class TestAccountBuilder
         try
         {
             var request = new AccountObjectsRequest(_primaryAccount.ClassicAddress) { Type = LedgerEntryType.Ticket };
-            var response = (await _client.AccountObjects(request)).Result;
+            var response = await _client.AccountObjects(request).Typed();
             return response.AccountObjectList?.Count ?? 0;
         }
         catch
@@ -618,7 +618,7 @@ public class TestAccountBuilder
         try
         {
             var request = new AccountObjectsRequest(IssuerAccount.ClassicAddress) { Type = LedgerEntryType.MPTokenIssuance };
-            var response = (await _client.AccountObjects(request)).Result;
+            var response = await _client.AccountObjects(request).Typed();
             return response.AccountObjectList?.Count > 0;
         }
         catch
@@ -920,7 +920,7 @@ public class TestAccountBuilder
 
         try
         {
-            var nftsResponse = (await _client.AccountNFTs(new AccountNFTsRequest(_primaryAccount.ClassicAddress))).Result;
+            var nftsResponse = await _client.AccountNFTs(new AccountNFTsRequest(_primaryAccount.ClassicAddress)).Typed();
             if (nftsResponse.NFTs == null || nftsResponse.NFTs.Count == 0)
             {
                 Console.WriteLine("[TestAccountBuilder] No NFTs found to create offers for");

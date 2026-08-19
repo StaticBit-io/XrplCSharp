@@ -157,10 +157,10 @@ public class TestIAMMWithdrawAdvanced : TestIAMMBase
 
         ITransactionRequest autofilledForSim = await client.Autofill(withdraw);
 
-        SimulateResponse simResult = (await client.Simulate(new SimulateRequest
+        SimulateResponse simResult = await client.Simulate(new SimulateRequest
         {
             Transaction = autofilledForSim
-        })).Result;
+        }).Typed();
 
         Console.WriteLine($"Simulate result: {simResult.EngineResult}");
         Assert.IsTrue(

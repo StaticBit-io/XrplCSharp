@@ -7,6 +7,7 @@ using Xrpl.Models.Methods;
 using Xrpl.Models.Transactions;
 using Xrpl.Utils.Hashes;
 
+using Xrpl.Client;
 // https://github.com/XRPLF/xrpl.js/blob/main/packages/xrpl/test/integration/requests/tx.ts
 
 namespace XrplTests.Xrpl.ClientLib.Integration
@@ -39,7 +40,7 @@ namespace XrplTests.Xrpl.ClientLib.Integration
             Submit response = await runner.client.Submit(txRequest, runner.wallet);
             string hash = HashLedger.HashSignedTx(response.TxBlob);
             TxRequest request1 = new TxRequest(hash);
-            TransactionResponse accountTx = (await runner.client.TxV1(request1)).Result;
+            TransactionResponse accountTx = await runner.client.TxV1(request1).Typed();
             Assert.IsNotNull(accountTx);
         }
     }
