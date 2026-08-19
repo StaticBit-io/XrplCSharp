@@ -422,6 +422,127 @@ namespace Xrpl.Tests.ClientLib
             Assert.IsNull(parsed.Type, "the message carried no type member - the property must stay null");
         }
 
+        private const string TransactionStreamDuplicateEndingInNull = """
+        {
+          "type": "transaction",
+          "status": "closed",
+          "validated": true,
+          "tx_json": {
+            "TransactionType": "Payment",
+            "Account": "rP9jPyP5kyvFRb6ZiRghAGw5u8SGAmU4bd",
+            "Destination": "rBTwLga3i2gz3doX6Gva3MgEV8ZCD8jjah",
+            "Amount": "1000000",
+            "Fee": "12",
+            "Sequence": 55
+          },
+          "engine_result": "tesSUCCESS",
+          "tx_json": null,
+          "meta": {
+            "AffectedNodes": [],
+            "TransactionIndex": 3,
+            "TransactionResult": "tesSUCCESS"
+          }
+        }
+        """;
+
+        /// <summary>
+        /// The last-occurrence rule skips null-valued occurrences, because the typed setters do:
+        /// they run `value ?? _transaction`, so a duplicate ending in null leaves the real object
+        /// in place. Resolving the slice to that null instead would empty
+        /// <see cref="TransactionStream.RawTransaction"/> while
+        /// <see cref="TransactionStream.Transaction"/> still held a payment — showing a wallet
+        /// nothing while it signs something.
+        /// </summary>
+        [TestMethod]
+        public async Task TestTransactionStreamSkipsANullOccurrenceWhenPickingTheLastOne()
+        {
+            TaskCompletionSource<TransactionStream> received = new TaskCompletionSource<TransactionStream>(
+                TaskCreationOptions.RunContinuationsAsynchronously);
+
+            runner.client.connection.OnTransaction += r =>
+            {
+                received.TrySetResult(r);
+                return Task.CompletedTask;
+            };
+
+            await runner.client.connection.OnMessage(TransactionStreamDuplicateEndingInNull);
+
+            Task completed = await Task.WhenAny(received.Task, Task.Delay(TimeSpan.FromSeconds(5)));
+            Assert.AreSame(received.Task, completed, "OnTransaction was not invoked within timeout");
+
+            TransactionStream result = await received.Task;
+
+            Assert.AreEqual(55u, result.Transaction.Sequence, "sanity: the typed side keeps the object, discarding the null duplicate");
+
+            Assert.IsFalse(result.RawTransaction.IsEmpty,
+                "RawTransaction resolved to the trailing null while Transaction kept the payment - the two views must not disagree");
+            StringAssert.Contains(result.RawTransaction.ToString(), "\"Sequence\": 55");
+        }
+
+        // rippled NetworkOpsImp: account_history_tx_index is written on every event of such a
+        // subscription (forwardTxIndex++ streaming forward, txHistoryIndex-- backfilling, hence
+        // the negative value here); account_history_boundary marks the last transaction of a
+        // ledger and account_history_tx_first the earliest transaction the account ever had, so
+        // those two appear only on some events. All three are declared properties rather than
+        // extension-data captures because capture costs ~464 B per member.
+        private const string AccountHistoryTransaction = """
+        {
+          "type": "transaction",
+          "status": "closed",
+          "validated": true,
+          "engine_result": "tesSUCCESS",
+          "account_history_tx_index": -5,
+          "account_history_boundary": true,
+          "account_history_tx_first": true,
+          "tx_json": {
+            "TransactionType": "Payment",
+            "Account": "rP9jPyP5kyvFRb6ZiRghAGw5u8SGAmU4bd",
+            "Sequence": 7
+          },
+          "meta": {
+            "AffectedNodes": [],
+            "TransactionIndex": 3,
+            "TransactionResult": "tesSUCCESS"
+          }
+        }
+        """;
+
+        /// <summary>
+        /// The <c>account_history_*</c> members reach declared properties, not
+        /// <see cref="BaseStream.UnknownFields"/> — a typo in any of the three
+        /// <c>[JsonPropertyName]</c> attributes would silently route the field back into capture,
+        /// which round-trips either way and so shows up in no fidelity check.
+        /// </summary>
+        [TestMethod]
+        public void TestAccountHistoryMembersReachDeclaredProperties()
+        {
+            TransactionStream result = JsonSerializer.Deserialize<TransactionStream>(
+                AccountHistoryTransaction, XrplJsonOptions.Default);
+
+            Assert.AreEqual(-5L, result.AccountHistoryTxIndex, "backfill counts down through zero, so the index must survive as a signed value");
+            Assert.AreEqual(true, result.AccountHistoryBoundary);
+            Assert.AreEqual(true, result.AccountHistoryTxFirst);
+
+            Assert.IsTrue(result.UnknownFields is null || result.UnknownFields.Count == 0,
+                "all three are declared properties - none of them should have fallen into capture: "
+                + (result.UnknownFields is null ? "" : string.Join(", ", result.UnknownFields.Keys)));
+        }
+
+        /// <summary>
+        /// An event of an ordinary <c>transactions</c> subscription carries none of them, and must
+        /// not report values the node never sent.
+        /// </summary>
+        [TestMethod]
+        public void TestAccountHistoryMembersStayNullWhenNotAnAccountHistorySubscription()
+        {
+            TransactionStream result = JsonSerializer.Deserialize<TransactionStream>(
+                TransactionStreamApiV2, XrplJsonOptions.Default);
+
+            Assert.IsNull(result.AccountHistoryTxIndex);
+            Assert.IsNull(result.AccountHistoryBoundary);
+            Assert.IsNull(result.AccountHistoryTxFirst);
+        }
+
         private const string TransactionStreamUppercaseTxJson = """
         {
           "type": "transaction",

@@ -250,15 +250,23 @@ public class TestURawJson
     }
 
     /// <summary>
-    /// Case folding applies to letters only. <c>_</c> (0x5F) and <c>?</c> (0x3F) differ by exactly
-    /// the 0x20 bit that folds a letter's case, so a comparison that flips that bit unconditionally
-    /// would match one for the other — this pins that it does not.
+    /// Case folding applies to letters only.
     /// </summary>
+    /// <remarks>
+    /// The pairs below differ from the target by exactly 0x20 — the bit that folds a letter's
+    /// case — while being non-letters: <c>{</c> (0x7B) against <c>[</c> (0x5B), and DEL (0x7F)
+    /// against <c>_</c> (0x5F). A comparison that flipped that bit unconditionally would match
+    /// them, so these are what actually pin the guard.
+    ///
+    /// An earlier version of this test used <c>_</c> against <c>?</c>, which differ by 0x60, not
+    /// 0x20 — no fold could ever have confused them, so removing the guard entirely left the test
+    /// green. Verified the current pairs by mutation: they turn red.
+    /// </remarks>
     [TestMethod]
     public void TestURawJsonFoldsLettersOnlyWhenMatchingAPropertyName()
     {
-        Assert.IsFalse(Window("{\"marke?\":1}").HasTopLevelProperty("marker"u8));
-        Assert.IsFalse(Window("{\"tx?json\":1}").HasTopLevelProperty("tx_json"u8));
+        Assert.IsFalse(Window("{\"tx{json\":1}").HasTopLevelProperty("tx[json"u8));
+        Assert.IsFalse(Window("{\"txjson\":1}").HasTopLevelProperty("tx_json"u8));
         Assert.IsTrue(Window("{\"TX_JSON\":1}").HasTopLevelProperty("tx_json"u8));
     }
 

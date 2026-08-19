@@ -192,8 +192,8 @@ namespace Xrpl.Models.Subscriptions
                 throw new ArgumentNullException(nameof(frame));
             }
 
-            JsonSlice txJson = WithoutJsonNull(frame, JsonSlice.FindTopLevelMember(frame, "tx_json"u8));
-            JsonSlice legacy = WithoutJsonNull(frame, JsonSlice.FindTopLevelMember(frame, "transaction"u8));
+            JsonSlice txJson = JsonSlice.FindTopLevelMember(frame, "tx_json"u8, ignoringJsonNull: true);
+            JsonSlice legacy = JsonSlice.FindTopLevelMember(frame, "transaction"u8, ignoringJsonNull: true);
 
             // Whichever envelope sits later in the frame wins, because that is what the typed
             // Transaction ends up holding: its two setters both do `value ?? _transaction` and run
@@ -212,25 +212,6 @@ namespace Xrpl.Models.Subscriptions
             base.AttachFrame(frame);
         }
 
-        /// <summary>
-        /// Treats an envelope explicitly set to JSON <c>null</c> as absent.
-        /// </summary>
-        /// <remarks>
-        /// A member present with a <c>null</c> value still produces a non-empty slice - four bytes
-        /// of literal - while the typed setters discard it (`value ?? _transaction`). Left as-is,
-        /// `{"tx_json":{...},"transaction":null}` gave RawTransaction the null and Transaction the
-        /// object: the two views disagreeing again, in the one case the position rule above cannot
-        /// see.
-        /// </remarks>
-        private static JsonSlice WithoutJsonNull(byte[] frame, JsonSlice slice)
-        {
-            if (slice.IsEmpty || slice.Length != 4)
-            {
-                return slice;
-            }
-
-            return frame.AsSpan(slice.Offset, 4).SequenceEqual("null"u8) ? default : slice;
-        }
 
         /// <summary>
         /// If true, this transaction is included in a validated ledger and its outcome is final.<br/>

@@ -96,7 +96,7 @@ namespace Xrpl.Client.Json
         /// <see cref="RawJson.HasTopLevelProperty"/> for the same rule applied to presence rather
         /// than value.
         /// </remarks>
-        public static JsonSlice FindTopLevelMember(byte[] buffer, ReadOnlySpan<byte> name)
+        public static JsonSlice FindTopLevelMember(byte[] buffer, ReadOnlySpan<byte> name, bool ignoringJsonNull = false)
         {
             Utf8JsonReader reader = new Utf8JsonReader(buffer);
 
@@ -121,11 +121,17 @@ namespace Xrpl.Client.Json
 
                 bool isMatch = NameMatches(ref reader, name);
                 reader.Read();
+                bool isJsonNull = reader.TokenType == JsonTokenType.Null;
                 long start = reader.TokenStartIndex;
                 reader.Skip();
                 long end = reader.BytesConsumed;
 
-                if (isMatch)
+                // A null-valued occurrence is skipped rather than overwriting what an earlier one
+                // found, mirroring the `value ?? previous` setters on the typed side: with
+                // `{"tx_json":{...},"tx_json":null}` the deserializer keeps the object, so
+                // discarding it here would leave the two views disagreeing again - the same split
+                // this whole ordering rule exists to close.
+                if (isMatch && !(ignoringJsonNull && isJsonNull))
                 {
                     result = new JsonSlice(checked((int)start), checked((int)(end - start)));
                 }
@@ -195,7 +201,8 @@ namespace Xrpl.Client.Json
                     continue;
                 }
 
-                // Fold only letters: without this guard '_' (0x5F) would match '?' (0x3F).
+                // Fold only letters: without this guard '[' (0x5B) would match '{' (0x7B),
+                // and '_' (0x5F) would match DEL (0x7F) - pairs that differ by that same bit.
                 int lowered = a | 0x20;
                 if (lowered < 'a' || lowered > 'z' || lowered != (b | 0x20))
                 {
