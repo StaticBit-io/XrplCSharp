@@ -12,21 +12,14 @@ namespace Xrpl.Models.Ledger
     /// </summary>
     public class LOTicket : BaseLedgerEntry
     {
-        public LOTicket()
-        {
-            LedgerEntryType = LedgerEntryType.Ticket;
-        }
-
         /// <summary>
-        /// The sender of the Check. Cashing the Check debits this address's balance.<br/>
         /// The account that owns this Ticket.
         /// </summary>
         public string Account { get; set; }
 
         /// <summary>
         /// A bit-map of Boolean flags enabled for this Ticket.<br/>
-        /// Currently, there are no flags defined for Tickets.<br/>
-        /// No flags are defined for Checks, so this value is always 0.
+        /// Currently, there are no flags defined for Tickets, so this value is always 0.
         /// </summary>
         [JsonConverter(typeof(NumberOrStringConverter))]
         public string Flags { get; set; }
@@ -45,13 +38,11 @@ namespace Xrpl.Models.Ledger
         /// <summary>
         /// The index of the ledger that contains the transaction that most recently modified this object.
         /// </summary>
-        public uint PreviousTxnLgrSeq { get; set; }
+        public uint? PreviousTxnLgrSeq { get; set; }
 
         /// <summary>
-        /// The maximum amount of currency this Check can debit the sender.<br/>
-        /// If the Check is successfully cashed, the destination is credited in the same currency for up to this amount.<br/>
         /// The Sequence Number this Ticket sets aside.
         /// </summary>
-        public uint TicketSequence { get; set; }
+        public uint? TicketSequence { get; set; }
     }
 }

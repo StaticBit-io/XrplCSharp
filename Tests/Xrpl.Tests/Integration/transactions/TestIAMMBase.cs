@@ -136,7 +136,7 @@ public abstract class TestIAMMBase
         {
             Asset = TokenAsset,
             Asset2 = XrpAsset
-        });
+        }).Typed();
     }
 
     protected static void AssertSuccess(TransactionSummary res, string context)

@@ -19,7 +19,7 @@ namespace Xrpl.Models.Transactions
         }
 
         /// <inheritdoc />
-        public uint SignerQuorum { get; set; }
+        public uint? SignerQuorum { get; set; }
         /// <inheritdoc />
         public List<SignerEntryWrapper> SignerEntries { get; set; }
     }
@@ -40,7 +40,7 @@ namespace Xrpl.Models.Transactions
         /// A multi-signature from this list is valid only if the sum weights of the signatures provided is greater than or equal to this value.<br/>
         /// To delete a signer list, use the value 0.
         /// </summary>
-        uint SignerQuorum { get; set; }
+        uint? SignerQuorum { get; set; }
     }
 
     /// <inheritdoc cref="ISignerListSet" />
@@ -49,7 +49,7 @@ namespace Xrpl.Models.Transactions
         /// <inheritdoc />
         public List<SignerEntryWrapper> SignerEntries { get; set; }
         /// <inheritdoc />
-        public uint SignerQuorum { get; set; }
+        public uint? SignerQuorum { get; set; }
     }
 
     public partial class Validation

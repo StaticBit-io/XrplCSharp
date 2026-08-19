@@ -121,8 +121,14 @@ namespace Xrpl.Sugar
                 }
             }
 
-            if (collected < list.SignerQuorum)
-                throw new ValidationException($"Insufficient signatures for the {side} SignerList: collected weight {collected} of the required quorum {list.SignerQuorum}.");
+            // SignerQuorum is a required field of a live SignerList ledger entry (never legitimately absent);
+            // treat a missing value as a malformed fetch rather than silently skip the quorum check
+            // (collected < null is always false, which would defeat the whole point of failing fast here).
+            if (list.SignerQuorum is not { } quorum)
+                throw new ValidationException($"SignerList for the {side} side is missing SignerQuorum; cannot validate collected signatures.");
+
+            if (collected < quorum)
+                throw new ValidationException($"Insufficient signatures for the {side} SignerList: collected weight {collected} of the required quorum {quorum}.");
         }
 
         /// <summary>
@@ -150,7 +156,7 @@ namespace Xrpl.Sugar
             {
                 Type = LedgerEntryType.SignerList,
             };
-            AccountObjects response = await client.AccountObjects(request, cancellationToken).ConfigureAwait(false);
+            AccountObjects response = await client.AccountObjects(request, cancellationToken).Typed().ConfigureAwait(false);
             return response?.AccountObjectList?.OfType<LOSignerList>().FirstOrDefault();
         }
 

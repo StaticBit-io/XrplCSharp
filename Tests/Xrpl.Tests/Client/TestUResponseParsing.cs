@@ -1,7 +1,8 @@
-using Microsoft.VisualStudio.TestTools.UnitTesting;
+﻿using Microsoft.VisualStudio.TestTools.UnitTesting;
 
 using System;
 using System.Collections.Generic;
+using System.IO;
 using System.Text;
 using System.Text.Json;
 using System.Threading;
@@ -9,8 +10,10 @@ using System.Threading.Tasks;
 
 using Xrpl.Client;
 using Xrpl.Client.Exceptions;
+using Xrpl.Client.Json;
 using Xrpl.Models.Ledger;
 using Xrpl.Models.Methods;
+using Xrpl.Models.Subscriptions;
 
 namespace Xrpl.Tests.ClientLib
 {
@@ -76,7 +79,7 @@ namespace Xrpl.Tests.ClientLib
 
             manager.HandleResponse(BuildLedgerDataMessage(pending.Id, 4));
 
-            JsonElement result = (JsonElement)pending.Promise.GetAwaiter().GetResult();
+            JsonElement result = XrplResponse.From<JsonElement>(pending.Promise.GetAwaiter().GetResult()).Result;
             Assert.AreEqual(JsonValueKind.Object, result.ValueKind);
             Assert.AreEqual(4, result.GetProperty("state").GetArrayLength());
             Assert.AreEqual(96000000, result.GetProperty("ledger_index").GetInt32());
@@ -96,7 +99,7 @@ namespace Xrpl.Tests.ClientLib
 
             manager.HandleResponse(BuildLedgerDataMessage(pending.Id, 3));
 
-            LOLedgerData result = (LOLedgerData)pending.Promise.GetAwaiter().GetResult();
+            LOLedgerData result = XrplResponse.From<LOLedgerData>(pending.Promise.GetAwaiter().GetResult()).Result;
             Assert.IsNotNull(result);
             Assert.AreEqual(96000000u, result.LedgerIndex);
             Assert.AreEqual("842B57C1CC0613299A686D3E9F310EC0422C84D3911E5056389AA7E5808A93C8", result.LedgerHash);
@@ -116,8 +119,8 @@ namespace Xrpl.Tests.ClientLib
             RequestManager.XrplGRequest viaBytes = Pending<LOLedgerData>(manager);
             manager.HandleResponse(Encoding.UTF8.GetBytes(BuildLedgerDataMessage(viaBytes.Id, 5)));
 
-            LOLedgerData fromString = (LOLedgerData)viaString.Promise.GetAwaiter().GetResult();
-            LOLedgerData fromBytes = (LOLedgerData)viaBytes.Promise.GetAwaiter().GetResult();
+            LOLedgerData fromString = XrplResponse.From<LOLedgerData>(viaString.Promise.GetAwaiter().GetResult()).Result;
+            LOLedgerData fromBytes = XrplResponse.From<LOLedgerData>(viaBytes.Promise.GetAwaiter().GetResult()).Result;
 
             Assert.AreEqual(fromString.LedgerIndex, fromBytes.LedgerIndex);
             Assert.AreEqual(fromString.LedgerHash, fromBytes.LedgerHash);
@@ -131,13 +134,13 @@ namespace Xrpl.Tests.ClientLib
 
             RequestManager.XrplGRequest untyped = Pending<JsonElement>(manager);
             manager.HandleResponse($"{{\"id\":\"{untyped.Id:D}\",\"status\":\"success\",\"type\":\"response\",\"result\":null}}");
-            JsonElement empty = (JsonElement)untyped.Promise.GetAwaiter().GetResult();
+            JsonElement empty = XrplResponse.From<JsonElement>(untyped.Promise.GetAwaiter().GetResult()).Result;
             Assert.AreEqual(JsonValueKind.Object, empty.ValueKind);
             Assert.IsFalse(empty.TryGetProperty("state", out _));
 
             RequestManager.XrplGRequest typed = Pending<LOLedgerData>(manager);
             manager.HandleResponse($"{{\"id\":\"{typed.Id:D}\",\"status\":\"success\",\"type\":\"response\"}}");
-            LOLedgerData defaults = (LOLedgerData)typed.Promise.GetAwaiter().GetResult();
+            LOLedgerData defaults = XrplResponse.From<LOLedgerData>(typed.Promise.GetAwaiter().GetResult()).Result;
             Assert.IsNotNull(defaults);
             Assert.IsNull(defaults.State);
         }
@@ -167,6 +170,103 @@ namespace Xrpl.Tests.ClientLib
             Assert.IsNotNull(rippled.Response, "the parsed error response must be attached");
             Assert.AreEqual("lgrNotFound", rippled.Response.Error);
             Assert.AreEqual("ledgerNotFound", rippled.Response.ErrorMessage);
+        }
+
+        /// <summary>
+        /// The result member is no longer parsed on the way in — the envelope only records where it
+        /// sits — so the typed deserialization now has to cut it straight out of the frame.
+        /// </summary>
+        [TestMethod]
+        public void TestUTypedResultDeserializesFromTheSlice()
+        {
+            RequestManager manager = new RequestManager();
+            RequestManager.XrplGRequest pending = Pending<LOLedgerData>(manager);
+
+            manager.HandleResponse(Encoding.UTF8.GetBytes(BuildLedgerDataMessage(pending.Id, 3)));
+
+            LOLedgerData result = XrplResponse.From<LOLedgerData>(pending.Promise.GetAwaiter().GetResult()).Result;
+            Assert.IsNotNull(result);
+            Assert.IsNotNull(result.Marker);
+            Assert.AreEqual("AABBCCDD", result.Marker.ToString());
+        }
+
+        /// <summary>A response carrying the raw frame must expose the result member byte for byte.</summary>
+        [TestMethod]
+        public void TestURawResultReproducesWhatTheNodeSent()
+        {
+            RequestManager manager = new RequestManager();
+            RequestManager.XrplGRequest pending = Pending<LOLedgerData>(manager);
+
+            string message = BuildLedgerDataMessage(pending.Id, 2);
+            (BaseResponse response, bool handled) = manager.HandleResponse(Encoding.UTF8.GetBytes(message));
+
+            Assert.IsTrue(handled);
+            int start = message.IndexOf("\"result\":", StringComparison.Ordinal) + "\"result\":".Length;
+            string expected = message.Substring(start, message.Length - start - 1);
+            Assert.AreEqual(expected, response.RawResult.ToString());
+        }
+
+        /// <summary>
+        /// The response aliases the frame it was handed rather than copying it. Pinned because the
+        /// contract is invisible in the signature: a caller that reuses a pooled buffer would
+        /// rewrite a response it already handed out.
+        /// </summary>
+        [TestMethod]
+        public void TestUResponseAliasesTheFrameItWasGiven()
+        {
+            byte[] frame = Encoding.UTF8.GetBytes("{\"id\":\"1\",\"result\":{\"marker\":1}}");
+            RequestManager manager = new RequestManager();
+            (BaseResponse response, _) = manager.HandleResponse(frame);
+
+            Assert.AreEqual("{\"marker\":1}", response.RawResult.ToString());
+
+            // Index 21 is the 'm' of "marker": {"id":"1","result":{"marker":1}} counts
+            // 0123456789012345678901 up to that byte.
+            frame[21] = (byte)'z';
+
+            Assert.AreEqual("{\"zarker\":1}", response.RawResult.ToString());
+        }
+
+        /// <summary>
+        /// Bounds are only meaningful for a reader that covered one contiguous buffer, which the
+        /// Stream overloads do not. That path is disarmed by construction rather than by a check:
+        /// Frame is internal, so it stays null there and the raw result comes back empty instead of
+        /// pointing at bytes that were never checked.
+        /// </summary>
+        [TestMethod]
+        public void TestUEnvelopeParsedFromAStreamExposesNoRawResult()
+        {
+            byte[] frame = Encoding.UTF8.GetBytes("{\"id\":\"7\",\"result\":{\"a\":1}}");
+            using MemoryStream stream = new MemoryStream(frame);
+
+            ErrorResponse envelope = JsonSerializer.Deserialize<ErrorResponse>(stream, XrplJsonOptions.Default);
+
+            Assert.IsTrue(envelope.RawResult.IsEmpty);
+        }
+
+        /// <summary>An envelope built by hand has no frame, so there is nothing to hand out.</summary>
+        [TestMethod]
+        public void TestUEnvelopeWithoutFrameHasEmptyRawResult()
+        {
+            Assert.IsTrue(new ErrorResponse().RawResult.IsEmpty);
+        }
+
+        /// <summary>
+        /// Each response reads from its own frame. The receive loop hands out a fresh exact-sized
+        /// array per message, and nothing downstream may collapse two of them.
+        /// </summary>
+        [TestMethod]
+        public void TestUEnvelopesDoNotShareAFrame()
+        {
+            byte[] first = Encoding.UTF8.GetBytes("{\"id\":\"1\",\"result\":{\"n\":1}}");
+            byte[] second = Encoding.UTF8.GetBytes("{\"id\":\"2\",\"result\":{\"n\":2}}");
+
+            RequestManager manager = new RequestManager();
+            (BaseResponse a, _) = manager.HandleResponse(first);
+            (BaseResponse b, _) = manager.HandleResponse(second);
+
+            Assert.AreEqual("{\"n\":1}", a.RawResult.ToString());
+            Assert.AreEqual("{\"n\":2}", b.RawResult.ToString());
         }
 
         /// <summary>
@@ -201,7 +301,7 @@ namespace Xrpl.Tests.ClientLib
                 RequestManager.XrplGRequest pending = Pending<JsonElement>(manager);
                 WriteId(message, IdOffset, pending.Id);
                 manager.HandleResponse(message);
-                JsonElement result = (JsonElement)pending.Promise.GetAwaiter().GetResult();
+                JsonElement result = XrplResponse.From<JsonElement>(pending.Promise.GetAwaiter().GetResult()).Result;
                 Assert.AreEqual(Entries, result.GetProperty("state").GetArrayLength());
             }
 
@@ -211,9 +311,13 @@ namespace Xrpl.Tests.ClientLib
 
             Console.WriteLine($"response {message.Length:N0} bytes, {perResponse / 1024 / 1024:F2} MB allocated per response ({ratio:F2}x)");
 
+            // Measured 1.89x. Note this budget is blind to the change that removed the
+            // intermediate document: asking for JsonElement builds one either way, so the figure
+            // is identical before and after. TestTypedResponseParsingStaysWithinItsAllocationBudget
+            // is the one that sees it.
             Assert.IsTrue(
-                ratio < 4.0,
-                $"response parsing allocated {ratio:F2}x the response size, budget is 4x " +
+                ratio < 2.4,
+                $"response parsing allocated {ratio:F2}x the response size, budget is 2.4x " +
                 "(the pre-fix double round-trip cost about 7x here)");
         }
 
@@ -392,12 +496,158 @@ namespace Xrpl.Tests.ClientLib
         {
             JsonElement page = await client
                 .GRequest<JsonElement, LedgerDataRequest>(new LedgerDataRequest { Binary = true, Limit = 2048 })
-                .ConfigureAwait(false);
+                .Typed().ConfigureAwait(false);
 
             if (page.GetProperty("state").GetArrayLength() == 0)
             {
                 throw new InvalidOperationException("ledger_data page carried no objects");
             }
         }
+
+        /// <summary>
+        /// The typed path is where removing the intermediate document shows: the result member is
+        /// no longer parsed into a JsonElement on the way in, only its bounds are recorded, so the
+        /// only parse is the one that produces the requested type. The JsonElement budget above
+        /// cannot see this - asking for JsonElement builds one either way.
+        /// </summary>
+        [TestMethod]
+        public void TestTypedResponseParsingStaysWithinItsAllocationBudget()
+        {
+            const int Entries = 4096;
+            const int Rounds = 12;
+
+            RequestManager manager = new RequestManager();
+
+            RequestManager.XrplGRequest warmup = Pending<LOLedgerData>(manager);
+            byte[] message = Encoding.UTF8.GetBytes(BuildLedgerDataMessage(warmup.Id, Entries));
+            const int IdOffset = 7;
+            manager.HandleResponse(message);
+            _ = warmup.Promise.GetAwaiter().GetResult();
+
+            GC.Collect(2, GCCollectionMode.Forced, blocking: true);
+            long before = GC.GetAllocatedBytesForCurrentThread();
+
+            for (int i = 0; i < Rounds; i++)
+            {
+                RequestManager.XrplGRequest pending = Pending<LOLedgerData>(manager);
+                WriteId(message, IdOffset, pending.Id);
+                manager.HandleResponse(message);
+                LOLedgerData result = XrplResponse.From<LOLedgerData>(pending.Promise.GetAwaiter().GetResult()).Result;
+                Assert.AreEqual(Entries, result.State.Count);
+            }
+
+            long allocated = GC.GetAllocatedBytesForCurrentThread() - before;
+            double perResponse = allocated / (double)Rounds;
+            double ratio = perResponse / message.Length;
+
+            Console.WriteLine($"TYPED response {message.Length:N0} bytes, {perResponse / 1024 / 1024:F2} MB per response ({ratio:F2}x)");
+
+            // Measured 5.57x here against 7.45x on the commit before the result member became a
+            // slice - 1.6 MB less per 889 KB response. The bound sits between the two, so it fails
+            // if the intermediate document comes back and passes through ordinary GC jitter.
+            Assert.IsTrue(ratio < 6.5, $"typed path cost {ratio:F2}x of the message");
+        }
+
+
+        /// <summary>
+        /// An envelope must not retain more than the frame it shares. Before the result member
+        /// became a slice, System.Text.Json built a JsonElement for it whose pooled backing array —
+        /// 65 536 bytes for a 36 691-byte response — was never returned to the pool, and every
+        /// envelope carried its own.
+        /// </summary>
+        [TestMethod]
+        [DoNotParallelize]
+        public void TestUEnvelopeRetainsNoMoreThanTheFrame()
+        {
+            byte[] frame = Encoding.UTF8.GetBytes(BuildLedgerDataMessage(Guid.NewGuid(), 200));
+
+            // Two thousand envelopes, not fifty. GC.GetTotalMemory is a process-wide counter and
+            // [DoNotParallelize] only keeps other tests in this assembly off the CPU - it does
+            // nothing about background threads, WebSocket servers left running by earlier tests, or
+            // finalizers landing inside the window. Measured directly, the noise band is on the
+            // order of a few kilobytes in both directions, which swamps a per-envelope cost of a
+            // couple of hundred bytes if the sample is small.
+            //
+            // Raising the sample size is what makes the measurement mean something: the signal
+            // scales with Count, the noise does not. Averaging over 2 000 envelopes puts the real
+            // per-envelope figure far above the per-sample jitter, and a regression - the pooled
+            // result document returning at 65 536 B per response - misses the bound by three
+            // orders of magnitude rather than hiding inside it.
+            //
+            // Filtering the noise instead of outgrowing it does not work here, and was tried:
+            // taking the minimum across repeats drove the reading to zero, at which point the test
+            // stayed green with 10 000 bytes of deliberate ballast added to every envelope.
+            const int Count = 2000;
+
+            GC.Collect(2, GCCollectionMode.Forced, blocking: true);
+            GC.WaitForPendingFinalizers();
+            GC.Collect(2, GCCollectionMode.Forced, blocking: true);
+            long before = GC.GetTotalMemory(true);
+
+            List<BaseResponse> retained = new List<BaseResponse>(Count);
+            for (int i = 0; i < Count; i++)
+            {
+                retained.Add(JsonSerializer.Deserialize<ErrorResponse>(frame, XrplJsonOptions.Default));
+            }
+
+            GC.Collect(2, GCCollectionMode.Forced, blocking: true);
+            GC.WaitForPendingFinalizers();
+            GC.Collect(2, GCCollectionMode.Forced, blocking: true);
+            long perEnvelope = (GC.GetTotalMemory(true) - before) / Count;
+
+            GC.KeepAlive(retained);
+
+            Console.WriteLine(
+                $"envelope retains {perEnvelope} B on its own, averaged over {Count} (frame is {frame.Length} B, shared)");
+
+            // BaseResponse.Id and ErrorResponse.Request are slices now, same as result, so neither
+            // builds a JsonElement with an unreturned ArrayPool rental any more - the 3 455 B
+            // remainder that used to sit here is gone. The bound has headroom over the real
+            // per-envelope cost and sits far below a returning result document, which was 65 536 B
+            // per response on its own.
+            Assert.IsTrue(
+                perEnvelope < 6144,
+                $"envelope retained {perEnvelope} B on its own, averaged over {Count}; a pooled result document is back");
+        }
+
+        /// <summary>
+        /// Pairing is done in one call that checks the bounds against the frame, so a frame that
+        /// does not match the recorded slice is rejected where the two meet rather than lazily,
+        /// inside a consumer's read.
+        /// </summary>
+        [TestMethod]
+        public void TestUAttachFrameRejectsAFrameThatDoesNotFitTheSlice()
+        {
+            byte[] frame = Encoding.UTF8.GetBytes("{\"id\":\"7\",\"result\":{\"a\":1}}");
+            ErrorResponse envelope = JsonSerializer.Deserialize<ErrorResponse>(frame, XrplJsonOptions.Default);
+
+            Assert.ThrowsExactly<ArgumentException>(() => envelope.AttachFrame(Encoding.UTF8.GetBytes("{}")));
+        }
+
+        /// <summary>The other half of pairing: a missing frame is rejected too, not just a short one.</summary>
+        [TestMethod]
+        public void TestUAttachFrameRejectsANullFrame()
+        {
+            Assert.ThrowsExactly<ArgumentNullException>(() => new ErrorResponse().AttachFrame(null));
+        }
+
+        /// <summary>
+        /// A frame holding the bare JSON literal <c>null</c> (not an empty/missing frame - the byte
+        /// content of the frame itself is the four characters "null") deserializes to a null
+        /// <see cref="ErrorResponse"/> rather than throwing. <see cref="RequestManager.HandleResponse(byte[])"/>
+        /// must catch that and raise a typed protocol error instead of letting the next line's
+        /// <c>response.AttachFrame(frame)</c> throw a bare <see cref="NullReferenceException"/>.
+        /// </summary>
+        [TestMethod]
+        public void TestUHandleResponseRejectsAJsonNullFrame()
+        {
+            RequestManager manager = new RequestManager();
+
+            XrplException raised = Assert.ThrowsExactly<XrplException>(
+                () => manager.HandleResponse(Encoding.UTF8.GetBytes("null")));
+
+            StringAssert.Contains(raised.Message, "null");
+        }
+
     }
 }

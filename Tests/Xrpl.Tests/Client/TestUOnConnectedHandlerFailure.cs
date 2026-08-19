@@ -155,7 +155,7 @@ namespace Xrpl.Tests
                 { "command", "server_info" },
             };
 
-            Dictionary<string, object> response = await _client.Request(request);
+            Dictionary<string, object> response = await _client.Request(request).Typed();
             Assert.IsNotNull(response, "Request after recovery must succeed.");
         }
 

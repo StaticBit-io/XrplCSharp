@@ -15,12 +15,6 @@ namespace Xrpl.Models.Ledger
     /// </summary>
     public class LOEscrow : BaseLedgerEntry, IDestination
     {
-        public LOEscrow()
-        {
-            LedgerEntryType = LedgerEntryType.Escrow;
-        }
-
-
         /// <summary>
         /// The address of the owner (sender) of this held payment.<br/>
         /// This is the account that provided the funds, and gets it back if the held payment is
@@ -104,7 +98,7 @@ namespace Xrpl.Models.Ledger
         /// <summary>
         /// The index of the ledger that contains the transaction that most recently modified this object.
         /// </summary>
-        public uint PreviousTxnLgrSeq { get; set; }
+        public uint? PreviousTxnLgrSeq { get; set; }
 
         //todo not found field Flags: number
         //A bit-map of boolean flags. No flags are defined for the Escrow type, so

@@ -50,7 +50,7 @@ namespace XrplTests.Xrpl.ClientLib.Integration
                 destinationAmount: destinationAmount
             );
 
-            RipplePathFindResponse response = await client.RipplePathFind(request);
+            RipplePathFindResponse response = await client.RipplePathFind(request).Typed();
             Assert.IsNotNull(response);
             Assert.IsNotNull(response.Alternatives);
             Assert.IsNotNull(response.DestinationCurrencies);
@@ -82,7 +82,7 @@ namespace XrplTests.Xrpl.ClientLib.Integration
                 }
             };
 
-            RipplePathFindResponse response = await client.RipplePathFind(request);
+            RipplePathFindResponse response = await client.RipplePathFind(request).Typed();
             Assert.IsNotNull(response);
             Assert.IsNotNull(response.Alternatives);
         }

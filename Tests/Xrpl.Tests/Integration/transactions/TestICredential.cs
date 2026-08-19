@@ -376,7 +376,7 @@ public class TestICredential
             DestinationAccount = walletRecipient.ClassicAddress,
             Credentials = new List<string> { credentialId },
         };
-        DepositAuthorized depAuthResp = await client.DepositAuthorized(depAuthReq);
+        DepositAuthorized depAuthResp = await client.DepositAuthorized(depAuthReq).Typed();
         Assert.IsNotNull(depAuthResp, "deposit_authorized response is null");
         Assert.IsTrue(depAuthResp.IsDepositAuthorized, "deposit_authorized must be true with valid credentials");
         Console.WriteLine("Step 5: deposit_authorized confirmed");
@@ -494,7 +494,7 @@ public class TestICredential
                 LedgerIndex = new LedgerIndex(LedgerIndexType.Validated),
                 Type = LedgerEntryType.Credential,
             };
-            var response = await client.AccountObjects(request);
+            var response = await client.AccountObjects(request).Typed();
             if (response?.AccountObjectList != null)
             {
                 foreach (var obj in response.AccountObjectList)

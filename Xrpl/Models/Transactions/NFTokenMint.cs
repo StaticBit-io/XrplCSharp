@@ -63,7 +63,7 @@ namespace Xrpl.Models.Transactions
         }
 
         /// <inheritdoc />
-        public uint NFTokenTaxon { get; set; }
+        public uint? NFTokenTaxon { get; set; }
 
         /// <inheritdoc />
         public string Issuer { get; set; }
@@ -99,7 +99,7 @@ namespace Xrpl.Models.Transactions
         /// The implementation reserves taxon identifiers greater than or equal to 2147483648 (0x80000000).<br/>
         /// If you have no use for this field, set it to 0.
         /// </summary>
-        uint NFTokenTaxon { get; set; }
+        uint? NFTokenTaxon { get; set; }
         /// <summary>
         /// Indicates the account that should be the issuer of this token.<br/>
         /// This value is optional and should only be specified if the account executing the transaction is not the `Issuer` of the `NFToken` object.<br/>
@@ -145,7 +145,7 @@ namespace Xrpl.Models.Transactions
         }
 
         /// <inheritdoc />
-        public uint NFTokenTaxon { get; set; }
+        public uint? NFTokenTaxon { get; set; }
 
         /// <inheritdoc />
         public string Issuer { get; set; }

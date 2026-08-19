@@ -12,7 +12,7 @@ namespace Xrpl.Models.Methods
     /// Each element in the alternatives array represents a path from one possible
     /// source currency to the destination account and currency.
     /// </summary>
-    public class PathAlternative
+    public class PathAlternative : BaseMethodResult
     {
         /// <summary>
         /// Array of arrays of objects defining payment paths.
@@ -47,7 +47,7 @@ namespace Xrpl.Models.Methods
     /// <summary>
     /// Response expected from a path_find create, close, or status request.
     /// </summary>
-    public class PathFindResponse
+    public class PathFindResponse : BaseMethodResult
     {
         /// <summary>
         /// Array of objects with suggested paths to take.<br/>

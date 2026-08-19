@@ -237,7 +237,13 @@ public class LOConverter : JsonConverter<BaseLedgerEntry>
 
         if (result != null)
         {
-            result.LedgerEntryType = type;
+            // `type` (from the owning node) only selects which C# class to deserialize into, via
+            // GetTypeForLedgerEntry above. It must not be stamped onto the result: rippled's wire
+            // format never repeats "LedgerEntryType" inside FinalFields/PreviousFields/NewFields
+            // (only the owning ModifiedNode/CreatedNode/DeletedNode carries it), so the field would
+            // otherwise be a fabricated non-null value whenever it is genuinely absent from `element`.
+            // The normal Deserialize call above already populates it correctly when the raw JSON does
+            // contain the member.
 
             if (string.IsNullOrWhiteSpace(result.LedgerIndex) && element.Value.TryGetProperty("LedgerIndex", out JsonElement liEl))
             {

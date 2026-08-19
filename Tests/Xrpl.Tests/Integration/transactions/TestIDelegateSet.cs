@@ -61,7 +61,7 @@ public class TestIDelegateSet
         {
             Type = LedgerEntryType.Delegate,
         };
-        AccountObjects response = await client.AccountObjects(request);
+        AccountObjects response = await client.AccountObjects(request).Typed();
 
         return response?.AccountObjectList?
             .OfType<LODelegate>()
@@ -179,7 +179,7 @@ public class TestIDelegateSet
         ValidateResult(result);
 
         // Back out of the ledger into the typed model
-        TransactionResponse readBack = await client.Tx(new TxRequest(result.Hash));
+        TransactionResponse readBack = await client.TxV1(new TxRequest(result.Hash)).Typed();
         Assert.AreEqual(walletDelegate.ClassicAddress, readBack.Delegate, "Delegate must survive the ledger round trip");
         Assert.AreEqual(walletOwner.ClassicAddress, readBack.Account, "the transaction stays the owner's");
 

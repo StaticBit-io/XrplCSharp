@@ -1,4 +1,6 @@
-﻿using System.Text.Json.Serialization;
+﻿using System.Collections.Generic;
+using System.Text.Json;
+using System.Text.Json.Serialization;
 
 //https://github.com/XRPLF/xrpl.js/blob/76b73e16a97e1a371261b462ee1a24f1c01dbb0c/packages/xrpl/src/models/ledger/Ledger.ts
 
@@ -7,6 +9,16 @@ namespace Xrpl.Models.Ledger
     /// <summary> base ledger fields </summary>
     public class LOBaseLedger
     {
+        /// <summary>
+        /// Members the node sent that no declared property here claims. Mirrors
+        /// <see cref="BaseLedgerEntry.UnknownFields"/> for ledger entries and
+        /// <see cref="Xrpl.Models.Methods.BaseMethodResult.UnknownFields"/> for command results:
+        /// without it, anything this model does not yet know about is dropped between the node and
+        /// the caller instead of surviving the round trip.
+        /// </summary>
+        [JsonExtensionData]
+        public Dictionary<string, JsonElement> UnknownFields { get; set; }
+
         /// <summary>
         /// The SHA-512Half of this ledger version.<br/>
         /// This serves as a unique identifier for this ledger and all its contents.
@@ -18,7 +30,15 @@ namespace Xrpl.Models.Ledger
         /// The ledger index of the ledger.<br/>
         /// Some API methods display this as a quoted integer; some display it as a native JSON number.
         /// </summary>
-        [JsonPropertyName("ledger_index")] 
-        public uint LedgerIndex { get; set; }
+        /// <remarks>
+        /// Unconditional for the dedicated <c>ledger_closed</c> command (rippled
+        /// LedgerClosed.cpp), but this class is also the base of <see cref="LOLedger"/> for the
+        /// general <c>ledger</c> command, where the shared <c>lookupLedger</c> helper
+        /// (RPCLedgerHelpers.cpp) sets this field only when the resolved ledger is closed —
+        /// an open/current ledger response carries <c>ledger_current_index</c> instead and omits
+        /// this member entirely.
+        /// </remarks>
+        [JsonPropertyName("ledger_index")]
+        public uint? LedgerIndex { get; set; }
     }
 }

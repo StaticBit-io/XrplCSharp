@@ -9,7 +9,15 @@ namespace Xrpl.Models.Methods
     /// Each member of the path set is another array that represents an individual path.<br/>
     /// Each member of a path is an object that specifies the step.
     /// </summary>
-    public class Path //todo rename to path steps?
+    // No unknown-field capture here on purpose: a Path step is not only read off a
+    // ripple_path_find/path_find response, it is fed straight back into an outgoing
+    // Payment (Transactions/Payment.cs Paths) and PathFindCreateRequest. Capturing
+    // unknown members would let a field read from one node's response ride back out
+    // inside a transaction the user never put it in - and worse, StObject.FromJson
+    // passes signingOnly only to the top level, so a nested unknown member reaches the
+    // displayed tx_json but not the signed blob. Show-one-sign-another, the exact
+    // failure this branch exists to remove, arriving from the outgoing side.
+    public class Path//todo rename to path steps?
     {
         /// <summary>
         /// (Optional) If present, this path step represents rippling through the specified address.<br/>

@@ -86,7 +86,7 @@ public class TestUCancellationToken
         string json = $"{{\"id\":\"{xrplRequest.Id}\",\"status\":\"success\",\"type\":\"response\",\"result\":{{\"value\":42}}}}";
         rm.HandleResponse(json);
 
-        Dictionary<string, object> result = await xrplRequest.Promise;
+        Dictionary<string, object> result = XrplResponse.From<Dictionary<string, object>>(await xrplRequest.Promise).Result;
         Assert.IsNotNull(result);
 
         cts.Cancel();
@@ -266,7 +266,7 @@ public class TestUCancellationToken
             {
                 ["command"] = "server_info"
             };
-            Dictionary<string, object> result = await runner.client.connection.Request(normalRequest);
+            Dictionary<string, object> result = await runner.client.connection.Request(normalRequest).Typed();
             Assert.IsNotNull(result, "Request after cancelled request should succeed");
         }
         finally

@@ -86,7 +86,7 @@ public class TestIDID
             {
                 DID = account
             };
-            var response = await client.LedgerEntry(request);
+            var response = await client.LedgerEntry(request).Typed();
             return response?.Node != null;
         }
         catch

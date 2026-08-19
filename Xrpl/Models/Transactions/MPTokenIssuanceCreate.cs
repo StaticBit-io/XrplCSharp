@@ -47,7 +47,19 @@ namespace Xrpl.Models.Transactions
         /// <summary>
         /// If set, indicates that the issuer can clawback tokens.
         /// </summary>
-        tfMPTCanClawback = 64
+        tfMPTCanClawback = 64,
+
+        /// <summary>
+        /// If set, holders of this issuance may hold a confidential balance.
+        /// </summary>
+        /// <remarks>
+        /// rippled maps this straight onto the ledger flag
+        /// (<c>TF_FLAG(tfMPTCanHoldConfidentialBalance, lsfMPTCanHoldConfidentialBalance)</c>,
+        /// TxFlags.h), and lsfMPTCanHoldConfidentialBalance is 0x00000080 in LedgerFormats.h.
+        /// The Set-side counterpart (MPTokenIssuanceSetFlags.tfMPTSetCanHoldConfidentialBalance)
+        /// was already here; only the create-side flag was missing.
+        /// </remarks>
+        tfMPTCanHoldConfidentialBalance = 128
     }
 
     /// <summary>

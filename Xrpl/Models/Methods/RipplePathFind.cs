@@ -102,7 +102,7 @@ namespace Xrpl.Models.Methods
     /// <summary>
     /// Response expected from a <see cref="RipplePathFindRequest"/>.
     /// </summary>
-    public class RipplePathFindResponse
+    public class RipplePathFindResponse : BaseMethodResult
     {
         /// <summary>
         /// Array of objects with possible paths to take.<br/>

@@ -13,10 +13,10 @@ namespace Xrpl.Models.Transactions
         public string UNLModifyValidator { get; set; }
 
         /// <inheritdoc />
-        public uint UNLModifyDisabling { get; set; }
+        public uint? UNLModifyDisabling { get; set; }
 
         /// <inheritdoc />
-        public uint LedgerSequence { get; set; }
+        public uint? LedgerSequence { get; set; }
     }
 
     public interface IUNLModify : ITransactionCommon
@@ -31,13 +31,13 @@ namespace Xrpl.Models.Transactions
         /// If 0, this change represents removing a validator from the Negative UNL.<br/>
         /// (No other values are allowed.)
         /// </summary>
-        uint UNLModifyDisabling { get; set; }
+        uint? UNLModifyDisabling { get; set; }
 
         /// <summary>
         /// The ledger index where this pseudo-transaction appears.<br/>
         /// This distinguishes the pseudo-transaction from other occurrences of the same change.
         /// </summary>
-        uint LedgerSequence { get; set; }
+        uint? LedgerSequence { get; set; }
     }
 
     public class UNLModifyResponse : TransactionResponse, IUNLModify
@@ -46,10 +46,10 @@ namespace Xrpl.Models.Transactions
         public string UNLModifyValidator { get; set; }
 
         /// <inheritdoc />
-        public uint UNLModifyDisabling { get; set; }
+        public uint? UNLModifyDisabling { get; set; }
 
         /// <inheritdoc />
-        public uint LedgerSequence { get; set; }
+        public uint? LedgerSequence { get; set; }
     }
 
 }

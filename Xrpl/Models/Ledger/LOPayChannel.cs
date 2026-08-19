@@ -16,15 +16,11 @@ namespace Xrpl.Models.Ledger
     /// </summary>
     public class LOPayChannel : BaseLedgerEntry, IDestination
     {
-        public LOPayChannel()
-        {
-            LedgerEntryType = LedgerEntryType.PayChannel;
-        }
         /// <summary>
         /// A bit-map of boolean flags enabled for this payment channel.<br/>
         /// Currently, the protocol defines no flags for PayChannel objects.
         /// </summary>
-        public uint Flags { get; set; }
+        public uint? Flags { get; set; }
         /// <summary>
         /// The source address that owns this payment channel.<br/>
         /// This comes from the sending address of the transaction that created the channel.
@@ -63,7 +59,7 @@ namespace Xrpl.Models.Ledger
         /// after the source address requests to close the channel.<br/>
         /// Can be any value that fits in a 32-bit unsigned integer (0 to 2^32-1). This is set by the transaction that creates the channel.
         /// </summary>
-        public uint SettleDelay { get; set; }
+        public uint? SettleDelay { get; set; }
         /// <summary>
         /// A hint indicating which page of the source address's owner directory links to this object,
         /// in case the directory consists of multiple pages.
@@ -76,7 +72,7 @@ namespace Xrpl.Models.Ledger
         /// <summary>
         /// The index of the ledger that contains the transaction that most recently modified this object.
         /// </summary>
-        public uint PreviousTxnLgrSeq { get; set; }
+        public uint? PreviousTxnLgrSeq { get; set; }
         /// <summary>
         /// The mutable expiration time for this payment channel, in seconds since the Ripple Epoch.<br/>
         /// The channel is expired if this value is present and smaller than the previous ledger's close_time field.
@@ -94,11 +90,11 @@ namespace Xrpl.Models.Ledger
         /// <summary>
         /// An arbitrary tag to further specify the source for this payment channel useful for specifying a hosted recipient at the owner's address.
         /// </summary>
-        public uint SourceTag { get; set; }
+        public uint? SourceTag { get; set; }
         /// <summary>
         /// An arbitrary tag to further specify the destination for this payment channel, such as a hosted recipient at the destination address.
         /// </summary>
-        public uint DestinationTag { get; set; }
+        public uint? DestinationTag { get; set; }
 
         /// <summary>Sequence (or ticket) of the PaymentChannelCreate that created this channel.</summary>
         [JsonPropertyName("Sequence")]

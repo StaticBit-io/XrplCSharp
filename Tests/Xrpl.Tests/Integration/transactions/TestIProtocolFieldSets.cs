@@ -70,7 +70,7 @@ namespace XrplTests.Xrpl.ClientLib.Integration
                 await Utils.LedgerAccept(client);
 
                 AccountObjects objects = await client.AccountObjects(
-                    new AccountObjectsRequest(sender.ClassicAddress) { Type = LedgerEntryType.Check });
+                    new AccountObjectsRequest(sender.ClassicAddress) { Type = LedgerEntryType.Check }).Typed();
                 LOCheck check = objects.AccountObjectList.OfType<LOCheck>().Single();
 
                 Assert.AreEqual(invoiceId, check.InvoiceID, "InvoiceID must survive as a Hash256");
@@ -79,7 +79,7 @@ namespace XrplTests.Xrpl.ClientLib.Integration
 
                 // ...and back into the typed transaction model, not just the ledger object:
                 // InvoiceID was uint? until this change and could not round-trip at all
-                CheckCreateResponse readBack = await client.Tx(new TxRequest(hash)) as CheckCreateResponse;
+                CheckCreateResponse readBack = await client.TxV1(new TxRequest(hash)).Typed() as CheckCreateResponse;
                 Assert.IsNotNull(readBack, "tx must deserialize into CheckCreateResponse");
                 Assert.AreEqual(invoiceId, readBack.InvoiceID);
                 Assert.AreEqual(13u, readBack.DestinationTag);
@@ -111,7 +111,7 @@ namespace XrplTests.Xrpl.ClientLib.Integration
                 await Utils.TestTransaction(client, setup.ToDictionary(), sender);
 
                 AccountObjects created = await client.AccountObjects(
-                    new AccountObjectsRequest(sender.ClassicAddress) { Type = LedgerEntryType.Check });
+                    new AccountObjectsRequest(sender.ClassicAddress) { Type = LedgerEntryType.Check }).Typed();
                 string checkId = created.AccountObjectList.Single().Index;
 
                 // DeliverMin is the CheckCash branch the suite never exercised; rippled takes
@@ -125,7 +125,7 @@ namespace XrplTests.Xrpl.ClientLib.Integration
                 await Utils.TestTransaction(client, cash.ToDictionary(), receiver);
 
                 AccountObjects afterCash = await client.AccountObjects(
-                    new AccountObjectsRequest(sender.ClassicAddress) { Type = LedgerEntryType.Check });
+                    new AccountObjectsRequest(sender.ClassicAddress) { Type = LedgerEntryType.Check }).Typed();
                 Assert.IsEmpty(afterCash.AccountObjectList, "the check must be consumed");
             }
             finally
@@ -161,7 +161,7 @@ namespace XrplTests.Xrpl.ClientLib.Integration
                 await Utils.TestTransaction(client, mint.ToDictionary(), minter);
 
                 AccountObjects offers = await client.AccountObjects(
-                    new AccountObjectsRequest(minter.ClassicAddress) { Type = LedgerEntryType.NFTokenOffer });
+                    new AccountObjectsRequest(minter.ClassicAddress) { Type = LedgerEntryType.NFTokenOffer }).Typed();
                 LONFTokenOffer offer = offers.AccountObjectList.OfType<LONFTokenOffer>().Single();
 
                 Assert.AreEqual("5000000", offer.Amount.Value, "the mint-time sell offer must carry Amount");
@@ -204,7 +204,7 @@ namespace XrplTests.Xrpl.ClientLib.Integration
                 await Utils.LedgerAccept(client);
 
                 // Back out of the ledger and into the typed model - the full cycle the models used to break
-                TransactionResponse readBack = await client.Tx(new TxRequest(hash));
+                TransactionResponse readBack = await client.TxV1(new TxRequest(hash)).Typed();
                 Assert.AreEqual(operationLimit, readBack.OperationLimit, "OperationLimit must survive the ledger round trip");
 
                 AccountSetResponse typed = readBack as AccountSetResponse;
@@ -212,7 +212,7 @@ namespace XrplTests.Xrpl.ClientLib.Integration
                 Assert.AreEqual(walletLocator, typed.WalletLocator);
                 Assert.AreEqual(3u, typed.WalletSize);
 
-                AccountInfo info = await client.AccountInfo(new AccountInfoRequest(wallet.ClassicAddress));
+                AccountInfo info = await client.AccountInfo(new AccountInfoRequest(wallet.ClassicAddress)).Typed();
                 Assert.AreEqual(walletLocator, info.AccountData.WalletLocator, "WalletLocator must be stored on the account root");
             }
             finally

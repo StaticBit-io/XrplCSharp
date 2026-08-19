@@ -660,7 +660,7 @@ internal sealed class FeeTestClient : IXrplClient
     public AccountInfoRequest? LastAccountInfoRequest { get; private set; }
     public LedgerEntryRequest? LastLedgerEntryRequest { get; private set; }
 
-    public Task<ServerInfo> ServerInfo(ServerInfoRequest request, CancellationToken cancellationToken = default)
+    public Task<XrplResponse<ServerInfo>> ServerInfo(ServerInfoRequest request, CancellationToken cancellationToken = default)
     {
         var info = new ServerInfo
         {
@@ -673,10 +673,10 @@ internal sealed class FeeTestClient : IXrplClient
                 }
             }
         };
-        return Task.FromResult(info);
+        return Task.FromResult(new XrplResponse<ServerInfo>(info, default, null, null, null, null, false));
     }
 
-    public Task<ServerState> ServerState(ServerStateRequest request, CancellationToken cancellationToken = default)
+    public Task<XrplResponse<ServerState>> ServerState(ServerStateRequest request, CancellationToken cancellationToken = default)
     {
         var state = new ServerState
         {
@@ -688,10 +688,10 @@ internal sealed class FeeTestClient : IXrplClient
                 }
             }
         };
-        return Task.FromResult(state);
+        return Task.FromResult(new XrplResponse<ServerState>(state, default, null, null, null, null, false));
     }
 
-    public Task<ServerFeatures> ServerFeatures(string feature = null, CancellationToken cancellationToken = default) => throw new NotImplementedException();
+    public Task<XrplResponse<ServerFeatures>> ServerFeatures(string feature = null, CancellationToken cancellationToken = default) => throw new NotImplementedException();
 
     public Task<uint> GetLedgerIndex(CancellationToken cancellationToken = default) => Task.FromResult(100u);
     public Task<string> GetXrpBalance(string address, CancellationToken cancellationToken = default) => throw new NotSupportedException();
@@ -711,66 +711,68 @@ internal sealed class FeeTestClient : IXrplClient
     public Task DisconnectAndWaitAsync(TimeSpan timeout, CancellationToken cancellationToken = default) => throw new NotImplementedException();
 
     public bool IsConnected() => throw new NotSupportedException();
-    public Task<object> Subscribe(SubscribeRequest request, CancellationToken cancellationToken = default) => throw new NotSupportedException();
-    public Task<object> Unsubscribe(UnsubscribeRequest request, CancellationToken cancellationToken = default) => throw new NotSupportedException();
-    public Task<object> Ping(CancellationToken cancellationToken = default) => throw new NotSupportedException();
-    public Task<Fee> Fee(CancellationToken cancellationToken = default) => throw new NotSupportedException();
-    public Task<AccountInfo> AccountInfo(AccountInfoRequest request, CancellationToken cancellationToken = default)
+    public Task<XrplResponse<object>> Subscribe(SubscribeRequest request, CancellationToken cancellationToken = default) => throw new NotSupportedException();
+    public Task<XrplResponse<object>> Unsubscribe(UnsubscribeRequest request, CancellationToken cancellationToken = default) => throw new NotSupportedException();
+    public Task<XrplResponse<object>> Ping(CancellationToken cancellationToken = default) => throw new NotSupportedException();
+    public Task<XrplResponse<Fee>> Fee(CancellationToken cancellationToken = default) => throw new NotSupportedException();
+    public Task<XrplResponse<AccountInfo>> AccountInfo(AccountInfoRequest request, CancellationToken cancellationToken = default)
     {
         // Honour the token the way a real client does, so tests can assert that a caller's
         // cancellation reaches autofill instead of being turned into a fee fallback.
         cancellationToken.ThrowIfCancellationRequested();
         AccountInfoCalls++;
         LastAccountInfoRequest = request;
-        return Task.FromResult(new AccountInfo { SignerLists = CounterpartySignerLists });
+        AccountInfo info = new AccountInfo { SignerLists = CounterpartySignerLists };
+        return Task.FromResult(new XrplResponse<AccountInfo>(info, default, null, null, null, null, false));
     }
 
-    public Task<AccountOffers> AccountOffers(AccountOffersRequest request, CancellationToken cancellationToken = default) => throw new NotSupportedException();
-    public Task<AccountCurrencies> AccountCurrencies(AccountCurrenciesRequest request, CancellationToken cancellationToken = default) => throw new NotSupportedException();
-    public Task<AccountLines> AccountLines(AccountLinesRequest request, CancellationToken cancellationToken = default) => throw new NotSupportedException();
-    public Task<AccountChannels> AccountChannels(AccountChannelsRequest request, CancellationToken cancellationToken = default) => throw new NotSupportedException();
-    public Task<AccountObjects> AccountObjects(AccountObjectsRequest request, CancellationToken cancellationToken = default) => throw new NotSupportedException();
-    public Task<AccountTransactions> AccountTransactions(AccountTransactionsRequest request, CancellationToken cancellationToken = default) => throw new NotSupportedException();
-    public Task<GatewayBalancesResponse> GatewayBalances(GatewayBalancesRequest request, CancellationToken cancellationToken = default) => throw new NotSupportedException();
-    public Task<NoRippleCheck> NoRippleCheck(NoRippleCheckRequest request, CancellationToken cancellationToken = default) => throw new NotSupportedException();
-    public Task<LOLedger> Ledger(LedgerRequest request, CancellationToken cancellationToken = default) => throw new NotSupportedException();
-    public Task<LOBaseLedger> LedgerClosed(LedgerClosedRequest request, CancellationToken cancellationToken = default) => throw new NotSupportedException();
-    public Task<LOLedgerCurrentIndex> LedgerCurrent(LedgerCurrentRequest request, CancellationToken cancellationToken = default) => throw new NotSupportedException();
-    public Task<LOLedgerData> LedgerData(LedgerDataRequest request, CancellationToken cancellationToken = default) => throw new NotSupportedException();
-    public Task<LedgerEntryResponse> LedgerEntry(LedgerEntryRequest request, CancellationToken cancellationToken = default)
+    public Task<XrplResponse<AccountOffers>> AccountOffers(AccountOffersRequest request, CancellationToken cancellationToken = default) => throw new NotSupportedException();
+    public Task<XrplResponse<AccountCurrencies>> AccountCurrencies(AccountCurrenciesRequest request, CancellationToken cancellationToken = default) => throw new NotSupportedException();
+    public Task<XrplResponse<AccountLines>> AccountLines(AccountLinesRequest request, CancellationToken cancellationToken = default) => throw new NotSupportedException();
+    public Task<XrplResponse<AccountChannels>> AccountChannels(AccountChannelsRequest request, CancellationToken cancellationToken = default) => throw new NotSupportedException();
+    public Task<XrplResponse<AccountObjects>> AccountObjects(AccountObjectsRequest request, CancellationToken cancellationToken = default) => throw new NotSupportedException();
+    public Task<XrplResponse<AccountTransactions>> AccountTransactions(AccountTransactionsRequest request, CancellationToken cancellationToken = default) => throw new NotSupportedException();
+    public Task<XrplResponse<GatewayBalancesResponse>> GatewayBalances(GatewayBalancesRequest request, CancellationToken cancellationToken = default) => throw new NotSupportedException();
+    public Task<XrplResponse<NoRippleCheck>> NoRippleCheck(NoRippleCheckRequest request, CancellationToken cancellationToken = default) => throw new NotSupportedException();
+    public Task<XrplResponse<LOLedger>> Ledger(LedgerRequest request, CancellationToken cancellationToken = default) => throw new NotSupportedException();
+    public Task<XrplResponse<LOBaseLedger>> LedgerClosed(LedgerClosedRequest request, CancellationToken cancellationToken = default) => throw new NotSupportedException();
+    public Task<XrplResponse<LOLedgerCurrentIndex>> LedgerCurrent(LedgerCurrentRequest request, CancellationToken cancellationToken = default) => throw new NotSupportedException();
+    public Task<XrplResponse<LOLedgerData>> LedgerData(LedgerDataRequest request, CancellationToken cancellationToken = default) => throw new NotSupportedException();
+    public Task<XrplResponse<LedgerEntryResponse>> LedgerEntry(LedgerEntryRequest request, CancellationToken cancellationToken = default)
     {
         cancellationToken.ThrowIfCancellationRequested();
         LedgerEntryCalls++;
         LastLedgerEntryRequest = request;
         if (LedgerEntryThrows)
             throw new XrplException("entryNotFound");
-        return Task.FromResult(new LedgerEntryResponse { Index = request.Index, Node = LoanEntry });
+        LedgerEntryResponse response = new LedgerEntryResponse { Index = request.Index, Node = LoanEntry };
+        return Task.FromResult(new XrplResponse<LedgerEntryResponse>(response, default, null, null, null, null, false));
     }
 
     public Task<Submit> Submit(Dictionary<string, object> tx, XrplWallet wallet, bool autoFill = true, bool failHard = false, CancellationToken cancellationToken = default) => throw new NotSupportedException();
     public Task<Submit> Submit(ITransactionRequest tx, XrplWallet wallet, bool autoFill = true, bool failHard = false, CancellationToken cancellationToken = default) => throw new NotSupportedException();
-    public Task<TransactionResponse> Tx(TxRequest request, CancellationToken cancellationToken = default) => throw new NotSupportedException();
-    public Task<TransactionSummary> TxV2(TxRequest request, CancellationToken cancellationToken = default) => throw new NotSupportedException();
-    public Task<BookOffers> BookOffers(BookOffersRequest request, CancellationToken cancellationToken = default) => throw new NotSupportedException();
-    public Task<DepositAuthorized> DepositAuthorized(DepositAuthorizedRequest request, CancellationToken cancellationToken = default) => throw new NotSupportedException();
-    public Task<NFTBuyOffers> NFTBuyOffers(NFTBuyOffersRequest request, CancellationToken cancellationToken = default) => throw new NotSupportedException();
-    public Task<NFTSellOffers> NFTSellOffers(NFTSellOffersRequest request, CancellationToken cancellationToken = default) => throw new NotSupportedException();
-    public Task<AccountNFTs> AccountNFTs(AccountNFTsRequest request, CancellationToken cancellationToken = default) => throw new NotSupportedException();
-    public Task<AMMInfoResponse> AmmInfo(AMMInfoRequest request, CancellationToken cancellationToken = default) => throw new NotSupportedException();
-    public Task<object> Random(CancellationToken cancellationToken = default) => throw new NotSupportedException();
-    public Task<object> AnyRequest(BaseRequest request, CancellationToken cancellationToken = default) => throw new NotSupportedException();
-    public Task<Dictionary<string, object>> Request(Dictionary<string, object> request, CancellationToken cancellationToken = default) => throw new NotSupportedException();
-    public Task<T> GRequest<T, R>(R request, CancellationToken cancellationToken = default) where R : BaseRequest => throw new NotSupportedException();
-    public Task<SimulateResponse> Simulate(SimulateRequest request, CancellationToken cancellationToken = default) => throw new NotSupportedException();
-    public Task<PathFindResponse> PathFind(PathFindCreateRequest request, CancellationToken cancellationToken = default) => throw new NotSupportedException();
-    public Task<PathFindResponse> PathFindClose(PathFindCloseRequest request, CancellationToken cancellationToken = default) => throw new NotSupportedException();
-    public Task<PathFindResponse> PathFindStatus(PathFindStatusRequest request, CancellationToken cancellationToken = default) => throw new NotSupportedException();
-    public Task<RipplePathFindResponse> RipplePathFind(RipplePathFindRequest request, CancellationToken cancellationToken = default) => throw new NotSupportedException();
-    public Task<ChannelAuthorizeResponse> ChannelAuthorize(ChannelAuthorizeRequest request, CancellationToken cancellationToken = default) => throw new NotSupportedException();
-    public Task<ChannelVerifyResponse> ChannelVerify(ChannelVerifyRequest request, CancellationToken cancellationToken = default) => throw new NotSupportedException();
-    public Task<ServerDefinitionsResponse> ServerDefinitions(ServerDefinitionsRequest request, CancellationToken cancellationToken = default) => throw new NotSupportedException();
-    public Task<VaultInfoResponse> VaultInfo(VaultInfoRequest request, CancellationToken cancellationToken = default) => throw new NotSupportedException();
-    public Task<TransactionEntryResponse> TransactionEntry(TransactionEntryRequest request, CancellationToken cancellationToken = default) => throw new NotSupportedException();
+    public Task<XrplResponse<TransactionResponse>> TxV1(TxRequest request, CancellationToken cancellationToken = default) => throw new NotSupportedException();
+    public Task<XrplResponse<TransactionSummary>> TxV2(TxRequest request, CancellationToken cancellationToken = default) => throw new NotSupportedException();
+    public Task<XrplResponse<BookOffers>> BookOffers(BookOffersRequest request, CancellationToken cancellationToken = default) => throw new NotSupportedException();
+    public Task<XrplResponse<DepositAuthorized>> DepositAuthorized(DepositAuthorizedRequest request, CancellationToken cancellationToken = default) => throw new NotSupportedException();
+    public Task<XrplResponse<NFTBuyOffers>> NFTBuyOffers(NFTBuyOffersRequest request, CancellationToken cancellationToken = default) => throw new NotSupportedException();
+    public Task<XrplResponse<NFTSellOffers>> NFTSellOffers(NFTSellOffersRequest request, CancellationToken cancellationToken = default) => throw new NotSupportedException();
+    public Task<XrplResponse<AccountNFTs>> AccountNFTs(AccountNFTsRequest request, CancellationToken cancellationToken = default) => throw new NotSupportedException();
+    public Task<XrplResponse<AMMInfoResponse>> AmmInfo(AMMInfoRequest request, CancellationToken cancellationToken = default) => throw new NotSupportedException();
+    public Task<XrplResponse<object>> Random(CancellationToken cancellationToken = default) => throw new NotSupportedException();
+    public Task<XrplResponse<object>> AnyRequest(BaseRequest request, CancellationToken cancellationToken = default) => throw new NotSupportedException();
+    public Task<XrplResponse<Dictionary<string, object>>> Request(Dictionary<string, object> request, CancellationToken cancellationToken = default) => throw new NotSupportedException();
+    public Task<XrplResponse<T>> GRequest<T, R>(R request, CancellationToken cancellationToken = default) where R : BaseRequest => throw new NotSupportedException();
+    public Task<XrplResponse<SimulateResponse>> Simulate(SimulateRequest request, CancellationToken cancellationToken = default) => throw new NotSupportedException();
+    public Task<XrplResponse<PathFindResponse>> PathFind(PathFindCreateRequest request, CancellationToken cancellationToken = default) => throw new NotSupportedException();
+    public Task<XrplResponse<PathFindResponse>> PathFindClose(PathFindCloseRequest request, CancellationToken cancellationToken = default) => throw new NotSupportedException();
+    public Task<XrplResponse<PathFindResponse>> PathFindStatus(PathFindStatusRequest request, CancellationToken cancellationToken = default) => throw new NotSupportedException();
+    public Task<XrplResponse<RipplePathFindResponse>> RipplePathFind(RipplePathFindRequest request, CancellationToken cancellationToken = default) => throw new NotSupportedException();
+    public Task<XrplResponse<ChannelAuthorizeResponse>> ChannelAuthorize(ChannelAuthorizeRequest request, CancellationToken cancellationToken = default) => throw new NotSupportedException();
+    public Task<XrplResponse<ChannelVerifyResponse>> ChannelVerify(ChannelVerifyRequest request, CancellationToken cancellationToken = default) => throw new NotSupportedException();
+    public Task<XrplResponse<ServerDefinitionsResponse>> ServerDefinitions(ServerDefinitionsRequest request, CancellationToken cancellationToken = default) => throw new NotSupportedException();
+    public Task<XrplResponse<VaultInfoResponse>> VaultInfo(VaultInfoRequest request, CancellationToken cancellationToken = default) => throw new NotSupportedException();
+    public Task<XrplResponse<TransactionEntryResponse>> TransactionEntry(TransactionEntryRequest request, CancellationToken cancellationToken = default) => throw new NotSupportedException();
     public void Dispose() { }
 
     #endregion

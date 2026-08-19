@@ -1,6 +1,7 @@
 ﻿// https://github.com/XRPLF/xrpl.js/blob/main/packages/xrpl/src/models/ledger/DepositPreauth.ts
 // https://xrpl.org/docs/references/protocol/ledger-data/ledger-entry-types/depositpreauth
 
+using System.Text.Json;
 using System.Text.Json.Serialization;
 
 using System.Collections.Generic;
@@ -17,11 +18,6 @@ namespace Xrpl.Models.Ledger
     /// </summary>
     public class LODepositPreauth : BaseLedgerEntry
     {
-        public LODepositPreauth()
-        {
-            LedgerEntryType = LedgerEntryType.DepositPreauth;
-        }
-
         /// <summary>
         /// The account that granted the preauthorization (the destination of the future payments).
         /// </summary>
@@ -61,7 +57,7 @@ namespace Xrpl.Models.Ledger
         /// <summary>
         /// The index of the ledger that contains the transaction that most recently modified this object.
         /// </summary>
-        public uint PreviousTxnLgrSeq { get; set; }
+        public uint? PreviousTxnLgrSeq { get; set; }
     }
 
     /// <summary>
@@ -70,6 +66,12 @@ namespace Xrpl.Models.Ledger
     /// </summary>
     public class AuthorizeCredentialEntry
     {
+        // No unknown-field capture here on purpose: this shape is also part of an outgoing
+        // transaction (DepositPreauth), and a member captured off a node response would
+        // ride back out inside a transaction the user never put it in. StObject.FromJson
+        // passes signingOnly only to the top level, so such a member would reach the
+        // displayed tx_json but not the signed blob.
+
         [JsonPropertyName("Credential")]
         public AuthorizeCredentialBody Credential { get; set; }
     }
@@ -79,6 +81,12 @@ namespace Xrpl.Models.Ledger
     /// </summary>
     public class AuthorizeCredentialBody
     {
+        // No unknown-field capture here on purpose: this shape is also part of an outgoing
+        // transaction (DepositPreauth), and a member captured off a node response would
+        // ride back out inside a transaction the user never put it in. StObject.FromJson
+        // passes signingOnly only to the top level, so such a member would reach the
+        // displayed tx_json but not the signed blob.
+
         /// <summary>
         /// The account that issued the credential.
         /// </summary>

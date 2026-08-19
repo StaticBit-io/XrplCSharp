@@ -11,11 +11,6 @@ namespace Xrpl.Models.Ledger;
 /// </summary>
 public class LOBridge : BaseLedgerEntry
 {
-    public LOBridge()
-    {
-        LedgerEntryType = LedgerEntryType.Bridge;
-    }
-
     /// <summary>
     /// The account that owns this bridge on this chain.
     /// </summary>

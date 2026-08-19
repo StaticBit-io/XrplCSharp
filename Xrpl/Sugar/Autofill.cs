@@ -186,15 +186,38 @@ namespace Xrpl.Sugar
         {
             LedgerIndex index = new LedgerIndex(LedgerIndexType.Current);
             AccountInfoRequest request = new AccountInfoRequest((string)tx["Account"]) { LedgerIndex = index };
-            AccountInfo data = await client.AccountInfo(request, cancellationToken);
-            tx.TryAdd("Sequence", data.AccountData.Sequence);
-            return data.AccountData.Sequence;
+            AccountInfo data = await client.AccountInfo(request, cancellationToken).Typed();
+            // account_info returns the full AccountRoot for a live "current" ledger request, so
+            // AccountData (and its Sequence) is always present; a missing AccountData or Sequence
+            // means the node response is malformed and should fail loudly rather than dereference
+            // a null AccountData or silently autofill 0.
+            if (data.AccountData is null)
+            {
+                throw new XrplException("account_info response did not include account_data.");
+            }
+
+            uint? sequence = data.AccountData.Sequence;
+            if (sequence == null)
+            {
+                throw new XrplException("account_info response did not include the account's Sequence.");
+            }
+            tx.TryAdd("Sequence", sequence.Value);
+            return sequence.Value;
         }
 
         public static async Task<BigInteger> FetchReserveFee(this IXrplClient client, CancellationToken cancellationToken = default)
         {
             ServerStateRequest request = new ServerStateRequest();
-            ServerState data = await client.ServerState(request, cancellationToken);
+            ServerState data = await client.ServerState(request, cancellationToken).Typed();
+
+            // Checked before dereferencing, not after: reading through State.ValidatedLedger and
+            // testing only the leaf turns a response missing either container into a
+            // NullReferenceException, which says nothing about what the node returned.
+            if (data.State?.ValidatedLedger is null)
+            {
+                throw new XrplException("server_state response did not include the validated ledger.");
+            }
+
             uint? fee = data.State.ValidatedLedger.ReserveInc;
 
             if (fee == null)
@@ -339,7 +362,7 @@ namespace Xrpl.Sugar
 
             try
             {
-                AccountInfo data = await client.AccountInfo(request, cancellationToken);
+                AccountInfo data = await client.AccountInfo(request, cancellationToken).Typed();
                 int? entries = data?.SignerLists?.Length > 0 ? data.SignerLists[0].SignerEntries?.Count : null;
                 return entries is > 0 ? entries.Value : 1;
             }
@@ -425,7 +448,7 @@ namespace Xrpl.Sugar
                     Index = loanId,
                     LedgerIndex = new LedgerIndex(LedgerIndexType.Current),
                 };
-                LedgerEntryResponse response = await client.LedgerEntry(request, cancellationToken);
+                LedgerEntryResponse response = await client.LedgerEntry(request, cancellationToken).Typed();
                 return response?.Node as LOLoan;
             }
             catch (Exception) when (!cancellationToken.IsCancellationRequested)
@@ -664,7 +687,7 @@ namespace Xrpl.Sugar
                 LedgerIndex = index,
                 DeletionBlockersOnly = true,
             };
-            AccountObjects response = await client.AccountObjects(request, cancellationToken);
+            AccountObjects response = await client.AccountObjects(request, cancellationToken).Typed();
             TaskCompletionSource task = new TaskCompletionSource();
             if (response.AccountObjectList.Count > 0)
             {

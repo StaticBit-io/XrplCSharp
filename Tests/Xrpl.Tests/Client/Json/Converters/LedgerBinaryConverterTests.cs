@@ -30,7 +30,7 @@ public class TestULedgerBinaryConverter
         Assert.IsInstanceOfType(result.Ledger, typeof(LedgerBinaryEntity));
         LedgerBinaryEntity binary = (LedgerBinaryEntity)result.Ledger;
         Assert.AreEqual("ABCD1234", binary.LedgerData);
-        Assert.IsTrue(binary.Closed);
+        Assert.AreEqual(true, binary.Closed);
     }
 
     [TestMethod]
@@ -42,6 +42,6 @@ public class TestULedgerBinaryConverter
         Model result = JsonSerializer.Deserialize<Model>(json, XrplJsonOptions.Default);
         Assert.IsNotNull(result.Ledger);
         Assert.IsInstanceOfType(result.Ledger, typeof(LedgerEntity));
-        Assert.IsFalse(result.Ledger.Closed);
+        Assert.AreEqual(false, result.Ledger.Closed);
     }
 }

@@ -7,6 +7,7 @@ using Xrpl.Models.Methods;
 using Xrpl.Models.Transactions;
 using Xrpl.Wallet;
 
+using Xrpl.Client;
 // https://github.com/XRPLF/xrpl.js/blob/main/packages/xrpl/test/integration/transactions/checkCreate.ts
 
 namespace XrplTests.Xrpl.ClientLib.Integration
@@ -44,7 +45,7 @@ namespace XrplTests.Xrpl.ClientLib.Integration
 
             // get check ID
             AccountObjectsRequest request1 = new AccountObjectsRequest(runner.wallet.ClassicAddress) { Type = LedgerEntryType.Check };
-            AccountObjects response1 = await runner.client.AccountObjects(request1);
+            AccountObjects response1 = await runner.client.AccountObjects(request1).Typed();
             Assert.HasCount(1, response1.AccountObjectList);
         }
     }

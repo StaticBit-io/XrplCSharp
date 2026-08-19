@@ -26,7 +26,7 @@ namespace Xrpl.Models.Transactions
         public string Destination { get; set; }
 
         /// <inheritdoc />
-        public uint SettleDelay { get; set; }
+        public uint? SettleDelay { get; set; }
 
         /// <inheritdoc />
         public string PublicKey { get; set; }
@@ -77,7 +77,7 @@ namespace Xrpl.Models.Transactions
         /// <summary>
         /// Amount of time the source address must wait before closing the channel if it has unclaimed XRP.
         /// </summary>
-        uint SettleDelay { get; set; }
+        uint? SettleDelay { get; set; }
         /// <summary>
         /// (Optional) Arbitrary integer used to identify the reason for this payment, or a sender on whose behalf this transaction is made.<br/>
         /// Conventionally, a refund should specify the initial payment's SourceTag as the refund payment's DestinationTag.
@@ -95,7 +95,7 @@ namespace Xrpl.Models.Transactions
         public string Destination { get; set; }
 
         /// <inheritdoc />
-        public uint SettleDelay { get; set; }
+        public uint? SettleDelay { get; set; }
 
         /// <inheritdoc />
         public string PublicKey { get; set; }

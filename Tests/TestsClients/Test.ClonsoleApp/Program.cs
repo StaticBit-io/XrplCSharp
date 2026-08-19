@@ -75,7 +75,7 @@ internal class Program
 
             //await SetSigners(walletMultiSign, walletMultiSigner_1, walletMultiSigner_2);
 
-             var features = await client.ServerFeatures();
+             var features = await client.ServerFeatures().Typed();
             var canBe = features.GetActivated();
             var mpts = features.GetByNameContains("mpt");
             foreach (var mpt in canBe)
@@ -125,7 +125,7 @@ internal class Program
                     Marker = marker,
                     Limit = 200,
                     //IgnoreDefault = true
-                });
+                }).Typed();
             lines.AddRange(all.TrustLines);
             marker = all.Marker;
         }
@@ -173,8 +173,8 @@ internal class Program
             TakerPays = payment.DeliverMin,
             Flags = OfferCreateFlags.tfImmediateOrCancel | OfferCreateFlags.tfSell,
         };
-        var simulate = await client.Simulate(new SimulateRequest() { Transaction = payment });
-        var simulate2 = await client.Simulate(new SimulateRequest() { Transaction = offer });
+        var simulate = await client.Simulate(new SimulateRequest() { Transaction = payment }).Typed();
+        var simulate2 = await client.Simulate(new SimulateRequest() { Transaction = offer }).Typed();
         var changes = BalanceChanges.GetBalanceChanges(simulate.Meta);
         var changes2 = BalanceChanges.GetBalanceChanges(simulate2.Meta);
         var jsonSimulate = JsonSerializer.Serialize(simulate2);
@@ -213,7 +213,7 @@ internal class Program
                 Role = RoleType.Gateway,
                 Transactions = true,
                 Limit = 100
-            });
+            }).Typed();
         foreach (var request in noRippleCheck.Transactions)
         {
             Console.WriteLine(request.ToJson());
@@ -346,9 +346,26 @@ internal class Program
                     await Task.Run(Console.ReadLine);
 
                     await client.ChangeServer(server);
-                    ServerState? serverInfo = await client.ServerState(new ServerStateRequest());
-                    string lineReserveFee = serverInfo.State.ValidatedLedger.ReserveInc.ToString();
-                    string accReserveFee = serverInfo.State.ValidatedLedger.ReserveBase.ToString();
+                    ServerState? serverInfo = await client.ServerState(new ServerStateRequest()).Typed();
+                    // Check the whole path, not just the leaves: server_state.validated_ledger is the
+                    // only place these live, and a response missing any level of it is malformed the
+                    // same way a missing reserve is. Dereferencing first would turn that into a
+                    // NullReferenceException instead of the validation error below.
+                    if (serverInfo?.State?.ValidatedLedger is not { } validatedLedger)
+                    {
+                        throw new ValidationException("server_state response did not include a validated ledger.");
+                    }
+
+                    // reserve_base/reserve_inc are nullable (see Balances.GetXrpFreeBalance) — a
+                    // missing value means a malformed node response, not a zero reserve.
+                    uint? reserveInc = validatedLedger.ReserveInc;
+                    uint? reserveBase = validatedLedger.ReserveBase;
+                    if (reserveInc == null || reserveBase == null)
+                    {
+                        throw new ValidationException("server_state response did not include the validated ledger's reserve_base/reserve_inc.");
+                    }
+                    string lineReserveFee = reserveInc.Value.ToString();
+                    string accReserveFee = reserveBase.Value.ToString();
                     var _lineReserveFee = new Currency
                     {
                         Value = lineReserveFee,
@@ -482,7 +499,7 @@ internal class Program
             new SimulateRequest()
             {
                 Transaction = tx
-            });
+            }).Typed();
         if (result.TxJson is Payment { } payment)
         {
 
@@ -527,7 +544,7 @@ internal class Program
         var wallet = XrplWallet.FromSeed(seed);
 
         var request = new AccountInfoRequest(wallet.ClassicAddress);
-        var accountInfo = await client.AccountInfo(request);
+        var accountInfo = await client.AccountInfo(request).Typed();
 
         // prepare the transaction
         // the amount is expressed in drops, not XRP
@@ -561,7 +578,7 @@ internal class Program
         Console.WriteLine("NEXT");
 
         var request = new AccountInfoRequest(wallet.ClassicAddress);
-        var accountInfo = await client.AccountInfo(request);
+        var accountInfo = await client.AccountInfo(request).Typed();
 
         // prepare the transaction
         // the amount is expressed in drops, not XRP
@@ -959,7 +976,7 @@ internal class Program
     private static async Task SetSigners(XrplWallet owner, XrplWallet signer1, XrplWallet signer2)
     {
         // Проверьте: у owner достаточно резерва на SignerList (≈ +2 XRP * на подпись).
-        var acc = await client.AccountInfo(new AccountInfoRequest(owner.ClassicAddress));
+        var acc = await client.AccountInfo(new AccountInfoRequest(owner.ClassicAddress)).Typed();
 
         // Создаём/обновляем список подписантов (2 из 2)
         var sls = new SignerListSet
@@ -981,7 +998,7 @@ internal class Program
     private static async Task DisableMaster(XrplWallet owner)
     {
         AccountInfo acc;
-        acc = await client.AccountInfo(new AccountInfoRequest(owner.ClassicAddress));
+        acc = await client.AccountInfo(new AccountInfoRequest(owner.ClassicAddress)).Typed();
 
         var disableMaster = new AccountSet
         {

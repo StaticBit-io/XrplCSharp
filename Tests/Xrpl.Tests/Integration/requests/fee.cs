@@ -6,6 +6,7 @@ using System.Threading.Tasks;
 using Microsoft.VisualStudio.TestTools.UnitTesting;
 using Xrpl.Models.Methods;
 
+using Xrpl.Client;
 namespace XrplTests.Xrpl.ClientLib.Integration
 {
     [TestClass]
@@ -24,7 +25,7 @@ namespace XrplTests.Xrpl.ClientLib.Integration
         [TestMethod]
         public async Task TestRequestMethod()
         {
-            Fee response = await runner.client.Fee();
+            Fee response = await runner.client.Fee().Typed();
             Assert.IsNotNull(response);
         }
     }

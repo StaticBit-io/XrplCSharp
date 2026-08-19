@@ -11,14 +11,6 @@ namespace Xrpl.Models.Ledger
     public class LODID : BaseLedgerEntry
     {
         /// <summary>
-        /// Initializes a new instance of the LODID class.
-        /// </summary>
-        public LODID()
-        {
-            LedgerEntryType = LedgerEntryType.DID;
-        }
-
-        /// <summary>
         /// The account that controls the DID.
         /// </summary>
         [JsonPropertyName("Account")]
@@ -59,6 +51,6 @@ namespace Xrpl.Models.Ledger
         /// The index of the ledger that contains the transaction that most recently modified this entry.
         /// </summary>
         [JsonPropertyName("PreviousTxnLgrSeq")]
-        public uint PreviousTxnLgrSeq { get; set; }
+        public uint? PreviousTxnLgrSeq { get; set; }
     }
 }

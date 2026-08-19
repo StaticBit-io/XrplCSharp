@@ -78,8 +78,19 @@ namespace Xrpl.Sugar
             // read-path check must compare Expiration itself instead of trusting
             // the entry's existence.
             LedgerRequest ledgerRequest = new LedgerRequest { LedgerIndex = new LedgerIndex(LedgerIndexType.Validated) };
-            LOLedger ledgerResponse = await client.Ledger(ledgerRequest, cancellationToken);
-            LedgerEntity ledger = (LedgerEntity)ledgerResponse.LedgerEntity;
+            LOLedger ledgerResponse = await client.Ledger(ledgerRequest, cancellationToken).Typed();
+            // LedgerEntity is interface-typed, and the cast has two ways to go wrong that look
+            // nothing alike at the call site: a response without a "ledger" member casts to null
+            // and faults on the next dereference, while a binary response deserializes to
+            // LedgerBinaryEntity and throws InvalidCastException. Both are protocol conditions and
+            // should read as such.
+            if (ledgerResponse.LedgerEntity is not LedgerEntity ledger)
+            {
+                throw new ValidationException(
+                    "Validated ledger response did not include a JSON ledger object"
+                    + (ledgerResponse.LedgerEntity is null ? "." : " - got " + ledgerResponse.LedgerEntity.GetType().Name + ", which a binary request produces."));
+            }
+
             uint ledgerIndex = Convert.ToUInt32(ledger.LedgerIndex);
             DateTime closeTime = ledger.CloseTime
                 ?? throw new RippleException("Validated ledger response did not include a close time.");
@@ -90,7 +101,7 @@ namespace Xrpl.Sugar
                 Index = domainId,
                 LedgerIndex = pinnedIndex
             };
-            LedgerEntryResponse domainResponse = await client.LedgerEntry(domainRequest, cancellationToken);
+            LedgerEntryResponse domainResponse = await client.LedgerEntry(domainRequest, cancellationToken).Typed();
             if (domainResponse.Node is not LOPermissionedDomain domain)
                 throw new RippleException($"Ledger entry {domainId} is not a PermissionedDomain.");
 
@@ -119,7 +130,12 @@ namespace Xrpl.Sugar
                 if (credential is null)
                     continue;
 
-                bool accepted = (credential.Flags & (uint)CredentialFlags.lsfAccepted) != 0;
+                // Flags is nullable because these models double as metadata projections, where a
+                // member can be absent. Absence must not read as accepted: a lifted `!=` returns
+                // true when either side is null — unlike a lifted `<`, which returns false — so the
+                // presence check has to be explicit.
+                bool accepted = credential.Flags is { } flags
+                    && (flags & (uint)CredentialFlags.lsfAccepted) != 0;
                 bool expired = credential.Expiration is DateTime expiration && closeTime > expiration;
                 if (accepted && !expired)
                 {
@@ -154,7 +170,7 @@ namespace Xrpl.Sugar
             };
             try
             {
-                LedgerEntryResponse response = await client.LedgerEntry(request, cancellationToken);
+                LedgerEntryResponse response = await client.LedgerEntry(request, cancellationToken).Typed();
                 return response.Node as LOCredential;
             }
             catch (RippledException ex) when (ex.Response?.Error == XrplErrorCodes.EntryNotFound)

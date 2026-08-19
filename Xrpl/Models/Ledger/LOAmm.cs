@@ -1,4 +1,5 @@
-﻿using System;
+﻿using System.Text.Json;
+using System;
 using System.Collections.Generic;
 
 using System.Text.Json.Serialization;
@@ -10,10 +11,6 @@ namespace Xrpl.Models.Ledger
 {
     public class LOAmm : BaseLedgerEntry
     {
-        public LOAmm()
-        {
-            LedgerEntryType = LedgerEntryType.AMM;
-        }
         /// <summary>
         /// The special account that holds the AMM's assets and issues its LPTokens.
         /// Serialized as <c>Account</c>, which is the name rippled gives this field.
@@ -50,7 +47,7 @@ namespace Xrpl.Models.Ledger
         /// between 0% and 1%.<br/>
         /// This field is required.
         /// </summary>
-        public uint TradingFee { get; set; }
+        public uint? TradingFee { get; set; }
         /// <summary>
         /// A list of vote objects, representing votes on the pool's trading fee..
         /// </summary>
@@ -79,6 +76,12 @@ namespace Xrpl.Models.Ledger
     }
     public class AuthAccount : IAuthAccount
     {
+        // No unknown-field capture here on purpose: this shape is also part of an outgoing
+        // transaction (AMMBid), and a member captured off a node response would
+        // ride back out inside a transaction the user never put it in. StObject.FromJson
+        // passes signingOnly only to the top level, so such a member would reach the
+        // displayed tx_json but not the signed blob.
+
         [JsonPropertyName("account")]
         public string Account { get; set; }
     }
@@ -91,6 +94,16 @@ namespace Xrpl.Models.Ledger
     }
     public class VoteEntry : IVoteEntry
     {
+        /// <summary>
+        /// Members the node sent that no declared property here claims. Mirrors
+        /// <see cref="BaseLedgerEntry.UnknownFields"/> for ledger entries and
+        /// <see cref="Xrpl.Models.Methods.BaseMethodResult.UnknownFields"/> for command results:
+        /// without it, anything this model does not yet know about is dropped between the node and
+        /// the caller instead of surviving the round trip.
+        /// </summary>
+        [JsonExtensionData]
+        public Dictionary<string, JsonElement> UnknownFields { get; set; }
+
         [JsonPropertyName("account")]
         public string Account { get; set; }
         [JsonPropertyName("trading_fee")]
@@ -103,6 +116,16 @@ namespace Xrpl.Models.Ledger
     /// </summary>
     public class AuctionSlot
     {
+        /// <summary>
+        /// Members the node sent that no declared property here claims. Mirrors
+        /// <see cref="BaseLedgerEntry.UnknownFields"/> for ledger entries and
+        /// <see cref="Xrpl.Models.Methods.BaseMethodResult.UnknownFields"/> for command results:
+        /// without it, anything this model does not yet know about is dropped between the node and
+        /// the caller instead of surviving the round trip.
+        /// </summary>
+        [JsonExtensionData]
+        public Dictionary<string, JsonElement> UnknownFields { get; set; }
+
         /// <summary>
         /// The current owner of this auction slot.
         /// </summary>

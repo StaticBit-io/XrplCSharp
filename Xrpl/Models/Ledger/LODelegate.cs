@@ -11,11 +11,6 @@ namespace Xrpl.Models.Ledger;
 /// </summary>
 public class LODelegate : BaseLedgerEntry
 {
-    public LODelegate()
-    {
-        LedgerEntryType = LedgerEntryType.Delegate;
-    }
-
     /// <summary>
     /// The account that granted the permissions.
     /// </summary>

@@ -45,6 +45,18 @@ namespace Xrpl.Models.Transactions
         /// See Limit Quality for details.
         /// </summary>
         tfLimitQuality = 262144,
+
+        /// <summary>
+        /// The sponsor covers the reserve of an account this payment creates (XLS-68).
+        /// </summary>
+        /// <remarks>
+        /// rippled declares it in the Payment block of TxFlags.h as 0x00080000. The rest of
+        /// XLS-68 was already modelled here - the Sponsor fields, SponsorshipSet, SponsorshipFlags
+        /// - and only this flag was missing, which is what a conformance check over TxFlags.h
+        /// would have caught. No such check exists: ledger flags are verified against
+        /// LedgerFormats.h, transaction flags against nothing at all.
+        /// </remarks>
+        tfSponsorCreatedAccount = 524288,
     }
 
     /// <inheritdoc cref="IPayment" />
@@ -64,7 +76,29 @@ namespace Xrpl.Models.Transactions
         /// API v2 renames the ledger's Amount field to DeliverMax on the wire and omits Amount entirely.
         /// System.Text.Json skips non-public members unless they carry [JsonInclude], so this attribute
         /// is what keeps the alias wired up — without it Amount silently stays null on every v2 payload.
-        /// The property is set-only, so DeliverMax is never written back out.
+        /// <para>
+        /// The property is deliberately set-only, so DeliverMax is never written back out, unlike its
+        /// counterpart on <see cref="PaymentResponse"/>. <b>Do not "fix" this asymmetry by copying
+        /// PaymentResponse's read/write alias pair here</b> — it would be a signing-safety regression, not
+        /// a cleanup. The reason: <c>DeliverMax</c> has no entry of its own in
+        /// <c>Base/Xrpl.BinaryCodec/Enums/definitions.json</c> — checked directly: <c>Amount</c>,
+        /// <c>DeliverMin</c> and <c>SendMax</c> are all present there, <c>DeliverMax</c> is not, because it
+        /// is a JSON API v2 presentation-layer rename with no binary field code of its own. A
+        /// <see cref="PaymentResponse"/> is read-only display data, so preserving the wire name it arrived
+        /// under is safe and correct for a reconciliation UI. This class instead feeds
+        /// <c>ToJson()</c> → <c>EncodeForSigning</c> (see <c>XrplWallet.Sign</c>, which calls
+        /// <c>ITransactionRequest.ToJson()</c> before handing the dictionary to the binary codec): the
+        /// codec looks fields up by name in <c>definitions.json</c>, so an object that re-emitted
+        /// "DeliverMax" hands the codec a name it cannot resolve. What happens then depends on the
+        /// entry point, and both outcomes are bad — verified by execution:
+        /// <c>EncodeForSigning</c> raises <c>InvalidJsonException: unknown field DeliverMax</c>, so
+        /// signing fails outright, while a direct <c>XrplBinaryCodec.Encode</c> drops the member
+        /// silently and yields a blob with no amount in it at all. On the <c>Sign</c> path the loud
+        /// failure comes first, since the signature is computed before the final blob is built — but
+        /// "it throws instead" is not a reason to relax the rule, and nothing stops a caller from
+        /// reaching <c>Encode</c> directly. So Amount is always written here, regardless of which
+        /// name it came in under.
+        /// </para>
         /// </remarks>
         [JsonInclude]
         [JsonPropertyName("DeliverMax")]
@@ -196,24 +230,92 @@ namespace Xrpl.Models.Transactions
     /// <inheritdoc cref="IPayment" />
     public class PaymentResponse : TransactionResponse, IPayment, IDestination
     {
+        /// <summary>
+        /// True once a value has been assigned through the <see cref="AmountAlias"/> setter below —
+        /// i.e. the node sent (or an earlier deserialize pass already saw) the field under its API v1
+        /// name "Amount". Independent of <see cref="_receivedAsDeliverMax"/>: rippled's <c>tx</c>
+        /// method with <c>api_version: 1</c> sends BOTH "Amount" and "DeliverMax" for the same
+        /// transaction (confirmed live against mainnet — see
+        /// <c>Fixtures/Responses/tx_v1_raw.json</c>), and <see cref="System.Text.Json"/> calls both
+        /// property setters in the order the members appear in the source JSON. A single bool here
+        /// could only remember whichever setter ran last, so the earlier one's presence would be
+        /// lost — exactly the defect this pair of flags exists to avoid.
+        /// </summary>
+        private bool _receivedAsAmount;
+
+        /// <summary>
+        /// True once a value has been assigned through the <see cref="DeliverMax"/> setter below —
+        /// i.e. the node sent the field under its API v2 name "DeliverMax". See
+        /// <see cref="_receivedAsAmount"/> for why this is a second, independent flag rather than a
+        /// single "which one" bool.
+        /// </summary>
+        private bool _receivedAsDeliverMax;
+
         /// <inheritdoc />
-        [JsonConverter(typeof(CurrencyConverter))]
+        /// <remarks>
+        /// The single value callers read, regardless of whether the node sent it as "Amount" (API v1),
+        /// "DeliverMax" (API v2), or both (API v1, confirmed live - see
+        /// <see cref="_receivedAsAmount"/>). Excluded from JSON directly: <see cref="AmountAlias"/> and
+        /// <see cref="DeliverMax"/> below own the wire representation, so every field name a value came
+        /// in under is one it goes back out under — callers never have to guess which one(s) fired.
+        /// </remarks>
+        /// <remarks>
+        /// One value behind two names, which is exact for every response rippled actually produces:
+        /// v2 sends DeliverMax alone, v1 sends both carrying the same amount. It is not exact if the
+        /// two ever disagree - the setters run in document order, the later one wins, and both names
+        /// then re-serialize with that single value. Measured on a hand-built payload where the node
+        /// "sent" Amount 1000000 and DeliverMax 999, the round trip emits 999 under both names, so
+        /// Amount reads as a value that was never sent. rippled cannot produce that response - the v1
+        /// path duplicates one field rather than computing two - so this is a property of malformed
+        /// or hostile input, not of the protocol. <c>Raw</c> keeps the truth either way; a consumer
+        /// that must detect tampering should compare against it rather than trusting this projection.
+        /// </remarks>
+        [JsonIgnore]
         public Currency Amount { get; set; }
+
+        /// <summary>
+        /// JSON view of <see cref="Amount"/> under its API v1 wire name "Amount". Serialized whenever
+        /// the value arrived under this name, or under neither name (an object assembled by
+        /// application code defaults to "Amount") - i.e. whenever it was NOT received exclusively as
+        /// DeliverMax. That "received both" case is what keeps this alias and <see cref="DeliverMax"/>
+        /// both emitting instead of one silently winning over the other.
+        /// </summary>
+        [JsonInclude]
+        [JsonPropertyName("Amount")]
+        [JsonConverter(typeof(CurrencyConverter))]
+        [JsonIgnore(Condition = JsonIgnoreCondition.WhenWritingNull)]
+        private Currency AmountAlias
+        {
+            get => _receivedAsAmount || !_receivedAsDeliverMax ? Amount : null;
+            set
+            {
+                Amount = value;
+                _receivedAsAmount = true;
+            }
+        }
 
         /// <inheritdoc />
         /// <remarks>
         /// API v2 renames the ledger's Amount field to DeliverMax on the wire and omits Amount entirely.
         /// System.Text.Json skips non-public members unless they carry [JsonInclude], so this attribute
         /// is what keeps the alias wired up — without it Amount silently stays null on every v2 payload
-        /// (account_tx, tx with api_version 2, subscription streams). The property is set-only, so
-        /// DeliverMax is never written back out and cannot reach the binary codec.
+        /// (account_tx, tx with api_version 2, subscription streams).
+        /// Serialized only when the node actually sent "DeliverMax" - a value that arrived as DeliverMax
+        /// is written back out as DeliverMax, not silently renamed to Amount, and an object the node
+        /// never sent this field for does not gain it on round-trip.
         /// </remarks>
         [JsonInclude]
         [JsonPropertyName("DeliverMax")]
         [JsonConverter(typeof(CurrencyConverter))]
-        private Currency? DeliverMax
+        [JsonIgnore(Condition = JsonIgnoreCondition.WhenWritingNull)]
+        private Currency DeliverMax
         {
-            set => Amount = value;
+            get => _receivedAsDeliverMax ? Amount : null;
+            set
+            {
+                Amount = value;
+                _receivedAsDeliverMax = true;
+            }
         }
 
         /// <inheritdoc />

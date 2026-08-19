@@ -1,4 +1,9 @@
-﻿using System.Text.Json.Serialization;
+﻿using System;
+using System.ComponentModel;
+using System.Text.Json.Serialization;
+
+using Xrpl.Client.Json;
+using Xrpl.Client.Json.Converters;
 
 //https://github.com/XRPLF/xrpl.js/blob/main/packages/xrpl/src/models/methods/baseMethod.ts
 //https://xrpl.org/error-formatting.html#error-formatting
@@ -26,10 +31,53 @@ public class ErrorResponse : BaseResponse
     public string? ErrorException { get; set; }
 
     /// <summary>
-    /// A copy of the request that prompted this error, in JSON format.<br/>
-    /// Caution: If the request contained any secrets, they are copied here!
+    /// Where the <c>request</c> member sits inside the frame passed to
+    /// <see cref="AttachFrame(byte[])"/>.
     /// </summary>
+    /// <remarks>
+    /// Deliberately not the parsed request: binding it to <see cref="object"/> made
+    /// System.Text.Json build a <see cref="System.Text.Json.JsonElement"/> whose pooled backing
+    /// array is never returned, on every error response - and <c>Sugar/Submit.cs</c> hits this
+    /// branch on every poll of an unconfirmed transaction. Recording bounds costs nothing.
+    /// </remarks>
     [JsonPropertyName("request")]
+    [JsonConverter(typeof(JsonSliceConverter))]
+    [JsonInclude]
+    internal JsonSlice RequestSlice
+    {
+        set => _requestSlice = value;
+    }
 
-    public object Request { get; set; }
+    private JsonSlice _requestSlice;
+
+    /// <summary>
+    /// A copy of the request that prompted this error, exactly as the node echoed it back.
+    /// </summary>
+    /// <remarks>
+    /// Caution: if the original request carried secrets, they are echoed here — same warning as
+    /// the field it replaces.
+    /// </remarks>
+    [JsonIgnore]
+    public RawJson RawRequest =>
+        _frame is null || _requestSlice.IsEmpty
+            ? default
+            : RawJson.Trusted(_frame, _requestSlice.Offset, _requestSlice.Length);
+
+    /// <inheritdoc/>
+    /// <remarks>
+    /// Checks <see cref="RequestSlice"/> against the frame before deferring to
+    /// <see cref="BaseResponse.AttachFrame(byte[])"/> for <c>result</c> and <c>id</c>, so a frame
+    /// that does not fit any of the three recorded slices is rejected here rather than lazily,
+    /// inside a consumer's read of <see cref="RawRequest"/>.
+    /// </remarks>
+    internal override void AttachFrame(byte[] frame)
+    {
+        if (frame is null)
+        {
+            throw new ArgumentNullException(nameof(frame));
+        }
+
+        ValidateSliceFitsFrame(_requestSlice, frame);
+        base.AttachFrame(frame);
+    }
 }

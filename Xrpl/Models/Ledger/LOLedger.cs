@@ -1,4 +1,5 @@
-﻿using System.Text.Json.Serialization;
+﻿using System.Text.Json;
+using System.Text.Json.Serialization;
 
 using System;
 using System.Collections.Generic;
@@ -38,22 +39,60 @@ namespace Xrpl.Models.Ledger
         /// </summary>
         [JsonPropertyName("validated")]
         public bool Validated { get; set; }
+
+        // Unknown-field capture is inherited from LOBaseLedger. It was declared here too, back
+        // when the base carried none: two declarations in one hierarchy compile - the derived one
+        // hides the base (CS0108) and System.Text.Json binds the derived one - so nothing failed
+        // visibly, while the base property stayed null forever. LedgerClosed hands callers an
+        // LOBaseLedger, which would have read empty with the data sitting on the subclass.
     }
 
     public abstract class BaseLedgerEntity : IBaseLedgerEntity
     {
-        /// <summary> Whether or not this ledger has been closed. </summary>
+        /// <summary>
+        /// Members the node sent that no declared property here claims. Mirrors
+        /// <see cref="BaseLedgerEntry.UnknownFields"/> for ledger entries and
+        /// <see cref="Xrpl.Models.Methods.BaseMethodResult.UnknownFields"/> for command results:
+        /// without it, anything this model does not yet know about is dropped between the node and
+        /// the caller instead of surviving the round trip.
+        /// </summary>
+        [JsonExtensionData]
+        public Dictionary<string, JsonElement> UnknownFields { get; set; }
+
+        /// <summary>
+        /// Whether or not this ledger has been closed.
+        /// </summary>
+        /// <remarks>
+        /// rippled's LedgerToJson.cpp <c>fillJson</c> omits this member entirely for a non-binary
+        /// response when the ledger is open (<c>closed == false</c>) and the request asked for
+        /// <c>full: true</c> — the only combination where the field is dropped instead of written
+        /// as <c>true</c>/<c>false</c>.
+        /// </remarks>
         [JsonPropertyName("closed")]
-        public bool Closed { get; set; }
+        public bool? Closed { get; set; }
     }
     public interface IBaseLedgerEntity
     {
+        /// <summary>
+        /// Members the node sent that no declared property claims - see
+        /// <see cref="BaseLedgerEntry.UnknownFields"/> for what capture is and what it costs.
+        /// </summary>
+        /// <remarks>
+        /// On the interface, not only on <see cref="BaseLedgerEntity"/>: <see cref="LOLedger.LedgerEntity"/>
+        /// is typed as this interface, so without it a caller holding the ledger of a <c>ledger</c>
+        /// response cannot read a captured field without casting to a concrete type - and which
+        /// concrete type it is depends on whether the request asked for binary.
+        /// </remarks>
+        public Dictionary<string, JsonElement> UnknownFields { get; set; }
+
         /// <summary> Whether or not this ledger has been closed. </summary>
-        public bool Closed { get; set; }
+        public bool? Closed { get; set; }
     }
 
     public class LedgerBinaryEntity : BaseLedgerEntity
     {
+        // Unknown-field capture is inherited from BaseLedgerEntity - see the note on LOLedger.
+
         [JsonPropertyName("ledger_data")]
         public string LedgerData { get; set; }
 
@@ -66,6 +105,8 @@ namespace Xrpl.Models.Ledger
     /// </summary>
     public class LedgerEntity : BaseLedgerEntity //todo rename to Ledger https://github.com/XRPLF/xrpl.js/blob/b20c05c3680d80344006d20c44b4ae1c3b0ffcac/packages/xrpl/src/models/ledger/Ledger.ts#L11
     {
+        // Unknown-field capture is inherited from BaseLedgerEntity - see the note on LOLedger.
+
         /// <summary>
         /// The SHA-512Half of this ledger's state tree information.
         /// </summary>
@@ -153,6 +194,16 @@ namespace Xrpl.Models.Ledger
     public class QueuedTransaction
     //todo Rename to LedgerQueueData https://github.com/XRPLF/xrpl.js/blob/b20c05c3680d80344006d20c44b4ae1c3b0ffcac/packages/xrpl/src/models/methods/ledger.ts#L87
     {
+        /// <summary>
+        /// Members the node sent that no declared property here claims. Mirrors
+        /// <see cref="BaseLedgerEntry.UnknownFields"/> for ledger entries and
+        /// <see cref="Xrpl.Models.Methods.BaseMethodResult.UnknownFields"/> for command results:
+        /// without it, anything this model does not yet know about is dropped between the node and
+        /// the caller instead of surviving the round trip.
+        /// </summary>
+        [JsonExtensionData]
+        public Dictionary<string, JsonElement> UnknownFields { get; set; }
+
         /// <summary>
         /// The Address of the sender for this queued transaction.
         /// </summary>

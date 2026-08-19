@@ -1,8 +1,10 @@
-﻿using System.Text.Json.Serialization;
+﻿using System.ComponentModel;
+using System.Text.Json.Serialization;
 
 using System;
 using System.Collections.Generic;
 
+using Xrpl.Client.Json;
 using Xrpl.Client.Json.Converters;
 using Xrpl.Models.Transactions;
 
@@ -13,11 +15,49 @@ namespace Xrpl.Models.Subscriptions
 {
     public class BaseResponse
     {
+        // Not [JsonIgnore]: System.Text.Json never serializes private fields, so the attribute
+        // would be a no-op that misleads a reader into thinking it is load-bearing here.
+        // Internal, not private: ErrorResponse adds its own slice-based member (RequestSlice)
+        // over the same frame, and needs this to build RawRequest the same way RawResult is built
+        // here.
+        internal byte[]? _frame;
+
+        private JsonSlice _idSlice;
+
+        private JsonSlice _resultSlice;
+
         /// <summary>
-        /// (WebSocket only) ID provided in the request that prompted this response
+        /// (WebSocket only) ID provided in the request that prompted this response.
         /// </summary>
+        /// <remarks>
+        /// Deliberately not the parsed id: binding it to <see cref="object"/> made
+        /// System.Text.Json build a <see cref="System.Text.Json.JsonElement"/> whose pooled backing
+        /// array is never returned, and it was then formatted back to a string on every response
+        /// just to be matched against a pending request's <see cref="System.Guid"/>. Recording
+        /// bounds costs nothing, and <see cref="RequestManager"/> parses the Guid straight out of
+        /// the bytes.
+        /// </remarks>
         [JsonPropertyName("id")]
-        public object? Id { get; set; }
+        [JsonConverter(typeof(JsonSliceConverter))]
+        [JsonInclude]
+        internal JsonSlice IdSlice
+        {
+            // Set-only, like the DeliverMax alias on PaymentResponse: System.Text.Json fills it on
+            // read but never asks for it on write, so the converter's Write - which refuses, because
+            // an envelope rebuilt from bounds would be a different document - is never reached.
+            // Without this, serializing any envelope model threw, including the public subscription
+            // types a consumer may well log.
+            set => _idSlice = value;
+        }
+
+        /// <summary>
+        /// The <c>id</c> member exactly as the node sent it.
+        /// </summary>
+        [JsonIgnore]
+        public RawJson RawId =>
+            _frame is null || _idSlice.IsEmpty
+                ? default
+                : RawJson.Trusted(_frame, _idSlice.Offset, _idSlice.Length);
 
         /// <summary>
         /// "error" if the request caused an error
@@ -31,11 +71,86 @@ namespace Xrpl.Models.Subscriptions
         [JsonPropertyName("type")]
         public string Type { get; set; }
         /// <summary>
-        /// (WebSocket only) The value success indicates the request was successfully received and understood by the server.<br/>
-        /// Some client libraries omit this field on success.
+        /// Where the <c>result</c> member sits inside the frame passed to
+        /// <see cref="AttachFrame(byte[])"/>.
         /// </summary>
+        /// <remarks>
+        /// Deliberately not the parsed result: binding it to <see cref="object"/> made
+        /// System.Text.Json build a <see cref="System.Text.Json.JsonElement"/> whose pooled backing
+        /// array is never returned, and the member was then parsed a second time to reach the
+        /// requested type. Recording bounds costs nothing and leaves exactly one parse, cut
+        /// straight from the frame.
+        /// </remarks>
         [JsonPropertyName("result")]
-        public object Result { get; set; }
+        [JsonConverter(typeof(JsonSliceConverter))]
+        [JsonInclude]
+        internal JsonSlice ResultSlice
+        {
+            set => _resultSlice = value;
+        }
+
+        /// <summary>
+        /// Pairs this envelope with the frame it was read from.
+        /// </summary>
+        /// <remarks>
+        /// One call instead of a settable property, so the bounds are checked against the buffer
+        /// once, where the two meet — a frame that does not match a recorded slice is rejected
+        /// here rather than lazily, inside a consumer's read of <see cref="RawResult"/> or
+        /// <see cref="RawId"/>. Internal on purpose: the bounds are only meaningful for a reader
+        /// that covered one contiguous buffer, which the Stream overloads of System.Text.Json do
+        /// not, and keeping this unreachable disarms that path by construction. Virtual so
+        /// <see cref="ErrorResponse"/> can check its own <c>RequestSlice</c> the same way before
+        /// deferring here.
+        /// </remarks>
+        /// <exception cref="ArgumentNullException">
+        /// <paramref name="frame"/> is <see langword="null"/>.
+        /// </exception>
+        /// <exception cref="ArgumentException">
+        /// <paramref name="frame"/> is too short for a recorded slice.
+        /// </exception>
+        internal virtual void AttachFrame(byte[] frame)
+        {
+            if (frame is null)
+            {
+                throw new ArgumentNullException(nameof(frame));
+            }
+
+            ValidateSliceFitsFrame(_resultSlice, frame);
+            ValidateSliceFitsFrame(_idSlice, frame);
+
+            _frame = frame;
+        }
+
+        /// <summary>
+        /// Checks that <paramref name="slice"/> lies inside <paramref name="frame"/>. Shared so
+        /// every slice-based member — here and in <see cref="ErrorResponse"/> — is checked the
+        /// same way, before <see cref="_frame"/> is set for any of them.
+        /// </summary>
+        /// <exception cref="ArgumentException"><paramref name="slice"/> does not fit.</exception>
+        internal static void ValidateSliceFitsFrame(JsonSlice slice, byte[] frame)
+        {
+            // Unsigned, matching the check in the RawJson constructor: a negative Offset cast to
+            // uint becomes huge and trips the first comparison, instead of making the subtraction
+            // below go negative and comparing wrong.
+            if (!slice.IsEmpty
+                && ((uint)slice.Offset > (uint)frame.Length
+                    || (uint)slice.Length > (uint)(frame.Length - slice.Offset)))
+            {
+                throw new ArgumentException(
+                    $"Frame of {frame.Length} bytes does not contain the recorded slice at "
+                    + $"[{slice.Offset}, {slice.Offset + (long)slice.Length}).",
+                    nameof(frame));
+            }
+        }
+
+        /// <summary>
+        /// The <c>result</c> member exactly as the node sent it.
+        /// </summary>
+        [JsonIgnore]
+        public RawJson RawResult =>
+            _frame is null || _resultSlice.IsEmpty
+                ? default
+                : RawJson.Trusted(_frame, _resultSlice.Offset, _resultSlice.Length);
         /// <summary>
         /// (May be omitted) If this field is provided, the value is the string load.<br/>
         /// This means the client is approaching the rate limiting threshold where the server will disconnect this client.

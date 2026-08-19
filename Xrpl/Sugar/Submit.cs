@@ -149,7 +149,7 @@ public static class SubmitSugar
             TxBlob = signedTxEncoded,
             FailHard = failHard,
         };
-        var response = await client.GRequest<Submit, SubmitRequest>(request, cancellationToken);
+        var response = await client.GRequest<Submit, SubmitRequest>(request, cancellationToken).Typed();
         return response;
     }
 
@@ -290,14 +290,28 @@ public static class SubmitSugar
                 new AccountInfoRequest(acct)
                 {
                     SignerLists = true
-                }, cancellationToken);
-            var hasSL = ai.SignerLists?.Length > 0 && ai.AccountFlags!.DisableMasterKey;
+                }, cancellationToken).Typed();
+            // Both are read below to decide how this account signs, and a response missing either
+            // is malformed rather than a signer with no flags: the master-key check would otherwise
+            // throw NullReferenceException here, and the RegularKey lookup further down would do
+            // the same. Failing with the account named beats either.
+            if (ai.AccountData is null)
+            {
+                throw new ValidationException($"account_info response for '{acct}' did not include account_data.");
+            }
+
+            if (ai.AccountFlags is null)
+            {
+                throw new ValidationException($"account_info response for '{acct}' did not include the account's flags.");
+            }
+
+            var hasSL = ai.SignerLists?.Length > 0 && ai.AccountFlags.DisableMasterKey;
             if (hasSL)
             {
                 var sl = ai.SignerLists[0];
-                var (picked, sum) = BatchSigningHelper.PickWalletsForQuorum(sl, walletByAddr);
+                var (picked, sum, quorum) = BatchSigningHelper.PickWalletsForQuorum(sl, walletByAddr);
 
-                if (sum < sl.SignerQuorum)
+                if (sum < quorum)
                 {
                     throw new ValidationException($"Not enough signer wallets for multisig account {acct}.");
                 }
@@ -308,7 +322,7 @@ public static class SubmitSugar
             }
             else
             {
-                if (walletByAddr.TryGetValue(acct, out var owner) && !ai.AccountFlags!.DisableMasterKey)
+                if (walletByAddr.TryGetValue(acct, out var owner) && !ai.AccountFlags.DisableMasterKey)
                     partialBlobs.Add(owner.SignAsBatchPart(txJson, multisign: false, signingFor: acct).TxBlob);
                 else if (!string.IsNullOrEmpty(ai.AccountData.RegularKey) &&
                          walletByAddr.TryGetValue(ai.AccountData.RegularKey, out var rk))
@@ -326,8 +340,15 @@ public static class SubmitSugar
             new AccountInfoRequest(mainAcc)
             {
                 SignerLists = true
-            }, cancellationToken);
-        var rootHasSL = aiRoot.SignerLists?.Length > 0 && aiRoot.AccountFlags!.DisableMasterKey;
+            }, cancellationToken).Typed();
+        // Same shape as the per-account check above: the master-key flag decides how the root
+        // signs, and a response without flags is malformed rather than an account with none.
+        if (aiRoot.AccountFlags is null)
+        {
+            throw new ValidationException($"account_info response for '{mainAcc}' did not include the account's flags.");
+        }
+
+        var rootHasSL = aiRoot.SignerLists?.Length > 0 && aiRoot.AccountFlags.DisableMasterKey;
         if (!rootHasSL)
         {
             // обычная подпись плательщика комиссии (должен быть в wallets)
@@ -342,9 +363,9 @@ public static class SubmitSugar
         {
             // мультисиг корня: берём из wallets только тех, кто входит в SignerList(main)
             var sl = aiRoot.SignerLists[0];
-            var (picked, sum) = BatchSigningHelper.PickWalletsForQuorum(sl, walletByAddr);
+            var (picked, sum, quorum) = BatchSigningHelper.PickWalletsForQuorum(sl, walletByAddr);
 
-            if (sum < sl.SignerQuorum) throw new ValidationException($"Not enough signer wallets for root multisig {mainAcc}.");
+            if (sum < quorum) throw new ValidationException($"Not enough signer wallets for root multisig {mainAcc}.");
 
             //// корневой мультисиг: обязательно пустой SPK и без TxnSignature
             //combinedJson.Remove("TxnSignature");
@@ -420,7 +441,7 @@ public static class SubmitSugar
                     new TxRequest(txHash)
                     {
                         ApiVersion = 2,
-                    }, cancellationToken);
+                    }, cancellationToken).Typed();
             }
             catch (RippledException ex) when (ex.Response?.Error == XrplErrorCodes.TxnNotFound)
             {
@@ -625,15 +646,17 @@ public static class SubmitSugar
         {
             Type = Models.LedgerEntryType.Sponsorship,
         };
-        var response = await client.AccountObjects(request, cancellationToken).ConfigureAwait(false);
+        var response = await client.AccountObjects(request, cancellationToken).Typed().ConfigureAwait(false);
         var sponsorship = response?.AccountObjectList?
             .OfType<Models.Ledger.LOSponsorship>()
             .FirstOrDefault(s => string.Equals(s.Sponsee, account, StringComparison.Ordinal));
         if (sponsorship is null)
             return false;
 
-        bool requireForFee = sponsorship.Flags.HasFlag(Models.Ledger.SponsorshipFlags.lsfSponsorshipRequireSignForFee);
-        bool requireForReserve = sponsorship.Flags.HasFlag(Models.Ledger.SponsorshipFlags.lsfSponsorshipRequireSignForReserve);
+        // A missing Flags value is equivalent to "no flags set" for a bitmask check, so false is the correct
+        // (not a fabricated) default here - unlike numeric fields (Sequence, balances) where 0 would be a lie.
+        bool requireForFee = sponsorship.Flags?.HasFlag(Models.Ledger.SponsorshipFlags.lsfSponsorshipRequireSignForFee) ?? false;
+        bool requireForReserve = sponsorship.Flags?.HasFlag(Models.Ledger.SponsorshipFlags.lsfSponsorshipRequireSignForReserve) ?? false;
 
         return ((coverage & (uint)SponsorCoverage.spfSponsorFee) != 0 && requireForFee)
             || ((coverage & (uint)SponsorCoverage.spfSponsorReserve) != 0 && requireForReserve);

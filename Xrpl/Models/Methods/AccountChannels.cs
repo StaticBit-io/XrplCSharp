@@ -11,7 +11,7 @@ namespace Xrpl.Models.Methods
     /// <summary>
     /// The expected response from an <see cref="AccountChannelsRequest"/> .
     /// </summary>
-    public class AccountChannels //todo rename to AccountChannelsResponse
+    public class AccountChannels : BaseMethodResult//todo rename to AccountChannelsResponse
     {
         /// <summary>
         /// The address of the source/owner of the payment channels.<br/>
@@ -45,7 +45,7 @@ namespace Xrpl.Models.Methods
     /// Payment channel owned by account.
     /// https://xrpl.org/account_channels.html
     /// </summary>
-    public class Channel
+    public class Channel : BaseMethodResult
     {
         /// <summary>
         /// The owner of the channel, as an Address.

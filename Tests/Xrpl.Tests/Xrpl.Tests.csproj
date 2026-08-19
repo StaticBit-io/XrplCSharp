@@ -42,6 +42,10 @@
                 <None Update="Fixtures\ledger_entries.macro">
                         <CopyToOutputDirectory>PreserveNewest</CopyToOutputDirectory>
                 </None>
+                <!-- Live mainnet response corpus used by TestUResponseFidelity; see Fixtures\Responses\README.md. -->
+                <None Update="Fixtures\Responses\*.json">
+                        <CopyToOutputDirectory>PreserveNewest</CopyToOutputDirectory>
+                </None>
         </ItemGroup>
         <ItemGroup>
                 <ProjectReference Include="..\..\Xrpl\Xrpl.csproj" />

@@ -4,6 +4,7 @@ using System.Threading;
 using System.Threading.Tasks;
 
 using Xrpl.Client;
+using Xrpl.Client.Exceptions;
 using Xrpl.Models.Common;
 using Xrpl.Models.Ledger;
 using Xrpl.Models.Methods;
@@ -58,7 +59,15 @@ namespace Xrpl.Sugar
                 LedgerIndex = lederIndex ?? index,
                 Strict = true
             };
-            AccountInfo accountInfo = await client.AccountInfo(xrpRequest, cancellationToken);
+            AccountInfo accountInfo = await client.AccountInfo(xrpRequest, cancellationToken).Typed();
+
+            // account_info for a live account always returns account_data; a missing value means a
+            // malformed node response and must fail loudly rather than dereference a null AccountData.
+            if (accountInfo.AccountData is null)
+            {
+                throw new ValidationException($"account_info response for '{address}' did not include account_data.");
+            }
+
             return accountInfo.AccountData.Balance.ValueAsXrp.ToString();
         }
 
@@ -86,22 +95,52 @@ namespace Xrpl.Sugar
                 LedgerIndex = lederIndex ?? index,
                 Strict = true
             };
-            AccountInfo accountInfo = await client.AccountInfo(xrpRequest, cancellationToken);
+            AccountInfo accountInfo = await client.AccountInfo(xrpRequest, cancellationToken).Typed();
 
-            var serverInfo = await client.ServerState(new ServerStateRequest(), cancellationToken);
-            var FlineReserveFee = serverInfo.State.ValidatedLedger.ReserveInc.ToString();
-            var FaccReserveFee = serverInfo.State.ValidatedLedger.ReserveBase.ToString();
+            // account_info for a live account always returns account_data; a missing value means a
+            // malformed node response and must fail loudly rather than dereference a null AccountData.
+            if (accountInfo.AccountData is null)
+            {
+                throw new ValidationException($"account_info response for '{address}' did not include account_data.");
+            }
+
+            var serverInfo = await client.ServerState(new ServerStateRequest(), cancellationToken).Typed();
+
+            // server_state for a live node always returns validated_ledger.reserve_base/reserve_inc;
+            // a missing value means a malformed node response and must fail loudly rather than be
+            // treated as a zero reserve, which would overstate the free balance.
+            // The containers are checked first: testing only the leaf values, as this did, means a
+            // response missing "state" or "validated_ledger" faults with a NullReferenceException
+            // on the way to the check rather than reaching it.
+            if (serverInfo.State?.ValidatedLedger is null)
+            {
+                throw new ValidationException("server_state response did not include the validated ledger.");
+            }
+
+            uint? reserveInc = serverInfo.State.ValidatedLedger.ReserveInc;
+            uint? reserveBase = serverInfo.State.ValidatedLedger.ReserveBase;
+            if (reserveInc == null || reserveBase == null)
+            {
+                throw new ValidationException("server_state response did not include the validated ledger's reserve_base/reserve_inc.");
+            }
+
             var lineReserveFee = (decimal)new Currency()
             {
-                Value = FlineReserveFee
+                Value = reserveInc.Value.ToString()
             }.ValueAsXrp;
             var accReserveFee = (decimal)new Currency()
             {
-                Value = FaccReserveFee
+                Value = reserveBase.Value.ToString()
             }.ValueAsXrp;
 
-            var numLines = accountInfo.AccountData.OwnerCount;
-            var totalReserve = accReserveFee + (lineReserveFee * numLines);
+            // account_info for a live account always returns OwnerCount; a missing value means a malformed
+            // node response and must fail loudly rather than be treated as 0 owned objects.
+            uint? numLines = accountInfo.AccountData.OwnerCount;
+            if (numLines == null)
+            {
+                throw new ValidationException($"account_info response for '{address}' did not include the account's OwnerCount.");
+            }
+            var totalReserve = accReserveFee + (lineReserveFee * numLines.Value);
             var freeBalance = (decimal)accountInfo.AccountData.Balance.ValueAsXrp - totalReserve;
             return freeBalance;
         }
@@ -118,12 +157,12 @@ namespace Xrpl.Sugar
                 Limit = options?.Limit
             };
 
-            var response = await client.AccountLines(linesRequest, cancellationToken);
+            var response = await client.AccountLines(linesRequest, cancellationToken).Typed();
             var lines = response.TrustLines;
             while (response.Marker is not null && lines.Count > 0)
             {
                 linesRequest.Marker = response.Marker;
-                response = await client.AccountLines(linesRequest, cancellationToken);
+                response = await client.AccountLines(linesRequest, cancellationToken).Typed();
                 if (response.TrustLines.Count > 0)
                     lines.AddRange(response.TrustLines);
                 if (options?.Limit is not null && lines.Count >= options.Limit)

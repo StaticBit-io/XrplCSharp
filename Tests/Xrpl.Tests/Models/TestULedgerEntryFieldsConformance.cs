@@ -87,7 +87,11 @@ namespace Xrpl.Tests.Models.Tests
         /// The JSON name a property maps to: <see cref="JsonPropertyNameAttribute"/> when
         /// present, the property name otherwise. Properties marked <see cref="JsonIgnoreAttribute"/>
         /// never reach the wire and are excluded — that is where the computed helpers live
-        /// (DataParsed, MPTokenMetadataRow, Metadata, …).
+        /// (DataParsed, MPTokenMetadataRow, Metadata, …). Properties marked
+        /// <see cref="JsonExtensionDataAttribute"/> (BaseLedgerEntry.UnknownFields) are excluded
+        /// too: that property is not itself a field of any ledger object — it is the catch-all
+        /// System.Text.Json pours anything undeclared into — so it never belongs in either side of
+        /// this diff.
         /// </summary>
         private static Dictionary<string, PropertyInfo> WireProperties(Type model)
         {
@@ -96,6 +100,9 @@ namespace Xrpl.Tests.Models.Tests
             foreach (PropertyInfo property in model.GetProperties(BindingFlags.Public | BindingFlags.Instance))
             {
                 if (property.GetCustomAttribute<JsonIgnoreAttribute>() != null)
+                    continue;
+
+                if (property.GetCustomAttribute<JsonExtensionDataAttribute>() != null)
                     continue;
 
                 string name = property.GetCustomAttribute<JsonPropertyNameAttribute>()?.Name ?? property.Name;

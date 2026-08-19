@@ -32,11 +32,6 @@ namespace Xrpl.Models.Ledger
     /// </summary>
     public class LOMPToken : BaseLedgerEntry
     {
-        public LOMPToken()
-        {
-            LedgerEntryType = LedgerEntryType.MPToken;
-        }
-
         /// <summary>
         /// A bit-map of boolean flags enabled for this MPToken.
         /// </summary>

@@ -1,5 +1,6 @@
 using System;
 using System.Collections.Generic;
+using System.Text.Json;
 using System.Threading.Tasks;
 
 using Microsoft.VisualStudio.TestTools.UnitTesting;
@@ -7,6 +8,7 @@ using System.Text.Json.Nodes;
 
 using Xrpl.Client;
 using Xrpl.Client.Exceptions;
+using Xrpl.Client.Json;
 using Xrpl.Models.Common;
 using Xrpl.Models.Ledger;
 using Xrpl.Models.Methods;
@@ -93,7 +95,7 @@ public class TestIXrplErrorClassifier
 
         TxRequest request = new TxRequest(transactionHash);
 
-        RippledException exception = await CatchRippledException(() => client.Tx(request));
+        RippledException exception = await CatchRippledException(() => client.TxV1(request));
         XrplErrorInfo info = XrplErrorClassifier.Classify(exception);
 
         Assert.AreEqual(XrplErrorCodes.TxnNotFound, info.RawError);
@@ -1051,19 +1053,31 @@ public class TestUXrplErrorClassifier
         Assert.AreEqual("[\"rHot1\"]", info.FieldValue);
     }
 
+    /// <summary>
+    /// Builds an <see cref="ErrorResponse"/> the same way <see cref="RequestManager"/> does: through
+    /// the wire form. <c>RequestSlice</c>/<c>RawRequest</c> only exist as bounds into a frame the
+    /// envelope was parsed from - <see cref="ErrorResponse.Request"/> was removed together with
+    /// that - so a hand-built instance with no frame would report an empty request regardless of
+    /// what is passed here.
+    /// </summary>
     private static ErrorResponse CreateErrorResponse(
         string errorCode,
         object? request = null,
         string? errorMessage = null,
         List<RippleResponseWarning>? warnings = null)
     {
-        return new ErrorResponse
+        var envelope = new
         {
-            Error = errorCode,
-            ErrorMessage = errorMessage ?? errorCode,
-            Request = request ?? new { },
-            Warnings = warnings
+            error = errorCode,
+            error_message = errorMessage ?? errorCode,
+            request = request ?? new { },
+            warnings
         };
+
+        byte[] frame = JsonSerializer.SerializeToUtf8Bytes(envelope, XrplJsonOptions.Default);
+        ErrorResponse response = JsonSerializer.Deserialize<ErrorResponse>(frame, XrplJsonOptions.Default)!;
+        response.AttachFrame(frame);
+        return response;
     }
 
     private static RippleResponseWarning CreateWarning(uint id, string message)

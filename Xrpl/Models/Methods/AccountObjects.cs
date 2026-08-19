@@ -11,7 +11,7 @@ namespace Xrpl.Models.Methods
     /// <summary>
     /// Response expected from an <see cref="AccountObjectsRequest"/>.
     /// </summary>
-    public class AccountObjects //todo rename to response
+    public class AccountObjects : BaseMethodResult //todo rename to response
     {
         /// <summary>
         /// Unique Address of the account this request corresponds to.

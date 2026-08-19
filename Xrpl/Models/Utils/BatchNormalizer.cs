@@ -99,10 +99,22 @@ public static class BatchNormalizer
             var ai = await client.AccountInfo(new AccountInfoRequest(account)
             {
                 LedgerIndex = new LedgerIndex(LedgerIndexType.Current)
-            }, cancellationToken);
-            var start = ai.AccountData.Sequence;
-            nextSeqByAccount[account] = start;
-            return start;
+            }, cancellationToken).Typed();
+            // account_info for the current ledger always returns a full AccountRoot with a Sequence;
+            // a missing AccountData (or a missing Sequence within it) means a malformed node response
+            // and must fail loudly rather than dereference a null AccountData or silently treat it as 0.
+            if (ai.AccountData is null)
+            {
+                throw new ValidationException($"account_info response for '{account}' did not include account_data.");
+            }
+
+            uint? start = ai.AccountData.Sequence;
+            if (start == null)
+            {
+                throw new ValidationException($"account_info response for '{account}' did not include the account's Sequence.");
+            }
+            nextSeqByAccount[account] = start.Value;
+            return start.Value;
         }
 
         void Bump(string account)
