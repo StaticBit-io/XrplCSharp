@@ -89,9 +89,15 @@ namespace Xrpl.Models.Transactions
         /// <c>ToJson()</c> → <c>EncodeForSigning</c> (see <c>XrplWallet.Sign</c>, which calls
         /// <c>ITransactionRequest.ToJson()</c> before handing the dictionary to the binary codec): the
         /// codec looks fields up by name in <c>definitions.json</c>, so an object that re-emitted
-        /// "DeliverMax" would have the codec fail to find it there and silently drop the amount from the
-        /// signed blob — a transaction signed with no amount in it. So Amount is always written here,
-        /// regardless of which name it came in under.
+        /// "DeliverMax" hands the codec a name it cannot resolve. What happens then depends on the
+        /// entry point, and both outcomes are bad — verified by execution:
+        /// <c>EncodeForSigning</c> raises <c>InvalidJsonException: unknown field DeliverMax</c>, so
+        /// signing fails outright, while a direct <c>XrplBinaryCodec.Encode</c> drops the member
+        /// silently and yields a blob with no amount in it at all. On the <c>Sign</c> path the loud
+        /// failure comes first, since the signature is computed before the final blob is built — but
+        /// "it throws instead" is not a reason to relax the rule, and nothing stops a caller from
+        /// reaching <c>Encode</c> directly. So Amount is always written here, regardless of which
+        /// name it came in under.
         /// </para>
         /// </remarks>
         [JsonInclude]
@@ -252,6 +258,17 @@ namespace Xrpl.Models.Transactions
         /// <see cref="_receivedAsAmount"/>). Excluded from JSON directly: <see cref="AmountAlias"/> and
         /// <see cref="DeliverMax"/> below own the wire representation, so every field name a value came
         /// in under is one it goes back out under — callers never have to guess which one(s) fired.
+        /// </remarks>
+        /// <remarks>
+        /// One value behind two names, which is exact for every response rippled actually produces:
+        /// v2 sends DeliverMax alone, v1 sends both carrying the same amount. It is not exact if the
+        /// two ever disagree - the setters run in document order, the later one wins, and both names
+        /// then re-serialize with that single value. Measured on a hand-built payload where the node
+        /// "sent" Amount 1000000 and DeliverMax 999, the round trip emits 999 under both names, so
+        /// Amount reads as a value that was never sent. rippled cannot produce that response - the v1
+        /// path duplicates one field rather than computing two - so this is a property of malformed
+        /// or hostile input, not of the protocol. <c>Raw</c> keeps the truth either way; a consumer
+        /// that must detect tampering should compare against it rather than trusting this projection.
         /// </remarks>
         [JsonIgnore]
         public Currency Amount { get; set; }
