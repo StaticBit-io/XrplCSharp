@@ -335,14 +335,60 @@ public class TestUStaleSessionFrames
     }
 
     /// <summary>
-    /// The guard must not reject frames from the live session, or the stream stops entirely.
+    /// A frame naming the live session is delivered.
     /// </summary>
     /// <remarks>
-    /// Without this, a comparison that always failed would pass the test above while breaking
-    /// every subscription in the SDK.
+    /// The sessionless case below cannot stand in for this one: a guard that rejected every named
+    /// session would pass it and still take the whole stream down, since every frame the socket
+    /// produces is named.
     /// </remarks>
     [TestMethod]
-    public async Task TestUFrameFromTheActiveSessionIsDelivered()
+    public async Task TestUFrameNamingTheLiveSessionIsDelivered()
+    {
+        using ScriptedResponseServer server = new ScriptedResponseServer(ScriptedReply);
+        using XrplClient client = new XrplClient(server.Url);
+        await client.Connect();
+        await WaitForMessageProcessor(client);
+
+        TaskCompletionSource<TransactionStream> received = new TaskCompletionSource<TransactionStream>(
+            TaskCreationOptions.RunContinuationsAsynchronously);
+        client.OnTransaction += r =>
+        {
+            received.TrySetResult(r);
+            return Task.CompletedTask;
+        };
+
+        try
+        {
+            long? sessionId = client.connection.ActiveSessionId;
+            Assert.IsNotNull(sessionId, "a connected client must have a session");
+
+            await client.connection.IOnMessageFastPath(
+                Encoding.UTF8.GetBytes(TransactionMessage), sessionId);
+
+            Task completed = await Task.WhenAny(received.Task, Task.Delay(TimeSpan.FromSeconds(5)));
+            Assert.AreSame(received.Task, completed,
+                "a frame from the session the client is actually on was dropped");
+
+            Assert.AreEqual(0L, client.connection.StaleSessionFramesDropped,
+                "nothing here came from a session the client had left");
+        }
+        finally
+        {
+            await client.Disconnect();
+        }
+    }
+
+    /// <summary>
+    /// A frame that names no session is delivered.
+    /// </summary>
+    /// <remarks>
+    /// <c>OnMessage</c> is public and has no session to name, so there is nothing to compare it
+    /// against. Rejecting it for want of a session would break the one entry point a caller can
+    /// drive by hand.
+    /// </remarks>
+    [TestMethod]
+    public async Task TestUFrameNamingNoSessionIsDelivered()
     {
         using ScriptedResponseServer server = new ScriptedResponseServer(ScriptedReply);
         using XrplClient client = new XrplClient(server.Url);
