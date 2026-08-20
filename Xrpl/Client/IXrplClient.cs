@@ -69,6 +69,20 @@ namespace Xrpl.Client
         /// </remarks>
         long DroppedStreamMessages { get; }
 
+        /// <summary>
+        /// How many stream frames were discarded because they came from a connection this client
+        /// had already left.
+        /// </summary>
+        /// <remarks>
+        /// A socket being retired keeps delivering until its graceful close finishes, so a few
+        /// frames can arrive after a reconnect or <c>ChangeServer</c> has moved on. Delivering them
+        /// would be wrong rather than merely late: after a change of network they describe a
+        /// different chain entirely. A non-zero value here is therefore normal right after a
+        /// reconnect and says nothing about handler speed - that is
+        /// <see cref="DroppedStreamMessages"/>, and the two are counted apart on purpose.
+        /// </remarks>
+        long StaleSessionFramesDropped { get; }
+
         /// <summary>Node error reported over the socket.</summary>
         event OnError OnError;
 
@@ -558,6 +572,9 @@ namespace Xrpl.Client
 
         /// <inheritdoc />
         public long DroppedStreamMessages => connection.DroppedStreamMessages;
+
+        /// <inheritdoc />
+        public long StaleSessionFramesDropped => connection.StaleSessionFramesDropped;
 
         // Forwarded, not relayed: add/remove reach the same Connection a caller would have used
         // through the property, so this type holds no delegates and no subscription of its own. A

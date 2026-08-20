@@ -415,26 +415,11 @@ public class Connection
     // to prevent head-of-line blocking that causes ping timeouts under high stream load
     // Channel is created per-session to prevent cross-session message leakage
     // Using Channel<T> instead of BlockingCollection for true async support in WebAssembly
-    // Carries the raw frame (byte[]), not text: stream events pair themselves with it the same
+    // Carries the raw frame bytes, not text: stream events pair themselves with the frame the same
     // way a query response does, through AttachFrame, so their Raw/RawTransaction is available
     // without a second UTF-8 encode of a string that was itself decoded from these same bytes.
+    // The frame travels wrapped in SessionFrame, which names the session that produced it.
     private Channel<SessionFrame>? _streamMessageChannel = null;
-
-    /// <summary>
-    /// A stream frame together with the session whose socket produced it.
-    /// </summary>
-    /// <remarks>
-    /// The session has to ride along in the queue, not just be checked on the way in: the channel
-    /// is rebuilt per session by <see cref="StartMessageProcessor"/>, and between the check and
-    /// the write nothing holds the two together. Carrying the id lets the reader ask the question
-    /// again at the only moment that decides anything - just before handlers run.
-    /// </remarks>
-    /// <param name="Frame">The raw UTF-8 frame.</param>
-    /// <param name="SessionId">
-    /// The session whose socket produced it, or <see langword="null"/> when the caller had none to
-    /// name.
-    /// </param>
-    private readonly record struct SessionFrame(byte[] Frame, long? SessionId);
 
     private long _droppedStreamMessages;
 
@@ -483,7 +468,12 @@ public class Connection
     /// be ahead of the queue. That ordering is the startup window described on
     /// <see cref="EnqueueStreamMessage"/>.
     /// </remarks>
-    internal bool IsMessageProcessorRunning => _streamMessageChannel != null;
+    /// <remarks>
+    /// <see cref="Volatile.Read{T}(ref T)"/> rather than a plain read or <c>_messageProcessorLock</c>:
+    /// the field is written under that lock, and holding it here would mean waiting out
+    /// <c>StopMessageProcessorInternal</c>, which blocks up to two seconds on the reader task.
+    /// </remarks>
+    internal bool IsMessageProcessorRunning => Volatile.Read(ref _streamMessageChannel) != null;
 
     /// <summary>
     /// Completes the stream channel's writer without clearing the channel, reproducing the state
@@ -3506,34 +3496,21 @@ public class Connection
     }
 
     /// <summary>
-    /// Hands a stream message to the background processor.
+    /// A stream frame together with the session whose socket produced it.
     /// </summary>
     /// <remarks>
-    /// Used for ordinary stream messages (no <c>id</c>) and for follow-ups carrying an <c>id</c>
-    /// that matches no pending request, such as <c>path_find</c> updates.
-    /// <para>
-    /// Browsers used to take a separate path here - one fire-and-forget task per frame, bypassing
-    /// the queue entirely, so <see cref="ConnectionOptions.StreamMessageQueueCapacity"/> did not
-    /// apply, <see cref="DroppedStreamMessages"/> stayed at zero however far handlers fell behind,
-    /// the backlog was bounded by nothing, and concurrent dispatch could hand handlers events out
-    /// of the order the node sent them. The queue was built for this environment in the first
-    /// place ("true async support in WebAssembly single-threaded environment" on
-    /// <see cref="StartMessageProcessor"/>), and measurement confirmed it works there: running the
-    /// Blazor demo against mainnet, the queue delivered 1 004 transactions over 52 s (19.2 tx/s,
-    /// 13 ledgers) with no console errors and timestamps in order - against 462 over 33 s
-    /// (13.9 tx/s) on the bypass. So the platforms no longer diverge: capacity, eviction counting
-    /// and single-reader ordering hold on every target.
-    /// </para>
-    /// <para>
-    /// One window remains, and it is not platform-specific: <see cref="StartMessageProcessor"/>
-    /// runs at the end of <c>OnceOpen</c>, after the <c>OnConnected</c> callback. A handler that
-    /// subscribes there can see frames answered before the channel exists, and those take the
-    /// fallback below - outside the capacity, the eviction count and the ordering. Moving the
-    /// start ahead of the callback is not a one-line change: <see cref="StartPingTimer"/> calls
-    /// <c>StopPingTimerSync</c>, which stops the message processor as well, so an earlier start is
-    /// torn down again moments later. Untangling that is tracked separately.
-    /// </para>
+    /// The session has to ride along in the queue, not just be checked on the way in: the channel
+    /// is rebuilt per session by <see cref="StartMessageProcessor"/>, and between the check and
+    /// the write nothing holds the two together. Carrying the id lets the reader ask the question
+    /// again at the only moment that decides anything - just before handlers run.
     /// </remarks>
+    /// <param name="Frame">The raw UTF-8 frame.</param>
+    /// <param name="SessionId">
+    /// The session whose socket produced it, or <see langword="null"/> when the caller had none to
+    /// name.
+    /// </param>
+    private readonly record struct SessionFrame(byte[] Frame, long? SessionId);
+
     /// <summary>
     /// Whether a frame carrying this session id belongs to the connection as it stands right now.
     /// </summary>
@@ -3565,6 +3542,35 @@ public class Connection
         }
     }
 
+    /// <summary>
+    /// Hands a stream message to the background processor.
+    /// </summary>
+    /// <remarks>
+    /// Used for ordinary stream messages (no <c>id</c>) and for follow-ups carrying an <c>id</c>
+    /// that matches no pending request, such as <c>path_find</c> updates.
+    /// <para>
+    /// Browsers used to take a separate path here - one fire-and-forget task per frame, bypassing
+    /// the queue entirely, so <see cref="ConnectionOptions.StreamMessageQueueCapacity"/> did not
+    /// apply, <see cref="DroppedStreamMessages"/> stayed at zero however far handlers fell behind,
+    /// the backlog was bounded by nothing, and concurrent dispatch could hand handlers events out
+    /// of the order the node sent them. The queue was built for this environment in the first
+    /// place ("true async support in WebAssembly single-threaded environment" on
+    /// <see cref="StartMessageProcessor"/>), and measurement confirmed it works there: running the
+    /// Blazor demo against mainnet, the queue delivered 1 004 transactions over 52 s (19.2 tx/s,
+    /// 13 ledgers) with no console errors and timestamps in order - against 462 over 33 s
+    /// (13.9 tx/s) on the bypass. So the platforms no longer diverge: capacity, eviction counting
+    /// and single-reader ordering hold on every target.
+    /// </para>
+    /// <para>
+    /// One window remains, and it is not platform-specific: <see cref="StartMessageProcessor"/>
+    /// runs at the end of <c>OnceOpen</c>, after the <c>OnConnected</c> callback. A handler that
+    /// subscribes there can see frames answered before the channel exists, and those take the
+    /// fallback below - outside the capacity, the eviction count and the ordering. Moving the
+    /// start ahead of the callback is not a one-line change: <see cref="StartPingTimer"/> calls
+    /// <c>StopPingTimerSync</c>, which stops the message processor as well, so an earlier start is
+    /// torn down again moments later. Untangling that is tracked separately.
+    /// </para>
+    /// </remarks>
     private void EnqueueStreamMessage(byte[] frame, long? sessionId = null)
     {
         // A retiring socket keeps delivering while InitiateGracefulCloseAsync completes, and that
@@ -3585,25 +3591,23 @@ public class Connection
 
         SessionFrame item = new SessionFrame(frame, sessionId);
 
+        // The channel is bounded with DropOldest, so a full queue is not a refusal: TryWrite
+        // evicts the oldest frame, counts it through itemDropped and reports success. It
+        // refuses only a completed writer - and that happens on the ordinary path, not just in
+        // some corner: StopMessageProcessorInternal completes the writer after clearing
+        // _streamMessageChannel, so a reader that got the reference an instant earlier writes
+        // into a channel that is already closed. StartPingTimer tears the processor down and
+        // StartMessageProcessor builds it again on every connect, so the window recurs.
+        //
+        // A refused frame therefore goes down the fallback rather than disappearing. It still
+        // faces the session check there - fallback and queue meet in ProcessSessionFrameAsync.
+        Channel<SessionFrame>? channel = _streamMessageChannel;
+        if (channel?.Writer.TryWrite(item) == true)
         {
-            // The channel is bounded with DropOldest, so a full queue is not a refusal: TryWrite
-            // evicts the oldest frame, counts it through itemDropped and reports success. It
-            // refuses only a completed writer - and that happens on the ordinary path, not just in
-            // some corner: StopMessageProcessorInternal completes the writer after clearing
-            // _streamMessageChannel, so a reader that got the reference an instant earlier writes
-            // into a channel that is already closed. StartPingTimer tears the processor down and
-            // StartMessageProcessor builds it again on every connect, so the window recurs.
-            //
-            // A refused frame therefore goes down the fallback rather than disappearing. It still
-            // faces the session check there - fallback and queue meet in ProcessSessionFrameAsync.
-            var channel = _streamMessageChannel;
-            if (channel?.Writer.TryWrite(item) == true)
-            {
-                return;
-            }
-
-            _ = ProcessStreamMessageFireAndForgetAsync(item);
+            return;
         }
+
+        _ = ProcessStreamMessageFireAndForgetAsync(item);
     }
 
     /// <summary>
@@ -3630,9 +3634,15 @@ public class Connection
     }
 
     /// <summary>
-    /// Fire-and-forget stream message processing for single-threaded environments like WebAssembly.
-    /// Uses ConfigureAwait(false) to prevent deadlocks and allow proper continuation scheduling.
+    /// Processes a stream frame outside the queue, on its own task.
     /// </summary>
+    /// <remarks>
+    /// Three ways in, none of them platform-specific since browsers stopped taking a path of their
+    /// own: before <see cref="StartMessageProcessor"/> has run, after the processor was stopped,
+    /// and when the channel refuses the write because its writer is already completed. Ordering
+    /// and the capacity bound do not hold here - that is the cost of not losing the frame.
+    /// <c>ConfigureAwait(false)</c> throughout, to keep continuations off a captured context.
+    /// </remarks>
     private async Task ProcessStreamMessageFireAndForgetAsync(SessionFrame item)
     {
         try
