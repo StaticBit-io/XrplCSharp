@@ -675,8 +675,11 @@ public class Connection
         // 1. Quick state cleanup - stop reconnect loop
         StopReconnectLoop();
         
-        // 2. Cancel ping timer (but don't wait yet)
+        // 2. Cancel ping timer and the message processor (but don't wait yet). Stopping the
+        // processor is explicit since StopPingTimerSync no longer does it as a side effect - this
+        // session's queue goes with the session.
         StopPingTimerSync();
+        StopMessageProcessor();
         
         // 3. Reject all pending requests BEFORE waiting for ping
         // This allows the ping handler to receive OperationCanceledException and exit quickly
@@ -811,8 +814,10 @@ public class Connection
         // New session is created immediately without waiting.
         // Callbacks check session ID to ignore retiring sessions.
 
-        // 4. Stop ping timer (but don't wait yet)
+        // 4. Stop ping timer and the message processor (but don't wait yet) - the queue belongs
+        // to the session being retired.
         StopPingTimerSync();
+        StopMessageProcessor();
         
         // 5. Reject all pending requests BEFORE waiting for ping
         // This allows the ping handler to receive OperationCanceledException and exit quickly
@@ -1274,6 +1279,7 @@ public class Connection
 
         ClearReconnectState(); // Clear all reconnect state on user disconnect
         StopPingTimerSync();
+        StopMessageProcessor();
         
         // Reject pending requests so ping handler can exit quickly
         requestManager.RejectAllWithCancellation();
@@ -1329,6 +1335,7 @@ public class Connection
 
         ClearReconnectState(); // Clear all reconnect state on user disconnect
         StopPingTimerSync();
+        StopMessageProcessor();
         
         // Reject pending requests so ping handler can exit quickly
         requestManager.RejectAllWithCancellation();
@@ -1997,6 +2004,13 @@ public class Connection
 
         connectedSocket.ResetIntentionalDisconnect();
 
+        // Before ResolveAllAwaiting and before the OnConnected callback, because both hand control
+        // to consumer code that subscribes - and the node can answer that subscription while the
+        // handler is still running. Frames arriving with no channel take the fallback: outside the
+        // capacity, uncounted by DroppedStreamMessages and dispatched concurrently, so the first
+        // events after connecting were exactly the ones that could arrive out of order.
+        StartMessageProcessor();
+
         try
         {
             connectionManager.ResolveAllAwaiting();
@@ -2018,13 +2032,6 @@ public class Connection
         // Start ping timer AFTER connection is fully established and all callbacks completed
         // This is outside try/catch to ensure it always runs on successful connection
         StartPingTimer();
-
-        // After StartPingTimer, not before: StartPingTimer calls StopPingTimerSync, which stops
-        // the message processor too - starting the processor first would have it torn down again
-        // before a single frame arrived. That coupling is the reason this cannot simply move
-        // ahead of the OnConnected callback, where it belongs; see the note on
-        // EnqueueStreamMessage.
-        StartMessageProcessor();
     }
 
     /// <summary>
@@ -2092,6 +2099,7 @@ public class Connection
             reconnect: BuildReconnectInfo(failures));
 
         StopPingTimerSync();
+        StopMessageProcessor();
         requestManager.RejectAllWithCancellation();
         await WaitForPingToFinishAsync();
 
@@ -2224,8 +2232,10 @@ public class Connection
             return;
         }
 
-        // Only stop ping timer for current socket
+        // Only for the current socket - and the message processor goes with it, this connection
+        // is over.
         StopPingTimerSync();
+        StopMessageProcessor();
 
         // Check if this is a network drop (FailureReason set by WebSocketClient)
         var isNetworkDrop = closingSocket.FailureReason == SocketFailureReason.NetworkDrop;
@@ -2857,6 +2867,20 @@ public class Connection
         }
     }
 
+    /// <summary>
+    /// Stops the ping timer, and nothing else.
+    /// </summary>
+    /// <remarks>
+    /// It used to stop the message processor too, which tied two unrelated lifecycles together:
+    /// <see cref="StartPingTimer"/> begins by calling this, so starting the processor before the
+    /// ping timer had it torn down again moments later - and that is what forced
+    /// <see cref="StartMessageProcessor"/> to the very end of <c>OnceOpen</c>, after the
+    /// <c>OnConnected</c> callback, leaving every frame answered during that callback to the
+    /// fallback path. The processor is now stopped explicitly wherever a connection genuinely
+    /// ends: <see cref="Disconnect"/>, <see cref="DisconnectAndWaitAsync"/>, <c>OnceClose</c>,
+    /// <c>OnConnectHandlerFailedAsync</c>, <see cref="ChangeServer"/> and
+    /// <c>RetireCurrentSessionAndReconnectAsync</c>.
+    /// </remarks>
     private void StopPingTimerSync()
     {
         var cts = _pingCts;
@@ -2879,8 +2903,6 @@ public class Connection
         wasmTimer?.Dispose();
 
         cts?.Dispose();
-        
-        StopMessageProcessor();
     }
 
     /// <summary>
