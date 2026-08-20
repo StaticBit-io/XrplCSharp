@@ -274,6 +274,67 @@ public class TestUStaleSessionFrames
     }
 
     /// <summary>
+    /// The fallback path hands the frame off before doing any of the work, so the receive loop is
+    /// not the thread that parses JSON and runs handlers.
+    /// </summary>
+    /// <remarks>
+    /// An async method runs on its caller's thread up to the first real await, and the first real
+    /// await inside <c>ProcessStreamMessageAsync</c> comes after <c>JsonSerializer.Deserialize</c>.
+    /// Without a yield at the top of the fallback, everything up to a handler's own first await
+    /// runs inline on the socket callback - the head-of-line blocking the queue exists to prevent,
+    /// reintroduced for the startup window, a stopped processor and a refused write.
+    /// <para>
+    /// Deterministic by construction: the handler parks on a blocking wait. If the frame were
+    /// processed inline, the injecting call could not return until the handler was released, so
+    /// the wait below would time out rather than merely be slow.
+    /// </para>
+    /// </remarks>
+    [TestMethod]
+    public async Task TestUFallbackPathReturnsBeforeHandlersRun()
+    {
+        using ScriptedResponseServer server = new ScriptedResponseServer(ScriptedReply);
+        using XrplClient client = new XrplClient(server.Url);
+        await client.Connect();
+        await WaitForMessageProcessor(client);
+
+        using ManualResetEventSlim handlerEntered = new ManualResetEventSlim(initialState: false);
+        using ManualResetEventSlim releaseHandler = new ManualResetEventSlim(initialState: false);
+
+        client.OnTransaction += _ =>
+        {
+            handlerEntered.Set();
+            releaseHandler.Wait(TimeSpan.FromSeconds(10));
+            return Task.CompletedTask;
+        };
+
+        try
+        {
+            long? sessionId = client.connection.ActiveSessionId;
+            Assert.IsNotNull(sessionId, "a connected client must have a session");
+
+            // Completing the writer forces the next frame onto the fallback path.
+            client.connection.CompleteStreamChannelWriterForTests();
+
+            // Injected from a task of its own: were the frame processed inline, the call itself
+            // would block and there would be no Task to wait on.
+            Task inject = Task.Run(() => client.connection.IOnMessageFastPath(
+                Encoding.UTF8.GetBytes(TransactionMessage), sessionId));
+
+            Task finished = await Task.WhenAny(inject, Task.Delay(TimeSpan.FromSeconds(5)));
+            Assert.AreSame(inject, finished,
+                "the fallback ran the frame inline: injection did not return while the handler was parked");
+
+            Assert.IsTrue(handlerEntered.Wait(TimeSpan.FromSeconds(5)),
+                "the frame never reached the handler at all");
+        }
+        finally
+        {
+            releaseHandler.Set();
+            await client.Disconnect();
+        }
+    }
+
+    /// <summary>
     /// The guard must not reject frames from the live session, or the stream stops entirely.
     /// </summary>
     /// <remarks>

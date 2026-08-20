@@ -3642,9 +3642,21 @@ public class Connection
     /// and when the channel refuses the write because its writer is already completed. Ordering
     /// and the capacity bound do not hold here - that is the cost of not losing the frame.
     /// <c>ConfigureAwait(false)</c> throughout, to keep continuations off a captured context.
+    /// <para>
+    /// The yield is what makes "fire and forget" true. Without it an async method runs on the
+    /// caller's thread up to its first real await, and the first real await inside
+    /// <see cref="ProcessStreamMessageAsync"/> comes after
+    /// <c>JsonSerializer.Deserialize</c> - so the receive loop would pay for parsing every frame
+    /// that takes this path, plus whatever a handler does before its own first await. That is
+    /// precisely the head-of-line blocking the queue exists to prevent, and the fallback would
+    /// have reintroduced it for the startup window, for a stopped processor and for a refused
+    /// write.
+    /// </para>
     /// </remarks>
     private async Task ProcessStreamMessageFireAndForgetAsync(SessionFrame item)
     {
+        await Task.Yield();
+
         try
         {
             await ProcessSessionFrameAsync(item).ConfigureAwait(false);
