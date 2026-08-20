@@ -112,9 +112,16 @@ public class TestUClientStreamEvents
         // that work: a relaying client would keep its own subscriber list, the removal would miss
         // it, and the handler would keep firing. Removing through the same surface it was added
         // to cannot tell the two apart - both pass - which is why the test crosses surfaces.
-        // A witness that is never removed, added after the handler so it runs after it: it tells
-        // the test when a frame has been dispatched. Without it, "calls is still 1" after the
-        // removal would pass just as well for a frame that has not been processed yet.
+        contract.OnTransaction += handler;
+
+        // A witness that is never removed: it tells the test when a frame has been dispatched.
+        // Without it, "calls is still 1" after the removal would pass just as well for a frame
+        // that has not been processed yet.
+        //
+        // Registered after the handler, and that order is load-bearing: a multicast delegate
+        // invokes its subscribers in registration order, so a witness registered first would
+        // report the frame as dispatched while the handler had not yet run - and the sanity
+        // assertion below would flake rather than fail.
         int dispatched = 0;
         client.connection.OnTransaction += _ =>
         {
@@ -122,7 +129,6 @@ public class TestUClientStreamEvents
             return Task.CompletedTask;
         };
 
-        contract.OnTransaction += handler;
         await client.connection.OnMessage(TransactionMessage);
         WaitForCount(() => Volatile.Read(ref dispatched), 1, "the first frame was never dispatched");
         Assert.AreEqual(1, calls, "sanity: the handler is attached");
@@ -158,6 +164,9 @@ public class TestUClientStreamEvents
 
         client.connection.OnTransaction += handler;
 
+        // After the handler, for the reason spelled out in the test above: registration order is
+        // invocation order, and a witness that ran first would report a dispatch the handler had
+        // not seen yet.
         int dispatched = 0;
         client.connection.OnTransaction += _ =>
         {

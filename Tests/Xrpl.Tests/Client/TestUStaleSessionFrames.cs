@@ -302,6 +302,11 @@ public class TestUStaleSessionFrames
             long? sessionId = client.connection.ActiveSessionId;
             Assert.IsNotNull(sessionId, "a connected client must have a session");
 
+            // A baseline, not an absolute: the counter runs for the life of the connection, and
+            // the startup window this file documents elsewhere can have sent frames round the
+            // queue before the test got here.
+            long fallbackBefore = client.connection.FallbackDispatchedStreamMessages;
+
             client.connection.CompleteStreamChannelWriterForTests();
 
             await client.connection.IOnMessageFastPath(
@@ -314,7 +319,7 @@ public class TestUStaleSessionFrames
             Assert.AreEqual(0L, client.connection.StaleSessionFramesDropped,
                 "the session was live throughout; nothing here is stale");
 
-            Assert.AreEqual(1L, client.connection.FallbackDispatchedStreamMessages,
+            Assert.AreEqual(1L, client.connection.FallbackDispatchedStreamMessages - fallbackBefore,
                 "a frame that went round the queue must say so - that is what the counter is for");
         }
         finally
