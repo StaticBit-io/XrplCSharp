@@ -439,9 +439,9 @@ public class Connection
     /// <para>
     /// Cumulative over the life of the connection, and a non-zero value is not by itself a fault:
     /// a client that was driven before it connected, or after it disconnected, legitimately has
-    /// frames here. What means something is an increase <em>across a connect</em> - the startup
-    /// window this counter was added to measure is closed, so that number should stay put while a
-    /// connection is being established.
+    /// frames here. What means something is an increase across a connect: the startup window this
+    /// counter was added to measure is closed, so the number should not move while a connection is
+    /// being established.
     /// </para>
     /// </remarks>
     public long FallbackDispatchedStreamMessages => Interlocked.Read(ref _fallbackDispatchedStreamMessages);
@@ -487,11 +487,11 @@ public class Connection
     /// through <c>connectionManager.ResolveAllAwaiting()</c> and before the <c>OnConnected</c>
     /// callback, so a returned <c>Connect()</c> does imply a queue - it did not until the ping
     /// timer stopped taking the processor down with it.
-    /// </remarks>
-    /// <remarks>
-    /// <c>Volatile.Read</c> rather than a plain read or <c>_messageProcessorLock</c>:
-    /// the field is written under that lock, and holding it here would mean waiting out
+    /// <para>
+    /// <c>Volatile.Read</c> rather than a plain read or <c>_messageProcessorLock</c>: the field is
+    /// written under that lock, and holding it here would mean waiting out
     /// <c>StopMessageProcessorInternal</c>, which blocks up to two seconds on the reader task.
+    /// </para>
     /// </remarks>
     internal bool IsMessageProcessorRunning => Volatile.Read(ref _streamMessageChannel) != null;
 
@@ -501,9 +501,15 @@ public class Connection
     /// <remarks>
     /// Exists for tests, and for one question in particular: the ping timer starts at the very end
     /// of <c>OnceOpen</c>, after <c>Connect()</c> has already returned, so a test that wants to
-    /// know the processor survived <see cref="StartPingTimer"/> has to wait for the timer rather
-    /// than assume it. Without that wait such a test can pass by asserting too early - before the
-    /// thing it is testing has had a chance to go wrong.
+    /// know the processor survived <see cref="StartPingTimer"/> has to wait for it rather than
+    /// assume it. Without that wait such a test can pass by asserting too early - before the thing
+    /// it is testing has had a chance to go wrong.
+    /// <para>
+    /// The signal is exact for that purpose: <see cref="StartPingTimer"/> begins by calling
+    /// <see cref="StopPingTimerSync"/>, which clears this field, and only assigns it afterwards.
+    /// Seeing it non-null therefore means the teardown step - the one that used to take the
+    /// message processor with it - is already behind us.
+    /// </para>
     /// </remarks>
     internal bool IsPingTimerRunning => Volatile.Read(ref _pingCts) != null;
 

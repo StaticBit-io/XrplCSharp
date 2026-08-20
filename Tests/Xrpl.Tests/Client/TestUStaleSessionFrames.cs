@@ -85,9 +85,10 @@ public class TestUStaleSessionFrames
     /// Waits until stream frames are queued rather than taking the fallback path.
     /// </summary>
     /// <remarks>
-    /// <c>Connect()</c> returning is not enough: <c>OnceOpen</c> resolves the waiters first and
-    /// starts the message processor last, so a test that injects a frame the moment it connects
-    /// can find no queue to put it in.
+    /// <c>Connect()</c> returning implies this now - <c>OnceOpen</c> starts the processor before it
+    /// resolves the waiters - so the wait is a guard rather than a necessity. It earns its place by
+    /// failing here, with a sentence saying so, if that ordering ever regresses: without it these
+    /// tests would quietly exercise the fallback path instead and still pass.
     /// </remarks>
     private static async Task WaitForMessageProcessor(XrplClient client)
     {
