@@ -324,8 +324,8 @@ public class TestUStaleSessionFrames
     }
 
     /// <summary>
-    /// The fallback path hands the frame off before doing any of the work, so the receive loop is
-    /// not the thread that parses JSON and runs handlers.
+    /// The fallback path hands the frame off before doing any of the work, so the receive loop
+    /// does not synchronously parse JSON or run handlers.
     /// </summary>
     /// <remarks>
     /// An async method runs on its caller's thread up to the first real await, and the first real
