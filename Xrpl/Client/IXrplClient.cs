@@ -66,11 +66,11 @@ namespace Xrpl.Client
         /// and drops the oldest when full, so a slow handler costs events instead of stalling the
         /// socket - silently, until something reads this. A consumer building state from the
         /// stream should treat any increase as a signal that its state has drifted.
-        /// </remarks>
-        /// <remarks>
+        /// <para>
         /// Defaulted, like <see cref="SetNetworkId"/>: forwarding to <see cref="connection"/> is
         /// the only implementation that means anything, and an observational member is a poor
         /// reason to break every external implementer of this interface.
+        /// </para>
         /// </remarks>
         long DroppedStreamMessages => connection.DroppedStreamMessages;
 
@@ -85,8 +85,12 @@ namespace Xrpl.Client
         /// different chain entirely. A non-zero value here is therefore normal right after a
         /// reconnect and says nothing about handler speed - that is
         /// <see cref="DroppedStreamMessages"/>, and the two are counted apart on purpose.
+        /// <para>
+        /// Defaulted, like <see cref="SetNetworkId"/>: forwarding to <see cref="connection"/> is
+        /// the only implementation that means anything, and an observational member is a poor
+        /// reason to break every external implementer of this interface.
+        /// </para>
         /// </remarks>
-        /// <inheritdoc cref="DroppedStreamMessages"/>
         long StaleSessionFramesDropped => connection.StaleSessionFramesDropped;
 
         /// <summary>
@@ -99,6 +103,11 @@ namespace Xrpl.Client
         /// every connect: the processor starts at the end of <c>OnceOpen</c>, after the
         /// <c>OnConnected</c> callback, so a handler subscribing there can be reached before the
         /// queue exists. This counts how often that happened.
+        /// <para>
+        /// Defaulted, like <see cref="SetNetworkId"/>: forwarding to <see cref="connection"/> is
+        /// the only implementation that means anything, and an observational member is a poor
+        /// reason to break every external implementer of this interface.
+        /// </para>
         /// </remarks>
         long FallbackDispatchedStreamMessages => connection.FallbackDispatchedStreamMessages;
 

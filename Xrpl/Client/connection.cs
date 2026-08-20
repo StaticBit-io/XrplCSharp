@@ -489,7 +489,7 @@ public class Connection
     /// <see cref="EnqueueStreamMessage"/>.
     /// </remarks>
     /// <remarks>
-    /// <see cref="Volatile.Read{T}(ref T)"/> rather than a plain read or <c>_messageProcessorLock</c>:
+    /// <c>Volatile.Read</c> rather than a plain read or <c>_messageProcessorLock</c>:
     /// the field is written under that lock, and holding it here would mean waiting out
     /// <c>StopMessageProcessorInternal</c>, which blocks up to two seconds on the reader task.
     /// </remarks>
@@ -3360,7 +3360,7 @@ public class Connection
 
     /// <summary>
     /// Overload for a message still in its wire form, used by the socket callback. See
-    /// <see cref="IOnMessageFastPath(string, byte[])"/> for why the bytes are kept as they are.
+    /// <see cref="IOnMessageFastPath(string, byte[], long?)"/> for why the bytes are kept as they are.
     /// </summary>
     /// <remarks>
     /// Internal rather than private so a test can drive the actual production entry point - the

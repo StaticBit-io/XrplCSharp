@@ -645,6 +645,10 @@ internal sealed class FeeTestClient : IXrplClient
 
     public long StaleSessionFramesDropped => 0;
 
+    // Declared rather than inherited: this substitute returns null from connection, and the
+    // interface defaults forward there.
+    public long FallbackDispatchedStreamMessages => 0;
+
     // Declared, never raised: this client answers requests, it does not stream. Being able to
     // declare them at all is the point of the events moving onto IXrplClient - a substitute
     // client could not carry them while they lived only on Connection.
