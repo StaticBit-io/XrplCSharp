@@ -255,6 +255,21 @@ public class Connection
         /// Default: 30 seconds.
         /// </summary>
         public TimeSpan ConnectionAcquisitionTimeout { get; set; } = TimeSpan.FromMinutes(5);
+
+        /// <summary>
+        /// How many stream messages may wait for the consumer before the oldest are discarded.
+        /// </summary>
+        /// <remarks>
+        /// Stream events are handed to a background reader through a bounded channel, so a slow
+        /// handler never blocks the receive loop. What it does instead is fall behind, and past
+        /// this many queued messages the oldest are dropped to make room -
+        /// <see cref="Connection.DroppedStreamMessages"/> counts them.
+        /// <para>
+        /// Raise it for a consumer that must not miss events and can absorb the memory (each slot
+        /// holds one frame); lower it to bound memory harder, accepting more loss. Default 10 000.
+        /// </para>
+        /// </remarks>
+        public int StreamMessageQueueCapacity { get; set; } = 10000;
     }
 
     private void ValidateConfig()
@@ -404,6 +419,25 @@ public class Connection
     // way a query response does, through AttachFrame, so their Raw/RawTransaction is available
     // without a second UTF-8 encode of a string that was itself decoded from these same bytes.
     private Channel<byte[]>? _streamMessageChannel = null;
+
+    private long _droppedStreamMessages;
+
+    /// <summary>
+    /// How many stream messages have been discarded because the consumer fell behind.
+    /// </summary>
+    /// <remarks>
+    /// The queue feeding stream handlers is bounded (see
+    /// <see cref="ConnectionOptions.StreamMessageQueueCapacity"/>) and discards the oldest message
+    /// when full, so a slow handler costs events rather than stalling the socket. That discard used
+    /// to be entirely silent: nothing threw, nothing logged, and a consumer building state from the
+    /// stream simply drifted from the ledger with no way to notice. This counter is the way to
+    /// notice - non-zero and rising means handlers are not keeping up.
+    /// <para>
+    /// Counts across the lifetime of this connection, including across reconnects and
+    /// <c>ChangeServer</c>, since the same object serves them all.
+    /// </para>
+    /// </remarks>
+    public long DroppedStreamMessages => Interlocked.Read(ref _droppedStreamMessages);
     private CancellationTokenSource? _messageProcessorCts = null;
     private Task? _messageProcessorTask = null;
     private readonly object _messageProcessorLock = new();
@@ -2916,12 +2950,17 @@ public class Connection
             
             // Create new session-bound channel and CTS
             // Using bounded channel to prevent memory issues under high load
-            _streamMessageChannel = System.Threading.Channels.Channel.CreateBounded<byte[]>(new BoundedChannelOptions(10000)
-            {
-                SingleReader = true,
-                SingleWriter = false,
-                FullMode = BoundedChannelFullMode.DropOldest
-            });
+            // itemDropped runs inside TryWrite, i.e. on the receive loop, so it does no more than
+            // increment: raising an event or logging here would put consumer code back on the path
+            // this channel exists to keep it off. Callers read DroppedStreamMessages instead.
+            _streamMessageChannel = System.Threading.Channels.Channel.CreateBounded<byte[]>(
+                new BoundedChannelOptions(Math.Max(1, config?.StreamMessageQueueCapacity ?? 10000))
+                {
+                    SingleReader = true,
+                    SingleWriter = false,
+                    FullMode = BoundedChannelFullMode.DropOldest
+                },
+                itemDropped: _ => Interlocked.Increment(ref _droppedStreamMessages));
             _messageProcessorCts = new CancellationTokenSource();
 
             var channel = _streamMessageChannel;
