@@ -641,6 +641,7 @@ internal sealed class FeeTestClient : IXrplClient
     }
 
     public Connection connection => null!;
+    public long DroppedStreamMessages => 0;
 
     // Declared, never raised: this client answers requests, it does not stream. Being able to
     // declare them at all is the point of the events moving onto IXrplClient - a substitute

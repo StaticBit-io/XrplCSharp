@@ -19,6 +19,7 @@ This release makes the SDK stop misrepresenting what a node sent. It is a delibe
 | Untyped request | `Task<Dictionary<string, object>> Request(...)` | `Task<XrplResponse<Dictionary<string, object>>> Request(...)` |
 | Stream events | `client.connection.OnTransaction += …` | also `client.OnTransaction += …` — on `IXrplClient` now; the old form still works |
 | `IXrplClient.connection` | `{ get; set; }` | `{ get; }` — assigning it would strand handlers on the old object |
+| Dropped stream events | invisible | `client.DroppedStreamMessages` counts them; `StreamMessageQueueCapacity` sizes the queue |
 | Stream event type | `LedgerStream.Type` was a public field | inherited `BaseStream.Type` property — source-compatible, but an assembly built against the old package needs a rebuild |
 | Stream event type value | `ResponseStreamType Type` | `ResponseStreamType? Type` — an event that carried no `type` no longer reports `UNKNOWN` as though the node had said so |
 
@@ -198,6 +199,12 @@ The entries below are grouped by what changed, not by the order the levels were 
   * **forwarded, not relayed**, and the distinction is the whole design: `add`/`remove` go straight to the same `Connection`, so the client holds no delegates, no subscriber list of its own, and no subscription that nothing removes. A relaying version would add all three, plus a second place to keep in sync. `TestUUnsubscribingThroughTheInterfaceRemovesTheHandler` pins it by crossing surfaces — subscribe through the client, remove through the connection — because removing through the same surface passes either way
   * this is safe because the `Connection` outlives the client: it is assigned once, in the constructor, and `ChangeServer` swaps the *session* inside it rather than the object, so subscriptions survive a server change
   * **`IXrplClient.connection` lost its setter** (**breaking**, though nothing in the tree assigned it). With handlers attached through the events above, replacing the connection would strand every one of them on the old object and the stream would go quiet with nothing to show for it
+* **Stream messages discarded because handlers fell behind are counted rather than lost in silence** (#105). Events reach handlers through a bounded queue, so a slow handler costs events instead of stalling the socket - the right trade, made in `3c7e38e`. What it left was no trace at all: the queue drops its oldest entry when full, nothing throws, nothing logs, and a consumer building state from the stream drifts from the ledger with no way to tell.
+  * `Connection.DroppedStreamMessages` and `IXrplClient.DroppedStreamMessages` count the discards, across reconnects and `ChangeServer` alike, since one `Connection` serves them all. Any increase means events arrived and never reached a handler
+  * `ConnectionOptions.StreamMessageQueueCapacity` (default 10 000, unchanged) sizes the queue - raise it for a consumer that must not miss events and can hold the frames, lower it to bound memory harder
+  * the counter is incremented from `Channel`'s `itemDropped` callback, which runs inside `TryWrite` on the receive loop. It does nothing but increment for that reason: raising an event or logging there would put consumer code back on the path this queue exists to keep it off - the very failure #105 described but which the queue already prevented
+  * **none of this applies under WebAssembly**, where `EnqueueStreamMessage` dispatches each frame directly instead of queueing it: the capacity is not consulted, nothing is evicted, and the counter stays at zero however far handlers fall behind - the backlog there is bounded by memory alone. Routing browser frames through the queue needs verifying in a real browser, which no test in this repository can do, so it is left as its own change rather than done blind
+  * the issue's premise was checked and does not hold: handlers do not run in the receive loop. `ProcessStreamMessageAsync` is called by a background reader, and the receive loop only calls `TryWrite`. What is real is the silent loss, which is what this addresses
 
 ## 10.12.0.0 08/16/2026
 

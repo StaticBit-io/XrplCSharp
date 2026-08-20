@@ -57,6 +57,22 @@ namespace Xrpl.Client
         /// </remarks>
         Connection connection { get; }
 
+        /// <summary>
+        /// How many stream messages were discarded because handlers fell behind.
+        /// </summary>
+        /// <remarks>
+        /// Non-zero means events reached this client and never reached its handlers. The queue in
+        /// front of them is bounded (<see cref="Connection.ConnectionOptions.StreamMessageQueueCapacity"/>)
+        /// and drops the oldest when full, so a slow handler costs events instead of stalling the
+        /// socket - silently, until something reads this. A consumer building state from the
+        /// stream should treat any increase as a signal that its state has drifted.
+        /// <para>
+        /// Stays at zero under WebAssembly, where frames bypass the queue entirely - see
+        /// <see cref="Connection.DroppedStreamMessages"/>.
+        /// </para>
+        /// </remarks>
+        long DroppedStreamMessages { get; }
+
         /// <summary>Node error reported over the socket.</summary>
         event OnError OnError;
 
@@ -543,6 +559,9 @@ namespace Xrpl.Client
         // A second assignment would strand every handler attached through these events on the old
         // object.
         public Connection connection { get; }
+
+        /// <inheritdoc />
+        public long DroppedStreamMessages => connection.DroppedStreamMessages;
 
         // Forwarded, not relayed: add/remove reach the same Connection a caller would have used
         // through the property, so this type holds no delegates and no subscription of its own. A
