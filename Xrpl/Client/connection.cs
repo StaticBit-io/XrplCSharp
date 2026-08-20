@@ -439,6 +439,26 @@ public class Connection
     public long StaleSessionFramesDropped => Interlocked.Read(ref _staleSessionFramesDropped);
 
     /// <summary>
+    /// Marks the session serving this connection as retiring and returns its id, reproducing the
+    /// window <c>ChangeServer</c> and the reconnect loop open between <c>MarkAsRetiring()</c> and
+    /// the installation of the replacement session.
+    /// </summary>
+    /// <remarks>
+    /// Exists for tests: that window is reachable in production only by racing a real reconnect,
+    /// and the id of the session being retired is not otherwise observable. Marks it exactly the
+    /// way the two production paths do, under <c>_sessionLock</c>.
+    /// </remarks>
+    /// <returns>The id of the session that was marked, or <see langword="null"/> if there is none.</returns>
+    internal long? MarkActiveSessionRetiringForTests()
+    {
+        lock (_sessionLock)
+        {
+            _activeSession?.MarkAsRetiring();
+            return _activeSession?.SessionId;
+        }
+    }
+
+    /// <summary>
     /// How many stream messages have been discarded because the consumer fell behind.
     /// </summary>
     /// <remarks>
@@ -3462,14 +3482,32 @@ public class Connection
         // close runs fire-and-forget alongside the new connection. Without this check its last
         // frames land in the new session's queue and reach handlers as if they were current -
         // stale after a reconnect, and from an entirely different chain after a ChangeServer
-        // between networks. Lifecycle callbacks already guard the same way against _activeSession.
+        // between networks.
+        //
+        // Matching the id is not enough: ChangeServer and the reconnect loop call
+        // MarkAsRetiring() on the session while it is still _activeSession, and only
+        // ConnectInternalAsync installs its replacement. Frames arriving in that window carry the
+        // id of the very session being retired, so the retiring flag has to be part of the test -
+        // exactly as OnceOpen and the other lifecycle guards do it, and under the same lock, since
+        // IsRetiring is a plain bool published only by _sessionLock.
         //
         // A null sessionId means the caller cannot name a session (OnMessage, which anyone may
         // call): nothing to compare, so nothing is rejected.
-        if (sessionId is not null && _activeSession?.SessionId != sessionId)
+        if (sessionId is not null)
         {
-            Interlocked.Increment(ref _staleSessionFramesDropped);
-            return;
+            bool fromActiveSession;
+            lock (_sessionLock)
+            {
+                fromActiveSession = _activeSession != null &&
+                                    _activeSession.SessionId == sessionId &&
+                                    !_activeSession.IsRetiring;
+            }
+
+            if (!fromActiveSession)
+            {
+                Interlocked.Increment(ref _staleSessionFramesDropped);
+                return;
+            }
         }
 
         {

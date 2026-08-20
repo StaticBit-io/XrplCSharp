@@ -78,6 +78,49 @@ public class TestUStaleSessionFrames
     }
 
     /// <summary>
+    /// A frame carrying the id of the session that is being retired is dropped too.
+    /// </summary>
+    /// <remarks>
+    /// This is the case a plain id comparison misses. <c>ChangeServer</c> and the reconnect loop
+    /// mark the session retiring while it is still the active one - its replacement is installed
+    /// later, by <c>ConnectInternalAsync</c> - so frames arriving in that window carry an id that
+    /// matches. Whether the new connection is up yet decides nothing about whether these frames
+    /// belong to it.
+    /// </remarks>
+    [TestMethod]
+    public async Task TestUFrameFromTheSessionBeingRetiredIsDropped()
+    {
+        using ScriptedResponseServer server = new ScriptedResponseServer(ScriptedReply);
+        using XrplClient client = new XrplClient(server.Url);
+        await client.Connect();
+
+        int calls = 0;
+        client.OnTransaction += _ =>
+        {
+            calls++;
+            return Task.CompletedTask;
+        };
+
+        try
+        {
+            long? retiringSessionId = client.connection.MarkActiveSessionRetiringForTests();
+            Assert.IsNotNull(retiringSessionId, "a connected client must have a session to retire");
+
+            await client.connection.IOnMessageFastPath(
+                Encoding.UTF8.GetBytes(TransactionMessage),
+                retiringSessionId);
+
+            Assert.AreEqual(1L, client.connection.StaleSessionFramesDropped,
+                "an id that matches a retiring session is not an id that matches the live one");
+            Assert.AreEqual(0, calls, "the handler saw a frame from the session being retired");
+        }
+        finally
+        {
+            await client.Disconnect();
+        }
+    }
+
+    /// <summary>
     /// The guard must not reject frames from the live session, or the stream stops entirely.
     /// </summary>
     /// <remarks>
