@@ -74,7 +74,7 @@ public class TestUClientStreamEvents
     /// list, and removing through one surface would leave the other still subscribed.
     /// </remarks>
     [TestMethod]
-    public async Task TestUUnsubscribingThroughTheInterfaceRemovesTheHandler()
+    public async Task TestUHandlerAddedThroughTheClientCanBeRemovedThroughTheConnection()
     {
         using XrplClient client = new XrplClient("wss://localhost:1/");
         IXrplClient contract = client;
@@ -98,6 +98,38 @@ public class TestUClientStreamEvents
         await client.connection.OnMessage(TransactionMessage);
 
         Assert.AreEqual(1, calls, "removing through the connection left the handler attached - the client is relaying into its own list rather than forwarding");
+    }
+
+    /// <summary>
+    /// The mirror case: added through the connection, removed through the client.
+    /// </summary>
+    /// <remarks>
+    /// Needed as its own test because the one above never executes the client's <c>remove</c>
+    /// accessor - it removes through the connection. Verified by mutation: turning the client's
+    /// <c>remove</c> into <c>connection.OnTransaction += value</c> left the whole suite green
+    /// until this existed.
+    /// </remarks>
+    [TestMethod]
+    public async Task TestUHandlerAddedThroughTheConnectionCanBeRemovedThroughTheClient()
+    {
+        using XrplClient client = new XrplClient("wss://localhost:1/");
+        IXrplClient contract = client;
+
+        int calls = 0;
+        OnTransaction handler = _ =>
+        {
+            calls++;
+            return Task.CompletedTask;
+        };
+
+        client.connection.OnTransaction += handler;
+        await client.connection.OnMessage(TransactionMessage);
+        Assert.AreEqual(1, calls, "sanity: the handler is attached");
+
+        contract.OnTransaction -= handler;
+        await client.connection.OnMessage(TransactionMessage);
+
+        Assert.AreEqual(1, calls, "removing through the client left the handler attached - its remove accessor does not reach the connection");
     }
 
     /// <summary>

@@ -538,7 +538,11 @@ namespace Xrpl.Client
             public uint? ApiVersion { get; set; }
         }
 
-        public Connection connection { get; private set; }
+        // get-only, not `private set`: the one-assignment invariant the forwarding below depends on
+        // is then checked by the compiler rather than by everyone who edits this 1100-line class.
+        // A second assignment would strand every handler attached through these events on the old
+        // object.
+        public Connection connection { get; }
 
         // Forwarded, not relayed: add/remove reach the same Connection a caller would have used
         // through the property, so this type holds no delegates and no subscription of its own. A
