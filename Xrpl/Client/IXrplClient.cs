@@ -46,7 +46,64 @@ namespace Xrpl.Client
 
     public interface IXrplClient : IDisposable
     {
-        Connection connection { get; set; }
+        /// <summary>
+        /// The socket this client speaks over.
+        /// </summary>
+        /// <remarks>
+        /// Read-only: replacing it would leave every handler registered through the events below
+        /// attached to the old object, and the stream would go quiet with nothing to show for it.
+        /// <c>ChangeServer</c> is how a caller moves to another server - it swaps the session
+        /// inside this object rather than the object itself, so subscriptions survive.
+        /// </remarks>
+        Connection connection { get; }
+
+        /// <summary>Node error reported over the socket.</summary>
+        event OnError OnError;
+
+        /// <summary>Node warning reported over the socket.</summary>
+        event OnWarning OnWarning;
+
+        /// <summary>Server warnings attached to a response envelope.</summary>
+        event OnServerWarning OnServerWarning;
+
+        /// <summary>The socket finished connecting.</summary>
+        event OnConnected OnConnected;
+
+        /// <summary>The socket closed.</summary>
+        event OnDisconnect OnDisconnect;
+
+        /// <summary>Keep-alive round trip completed.</summary>
+        event OnPing OnPing;
+
+        /// <summary><c>ledgerClosed</c> stream event.</summary>
+        event OnLedgerClosed OnLedgerClosed;
+
+        /// <summary><c>transaction</c> stream event - the one a wallet renders for signing.</summary>
+        event OnTransaction OnTransaction;
+
+        /// <summary><c>validationReceived</c> stream event.</summary>
+        event OnValidationReceived OnValidationReceived;
+
+        /// <summary><c>manifestReceived</c> stream event.</summary>
+        event OnManifestReceived OnManifestReceived;
+
+        /// <summary><c>peerStatusChange</c> stream event.</summary>
+        event OnPeerStatusChange OnPeerStatusChange;
+
+        /// <summary><c>consensusPhase</c> stream event.</summary>
+        event OnConsensusPhase OnConsensusPhase;
+
+        /// <summary><c>path_find</c> follow-up.</summary>
+        event OnPathFind OnPathFind;
+
+        /// <summary><c>bookChanges</c> stream event.</summary>
+        event OnBookChanges OnBookChanges;
+
+        /// <summary><c>serverStatus</c> stream event.</summary>
+        event OnServerStatus OnServerStatus;
+
+        /// <summary>Connection state transitions, for diagnostics.</summary>
+        event Action<ConnectionStatusInfo> OnConnectionStatus;
         double feeCushion { get; set; }
         string maxFeeXRP { get; set; }
         uint? networkID { get; set; }
@@ -481,7 +538,118 @@ namespace Xrpl.Client
             public uint? ApiVersion { get; set; }
         }
 
-        public Connection connection { get; set; }
+        // get-only, not `private set`: the one-assignment invariant the forwarding below depends on
+        // is then checked by the compiler rather than by everyone who edits this 1100-line class.
+        // A second assignment would strand every handler attached through these events on the old
+        // object.
+        public Connection connection { get; }
+
+        // Forwarded, not relayed: add/remove reach the same Connection a caller would have used
+        // through the property, so this type holds no delegates and no subscription of its own. A
+        // relaying version - a local event plus a subscription to the connection that re-raises it
+        // - would add a second subscriber list, a subscription nothing removes, and a second place
+        // to keep in sync. There is nothing to keep in sync here.
+        //
+        // Safe because the Connection outlives the client: it is assigned once, in the
+        // constructor, and ChangeServer swaps the session inside it rather than the object. Were
+        // that to change, handlers would silently stay on the old object - which is why the
+        // property lost its public setter.
+
+        public event OnError OnError
+        {
+            add => connection.OnError += value;
+            remove => connection.OnError -= value;
+        }
+
+        public event OnWarning OnWarning
+        {
+            add => connection.OnWarning += value;
+            remove => connection.OnWarning -= value;
+        }
+
+        public event OnServerWarning OnServerWarning
+        {
+            add => connection.OnServerWarning += value;
+            remove => connection.OnServerWarning -= value;
+        }
+
+        public event OnConnected OnConnected
+        {
+            add => connection.OnConnected += value;
+            remove => connection.OnConnected -= value;
+        }
+
+        public event OnDisconnect OnDisconnect
+        {
+            add => connection.OnDisconnect += value;
+            remove => connection.OnDisconnect -= value;
+        }
+
+        public event OnPing OnPing
+        {
+            add => connection.OnPing += value;
+            remove => connection.OnPing -= value;
+        }
+
+        public event OnLedgerClosed OnLedgerClosed
+        {
+            add => connection.OnLedgerClosed += value;
+            remove => connection.OnLedgerClosed -= value;
+        }
+
+        public event OnTransaction OnTransaction
+        {
+            add => connection.OnTransaction += value;
+            remove => connection.OnTransaction -= value;
+        }
+
+        public event OnValidationReceived OnValidationReceived
+        {
+            add => connection.OnValidationReceived += value;
+            remove => connection.OnValidationReceived -= value;
+        }
+
+        public event OnManifestReceived OnManifestReceived
+        {
+            add => connection.OnManifestReceived += value;
+            remove => connection.OnManifestReceived -= value;
+        }
+
+        public event OnPeerStatusChange OnPeerStatusChange
+        {
+            add => connection.OnPeerStatusChange += value;
+            remove => connection.OnPeerStatusChange -= value;
+        }
+
+        public event OnConsensusPhase OnConsensusPhase
+        {
+            add => connection.OnConsensusPhase += value;
+            remove => connection.OnConsensusPhase -= value;
+        }
+
+        public event OnPathFind OnPathFind
+        {
+            add => connection.OnPathFind += value;
+            remove => connection.OnPathFind -= value;
+        }
+
+        public event OnBookChanges OnBookChanges
+        {
+            add => connection.OnBookChanges += value;
+            remove => connection.OnBookChanges -= value;
+        }
+
+        public event OnServerStatus OnServerStatus
+        {
+            add => connection.OnServerStatus += value;
+            remove => connection.OnServerStatus -= value;
+        }
+
+        public event Action<ConnectionStatusInfo> OnConnectionStatus
+        {
+            add => connection.OnConnectionStatus += value;
+            remove => connection.OnConnectionStatus -= value;
+        }
         public double feeCushion { get; set; }
         public string maxFeeXRP { get; set; }
         public uint? networkID { get; set; }
@@ -497,15 +665,6 @@ namespace Xrpl.Client
         /// The API version to use when making requests.
         /// </summary>
         public uint ApiVersion { get; set; }
-        //public event OnError OnError;
-        //public event OnConnected OnConnected;
-        //public event OnDisconnect OnDisconnect;
-        //public event OnLedgerClosed OnLedgerClosed;
-        //public event OnTransaction OnTransaction;
-        //public event OnManifestReceived OnManifestReceived;
-        //public event OnPeerStatusChange OnPeerStatusChange;
-        //public event OnConsensusPhase OnConsensusPhase;
-        //public event OnPathFind OnPathFind;
 
         ///// <summary> Current web socket client state </summary>
         //public WebSocketState SocketState => client.State;

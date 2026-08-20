@@ -640,7 +640,29 @@ internal sealed class FeeTestClient : IXrplClient
         this.feeCushion = 1.0;
     }
 
-    public Connection connection { get; set; } = null!;
+    public Connection connection => null!;
+
+    // Declared, never raised: this client answers requests, it does not stream. Being able to
+    // declare them at all is the point of the events moving onto IXrplClient - a substitute
+    // client could not carry them while they lived only on Connection.
+#pragma warning disable CS0067
+    public event OnError OnError;
+    public event OnWarning OnWarning;
+    public event OnServerWarning OnServerWarning;
+    public event OnConnected OnConnected;
+    public event OnDisconnect OnDisconnect;
+    public event OnPing OnPing;
+    public event OnLedgerClosed OnLedgerClosed;
+    public event OnTransaction OnTransaction;
+    public event OnValidationReceived OnValidationReceived;
+    public event OnManifestReceived OnManifestReceived;
+    public event OnPeerStatusChange OnPeerStatusChange;
+    public event OnConsensusPhase OnConsensusPhase;
+    public event OnPathFind OnPathFind;
+    public event OnBookChanges OnBookChanges;
+    public event OnServerStatus OnServerStatus;
+    public event Action<ConnectionStatusInfo> OnConnectionStatus;
+#pragma warning restore CS0067
     public double feeCushion { get; set; }
     public string maxFeeXRP { get; set; }
     public uint? networkID { get; set; }
