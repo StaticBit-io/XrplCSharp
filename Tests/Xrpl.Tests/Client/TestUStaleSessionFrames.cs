@@ -1,6 +1,8 @@
 using Microsoft.VisualStudio.TestTools.UnitTesting;
 
 using System;
+using System.Collections.Concurrent;
+using System.Linq;
 using System.Text;
 using System.Threading;
 using System.Threading.Tasks;
@@ -44,6 +46,42 @@ public class TestUStaleSessionFrames
     """;
 
     /// <summary>
+    /// The same message with a sequence number a test can recognise.
+    /// </summary>
+    private static string TransactionMessageWith(uint sequence) =>
+        TransactionMessage.Replace("\"Sequence\": 9", $"\"Sequence\": {sequence}");
+
+    private const uint DroppedSequence = 9;
+
+    private const uint WitnessSequence = 77;
+
+    /// <summary>
+    /// Waits until the handler has seen the witness frame, then reports whether it also saw the
+    /// frame that was supposed to be dropped.
+    /// </summary>
+    /// <remarks>
+    /// A bare "the handler was not called" assertion cannot fail: dispatch is asynchronous on both
+    /// paths, so an undropped frame would simply not have arrived yet when the assertion ran. The
+    /// witness fixes that. It carries no session - <c>OnMessage</c>, which is never rejected - and
+    /// is submitted after the frame under test, so the single reader would have dispatched that
+    /// one first had it been queued at all. Seeing the witness therefore means the other one is
+    /// never coming.
+    /// </remarks>
+    private static async Task DriveWitnessAndWait(XrplClient client, ConcurrentQueue<uint> seen)
+    {
+        await client.connection.OnMessage(TransactionMessageWith(WitnessSequence));
+
+        DateTime deadline = DateTime.UtcNow.AddSeconds(5);
+        while (!seen.Contains(WitnessSequence) && DateTime.UtcNow < deadline)
+        {
+            await Task.Delay(10);
+        }
+
+        Assert.IsTrue(seen.Contains(WitnessSequence),
+            "the witness frame never arrived, so nothing here can be concluded about the other one");
+    }
+
+    /// <summary>
     /// Waits until stream frames are queued rather than taking the fallback path.
     /// </summary>
     /// <remarks>
@@ -72,11 +110,12 @@ public class TestUStaleSessionFrames
         using ScriptedResponseServer server = new ScriptedResponseServer(ScriptedReply);
         using XrplClient client = new XrplClient(server.Url);
         await client.Connect();
+        await WaitForMessageProcessor(client);
 
-        int calls = 0;
-        client.OnTransaction += _ =>
+        ConcurrentQueue<uint> seen = new ConcurrentQueue<uint>();
+        client.OnTransaction += r =>
         {
-            calls++;
+            seen.Enqueue(r.Transaction.Sequence ?? 0);
             return Task.CompletedTask;
         };
 
@@ -90,7 +129,10 @@ public class TestUStaleSessionFrames
 
             Assert.AreEqual(1L, client.connection.StaleSessionFramesDropped,
                 "a frame from a session that is not active must be dropped before it reaches the queue");
-            Assert.AreEqual(0, calls, "the handler saw a frame belonging to a connection that is being retired");
+
+            await DriveWitnessAndWait(client, seen);
+            Assert.IsFalse(seen.Contains(DroppedSequence),
+                "the handler saw a frame belonging to a connection that is being retired");
         }
         finally
         {
@@ -114,11 +156,12 @@ public class TestUStaleSessionFrames
         using ScriptedResponseServer server = new ScriptedResponseServer(ScriptedReply);
         using XrplClient client = new XrplClient(server.Url);
         await client.Connect();
+        await WaitForMessageProcessor(client);
 
-        int calls = 0;
-        client.OnTransaction += _ =>
+        ConcurrentQueue<uint> seen = new ConcurrentQueue<uint>();
+        client.OnTransaction += r =>
         {
-            calls++;
+            seen.Enqueue(r.Transaction.Sequence ?? 0);
             return Task.CompletedTask;
         };
 
@@ -134,7 +177,10 @@ public class TestUStaleSessionFrames
 
             Assert.AreEqual(1L, client.connection.StaleSessionFramesDropped,
                 "an id that matches a retiring session is not an id that matches the live one");
-            Assert.AreEqual(0, calls, "the handler saw a frame from the session being retired");
+
+            await DriveWitnessAndWait(client, seen);
+            Assert.IsFalse(seen.Contains(DroppedSequence),
+                "the handler saw a frame from the session being retired");
         }
         finally
         {
