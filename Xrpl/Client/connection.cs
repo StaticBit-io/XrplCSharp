@@ -1901,8 +1901,12 @@ public class Connection
         // Start ping timer AFTER connection is fully established and all callbacks completed
         // This is outside try/catch to ensure it always runs on successful connection
         StartPingTimer();
-        
-        // Start background message processor for stream messages
+
+        // After StartPingTimer, not before: StartPingTimer calls StopPingTimerSync, which stops
+        // the message processor too - starting the processor first would have it torn down again
+        // before a single frame arrived. That coupling is the reason this cannot simply move
+        // ahead of the OnConnected callback, where it belongs; see the note on
+        // EnqueueStreamMessage.
         StartMessageProcessor();
     }
 
@@ -3408,8 +3412,17 @@ public class Connection
     /// <see cref="StartMessageProcessor"/>), and measurement confirmed it works there: running the
     /// Blazor demo against mainnet, the queue delivered 1 004 transactions over 52 s (19.2 tx/s,
     /// 13 ledgers) with no console errors and timestamps in order - against 462 over 33 s
-    /// (13.9 tx/s) on the bypass. So there is one path now, and capacity, eviction counting and
-    /// single-reader ordering hold everywhere.
+    /// (13.9 tx/s) on the bypass. So the platforms no longer diverge: capacity, eviction counting
+    /// and single-reader ordering hold on every target.
+    /// </para>
+    /// <para>
+    /// One window remains, and it is not platform-specific: <see cref="StartMessageProcessor"/>
+    /// runs at the end of <c>OnceOpen</c>, after the <c>OnConnected</c> callback. A handler that
+    /// subscribes there can see frames answered before the channel exists, and those take the
+    /// fallback below - outside the capacity, the eviction count and the ordering. Moving the
+    /// start ahead of the callback is not a one-line change: <see cref="StartPingTimer"/> calls
+    /// <c>StopPingTimerSync</c>, which stops the message processor as well, so an earlier start is
+    /// torn down again moments later. Untangling that is tracked separately.
     /// </para>
     /// </remarks>
     private void EnqueueStreamMessage(byte[] frame)
