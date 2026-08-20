@@ -497,12 +497,22 @@ public class Connection
     /// <remarks>
     /// Exists for tests: in production that window is reachable only by racing a real reconnect.
     /// Marks it exactly the way the two production paths do, under <c>_sessionLock</c>.
+    /// <para>
+    /// Returns the id rather than leaving the caller to read <see cref="ActiveSessionId"/>
+    /// separately: two lock acquisitions would let a reconnect swap the session in between, and a
+    /// test that then named the id it read first would be exercising the mismatch path it was
+    /// written to avoid - silently, and only sometimes.
+    /// </para>
     /// </remarks>
-    internal void MarkActiveSessionRetiringForTests()
+    /// <returns>
+    /// The id of the session that was marked, or <see langword="null"/> if there is none.
+    /// </returns>
+    internal long? MarkActiveSessionRetiringForTests()
     {
         lock (_sessionLock)
         {
             _activeSession?.MarkAsRetiring();
+            return _activeSession?.SessionId;
         }
     }
 

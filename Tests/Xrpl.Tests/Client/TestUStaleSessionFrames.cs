@@ -167,9 +167,10 @@ public class TestUStaleSessionFrames
 
         try
         {
-            long? retiringSessionId = client.connection.ActiveSessionId;
+            // Marked and named in one lock: reading the id separately would let a reconnect swap
+            // the session in between, and the test would quietly fall back to the mismatch case.
+            long? retiringSessionId = client.connection.MarkActiveSessionRetiringForTests();
             Assert.IsNotNull(retiringSessionId, "a connected client must have a session to retire");
-            client.connection.MarkActiveSessionRetiringForTests();
 
             await client.connection.IOnMessageFastPath(
                 Encoding.UTF8.GetBytes(TransactionMessage),
