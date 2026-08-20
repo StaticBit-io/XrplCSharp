@@ -1,6 +1,7 @@
 using Microsoft.VisualStudio.TestTools.UnitTesting;
 
 using System;
+using System.Threading;
 using System.Threading.Tasks;
 
 using Xrpl.Client;
@@ -35,6 +36,27 @@ public class TestUClientStreamEvents
       "meta": { "AffectedNodes": [], "TransactionIndex": 0, "TransactionResult": "tesSUCCESS" }
     }
     """;
+
+    /// <summary>
+    /// Waits until the counter reaches <paramref name="expected"/>, or fails.
+    /// </summary>
+    /// <remarks>
+    /// <c>OnMessage</c> returning does not mean handlers have run: a stream frame is handed to the
+    /// background processor, and when there is none - an unconnected client, as here - to a task
+    /// that yields before doing anything, so that parsing and handler code never run on the
+    /// receive loop. Both paths are asynchronous, which is the point; the test has to wait rather
+    /// than assume.
+    /// </remarks>
+    private static void WaitForCount(Func<int> counter, int expected, string message)
+    {
+        DateTime deadline = DateTime.UtcNow.AddSeconds(5);
+        while (counter() < expected && DateTime.UtcNow < deadline)
+        {
+            Thread.Sleep(10);
+        }
+
+        Assert.AreEqual(expected, counter(), message);
+    }
 
     /// <summary>
     /// A handler registered through the interface receives the event, and the raw bytes come with
@@ -91,11 +113,29 @@ public class TestUClientStreamEvents
         // it, and the handler would keep firing. Removing through the same surface it was added
         // to cannot tell the two apart - both pass - which is why the test crosses surfaces.
         contract.OnTransaction += handler;
+
+        // A witness that is never removed: it tells the test when a frame has been dispatched.
+        // Without it, "calls is still 1" after the removal would pass just as well for a frame
+        // that has not been processed yet.
+        //
+        // Registered after the handler, and that order is load-bearing: a multicast delegate
+        // invokes its subscribers in registration order, so a witness registered first would
+        // report the frame as dispatched while the handler had not yet run - and the sanity
+        // assertion below would flake rather than fail.
+        int dispatched = 0;
+        client.connection.OnTransaction += _ =>
+        {
+            Interlocked.Increment(ref dispatched);
+            return Task.CompletedTask;
+        };
+
         await client.connection.OnMessage(TransactionMessage);
+        WaitForCount(() => Volatile.Read(ref dispatched), 1, "the first frame was never dispatched");
         Assert.AreEqual(1, calls, "sanity: the handler is attached");
 
         client.connection.OnTransaction -= handler;
         await client.connection.OnMessage(TransactionMessage);
+        WaitForCount(() => Volatile.Read(ref dispatched), 2, "the second frame was never dispatched");
 
         Assert.AreEqual(1, calls, "removing through the connection left the handler attached - the client is relaying into its own list rather than forwarding");
     }
@@ -123,11 +163,24 @@ public class TestUClientStreamEvents
         };
 
         client.connection.OnTransaction += handler;
+
+        // After the handler, for the reason spelled out in the test above: registration order is
+        // invocation order, and a witness that ran first would report a dispatch the handler had
+        // not seen yet.
+        int dispatched = 0;
+        client.connection.OnTransaction += _ =>
+        {
+            Interlocked.Increment(ref dispatched);
+            return Task.CompletedTask;
+        };
+
         await client.connection.OnMessage(TransactionMessage);
+        WaitForCount(() => Volatile.Read(ref dispatched), 1, "the first frame was never dispatched");
         Assert.AreEqual(1, calls, "sanity: the handler is attached");
 
         contract.OnTransaction -= handler;
         await client.connection.OnMessage(TransactionMessage);
+        WaitForCount(() => Volatile.Read(ref dispatched), 2, "the second frame was never dispatched");
 
         Assert.AreEqual(1, calls, "removing through the client left the handler attached - its remove accessor does not reach the connection");
     }

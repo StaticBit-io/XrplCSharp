@@ -268,10 +268,6 @@ public class Connection
         /// Raise it for a consumer that must not miss events and can absorb the memory (each slot
         /// holds one frame); lower it to bound memory harder, accepting more loss. Default 10 000.
         /// </para>
-        /// <para>
-        /// <b>Has no effect under WebAssembly</b>, where frames are dispatched directly rather
-        /// than queued - see <see cref="Connection.DroppedStreamMessages"/>.
-        /// </para>
         /// </remarks>
         public int StreamMessageQueueCapacity { get; set; } = 10000;
     }
@@ -419,12 +415,126 @@ public class Connection
     // to prevent head-of-line blocking that causes ping timeouts under high stream load
     // Channel is created per-session to prevent cross-session message leakage
     // Using Channel<T> instead of BlockingCollection for true async support in WebAssembly
-    // Carries the raw frame (byte[]), not text: stream events pair themselves with it the same
+    // Carries the raw frame bytes, not text: stream events pair themselves with the frame the same
     // way a query response does, through AttachFrame, so their Raw/RawTransaction is available
     // without a second UTF-8 encode of a string that was itself decoded from these same bytes.
-    private Channel<byte[]>? _streamMessageChannel = null;
+    // The frame travels wrapped in SessionFrame, which names the session that produced it.
+    private Channel<SessionFrame>? _streamMessageChannel = null;
 
     private long _droppedStreamMessages;
+
+    private long _staleSessionFramesDropped;
+
+    private long _fallbackDispatchedStreamMessages;
+
+    /// <summary>
+    /// How many stream frames were dispatched outside the queue.
+    /// </summary>
+    /// <remarks>
+    /// The fallback path holds none of the queue's guarantees: no capacity bound, no eviction
+    /// counting, no single-reader ordering. Three things send a frame down it - the processor not
+    /// being up yet, the processor having been stopped, and the channel refusing a write because
+    /// its writer is already completed - and none of them were visible from outside until this
+    /// counter existed.
+    /// <para>
+    /// It makes the startup window measurable rather than merely argued about: a handler that
+    /// subscribes from <c>OnConnected</c> can be reached before
+    /// <see cref="StartMessageProcessor"/> has run, and this says how often that happened and to
+    /// how many frames.
+    /// </para>
+    /// </remarks>
+    public long FallbackDispatchedStreamMessages => Interlocked.Read(ref _fallbackDispatchedStreamMessages);
+
+    /// <summary>
+    /// How many stream frames were discarded because they came from a session that is no longer
+    /// active.
+    /// </summary>
+    /// <remarks>
+    /// A socket being retired keeps delivering until its graceful close finishes, so a handful of
+    /// frames can arrive after a reconnect or <c>ChangeServer</c> has already moved on. They are
+    /// dropped rather than delivered: after a change of network they would otherwise describe a
+    /// different chain entirely. Counted separately from
+    /// <see cref="DroppedStreamMessages"/>, which is about consumers falling behind - these two
+    /// mean different things and a non-zero value here is normal right after a reconnect.
+    /// </remarks>
+    public long StaleSessionFramesDropped => Interlocked.Read(ref _staleSessionFramesDropped);
+
+    /// <summary>
+    /// The id of the session serving this connection, or <see langword="null"/> if there is none.
+    /// </summary>
+    /// <remarks>
+    /// Exists for tests, which need to name the session a frame came from - something only the
+    /// socket callbacks can otherwise do.
+    /// </remarks>
+    internal long? ActiveSessionId
+    {
+        get
+        {
+            lock (_sessionLock)
+            {
+                return _activeSession?.SessionId;
+            }
+        }
+    }
+
+    /// <summary>
+    /// Whether the background message processor is up, i.e. whether stream frames are queued
+    /// rather than taking the fallback path.
+    /// </summary>
+    /// <remarks>
+    /// Exists for tests. <c>Connect()</c> returning does not imply it: <c>OnceOpen</c> resolves the
+    /// waiters through <c>connectionManager.ResolveAllAwaiting()</c> and only then invokes the
+    /// <c>OnConnected</c> callback and starts the processor, so a caller can be connected and still
+    /// be ahead of the queue. That ordering is the startup window described on
+    /// <see cref="EnqueueStreamMessage"/>.
+    /// </remarks>
+    /// <remarks>
+    /// <c>Volatile.Read</c> rather than a plain read or <c>_messageProcessorLock</c>:
+    /// the field is written under that lock, and holding it here would mean waiting out
+    /// <c>StopMessageProcessorInternal</c>, which blocks up to two seconds on the reader task.
+    /// </remarks>
+    internal bool IsMessageProcessorRunning => Volatile.Read(ref _streamMessageChannel) != null;
+
+    /// <summary>
+    /// Completes the stream channel's writer without clearing the channel, reproducing the state
+    /// <c>StopMessageProcessorInternal</c> leaves behind for anyone who read
+    /// <c>_streamMessageChannel</c> just before it was cleared.
+    /// </summary>
+    /// <remarks>
+    /// Exists for tests: in production that state lasts between one field read and one call, and
+    /// is not reachable deliberately.
+    /// </remarks>
+    internal void CompleteStreamChannelWriterForTests()
+    {
+        _streamMessageChannel?.Writer.Complete();
+    }
+
+    /// <summary>
+    /// Marks the session serving this connection as retiring, reproducing the window
+    /// <c>ChangeServer</c> and the reconnect loop open between <c>MarkAsRetiring()</c> and the
+    /// installation of the replacement session.
+    /// </summary>
+    /// <remarks>
+    /// Exists for tests: in production that window is reachable only by racing a real reconnect.
+    /// Marks it exactly the way the two production paths do, under <c>_sessionLock</c>.
+    /// <para>
+    /// Returns the id rather than leaving the caller to read <see cref="ActiveSessionId"/>
+    /// separately: two lock acquisitions would let a reconnect swap the session in between, and a
+    /// test that then named the id it read first would be exercising the mismatch path it was
+    /// written to avoid - silently, and only sometimes.
+    /// </para>
+    /// </remarks>
+    /// <returns>
+    /// The id of the session that was marked, or <see langword="null"/> if there is none.
+    /// </returns>
+    internal long? MarkActiveSessionRetiringForTests()
+    {
+        lock (_sessionLock)
+        {
+            _activeSession?.MarkAsRetiring();
+            return _activeSession?.SessionId;
+        }
+    }
 
     /// <summary>
     /// How many stream messages have been discarded because the consumer fell behind.
@@ -439,14 +549,6 @@ public class Connection
     /// <para>
     /// Counts across the lifetime of this connection, including across reconnects and
     /// <c>ChangeServer</c>, since the same object serves them all.
-    /// </para>
-    /// <para>
-    /// <b>Not counted under WebAssembly.</b> In a browser <c>EnqueueStreamMessage</c> dispatches
-    /// each frame directly instead of queueing it, so
-    /// <see cref="ConnectionOptions.StreamMessageQueueCapacity"/> does not apply, nothing is ever
-    /// evicted, and this stays at zero however far handlers fall behind. The backlog there is
-    /// bounded by nothing but memory. Routing browser frames through the queue is a separate
-    /// change - it needs verifying in a real browser, which no test here can do.
     /// </para>
     /// </remarks>
     public long DroppedStreamMessages => Interlocked.Read(ref _droppedStreamMessages);
@@ -1118,8 +1220,11 @@ public class Connection
                 try
                 {
                     // Use fast-path processing to prioritize ping/pong responses
-                    // and prevent head-of-line blocking from high-volume stream data
-                    await IOnMessageFastPath(m);
+                    // and prevent head-of-line blocking from high-volume stream data.
+                    // The session travels with the frame so a late arrival from a socket being
+                    // retired can be told apart from one on the live connection - see
+                    // EnqueueStreamMessage.
+                    await IOnMessageFastPath(m, capturedSession.SessionId);
                 }
                 catch (Exception ex)
                 {
@@ -1913,8 +2018,12 @@ public class Connection
         // Start ping timer AFTER connection is fully established and all callbacks completed
         // This is outside try/catch to ensure it always runs on successful connection
         StartPingTimer();
-        
-        // Start background message processor for stream messages
+
+        // After StartPingTimer, not before: StartPingTimer calls StopPingTimerSync, which stops
+        // the message processor too - starting the processor first would have it torn down again
+        // before a single frame arrived. That coupling is the reason this cannot simply move
+        // ahead of the OnConnected callback, where it belongs; see the note on
+        // EnqueueStreamMessage.
         StartMessageProcessor();
     }
 
@@ -2965,7 +3074,7 @@ public class Connection
             // itemDropped runs inside TryWrite, i.e. on the receive loop, so it does no more than
             // increment: raising an event or logging here would put consumer code back on the path
             // this channel exists to keep it off. Callers read DroppedStreamMessages instead.
-            _streamMessageChannel = System.Threading.Channels.Channel.CreateBounded<byte[]>(
+            _streamMessageChannel = System.Threading.Channels.Channel.CreateBounded<SessionFrame>(
                 new BoundedChannelOptions(Math.Max(1, config?.StreamMessageQueueCapacity ?? 10000))
                 {
                     SingleReader = true,
@@ -2986,18 +3095,18 @@ public class Connection
                     var reader = channel.Reader;
                     while (await reader.WaitToReadAsync(cts.Token).ConfigureAwait(false))
                     {
-                        while (reader.TryRead(out var frame))
+                        while (reader.TryRead(out SessionFrame item))
                         {
                             if (cts.Token.IsCancellationRequested)
                                 return;
 
                             try
                             {
-                                await ProcessStreamMessageAsync(frame).ConfigureAwait(false);
+                                await ProcessSessionFrameAsync(item).ConfigureAwait(false);
                             }
                             catch (Exception ex)
                             {
-                                await NotifyStreamProcessingErrorAsync(ex, frame).ConfigureAwait(false);
+                                await NotifyStreamProcessingErrorAsync(ex, item.Frame).ConfigureAwait(false);
                             }
                         }
                     }
@@ -3246,12 +3355,12 @@ public class Connection
     /// </summary>
     private Task IOnMessageFastPath(string message)
     {
-        return IOnMessageFastPath(message, null);
+        return IOnMessageFastPath(message, null, sessionId: null);
     }
 
     /// <summary>
     /// Overload for a message still in its wire form, used by the socket callback. See
-    /// <see cref="IOnMessageFastPath(string, byte[])"/> for why the bytes are kept as they are.
+    /// <see cref="IOnMessageFastPath(string, byte[], long?)"/> for why the bytes are kept as they are.
     /// </summary>
     /// <remarks>
     /// Internal rather than private so a test can drive the actual production entry point - the
@@ -3262,7 +3371,15 @@ public class Connection
     /// </remarks>
     internal Task IOnMessageFastPath(byte[] utf8Message)
     {
-        return IOnMessageFastPath(null, utf8Message);
+        return IOnMessageFastPath(null, utf8Message, sessionId: null);
+    }
+
+    /// <summary>
+    /// As above, for a frame whose originating session is known.
+    /// </summary>
+    internal Task IOnMessageFastPath(byte[] utf8Message, long? sessionId)
+    {
+        return IOnMessageFastPath(null, utf8Message, sessionId);
     }
 
     /// <summary>
@@ -3284,7 +3401,11 @@ public class Connection
     /// bytes the socket produced. Only the warning and error callbacks, which still take a string,
     /// ask for text at all, through <c>Text()</c>, and materialize it once and only then.
     /// </remarks>
-    private async Task IOnMessageFastPath(string message, byte[] utf8Message)
+    /// <param name="sessionId">
+    /// The session whose socket produced this frame, or <see langword="null"/> when the caller has
+    /// no session to name - <see cref="OnMessage(string)"/>, which anyone may call directly.
+    /// </param>
+    private async Task IOnMessageFastPath(string message, byte[] utf8Message, long? sessionId)
     {
         lastActivityTime = DateTime.UtcNow;
 
@@ -3365,7 +3486,7 @@ public class Connection
             {
                 // Message has "id" but no matching pending request — this is an async
                 // follow-up (e.g. path_find updates). Route to stream processing.
-                EnqueueStreamMessage(Frame());
+                EnqueueStreamMessage(Frame(), sessionId);
                 return;
             }
 
@@ -3400,52 +3521,180 @@ public class Connection
         {
             // This is a stream message (no "id") - process asynchronously
             // to avoid blocking the receive loop and causing ping timeouts
-            EnqueueStreamMessage(Frame());
+            EnqueueStreamMessage(Frame(), sessionId);
         }
     }
 
     /// <summary>
-    /// Routes a message to stream processing (Channel or fire-and-forget).<br/>
-    /// Used for both regular stream messages (no "id") and async follow-ups
-    /// that have "id" but no matching pending request (e.g. path_find updates).
+    /// A stream frame together with the session whose socket produced it.
     /// </summary>
-    private void EnqueueStreamMessage(byte[] frame)
+    /// <remarks>
+    /// The session has to ride along in the queue, not just be checked on the way in: the channel
+    /// is rebuilt per session by <see cref="StartMessageProcessor"/>, and between the check and
+    /// the write nothing holds the two together. Carrying the id lets the reader ask the question
+    /// again at the only moment that decides anything - just before handlers run.
+    /// </remarks>
+    /// <param name="Frame">The raw UTF-8 frame.</param>
+    /// <param name="SessionId">
+    /// The session whose socket produced it, or <see langword="null"/> when the caller had none to
+    /// name.
+    /// </param>
+    private readonly record struct SessionFrame(byte[] Frame, long? SessionId);
+
+    /// <summary>
+    /// Whether a frame carrying this session id belongs to the connection as it stands right now.
+    /// </summary>
+    /// <remarks>
+    /// Matching the id is not enough: <c>ChangeServer</c> and the reconnect loop call
+    /// <c>MarkAsRetiring()</c> on the session while it is still <c>_activeSession</c>, and only
+    /// <c>ConnectInternalAsync</c> installs its replacement. Frames arriving in that window carry
+    /// the id of the very session being retired, so the retiring flag is part of the test - as
+    /// <c>OnceOpen</c> and the other lifecycle guards do it, and under the same lock, since
+    /// <c>IsRetiring</c> is a plain bool published only by <c>_sessionLock</c>.
+    /// <para>
+    /// A <see langword="null"/> id means the caller cannot name a session
+    /// (<see cref="OnMessage(string)"/>, which anyone may call): nothing to compare, so nothing is
+    /// rejected.
+    /// </para>
+    /// </remarks>
+    private bool IsFromLiveSession(long? sessionId)
     {
-        if (OperatingSystem.IsBrowser())
+        if (sessionId is null)
         {
-            _ = ProcessStreamMessageFireAndForgetAsync(frame);
+            return true;
         }
-        else
+
+        lock (_sessionLock)
         {
-            var channel = _streamMessageChannel;
-            if (channel != null)
-            {
-                // No failure branch on purpose: the channel is bounded with DropOldest, so
-                // TryWrite always succeeds and silently evicts the oldest frame instead. A
-                // consumer falling 10 000 messages behind loses the oldest events with nothing
-                // reported - worth knowing, but a log line here would never fire.
-                channel.Writer.TryWrite(frame);
-            }
-            else
-            {
-                _ = ProcessStreamMessageFireAndForgetAsync(frame);
-            }
+            return _activeSession != null &&
+                   _activeSession.SessionId == sessionId &&
+                   !_activeSession.IsRetiring;
         }
     }
 
     /// <summary>
-    /// Fire-and-forget stream message processing for single-threaded environments like WebAssembly.
-    /// Uses ConfigureAwait(false) to prevent deadlocks and allow proper continuation scheduling.
+    /// Hands a stream message to the background processor.
     /// </summary>
-    private async Task ProcessStreamMessageFireAndForgetAsync(byte[] frame)
+    /// <remarks>
+    /// Used for ordinary stream messages (no <c>id</c>) and for follow-ups carrying an <c>id</c>
+    /// that matches no pending request, such as <c>path_find</c> updates.
+    /// <para>
+    /// Browsers used to take a separate path here - one fire-and-forget task per frame, bypassing
+    /// the queue entirely, so <see cref="ConnectionOptions.StreamMessageQueueCapacity"/> did not
+    /// apply, <see cref="DroppedStreamMessages"/> stayed at zero however far handlers fell behind,
+    /// the backlog was bounded by nothing, and concurrent dispatch could hand handlers events out
+    /// of the order the node sent them. The queue was built for this environment in the first
+    /// place ("true async support in WebAssembly single-threaded environment" on
+    /// <see cref="StartMessageProcessor"/>), and measurement confirmed it works there: running the
+    /// Blazor demo against mainnet, the queue delivered 1 004 transactions over 52 s (19.2 tx/s,
+    /// 13 ledgers) with no console errors and timestamps in order - against 462 over 33 s
+    /// (13.9 tx/s) on the bypass. So the platforms no longer diverge: capacity, eviction counting
+    /// and single-reader ordering hold on every target.
+    /// </para>
+    /// <para>
+    /// One window remains, and it is not platform-specific: <see cref="StartMessageProcessor"/>
+    /// runs at the end of <c>OnceOpen</c>, after the <c>OnConnected</c> callback. A handler that
+    /// subscribes there can see frames answered before the channel exists, and those take the
+    /// fallback below - outside the capacity, the eviction count and the ordering. Moving the
+    /// start ahead of the callback is not a one-line change: <see cref="StartPingTimer"/> calls
+    /// <c>StopPingTimerSync</c>, which stops the message processor as well, so an earlier start is
+    /// torn down again moments later. Untangling that is tracked separately.
+    /// </para>
+    /// </remarks>
+    private void EnqueueStreamMessage(byte[] frame, long? sessionId = null)
     {
+        // A retiring socket keeps delivering while InitiateGracefulCloseAsync completes, and that
+        // close runs fire-and-forget alongside the new connection. Without this its last frames
+        // reach handlers as if they were current - stale after a reconnect, and from an entirely
+        // different chain after a ChangeServer between networks.
+        //
+        // Checking here only saves a queue slot. It cannot be the guarantee: the channel is
+        // rebuilt per session and the swap is under _messageProcessorLock, not _sessionLock, so
+        // between this answer and the write below the session can retire and its replacement
+        // install a new channel - and the frame would land in that one. The answer that counts is
+        // the one the reader asks in ProcessSessionFrameAsync, immediately before handlers run.
+        if (!IsFromLiveSession(sessionId))
+        {
+            Interlocked.Increment(ref _staleSessionFramesDropped);
+            return;
+        }
+
+        SessionFrame item = new SessionFrame(frame, sessionId);
+
+        // The channel is bounded with DropOldest, so a full queue is not a refusal: TryWrite
+        // evicts the oldest frame, counts it through itemDropped and reports success. It
+        // refuses only a completed writer - and that happens on the ordinary path, not just in
+        // some corner: StopMessageProcessorInternal completes the writer after clearing
+        // _streamMessageChannel, so a reader that got the reference an instant earlier writes
+        // into a channel that is already closed. StartPingTimer tears the processor down and
+        // StartMessageProcessor builds it again on every connect, so the window recurs.
+        //
+        // A refused frame therefore goes down the fallback rather than disappearing. It still
+        // faces the session check there - fallback and queue meet in ProcessSessionFrameAsync.
+        Channel<SessionFrame>? channel = _streamMessageChannel;
+        if (channel?.Writer.TryWrite(item) == true)
+        {
+            return;
+        }
+
+        Interlocked.Increment(ref _fallbackDispatchedStreamMessages);
+        _ = ProcessStreamMessageFireAndForgetAsync(item);
+    }
+
+    /// <summary>
+    /// Runs a queued frame through the stream handlers, unless its session stopped being the live
+    /// one while it waited.
+    /// </summary>
+    /// <remarks>
+    /// This is where the session check has to be final. A frame can be queued while its session is
+    /// live and dequeued after <c>ChangeServer</c> has moved the client to another network
+    /// entirely - and the queue holds up to
+    /// <see cref="ConnectionOptions.StreamMessageQueueCapacity"/> frames, so the wait is not
+    /// necessarily short. Asking again here costs one uncontended lock per frame, against a JSON
+    /// parse and a handler call.
+    /// </remarks>
+    private Task ProcessSessionFrameAsync(SessionFrame item)
+    {
+        if (!IsFromLiveSession(item.SessionId))
+        {
+            Interlocked.Increment(ref _staleSessionFramesDropped);
+            return Task.CompletedTask;
+        }
+
+        return ProcessStreamMessageAsync(item.Frame);
+    }
+
+    /// <summary>
+    /// Processes a stream frame outside the queue, on its own task.
+    /// </summary>
+    /// <remarks>
+    /// Three ways in, none of them platform-specific since browsers stopped taking a path of their
+    /// own: before <see cref="StartMessageProcessor"/> has run, after the processor was stopped,
+    /// and when the channel refuses the write because its writer is already completed. Ordering
+    /// and the capacity bound do not hold here - that is the cost of not losing the frame.
+    /// <c>ConfigureAwait(false)</c> throughout, to keep continuations off a captured context.
+    /// <para>
+    /// The yield is what makes "fire and forget" true. Without it an async method runs on the
+    /// caller's thread up to its first real await, and the first real await inside
+    /// <see cref="ProcessStreamMessageAsync"/> comes after
+    /// <c>JsonSerializer.Deserialize</c> - so the receive loop would pay for parsing every frame
+    /// that takes this path, plus whatever a handler does before its own first await. That is
+    /// precisely the head-of-line blocking the queue exists to prevent, and the fallback would
+    /// have reintroduced it for the startup window, for a stopped processor and for a refused
+    /// write.
+    /// </para>
+    /// </remarks>
+    private async Task ProcessStreamMessageFireAndForgetAsync(SessionFrame item)
+    {
+        await Task.Yield();
+
         try
         {
-            await ProcessStreamMessageAsync(frame).ConfigureAwait(false);
+            await ProcessSessionFrameAsync(item).ConfigureAwait(false);
         }
         catch (Exception ex)
         {
-            await NotifyStreamProcessingErrorAsync(ex, frame).ConfigureAwait(false);
+            await NotifyStreamProcessingErrorAsync(ex, item.Frame).ConfigureAwait(false);
         }
     }
 
