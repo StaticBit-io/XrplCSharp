@@ -66,10 +66,6 @@ namespace Xrpl.Client
         /// and drops the oldest when full, so a slow handler costs events instead of stalling the
         /// socket - silently, until something reads this. A consumer building state from the
         /// stream should treat any increase as a signal that its state has drifted.
-        /// <para>
-        /// Stays at zero under WebAssembly, where frames bypass the queue entirely - see
-        /// <see cref="Connection.DroppedStreamMessages"/>.
-        /// </para>
         /// </remarks>
         long DroppedStreamMessages { get; }
 
