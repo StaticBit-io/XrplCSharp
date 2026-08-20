@@ -62,6 +62,8 @@ public class TestUStreamProcessorStartsBeforeCallbacks
 
         bool channelExisted = false;
         long fallbackDuringCallback = -1;
+        TaskCompletionSource callbackDone = new TaskCompletionSource(
+            TaskCreationOptions.RunContinuationsAsynchronously);
 
         client.connection.OnConnected += async () =>
         {
@@ -71,12 +73,18 @@ public class TestUStreamProcessorStartsBeforeCallbacks
                 Encoding.UTF8.GetBytes(TransactionMessage),
                 client.connection.ActiveSessionId);
             fallbackDuringCallback = client.connection.FallbackDispatchedStreamMessages;
+            callbackDone.TrySetResult();
         };
 
         await client.Connect();
 
         try
         {
+            // Connect() returning is not enough: OnceOpen resolves the waiters before invoking
+            // this callback, so without the wait the assertions below can read their defaults.
+            Task finished = await Task.WhenAny(callbackDone.Task, Task.Delay(TimeSpan.FromSeconds(5)));
+            Assert.AreSame(callbackDone.Task, finished, "the OnConnected handler never ran");
+
             Assert.IsTrue(channelExisted,
                 "the queue did not exist while consumer code was subscribing - frames answered there take the fallback");
             Assert.AreEqual(0L, fallbackDuringCallback,
@@ -109,6 +117,17 @@ public class TestUStreamProcessorStartsBeforeCallbacks
 
         try
         {
+            // The ping timer starts at the very end of OnceOpen, after Connect() has returned.
+            // Asserting before it runs would pass whether or not it takes the processor down -
+            // the test has to wait for the thing that used to break it.
+            DateTime deadline = DateTime.UtcNow.AddSeconds(5);
+            while (!client.connection.IsPingTimerRunning && DateTime.UtcNow < deadline)
+            {
+                await Task.Delay(10);
+            }
+
+            Assert.IsTrue(client.connection.IsPingTimerRunning, "the ping timer never started");
+
             Assert.IsTrue(client.connection.IsMessageProcessorRunning,
                 "the ping timer took the message processor down with it");
 

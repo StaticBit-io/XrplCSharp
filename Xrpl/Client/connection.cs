@@ -437,10 +437,11 @@ public class Connection
     /// its writer is already completed - and none of them were visible from outside until this
     /// counter existed.
     /// <para>
-    /// It makes the startup window measurable rather than merely argued about: a handler that
-    /// subscribes from <c>OnConnected</c> can be reached before
-    /// <see cref="StartMessageProcessor"/> has run, and this says how often that happened and to
-    /// how many frames.
+    /// Cumulative over the life of the connection, and a non-zero value is not by itself a fault:
+    /// a client that was driven before it connected, or after it disconnected, legitimately has
+    /// frames here. What means something is an increase <em>across a connect</em> - the startup
+    /// window this counter was added to measure is closed, so that number should stay put while a
+    /// connection is being established.
     /// </para>
     /// </remarks>
     public long FallbackDispatchedStreamMessages => Interlocked.Read(ref _fallbackDispatchedStreamMessages);
@@ -482,11 +483,10 @@ public class Connection
     /// rather than taking the fallback path.
     /// </summary>
     /// <remarks>
-    /// Exists for tests. <c>Connect()</c> returning does not imply it: <c>OnceOpen</c> resolves the
-    /// waiters through <c>connectionManager.ResolveAllAwaiting()</c> and only then invokes the
-    /// <c>OnConnected</c> callback and starts the processor, so a caller can be connected and still
-    /// be ahead of the queue. That ordering is the startup window described on
-    /// <see cref="EnqueueStreamMessage"/>.
+    /// Exists for tests. <c>OnceOpen</c> now starts the processor before it resolves the waiters
+    /// through <c>connectionManager.ResolveAllAwaiting()</c> and before the <c>OnConnected</c>
+    /// callback, so a returned <c>Connect()</c> does imply a queue - it did not until the ping
+    /// timer stopped taking the processor down with it.
     /// </remarks>
     /// <remarks>
     /// <c>Volatile.Read</c> rather than a plain read or <c>_messageProcessorLock</c>:
@@ -494,6 +494,18 @@ public class Connection
     /// <c>StopMessageProcessorInternal</c>, which blocks up to two seconds on the reader task.
     /// </remarks>
     internal bool IsMessageProcessorRunning => Volatile.Read(ref _streamMessageChannel) != null;
+
+    /// <summary>
+    /// Whether the ping timer is up.
+    /// </summary>
+    /// <remarks>
+    /// Exists for tests, and for one question in particular: the ping timer starts at the very end
+    /// of <c>OnceOpen</c>, after <c>Connect()</c> has already returned, so a test that wants to
+    /// know the processor survived <see cref="StartPingTimer"/> has to wait for the timer rather
+    /// than assume it. Without that wait such a test can pass by asserting too early - before the
+    /// thing it is testing has had a chance to go wrong.
+    /// </remarks>
+    internal bool IsPingTimerRunning => Volatile.Read(ref _pingCts) != null;
 
     /// <summary>
     /// Completes the stream channel's writer without clearing the channel, reproducing the state
@@ -3623,13 +3635,19 @@ public class Connection
     /// and single-reader ordering hold on every target.
     /// </para>
     /// <para>
-    /// One window remains, and it is not platform-specific: <see cref="StartMessageProcessor"/>
-    /// runs at the end of <c>OnceOpen</c>, after the <c>OnConnected</c> callback. A handler that
-    /// subscribes there can see frames answered before the channel exists, and those take the
-    /// fallback below - outside the capacity, the eviction count and the ordering. Moving the
-    /// start ahead of the callback is not a one-line change: <see cref="StartPingTimer"/> calls
-    /// <c>StopPingTimerSync</c>, which stops the message processor as well, so an earlier start is
-    /// torn down again moments later. Untangling that is tracked separately.
+    /// The startup window is closed too: <see cref="StartMessageProcessor"/> used to run at the
+    /// very end of <c>OnceOpen</c>, after the <c>OnConnected</c> callback, so a handler
+    /// subscribing there saw its first frames answered before the channel existed and they took
+    /// the fallback below - outside the capacity, the eviction count and the ordering. It now runs
+    /// before the callback. That was not a one-line change: <see cref="StartPingTimer"/> begins
+    /// with <c>StopPingTimerSync</c>, which used to stop the message processor as well, so an
+    /// earlier start was torn down again moments later; see the remarks on
+    /// <see cref="StopPingTimerSync"/>.
+    /// </para>
+    /// <para>
+    /// The fallback stays, because it is still reachable: <see cref="OnMessage(string)"/> on a
+    /// client that never connected, anything arriving after the processor is stopped, and a write
+    /// the channel refuses because its writer is already completed.
     /// </para>
     /// </remarks>
     private void EnqueueStreamMessage(byte[] frame, long? sessionId = null)
