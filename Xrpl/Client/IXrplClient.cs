@@ -67,7 +67,12 @@ namespace Xrpl.Client
         /// socket - silently, until something reads this. A consumer building state from the
         /// stream should treat any increase as a signal that its state has drifted.
         /// </remarks>
-        long DroppedStreamMessages { get; }
+        /// <remarks>
+        /// Defaulted, like <see cref="SetNetworkId"/>: forwarding to <see cref="connection"/> is
+        /// the only implementation that means anything, and an observational member is a poor
+        /// reason to break every external implementer of this interface.
+        /// </remarks>
+        long DroppedStreamMessages => connection.DroppedStreamMessages;
 
         /// <summary>
         /// How many stream frames were discarded because they came from a connection this client
@@ -81,7 +86,21 @@ namespace Xrpl.Client
         /// reconnect and says nothing about handler speed - that is
         /// <see cref="DroppedStreamMessages"/>, and the two are counted apart on purpose.
         /// </remarks>
-        long StaleSessionFramesDropped { get; }
+        /// <inheritdoc cref="DroppedStreamMessages"/>
+        long StaleSessionFramesDropped => connection.StaleSessionFramesDropped;
+
+        /// <summary>
+        /// How many stream frames were dispatched outside the queue, without its ordering or its
+        /// capacity bound.
+        /// </summary>
+        /// <remarks>
+        /// Frames take that path when the background processor is not up yet, when it has been
+        /// stopped, or when the channel refuses a write. The first of those is a real window on
+        /// every connect: the processor starts at the end of <c>OnceOpen</c>, after the
+        /// <c>OnConnected</c> callback, so a handler subscribing there can be reached before the
+        /// queue exists. This counts how often that happened.
+        /// </remarks>
+        long FallbackDispatchedStreamMessages => connection.FallbackDispatchedStreamMessages;
 
         /// <summary>Node error reported over the socket.</summary>
         event OnError OnError;
@@ -575,6 +594,9 @@ namespace Xrpl.Client
 
         /// <inheritdoc />
         public long StaleSessionFramesDropped => connection.StaleSessionFramesDropped;
+
+        /// <inheritdoc />
+        public long FallbackDispatchedStreamMessages => connection.FallbackDispatchedStreamMessages;
 
         // Forwarded, not relayed: add/remove reach the same Connection a caller would have used
         // through the property, so this type holds no delegates and no subscription of its own. A

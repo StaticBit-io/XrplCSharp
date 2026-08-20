@@ -425,6 +425,26 @@ public class Connection
 
     private long _staleSessionFramesDropped;
 
+    private long _fallbackDispatchedStreamMessages;
+
+    /// <summary>
+    /// How many stream frames were dispatched outside the queue.
+    /// </summary>
+    /// <remarks>
+    /// The fallback path holds none of the queue's guarantees: no capacity bound, no eviction
+    /// counting, no single-reader ordering. Three things send a frame down it - the processor not
+    /// being up yet, the processor having been stopped, and the channel refusing a write because
+    /// its writer is already completed - and none of them were visible from outside until this
+    /// counter existed.
+    /// <para>
+    /// It makes the startup window measurable rather than merely argued about: a handler that
+    /// subscribes from <c>OnConnected</c> can be reached before
+    /// <see cref="StartMessageProcessor"/> has run, and this says how often that happened and to
+    /// how many frames.
+    /// </para>
+    /// </remarks>
+    public long FallbackDispatchedStreamMessages => Interlocked.Read(ref _fallbackDispatchedStreamMessages);
+
     /// <summary>
     /// How many stream frames were discarded because they came from a session that is no longer
     /// active.
@@ -3617,6 +3637,7 @@ public class Connection
             return;
         }
 
+        Interlocked.Increment(ref _fallbackDispatchedStreamMessages);
         _ = ProcessStreamMessageFireAndForgetAsync(item);
     }
 

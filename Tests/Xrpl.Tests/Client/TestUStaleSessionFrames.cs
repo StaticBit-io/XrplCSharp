@@ -313,6 +313,9 @@ public class TestUStaleSessionFrames
 
             Assert.AreEqual(0L, client.connection.StaleSessionFramesDropped,
                 "the session was live throughout; nothing here is stale");
+
+            Assert.AreEqual(1L, client.connection.FallbackDispatchedStreamMessages,
+                "a frame that went round the queue must say so - that is what the counter is for");
         }
         finally
         {
