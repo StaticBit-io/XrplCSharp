@@ -268,6 +268,10 @@ public class Connection
         /// Raise it for a consumer that must not miss events and can absorb the memory (each slot
         /// holds one frame); lower it to bound memory harder, accepting more loss. Default 10 000.
         /// </para>
+        /// <para>
+        /// <b>Has no effect under WebAssembly</b>, where frames are dispatched directly rather
+        /// than queued - see <see cref="Connection.DroppedStreamMessages"/>.
+        /// </para>
         /// </remarks>
         public int StreamMessageQueueCapacity { get; set; } = 10000;
     }
@@ -435,6 +439,14 @@ public class Connection
     /// <para>
     /// Counts across the lifetime of this connection, including across reconnects and
     /// <c>ChangeServer</c>, since the same object serves them all.
+    /// </para>
+    /// <para>
+    /// <b>Not counted under WebAssembly.</b> In a browser <c>EnqueueStreamMessage</c> dispatches
+    /// each frame directly instead of queueing it, so
+    /// <see cref="ConnectionOptions.StreamMessageQueueCapacity"/> does not apply, nothing is ever
+    /// evicted, and this stays at zero however far handlers fall behind. The backlog there is
+    /// bounded by nothing but memory. Routing browser frames through the queue is a separate
+    /// change - it needs verifying in a real browser, which no test here can do.
     /// </para>
     /// </remarks>
     public long DroppedStreamMessages => Interlocked.Read(ref _droppedStreamMessages);

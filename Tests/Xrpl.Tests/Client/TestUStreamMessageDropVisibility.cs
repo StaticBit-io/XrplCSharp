@@ -1,4 +1,4 @@
-using Microsoft.VisualStudio.TestTools.UnitTesting;
+﻿using Microsoft.VisualStudio.TestTools.UnitTesting;
 
 using System;
 using System.Threading;
@@ -66,23 +66,34 @@ public class TestUStreamMessageDropVisibility
             await blocked.Task;
         };
 
-        Assert.AreEqual(0L, client.DroppedStreamMessages, "nothing has been dropped before the queue is exercised");
-
-        // The first message occupies the handler; everything after it queues behind.
-        await client.connection.OnMessage(TransactionMessage);
-        await firstArrived.Task;
-
-        for (int i = 0; i < 12; i++)
+        try
         {
+            Assert.AreEqual(0L, client.DroppedStreamMessages, "nothing has been dropped before the queue is exercised");
+
+            // The first message occupies the handler; everything after it queues behind.
             await client.connection.OnMessage(TransactionMessage);
+            await firstArrived.Task;
+
+            for (int i = 0; i < 12; i++)
+            {
+                await client.connection.OnMessage(TransactionMessage);
+            }
+
+            // Exact, not just non-zero: the reader took the first frame and is stuck on it, so the
+            // twelve that follow meet a queue of capacity two - ten of them evict. A >0 assertion
+            // would also pass if the callback missed some.
+            Assert.AreEqual(
+                10L,
+                client.DroppedStreamMessages,
+                $"twelve writes into a capacity-two queue behind a blocked handler should evict exactly ten, found {client.DroppedStreamMessages}");
         }
-
-        Assert.IsTrue(
-            client.DroppedStreamMessages > 0,
-            $"messages queued past a capacity of 2 while the handler was blocked, so some were discarded - the counter should say so, it reads {client.DroppedStreamMessages}");
-
-        blocked.TrySetResult();
-        await client.Disconnect();
+        finally
+        {
+            // Released here, not after the assertion: a failed assertion would otherwise leave the
+            // handler parked on an unfinished task and the client connected.
+            blocked.TrySetResult();
+            await client.Disconnect();
+        }
     }
 
     /// <summary>
@@ -113,18 +124,24 @@ public class TestUStreamMessageDropVisibility
             return Task.CompletedTask;
         };
 
-        for (int i = 0; i < Sent; i++)
+        try
         {
-            await client.connection.OnMessage(TransactionMessage);
+            for (int i = 0; i < Sent; i++)
+            {
+                await client.connection.OnMessage(TransactionMessage);
+            }
+
+            // Awaited, not asserted straight away: delivery is asynchronous now that messages
+            // travel through the queue, so reading the counter immediately after sending measures
+            // nothing.
+            Task completed = await Task.WhenAny(allArrived.Task, Task.Delay(TimeSpan.FromSeconds(5)));
+            Assert.AreSame(allArrived.Task, completed, $"only {Volatile.Read(ref seen)} of {Sent} messages reached the handler");
+
+            Assert.AreEqual(0L, client.DroppedStreamMessages, "the handler returned immediately every time - nothing should have been discarded");
         }
-
-        // Awaited, not asserted straight away: delivery is asynchronous now that messages travel
-        // through the queue, so reading the counter immediately after sending measures nothing.
-        Task completed = await Task.WhenAny(allArrived.Task, Task.Delay(TimeSpan.FromSeconds(5)));
-        Assert.AreSame(allArrived.Task, completed, $"only {Volatile.Read(ref seen)} of {Sent} messages reached the handler");
-
-        Assert.AreEqual(0L, client.DroppedStreamMessages, "the handler returned immediately every time - nothing should have been discarded");
-
-        await client.Disconnect();
+        finally
+        {
+            await client.Disconnect();
+        }
     }
 }
