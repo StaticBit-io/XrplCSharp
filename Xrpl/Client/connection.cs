@@ -2879,7 +2879,16 @@ public class Connection
     /// fallback path. The processor is now stopped explicitly wherever a connection genuinely
     /// ends: <see cref="Disconnect"/>, <see cref="DisconnectAndWaitAsync"/>, <c>OnceClose</c>,
     /// <c>OnConnectHandlerFailedAsync</c>, <see cref="ChangeServer"/> and
-    /// <c>RetireCurrentSessionAndReconnectAsync</c>.
+    /// <c>RetireCurrentSessionAndReconnectAsync</c> - the same six places the side effect used to
+    /// fire, so when the processor stops is unchanged; only the spurious stop inside
+    /// <see cref="StartPingTimer"/> is gone.
+    /// <para>
+    /// <c>ReconnectLoopAsync</c> retires a session without stopping the processor, and deliberately
+    /// so: it did not stop it before this change either, <c>OnceClose</c> has already run by the
+    /// time it retries, and <see cref="StartMessageProcessor"/> tears down any leftover when the
+    /// next connection opens. Adding a stop there would discard frames still queued from before the
+    /// drop, on a path where nothing shows that is wanted.
+    /// </para>
     /// </remarks>
     private void StopPingTimerSync()
     {
