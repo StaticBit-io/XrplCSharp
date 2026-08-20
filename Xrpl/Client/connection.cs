@@ -422,6 +422,22 @@ public class Connection
 
     private long _droppedStreamMessages;
 
+    private long _staleSessionFramesDropped;
+
+    /// <summary>
+    /// How many stream frames were discarded because they came from a session that is no longer
+    /// active.
+    /// </summary>
+    /// <remarks>
+    /// A socket being retired keeps delivering until its graceful close finishes, so a handful of
+    /// frames can arrive after a reconnect or <c>ChangeServer</c> has already moved on. They are
+    /// dropped rather than delivered: after a change of network they would otherwise describe a
+    /// different chain entirely. Counted separately from
+    /// <see cref="DroppedStreamMessages"/>, which is about consumers falling behind - these two
+    /// mean different things and a non-zero value here is normal right after a reconnect.
+    /// </remarks>
+    public long StaleSessionFramesDropped => Interlocked.Read(ref _staleSessionFramesDropped);
+
     /// <summary>
     /// How many stream messages have been discarded because the consumer fell behind.
     /// </summary>
@@ -1106,8 +1122,11 @@ public class Connection
                 try
                 {
                     // Use fast-path processing to prioritize ping/pong responses
-                    // and prevent head-of-line blocking from high-volume stream data
-                    await IOnMessageFastPath(m);
+                    // and prevent head-of-line blocking from high-volume stream data.
+                    // The session travels with the frame so a late arrival from a socket being
+                    // retired can be told apart from one on the live connection - see
+                    // EnqueueStreamMessage.
+                    await IOnMessageFastPath(m, capturedSession.SessionId);
                 }
                 catch (Exception ex)
                 {
@@ -3238,7 +3257,7 @@ public class Connection
     /// </summary>
     private Task IOnMessageFastPath(string message)
     {
-        return IOnMessageFastPath(message, null);
+        return IOnMessageFastPath(message, null, sessionId: null);
     }
 
     /// <summary>
@@ -3254,7 +3273,15 @@ public class Connection
     /// </remarks>
     internal Task IOnMessageFastPath(byte[] utf8Message)
     {
-        return IOnMessageFastPath(null, utf8Message);
+        return IOnMessageFastPath(null, utf8Message, sessionId: null);
+    }
+
+    /// <summary>
+    /// As above, for a frame whose originating session is known.
+    /// </summary>
+    internal Task IOnMessageFastPath(byte[] utf8Message, long? sessionId)
+    {
+        return IOnMessageFastPath(null, utf8Message, sessionId);
     }
 
     /// <summary>
@@ -3276,7 +3303,11 @@ public class Connection
     /// bytes the socket produced. Only the warning and error callbacks, which still take a string,
     /// ask for text at all, through <c>Text()</c>, and materialize it once and only then.
     /// </remarks>
-    private async Task IOnMessageFastPath(string message, byte[] utf8Message)
+    /// <param name="sessionId">
+    /// The session whose socket produced this frame, or <see langword="null"/> when the caller has
+    /// no session to name - <see cref="OnMessage(string)"/>, which anyone may call directly.
+    /// </param>
+    private async Task IOnMessageFastPath(string message, byte[] utf8Message, long? sessionId)
     {
         lastActivityTime = DateTime.UtcNow;
 
@@ -3357,7 +3388,7 @@ public class Connection
             {
                 // Message has "id" but no matching pending request — this is an async
                 // follow-up (e.g. path_find updates). Route to stream processing.
-                EnqueueStreamMessage(Frame());
+                EnqueueStreamMessage(Frame(), sessionId);
                 return;
             }
 
@@ -3392,7 +3423,7 @@ public class Connection
         {
             // This is a stream message (no "id") - process asynchronously
             // to avoid blocking the receive loop and causing ping timeouts
-            EnqueueStreamMessage(Frame());
+            EnqueueStreamMessage(Frame(), sessionId);
         }
     }
 
@@ -3425,8 +3456,22 @@ public class Connection
     /// torn down again moments later. Untangling that is tracked separately.
     /// </para>
     /// </remarks>
-    private void EnqueueStreamMessage(byte[] frame)
+    private void EnqueueStreamMessage(byte[] frame, long? sessionId = null)
     {
+        // A retiring socket keeps delivering while InitiateGracefulCloseAsync completes, and that
+        // close runs fire-and-forget alongside the new connection. Without this check its last
+        // frames land in the new session's queue and reach handlers as if they were current -
+        // stale after a reconnect, and from an entirely different chain after a ChangeServer
+        // between networks. Lifecycle callbacks already guard the same way against _activeSession.
+        //
+        // A null sessionId means the caller cannot name a session (OnMessage, which anyone may
+        // call): nothing to compare, so nothing is rejected.
+        if (sessionId is not null && _activeSession?.SessionId != sessionId)
+        {
+            Interlocked.Increment(ref _staleSessionFramesDropped);
+            return;
+        }
+
         {
             var channel = _streamMessageChannel;
             if (channel != null)
