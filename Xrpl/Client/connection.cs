@@ -473,6 +473,33 @@ public class Connection
     }
 
     /// <summary>
+    /// Whether the background message processor is up, i.e. whether stream frames are queued
+    /// rather than taking the fallback path.
+    /// </summary>
+    /// <remarks>
+    /// Exists for tests. <c>Connect()</c> returning does not imply it: <c>OnceOpen</c> resolves the
+    /// waiters through <c>connectionManager.ResolveAllAwaiting()</c> and only then invokes the
+    /// <c>OnConnected</c> callback and starts the processor, so a caller can be connected and still
+    /// be ahead of the queue. That ordering is the startup window described on
+    /// <see cref="EnqueueStreamMessage"/>.
+    /// </remarks>
+    internal bool IsMessageProcessorRunning => _streamMessageChannel != null;
+
+    /// <summary>
+    /// Completes the stream channel's writer without clearing the channel, reproducing the state
+    /// <c>StopMessageProcessorInternal</c> leaves behind for anyone who read
+    /// <c>_streamMessageChannel</c> just before it was cleared.
+    /// </summary>
+    /// <remarks>
+    /// Exists for tests: in production that state lasts between one field read and one call, and
+    /// is not reachable deliberately.
+    /// </remarks>
+    internal void CompleteStreamChannelWriterForTests()
+    {
+        _streamMessageChannel?.Writer.Complete();
+    }
+
+    /// <summary>
     /// Marks the session serving this connection as retiring, reproducing the window
     /// <c>ChangeServer</c> and the reconnect loop open between <c>MarkAsRetiring()</c> and the
     /// installation of the replacement session.
@@ -3559,18 +3586,23 @@ public class Connection
         SessionFrame item = new SessionFrame(frame, sessionId);
 
         {
+            // The channel is bounded with DropOldest, so a full queue is not a refusal: TryWrite
+            // evicts the oldest frame, counts it through itemDropped and reports success. It
+            // refuses only a completed writer - and that happens on the ordinary path, not just in
+            // some corner: StopMessageProcessorInternal completes the writer after clearing
+            // _streamMessageChannel, so a reader that got the reference an instant earlier writes
+            // into a channel that is already closed. StartPingTimer tears the processor down and
+            // StartMessageProcessor builds it again on every connect, so the window recurs.
+            //
+            // A refused frame therefore goes down the fallback rather than disappearing. It still
+            // faces the session check there - fallback and queue meet in ProcessSessionFrameAsync.
             var channel = _streamMessageChannel;
-            if (channel != null)
+            if (channel?.Writer.TryWrite(item) == true)
             {
-                // No failure branch on purpose: the channel is bounded with DropOldest, so
-                // TryWrite always succeeds and silently evicts the oldest frame instead - counted
-                // by the itemDropped callback rather than reported here.
-                channel.Writer.TryWrite(item);
+                return;
             }
-            else
-            {
-                _ = ProcessStreamMessageFireAndForgetAsync(item);
-            }
+
+            _ = ProcessStreamMessageFireAndForgetAsync(item);
         }
     }
 

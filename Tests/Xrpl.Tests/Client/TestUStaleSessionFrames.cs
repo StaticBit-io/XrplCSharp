@@ -44,6 +44,26 @@ public class TestUStaleSessionFrames
     """;
 
     /// <summary>
+    /// Waits until stream frames are queued rather than taking the fallback path.
+    /// </summary>
+    /// <remarks>
+    /// <c>Connect()</c> returning is not enough: <c>OnceOpen</c> resolves the waiters first and
+    /// starts the message processor last, so a test that injects a frame the moment it connects
+    /// can find no queue to put it in.
+    /// </remarks>
+    private static async Task WaitForMessageProcessor(XrplClient client)
+    {
+        DateTime deadline = DateTime.UtcNow.AddSeconds(5);
+        while (!client.connection.IsMessageProcessorRunning && DateTime.UtcNow < deadline)
+        {
+            await Task.Delay(10);
+        }
+
+        Assert.IsTrue(client.connection.IsMessageProcessorRunning,
+            "the message processor never started");
+    }
+
+    /// <summary>
     /// A frame tagged with a session that is not the active one is dropped and counted.
     /// </summary>
     [TestMethod]
@@ -143,6 +163,7 @@ public class TestUStaleSessionFrames
         using ScriptedResponseServer server = new ScriptedResponseServer(ScriptedReply);
         using XrplClient client = new XrplClient(server.Url);
         await client.Connect();
+        await WaitForMessageProcessor(client);
 
         TaskCompletionSource firstFrameEntered = new TaskCompletionSource(
             TaskCreationOptions.RunContinuationsAsynchronously);
@@ -197,6 +218,57 @@ public class TestUStaleSessionFrames
         finally
         {
             releaseFirstFrame.TrySetResult();
+            await client.Disconnect();
+        }
+    }
+
+    /// <summary>
+    /// A frame the channel refuses is still delivered, through the fallback path.
+    /// </summary>
+    /// <remarks>
+    /// The bounded channel uses <c>DropOldest</c>, so a full queue is not a refusal - it evicts and
+    /// reports success. <c>TryWrite</c> returns <see langword="false"/> only for a completed
+    /// writer, which <c>StopMessageProcessorInternal</c> produces after clearing the field: anyone
+    /// holding the reference from an instant earlier writes into a closed channel. Since
+    /// <c>StartPingTimer</c> stops the processor and <c>StartMessageProcessor</c> rebuilds it on
+    /// every connect, this is the ordinary path rather than a corner of it, and a frame lost here
+    /// would be lost silently.
+    /// </remarks>
+    [TestMethod]
+    public async Task TestUFrameRefusedByACompletedChannelTakesTheFallbackPath()
+    {
+        using ScriptedResponseServer server = new ScriptedResponseServer(ScriptedReply);
+        using XrplClient client = new XrplClient(server.Url);
+        await client.Connect();
+        await WaitForMessageProcessor(client);
+
+        TaskCompletionSource<TransactionStream> received = new TaskCompletionSource<TransactionStream>(
+            TaskCreationOptions.RunContinuationsAsynchronously);
+        client.OnTransaction += r =>
+        {
+            received.TrySetResult(r);
+            return Task.CompletedTask;
+        };
+
+        try
+        {
+            long? sessionId = client.connection.ActiveSessionId;
+            Assert.IsNotNull(sessionId, "a connected client must have a session");
+
+            client.connection.CompleteStreamChannelWriterForTests();
+
+            await client.connection.IOnMessageFastPath(
+                Encoding.UTF8.GetBytes(TransactionMessage), sessionId);
+
+            Task completed = await Task.WhenAny(received.Task, Task.Delay(TimeSpan.FromSeconds(5)));
+            Assert.AreSame(received.Task, completed,
+                "a frame the channel refused was neither queued nor dispatched - it vanished");
+
+            Assert.AreEqual(0L, client.connection.StaleSessionFramesDropped,
+                "the session was live throughout; nothing here is stale");
+        }
+        finally
+        {
             await client.Disconnect();
         }
     }
