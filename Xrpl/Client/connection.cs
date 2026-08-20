@@ -418,7 +418,23 @@ public class Connection
     // Carries the raw frame (byte[]), not text: stream events pair themselves with it the same
     // way a query response does, through AttachFrame, so their Raw/RawTransaction is available
     // without a second UTF-8 encode of a string that was itself decoded from these same bytes.
-    private Channel<byte[]>? _streamMessageChannel = null;
+    private Channel<SessionFrame>? _streamMessageChannel = null;
+
+    /// <summary>
+    /// A stream frame together with the session whose socket produced it.
+    /// </summary>
+    /// <remarks>
+    /// The session has to ride along in the queue, not just be checked on the way in: the channel
+    /// is rebuilt per session by <see cref="StartMessageProcessor"/>, and between the check and
+    /// the write nothing holds the two together. Carrying the id lets the reader ask the question
+    /// again at the only moment that decides anything - just before handlers run.
+    /// </remarks>
+    /// <param name="Frame">The raw UTF-8 frame.</param>
+    /// <param name="SessionId">
+    /// The session whose socket produced it, or <see langword="null"/> when the caller had none to
+    /// name.
+    /// </param>
+    private readonly record struct SessionFrame(byte[] Frame, long? SessionId);
 
     private long _droppedStreamMessages;
 
@@ -439,22 +455,37 @@ public class Connection
     public long StaleSessionFramesDropped => Interlocked.Read(ref _staleSessionFramesDropped);
 
     /// <summary>
-    /// Marks the session serving this connection as retiring and returns its id, reproducing the
-    /// window <c>ChangeServer</c> and the reconnect loop open between <c>MarkAsRetiring()</c> and
-    /// the installation of the replacement session.
+    /// The id of the session serving this connection, or <see langword="null"/> if there is none.
     /// </summary>
     /// <remarks>
-    /// Exists for tests: that window is reachable in production only by racing a real reconnect,
-    /// and the id of the session being retired is not otherwise observable. Marks it exactly the
-    /// way the two production paths do, under <c>_sessionLock</c>.
+    /// Exists for tests, which need to name the session a frame came from - something only the
+    /// socket callbacks can otherwise do.
     /// </remarks>
-    /// <returns>The id of the session that was marked, or <see langword="null"/> if there is none.</returns>
-    internal long? MarkActiveSessionRetiringForTests()
+    internal long? ActiveSessionId
+    {
+        get
+        {
+            lock (_sessionLock)
+            {
+                return _activeSession?.SessionId;
+            }
+        }
+    }
+
+    /// <summary>
+    /// Marks the session serving this connection as retiring, reproducing the window
+    /// <c>ChangeServer</c> and the reconnect loop open between <c>MarkAsRetiring()</c> and the
+    /// installation of the replacement session.
+    /// </summary>
+    /// <remarks>
+    /// Exists for tests: in production that window is reachable only by racing a real reconnect.
+    /// Marks it exactly the way the two production paths do, under <c>_sessionLock</c>.
+    /// </remarks>
+    internal void MarkActiveSessionRetiringForTests()
     {
         lock (_sessionLock)
         {
             _activeSession?.MarkAsRetiring();
-            return _activeSession?.SessionId;
         }
     }
 
@@ -2996,7 +3027,7 @@ public class Connection
             // itemDropped runs inside TryWrite, i.e. on the receive loop, so it does no more than
             // increment: raising an event or logging here would put consumer code back on the path
             // this channel exists to keep it off. Callers read DroppedStreamMessages instead.
-            _streamMessageChannel = System.Threading.Channels.Channel.CreateBounded<byte[]>(
+            _streamMessageChannel = System.Threading.Channels.Channel.CreateBounded<SessionFrame>(
                 new BoundedChannelOptions(Math.Max(1, config?.StreamMessageQueueCapacity ?? 10000))
                 {
                     SingleReader = true,
@@ -3017,18 +3048,18 @@ public class Connection
                     var reader = channel.Reader;
                     while (await reader.WaitToReadAsync(cts.Token).ConfigureAwait(false))
                     {
-                        while (reader.TryRead(out var frame))
+                        while (reader.TryRead(out SessionFrame item))
                         {
                             if (cts.Token.IsCancellationRequested)
                                 return;
 
                             try
                             {
-                                await ProcessStreamMessageAsync(frame).ConfigureAwait(false);
+                                await ProcessSessionFrameAsync(item).ConfigureAwait(false);
                             }
                             catch (Exception ex)
                             {
-                                await NotifyStreamProcessingErrorAsync(ex, frame).ConfigureAwait(false);
+                                await NotifyStreamProcessingErrorAsync(ex, item.Frame).ConfigureAwait(false);
                             }
                         }
                     }
@@ -3476,39 +3507,56 @@ public class Connection
     /// torn down again moments later. Untangling that is tracked separately.
     /// </para>
     /// </remarks>
+    /// <summary>
+    /// Whether a frame carrying this session id belongs to the connection as it stands right now.
+    /// </summary>
+    /// <remarks>
+    /// Matching the id is not enough: <c>ChangeServer</c> and the reconnect loop call
+    /// <c>MarkAsRetiring()</c> on the session while it is still <c>_activeSession</c>, and only
+    /// <c>ConnectInternalAsync</c> installs its replacement. Frames arriving in that window carry
+    /// the id of the very session being retired, so the retiring flag is part of the test - as
+    /// <c>OnceOpen</c> and the other lifecycle guards do it, and under the same lock, since
+    /// <c>IsRetiring</c> is a plain bool published only by <c>_sessionLock</c>.
+    /// <para>
+    /// A <see langword="null"/> id means the caller cannot name a session
+    /// (<see cref="OnMessage(string)"/>, which anyone may call): nothing to compare, so nothing is
+    /// rejected.
+    /// </para>
+    /// </remarks>
+    private bool IsFromLiveSession(long? sessionId)
+    {
+        if (sessionId is null)
+        {
+            return true;
+        }
+
+        lock (_sessionLock)
+        {
+            return _activeSession != null &&
+                   _activeSession.SessionId == sessionId &&
+                   !_activeSession.IsRetiring;
+        }
+    }
+
     private void EnqueueStreamMessage(byte[] frame, long? sessionId = null)
     {
         // A retiring socket keeps delivering while InitiateGracefulCloseAsync completes, and that
-        // close runs fire-and-forget alongside the new connection. Without this check its last
-        // frames land in the new session's queue and reach handlers as if they were current -
-        // stale after a reconnect, and from an entirely different chain after a ChangeServer
-        // between networks.
+        // close runs fire-and-forget alongside the new connection. Without this its last frames
+        // reach handlers as if they were current - stale after a reconnect, and from an entirely
+        // different chain after a ChangeServer between networks.
         //
-        // Matching the id is not enough: ChangeServer and the reconnect loop call
-        // MarkAsRetiring() on the session while it is still _activeSession, and only
-        // ConnectInternalAsync installs its replacement. Frames arriving in that window carry the
-        // id of the very session being retired, so the retiring flag has to be part of the test -
-        // exactly as OnceOpen and the other lifecycle guards do it, and under the same lock, since
-        // IsRetiring is a plain bool published only by _sessionLock.
-        //
-        // A null sessionId means the caller cannot name a session (OnMessage, which anyone may
-        // call): nothing to compare, so nothing is rejected.
-        if (sessionId is not null)
+        // Checking here only saves a queue slot. It cannot be the guarantee: the channel is
+        // rebuilt per session and the swap is under _messageProcessorLock, not _sessionLock, so
+        // between this answer and the write below the session can retire and its replacement
+        // install a new channel - and the frame would land in that one. The answer that counts is
+        // the one the reader asks in ProcessSessionFrameAsync, immediately before handlers run.
+        if (!IsFromLiveSession(sessionId))
         {
-            bool fromActiveSession;
-            lock (_sessionLock)
-            {
-                fromActiveSession = _activeSession != null &&
-                                    _activeSession.SessionId == sessionId &&
-                                    !_activeSession.IsRetiring;
-            }
-
-            if (!fromActiveSession)
-            {
-                Interlocked.Increment(ref _staleSessionFramesDropped);
-                return;
-            }
+            Interlocked.Increment(ref _staleSessionFramesDropped);
+            return;
         }
+
+        SessionFrame item = new SessionFrame(frame, sessionId);
 
         {
             var channel = _streamMessageChannel;
@@ -3517,28 +3565,51 @@ public class Connection
                 // No failure branch on purpose: the channel is bounded with DropOldest, so
                 // TryWrite always succeeds and silently evicts the oldest frame instead - counted
                 // by the itemDropped callback rather than reported here.
-                channel.Writer.TryWrite(frame);
+                channel.Writer.TryWrite(item);
             }
             else
             {
-                _ = ProcessStreamMessageFireAndForgetAsync(frame);
+                _ = ProcessStreamMessageFireAndForgetAsync(item);
             }
         }
+    }
+
+    /// <summary>
+    /// Runs a queued frame through the stream handlers, unless its session stopped being the live
+    /// one while it waited.
+    /// </summary>
+    /// <remarks>
+    /// This is where the session check has to be final. A frame can be queued while its session is
+    /// live and dequeued after <c>ChangeServer</c> has moved the client to another network
+    /// entirely - and the queue holds up to
+    /// <see cref="ConnectionOptions.StreamMessageQueueCapacity"/> frames, so the wait is not
+    /// necessarily short. Asking again here costs one uncontended lock per frame, against a JSON
+    /// parse and a handler call.
+    /// </remarks>
+    private Task ProcessSessionFrameAsync(SessionFrame item)
+    {
+        if (!IsFromLiveSession(item.SessionId))
+        {
+            Interlocked.Increment(ref _staleSessionFramesDropped);
+            return Task.CompletedTask;
+        }
+
+        return ProcessStreamMessageAsync(item.Frame);
     }
 
     /// <summary>
     /// Fire-and-forget stream message processing for single-threaded environments like WebAssembly.
     /// Uses ConfigureAwait(false) to prevent deadlocks and allow proper continuation scheduling.
     /// </summary>
-    private async Task ProcessStreamMessageFireAndForgetAsync(byte[] frame)
+    private async Task ProcessStreamMessageFireAndForgetAsync(SessionFrame item)
     {
         try
         {
-            await ProcessStreamMessageAsync(frame).ConfigureAwait(false);
+            await ProcessSessionFrameAsync(item).ConfigureAwait(false);
         }
         catch (Exception ex)
         {
-            await NotifyStreamProcessingErrorAsync(ex, frame).ConfigureAwait(false);
+            await NotifyStreamProcessingErrorAsync(ex, item.Frame).ConfigureAwait(false);
         }
     }
 

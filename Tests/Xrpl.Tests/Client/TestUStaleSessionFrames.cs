@@ -2,6 +2,7 @@ using Microsoft.VisualStudio.TestTools.UnitTesting;
 
 using System;
 using System.Text;
+using System.Threading;
 using System.Threading.Tasks;
 
 using Xrpl.Client;
@@ -103,8 +104,9 @@ public class TestUStaleSessionFrames
 
         try
         {
-            long? retiringSessionId = client.connection.MarkActiveSessionRetiringForTests();
+            long? retiringSessionId = client.connection.ActiveSessionId;
             Assert.IsNotNull(retiringSessionId, "a connected client must have a session to retire");
+            client.connection.MarkActiveSessionRetiringForTests();
 
             await client.connection.IOnMessageFastPath(
                 Encoding.UTF8.GetBytes(TransactionMessage),
@@ -116,6 +118,85 @@ public class TestUStaleSessionFrames
         }
         finally
         {
+            await client.Disconnect();
+        }
+    }
+
+    /// <summary>
+    /// A frame that was queued while its session was live is still dropped if the session stops
+    /// being live before the frame is dispatched.
+    /// </summary>
+    /// <remarks>
+    /// Checking on the way into the queue cannot be the guarantee. The queue holds up to
+    /// <c>StreamMessageQueueCapacity</c> frames (10 000 by default) and the channel itself is
+    /// rebuilt per session under a different lock, so between the check and the handler call the
+    /// session can retire and the client can be on another network entirely.
+    /// <para>
+    /// Made deterministic by stalling the reader: the processor is a single reader that awaits
+    /// each handler, so a handler that does not return holds the second frame in the queue for as
+    /// long as the test needs.
+    /// </para>
+    /// </remarks>
+    [TestMethod]
+    public async Task TestUFrameQueuedBeforeRetirementIsNotDispatchedAfterIt()
+    {
+        using ScriptedResponseServer server = new ScriptedResponseServer(ScriptedReply);
+        using XrplClient client = new XrplClient(server.Url);
+        await client.Connect();
+
+        TaskCompletionSource firstFrameEntered = new TaskCompletionSource(
+            TaskCreationOptions.RunContinuationsAsynchronously);
+        TaskCompletionSource releaseFirstFrame = new TaskCompletionSource(
+            TaskCreationOptions.RunContinuationsAsynchronously);
+        int calls = 0;
+
+        client.OnTransaction += async _ =>
+        {
+            if (Interlocked.Increment(ref calls) == 1)
+            {
+                firstFrameEntered.TrySetResult();
+                await releaseFirstFrame.Task;
+            }
+        };
+
+        try
+        {
+            long? sessionId = client.connection.ActiveSessionId;
+            Assert.IsNotNull(sessionId, "a connected client must have a session");
+
+            // Frame one occupies the reader and parks it inside the handler.
+            await client.connection.IOnMessageFastPath(
+                Encoding.UTF8.GetBytes(TransactionMessage), sessionId);
+
+            Task entered = await Task.WhenAny(firstFrameEntered.Task, Task.Delay(TimeSpan.FromSeconds(5)));
+            Assert.AreSame(firstFrameEntered.Task, entered, "the reader never reached the handler");
+
+            // Frame two is accepted into the queue - the session is still live at this point - and
+            // waits there because the reader is parked.
+            await client.connection.IOnMessageFastPath(
+                Encoding.UTF8.GetBytes(TransactionMessage), sessionId);
+            Assert.AreEqual(0L, client.connection.StaleSessionFramesDropped,
+                "both frames were queued while the session was live");
+
+            // Only now does the session stop being the live one.
+            client.connection.MarkActiveSessionRetiringForTests();
+            releaseFirstFrame.TrySetResult();
+
+            // The reader wakes, takes frame two and must refuse it.
+            DateTime deadline = DateTime.UtcNow.AddSeconds(5);
+            while (client.connection.StaleSessionFramesDropped == 0 && DateTime.UtcNow < deadline)
+            {
+                await Task.Delay(20);
+            }
+
+            Assert.AreEqual(1L, client.connection.StaleSessionFramesDropped,
+                "a frame dequeued after its session retired must not be dispatched");
+            Assert.AreEqual(1, Volatile.Read(ref calls),
+                "the handler saw a frame belonging to a session the client had already left");
+        }
+        finally
+        {
+            releaseFirstFrame.TrySetResult();
             await client.Disconnect();
         }
     }
