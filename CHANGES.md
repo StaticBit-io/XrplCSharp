@@ -20,7 +20,7 @@ This release makes the SDK stop misrepresenting what a node sent. It is a delibe
 | Stream events | `client.connection.OnTransaction += …` | also `client.OnTransaction += …` — on `IXrplClient` now; the old form still works |
 | `IXrplClient.connection` | `{ get; set; }` | `{ get; }` — assigning it would strand handlers on the old object |
 | Dropped stream events | invisible | `client.DroppedStreamMessages` counts them; `StreamMessageQueueCapacity` sizes the queue |
-| Frames from a retiring socket | delivered as current | dropped, and counted by `Connection.StaleSessionFramesDropped` |
+| Frames from a stale or retiring session | delivered as current | dropped, and counted by `Connection.StaleSessionFramesDropped` |
 | Frames dispatched outside the queue | invisible | counted by `Connection.FallbackDispatchedStreamMessages` |
 | Stream event type | `LedgerStream.Type` was a public field | inherited `BaseStream.Type` property — source-compatible, but an assembly built against the old package needs a rebuild |
 | Stream event type value | `ResponseStreamType Type` | `ResponseStreamType? Type` — an event that carried no `type` no longer reports `UNKNOWN` as though the node had said so |
