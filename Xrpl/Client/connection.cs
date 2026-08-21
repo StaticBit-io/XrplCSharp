@@ -437,10 +437,11 @@ public class Connection
     /// its writer is already completed - and none of them were visible from outside until this
     /// counter existed.
     /// <para>
-    /// It makes the startup window measurable rather than merely argued about: a handler that
-    /// subscribes from <c>OnConnected</c> can be reached before
-    /// <see cref="StartMessageProcessor"/> has run, and this says how often that happened and to
-    /// how many frames.
+    /// Cumulative over the life of the connection, and a non-zero value is not by itself a fault:
+    /// a client that was driven before it connected, or after it disconnected, legitimately has
+    /// frames here. What means something is an increase across a connect: the startup window this
+    /// counter was added to measure is closed, so the number should not move while a connection is
+    /// being established.
     /// </para>
     /// </remarks>
     public long FallbackDispatchedStreamMessages => Interlocked.Read(ref _fallbackDispatchedStreamMessages);
@@ -482,18 +483,35 @@ public class Connection
     /// rather than taking the fallback path.
     /// </summary>
     /// <remarks>
-    /// Exists for tests. <c>Connect()</c> returning does not imply it: <c>OnceOpen</c> resolves the
-    /// waiters through <c>connectionManager.ResolveAllAwaiting()</c> and only then invokes the
-    /// <c>OnConnected</c> callback and starts the processor, so a caller can be connected and still
-    /// be ahead of the queue. That ordering is the startup window described on
-    /// <see cref="EnqueueStreamMessage"/>.
-    /// </remarks>
-    /// <remarks>
-    /// <c>Volatile.Read</c> rather than a plain read or <c>_messageProcessorLock</c>:
-    /// the field is written under that lock, and holding it here would mean waiting out
+    /// Exists for tests. <c>OnceOpen</c> now starts the processor before it resolves the waiters
+    /// through <c>connectionManager.ResolveAllAwaiting()</c> and before the <c>OnConnected</c>
+    /// callback, so a returned <c>Connect()</c> does imply a queue - it did not until the ping
+    /// timer stopped taking the processor down with it.
+    /// <para>
+    /// <c>Volatile.Read</c> rather than a plain read or <c>_messageProcessorLock</c>: the field is
+    /// written under that lock, and holding it here would mean waiting out
     /// <c>StopMessageProcessorInternal</c>, which blocks up to two seconds on the reader task.
+    /// </para>
     /// </remarks>
     internal bool IsMessageProcessorRunning => Volatile.Read(ref _streamMessageChannel) != null;
+
+    /// <summary>
+    /// Whether the ping timer is up.
+    /// </summary>
+    /// <remarks>
+    /// Exists for tests, and for one question in particular: the ping timer starts at the very end
+    /// of <c>OnceOpen</c>, after <c>Connect()</c> has already returned, so a test that wants to
+    /// know the processor survived <see cref="StartPingTimer"/> has to wait for it rather than
+    /// assume it. Without that wait such a test can pass by asserting too early - before the thing
+    /// it is testing has had a chance to go wrong.
+    /// <para>
+    /// The signal is exact for that purpose: <see cref="StartPingTimer"/> begins by calling
+    /// <see cref="StopPingTimerSync"/>, which clears this field, and only assigns it afterwards.
+    /// Seeing it non-null therefore means the teardown step - the one that used to take the
+    /// message processor with it - is already behind us.
+    /// </para>
+    /// </remarks>
+    internal bool IsPingTimerRunning => Volatile.Read(ref _pingCts) != null;
 
     /// <summary>
     /// Completes the stream channel's writer without clearing the channel, reproducing the state
@@ -675,8 +693,11 @@ public class Connection
         // 1. Quick state cleanup - stop reconnect loop
         StopReconnectLoop();
         
-        // 2. Cancel ping timer (but don't wait yet)
+        // 2. Cancel ping timer and the message processor (but don't wait yet). Stopping the
+        // processor is explicit since StopPingTimerSync no longer does it as a side effect - this
+        // session's queue goes with the session.
         StopPingTimerSync();
+        StopMessageProcessor();
         
         // 3. Reject all pending requests BEFORE waiting for ping
         // This allows the ping handler to receive OperationCanceledException and exit quickly
@@ -811,8 +832,10 @@ public class Connection
         // New session is created immediately without waiting.
         // Callbacks check session ID to ignore retiring sessions.
 
-        // 4. Stop ping timer (but don't wait yet)
+        // 4. Stop ping timer and the message processor (but don't wait yet) - the queue belongs
+        // to the session being retired.
         StopPingTimerSync();
+        StopMessageProcessor();
         
         // 5. Reject all pending requests BEFORE waiting for ping
         // This allows the ping handler to receive OperationCanceledException and exit quickly
@@ -1274,6 +1297,7 @@ public class Connection
 
         ClearReconnectState(); // Clear all reconnect state on user disconnect
         StopPingTimerSync();
+        StopMessageProcessor();
         
         // Reject pending requests so ping handler can exit quickly
         requestManager.RejectAllWithCancellation();
@@ -1329,6 +1353,7 @@ public class Connection
 
         ClearReconnectState(); // Clear all reconnect state on user disconnect
         StopPingTimerSync();
+        StopMessageProcessor();
         
         // Reject pending requests so ping handler can exit quickly
         requestManager.RejectAllWithCancellation();
@@ -1997,6 +2022,13 @@ public class Connection
 
         connectedSocket.ResetIntentionalDisconnect();
 
+        // Before ResolveAllAwaiting and before the OnConnected callback, because both hand control
+        // to consumer code that subscribes - and the node can answer that subscription while the
+        // handler is still running. Frames arriving with no channel take the fallback: outside the
+        // capacity, uncounted by DroppedStreamMessages and dispatched concurrently, so the first
+        // events after connecting were exactly the ones that could arrive out of order.
+        StartMessageProcessor();
+
         try
         {
             connectionManager.ResolveAllAwaiting();
@@ -2018,13 +2050,6 @@ public class Connection
         // Start ping timer AFTER connection is fully established and all callbacks completed
         // This is outside try/catch to ensure it always runs on successful connection
         StartPingTimer();
-
-        // After StartPingTimer, not before: StartPingTimer calls StopPingTimerSync, which stops
-        // the message processor too - starting the processor first would have it torn down again
-        // before a single frame arrived. That coupling is the reason this cannot simply move
-        // ahead of the OnConnected callback, where it belongs; see the note on
-        // EnqueueStreamMessage.
-        StartMessageProcessor();
     }
 
     /// <summary>
@@ -2092,6 +2117,7 @@ public class Connection
             reconnect: BuildReconnectInfo(failures));
 
         StopPingTimerSync();
+        StopMessageProcessor();
         requestManager.RejectAllWithCancellation();
         await WaitForPingToFinishAsync();
 
@@ -2224,8 +2250,10 @@ public class Connection
             return;
         }
 
-        // Only stop ping timer for current socket
+        // Only for the current socket - and the message processor goes with it, this connection
+        // is over.
         StopPingTimerSync();
+        StopMessageProcessor();
 
         // Check if this is a network drop (FailureReason set by WebSocketClient)
         var isNetworkDrop = closingSocket.FailureReason == SocketFailureReason.NetworkDrop;
@@ -2857,6 +2885,29 @@ public class Connection
         }
     }
 
+    /// <summary>
+    /// Stops the ping timer, and nothing else.
+    /// </summary>
+    /// <remarks>
+    /// It used to stop the message processor too, which tied two unrelated lifecycles together:
+    /// <see cref="StartPingTimer"/> begins by calling this, so starting the processor before the
+    /// ping timer had it torn down again moments later - and that is what forced
+    /// <see cref="StartMessageProcessor"/> to the very end of <c>OnceOpen</c>, after the
+    /// <c>OnConnected</c> callback, leaving every frame answered during that callback to the
+    /// fallback path. The processor is now stopped explicitly wherever a connection genuinely
+    /// ends: <see cref="Disconnect"/>, <see cref="DisconnectAndWaitAsync"/>, <c>OnceClose</c>,
+    /// <c>OnConnectHandlerFailedAsync</c>, <see cref="ChangeServer"/> and
+    /// <c>RetireCurrentSessionAndReconnectAsync</c> - the same six places the side effect used to
+    /// fire, so when the processor stops is unchanged; only the spurious stop inside
+    /// <see cref="StartPingTimer"/> is gone.
+    /// <para>
+    /// <c>ReconnectLoopAsync</c> retires a session without stopping the processor, and deliberately
+    /// so: it did not stop it before this change either, <c>OnceClose</c> has already run by the
+    /// time it retries, and <see cref="StartMessageProcessor"/> tears down any leftover when the
+    /// next connection opens. Adding a stop there would discard frames still queued from before the
+    /// drop, on a path where nothing shows that is wanted.
+    /// </para>
+    /// </remarks>
     private void StopPingTimerSync()
     {
         var cts = _pingCts;
@@ -2879,8 +2930,6 @@ public class Connection
         wasmTimer?.Dispose();
 
         cts?.Dispose();
-        
-        StopMessageProcessor();
     }
 
     /// <summary>
@@ -3592,13 +3641,19 @@ public class Connection
     /// and single-reader ordering hold on every target.
     /// </para>
     /// <para>
-    /// One window remains, and it is not platform-specific: <see cref="StartMessageProcessor"/>
-    /// runs at the end of <c>OnceOpen</c>, after the <c>OnConnected</c> callback. A handler that
-    /// subscribes there can see frames answered before the channel exists, and those take the
-    /// fallback below - outside the capacity, the eviction count and the ordering. Moving the
-    /// start ahead of the callback is not a one-line change: <see cref="StartPingTimer"/> calls
-    /// <c>StopPingTimerSync</c>, which stops the message processor as well, so an earlier start is
-    /// torn down again moments later. Untangling that is tracked separately.
+    /// The startup window is closed too: <see cref="StartMessageProcessor"/> used to run at the
+    /// very end of <c>OnceOpen</c>, after the <c>OnConnected</c> callback, so a handler
+    /// subscribing there saw its first frames answered before the channel existed and they took
+    /// the fallback below - outside the capacity, the eviction count and the ordering. It now runs
+    /// before the callback. That was not a one-line change: <see cref="StartPingTimer"/> begins
+    /// with <c>StopPingTimerSync</c>, which used to stop the message processor as well, so an
+    /// earlier start was torn down again moments later; see the remarks on
+    /// <see cref="StopPingTimerSync"/>.
+    /// </para>
+    /// <para>
+    /// The fallback stays, because it is still reachable: <see cref="OnMessage(string)"/> on a
+    /// client that never connected, anything arriving after the processor is stopped, and a write
+    /// the channel refuses because its writer is already completed.
     /// </para>
     /// </remarks>
     private void EnqueueStreamMessage(byte[] frame, long? sessionId = null)
