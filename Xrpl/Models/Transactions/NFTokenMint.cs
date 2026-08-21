@@ -45,6 +45,7 @@ namespace Xrpl.Models.Transactions
 
         /// <summary>
         /// If set, indicates that this NFT's URI can be modified.
+        /// </summary>
         tfMutable = 16,
     }
     /// <inheritdoc cref="INFTokenMint" />

@@ -354,14 +354,14 @@ public class Connection
     /// the ownership-guarded writes in <see cref="ReconnectLoopAsync"/>.
     /// </summary>
     /// <remarks>
+    /// <para>
     /// Not every touch of these fields is covered: the per-iteration <c>_reconnectAttempts++</c> in
     /// <see cref="ReconnectLoopAsync"/>, the plain resets in <c>ChangeServer</c> and
     /// <c>OnceClose</c>, and the "is a loop already running" pre-checks in
     /// <c>OnConnectionFailed</c> and <c>OnceClose</c> (which read <c>_reconnectLoop</c>, a
     /// non-volatile field, outside the lock) all still run outside it. Those predate this lock; do
     /// not read the list above as "all three fields are always synchronized".
-    /// </remarks>
-    /// <remarks>
+    /// </para>
     /// <para>
     /// <c>volatile</c> alone was not enough: it makes each individual access atomic, not the
     /// sequence of them. The stop path used to read the field three times in a row (Cancel,

@@ -75,7 +75,7 @@ namespace Xrpl.Utils
         /// Convert Drops to XRP.
         /// </summary>
         /// <param name="dropsToConvert"> Drops to convert to XRP. This can be a string, number, or BigNumber.</param>
-        /// <returns
+        /// <returns>Amount in XRP.</returns>
         public static string DropsToXrp(double dropsToConvert)
         {
             return DropsToXrp(dropsToConvert.ToString(CultureInfo.InvariantCulture));
@@ -85,7 +85,7 @@ namespace Xrpl.Utils
         /// Convert Drops to XRP.
         /// </summary>
         /// <param name="dropsToConvert"> Drops to convert to XRP. This can be a string, number, or BigNumber.</param>
-        /// <returns
+        /// <returns>Amount in XRP.</returns>
         public static string DropsToXrp(string dropsToConvert)
         {
             /*
@@ -141,7 +141,7 @@ namespace Xrpl.Utils
         /// Convert XRP to Drops.
         /// </summary>
         /// <param name="xrpToConvert"> XRP to convert to Drops. This can be a string, number, or BigNumber.</param>
-        /// <returns
+        /// <returns>Amount in drops.</returns>
         public static string XrpToDrops(double xrpToConvert)
         {
             return XrpToDrops(xrpToConvert.ToString());

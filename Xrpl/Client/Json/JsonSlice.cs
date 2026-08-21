@@ -71,6 +71,7 @@ namespace Xrpl.Client.Json
         /// <paramref name="buffer"/>, or <c>default</c> (empty) if the object has no such member.
         /// </summary>
         /// <remarks>
+        /// <para>
         /// For a member that is one of several C# properties bound to the same JSON name via
         /// <see cref="System.Text.Json.Serialization.JsonPropertyNameAttribute"/> —
         /// <see cref="Xrpl.Models.Subscriptions.TransactionStream.Transaction"/> and its API v1
@@ -78,8 +79,8 @@ namespace Xrpl.Client.Json
         /// the value sits: registering a second <see cref="Converters.JsonSliceConverter"/> member
         /// under the same name is not an option, since System.Text.Json rejects two members
         /// mapped to one JSON name outright.
-        /// </remarks>
-        /// <remarks>
+        /// </para>
+        /// <para>
         /// The scan does not stop at the first match: on a duplicate top-level key it keeps going
         /// to <see cref="JsonTokenType.EndObject"/> and returns the <em>last</em> one, matching
         /// <see cref="JsonSerializer"/>'s own last-value-wins behavior for a POCO property fed by a
@@ -91,8 +92,8 @@ namespace Xrpl.Client.Json
         /// <see cref="Xrpl.Models.Subscriptions.TransactionStream.RawTransaction"/> pointing at the
         /// first occurrence while the deserializer-fed <see cref="Xrpl.Models.Subscriptions.TransactionStream.Transaction"/>
         /// reflects the last: a wallet would display one transaction and sign the other.
-        /// </remarks>
-        /// <remarks>
+        /// </para>
+        /// <para>
         /// Matching is case-insensitive, mirroring <see cref="XrplJsonOptions.Default"/>'s
         /// <see cref="JsonSerializerOptions.PropertyNameCaseInsensitive"/> = <see langword="true"/>:
         /// a frame that spells the member <c>"TX_JSON"</c> still has to populate
@@ -106,6 +107,7 @@ namespace Xrpl.Client.Json
         /// <see cref="StringComparison.OrdinalIgnoreCase"/>. See
         /// <see cref="RawJson.HasTopLevelProperty"/> for the same rule applied to presence rather
         /// than value.
+        /// </para>
         /// </remarks>
         public static JsonSlice FindTopLevelMember(byte[] buffer, ReadOnlySpan<byte> name, bool ignoringJsonNull = false)
         {

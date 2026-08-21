@@ -143,7 +143,7 @@ namespace Xrpl.BinaryCodec.Types
         /// Construct a STObject from a JSON object
         /// </summary>
         /// <param name="token">An object to include</param>
-        /// <param name="strict">optional, denote which field to include in serialized object</param>
+        /// <param name="signingOnly">include only the fields that take part in signing</param>
         /// <returns></returns>
         /// <exception cref="InvalidJsonException">unknown field or token is not an object</exception>
         public static StObject FromJson(JsonNode token, bool signingOnly)

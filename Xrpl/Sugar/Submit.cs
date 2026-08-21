@@ -51,7 +51,7 @@ public static class SubmitSugar
         CancellationToken cancellationToken = default
     )
     {
-        var (signedTx, _) = await client.GetSignedTx(transaction, autofill, failHard: false, wallet, cancellationToken);
+        var (signedTx, _) = await client.GetSignedTx(transaction, autofill, wallet, cancellationToken);
         return await SubmitRequest(client, signedTx, failHard, cancellationToken);
     }
 
@@ -93,7 +93,7 @@ public static class SubmitSugar
         bool failHard = false,
         CancellationToken cancellationToken = default)
     {
-        var (signedTx, tx) = await client.GetSignedTx(transaction, autofill, failHard, wallet, cancellationToken);
+        var (signedTx, tx) = await client.GetSignedTx(transaction, autofill, wallet, cancellationToken);
         var lastLedger = GetLastLedgerSequence(tx);
         if (lastLedger == null)
         {
@@ -500,16 +500,14 @@ public static class SubmitSugar
     /// Initializes a transaction for a submit request
     /// </summary>
     /// <param name="client">A Client.</param>
-    /// <param name="transaction">A transaction to autofill, sign & encode, and submit.</param>
+    /// <param name="transaction">A transaction to autofill, sign and encode.</param>
     /// <param name="autofill">If true, autofill a transaction.</param>
-    /// <param name="failHard">If true, and the transaction fails locally, do not retry or relay the transaction to other servers.</param>
     /// <param name="wallet">A wallet to sign a transaction. It must be provided when submitting an unsigned transaction.</param>
-    /// <returns>A Wallet derived from a seed.</returns>
+    /// <returns>The signed transaction blob and the transaction it was built from.</returns>
     public static async Task<(string txBlob, Dictionary<string, object> tx)> GetSignedTx(
         this IXrplClient client,
         Dictionary<string, object> transaction,
         bool autofill = false,
-        bool failHard = false,
         XrplWallet? wallet = null,
         CancellationToken cancellationToken = default,
         bool sponsorPreCheck = true

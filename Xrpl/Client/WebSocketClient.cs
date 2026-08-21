@@ -194,9 +194,9 @@ namespace Xrpl.Client
         }
 
         /// <summary>
-        /// Set the Action to call when the connection fails.
+        /// Set the Action to call when the socket reports an error.
         /// </summary>
-        /// <param name="onConnectionError">The Action to call</param>
+        /// <param name="onError">The Action to call</param>
         /// <returns>Self</returns>
         internal WebSocketClient OnError(Func<Exception, WebSocketClient, Task> onError)
         {

@@ -141,7 +141,8 @@ namespace Xrpl.Models.Subscriptions
         public string Close { get; set; }
 
         /// <summary>
-        /// Parses a book_changes currency string into an <see cref="Common.IssuedCurrency"/>.
+        /// Parses a book_changes currency string into an
+        /// <see cref="Xrpl.Models.Common.Common.IssuedCurrency"/>.
         /// Handles "XRP_drops" and "issuer/currency_hex" formats.
         /// </summary>
         private static Common.Common.IssuedCurrency ParseBookChangeCurrency(string raw)

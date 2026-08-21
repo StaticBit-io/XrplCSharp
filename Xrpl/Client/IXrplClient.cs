@@ -1091,7 +1091,6 @@ namespace Xrpl.Client
             return this.GRequest<VaultInfoResponse, VaultInfoRequest>(request, cancellationToken);
         }
 
-        /// <inheritdoc />
         //public Task<Submit> Submit(SubmitRequest request)
         //{
         //    return this.GRequest<Submit, SubmitRequest>(request);

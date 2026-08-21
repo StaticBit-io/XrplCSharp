@@ -34,7 +34,7 @@ namespace Xrpl.Models.Subscriptions
         /// System.Text.Json build a <see cref="System.Text.Json.JsonElement"/> whose pooled backing
         /// array is never returned, and it was then formatted back to a string on every response
         /// just to be matched against a pending request's <see cref="System.Guid"/>. Recording
-        /// bounds costs nothing, and <see cref="RequestManager"/> parses the Guid straight out of
+        /// bounds costs nothing, and <see cref="Xrpl.Client.RequestManager"/> parses the Guid straight out of
         /// the bytes.
         /// </remarks>
         [JsonPropertyName("id")]
