@@ -500,11 +500,11 @@ public static class SubmitSugar
     /// Initializes a transaction for a submit request
     /// </summary>
     /// <param name="client">A Client.</param>
-    /// <param name="transaction">A transaction to autofill, sign & encode, and submit.</param>
+    /// <param name="transaction">A transaction to autofill, sign &amp; encode, and submit.</param>
     /// <param name="autofill">If true, autofill a transaction.</param>
     /// <param name="failHard">If true, and the transaction fails locally, do not retry or relay the transaction to other servers.</param>
     /// <param name="wallet">A wallet to sign a transaction. It must be provided when submitting an unsigned transaction.</param>
-    /// <returns>A Wallet derived from a seed.</returns>
+    /// <returns>The signed transaction blob and the transaction it was built from.</returns>
     public static async Task<(string txBlob, Dictionary<string, object> tx)> GetSignedTx(
         this IXrplClient client,
         Dictionary<string, object> transaction,

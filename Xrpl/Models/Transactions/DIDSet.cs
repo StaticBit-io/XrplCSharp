@@ -75,13 +75,13 @@ namespace Xrpl.Models.Transactions
 
     public partial class Validation
     {
+        private const int MaxDIDFieldLength = 512;
+
         /// <summary>
         /// Verify the form and type of a DIDSet at runtime.
         /// </summary>
         /// <param name="tx">A DIDSet Transaction.</param>
         /// <exception cref="ValidationException">When the DIDSet is malformed.</exception>
-        private const int MaxDIDFieldLength = 512;
-
         public static async Task ValidateDIDSet(Dictionary<string, object> tx)
         {
             await Common.ValidateBaseTransaction(tx);

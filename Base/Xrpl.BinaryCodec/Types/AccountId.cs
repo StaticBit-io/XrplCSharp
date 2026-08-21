@@ -90,9 +90,8 @@ namespace Xrpl.BinaryCodec.Types
         public static readonly AccountId Zero = 0;
         public static readonly AccountId Neutral = 1;
 
-        /// <summary> create instance from binary parser</summary>
-        /// <param name="parser">parser</param>
-        /// <param name="hint"></param>
+        /// <summary> create instance from an account id in hex, or from a classic address </summary>
+        /// <param name="value">40 hex characters, or a base58 classic address</param>
         public static AccountId FromValue(string value)
         {
             Regex rg = new Regex(HEX_REGEX);
