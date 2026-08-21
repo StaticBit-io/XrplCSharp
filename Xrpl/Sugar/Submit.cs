@@ -500,9 +500,9 @@ public static class SubmitSugar
     /// Initializes a transaction for a submit request
     /// </summary>
     /// <param name="client">A Client.</param>
-    /// <param name="transaction">A transaction to autofill, sign &amp; encode, and submit.</param>
+    /// <param name="transaction">A transaction to autofill, sign and encode.</param>
     /// <param name="autofill">If true, autofill a transaction.</param>
-    /// <param name="failHard">If true, and the transaction fails locally, do not retry or relay the transaction to other servers.</param>
+    /// <param name="failHard">Not used here - this method does not submit. Present so the signature lines up with the submit helpers that do.</param>
     /// <param name="wallet">A wallet to sign a transaction. It must be provided when submitting an unsigned transaction.</param>
     /// <returns>The signed transaction blob and the transaction it was built from.</returns>
     public static async Task<(string txBlob, Dictionary<string, object> tx)> GetSignedTx(

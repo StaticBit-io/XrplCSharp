@@ -91,7 +91,11 @@ namespace Xrpl.BinaryCodec.Types
         public static readonly AccountId Neutral = 1;
 
         /// <summary> create instance from an account id in hex, or from a classic address </summary>
-        /// <param name="value">40 hex characters, or a base58 classic address</param>
+        /// <param name="value">
+        /// 40 <b>uppercase</b> hex characters, or a base58 classic address. The hex matcher is
+        /// <c>^[A-F0-9]{40}$</c> with no ignore-case option, so lowercase hex is not recognised as
+        /// hex and falls through to the address decoder.
+        /// </param>
         public static AccountId FromValue(string value)
         {
             Regex rg = new Regex(HEX_REGEX);
