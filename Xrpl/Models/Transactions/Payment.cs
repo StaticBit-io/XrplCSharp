@@ -253,13 +253,14 @@ namespace Xrpl.Models.Transactions
 
         /// <inheritdoc />
         /// <remarks>
+        /// <para>
         /// The single value callers read, regardless of whether the node sent it as "Amount" (API v1),
         /// "DeliverMax" (API v2), or both (API v1, confirmed live - see
         /// <see cref="_receivedAsAmount"/>). Excluded from JSON directly: <see cref="AmountAlias"/> and
         /// <see cref="DeliverMax"/> below own the wire representation, so every field name a value came
         /// in under is one it goes back out under — callers never have to guess which one(s) fired.
-        /// </remarks>
-        /// <remarks>
+        /// </para>
+        /// <para>
         /// One value behind two names, which is exact for every response rippled actually produces:
         /// v2 sends DeliverMax alone, v1 sends both carrying the same amount. It is not exact if the
         /// two ever disagree - the setters run in document order, the later one wins, and both names
@@ -269,6 +270,7 @@ namespace Xrpl.Models.Transactions
         /// path duplicates one field rather than computing two - so this is a property of malformed
         /// or hostile input, not of the protocol. <c>Raw</c> keeps the truth either way; a consumer
         /// that must detect tampering should compare against it rather than trusting this projection.
+        /// </para>
         /// </remarks>
         [JsonIgnore]
         public Currency Amount { get; set; }

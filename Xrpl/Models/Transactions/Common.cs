@@ -597,18 +597,19 @@ namespace Xrpl.Models.Transactions
         [JsonPropertyName("PreviousTxnLgrSeq")]
         public uint? PreviousTxnLgrSeq { get; set; }
         /// <summary>
-        /// <remarks>
-        /// DeletedNode <br/>
-        /// The content fields of the ledger object immediately before it was deleted.<br/>
-        /// Which fields are present depends on what type of ledger object was created.
-        /// </remarks>
-        /// <remarks>
-        /// ModifiedNode <br/>
-        /// The content fields of the ledger object after applying any changes from this transaction.<br/>
-        /// Which fields are present depends on what type of ledger object was created.<br/>
-        /// This omits the PreviousTxnID and PreviousTxnLgrSeq fields, even though most types of ledger objects have them.
-        /// </remarks>
+        /// The content fields of the ledger object, read differently depending on the node type.
         /// </summary>
+        /// <remarks>
+        /// <para>
+        /// <c>DeletedNode</c>: the fields as they were immediately before the object was deleted.
+        /// Which fields are present depends on what type of ledger object it was.
+        /// </para>
+        /// <para>
+        /// <c>ModifiedNode</c>: the fields after applying any changes from this transaction. Which
+        /// fields are present depends on the object type, and this omits <c>PreviousTxnID</c> and
+        /// <c>PreviousTxnLgrSeq</c> even though most types of ledger object carry them.
+        /// </para>
+        /// </remarks>
         public BaseLedgerEntry? FinalFields { get; set; }
 
         /// <summary>
