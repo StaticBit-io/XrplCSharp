@@ -504,19 +504,70 @@ public class TestIEscrow
 
     #region Helper Methods
 
+    /// <summary>
+    /// Waits until the validated ledger's close time passes <paramref name="targetTime"/>.
+    /// </summary>
+    /// <remarks>
+    /// Close time on the standalone stand tracks the wall clock almost second for second, in steps
+    /// that round up to multiples of ten - measured, not assumed: over 94 seconds of real time it
+    /// advanced 92 seconds, in a repeating +1, +1, +8 pattern. So a target one margin ahead is
+    /// reached in about that margin plus one rounding step, and a budget of a minute is generous
+    /// for the 24-second margin these tests use.
+    /// <para>
+    /// When it nonetheless runs out, the reason matters and the old message did not carry it: it
+    /// named the target and nothing else, so a failure could not be told apart from a close time
+    /// that never arrived, one that arrived null, or a node that stopped answering. It also
+    /// reported a number of seconds that was not the one it waited - the loop ran
+    /// <c>maxWaitSeconds + 10</c>. Both fixed here; what the failure says is now enough to act on.
+    /// </para>
+    /// </remarks>
     private static async Task WaitForLedgerCloseTime(IXrplClient client, DateTime targetTime, int maxWaitSeconds = 60)
     {
         var sw = System.Diagnostics.Stopwatch.StartNew();
-        while (sw.Elapsed.TotalSeconds < maxWaitSeconds+10)
+        DateTime? lastCloseTime = null;
+        int polls = 0;
+        string lastError = null;
+
+        while (sw.Elapsed.TotalSeconds < maxWaitSeconds)
         {
             await Task.Delay(3000);
-            LedgerRequest req = new LedgerRequest() { LedgerIndex = new LedgerIndex(LedgerIndexType.Validated) };
-            LOLedger resp = await client.Ledger(req).Typed();
-            LedgerEntity entity = (LedgerEntity)resp.LedgerEntity;
-            if (entity.CloseTime > targetTime)
-                return;
+            polls++;
+            try
+            {
+                // Close a ledger rather than wait for one. The stand has a container calling
+                // ledger_accept every four seconds, and while the suite is idle that keeps the
+                // validated close time within a second or two of the wall clock - measured. Under
+                // the parallel suite it does not: the acceptor's calls queue behind everyone
+                // else's traffic, ledgers close further apart, and the validated close time falls
+                // behind real time. Measured too, by the failure this replaces: sixty seconds of
+                // waiting bought twenty-two seconds of close time and landed two seconds short of
+                // a twenty-four second margin.
+                //
+                // Asking for the close here removes the dependence on someone else's timer: the
+                // next validated ledger carries a close time taken from the clock now. A stand
+                // that refuses the command leaves the wait exactly as it was, polling.
+                await client.AnyRequest(new BaseRequest { Command = "ledger_accept" });
+
+                LedgerRequest req = new LedgerRequest() { LedgerIndex = new LedgerIndex(LedgerIndexType.Validated) };
+                LOLedger resp = await client.Ledger(req).Typed();
+                LedgerEntity entity = (LedgerEntity)resp.LedgerEntity;
+                lastCloseTime = entity.CloseTime;
+                if (lastCloseTime > targetTime)
+                    return;
+            }
+            catch (Exception error)
+            {
+                // Kept and reported rather than thrown: one refused round trip under load should
+                // not end the wait, but a wait that ended having only ever seen errors must say so.
+                lastError = $"{error.GetType().Name}: {error.Message}";
+            }
         }
-        Assert.Fail($"Ledger close time did not exceed {targetTime} within {maxWaitSeconds} seconds");
+
+        Assert.Fail(
+            $"Ledger close time did not pass {targetTime:O} within {maxWaitSeconds}s. " +
+            $"Last close time seen: {(lastCloseTime.HasValue ? lastCloseTime.Value.ToString("O") : "never read")}" +
+            $"{(lastCloseTime.HasValue ? $" (short by {(targetTime - lastCloseTime.Value).TotalSeconds:F1}s)" : string.Empty)}, " +
+            $"polls: {polls}, last error: {lastError ?? "none"}");
     }
 
     private static void ValidateResult(Submit res)
