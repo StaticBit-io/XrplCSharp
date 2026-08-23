@@ -313,6 +313,34 @@ public class TestUStrictNestedFields
     }
 
     /// <summary>
+    /// Swapping one of the four members for an unknown one is still refused.
+    /// </summary>
+    /// <remarks>
+    /// Counting alone would let this through: three of the four plus one member that does not
+    /// belong also comes to four. The missing one would then reach <c>AccountId.FromJson</c> as
+    /// null, and the caller would be told whatever that makes of nothing instead of which member
+    /// is wrong.
+    /// </remarks>
+    [TestMethod]
+    public void TestUXChainBridgeWithTheRightCountButTheWrongMembersIsRefused()
+    {
+        JsonObject bridge = new JsonObject
+        {
+            ["LockingChainDoor"] = "rHb9CJAWyB4rj91VRWn96DkukG4bwdtyTh",
+            ["LockingChainIssue"] = new JsonObject { ["currency"] = "XRP" },
+            ["IssuingChainDoor"] = "rQ3fNyLjbvcDaPNS4EAJY8aT9zR3uGk17c",
+            ["bogus"] = "1",
+        };
+
+        InvalidJsonException error = Assert.ThrowsExactly<InvalidJsonException>(
+            () => XChainBridgeType.FromJson(bridge),
+            "four members of the wrong names passed a check that only counted them");
+
+        StringAssert.Contains(error.Message, "IssuingChainIssue",
+            "the error should say which members a bridge is supposed to have");
+    }
+
+    /// <summary>
     /// <c>Encode</c> stays lenient, deliberately.
     /// </summary>
     /// <remarks>
