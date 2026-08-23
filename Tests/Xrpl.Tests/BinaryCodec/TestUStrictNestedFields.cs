@@ -4,6 +4,7 @@ using System.Collections.Generic;
 using System.Text.Json.Nodes;
 
 using Xrpl.BinaryCodec;
+using Xrpl.BinaryCodec.Types;
 using Xrpl.Models.Utils;
 using Xrpl.Wallet;
 
@@ -198,6 +199,117 @@ public class TestUStrictNestedFields
         string id = inner.ComputeInnerTxId();
 
         Assert.AreEqual(64, id.Length, "a transaction id is 32 bytes of hex");
+    }
+
+    /// <summary>
+    /// A member the codec does not know inside a path step is refused.
+    /// </summary>
+    /// <remarks>
+    /// Path steps are not <c>StObject</c>s - <c>PathHop</c> parses them itself, reading four named
+    /// members and, until now, walking past anything else. So the recursion through objects and
+    /// arrays did not reach them: a member here was still dropped from the bytes being signed.
+    /// </remarks>
+    [TestMethod]
+    public void TestUUnknownMemberInAPathStepIsRefused()
+    {
+        XrplWallet wallet = XrplWallet.FromSeed(Seed);
+        Dictionary<string, object> tx = Payment(wallet);
+        tx["Amount"] = new Dictionary<string, object>
+        {
+            { "currency", "USD" },
+            { "issuer", "rHb9CJAWyB4rj91VRWn96DkukG4bwdtyTh" },
+            { "value", "100" },
+        };
+        tx["Paths"] = new List<object>
+        {
+            new List<object>
+            {
+                new Dictionary<string, object>
+                {
+                    { "account", "rHb9CJAWyB4rj91VRWn96DkukG4bwdtyTh" },
+                    { "bogus_step_member", "1" },
+                },
+            },
+        };
+
+        InvalidJsonException error = Assert.ThrowsExactly<InvalidJsonException>(() => wallet.Sign(tx));
+        StringAssert.Contains(error.Message, "bogus_step_member");
+    }
+
+    /// <summary>
+    /// A path step carrying <c>type</c> still parses, because that is what the node sends.
+    /// </summary>
+    /// <remarks>
+    /// The trap in refusing unknown members here. <c>ripple_path_find</c> answers with a
+    /// <c>type</c> on every step, this SDK declares it on <c>Path</c> and emits it back out of
+    /// <c>PathHop.ToJson</c>, so a path taken from a response and put into a payment carries it.
+    /// The byte is synthesised from which of account, currency and issuer are present, so the
+    /// member is redundant rather than unknown - refusing it would break the ordinary
+    /// path-finding flow, and this test is what says so out loud.
+    /// </remarks>
+    [TestMethod]
+    public void TestUPathStepFromTheNodeStillSigns()
+    {
+        XrplWallet wallet = XrplWallet.FromSeed(Seed);
+        Dictionary<string, object> tx = Payment(wallet);
+        tx["Amount"] = new Dictionary<string, object>
+        {
+            { "currency", "USD" },
+            { "issuer", "rHb9CJAWyB4rj91VRWn96DkukG4bwdtyTh" },
+            { "value", "100" },
+        };
+        tx["Paths"] = new List<object>
+        {
+            new List<object>
+            {
+                new Dictionary<string, object>
+                {
+                    { "account", "rHb9CJAWyB4rj91VRWn96DkukG4bwdtyTh" },
+                    { "type", 1 },
+                    { "type_hex", "0000000000000001" },
+                },
+            },
+        };
+
+        SignatureResult signed = wallet.Sign(tx);
+
+        Assert.IsFalse(string.IsNullOrEmpty(signed.TxBlob),
+            "a path taken from a ripple_path_find answer must still sign");
+    }
+
+    /// <summary>
+    /// The MPT form of an Issue counts its members, like the two forms beside it always did.
+    /// </summary>
+    [TestMethod]
+    public void TestUUnknownMemberInAnMptIssueIsRefused()
+    {
+        JsonObject issue = new JsonObject
+        {
+            ["mpt_issuance_id"] = "00000012D444B0B85E1FB7C22C0B7A8CE9C5AA5CE68B96A3",
+            ["bogus"] = "1",
+        };
+
+        Assert.ThrowsExactly<InvalidJsonException>(
+            () => Issue.FromJson(issue),
+            "the MPT form was the one shape of Issue that walked past a member it did not know");
+    }
+
+    /// <summary>
+    /// An XChainBridge carries exactly its four members.
+    /// </summary>
+    [TestMethod]
+    public void TestUUnknownMemberInAnXChainBridgeIsRefused()
+    {
+        JsonObject bridge = new JsonObject
+        {
+            ["LockingChainDoor"] = "rHb9CJAWyB4rj91VRWn96DkukG4bwdtyTh",
+            ["LockingChainIssue"] = new JsonObject { ["currency"] = "XRP" },
+            ["IssuingChainDoor"] = "rQ3fNyLjbvcDaPNS4EAJY8aT9zR3uGk17c",
+            ["IssuingChainIssue"] = new JsonObject { ["currency"] = "XRP" },
+            ["bogus"] = "1",
+        };
+
+        Assert.ThrowsExactly<InvalidJsonException>(() => XChainBridgeType.FromJson(bridge));
     }
 
     /// <summary>
