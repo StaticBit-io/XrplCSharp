@@ -55,6 +55,19 @@ public class AccountLines : BaseMethodResult//todo rename to AccountLinesRespons
     [JsonPropertyName("marker")]
     public object Marker { get; set; } 
 
+    /// <summary>
+    /// Whether the ledger this answer was read from is validated.
+    /// </summary>
+    /// <remarks>
+    /// rippled writes this through <c>lookupLedger</c>, unconditionally, so it arrives on every
+    /// <c>account_lines</c> answer. Every sibling result model - <c>AccountInfo</c>,
+    /// <c>AccountObjects</c>, <c>AccountNFTs</c>, <c>AccountCurrencies</c>, <c>NoRippleCheck</c> -
+    /// has always declared it; this one alone did not, so it landed in <c>UnknownFields</c> and
+    /// callers had no typed way to tell a validated answer from a provisional one.
+    /// </remarks>
+    [JsonPropertyName("validated")]
+    public bool? Validated { get; set; }
+
     [JsonPropertyName("limit")]
     public int? Limit { get; set; }
 }

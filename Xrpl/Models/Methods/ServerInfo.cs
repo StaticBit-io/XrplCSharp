@@ -205,9 +205,138 @@ namespace Xrpl.Models.Methods
         [JsonConverter(typeof(NumberOrStringConverter))]
         public string ValidatorListExpires { get; set; }
 
-        //todo not found fields -  amendment_blocked?: boolean,  closed_ledger?:, jq_trans_overflow: string, load_factor_local?: number,   load_factor_cluster?: number
+        /// <summary>
+        /// How long it took this server to reach a synchronised state after starting, in
+        /// microseconds. A string, as the node sends it.
+        /// </summary>
+        [JsonPropertyName("initial_sync_duration_us")]
+        public string InitialSyncDurationUs { get; set; }
+
+        /// <summary>
+        /// How many times this server's job queue has overflowed since it started.
+        /// </summary>
+        /// <remarks>
+        /// Declared as a string because that is what the node sends - the same field on
+        /// <c>server_state</c> is already modelled that way.
+        /// </remarks>
+        [JsonPropertyName("jq_trans_overflow")]
+        public string JqTransOverflow { get; set; }
+
+        /// <summary>
+        /// How many peers this server has disconnected since it started.
+        /// </summary>
+        [JsonPropertyName("peer_disconnects")]
+        public string PeerDisconnects { get; set; }
+
+        /// <summary>
+        /// How many peers this server has disconnected for exceeding a resource limit.
+        /// </summary>
+        [JsonPropertyName("peer_disconnects_resources")]
+        public string PeerDisconnectsResources { get; set; }
+
+        /// <summary>
+        /// How long the server has been in its current <see cref="ServerState"/>, in microseconds.
+        /// </summary>
+        /// <remarks>
+        /// A string here, although <c>ServerState.State</c> declares the same field as a number.
+        /// Measured against a node rather than assumed: <c>server_info</c> sends
+        /// <c>"25380868"</c>, quoted.
+        /// </remarks>
+        [JsonPropertyName("server_state_duration_us")]
+        public string ServerStateDurationUs { get; set; }
+
+        /// <summary>
+        /// The server's current time in UTC, as a human-readable string.
+        /// </summary>
+        [JsonPropertyName("time")]
+        public string Time { get; set; }
+
+        /// <summary>
+        /// The rough size of this server's configured node, e.g. <c>tiny</c>, <c>small</c>,
+        /// <c>huge</c>.
+        /// </summary>
+        [JsonPropertyName("node_size")]
+        public string NodeSize { get; set; }
+
+        /// <summary>
+        /// Which source revision this server was built from.
+        /// </summary>
+        /// <remarks>
+        /// Not sent by every build - absent leaves this null rather than raising.
+        /// </remarks>
+        [JsonPropertyName("git")]
+        public GitInfo Git { get; set; }
+
+        /// <summary>
+        /// The state of the published validator list this server is following.
+        /// </summary>
+        /// <remarks>
+        /// Supersedes <see cref="ValidatorListExpires"/>, which modern rippled does not send.
+        /// </remarks>
+        [JsonPropertyName("validator_list")]
+        public ValidatorListInfo ValidatorList { get; set; }
+
+        /// <summary>
+        /// The ports this server is listening on, and what speaks on each.
+        /// </summary>
+        [JsonPropertyName("ports")]
+        public List<ServerPort> Ports { get; set; }
+
+        //todo not found fields -  amendment_blocked?: boolean,  closed_ledger?:, load_factor_local?: number,   load_factor_cluster?: number
         //load_factor_fee_escalation?: number, load_factor_fee_queue?: number, load_factor_server?: number, network_ledger?: 'waiting'
-        //   server_state_duration_us: number,  time: string, 
+    }
+
+    /// <summary>
+    /// Which source revision a server was built from.
+    /// </summary>
+    public class GitInfo : BaseMethodResult
+    {
+        /// <summary>The branch the build came from.</summary>
+        [JsonPropertyName("branch")]
+        public string Branch { get; set; }
+
+        /// <summary>The commit the build came from.</summary>
+        [JsonPropertyName("hash")]
+        public string Hash { get; set; }
+    }
+
+    /// <summary>
+    /// The state of the published validator list a server is following.
+    /// </summary>
+    public class ValidatorListInfo : BaseMethodResult
+    {
+        /// <summary>How many validator lists this server has loaded.</summary>
+        [JsonPropertyName("count")]
+        public int? Count { get; set; }
+
+        /// <summary>
+        /// When the list expires, in UTC - or <c>unknown</c> before a list is loaded, or
+        /// <c>never</c> for a static configuration.
+        /// </summary>
+        [JsonPropertyName("expiration")]
+        public string Expiration { get; set; }
+
+        /// <summary>Whether the list is current, expired, or unknown.</summary>
+        [JsonPropertyName("status")]
+        public string Status { get; set; }
+    }
+
+    /// <summary>
+    /// A port a server listens on, and what speaks on it.
+    /// </summary>
+    public class ServerPort : BaseMethodResult
+    {
+        /// <summary>
+        /// The port number. A string, as the node sends it.
+        /// </summary>
+        [JsonPropertyName("port")]
+        public string Port { get; set; }
+
+        /// <summary>
+        /// The protocols served on this port, e.g. <c>http</c>, <c>ws</c>, <c>peer</c>.
+        /// </summary>
+        [JsonPropertyName("protocol")]
+        public List<string> Protocol { get; set; }
     }
 
     /// <summary>
