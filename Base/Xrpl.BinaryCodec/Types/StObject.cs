@@ -41,6 +41,11 @@ namespace Xrpl.BinaryCodec.Types
 
         private static readonly Dictionary<FieldType, BuildFrom> DispatchTable = new Dictionary<FieldType, BuildFrom>
         {
+            // The JSON halves of these two are no longer the route ParseObject takes - it walks
+            // objects and arrays itself, which is the only way the strictness flag reaches them.
+            // They stay because both are public API a caller can reach directly, and because
+            // FromParser still dispatches through here. Equivalent to ParseObject(node, false)
+            // today; keep them that way.
             [FieldType.StObject] = new BuildFrom(FromJson, FromParser),
             [FieldType.StArray] = new BuildFrom(StArray.FromJson, StArray.FromParser),
             [FieldType.Uint8] = new BuildFrom(Uint8.FromJson, Uint8.FromParser),
