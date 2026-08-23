@@ -1,4 +1,6 @@
 ﻿using System.Collections.Generic;
+using System;
+using System.Collections.Generic;
 using System.Linq;
 using System.Text.Json;
 using System.Text.Json.Nodes;
@@ -65,8 +67,36 @@ namespace Xrpl.BinaryCodec.Types
         /// <summary> Deserialize Hot </summary>
         /// <param name="json">json token</param>
         /// <returns></returns>
+        /// <summary>
+        /// The members a path step may carry.
+        /// </summary>
+        /// <remarks>
+        /// <c>type</c> and <c>type_hex</c> are in the set although nothing here reads them: the
+        /// node sends <c>type</c> on every step of a <c>ripple_path_find</c> answer, and this SDK
+        /// emits it back out of <see cref="PathHop.ToJson"/>, so a path taken from a response and
+        /// put into a payment carries it. The byte is synthesised from which of account, currency
+        /// and issuer are present, so the member is redundant rather than unknown - refusing it
+        /// would break the ordinary path-finding flow outright. <c>type_hex</c> has not been sent
+        /// since rippled 1.7.0 and is tolerated for old data.
+        /// </remarks>
+        private static readonly HashSet<string> PathStepMembers = new HashSet<string>(StringComparer.Ordinal)
+        {
+            "account", "currency", "issuer", "mpt_issuance_id", "type", "type_hex",
+        };
+
         public static PathHop FromJson(JsonNode json)
         {
+            if (json is JsonObject stepObject)
+            {
+                foreach (KeyValuePair<string, JsonNode> member in stepObject)
+                {
+                    if (!PathStepMembers.Contains(member.Key))
+                    {
+                        throw new InvalidJsonException($"unknown path step property `{member.Key}`");
+                    }
+                }
+            }
+
             JsonNode mptIssuanceId = json["mpt_issuance_id"];
             if (mptIssuanceId != null
                 && (!(mptIssuanceId is JsonValue mptJv) || mptJv.GetValueKind() != JsonValueKind.String))

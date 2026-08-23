@@ -41,6 +41,11 @@ namespace Xrpl.BinaryCodec.Types
 
         private static readonly Dictionary<FieldType, BuildFrom> DispatchTable = new Dictionary<FieldType, BuildFrom>
         {
+            // The JSON halves of these two are no longer the route ParseObject takes - it walks
+            // objects and arrays itself, which is the only way the strictness flag reaches them.
+            // They stay because both are public API a caller can reach directly, and because
+            // FromParser still dispatches through here. Equivalent to ParseObject(node, false)
+            // today; keep them that way.
             [FieldType.StObject] = new BuildFrom(FromJson, FromParser),
             [FieldType.StArray] = new BuildFrom(StArray.FromJson, StArray.FromParser),
             [FieldType.Uint8] = new BuildFrom(Uint8.FromJson, Uint8.FromParser),
@@ -148,6 +153,50 @@ namespace Xrpl.BinaryCodec.Types
         /// <exception cref="InvalidJsonException">unknown field or token is not an object</exception>
         public static StObject FromJson(JsonNode token, bool signingOnly)
         {
+            StObject so = ParseObject(token, strict: signingOnly);
+            return signingOnly ? so.FilterIsSigning() : so;
+        }
+
+        /// <summary>
+        /// Builds an STObject from JSON, refusing members this codec does not know at any level,
+        /// and keeping every field it does know.
+        /// </summary>
+        /// <remarks>
+        /// For callers that need the strictness without the signing filter - computing an id over
+        /// a transaction, where dropping the non-signing fields would hash something other than
+        /// the transaction. <see cref="FromJson(JsonNode, bool)"/> ties the two together because
+        /// one flag used to mean both.
+        /// </remarks>
+        public static StObject FromJsonStrict(JsonNode token)
+        {
+            return ParseObject(token, strict: true);
+        }
+
+        /// <summary>
+        /// Builds an STObject from JSON, rejecting members this codec does not know when
+        /// <paramref name="strict"/> - at every level, not just this one.
+        /// </summary>
+        /// <remarks>
+        /// The recursion is the point. Nested objects used to reach this class through the
+        /// <see cref="BuildFrom"/> dispatch table, whose delegate signature carries no flag, so
+        /// they went through the lenient single-argument overload and an unknown member one level
+        /// down was dropped without a word. A caller could be shown a transaction containing a
+        /// member - a typo, or a field from an amendment newer than this SDK's definitions.json -
+        /// sign it, and put it in the ledger without that member. The top level failed loudly; one
+        /// level down it did not.
+        /// <para>
+        /// rippled does the opposite: <c>STParsedJSON::parseObject</c> recurses and answers
+        /// <c>unknownField</c> at every level, so such a transaction does not parse at all.
+        /// </para>
+        /// <para>
+        /// Strictness and the signing filter are separate concerns, and only look alike because
+        /// one flag used to carry both. <see cref="FilterIsSigning"/> still applies to the top
+        /// level alone - dropping non-signing fields out of nested objects would change what gets
+        /// signed, which is not what this fixes.
+        /// </para>
+        /// </remarks>
+        private static StObject ParseObject(JsonNode token, bool strict)
+        {
             if (!(token is JsonObject))
                 throw new InvalidJsonException($"{token.GetValueKind()} is not an object");
 
@@ -156,7 +205,7 @@ namespace Xrpl.BinaryCodec.Types
             {
                 if (!Field.Values.Has(pair.Key))
                 {
-                    if (signingOnly)
+                    if (strict)
                         throw new InvalidJsonException($"unknown field {pair.Key}");
                     continue;
                 }
@@ -165,7 +214,13 @@ namespace Xrpl.BinaryCodec.Types
                 ISerializedType st;
                 try
                 {
-                    st = fieldForType.FromJson(jsonForField);
+                    // Objects and arrays are walked here rather than through the dispatch table,
+                    // which is the only way the flag reaches them.
+                    st = fieldForType.Type == FieldType.StObject
+                        ? ParseObject(jsonForField, strict)
+                        : fieldForType.Type == FieldType.StArray
+                            ? ParseArray(jsonForField, strict)
+                            : fieldForType.FromJson(jsonForField);
                 }
                 catch (Exception e) when (e is InvalidOperationException || e is FormatException || e is OverflowException || e is PrecisionException)
                 {
@@ -173,7 +228,20 @@ namespace Xrpl.BinaryCodec.Types
                 }
                 so.Fields[fieldForType] = st;
             }
-            return signingOnly ? so.FilterIsSigning() : so;
+            return so;
+        }
+
+        /// <summary>
+        /// Builds an STArray from JSON, carrying <paramref name="strict"/> into every element.
+        /// </summary>
+        /// <remarks>
+        /// Arrays are how the common case is reached: <c>Memos</c>, <c>Signers</c> and the rest
+        /// hold objects, so a member inside <c>Memos[0].Memo</c> is two levels down and was the
+        /// original report on this.
+        /// </remarks>
+        private static StArray ParseArray(JsonNode token, bool strict)
+        {
+            return new StArray(token.AsArray().Select(n => ParseObject(n, strict)));
         }
 
         /// <inheritdoc />

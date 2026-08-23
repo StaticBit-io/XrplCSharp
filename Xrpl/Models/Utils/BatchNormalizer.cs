@@ -180,7 +180,12 @@ public static class BatchNormalizer
     /// </summary>
     public static string ComputeInnerTxId(this JsonObject normalizedInnerTx)
     {
-        var st = Xrpl.BinaryCodec.Types.StObject.FromJson(JsonNode.Parse(normalizedInnerTx.ToJsonString()));
+        // Strict: this id is what the outer Batch signature commits to. Parsed leniently, a
+        // member the codec does not know would be dropped from the bytes being hashed, so the
+        // signature would fix an inner transaction other than the one the caller was shown - and
+        // nothing would say so. Strict without the signing filter, because an id covers the whole
+        // transaction, signing fields and not.
+        var st = Xrpl.BinaryCodec.Types.StObject.FromJsonStrict(JsonNode.Parse(normalizedInnerTx.ToJsonString()));
         var bytes = st.ToBytes();
 
         var prefix = Xrpl.BinaryCodec.Util.Bits.GetBytes((uint)Xrpl.BinaryCodec.Hashing.HashPrefix.TransactionId);

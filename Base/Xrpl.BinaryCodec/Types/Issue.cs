@@ -148,6 +148,12 @@ namespace Xrpl.BinaryCodec.Types
             // MPT format: { "mpt_issuance_id": "..." }
             if (obj.ContainsKey("mpt_issuance_id"))
             {
+                // Counted like the two forms below, which have always done this. Without it the MPT
+                // form was the one shape of Issue where a member this codec does not know was
+                // dropped on the way into a blob or an id, with nothing said about it.
+                if (obj.Count != 1)
+                    throw new InvalidJsonException("MPT Issue object must contain only 'mpt_issuance_id'.");
+
                 string mptId = obj["mpt_issuance_id"]?.GetValue<string>();
                 if (mptId is null)
                     throw new InvalidJsonException("Issue mpt_issuance_id must be a string.");
