@@ -76,6 +76,65 @@ namespace Xrpl.Tests
             });
 
         /// <summary>
+        /// A handler failure the client recovers from must not reach the caller at all - not even
+        /// as a different exception. The connect succeeded; saying otherwise is simply wrong.
+        /// </summary>
+        /// <remarks>
+        /// The reconnect path exists for exactly this: a handler that fails once and works on the
+        /// next attempt. But the teardown in between rejects whatever the caller had in flight, and
+        /// the caller is inside <c>SetNetworkId</c> by then - so <c>Connect()</c> threw
+        /// <c>OperationCanceledException</c> while the client went on to connect. Measured before
+        /// the fix: the caller got a cancellation and <c>IsConnected()</c> was <c>true</c> three
+        /// seconds later.
+        /// <para>
+        /// Asking "is it connected now?" in that catch would not have worked either: at that moment
+        /// the socket has just been torn down and the recovery has not finished, so the honest
+        /// answer is no. The wait is what makes the difference between a connection being rebuilt
+        /// and a client that gave up.
+        /// </para>
+        /// </remarks>
+        [TestMethod]
+        public async Task TestRecoveredHandlerFailureWithRequestInFlightStillConnects()
+        {
+            _mockedRippled.AddDelayedResponse("server_info", ServerInfoResult(), TimeSpan.FromSeconds(2));
+
+            _client = CreateClient(maxReconnectAttempts: 5, stopAfterMaxAttempts: true);
+
+            int calls = 0;
+            _client.OnConnected += async () =>
+            {
+                int call = Interlocked.Increment(ref calls);
+                await Task.Delay(TimeSpan.FromMilliseconds(400));
+
+                if (call == 1)
+                {
+                    throw new InvalidOperationException("first attempt fails, the next one works");
+                }
+            };
+
+            Exception connectError = null;
+            try
+            {
+                await _client.Connect();
+            }
+            catch (Exception error)
+            {
+                connectError = error;
+            }
+
+            Assert.IsNull(
+                connectError,
+                $"The client recovered and connected, so Connect() must not report a failure. " +
+                $"Got: {connectError}");
+            Assert.IsTrue(
+                _client.connection.IsConnected(),
+                "Precondition of the assertion above: the client really did end up connected.");
+            Assert.IsTrue(
+                Volatile.Read(ref calls) >= 2,
+                "The scenario requires the handler to have failed once and then run again.");
+        }
+
+        /// <summary>
         /// Giving up must reach the caller as <see cref="NotConnectedException"/> even when the
         /// caller had a request in flight at the moment the client gave up - issue #122.
         /// </summary>

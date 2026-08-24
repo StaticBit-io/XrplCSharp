@@ -4,6 +4,7 @@ using System.Text.Json;
 using System.Threading;
 using System.Threading.Tasks;
 
+using Xrpl.Client.Exceptions;
 using Xrpl.Client.Json;
 using Xrpl.Client.Json.Converters;
 using Xrpl.Models.Ledger;
@@ -866,7 +867,56 @@ namespace Xrpl.Client
         public async Task Connect(System.Threading.CancellationToken cancellationToken = default)
         {
             await connection.Connect(cancellationToken);
-            await SetNetworkId();
+            await SetNetworkIdWhileConnectingAsync(cancellationToken);
+        }
+
+        /// <summary>
+        /// Reads the network id, surviving a connection the client is still settling.
+        /// </summary>
+        /// <remarks>
+        /// <para>
+        /// <c>Connect()</c> is two operations, not one: the connection, and this. The socket really
+        /// does open for a moment before a failing <c>OnConnected</c> handler brings it down, so the
+        /// wait inside the first operation can return successfully while the second is still in
+        /// flight - and the teardown then rejects it. Letting that reach the caller was wrong twice
+        /// over: they cancelled nothing, and a handler that fails once and works on the next attempt
+        /// is precisely what the reconnect path is for, so moments later the client was connected
+        /// and <c>Connect()</c> had reported a failure that did not happen.
+        /// </para>
+        /// <para>
+        /// Waiting rather than asking whether the client is connected right now: at the moment the
+        /// request is rejected the socket has just been torn down, so the answer would be no even
+        /// though the recovery is already under way. The wait ends when the connection is back, or
+        /// throws <see cref="NotConnectedException"/> if the client gave up - the one case where the
+        /// caller really did fail to connect.
+        /// </para>
+        /// <para>
+        /// More than one attempt because the wait can also return during the teardown itself, while
+        /// the old socket is still nominally open; the request then goes out on a socket that is
+        /// already dying. The cap is the number of times the connection may be rebuilt: each retry
+        /// here answers one teardown, and the client cannot tear down more often than that before it
+        /// gives up.
+        /// </para>
+        /// </remarks>
+        private async Task SetNetworkIdWhileConnectingAsync(CancellationToken cancellationToken)
+        {
+            int attempts = Math.Max(1, connection.config.MaxReconnectAttempts);
+
+            for (int attempt = 1; ; attempt++)
+            {
+                try
+                {
+                    await SetNetworkId();
+                    return;
+                }
+                catch (Exception error) when (
+                    error is OperationCanceledException or DisconnectedException &&
+                    !cancellationToken.IsCancellationRequested &&
+                    attempt < attempts)
+                {
+                    await connection.WaitForConnectionAsync(cancellationToken: cancellationToken);
+                }
+            }
         }
 
         private async Task SetNetworkId()

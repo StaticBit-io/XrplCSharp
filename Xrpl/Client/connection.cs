@@ -2213,14 +2213,6 @@ public class Connection
             // SetNetworkId sends straight after, and the socket really does open for a moment
             // before a failing handler brings it down. A caller that got as far as the second
             // operation was told its own request had been cancelled, having cancelled nothing.
-            // Rejected here, before Disconnect(), and with the reason that is actually true. The
-            // requests in flight are being stopped because this client gave up connecting, not
-            // because anyone cancelled them - and Disconnect() rejects with cancellation, which is
-            // right for a close the caller asked for and wrong for a failure. Connect() is where
-            // that difference shows: it is two operations, the connection and the server_info that
-            // SetNetworkId sends straight after, and the socket really does open for a moment
-            // before a failing handler brings it down. A caller that got as far as the second
-            // operation was told its own request had been cancelled, having cancelled nothing.
             requestManager.RejectAll(new NotConnectedException(
                 $"Gave up connecting to {url}: the OnConnected handler failed {failures} time(s) in a row. " +
                 $"Call Connect() to retry."));
