@@ -54,8 +54,8 @@ namespace XrplTests.Xrpl.Models
         /// Every model type a property type can hold, unwrapping arrays and generics to any depth.
         /// </summary>
         /// <remarks>
-        /// Recursive on purpose. <c>Payment.Paths</c> is <c>List&lt;List&lt;Path&gt;&gt;</c>: peeling
-        /// one level yields <c>List&lt;Path&gt;</c>, which lives outside Xrpl.Models and gets
+        /// Recursive on purpose. <c>Payment.Paths</c> is <c>List&lt;List&lt;PathStep&gt;&gt;</c>: peeling
+        /// one level yields <c>List&lt;PathStep&gt;</c>, which lives outside Xrpl.Models and gets
         /// discarded, so <c>PathStep</c> is never reached. A single-level version of this walk passed
         /// while <c>PathStep</c> carried capture - the very defect that prompted this test.
         /// </remarks>
