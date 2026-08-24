@@ -52,7 +52,7 @@ namespace Xrpl.Tests.Models.Tests
     public class TestUResponseFidelity
     {
         private static readonly string ResponsesDirectory =
-            System.IO.Path.Combine(AppContext.BaseDirectory, "Fixtures", "Responses");
+            Path.Combine(AppContext.BaseDirectory, "Fixtures", "Responses");
 
         /// <summary>
         /// Corpus file -> the model type XrplClient actually deserializes that command's
@@ -122,7 +122,7 @@ namespace Xrpl.Tests.Models.Tests
             Assert.IsTrue(corpusFiles.Length > 0, $"no .json fixtures found under {ResponsesDirectory}");
 
             List<string> unmapped = corpusFiles
-                .Select(System.IO.Path.GetFileName)
+                .Select(Path.GetFileName)
                 .Where(name => !Models.ContainsKey(name))
                 .OrderBy(name => name, StringComparer.Ordinal)
                 .ToList();
@@ -149,7 +149,7 @@ namespace Xrpl.Tests.Models.Tests
             {
                 string file = entry.Key;
                 Type modelType = entry.Value;
-                string fixturePath = System.IO.Path.Combine(ResponsesDirectory, file);
+                string fixturePath = Path.Combine(ResponsesDirectory, file);
 
                 Assert.IsTrue(File.Exists(fixturePath), $"{file}: mapped in Models but the fixture file is missing at {fixturePath}");
 

@@ -7,6 +7,7 @@ using Xrpl.Client.Json;
 using Xrpl.Models.Enums;
 using Xrpl.Models.Methods;
 using Xrpl.Models.Transactions;
+using Xrpl.Models.Common;
 
 namespace XrplTests.Xrpl.Models
 {
@@ -28,7 +29,7 @@ namespace XrplTests.Xrpl.Models
             // shape of mainnet tx 1D813B78FC55ABF9054AEBD2AF9DD7C90361F9985B7897E8E9A592D63BF0CC43
             string json = @"{""currency"":""4249547800000000000000000000000000000000"",""issuer"":""rBitcoiNXev8VoVxV7pwoQx1sSfonVP9i3"",""type"":48}";
 
-            Path step = JsonSerializer.Deserialize<Path>(json, XrplJsonOptions.Default);
+            PathStep step = JsonSerializer.Deserialize<PathStep>(json, XrplJsonOptions.Default);
 
             Assert.AreEqual(PathStepType.Currency | PathStepType.Issuer, step.Type);
             Assert.IsTrue(step.Type.Value.HasFlag(PathStepType.Issuer));
@@ -41,7 +42,7 @@ namespace XrplTests.Xrpl.Models
         {
             string json = @"{""mpt_issuance_id"":""" + MptIssuanceId + @""",""issuer"":""rBitcoiNXev8VoVxV7pwoQx1sSfonVP9i3"",""type"":96}";
 
-            Path step = JsonSerializer.Deserialize<Path>(json, XrplJsonOptions.Default);
+            PathStep step = JsonSerializer.Deserialize<PathStep>(json, XrplJsonOptions.Default);
 
             Assert.AreEqual(MptIssuanceId, step.MPTokenIssuanceID);
             Assert.AreEqual(PathStepType.MPTokenIssuanceID | PathStepType.Issuer, step.Type);
@@ -51,7 +52,7 @@ namespace XrplTests.Xrpl.Models
         [TestCategory("TestU")]
         public void TestUPathStepTypeStaysNumericOnTheWire()
         {
-            Path step = new Path
+            PathStep step = new PathStep
             {
                 CurrencyCode = "4249547800000000000000000000000000000000",
                 Issuer = "rBitcoiNXev8VoVxV7pwoQx1sSfonVP9i3",
@@ -68,7 +69,7 @@ namespace XrplTests.Xrpl.Models
         public void TestUPathStepUndeclaredTypeBitSurvives()
         {
             // a future protocol bit the enum does not name must not break deserialization
-            Path step = JsonSerializer.Deserialize<Path>(@"{""type"":176}", XrplJsonOptions.Default);
+            PathStep step = JsonSerializer.Deserialize<PathStep>(@"{""type"":176}", XrplJsonOptions.Default);
 
             Assert.AreEqual(176u, (uint)step.Type.Value);
             Assert.IsTrue(step.Type.Value.HasFlag(PathStepType.Issuer));
@@ -82,7 +83,7 @@ namespace XrplTests.Xrpl.Models
             // model; a response from an ancient server must still deserialize, with the key ignored
             string json = @"{""currency"":""USD"",""issuer"":""rBitcoiNXev8VoVxV7pwoQx1sSfonVP9i3"",""type"":48,""type_hex"":""0000000000000030""}";
 
-            Path step = JsonSerializer.Deserialize<Path>(json, XrplJsonOptions.Default);
+            PathStep step = JsonSerializer.Deserialize<PathStep>(json, XrplJsonOptions.Default);
 
             Assert.AreEqual(PathStepType.Currency | PathStepType.Issuer, step.Type);
             Assert.AreEqual("USD", step.CurrencyCode);
@@ -120,7 +121,7 @@ namespace XrplTests.Xrpl.Models
         [TestCategory("TestU")]
         public void TestUPathStepWithoutTypeIsNull()
         {
-            Path step = JsonSerializer.Deserialize<Path>(@"{""account"":""rf1BiGeXwwQoi8Z2ueFYTEXSwuJYfV2Jpn""}", XrplJsonOptions.Default);
+            PathStep step = JsonSerializer.Deserialize<PathStep>(@"{""account"":""rf1BiGeXwwQoi8Z2ueFYTEXSwuJYfV2Jpn""}", XrplJsonOptions.Default);
 
             Assert.IsNull(step.Type);
         }
