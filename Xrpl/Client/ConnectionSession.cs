@@ -29,6 +29,27 @@ namespace Xrpl.Client
 
         private int _endNotified;
 
+        private int _opened;
+
+        /// <summary>
+        /// Whether this session's socket ever finished connecting.
+        /// </summary>
+        /// <remarks>
+        /// The session object is created before <c>ws.Connect()</c> is even called, so its
+        /// existence says nothing about whether a connection happened. A failed attempt still
+        /// reaches the close callback and would otherwise be announced as a session that ended -
+        /// once per retry - when nothing was ever subscribed to lose.
+        /// </remarks>
+        public bool IsOpened => Volatile.Read(ref _opened) == 1;
+
+        /// <summary>
+        /// Records that this session's socket finished connecting.
+        /// </summary>
+        public void MarkAsOpened()
+        {
+            Volatile.Write(ref _opened, value: 1);
+        }
+
         /// <summary>
         /// Task that completes when this session's OnDisconnected callback has finished.
         /// </summary>

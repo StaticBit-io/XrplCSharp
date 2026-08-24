@@ -684,7 +684,14 @@ public class Connection
         SessionEndReason reason,
         string description)
     {
-        if (session?.TryMarkEndNotified() != true)
+        // A session that never got a connected socket carries nothing to lose, and its close
+        // callback would otherwise announce an end for every failed retry.
+        if (session?.IsOpened != true)
+        {
+            return;
+        }
+
+        if (!session.TryMarkEndNotified())
         {
             return;
         }
@@ -2055,11 +2062,17 @@ public class Connection
     {
         // Check if this callback is from the active session (not retiring)
         bool isActiveSession;
+        ConnectionSession? openedSession = null;
         lock (_sessionLock)
         {
             isActiveSession = _activeSession != null &&
                               _activeSession.SessionId == sessionId &&
                               !_activeSession.IsRetiring;
+
+            if (isActiveSession)
+            {
+                openedSession = _activeSession;
+            }
         }
 
         if (!isActiveSession) // Callback from a retired session - ignore silently
@@ -2101,6 +2114,12 @@ public class Connection
         }
 
         connectedSocket.ResetIntentionalDisconnect();
+
+        // The session has a socket that connected, and only from here can it hold subscriptions -
+        // which is what makes its end worth announcing. Sessions are created before the connect
+        // attempt, so without this a server that is down would announce one ended session per
+        // retry, each of them a connection that never was.
+        openedSession.MarkAsOpened();
 
         // Before ResolveAllAwaiting and before the OnConnected callback, because both hand control
         // to consumer code that subscribes - and the node can answer that subscription while the

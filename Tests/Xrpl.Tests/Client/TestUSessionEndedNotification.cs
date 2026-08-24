@@ -263,10 +263,27 @@ namespace Xrpl.Tests
         }
 
         /// <summary>
-        /// A connection attempt that never succeeded had no session and no subscriptions, so there
-        /// is nothing to announce - and announcing it anyway would have consumers resubscribing
-        /// against a client that was never up.
+        /// A connection attempt that never succeeded had no subscriptions, so there is nothing to
+        /// announce - and announcing it anyway would have consumers resubscribing against a client
+        /// that was never up, once per retry.
         /// </summary>
+        /// <remarks>
+        /// <para>
+        /// A session object exists all the same: it is created before <c>ws.Connect()</c> is
+        /// called, so it long outlives the question of whether a connection happened. The failed
+        /// attempt still reaches the close callback - <c>closes</c> below is two even here - which
+        /// is why the announcement has to ask whether the socket ever opened rather than whether a
+        /// session exists.
+        /// </para>
+        /// <para>
+        /// <b>This test is worth less on Windows than on Linux.</b> Whether the close callback
+        /// arrives while its session is still the active one is a matter of timing: on Linux the
+        /// ids match and the defect showed as three announcements for three retries, which is how
+        /// CI caught it; on Windows the next retry has already installed its session by then, the
+        /// ids miss, and the count is zero with or without the fix. Removing the fix locally and
+        /// rerunning is therefore not a check - it passes either way here.
+        /// </para>
+        /// </remarks>
         [TestMethod]
         public async Task TestFailedConnectAnnouncesNothing()
         {
@@ -285,9 +302,15 @@ namespace Xrpl.Tests
             });
 
             int announced = 0;
+            int closes = 0;
             _client.OnSessionEnded += (reason, description) =>
             {
                 Interlocked.Increment(ref announced);
+                return Task.CompletedTask;
+            };
+            _client.OnDisconnect += (code, description) =>
+            {
+                Interlocked.Increment(ref closes);
                 return Task.CompletedTask;
             };
 
@@ -302,6 +325,9 @@ namespace Xrpl.Tests
 
             await Task.Delay(TimeSpan.FromSeconds(1));
 
+            Assert.IsTrue(
+                Volatile.Read(ref closes) > 0,
+                "The attempt must actually have failed and been reported, or this test proves nothing.");
             Assert.AreEqual(
                 0,
                 Volatile.Read(ref announced),
