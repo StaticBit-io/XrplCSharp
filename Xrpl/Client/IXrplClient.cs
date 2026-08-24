@@ -179,6 +179,17 @@ namespace Xrpl.Client
         /// alongside it where it always did.
         /// </para>
         /// <para>
+        /// It reports a loss, not a readiness: on a server switch and on a fast reconnect it fires
+        /// before the replacement connection is open, so the handler cannot resubscribe from where
+        /// it stands. Note that the subscriptions are gone and send them again from
+        /// <see cref="OnConnected"/> - which is also why the loss is announced first, so a consumer
+        /// is never told to resubscribe after it has already seen the new connection come up.
+        /// </para>
+        /// <para>
+        /// Handlers are awaited before the SDK carries on, so a slow one holds up the very
+        /// reconnect or server switch it is reporting. Keep the work short.
+        /// </para>
+        /// <para>
         /// It does not fire for a connection attempt that never succeeded: there was no session,
         /// and so no subscription, to lose. It does fire when the client is disposed, since
         /// <see cref="IDisposable.Dispose"/> closes the connection - and, because that close is not

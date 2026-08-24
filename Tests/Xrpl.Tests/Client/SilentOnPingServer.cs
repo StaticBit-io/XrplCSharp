@@ -6,7 +6,8 @@ using System.Threading.Tasks;
 namespace Xrpl.Tests
 {
     /// <summary>
-    /// WebSocket server that answers ordinary requests but never answers a <c>ping</c>.
+    /// WebSocket server that never answers a <c>ping</c>, and answers everything else with the
+    /// same <c>server_info</c> body.
     /// </summary>
     /// <remarks>
     /// The health check treats a connection with no inbound traffic past

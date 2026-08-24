@@ -74,6 +74,18 @@ namespace Xrpl.Tests
             });
         }
 
+        /// <summary>
+        /// Waits for <paramref name="condition"/>, polling; returns as soon as it holds.
+        /// </summary>
+        private static async Task WaitUntilAsync(Func<bool> condition, TimeSpan timeout)
+        {
+            DateTime deadline = DateTime.UtcNow + timeout;
+            while (DateTime.UtcNow < deadline && !condition())
+            {
+                await Task.Delay(TimeSpan.FromMilliseconds(50));
+            }
+        }
+
         [TestInitialize]
         public void MyTestInitialize()
         {
@@ -225,8 +237,10 @@ namespace Xrpl.Tests
             await _client.Disconnect();
             _client = null; // Already down; cleanup must not disconnect it a second time.
 
-            // Disconnect() returns as soon as it has asked the socket to close; a close callback,
-            // if there is going to be one, lands afterwards.
+            // Disconnect() returns as soon as it has asked the socket to close; the callback that
+            // reports it lands afterwards. The fixed wait that follows is not for the first event
+            // but for a second: both counts below are asserted to be one, and a duplicate needs
+            // somewhere to show up.
             await WaitUntilAsync(() => { lock (gate) { return reasons.Count > 0; } }, TimeSpan.FromSeconds(10));
             await Task.Delay(TimeSpan.FromMilliseconds(500));
 
@@ -246,18 +260,6 @@ namespace Xrpl.Tests
                 1,
                 Volatile.Read(ref disconnects),
                 "A closed socket is reported once, whichever way the receive loop ended.");
-        }
-
-        /// <summary>
-        /// Waits for <paramref name="condition"/>, polling; returns as soon as it holds.
-        /// </summary>
-        private static async Task WaitUntilAsync(Func<bool> condition, TimeSpan timeout)
-        {
-            DateTime deadline = DateTime.UtcNow + timeout;
-            while (DateTime.UtcNow < deadline && !condition())
-            {
-                await Task.Delay(TimeSpan.FromMilliseconds(50));
-            }
         }
 
         /// <summary>

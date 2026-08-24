@@ -501,7 +501,7 @@
                 if (IsStreamSubscribed)
                 {
                     _pendingSubscriptionRestore = true;
-                    Console.WriteLine($"[SUBSCRIBE DEBUG] Will restore subscriptions on the next connection");
+                    Console.WriteLine("[SUBSCRIBE DEBUG] Will restore subscriptions on the next connection");
                     _streamUiTimer?.Dispose();
                     _streamUiTimer = null;
                     IsStreamSubscribed = false;
