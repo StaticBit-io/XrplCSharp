@@ -83,6 +83,9 @@ public class Connection
 
     public event OnDisconnect OnDisconnect;
 
+    /// <inheritdoc cref="IXrplClient.OnSessionEnded" />
+    public event OnSessionEnded OnSessionEnded;
+
     public event OnPing OnPing;
 
     public event OnLedgerClosed OnLedgerClosed;
@@ -643,6 +646,65 @@ public class Connection
         }
     }
 
+    /// <summary>
+    /// Announces that <paramref name="session"/> has ended, once and only once.
+    /// </summary>
+    /// <remarks>
+    /// <para>
+    /// A session that ends because its socket closed is announced from <see cref="OnceClose"/>,
+    /// alongside <see cref="OnDisconnect"/>. The two paths that retire a session deliberately -
+    /// <see cref="ChangeServer"/> and <see cref="RetireCurrentSessionAndReconnectAsync"/> - mark it
+    /// retiring before the socket goes, which makes <see cref="OnceClose"/> return early by design,
+    /// so each has to speak for itself. For the fast-reconnect path a
+    /// <see cref="XrpConnectionState.RestoringConnection"/> status at least went out; for
+    /// <see cref="ChangeServer"/> nothing did, and that is issue #123: the client reported
+    /// <c>Connected</c> while the subscriptions, which the node keeps against the old connection,
+    /// were gone for good.
+    /// </para>
+    /// <para>
+    /// The once-per-session guard lives on the session rather than here, for a narrow race the
+    /// retiring check does not cover: a socket can close by itself in the moment before the
+    /// retirement marks its session, and then <see cref="OnceClose"/> sees a live session and
+    /// announces the loss just as the retirement announces the switch. One session, two causes,
+    /// and the consumer must still hear about it once.
+    /// </para>
+    /// <para>
+    /// A throwing consumer handler must not reach the caller. <see cref="ChangeServer"/> calls
+    /// this after it has torn the old socket down and before it connects the new one, so an
+    /// escaping exception would leave the client with no socket, no session and no reconnect
+    /// loop - the same reason <see cref="SetConnectionState"/> contains its handler.
+    /// </para>
+    /// </remarks>
+    /// <param name="session">The session that ended; <c>null</c> when there was none, and then
+    /// nothing is announced.</param>
+    /// <param name="reason">What ended it.</param>
+    /// <param name="description">Human-readable detail, for the consumer's log.</param>
+    private async Task NotifySessionEndedAsync(
+        ConnectionSession? session,
+        SessionEndReason reason,
+        string description)
+    {
+        if (session?.TryMarkEndNotified() != true)
+        {
+            return;
+        }
+
+        OnSessionEnded handler = OnSessionEnded;
+        if (handler is null)
+        {
+            return;
+        }
+
+        try
+        {
+            await handler.Invoke(reason, description);
+        }
+        catch (Exception notifyError)
+        {
+            Debug.WriteLine($"{DateTime.Now}OnSessionEnded handler threw for {reason}: {notifyError.Message}");
+        }
+    }
+
     private ReconnectInfo BuildReconnectInfo(int? explicitAttempt = null, TimeSpan? delay = null)
     {
         var attempt = explicitAttempt ?? _reconnectAttempts;
@@ -739,6 +801,17 @@ public class Connection
             // 6. Fire-and-forget GRACEFUL disposal - no blocking
             _ = RetireOldSessionAsync(oldSession, oldSocket);
         }
+
+        // The consumer's subscriptions belonged to the session just retired and do not follow the
+        // client to the new server. Nothing else on this path says so - the socket's own close
+        // callback is filtered out as a retiring session, and the status notification above reads
+        // Connecting, which is what a first connection reports too. Announced before the new
+        // connection is opened, so a consumer cannot see OnConnected for the new session and only
+        // afterwards learn that the old one is gone.
+        await NotifySessionEndedAsync(
+            oldSession,
+            SessionEndReason.ServerChanged,
+            $"Switched to {server}. Subscriptions from the previous connection are no longer in effect.");
 
         // 7. Update config for new server
         url = server;
@@ -876,6 +949,13 @@ public class Connection
             // 9. Fire-and-forget GRACEFUL disposal - no blocking
             _ = RetireOldSessionAsync(oldSession, oldSocket);
         }
+
+        // Same as ChangeServer: the session being retired took the subscriptions with it, and the
+        // socket's own close callback will be filtered out as retiring. The RestoringConnection
+        // status above reports that the connection is being rebuilt, not that everything bound to
+        // the old one is gone - a consumer had to infer the second from the first.
+        await NotifySessionEndedAsync(oldSession, SessionEndReason.ConnectionLost, reason)
+            .ConfigureAwait(false);
 
         // 10. Clear ping/network drop socket tracking (old socket is retired)
         // CRITICAL: If not cleared, these stale references would cause OnConnectionFailed
@@ -2198,12 +2278,17 @@ public class Connection
         // Check if this callback is from a retiring session using session ID
         bool isActiveSession;
         var isRetiringSession = false;
+
+        // The session object itself, not just the verdict about it: the end-of-session
+        // announcement below is guarded per session, and only the object carries that guard.
+        ConnectionSession? closingSession = null;
         lock (_sessionLock)
         {
             if (_activeSession != null)
             {
                 if (_activeSession.SessionId == sessionId)
                 {
+                    closingSession = _activeSession;
                     // Same session - but check if it's marked as retiring
                     isActiveSession = !_activeSession.IsRetiring;
                     isRetiringSession = _activeSession.IsRetiring;
@@ -2297,6 +2382,16 @@ public class Connection
                 await OnDisconnect?.Invoke(code, userMessage)!;
             }
         }
+
+        // The socket that carried this session has closed for real, so the session is over too.
+        // OnDisconnect above says a socket closed; this says what the consumer actually has to act
+        // on - that the subscriptions held against it are gone. Raised here as well as on the two
+        // deliberate retirement paths so that one subscription is enough to cover every way a
+        // session can end.
+        await NotifySessionEndedAsync(
+            closingSession,
+            intentionalDisconnect ? SessionEndReason.UserDisconnected : SessionEndReason.ConnectionLost,
+            userMessage);
 
         if (intentionalDisconnect)
         {

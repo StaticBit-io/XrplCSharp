@@ -26,12 +26,14 @@ namespace Xrpl.Client
         public bool IsRetiring { get; private set; }
         
         private readonly TaskCompletionSource<bool> _completionTcs;
-        
+
+        private int _endNotified;
+
         /// <summary>
         /// Task that completes when this session's OnDisconnected callback has finished.
         /// </summary>
         public Task Completion => _completionTcs.Task;
-        
+
         public ConnectionSession(WebSocketClient socket)
         {
             SessionId = Interlocked.Increment(ref _sessionIdCounter);
@@ -41,6 +43,21 @@ namespace Xrpl.Client
             _completionTcs = new TaskCompletionSource<bool>(TaskCreationOptions.RunContinuationsAsynchronously);
         }
         
+        /// <summary>
+        /// Claims the right to announce that this session has ended, for the first caller only.
+        /// </summary>
+        /// <remarks>
+        /// Several paths retire a session and more than one of them can reach the announcement:
+        /// a deliberate retirement (ChangeServer, fast reconnect) races the socket's own close
+        /// callback. The consumer must hear about the session once, so the guard belongs to the
+        /// session rather than to any one of those paths.
+        /// </remarks>
+        /// <returns><c>true</c> for the caller that won; <c>false</c> for every later one.</returns>
+        public bool TryMarkEndNotified()
+        {
+            return Interlocked.Exchange(ref _endNotified, value: 1) == 0;
+        }
+
         /// <summary>
         /// Marks this session as retiring. Callbacks from retiring sessions are ignored.
         /// </summary>

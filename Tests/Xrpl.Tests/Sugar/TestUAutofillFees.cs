@@ -658,6 +658,7 @@ internal sealed class FeeTestClient : IXrplClient
     public event OnServerWarning OnServerWarning;
     public event OnConnected OnConnected;
     public event OnDisconnect OnDisconnect;
+    public event OnSessionEnded OnSessionEnded;
     public event OnPing OnPing;
     public event OnLedgerClosed OnLedgerClosed;
     public event OnTransaction OnTransaction;
