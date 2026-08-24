@@ -33,11 +33,11 @@ namespace XrplTests.Xrpl.Models
                 //verifies a flag is enabled
                 flags |= flag1 | flag2;
 
-                Assert.IsTrue(Index.IsFlagEnabled(flags, flag1));
+                Assert.IsTrue(ModelUtils.IsFlagEnabled(flags, flag1));
                 //verifies a flag is not enabled
                 flags = 0x00000000;
                 flags |= flag2;
-                Assert.IsFalse(Index.IsFlagEnabled(flags, flag1));
+                Assert.IsFalse(ModelUtils.IsFlagEnabled(flags, flag1));
             }
             [TestMethod]
             public async Task TestVerifyValid_setTransactionFlagsToNumber()

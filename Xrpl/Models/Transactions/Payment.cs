@@ -8,10 +8,8 @@ using Xrpl.Client.Exceptions;
 using Xrpl.Client.Json.Converters;
 using Xrpl.Models.Common;
 using Xrpl.Models.Enums;
-using Xrpl.Models.Methods;
 using Xrpl.Models.Utils;
 
-using Index = Xrpl.Models.Utils.Index;
 
 // https://github.com/XRPLF/xrpl.js/blob/main/packages/xrpl/src/models/transactions/payment.ts
 
@@ -124,7 +122,7 @@ namespace Xrpl.Models.Transactions
         public string InvoiceID { get; set; }
 
         /// <inheritdoc />
-        public List<List<Path>> Paths { get; set; }
+        public List<List<PathStep>> Paths { get; set; }
 
         /// <inheritdoc />
         [JsonConverter(typeof(CurrencyConverter))]
@@ -204,7 +202,7 @@ namespace Xrpl.Models.Transactions
         /// Array of payment paths to be used for this transaction.<br/>
         /// Must be omitted for XRP-to-XRP transactions.
         /// </summary>
-        List<List<Path>> Paths { get; set; }
+        List<List<PathStep>> Paths { get; set; }
         /// <summary>
         /// Highest amount of source currency this transaction is allowed to cost, including transfer fees, exchange rates, and slippage.<br/>
         /// Does not include the XRP destroyed as a cost for submitting the transaction.<br/>
@@ -337,7 +335,7 @@ namespace Xrpl.Models.Transactions
         public string InvoiceID { get; set; }
 
         /// <inheritdoc />
-        public List<List<Path>> Paths { get; set; }
+        public List<List<PathStep>> Paths { get; set; }
 
         /// <inheritdoc />
         [JsonConverter(typeof(CurrencyConverter))]
@@ -417,7 +415,7 @@ namespace Xrpl.Models.Transactions
             }
 
             bool isTfPartialPayment = flags is uint uFlag
-                ? Index.IsFlagEnabled(uFlag, (uint)PaymentFlags.tfPartialPayment)
+                ? ModelUtils.IsFlagEnabled(uFlag, (uint)PaymentFlags.tfPartialPayment)
                 : flags is PaymentFlags pf 
                     ? pf == PaymentFlags.tfPartialPayment 
                     : flags is Dictionary<string, object> flagDict && CheckFlag<PaymentFlags>(flagDict, "tfPartialPayment");

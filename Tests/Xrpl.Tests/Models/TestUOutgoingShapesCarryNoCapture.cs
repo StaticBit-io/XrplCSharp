@@ -22,7 +22,7 @@ namespace XrplTests.Xrpl.Models
     /// only to the top level, so a nested unknown member reaches the displayed <c>tx_json</c> but
     /// not the signed blob. Show one, sign another.
     /// <para>
-    /// This is not hypothetical: <c>Methods.Path</c> (reaching <c>Payment.Paths</c>),
+    /// This is not hypothetical: <c>Common.PathStep</c> (reaching <c>Payment.Paths</c>),
     /// <c>AuthAccount</c> (<c>AMMBid</c>) and the <c>AuthorizeCredential*</c> pair
     /// (<c>DepositPreauth</c>) all carried capture until a review caught it. They were missed
     /// because the exclusion list was written by type name, while the property that matters is
@@ -43,7 +43,7 @@ namespace XrplTests.Xrpl.Models
         /// Deliberately not <see cref="BindingFlags.DeclaredOnly"/>. Capture arrives by inheritance
         /// far more often than by declaration: 47 method models get it from
         /// <see cref="Methods.BaseMethodResult"/> alone, and the defect that prompted this test was
-        /// exactly that - <c>Methods.Path</c> deriving from that base. A DeclaredOnly version of
+        /// exactly that - the path step deriving from that base. A DeclaredOnly version of
         /// this check stayed green with the defect reintroduced.
         /// </remarks>
         private static bool CarriesCapture(Type type) =>
@@ -54,10 +54,10 @@ namespace XrplTests.Xrpl.Models
         /// Every model type a property type can hold, unwrapping arrays and generics to any depth.
         /// </summary>
         /// <remarks>
-        /// Recursive on purpose. <c>Payment.Paths</c> is <c>List&lt;List&lt;Path&gt;&gt;</c>: peeling
-        /// one level yields <c>List&lt;Path&gt;</c>, which lives outside Xrpl.Models and gets
-        /// discarded, so <c>Path</c> is never reached. A single-level version of this walk passed
-        /// while <c>Path</c> carried capture - the very defect that prompted this test.
+        /// Recursive on purpose. <c>Payment.Paths</c> is <c>List&lt;List&lt;PathStep&gt;&gt;</c>: peeling
+        /// one level yields <c>List&lt;PathStep&gt;</c>, which lives outside Xrpl.Models and gets
+        /// discarded, so <c>PathStep</c> is never reached. A single-level version of this walk passed
+        /// while <c>PathStep</c> carried capture - the very defect that prompted this test.
         /// </remarks>
         private static IEnumerable<Type> Unwrap(Type type)
         {

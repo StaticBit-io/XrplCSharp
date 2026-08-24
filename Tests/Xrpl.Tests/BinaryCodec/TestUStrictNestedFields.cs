@@ -241,7 +241,7 @@ public class TestUStrictNestedFields
     /// </summary>
     /// <remarks>
     /// The trap in refusing unknown members here. <c>ripple_path_find</c> answers with a
-    /// <c>type</c> on every step, this SDK declares it on <c>Path</c> and emits it back out of
+    /// <c>type</c> on every step, this SDK declares it on <c>PathStep</c> and emits it back out of
     /// <c>PathHop.ToJson</c>, so a path taken from a response and put into a payment carries it.
     /// The byte is synthesised from which of account, currency and issuer are present, so the
     /// member is redundant rather than unknown - refusing it would break the ordinary

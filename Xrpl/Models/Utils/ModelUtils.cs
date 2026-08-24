@@ -6,9 +6,18 @@ using System;
 using System.Collections.Generic;
 using System.Linq;
 
-namespace Xrpl.Models.Utils //todo ?
+namespace Xrpl.Models.Utils
 {
-    public static class Index
+    /// <summary>
+    /// Helpers shared by the models.
+    /// </summary>
+    /// <remarks>
+    /// Called <c>Index</c> until 11.0.0.0 - a calque of the barrel file <c>utils/index.ts</c> it was
+    /// ported from, and a name that collides with <see cref="System.Index"/>, which is in scope in
+    /// every file whether anyone asked for it or not. The class now matches the file it has always
+    /// lived in.
+    /// </remarks>
+    public static class ModelUtils
     {
         /// <summary>
         /// Verify that all fields of an object are in fields.

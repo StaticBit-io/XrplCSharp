@@ -305,8 +305,8 @@ namespace XrplTests.Xrpl.ClientLib.Integration
                     {
                         for (int i = 0; i < alt.PathsComputed.Count; i++)
                         {
-                            List<Path> steps = alt.PathsComputed[i];
-                            foreach (Path step in steps)
+                            List<PathStep> steps = alt.PathsComputed[i];
+                            foreach (PathStep step in steps)
                             {
                                 Console.WriteLine($"[CrossCurrency]     step: type={step.Type} account={step.Account} currency={step.CurrencyCode} issuer={step.Issuer}");
                             }
