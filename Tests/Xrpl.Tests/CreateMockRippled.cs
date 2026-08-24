@@ -6,6 +6,7 @@ using System.Net;
 using System.Net.Sockets;
 using System.Text;
 using System.Text.RegularExpressions;
+using System.Threading.Tasks;
 using System.Threading;
 using System.Text.Json;
 using System.Text.Json.Nodes;
@@ -131,6 +132,25 @@ namespace Xrpl.Tests
                 throw new AddressCodecException($"Bad response format. Must contain `type` or `error`. {response}");
             }
             _responses[command] = response;
+        }
+
+        /// <summary>
+        /// How long to sit on a command's answer before sending it, per command.
+        /// </summary>
+        private Dictionary<string, TimeSpan> _responseDelays = new Dictionary<string, TimeSpan>();
+
+        /// <summary>
+        /// Registers an answer that is sent only after <paramref name="delay"/>.
+        /// </summary>
+        /// <remarks>
+        /// For tests that need a request to still be in flight while something else happens to the
+        /// connection. Answered at once, that window is reachable only by luck - which is how the
+        /// race in issue #122 stayed a CI-only flake through 37 local runs.
+        /// </remarks>
+        public void AddDelayedResponse(string command, Dictionary<string, object> response, TimeSpan delay)
+        {
+            AddResponse(command, response);
+            _responseDelays[command] = delay;
         }
 
         Dictionary<string, object> GetResponse(Dictionary<string, object> request)
@@ -303,7 +323,31 @@ namespace Xrpl.Tests
                     }
                     else if (this._responses.ContainsKey(commandStr))
                     {
-                        this.Send(e.GetClient(), this.CreateResponse(request, this.GetResponse(request)));
+                        string answer = this.CreateResponse(request, this.GetResponse(request));
+                        MockClient answerTo = e.GetClient();
+                        if (this._responseDelays.TryGetValue(commandStr, out TimeSpan delay))
+                        {
+                            // Answered late, on a task of its own: the read loop has to keep
+                            // running, or nothing else on this connection would happen while the
+                            // answer is held back.
+                            _ = Task.Run(async () =>
+                            {
+                                await Task.Delay(delay);
+                                try
+                                {
+                                    this.Send(answerTo, answer);
+                                }
+                                catch
+                                {
+                                    // The socket may be gone by now - that is usually the point of
+                                    // the delay, and it is not this mock's business to complain.
+                                }
+                            });
+                        }
+                        else
+                        {
+                            this.Send(answerTo, answer);
+                        }
                     }
                     else
                     {

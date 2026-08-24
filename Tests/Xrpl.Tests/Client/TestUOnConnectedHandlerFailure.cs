@@ -27,26 +27,28 @@ namespace Xrpl.Tests
         {
             _port = TestUtils.GetFreePort();
             _mockedRippled = new CreateMockRippled(_port) { suppressOutput = true };
-            _mockedRippled.AddResponse("server_info", new Dictionary<string, object>
-            {
-                { "type", "response" },
-                { "status", "success" },
-                { "result", new Dictionary<string, object>
-                    {
-                        { "info", new Dictionary<string, object>
-                            {
-                                { "build_version", "test-mock" },
-                                { "complete_ledgers", "1-1" },
-                                { "server_state", "full" },
-                            }
-                        },
-                    }
-                },
-            });
+            _mockedRippled.AddResponse("server_info", ServerInfoResult());
 
             Thread tcpListenerThread = new Thread(() => _mockedRippled.Start()) { IsBackground = true };
             tcpListenerThread.Start();
         }
+
+        private static Dictionary<string, object> ServerInfoResult() => new Dictionary<string, object>
+        {
+            { "type", "response" },
+            { "status", "success" },
+            { "result", new Dictionary<string, object>
+                {
+                    { "info", new Dictionary<string, object>
+                        {
+                            { "build_version", "test-mock" },
+                            { "complete_ledgers", "1-1" },
+                            { "server_state", "full" },
+                        }
+                    },
+                }
+            },
+        };
 
         [TestCleanup]
         public async Task MyTestCleanup()
@@ -72,6 +74,67 @@ namespace Xrpl.Tests
                 ConnectionAttemptTimeout = TimeSpan.FromSeconds(10),
                 UseCustomPing = false,
             });
+
+        /// <summary>
+        /// Giving up must reach the caller as <see cref="NotConnectedException"/> even when the
+        /// caller had a request in flight at the moment the client gave up - issue #122.
+        /// </summary>
+        /// <remarks>
+        /// <para>
+        /// <c>Connect()</c> is two operations, not one: the connection itself, and the
+        /// <c>server_info</c> that <c>SetNetworkId</c> sends straight after it. The socket really
+        /// does open for a moment before the failing handler brings it down, so the wait can return
+        /// successfully and the caller can already be inside that second operation when the give-up
+        /// path tears everything down. Whatever rejects the in-flight request then decides what the
+        /// caller sees - and none of the candidates is the right answer:
+        /// <c>OperationCanceledException</c> says the caller cancelled something they never
+        /// cancelled, <c>DisconnectedException</c> says a working connection went away.
+        /// </para>
+        /// <para>
+        /// The delayed answer is what makes this deterministic. Answered at once, the window is
+        /// reachable only by luck: the assertion failed on CI about every other run and never once
+        /// in 37 local runs, which is why the issue sat open with the mechanism unproven. Holding
+        /// <c>server_info</c> back puts the request in flight for certain.
+        /// </para>
+        /// </remarks>
+        [TestMethod]
+        public async Task TestGivingUpWithARequestInFlightStillReportsNotConnected()
+        {
+            // Long enough to outlive the give-up below, so the request is certainly still pending
+            // when it happens.
+            _mockedRippled.AddDelayedResponse(
+                "server_info",
+                ServerInfoResult(),
+                TimeSpan.FromSeconds(30));
+
+            _client = CreateClient(maxReconnectAttempts: 1, stopAfterMaxAttempts: true);
+
+            // Работающий, а потом падающий обработчик - это и есть настоящий случай: подписка,
+            // которая какое-то время выполняется и только потом отваливается. Пока она выполняется,
+            // сокет открыт, и ожидание подключения успевает вернуться успешно - без этого
+            // вызывающий до второй операции просто не доходит.
+            _client.OnConnected += async () =>
+            {
+                await Task.Delay(TimeSpan.FromMilliseconds(400));
+                throw new InvalidOperationException("handler always fails");
+            };
+
+            Exception connectError = null;
+            try
+            {
+                await _client.Connect();
+            }
+            catch (Exception error)
+            {
+                connectError = error;
+            }
+
+            Assert.IsInstanceOfType<NotConnectedException>(
+                connectError,
+                $"Giving up must unblock the caller with NotConnectedException whatever rejected the " +
+                $"request it had in flight, got: {connectError?.GetType().Name ?? "no exception"}. " +
+                $"Full exception: {connectError}");
+        }
 
         /// <summary>
         /// A transient failure inside <c>OnConnected</c> (e.g. a subscribe that timed out because the
