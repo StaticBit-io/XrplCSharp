@@ -40,11 +40,44 @@ namespace Xrpl.Models.Ledger
         [JsonPropertyName("validated")]
         public bool Validated { get; set; }
 
+        /// <summary>
+        /// The most recently closed ledger, when the request named no ledger at all.
+        /// </summary>
+        /// <remarks>
+        /// A <c>ledger</c> call that names nothing gets back two whole structures rather than one,
+        /// and neither is <see cref="LedgerEntity"/>. Not to be confused with
+        /// <c>BaseLedgerEntity.Closed</c>, which is the boolean <em>inside</em> a ledger saying
+        /// whether that one ledger is closed - the two spell the same word and mean different
+        /// things.
+        /// </remarks>
+        [JsonPropertyName("closed")]
+        public LedgerSide ClosedLedger { get; set; }
+
+        /// <summary>
+        /// The current open ledger, when the request named no ledger at all.
+        /// </summary>
+        /// <inheritdoc cref="ClosedLedger" path="/remarks"/>
+        [JsonPropertyName("open")]
+        public LedgerSide OpenLedger { get; set; }
+
         // Unknown-field capture is inherited from LOBaseLedger. It was declared here too, back
         // when the base carried none: two declarations in one hierarchy compile - the derived one
         // hides the base (CS0108) and System.Text.Json binds the derived one - so nothing failed
         // visibly, while the base property stayed null forever. LedgerClosed hands callers an
         // LOBaseLedger, which would have read empty with the data sitting on the subclass.
+    }
+
+    /// <summary>
+    /// One of the two ledgers a <c>ledger</c> call returns when it was asked for neither.
+    /// </summary>
+    public class LedgerSide : BaseMethodResult
+    {
+        /// <summary>
+        /// The ledger header.
+        /// </summary>
+        [JsonPropertyName("ledger")]
+        [JsonConverter(typeof(LedgerBinaryConverter))]
+        public IBaseLedgerEntity LedgerEntity { get; set; }
     }
 
     public abstract class BaseLedgerEntity : IBaseLedgerEntity
