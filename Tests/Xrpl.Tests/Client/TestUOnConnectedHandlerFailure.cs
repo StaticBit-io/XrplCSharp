@@ -22,17 +22,6 @@ namespace Xrpl.Tests
         private XrplClient _client;
         private int _port;
 
-        [TestInitialize]
-        public void MyTestInitialize()
-        {
-            _port = TestUtils.GetFreePort();
-            _mockedRippled = new CreateMockRippled(_port) { suppressOutput = true };
-            _mockedRippled.AddResponse("server_info", ServerInfoResult());
-
-            Thread tcpListenerThread = new Thread(() => _mockedRippled.Start()) { IsBackground = true };
-            tcpListenerThread.Start();
-        }
-
         private static Dictionary<string, object> ServerInfoResult() => new Dictionary<string, object>
         {
             { "type", "response" },
@@ -49,6 +38,17 @@ namespace Xrpl.Tests
                 }
             },
         };
+
+        [TestInitialize]
+        public void MyTestInitialize()
+        {
+            _port = TestUtils.GetFreePort();
+            _mockedRippled = new CreateMockRippled(_port) { suppressOutput = true };
+            _mockedRippled.AddResponse("server_info", ServerInfoResult());
+
+            Thread tcpListenerThread = new Thread(() => _mockedRippled.Start()) { IsBackground = true };
+            tcpListenerThread.Start();
+        }
 
         [TestCleanup]
         public async Task MyTestCleanup()
@@ -126,12 +126,15 @@ namespace Xrpl.Tests
                 connectError,
                 $"The client recovered and connected, so Connect() must not report a failure. " +
                 $"Got: {connectError}");
+            // Both of these say the run really was the scenario this test is about, rather than a
+            // connect that quietly did nothing: the client ended up connected, and it got there
+            // through a handler that failed once and ran again.
             Assert.IsTrue(
                 _client.connection.IsConnected(),
-                "Precondition of the assertion above: the client really did end up connected.");
+                "The client must have ended up connected.");
             Assert.IsTrue(
                 Volatile.Read(ref calls) >= 2,
-                "The scenario requires the handler to have failed once and then run again.");
+                $"The handler must have failed once and run again, but ran {Volatile.Read(ref calls)} time(s).");
         }
 
         /// <summary>
@@ -159,19 +162,17 @@ namespace Xrpl.Tests
         [TestMethod]
         public async Task TestGivingUpWithARequestInFlightStillReportsNotConnected()
         {
-            // Long enough to outlive the give-up below, so the request is certainly still pending
-            // when it happens.
-            _mockedRippled.AddDelayedResponse(
-                "server_info",
-                ServerInfoResult(),
-                TimeSpan.FromSeconds(30));
+            // Ten times longer than the give-up below takes, so the request is certainly still
+            // pending when it happens.
+            _mockedRippled.AddDelayedResponse("server_info", ServerInfoResult(), TimeSpan.FromSeconds(5));
 
             _client = CreateClient(maxReconnectAttempts: 1, stopAfterMaxAttempts: true);
 
-            // Работающий, а потом падающий обработчик - это и есть настоящий случай: подписка,
-            // которая какое-то время выполняется и только потом отваливается. Пока она выполняется,
-            // сокет открыт, и ожидание подключения успевает вернуться успешно - без этого
-            // вызывающий до второй операции просто не доходит.
+            // A handler that works before it fails is the realistic case - a subscribe that gets
+            // some way in before falling over - and it is also what makes this test mean anything.
+            // While it runs the socket is open, so the wait for a connection returns successfully
+            // and the caller reaches the second operation. With a handler that throws at once the
+            // client gives up first, the caller never gets there, and the test passes vacuously.
             _client.OnConnected += async () =>
             {
                 await Task.Delay(TimeSpan.FromMilliseconds(400));

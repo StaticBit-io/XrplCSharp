@@ -259,7 +259,7 @@ namespace Xrpl.Client
         /// failed connect would be reporting something that did not happen.
         /// </para>
         /// <para>
-        /// Throws <see cref="Exceptions.NotConnectedException"/> when the client gave up - a
+        /// Throws <see cref="NotConnectedException"/> when the client gave up - a
         /// handler that fails every time, or a server that never comes up.
         /// <see cref="OperationCanceledException"/> means what it says and nothing else: the
         /// caller's own <paramref name="cancellationToken"/> was cancelled.
