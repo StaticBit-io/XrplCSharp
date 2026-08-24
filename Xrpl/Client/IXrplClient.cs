@@ -43,6 +43,32 @@ namespace Xrpl.Client
     public delegate Task OnBookChanges(BookChangesStream response);
     public delegate Task OnServerStatus(ServerStatusStream response);
 
+    /// <summary>
+    /// Why the connection session ended.
+    /// </summary>
+    public enum SessionEndReason
+    {
+        /// <summary>
+        /// The connection dropped, or the SDK tore it down itself to reconnect after a ping
+        /// timeout or a network drop.
+        /// </summary>
+        ConnectionLost,
+
+        /// <summary>The caller moved to another server with <c>ChangeServer</c>.</summary>
+        ServerChanged,
+
+        /// <summary>The caller closed the connection with <c>Disconnect</c>.</summary>
+        UserDisconnected,
+    }
+
+    /// <summary>
+    /// A connection session has ended. Everything the node held against that connection - the
+    /// subscriptions above all - went with it.
+    /// </summary>
+    /// <param name="reason">What ended the session.</param>
+    /// <param name="description">Human-readable detail, for logs.</param>
+    public delegate Task OnSessionEnded(SessionEndReason reason, string description);
+
 
     public interface IXrplClient : IDisposable
     {
@@ -125,6 +151,53 @@ namespace Xrpl.Client
 
         /// <summary>The socket closed.</summary>
         event OnDisconnect OnDisconnect;
+
+        /// <summary>
+        /// The connection that carried the subscriptions has ended - by any route.
+        /// </summary>
+        /// <remarks>
+        /// <para>
+        /// Subscriptions live on the node against one connection. When that connection goes, so do
+        /// they, and a consumer has to resubscribe. Knowing when to is the hard part, because the
+        /// connection can end in three different ways and until this event only the first was
+        /// announced:
+        /// </para>
+        /// <list type="bullet">
+        /// <item><description>the socket closes on its own, or the caller closes it with
+        /// <c>Disconnect</c> - <see cref="OnDisconnect"/> fires;</description></item>
+        /// <item><description>a ping timeout or a network drop makes the SDK retire the session
+        /// and reconnect at once - only a <see cref="XrpConnectionState.RestoringConnection"/>
+        /// status went out;</description></item>
+        /// <item><description><c>ChangeServer</c> retires the session to move to another server -
+        /// nothing went out at all, and the client reported <c>Connected</c> throughout, so a
+        /// consumer had no way to notice its stream had gone quiet for good.</description></item>
+        /// </list>
+        /// <para>
+        /// This event fires exactly once per session in all three cases, which makes it the single
+        /// thing to subscribe to in order to know that a resubscribe is due.
+        /// <see cref="OnDisconnect"/> keeps its own meaning - a socket closed - and still fires
+        /// alongside it where it always did.
+        /// </para>
+        /// <para>
+        /// It reports a loss, not a readiness: on a server switch and on a fast reconnect it fires
+        /// before the replacement connection is open, so the handler cannot resubscribe from where
+        /// it stands. Note that the subscriptions are gone and send them again from
+        /// <see cref="OnConnected"/> - which is also why the loss is announced first, so a consumer
+        /// is never told to resubscribe after it has already seen the new connection come up.
+        /// </para>
+        /// <para>
+        /// Handlers are awaited before the SDK carries on, so a slow one holds up the very
+        /// reconnect or server switch it is reporting. Keep the work short.
+        /// </para>
+        /// <para>
+        /// It does not fire for a connection attempt that never succeeded: there was no session,
+        /// and so no subscription, to lose. It does fire when the client is disposed, since
+        /// <see cref="IDisposable.Dispose"/> closes the connection - and, because that close is not
+        /// awaited, possibly after <c>Dispose</c> has returned. A handler that touches the client
+        /// should be detached before disposing it.
+        /// </para>
+        /// </remarks>
+        event OnSessionEnded OnSessionEnded;
 
         /// <summary>Keep-alive round trip completed.</summary>
         event OnPing OnPing;
@@ -646,6 +719,12 @@ namespace Xrpl.Client
         {
             add => connection.OnDisconnect += value;
             remove => connection.OnDisconnect -= value;
+        }
+
+        public event OnSessionEnded OnSessionEnded
+        {
+            add => connection.OnSessionEnded += value;
+            remove => connection.OnSessionEnded -= value;
         }
 
         public event OnPing OnPing

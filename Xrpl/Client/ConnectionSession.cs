@@ -26,12 +26,35 @@ namespace Xrpl.Client
         public bool IsRetiring { get; private set; }
         
         private readonly TaskCompletionSource<bool> _completionTcs;
-        
+
+        private int _endNotified;
+
+        private int _opened;
+
+        /// <summary>
+        /// Whether this session's socket ever finished connecting.
+        /// </summary>
+        /// <remarks>
+        /// The session object is created before <c>ws.Connect()</c> is even called, so its
+        /// existence says nothing about whether a connection happened. A failed attempt still
+        /// reaches the close callback and would otherwise be announced as a session that ended -
+        /// once per retry - when nothing was ever subscribed to lose.
+        /// </remarks>
+        public bool IsOpened => Volatile.Read(ref _opened) == 1;
+
+        /// <summary>
+        /// Records that this session's socket finished connecting.
+        /// </summary>
+        public void MarkAsOpened()
+        {
+            Volatile.Write(ref _opened, value: 1);
+        }
+
         /// <summary>
         /// Task that completes when this session's OnDisconnected callback has finished.
         /// </summary>
         public Task Completion => _completionTcs.Task;
-        
+
         public ConnectionSession(WebSocketClient socket)
         {
             SessionId = Interlocked.Increment(ref _sessionIdCounter);
@@ -41,6 +64,21 @@ namespace Xrpl.Client
             _completionTcs = new TaskCompletionSource<bool>(TaskCreationOptions.RunContinuationsAsynchronously);
         }
         
+        /// <summary>
+        /// Claims the right to announce that this session has ended, for the first caller only.
+        /// </summary>
+        /// <remarks>
+        /// Several paths retire a session and more than one of them can reach the announcement:
+        /// a deliberate retirement (ChangeServer, fast reconnect) races the socket's own close
+        /// callback. The consumer must hear about the session once, so the guard belongs to the
+        /// session rather than to any one of those paths.
+        /// </remarks>
+        /// <returns><c>true</c> for the caller that won; <c>false</c> for every later one.</returns>
+        public bool TryMarkEndNotified()
+        {
+            return Interlocked.Exchange(ref _endNotified, value: 1) == 0;
+        }
+
         /// <summary>
         /// Marks this session as retiring. Callbacks from retiring sessions are ignored.
         /// </summary>

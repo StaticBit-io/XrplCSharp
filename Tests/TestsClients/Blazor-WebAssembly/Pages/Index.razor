@@ -382,6 +382,7 @@
 
     private OnConnected _onConnectedHandler;
     private OnDisconnect _onDisconnectHandler;
+    private OnSessionEnded _onSessionEndedHandler;
     private OnPing _onPingHandler;
     private Action<ConnectionStatusInfo> _onConnectionStatusHandler;
     private OnError _onErrorHandler;
@@ -482,6 +483,33 @@
                 _sessionTimer = null;
                 IsStreamSubscribed = false;
                 
+                StateHasChanged();
+            });
+        };
+
+        // The one signal that covers every way the connection can end. Watching OnDisconnect and
+        // the RestoringConnection status is not enough: a successful ChangeServer sends neither,
+        // and the subscriptions - which the node holds against the old connection - are gone all
+        // the same. That was issue #123, and this page was where it was found.
+        _onSessionEndedHandler = async (reason, description) =>
+        {
+            await InvokeAsync(() =>
+            {
+                AddStatusMessage($"Session ended ({reason}): {description}", MessageType.Warning);
+                Console.WriteLine($"[SESSION] ended: {reason} - {description}");
+
+                if (IsStreamSubscribed)
+                {
+                    _pendingSubscriptionRestore = true;
+                    Console.WriteLine("[SUBSCRIBE DEBUG] Will restore subscriptions on the next connection");
+                    _streamUiTimer?.Dispose();
+                    _streamUiTimer = null;
+                    IsStreamSubscribed = false;
+                }
+
+                _sessionTimer?.Dispose();
+                _sessionTimer = null;
+
                 StateHasChanged();
             });
         };
@@ -609,6 +637,7 @@
 
         client.connection.OnConnected += _onConnectedHandler;
         client.connection.OnDisconnect += _onDisconnectHandler;
+        client.connection.OnSessionEnded += _onSessionEndedHandler;
         client.connection.OnPing += _onPingHandler;
         client.connection.OnConnectionStatus += _onConnectionStatusHandler;
         client.connection.OnError += _onErrorHandler;
@@ -645,6 +674,9 @@
             
             if (_onDisconnectHandler != null)
                 client.connection.OnDisconnect -= _onDisconnectHandler;
+            
+            if (_onSessionEndedHandler != null)
+                client.connection.OnSessionEnded -= _onSessionEndedHandler;
             
             if (_onConnectionStatusHandler != null)
                 client.connection.OnConnectionStatus -= _onConnectionStatusHandler;
