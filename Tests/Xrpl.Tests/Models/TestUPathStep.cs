@@ -4,10 +4,9 @@ using System.Collections.Generic;
 using System.Text.Json;
 
 using Xrpl.Client.Json;
-using Xrpl.Models.Enums;
-using Xrpl.Models.Methods;
-using Xrpl.Models.Transactions;
 using Xrpl.Models.Common;
+using Xrpl.Models.Enums;
+using Xrpl.Models.Transactions;
 
 namespace XrplTests.Xrpl.Models
 {

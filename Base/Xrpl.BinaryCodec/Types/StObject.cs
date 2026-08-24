@@ -190,7 +190,7 @@ namespace Xrpl.BinaryCodec.Types
         /// </para>
         /// <para>
         /// Strictness and the signing filter are separate concerns, and only look alike because
-        /// one flag used to carry both. <see cref="FilterIsSigning"/> still applies to the top
+        /// one flag used to carry both. <c>FilterIsSigning</c> still applies to the top
         /// level alone - dropping non-signing fields out of nested objects would change what gets
         /// signed, which is not what this fixes.
         /// </para>
