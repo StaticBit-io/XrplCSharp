@@ -248,7 +248,24 @@ namespace Xrpl.Client
         #region Server
         /// <summary> the url </summary>
         string Url();
-        /// <summary> connect to the server </summary>
+        /// <summary>
+        /// Connects to the server and reads the network id from it.
+        /// </summary>
+        /// <remarks>
+        /// <para>
+        /// Returns when the client is connected and that second step has completed. A consumer
+        /// <see cref="OnConnected"/> handler that fails and works on the next attempt does not
+        /// reach the caller: the client rebuilds the connection itself, and reporting that as a
+        /// failed connect would be reporting something that did not happen.
+        /// </para>
+        /// <para>
+        /// Throws <see cref="Exceptions.NotConnectedException"/> when the client gave up - a
+        /// handler that fails every time, or a server that never comes up.
+        /// <see cref="OperationCanceledException"/> means what it says and nothing else: the
+        /// caller's own <paramref name="cancellationToken"/> was cancelled.
+        /// </para>
+        /// </remarks>
+        /// <param name="cancellationToken">Cancels the wait for a connection.</param>
         Task Connect(System.Threading.CancellationToken cancellationToken = default);
         /// <summary> Disconnect from server </summary>
         Task Disconnect();
@@ -859,11 +876,7 @@ namespace Xrpl.Client
             return true;
         }
 
-        /// <summary>
-        /// Connect to the server
-        /// </summary>
-        /// <param name="cancellationToken">cancellation token</param>
-        /// <returns></returns>
+        /// <inheritdoc />
         public async Task Connect(System.Threading.CancellationToken cancellationToken = default)
         {
             await connection.Connect(cancellationToken);
