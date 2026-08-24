@@ -100,13 +100,28 @@ public class TestUModelledResponseFields
         Assert.AreEqual("small", info.NodeSize);
 
         Assert.AreEqual("release-3.3", info.Git?.Branch);
+        Assert.AreEqual("00a178fb92ca49521b937ae1a99d863765ea8a90", info.Git?.Hash);
         Assert.AreEqual("unknown", info.ValidatorList?.Status);
+        Assert.AreEqual("unknown", info.ValidatorList?.Expiration);
         Assert.AreEqual(0, info.ValidatorList?.Count);
 
         Assert.AreEqual(2, info.Ports?.Count);
         Assert.AreEqual("5005", info.Ports?[0].Port);
         CollectionAssert.AreEqual(new List<string> { "http" }, info.Ports?[0].Protocol);
         CollectionAssert.AreEqual(new List<string> { "ws" }, info.Ports?[1].Protocol);
+
+        // The three new types capture too, and an assertion that only reads the top level would
+        // call the job done while `hash` or `expiration` sat untyped one level in - the same shape
+        // of miss this whole change is about.
+        CollectionAssert.AreEqual(new List<string>(), Captured(info.Git?.UnknownFields).ToList(),
+            "git carried a member no property claims");
+        CollectionAssert.AreEqual(new List<string>(), Captured(info.ValidatorList?.UnknownFields).ToList(),
+            "validator_list carried a member no property claims");
+        foreach (ServerPort port in info.Ports)
+        {
+            CollectionAssert.AreEqual(new List<string>(), Captured(port.UnknownFields).ToList(),
+                $"the entry for port {port.Port} carried a member no property claims");
+        }
     }
 
     /// <summary>

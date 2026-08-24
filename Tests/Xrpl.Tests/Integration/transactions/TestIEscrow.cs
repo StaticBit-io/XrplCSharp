@@ -40,6 +40,11 @@ public class TestIEscrow
     /// <see cref="FinishAfterMargin"/> and which the cancel tests wait out in full.
     /// </summary>
     private static readonly TimeSpan CancelAfterMargin = TimeSpan.FromSeconds(24);
+
+    /// <summary>
+    /// How long <see cref="WaitForLedgerCloseTime"/> sleeps between polls.
+    /// </summary>
+    private static readonly TimeSpan PollInterval = TimeSpan.FromSeconds(3);
     //static XrplWallet walletIssuer = XrplWallet.Generate();
     //static XrplWallet walletHolder1 = XrplWallet.Generate();
 
@@ -527,27 +532,39 @@ public class TestIEscrow
         DateTime? lastCloseTime = null;
         int polls = 0;
         string lastError = null;
+        string acceptError = null;
 
-        while (sw.Elapsed.TotalSeconds < maxWaitSeconds)
+        while (true)
         {
-            await Task.Delay(3000);
+            // The budget is a budget, not a starting gun: checking it before a fixed delay let a
+            // poll begin just under the limit and then run its requests past it, so the helper
+            // could overrun the number it reports. What is left decides both whether to wait and
+            // for how long.
+            TimeSpan remaining = TimeSpan.FromSeconds(maxWaitSeconds) - sw.Elapsed;
+            if (remaining <= TimeSpan.Zero)
+            {
+                break;
+            }
+
+            await Task.Delay(remaining < PollInterval ? remaining : PollInterval);
             polls++;
+
             try
             {
-                // Close a ledger rather than wait for one. The stand has a container calling
-                // ledger_accept every four seconds, and while the suite is idle that keeps the
-                // validated close time within a second or two of the wall clock - measured. Under
-                // the parallel suite it does not: the acceptor's calls queue behind everyone
-                // else's traffic, ledgers close further apart, and the validated close time falls
-                // behind real time. Measured too, by the failure this replaces: sixty seconds of
-                // waiting bought twenty-two seconds of close time and landed two seconds short of
-                // a twenty-four second margin.
-                //
-                // Asking for the close here removes the dependence on someone else's timer: the
-                // next validated ledger carries a close time taken from the clock now. A stand
-                // that refuses the command leaves the wait exactly as it was, polling.
+                // Closing the ledger is an optimisation, not the measurement, and its failure must
+                // not cost the poll. Inside the same try it did: an unavailable or unauthorised
+                // ledger_accept threw past the query below, so the helper stopped looking at the
+                // chain entirely and timed out even while someone else kept closing ledgers - the
+                // very fallback the comment below claimed to preserve.
                 await client.AnyRequest(new BaseRequest { Command = "ledger_accept" });
+            }
+            catch (Exception error)
+            {
+                acceptError = $"{error.GetType().Name}: {error.Message}";
+            }
 
+            try
+            {
                 LedgerRequest req = new LedgerRequest() { LedgerIndex = new LedgerIndex(LedgerIndexType.Validated) };
                 LOLedger resp = await client.Ledger(req).Typed();
                 LedgerEntity entity = (LedgerEntity)resp.LedgerEntity;
@@ -567,7 +584,8 @@ public class TestIEscrow
             $"Ledger close time did not pass {targetTime:O} within {maxWaitSeconds}s. " +
             $"Last close time seen: {(lastCloseTime.HasValue ? lastCloseTime.Value.ToString("O") : "never read")}" +
             $"{(lastCloseTime.HasValue ? $" (short by {(targetTime - lastCloseTime.Value).TotalSeconds:F1}s)" : string.Empty)}, " +
-            $"polls: {polls}, last error: {lastError ?? "none"}");
+            $"polls: {polls}, last read error: {lastError ?? "none"}, " +
+            $"last ledger_accept error: {acceptError ?? "none"}");
     }
 
     private static void ValidateResult(Submit res)
