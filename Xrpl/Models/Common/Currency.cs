@@ -291,9 +291,17 @@ public static class CurrencyExtensions
         return currency.CurrencyCode.IsLpToken();
     }
 
+    /// <summary>
+    /// Whether this amount is a multi-purpose token - that is, whether it carries an issuance id.
+    /// </summary>
+    /// <remarks>
+    /// An issuance id is what distinguishes a multi-purpose token from every other kind of amount,
+    /// so this is exclusive with <see cref="IsXrp"/> and with an issued currency: an amount is at
+    /// most one of the three.
+    /// </remarks>
     public static bool IsMPTToken(this Currency currency)
     {
-        return string.IsNullOrWhiteSpace(currency.MPTokenIssuanceID);
+        return currency is not null && !string.IsNullOrWhiteSpace(currency.MPTokenIssuanceID);
     }
     public static bool IsLpToken(this TrustLine currency)
     {
