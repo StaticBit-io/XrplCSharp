@@ -182,8 +182,8 @@ namespace Xrpl.Models.Methods
         /// the request type of the same name. So:
         /// </para>
         /// <code>
-        /// if (summary.Transaction is NFTokenCreateOffer offer)   // never matches
-        /// if (summary.Transaction is INFTokenCreateOffer offer)  // this is the one
+        /// if (summary.Transaction is NFTokenCreateOffer request)  // never matches
+        /// if (summary.Transaction is INFTokenCreateOffer offer)   // this is the one
         /// </code>
         /// <para>
         /// The first line compiles, warns about nothing and quietly finds nothing, which looks

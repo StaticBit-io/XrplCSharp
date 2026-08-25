@@ -199,8 +199,8 @@ warns about nothing and finds nothing:
 ```csharp
 foreach (TransactionSummary summary in history.Transactions)
 {
-    if (summary.Transaction is NFTokenCreateOffer offer) { }   // never matches
-    if (summary.Transaction is INFTokenCreateOffer offer)      // this is the one
+    if (summary.Transaction is NFTokenCreateOffer request) { }  // never matches
+    if (summary.Transaction is INFTokenCreateOffer offer)       // this is the one
     {
         Debug.WriteLine(offer.NFTokenID);
     }
