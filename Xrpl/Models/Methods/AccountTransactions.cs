@@ -188,8 +188,10 @@ namespace Xrpl.Models.Methods
         /// <para>
         /// The first line compiles, warns about nothing and quietly finds nothing, which looks
         /// exactly like the response having failed to parse - so the search starts in the wrong
-        /// place. Both halves of every request/response pair implement the same <c>I</c>-interface;
-        /// use those to read history, and the request types only to send.
+        /// place. Request and response types come in pairs that share an <c>I</c>-interface; use
+        /// those to read history, and the request types only to send. The five
+        /// <c>ConfidentialMPT</c> transactions are the exception - neither half declares an
+        /// interface, so for those there is nothing to match on yet.
         /// </para>
         /// </remarks>
         [JsonPropertyName("tx_json")]

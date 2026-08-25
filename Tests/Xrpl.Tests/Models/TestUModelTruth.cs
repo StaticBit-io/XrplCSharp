@@ -86,8 +86,14 @@ namespace Xrpl.Tests.Models
         }
 
         /// <summary>
-        /// And what it does have still serializes, so the removal did not take a real field with it.
+        /// All three fields it does have still serialize, so the removal took nothing real with it.
         /// </summary>
+        /// <remarks>
+        /// This does not also assert that <c>NFTokenID</c> is absent from the JSON, which would look
+        /// like extra safety and be none: null properties are omitted anyway, so that assertion
+        /// would have passed just as well before the property was removed. The absence is the
+        /// reflection test's to prove.
+        /// </remarks>
         [TestMethod]
         public void TestUNFTokenAcceptOfferStillCarriesItsOwnThreeFields()
         {
@@ -96,13 +102,14 @@ namespace Xrpl.Tests.Models
                 Account = "r4f4xLpXJtCh9PwdzsQ6KYwLevVnBpJV6f",
                 NFTokenSellOffer = "392578EC763875C71944D25F07528F28D5460A6DD2958A17792380D9E2B430A7",
                 NFTokenBuyOffer = "68CD1F6F906494EA08C9CB5CAFA64DFA90D4E834B7151899B73231DE5A0C3B77",
+                NFTokenBrokerFee = new Currency { ValueAsXrp = 1 },
             };
 
             string json = JsonSerializer.Serialize(accept, XrplJsonOptions.Default);
 
             StringAssert.Contains(json, "NFTokenSellOffer");
             StringAssert.Contains(json, "NFTokenBuyOffer");
-            Assert.IsFalse(json.Contains("NFTokenID"), $"NFTokenID must not reach the wire: {json}");
+            StringAssert.Contains(json, "NFTokenBrokerFee");
         }
 
         /// <summary>

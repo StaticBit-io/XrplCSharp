@@ -207,8 +207,9 @@ foreach (TransactionSummary summary in history.Transactions)
 }
 ```
 
-Both halves of every request/response pair implement the same `I` interface. Use those to read what
-the ledger sent, and the request types only to send.
+Request and response types come in pairs that share an `I` interface — use those to read what the
+ledger sent, and the request types only to send. The five `ConfidentialMPT` transactions are the
+exception: neither half declares an interface, so for those there is nothing to match on yet.
 
 
 ## Contributing

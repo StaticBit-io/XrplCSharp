@@ -65,15 +65,15 @@ namespace Xrpl.Models.Transactions
         /// If specified, the fee must be such that, prior to accounting for the transfer fee charged by the issuer, the amount that the seller would receive is at least as much as the amount indicated in the sell offer.<br/>
         /// This functionality is intended to allow the owner of an NFToken to offer their token for sale to a third party broker, who may then attempt to sell the NFToken on for a larger amount, without the broker having to own the NFToken or custody funds.<br/>
         /// Note: in brokered mode, the offers referenced by NFTokenBuyOffer and NFTokenSellOffer must both specify the same NFTokenID; that is, both must be for the same NFToken.
-        /// <para>
+        /// </summary>
+        /// <remarks>
         /// The transaction itself carries no NFTokenID field - the token is whichever one both
         /// offers are for. Brokered mode also needs three distinct accounts: rippled checks the
         /// owner of each offer against the submitter separately, not as alternatives, so a broker
         /// who is also the buyer or the seller gets <c>tecCANT_ACCEPT_OWN_NFTOKEN_OFFER</c>. The
         /// two blocks in its <c>preclaim</c> read like a choice between direct and brokered mode
         /// and are not one - both run in brokered mode.
-        /// </para>
-        /// </summary>
+        /// </remarks>
         [JsonConverter(typeof(CurrencyConverter))]
         public Currency NFTokenBrokerFee { get; set; }
     }
