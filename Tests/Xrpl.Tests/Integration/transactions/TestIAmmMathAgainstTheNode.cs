@@ -24,8 +24,15 @@ namespace XrplTests.Xrpl.ClientLib.Integration;
 /// </para>
 /// <para>
 /// The comparison is tight on purpose. The approximation this class replaces is out by 0.08%, so a
-/// loose tolerance would pass with the wrong formula and prove nothing; the bound here is a
-/// hundred times tighter than that error.
+/// loose tolerance would pass with the wrong formula and prove nothing; the bound here is five
+/// orders of magnitude tighter than that error.
+/// </para>
+/// <para>
+/// It is not tighter still, and the gap is deliberate. What these tests compare is the difference
+/// of two reported LP token balances, so the last of <c>STAmount</c>'s 15 significant digits is
+/// lost to cancellation before the comparison happens; the measured agreement is around 1e-15, and
+/// asserting anywhere near that would buy brittleness rather than coverage. At 1e-9 there are six
+/// orders of margin over what is measured and five over the error being guarded against.
 /// </para>
 /// <para>
 /// These tests also demonstrate the trap the report names first, because the first version of them
@@ -106,10 +113,10 @@ public class TestIAmmMathAgainstTheNode : TestIAMMBase
             $"estimated {estimated}, credited {credited}, relative error {relativeError}");
 
         Assert.IsTrue(
-            relativeError < 0.00001m,
+            relativeError < 0.000000001m,
             $"Estimated {estimated} against {credited} actually credited - a relative error of " +
-            $"{relativeError}. The approximation this class exists to replace is out by 0.0008, so " +
-            $"anything near that means the wrong equation was used.");
+            $"{relativeError}, against a bound of 1e-9. The approximation this class exists to " +
+            $"replace is out by 8e-4, so anything near that means the wrong equation was used.");
 
         Assert.AreNotEqual(
             poolFee,
@@ -171,8 +178,9 @@ public class TestIAmmMathAgainstTheNode : TestIAMMBase
             $"estimated {estimated}, spent {spent}, relative error {relativeError}");
 
         Assert.IsTrue(
-            relativeError < 0.00001m,
-            $"Estimated {estimated} against {spent} actually spent - a relative error of {relativeError}.");
+            relativeError < 0.000000001m,
+            $"Estimated {estimated} against {spent} actually spent - a relative error of " +
+            $"{relativeError}, against a bound of 1e-9.");
     }
 
     /// <summary>
