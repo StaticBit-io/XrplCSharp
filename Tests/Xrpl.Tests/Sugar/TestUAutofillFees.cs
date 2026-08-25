@@ -787,6 +787,8 @@ internal sealed class FeeTestClient : IXrplClient
     public Task<XrplResponse<DepositAuthorized>> DepositAuthorized(DepositAuthorizedRequest request, CancellationToken cancellationToken = default) => throw new NotSupportedException();
     public Task<XrplResponse<NFTBuyOffers>> NFTBuyOffers(NFTBuyOffersRequest request, CancellationToken cancellationToken = default) => throw new NotSupportedException();
     public Task<XrplResponse<NFTSellOffers>> NFTSellOffers(NFTSellOffersRequest request, CancellationToken cancellationToken = default) => throw new NotSupportedException();
+    public Task<XrplResponse<NFTInfo>> NFTInfo(NFTInfoRequest request, CancellationToken cancellationToken = default) => throw new NotSupportedException();
+    public Task<XrplResponse<NFTHistory>> NFTHistory(NFTHistoryRequest request, CancellationToken cancellationToken = default) => throw new NotSupportedException();
     public Task<XrplResponse<AccountNFTs>> AccountNFTs(AccountNFTsRequest request, CancellationToken cancellationToken = default) => throw new NotSupportedException();
     public Task<XrplResponse<AMMInfoResponse>> AmmInfo(AMMInfoRequest request, CancellationToken cancellationToken = default) => throw new NotSupportedException();
     public Task<XrplResponse<object>> Random(CancellationToken cancellationToken = default) => throw new NotSupportedException();

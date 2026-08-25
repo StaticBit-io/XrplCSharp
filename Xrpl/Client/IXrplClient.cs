@@ -422,6 +422,30 @@ namespace Xrpl.Client
         /// <returns>An <see cref="Models.Methods.NFTSellOffers"/> response.</returns>
         Task<XrplResponse<NFTSellOffers>> NFTSellOffers(NFTSellOffersRequest request, CancellationToken cancellationToken = default);
 
+        /// <summary>
+        /// The nft_info method says who owns an NFToken and what it was minted with.
+        /// </summary>
+        /// <remarks>
+        /// A Clio method: a plain rippled node answers <c>unknownCmd</c>, which arrives as an
+        /// ordinary node error so a caller can catch it and fall back. There is no substitute for
+        /// it on rippled - an owner cannot be read out of <see cref="NFTSellOffers"/>, because a
+        /// sale leaves the seller's offers in the ledger and the new owner usually has none.
+        /// </remarks>
+        /// <param name="request">An <see cref="NFTInfoRequest"/> request.</param>
+        /// <returns>An <see cref="Models.Methods.NFTInfo"/> response.</returns>
+        Task<XrplResponse<NFTInfo>> NFTInfo(NFTInfoRequest request, CancellationToken cancellationToken = default);
+
+        /// <summary>
+        /// The nft_history method returns the transactions that touched an NFToken.
+        /// </summary>
+        /// <remarks>
+        /// A Clio method, paginated the way <c>account_tx</c> is: keep passing
+        /// <see cref="Models.Methods.NFTHistory.Marker"/> back until an answer comes without one.
+        /// </remarks>
+        /// <param name="request">An <see cref="NFTHistoryRequest"/> request.</param>
+        /// <returns>An <see cref="Models.Methods.NFTHistory"/> response.</returns>
+        Task<XrplResponse<NFTHistory>> NFTHistory(NFTHistoryRequest request, CancellationToken cancellationToken = default);
+
 
         /// <summary> The account_nfts method returns a list of NFToken objects for the specified account.</summary>
         /// <param name="request">An <see cref="AccountNFTsRequest"/> request.</param>
@@ -1154,6 +1178,18 @@ namespace Xrpl.Client
         public Task<XrplResponse<NFTSellOffers>> NFTSellOffers(NFTSellOffersRequest request, CancellationToken cancellationToken = default)
         {
             return this.GRequest<NFTSellOffers, NFTSellOffersRequest>(request, cancellationToken);
+        }
+
+        /// <inheritdoc />
+        public Task<XrplResponse<NFTInfo>> NFTInfo(NFTInfoRequest request, CancellationToken cancellationToken = default)
+        {
+            return this.GRequest<NFTInfo, NFTInfoRequest>(request, cancellationToken);
+        }
+
+        /// <inheritdoc />
+        public Task<XrplResponse<NFTHistory>> NFTHistory(NFTHistoryRequest request, CancellationToken cancellationToken = default)
+        {
+            return this.GRequest<NFTHistory, NFTHistoryRequest>(request, cancellationToken);
         }
 
         /// <inheritdoc />
