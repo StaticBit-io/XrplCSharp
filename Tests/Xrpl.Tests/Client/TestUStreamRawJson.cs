@@ -725,59 +725,59 @@ namespace Xrpl.Tests.ClientLib
             const int Count = 2000;
             byte[] frame = Encoding.UTF8.GetBytes(TransactionStreamApiV2);
 
-            long MeasurePerInstance(bool attach)
+            // Warm up JIT and type-init for both calls outside any measured window.
+            TransactionStream warm = JsonSerializer.Deserialize<TransactionStream>(frame, XrplJsonOptions.Default);
+            warm.AttachFrame(frame);
+
+            // The instances exist before the window opens, and the window contains nothing but the
+            // AttachFrame calls. That is the whole of the fix to how this used to be measured: it
+            // took two whole-heap readings in two separate windows - one pass that attached, one
+            // that did not - and subtracted them. Anything that moved the heap between those two
+            // passes landed in the answer, and on Linux something did, by more than a megabyte:
+            // the unattached pass read ~600 B/instance lower than the attached one and the
+            // difference was reported as AttachFrame's cost. It failed CI twice, on two unrelated
+            // pull requests, and took a merge down with it; locally it read 0 B every time.
+            //
+            // Attaching to instances that already exist removes the comparison instead of widening
+            // the bound: what the window measures is exactly what AttachFrame allocates, which is
+            // the thing the test is named after.
+            List<TransactionStream> retained = new List<TransactionStream>(Count);
+            for (int i = 0; i < Count; i++)
             {
-                // Warm up JIT/type-init for this exact path outside the measured window, so the
-                // first of the two calls does not carry a one-time cost the second does not.
-                TransactionStream warm = JsonSerializer.Deserialize<TransactionStream>(frame, XrplJsonOptions.Default);
-                if (attach)
-                {
-                    warm.AttachFrame(frame);
-                }
-
-                GC.Collect(2, GCCollectionMode.Forced, blocking: true);
-                GC.WaitForPendingFinalizers();
-                GC.Collect(2, GCCollectionMode.Forced, blocking: true);
-                long before = GC.GetTotalMemory(true);
-
-                List<TransactionStream> retained = new List<TransactionStream>(Count);
-                for (int i = 0; i < Count; i++)
-                {
-                    TransactionStream stream = JsonSerializer.Deserialize<TransactionStream>(frame, XrplJsonOptions.Default);
-                    if (attach)
-                    {
-                        stream.AttachFrame(frame);
-                    }
-
-                    retained.Add(stream);
-                }
-
-                GC.Collect(2, GCCollectionMode.Forced, blocking: true);
-                GC.WaitForPendingFinalizers();
-                GC.Collect(2, GCCollectionMode.Forced, blocking: true);
-                long perInstance = (GC.GetTotalMemory(true) - before) / Count;
-
-                GC.KeepAlive(retained);
-                GC.KeepAlive(warm);
-                return perInstance;
+                retained.Add(JsonSerializer.Deserialize<TransactionStream>(frame, XrplJsonOptions.Default));
             }
 
-            long withoutFrame = MeasurePerInstance(attach: false);
-            long withFrame = MeasurePerInstance(attach: true);
-            long marginal = withFrame - withoutFrame;
+            GC.Collect(2, GCCollectionMode.Forced, blocking: true);
+            GC.WaitForPendingFinalizers();
+            GC.Collect(2, GCCollectionMode.Forced, blocking: true);
+            long before = GC.GetTotalMemory(true);
+
+            foreach (TransactionStream stream in retained)
+            {
+                stream.AttachFrame(frame);
+            }
+
+            GC.Collect(2, GCCollectionMode.Forced, blocking: true);
+            GC.WaitForPendingFinalizers();
+            GC.Collect(2, GCCollectionMode.Forced, blocking: true);
+            long marginal = (GC.GetTotalMemory(true) - before) / Count;
+
+            GC.KeepAlive(retained);
+            GC.KeepAlive(warm);
 
             Console.WriteLine(
-                $"TransactionStream retains {withoutFrame} B/instance without AttachFrame, {withFrame} B/instance " +
-                $"with it (marginal {marginal} B, frame is {frame.Length} B, shared across all {Count} instances)");
+                $"AttachFrame adds {marginal} B/instance across {Count} instances " +
+                $"(frame is {frame.Length} B, shared by all of them)");
 
-            // A frame accidentally copied per instance inside AttachFrame - the failure mode this
-            // guards against - would add close to frame.Length (900+ B) per instance; sharing the
-            // one array plus two int-pair slices should add near enough to nothing that a few
-            // kilobytes of GC jitter over 2 000 samples does not need to be told apart from it.
+            // A frame copied per instance - the failure mode this guards against, and the shape of
+            // the two retention regressions on this branch - would add close to frame.Length here,
+            // which is 744 B and 1.5 MB over the sample. Storing one reference and two int pairs
+            // adds nothing measurable, so the bound has two and a half times the headroom it needs
+            // over any jitter and still misses a real copy by a wide margin.
             Assert.IsTrue(
                 marginal < 300,
-                $"AttachFrame added {marginal} B/instance beyond the unattached baseline of {withoutFrame} B; " +
-                $"budget is 300 B, a full copy of the {frame.Length} B frame would show up as {frame.Length}+");
+                $"AttachFrame added {marginal} B/instance; budget is 300 B, and a full copy of the " +
+                $"{frame.Length} B frame would show up as {frame.Length}+");
         }
     }
 }
