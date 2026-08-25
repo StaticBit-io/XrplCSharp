@@ -26,8 +26,8 @@ namespace Xrpl.Models.Methods
         /// <remarks>
         /// The reason this command is worth having. An owner cannot be worked out from
         /// <see cref="NFTSellOffers"/>: selling a token does not remove offers for it from the
-        /// ledger, so offers made by a previous owner keep being returned long after they can be
-        /// accepted, and the current owner may have made none at all.
+        /// ledger, so offers made by a previous owner keep being returned long after they can no
+        /// longer be accepted, and the current owner may have made none at all.
         /// </remarks>
         [JsonPropertyName("owner")]
         public string Owner { get; set; }
