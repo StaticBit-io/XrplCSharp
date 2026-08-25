@@ -744,6 +744,15 @@ namespace Xrpl.Models.Transactions
         string ToJson();
         Dictionary<string, object> ToDictionary();
     }
+    /// <remarks>
+    /// The converter is declared here as well as on the implementing class because
+    /// System.Text.Json picks one by the <b>declared</b> type: a variable typed as this interface
+    /// does not inherit the class's attribute, and without this it was written as the interface -
+    /// every field of the actual transaction type missing, and no exception to say so. It happened
+    /// to work through <see cref="Xrpl.Client.Json.XrplJsonOptions.Default"/>, whose converter list
+    /// makes up for the attribute, and only there.
+    /// </remarks>
+    [JsonConverter(typeof(TransactionRequestConverter))]
     public interface ITransactionRequest : ITransactionCommon
     {
     }
@@ -751,6 +760,15 @@ namespace Xrpl.Models.Transactions
     /// <summary>
     /// Every transaction has the same set of common fields.
     /// </summary>
+    /// <remarks>
+    /// The converter is declared here as well as on the implementing class because
+    /// System.Text.Json picks one by the <b>declared</b> type: a variable typed as this interface
+    /// does not inherit the class's attribute, and without this it was written as the interface -
+    /// every field of the actual transaction type missing, and no exception to say so. It happened
+    /// to work through <see cref="Xrpl.Client.Json.XrplJsonOptions.Default"/>, whose converter list
+    /// makes up for the attribute, and only there.
+    /// </remarks>
+    [JsonConverter(typeof(TransactionResponseConverter))]
     public interface ITransactionResponse : IBaseTransactionResponse, ITransactionCommon
     {
         /// <summary>
