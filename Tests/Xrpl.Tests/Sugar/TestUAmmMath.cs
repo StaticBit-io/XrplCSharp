@@ -277,6 +277,174 @@ public class TestUAmmMath
         AmmMath.LPTokensForSingleAssetDeposit(1_000m, 100m, 1_000m, AmmMath.TradingFeeThreshold);
     }
 
+    /// <summary>
+    /// Equations 3 and 4 invert each other, which is the only cheap way to pin equation 4.
+    /// </summary>
+    /// <remarks>
+    /// rippled derives equation 4 by solving equation 3 for the deposit, so the two must compose
+    /// to the identity for any input. That derivation runs through a quadratic, and a sign or a
+    /// factor lost anywhere in it breaks this while leaving a plausible-looking number behind.
+    /// </remarks>
+    [TestMethod]
+    public void TestUTheDepositEquationsInvertEachOther()
+    {
+        const decimal Pool = 1_000_000m;
+        const decimal Tokens = 1_000_000m;
+
+        foreach (uint fee in new uint[] { 0, 1, 500, 1000 })
+        {
+            foreach (decimal deposit in new[] { 1m, 1_000m, 250_000m, 1_000_000m })
+            {
+                decimal tokens = AmmMath.LPTokensForSingleAssetDeposit(Pool, deposit, Tokens, fee);
+                decimal back = AmmMath.SingleAssetDepositForLPTokens(Pool, tokens, Tokens, fee);
+
+                Assert.AreEqual(
+                    Math.Round(deposit, 12),
+                    Math.Round(back, 12),
+                    $"Depositing {deposit} at a fee of {fee} earns {tokens}, which should cost {deposit} to buy back - got {back}.");
+            }
+        }
+    }
+
+    /// <summary>
+    /// And equations 7 and 8, the withdrawal pair.
+    /// </summary>
+    [TestMethod]
+    public void TestUTheWithdrawEquationsInvertEachOther()
+    {
+        const decimal Pool = 1_000_000m;
+        const decimal Tokens = 1_000_000m;
+
+        foreach (uint fee in new uint[] { 0, 1, 500, 1000 })
+        {
+            foreach (decimal withdraw in new[] { 1m, 1_000m, 250_000m, 900_000m })
+            {
+                decimal tokens = AmmMath.LPTokensForSingleAssetWithdraw(Pool, withdraw, Tokens, fee);
+                decimal back = AmmMath.SingleAssetWithdrawForLPTokens(Pool, tokens, Tokens, fee);
+
+                Assert.AreEqual(
+                    Math.Round(withdraw, 12),
+                    Math.Round(back, 12),
+                    $"Withdrawing {withdraw} at a fee of {fee} costs {tokens}, which should return {withdraw} - got {back}.");
+            }
+        }
+    }
+
+    /// <summary>
+    /// Redeeming every token empties the pool, whatever the fee.
+    /// </summary>
+    /// <remarks>
+    /// The input where equation 8's denominator comes closest to zero, and the answer is still
+    /// exact: at <c>t1 = 1</c> the fraction is <c>(fee - 1)/(fee - 1)</c>. Worth its own test
+    /// because a formula that is merely close would show it here first.
+    /// </remarks>
+    [TestMethod]
+    public void TestURedeemingEveryTokenTakesTheWholePool()
+    {
+        Assert.AreEqual(1_000m, AmmMath.SingleAssetWithdrawForLPTokens(1_000m, 500m, 500m, 1000));
+        Assert.AreEqual(1_000m, AmmMath.SingleAssetWithdrawForLPTokens(1_000m, 500m, 500m, 0));
+    }
+
+    /// <summary>
+    /// The swap matches the closed form, and the fee is taken before the curve rather than after.
+    /// </summary>
+    /// <remarks>
+    /// Two different things could be called "a 1% fee on a swap of 100": one takes 1 off the input
+    /// and puts 99 through the curve, the other puts 100 through and takes 1% off the output.
+    /// rippled does the first, and the two do not agree.
+    /// </remarks>
+    [TestMethod]
+    public void TestUASwapTakesTheFeeOffTheInputBeforeTheCurve()
+    {
+        decimal withoutFee = AmmMath.SwapAssetIn(1_000m, 1_000m, 100m, 0);
+        Assert.AreEqual(1_000m * 100m / 1_100m, withoutFee, "out = poolOut * in / (poolIn + in)");
+
+        decimal withFee = AmmMath.SwapAssetIn(1_000m, 1_000m, 100m, 1000);
+        Assert.AreEqual(1_000m * 99m / 1_099m, withFee, "99 goes through the curve, not 100.");
+
+        decimal feeOnOutput = withoutFee * 0.99m;
+        Assert.AreNotEqual(
+            Math.Round(feeOnOutput, 12),
+            Math.Round(withFee, 12),
+            "Taking the fee off the output instead gives a different number, and is the natural mistake.");
+    }
+
+    /// <summary>
+    /// Without a fee the swap leaves the constant product where it found it.
+    /// </summary>
+    [TestMethod]
+    public void TestUAFreeSwapPreservesTheInvariant()
+    {
+        const decimal In = 1_000m;
+        const decimal Out = 4_000m;
+
+        decimal received = AmmMath.SwapAssetIn(In, Out, 250m, tradingFee: 0);
+
+        Assert.AreEqual(
+            Math.Round(In * Out, 8),
+            Math.Round((In + 250m) * (Out - received), 8),
+            "k must be unchanged when nothing is charged for the trade.");
+    }
+
+    /// <summary>
+    /// The two halves of the swap invert each other exactly.
+    /// </summary>
+    [TestMethod]
+    public void TestUTheSwapInvertsExactly()
+    {
+        foreach (uint fee in new uint[] { 0, 500, 1000 })
+        {
+            decimal received = AmmMath.SwapAssetIn(1_000m, 4_000m, 250m, fee);
+            decimal cost = AmmMath.SwapAssetOut(1_000m, 4_000m, received, fee);
+
+            Assert.AreEqual(
+                Math.Round(250m, 12),
+                Math.Round(cost, 12),
+                $"At a fee of {fee}, buying back what 250 bought should cost 250 - got {cost}.");
+        }
+    }
+
+    /// <summary>
+    /// A constant-product pool cannot be swapped empty, and says so instead of dividing by zero.
+    /// </summary>
+    [TestMethod]
+    public void TestUAPoolCannotBeSwappedEmpty()
+    {
+        decimal nearly = AmmMath.SwapAssetOut(1_000m, 4_000m, 3_999m, 0);
+        decimal nearer = AmmMath.SwapAssetOut(1_000m, 4_000m, 3_999.9m, 0);
+        Assert.IsTrue(nearer > nearly * 9m, $"The cost should climb steeply: {nearly} then {nearer}.");
+
+        Assert.ThrowsExactly<ArgumentOutOfRangeException>(
+            () => AmmMath.SwapAssetOut(1_000m, 4_000m, 4_000m, 0));
+        Assert.ThrowsExactly<ArgumentOutOfRangeException>(
+            () => AmmMath.SwapAssetOut(1_000m, 4_000m, 4_001m, 0));
+    }
+
+    /// <summary>
+    /// The fee bound covers everything that charges a fee, not only what it was written for.
+    /// </summary>
+    [TestMethod]
+    public void TestUTheFeeBoundCoversTheSwapAndTheInverses()
+    {
+        Assert.ThrowsExactly<ArgumentOutOfRangeException>(
+            () => AmmMath.SwapAssetIn(1_000m, 1_000m, 100m, tradingFee: 5000));
+        Assert.ThrowsExactly<ArgumentOutOfRangeException>(
+            () => AmmMath.SwapAssetOut(1_000m, 1_000m, 100m, tradingFee: 5000));
+        Assert.ThrowsExactly<ArgumentOutOfRangeException>(
+            () => AmmMath.SingleAssetDepositForLPTokens(1_000m, 100m, 1_000m, tradingFee: 5000));
+        Assert.ThrowsExactly<ArgumentOutOfRangeException>(
+            () => AmmMath.SingleAssetWithdrawForLPTokens(1_000m, 100m, 1_000m, tradingFee: 5000));
+    }
+
+    [TestMethod]
+    public void TestUSwappingAndRedeemingNothingGivesNothing()
+    {
+        Assert.AreEqual(0m, AmmMath.SwapAssetIn(1_000m, 1_000m, 0m, 1000));
+        Assert.AreEqual(0m, AmmMath.SwapAssetOut(1_000m, 1_000m, 0m, 1000));
+        Assert.AreEqual(0m, AmmMath.SingleAssetDepositForLPTokens(1_000m, 0m, 1_000m, 1000));
+        Assert.AreEqual(0m, AmmMath.SingleAssetWithdrawForLPTokens(1_000m, 0m, 1_000m, 1000));
+    }
+
     [TestMethod]
     public void TestUDepositingNothingEarnsNothing()
     {

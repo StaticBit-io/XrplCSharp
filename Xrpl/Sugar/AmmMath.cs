@@ -38,6 +38,12 @@ namespace Xrpl.Sugar
     /// token balances can resolve.
     /// </para>
     /// <para>
+    /// Units are the caller's and nothing here converts between them. That matters most for XRP:
+    /// <c>amm_info</c> reports the XRP side of a pool in drops, so a balance read from it and an
+    /// amount the caller is thinking of in XRP are a million apart. Mixing the two in one call
+    /// returns a number that reads as a broken formula rather than as a unit mistake.
+    /// </para>
+    /// <para>
     /// Everything is computed in <see cref="decimal"/> rather than <see cref="double"/>: 28
     /// significant digits against 15. That is also why the square root here is Newton's method -
     /// <see cref="Math.Sqrt"/> would throw away the precision the rest of the calculation keeps.
@@ -199,6 +205,111 @@ namespace Xrpl.Sugar
         }
 
         /// <summary>
+        /// How much of one asset must be deposited to be credited exactly this many LP tokens.
+        /// </summary>
+        /// <remarks>
+        /// <para>
+        /// Equation 4, which is rippled solving equation 3 for <c>b</c>. With <c>f1</c> and
+        /// <c>f2</c> as in <see cref="LPTokensForSingleAssetDeposit"/>, <c>t1 = t/T</c> and
+        /// <c>t2 = 1 + t1</c>:
+        /// </para>
+        /// <code>
+        /// d = f2 - t1/t2
+        /// a = 1/t2²,  b = 2·d/t2 - 1/f1,  c = d² - f2²
+        /// deposit = B · (-b + √(b² - 4ac)) / 2a
+        /// </code>
+        /// <para>
+        /// This is what an <c>AMMDeposit</c> carrying <c>LPTokenOut</c> will actually take from
+        /// the account, and the direction of the node's rounding reverses here: it maximizes the
+        /// deposit, so it takes this much or a shade more. That is consistent rather than
+        /// contrary - every one of these roundings favours the pool.
+        /// </para>
+        /// </remarks>
+        /// <param name="poolBalance">The pool's balance of the asset being deposited.</param>
+        /// <param name="lpTokens">The LP tokens wanted.</param>
+        /// <param name="lpTokenBalance">The pool's LP token balance, before the deposit.</param>
+        /// <param name="tradingFee">The fee this depositor trades at - see <see cref="DiscountedTradingFee"/>.</param>
+        /// <exception cref="ArgumentOutOfRangeException">A balance is not positive, the token amount is negative, or the fee exceeds <see cref="TradingFeeThreshold"/>.</exception>
+        public static decimal SingleAssetDepositForLPTokens(
+            decimal poolBalance,
+            decimal lpTokens,
+            decimal lpTokenBalance,
+            uint tradingFee)
+        {
+            RequirePositive(poolBalance, nameof(poolBalance));
+            RequirePositive(lpTokenBalance, nameof(lpTokenBalance));
+            RequireNotNegative(lpTokens, nameof(lpTokens));
+            RequireValidTradingFee(tradingFee);
+
+            if (lpTokens == 0m)
+            {
+                return 0m;
+            }
+
+            decimal fee = TradingFeeFraction(tradingFee);
+            decimal f1 = 1m - fee;
+            decimal f2 = (1m - fee / 2m) / f1;
+            decimal t1 = lpTokens / lpTokenBalance;
+            decimal t2 = 1m + t1;
+            decimal d = f2 - t1 / t2;
+            decimal a = 1m / (t2 * t2);
+            decimal b = 2m * d / t2 - 1m / f1;
+            decimal c = d * d - f2 * f2;
+
+            return poolBalance * SolveQuadratic(a, b, c);
+        }
+
+        /// <summary>
+        /// How much of one asset comes out for redeeming exactly this many LP tokens.
+        /// </summary>
+        /// <remarks>
+        /// <para>
+        /// Equation 8, rippled solving equation 7 for <c>b</c>. With <c>t1 = t/T</c>:
+        /// </para>
+        /// <code>
+        /// withdraw = B · (t1² - t1·(2 - fee)) / (t1·fee - 1)
+        /// </code>
+        /// <para>
+        /// Both halves of that fraction are negative for any real input, which is why the result
+        /// is not. What an <c>AMMWithdraw</c> carrying <c>LPTokenIn</c> pays out; the node
+        /// minimizes the withdrawal, so it pays this or a shade less.
+        /// </para>
+        /// </remarks>
+        /// <param name="poolBalance">The pool's balance of the asset being withdrawn.</param>
+        /// <param name="lpTokens">The LP tokens being redeemed.</param>
+        /// <param name="lpTokenBalance">The pool's LP token balance, before the withdrawal.</param>
+        /// <param name="tradingFee">The fee this account trades at - see <see cref="DiscountedTradingFee"/>.</param>
+        /// <exception cref="ArgumentOutOfRangeException">A balance is not positive, the token amount is negative or exceeds the pool's, or the fee exceeds <see cref="TradingFeeThreshold"/>.</exception>
+        public static decimal SingleAssetWithdrawForLPTokens(
+            decimal poolBalance,
+            decimal lpTokens,
+            decimal lpTokenBalance,
+            uint tradingFee)
+        {
+            RequirePositive(poolBalance, nameof(poolBalance));
+            RequirePositive(lpTokenBalance, nameof(lpTokenBalance));
+            RequireNotNegative(lpTokens, nameof(lpTokens));
+            RequireValidTradingFee(tradingFee);
+
+            if (lpTokens == 0m)
+            {
+                return 0m;
+            }
+
+            if (lpTokens > lpTokenBalance)
+            {
+                throw new ArgumentOutOfRangeException(
+                    nameof(lpTokens),
+                    $"Cannot redeem {lpTokens} tokens against a balance of {lpTokenBalance}.");
+            }
+
+            decimal fee = TradingFeeFraction(tradingFee);
+            decimal t1 = lpTokens / lpTokenBalance;
+
+            return poolBalance * (t1 * t1 - t1 * (2m - fee)) / (t1 * fee - 1m);
+        }
+
+        /// <summary>
         /// LP tokens credited for depositing both assets at the pool's own ratio.
         /// </summary>
         /// <remarks>
@@ -279,6 +390,104 @@ namespace Xrpl.Sugar
         }
 
         /// <summary>
+        /// What comes out of the pool for swapping this much of the other asset in.
+        /// </summary>
+        /// <remarks>
+        /// <para>
+        /// rippled's <c>swapAssetIn</c>, and what a payment routed through an AMM pays the taker.
+        /// The node writes it as
+        /// </para>
+        /// <code>
+        /// out = poolOut - (poolIn · poolOut) / (poolIn + in·(1 - fee))
+        /// </code>
+        /// <para>
+        /// which is the form used here, rearranged to <c>poolOut·x/(poolIn + x)</c> with
+        /// <c>x = in·(1 - fee)</c>. The two are the same expression; the difference is that the
+        /// node's form subtracts two nearly equal numbers for a small swap and loses digits to
+        /// the cancellation, while this one has nothing to cancel.
+        /// </para>
+        /// <para>
+        /// The fee comes off the input before the curve sees it, so the whole of
+        /// <paramref name="assetIn"/> still enters the pool - the fee stays there for the
+        /// liquidity providers rather than being taken away.
+        /// </para>
+        /// </remarks>
+        /// <param name="poolIn">The pool's balance of the asset being swapped in.</param>
+        /// <param name="poolOut">The pool's balance of the asset being swapped out.</param>
+        /// <param name="assetIn">How much is being swapped in, fee included.</param>
+        /// <param name="tradingFee">The fee this account trades at - see <see cref="DiscountedTradingFee"/>.</param>
+        /// <exception cref="ArgumentOutOfRangeException">A balance is not positive, the amount is negative, or the fee exceeds <see cref="TradingFeeThreshold"/>.</exception>
+        public static decimal SwapAssetIn(
+            decimal poolIn,
+            decimal poolOut,
+            decimal assetIn,
+            uint tradingFee)
+        {
+            RequirePositive(poolIn, nameof(poolIn));
+            RequirePositive(poolOut, nameof(poolOut));
+            RequireNotNegative(assetIn, nameof(assetIn));
+            RequireValidTradingFee(tradingFee);
+
+            if (assetIn == 0m)
+            {
+                return 0m;
+            }
+
+            decimal effectiveIn = assetIn * (1m - TradingFeeFraction(tradingFee));
+
+            return poolOut * effectiveIn / (poolIn + effectiveIn);
+        }
+
+        /// <summary>
+        /// What must be swapped in to take exactly this much of the other asset out.
+        /// </summary>
+        /// <remarks>
+        /// <para>
+        /// rippled's <c>swapAssetOut</c>, the inverse of <see cref="SwapAssetIn"/>:
+        /// </para>
+        /// <code>
+        /// in = ((poolIn · poolOut) / (poolOut - out) - poolIn) / (1 - fee)
+        /// </code>
+        /// <para>
+        /// rearranged here to <c>poolIn·out / ((poolOut - out)·(1 - fee))</c> for the same reason
+        /// as above. The cost climbs without bound as <paramref name="assetOut"/> approaches the
+        /// pool's balance, which is the constant product refusing to be emptied; asking for the
+        /// whole of it, or more, is rejected rather than answered with a division by zero.
+        /// </para>
+        /// </remarks>
+        /// <param name="poolIn">The pool's balance of the asset being swapped in.</param>
+        /// <param name="poolOut">The pool's balance of the asset being swapped out.</param>
+        /// <param name="assetOut">How much is wanted out.</param>
+        /// <param name="tradingFee">The fee this account trades at - see <see cref="DiscountedTradingFee"/>.</param>
+        /// <exception cref="ArgumentOutOfRangeException">A balance is not positive, the amount is negative or is not less than the pool, or the fee exceeds <see cref="TradingFeeThreshold"/>.</exception>
+        public static decimal SwapAssetOut(
+            decimal poolIn,
+            decimal poolOut,
+            decimal assetOut,
+            uint tradingFee)
+        {
+            RequirePositive(poolIn, nameof(poolIn));
+            RequirePositive(poolOut, nameof(poolOut));
+            RequireNotNegative(assetOut, nameof(assetOut));
+            RequireValidTradingFee(tradingFee);
+
+            if (assetOut == 0m)
+            {
+                return 0m;
+            }
+
+            if (assetOut >= poolOut)
+            {
+                throw new ArgumentOutOfRangeException(
+                    nameof(assetOut),
+                    $"A constant-product pool cannot be emptied: {assetOut} was asked of a balance " +
+                    $"of {poolOut}, and the cost of the last unit is unbounded.");
+            }
+
+            return poolIn * assetOut / ((poolOut - assetOut) * (1m - TradingFeeFraction(tradingFee)));
+        }
+
+        /// <summary>
         /// Square root in <see cref="decimal"/>, by Newton's method.
         /// </summary>
         /// <remarks>
@@ -331,6 +540,12 @@ namespace Xrpl.Sugar
 
             return guess;
         }
+
+        /// <summary>
+        /// The larger root, which is the one rippled's <c>solveQuadraticEq</c> takes.
+        /// </summary>
+        private static decimal SolveQuadratic(decimal a, decimal b, decimal c)
+            => (-b + Sqrt(b * b - 4m * a * c)) / (2m * a);
 
         private static void RequireValidTradingFee(uint tradingFee)
         {

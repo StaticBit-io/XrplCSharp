@@ -8,6 +8,7 @@ using Xrpl.Models.Common;
 using Xrpl.Models.Ledger;
 using Xrpl.Models.Methods;
 using Xrpl.Models.Transactions;
+using Xrpl.Wallet;
 using Xrpl.Sugar;
 
 namespace XrplTests.Xrpl.ClientLib.Integration;
@@ -182,6 +183,246 @@ public class TestIAmmMathAgainstTheNode : TestIAMMBase
             $"Estimated {estimated} against {spent} actually spent - a relative error of " +
             $"{relativeError}, against a bound of 1e-9.");
     }
+
+    /// <summary>
+    /// Equation 4: asking the node for an exact number of LP tokens costs what it says it costs.
+    /// </summary>
+    /// <remarks>
+    /// The other direction of the deposit, and the one the unit tests can only reach through an
+    /// identity. <c>tfOneAssetLPToken</c> names the tokens wanted and lets the node work out the
+    /// asset, with <c>Amount</c> as a ceiling rather than the figure - so what is compared here is
+    /// what the node decided to take.
+    /// </remarks>
+    [TestMethod]
+    public async Task TestIADepositForExactTokensCostsAsEstimated()
+    {
+        await CreatePool();
+
+        AMMInfoResponse before = await GetAmmInfo();
+        decimal poolBalance = before.Amm.Amount.ValueAsNumber;
+        decimal lpBefore = before.Amm.LPTokenBalance.ValueAsNumber;
+        uint effectiveFee = FeeFor(before, walletHolder.ClassicAddress);
+
+        const decimal WantTokens = 50m;
+
+        decimal estimated = AmmMath.SingleAssetDepositForLPTokens(
+            poolBalance,
+            WantTokens,
+            lpBefore,
+            effectiveFee);
+
+        AMMDeposit deposit = new AMMDeposit
+        {
+            Account = walletHolder.ClassicAddress,
+            Asset = TokenAsset,
+            Asset2 = XrpAsset,
+
+            // A ceiling, deliberately far above the estimate: if the node were to spend all of it
+            // the comparison below would fail loudly instead of being satisfied by construction.
+            Amount = new Currency
+            {
+                CurrencyCode = CurrencyCode,
+                Issuer = walletIssuer.ClassicAddress,
+                Value = "500",
+            },
+            LPTokenOut = LpTokens(before, WantTokens),
+            Flags = AMMDepositFlags.tfOneAssetLPToken,
+        };
+
+        ITransactionRequest autofilled = await client.Autofill(deposit);
+        TransactionSummary result = await client.SubmitAndWait(autofilled, walletHolder, true);
+        AssertSuccess(result, "AMMDeposit one asset for LP tokens");
+
+        AMMInfoResponse after = await GetAmmInfo();
+        decimal taken = after.Amm.Amount.ValueAsNumber - poolBalance;
+        decimal credited = after.Amm.LPTokenBalance.ValueAsNumber - lpBefore;
+
+        decimal relativeError = Math.Abs(taken - estimated) / taken;
+
+        Console.WriteLine(
+            $"pool {poolBalance}, effective fee {effectiveFee}, wanted {WantTokens} tokens: " +
+            $"estimated {estimated}, taken {taken}, credited {credited}, relative error {relativeError}");
+
+        Assert.AreEqual(
+            WantTokens,
+            credited,
+            "tfOneAssetLPToken credits exactly what was asked for; if it did not, the comparison below is measuring something else.");
+
+        Assert.IsTrue(
+            relativeError < 0.000000001m,
+            $"Estimated a cost of {estimated} against {taken} actually taken - a relative error of " +
+            $"{relativeError}, against a bound of 1e-9.");
+    }
+
+    /// <summary>
+    /// Equation 8: redeeming an exact number of LP tokens returns what it says it returns.
+    /// </summary>
+    /// <remarks>
+    /// <c>Amount</c> is a floor here rather than a ceiling, so it is set low enough not to bind
+    /// and the node's own figure is what gets compared.
+    /// </remarks>
+    [TestMethod]
+    public async Task TestIAWithdrawForExactTokensReturnsAsEstimated()
+    {
+        await CreatePool();
+
+        AMMInfoResponse before = await GetAmmInfo();
+        decimal poolBalance = before.Amm.Amount.ValueAsNumber;
+        decimal lpBefore = before.Amm.LPTokenBalance.ValueAsNumber;
+        uint effectiveFee = FeeFor(before, walletHolder.ClassicAddress);
+
+        const decimal RedeemTokens = 50m;
+
+        decimal estimated = AmmMath.SingleAssetWithdrawForLPTokens(
+            poolBalance,
+            RedeemTokens,
+            lpBefore,
+            effectiveFee);
+
+        AMMWithdraw withdraw = new AMMWithdraw
+        {
+            Account = walletHolder.ClassicAddress,
+            Asset = TokenAsset,
+            Asset2 = XrpAsset,
+            Amount = new Currency
+            {
+                CurrencyCode = CurrencyCode,
+                Issuer = walletIssuer.ClassicAddress,
+                Value = "0.000001",
+            },
+            LPTokenIn = LpTokens(before, RedeemTokens),
+            Flags = AMMWithdrawFlags.tfOneAssetLPToken,
+        };
+
+        ITransactionRequest autofilled = await client.Autofill(withdraw);
+        TransactionSummary result = await client.SubmitAndWait(autofilled, walletHolder, true);
+        AssertSuccess(result, "AMMWithdraw one asset for LP tokens");
+
+        AMMInfoResponse after = await GetAmmInfo();
+        decimal received = poolBalance - after.Amm.Amount.ValueAsNumber;
+        decimal spent = lpBefore - after.Amm.LPTokenBalance.ValueAsNumber;
+
+        decimal relativeError = Math.Abs(received - estimated) / received;
+
+        Console.WriteLine(
+            $"pool {poolBalance}, effective fee {effectiveFee}, redeemed {RedeemTokens} tokens: " +
+            $"estimated {estimated}, received {received}, spent {spent}, relative error {relativeError}");
+
+        Assert.AreEqual(RedeemTokens, spent, "The node should burn exactly the tokens it was given.");
+
+        Assert.IsTrue(
+            relativeError < 0.000000001m,
+            $"Estimated {estimated} against {received} actually returned - a relative error of " +
+            $"{relativeError}, against a bound of 1e-9.");
+    }
+
+    /// <summary>
+    /// The swap: a payment routed through the pool pays out what <see cref="AmmMath.SwapAssetIn"/>
+    /// says it will.
+    /// </summary>
+    /// <remarks>
+    /// <para>
+    /// Nobody swaps by sending an <c>AMMDeposit</c>; a swap reaches the pool as a payment, which
+    /// is why this one goes through <c>Payment</c> rather than an AMM transaction. With
+    /// <c>tfPartialPayment</c> and a destination amount the pool cannot possibly cover, the whole
+    /// of <c>SendMax</c> goes in and whatever the curve gives comes out - which is exactly the
+    /// quantity the formula computes.
+    /// </para>
+    /// <para>
+    /// The account swapping here is a second holder, not the one that created the pool, so this
+    /// is the one case in this class that trades at the pool's own fee rather than at the auction
+    /// slot's discount. The other tests cover the discounted path; between them both branches of
+    /// <see cref="FeeFor"/> are exercised against a node.
+    /// </para>
+    /// <para>
+    /// The arithmetic below is in drops, because that is the unit <c>amm_info</c> reports the XRP
+    /// side of a pool in. <see cref="AmmMath"/> converts nothing, so mixing drops with XRP in one
+    /// call produces a number that looks like a broken formula rather than a unit mistake - the
+    /// first draft of this test did exactly that.
+    /// </para>
+    /// </remarks>
+    [TestMethod]
+    public async Task TestIASwapThroughTheePoolPaysOutAsEstimated()
+    {
+        await CreatePool();
+        XrplWallet swapper = await SetupSecondHolder();
+
+        AMMInfoResponse before = await GetAmmInfo();
+        decimal poolToken = before.Amm.Amount.ValueAsNumber;
+        decimal poolXrpDrops = before.Amm.Amount2.ValueAsNumber;
+        uint effectiveFee = FeeFor(before, swapper.ClassicAddress);
+
+        Assert.AreEqual(
+            before.Amm.TradingFee,
+            effectiveFee,
+            "The swapper does not hold the auction slot, so this must be the pool's own fee.");
+
+        const decimal SendXrp = 1m;
+        const decimal SendDrops = 1_000_000m;
+
+        // The pool takes XRP and gives the token back.
+        decimal estimated = AmmMath.SwapAssetIn(poolXrpDrops, poolToken, SendDrops, effectiveFee);
+
+        Payment payment = new Payment
+        {
+            Account = swapper.ClassicAddress,
+            Destination = walletHolder.ClassicAddress,
+
+            // Far more than one XRP can buy, so SendMax is what binds and the whole of it is spent.
+            Amount = new Currency
+            {
+                CurrencyCode = CurrencyCode,
+                Issuer = walletIssuer.ClassicAddress,
+                Value = "1000",
+            },
+            SendMax = new Currency { ValueAsXrp = SendXrp },
+            DeliverMin = new Currency
+            {
+                CurrencyCode = CurrencyCode,
+                Issuer = walletIssuer.ClassicAddress,
+                Value = "0.000001",
+            },
+            Flags = PaymentFlags.tfPartialPayment,
+        };
+
+        ITransactionRequest autofilled = await client.Autofill(payment);
+        TransactionSummary result = await client.SubmitAndWait(autofilled, swapper, true);
+        AssertSuccess(result, "Payment routed through the AMM");
+
+        AMMInfoResponse after = await GetAmmInfo();
+        decimal spentDrops = after.Amm.Amount2.ValueAsNumber - poolXrpDrops;
+        decimal received = poolToken - after.Amm.Amount.ValueAsNumber;
+
+        decimal relativeError = Math.Abs(received - estimated) / received;
+
+        Console.WriteLine(
+            $"pool {poolToken} token / {poolXrpDrops} drops, fee {effectiveFee}, sent {spentDrops} drops: " +
+            $"estimated {estimated}, paid out {received}, relative error {relativeError}");
+
+        Assert.AreEqual(
+            SendDrops,
+            spentDrops,
+            "The whole of SendMax should have entered the pool; if it did not, this is measuring a smaller swap than it estimated.");
+
+        Assert.IsTrue(
+            relativeError < 0.000000001m,
+            $"Estimated {estimated} out of the pool against {received} actually paid - a relative " +
+            $"error of {relativeError}, against a bound of 1e-9.");
+    }
+
+    /// <summary>
+    /// The pool's LP token, as an amount this many of them.
+    /// </summary>
+    /// <remarks>
+    /// The currency code is a hash of the two assets and the issuer is the AMM's own account, so
+    /// both are read off <c>amm_info</c> rather than constructed.
+    /// </remarks>
+    private static Currency LpTokens(AMMInfoResponse info, decimal count) => new Currency
+    {
+        CurrencyCode = info.Amm.LPTokenBalance.CurrencyCode,
+        Issuer = info.Amm.LPTokenBalance.Issuer,
+        Value = count.ToString(System.Globalization.CultureInfo.InvariantCulture),
+    };
 
     /// <summary>
     /// The fee this account actually trades at, which is not the pool's fee if it holds the slot.
