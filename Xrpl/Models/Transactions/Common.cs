@@ -744,13 +744,16 @@ namespace Xrpl.Models.Transactions
         string ToJson();
         Dictionary<string, object> ToDictionary();
     }
+    /// <summary>
+    /// A transaction on its way to a node: built by a caller, signed, submitted.
+    /// </summary>
     /// <remarks>
     /// The converter is declared here as well as on the implementing class because
     /// System.Text.Json picks one by the <b>declared</b> type: a variable typed as this interface
-    /// does not inherit the class's attribute, and without this it was written as the interface -
-    /// every field of the actual transaction type missing, and no exception to say so. It happened
-    /// to work through <see cref="Xrpl.Client.Json.XrplJsonOptions.Default"/>, whose converter list
-    /// makes up for the attribute, and only there.
+    /// does not inherit the class's attribute, and without it a transaction held in such a variable
+    /// was written as the interface - every field of its actual type missing, and no exception to
+    /// say so. It happened to work through <see cref="Xrpl.Client.Json.XrplJsonOptions.Default"/>,
+    /// whose converter list makes up for a missing attribute, and only there.
     /// </remarks>
     [JsonConverter(typeof(TransactionRequestConverter))]
     public interface ITransactionRequest : ITransactionCommon
@@ -761,12 +764,9 @@ namespace Xrpl.Models.Transactions
     /// Every transaction has the same set of common fields.
     /// </summary>
     /// <remarks>
-    /// The converter is declared here as well as on the implementing class because
-    /// System.Text.Json picks one by the <b>declared</b> type: a variable typed as this interface
-    /// does not inherit the class's attribute, and without this it was written as the interface -
-    /// every field of the actual transaction type missing, and no exception to say so. It happened
-    /// to work through <see cref="Xrpl.Client.Json.XrplJsonOptions.Default"/>, whose converter list
-    /// makes up for the attribute, and only there.
+    /// The converter is declared here for the same reason as on <see cref="ITransactionRequest"/>:
+    /// System.Text.Json picks one by the declared type, so without it a transaction held in a
+    /// variable of this type was written as the interface rather than as what it is.
     /// </remarks>
     [JsonConverter(typeof(TransactionResponseConverter))]
     public interface ITransactionResponse : IBaseTransactionResponse, ITransactionCommon

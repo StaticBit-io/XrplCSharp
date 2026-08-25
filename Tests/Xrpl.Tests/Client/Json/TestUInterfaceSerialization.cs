@@ -83,8 +83,14 @@ namespace Xrpl.Tests.Client.Json
 
             string json = JsonSerializer.Serialize(asInterface);
 
-            StringAssert.Contains(json, "\"Payment\"", $"TransactionType must be a name: {json}");
-            Assert.IsFalse(json.Contains("\"TransactionType\":16"), $"the enum's number is not what a node reads: {json}");
+            // The pair, not the two halves separately: asserting only that "Payment" appears
+            // somewhere would also pass if the field held the enum's number and the name turned up
+            // in an unrelated place, and asserting the absence of ":16" would stop testing anything
+            // the day that number changes.
+            StringAssert.Contains(
+                json,
+                "\"TransactionType\":\"Payment\"",
+                $"a node reads the name, not the number behind the enum: {json}");
         }
 
         /// <summary>
@@ -110,6 +116,30 @@ namespace Xrpl.Tests.Client.Json
             StringAssert.Contains(json, "TxnSignature", $"the protocol's name for the signature: {json}");
             Assert.IsFalse(json.Contains("SigningPublicKey"), $"the C# name must not reach the wire: {json}");
             Assert.IsFalse(json.Contains("TransactionSignature"), $"the C# name must not reach the wire: {json}");
+        }
+
+        /// <summary>
+        /// Reading is the other half of the same attribute, and it works through the interface too.
+        /// </summary>
+        /// <remarks>
+        /// Before, deserializing into a variable of this type with anything but the SDK's options
+        /// had no converter to reach for and no way to build an interface. The same declaration
+        /// that fixes writing is what makes this possible, so it is tested rather than assumed.
+        /// </remarks>
+        [TestMethod]
+        public void TestUAnInterfaceVariableRoundTrips()
+        {
+            string json = JsonSerializer.Serialize<ITransactionRequest>(APayment());
+
+            ITransactionRequest restored = JsonSerializer.Deserialize<ITransactionRequest>(json);
+
+            Assert.IsInstanceOfType<Payment>(
+                restored,
+                "The discriminator in the JSON is what decides the type, and it says Payment.");
+
+            Payment payment = (Payment)restored;
+            Assert.AreEqual("rQUSmV11JUe71qEJNsTQcw4rqzYDyEHZEG", payment.Destination);
+            Assert.IsNotNull(payment.Amount, "An amount that survived the trip out must survive the trip back.");
         }
 
         /// <summary>
