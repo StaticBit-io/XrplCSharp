@@ -291,9 +291,19 @@ public static class CurrencyExtensions
         return currency.CurrencyCode.IsLpToken();
     }
 
+    /// <summary>
+    /// Whether this amount is a multi-purpose token - that is, whether it carries an issuance id.
+    /// </summary>
+    /// <remarks>
+    /// The negation was missing, so the answer was the exact opposite: an amount with no issuance
+    /// id - XRP, an issued currency, anything at all that is not an MPT - was reported as one, and
+    /// the only kind this can be true of was reported as not. Nothing inside the SDK calls this,
+    /// which is why nothing showed it; a consumer branching on it would have taken the wrong branch
+    /// every time, in the place where the branch decides how to render an amount and how to add it up.
+    /// </remarks>
     public static bool IsMPTToken(this Currency currency)
     {
-        return string.IsNullOrWhiteSpace(currency.MPTokenIssuanceID);
+        return currency is not null && !string.IsNullOrWhiteSpace(currency.MPTokenIssuanceID);
     }
     public static bool IsLpToken(this TrustLine currency)
     {

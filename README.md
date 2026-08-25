@@ -190,6 +190,26 @@ Debug.WriteLine(fee);
 // 10
 ```
 
+#### Read transaction history through the `I` interfaces
+
+A transaction that comes back from the ledger — `account_tx`, `tx`, `SubmitAndWait` — is a *response*
+type: `NFTokenCreateOfferResponse`, not `NFTokenCreateOffer`. Matching on the request type compiles,
+warns about nothing and finds nothing:
+
+```csharp
+foreach (TransactionSummary summary in history.Transactions)
+{
+    if (summary.Transaction is NFTokenCreateOffer offer) { }   // never matches
+    if (summary.Transaction is INFTokenCreateOffer offer)      // this is the one
+    {
+        Debug.WriteLine(offer.NFTokenID);
+    }
+}
+```
+
+Both halves of every request/response pair implement the same `I` interface. Use those to read what
+the ledger sent, and the request types only to send.
+
 
 ## Contributing
 

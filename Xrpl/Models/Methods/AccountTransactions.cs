@@ -172,8 +172,25 @@ namespace Xrpl.Models.Methods
         /// JSON object defining the transaction.
         /// </summary>
         /// <remarks>
+        /// <para>
         /// rippled wraps the transaction in <c>tx_json</c> under API v2 and in <c>tx</c> under API v1;
         /// both envelopes populate this property.
+        /// </para>
+        /// <para>
+        /// <b>Match on the <c>I</c>-interface, not on the request type.</b> What arrives here is a
+        /// <see cref="TransactionResponse"/> - an <c>NFTokenCreateOfferResponse</c>, say - and never
+        /// the request type of the same name. So:
+        /// </para>
+        /// <code>
+        /// if (summary.Transaction is NFTokenCreateOffer offer)   // never matches
+        /// if (summary.Transaction is INFTokenCreateOffer offer)  // this is the one
+        /// </code>
+        /// <para>
+        /// The first line compiles, warns about nothing and quietly finds nothing, which looks
+        /// exactly like the response having failed to parse - so the search starts in the wrong
+        /// place. Both halves of every request/response pair implement the same <c>I</c>-interface;
+        /// use those to read history, and the request types only to send.
+        /// </para>
         /// </remarks>
         [JsonPropertyName("tx_json")]
         public TransactionResponse Transaction

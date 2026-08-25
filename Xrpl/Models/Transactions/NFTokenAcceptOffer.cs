@@ -2,6 +2,7 @@
 
 // https://github.com/XRPLF/xrpl.js/blob/main/packages/xrpl/src/models/transactions/NFTokenAcceptOffer.ts
 
+using System;
 using System.Collections.Generic;
 using System.Text.Json.Serialization;
 using System.Threading.Tasks;
@@ -19,9 +20,6 @@ namespace Xrpl.Models.Transactions
         {
             TransactionType = TransactionType.NFTokenAcceptOffer;
         }
-
-        /// <inheritdoc />
-        public string NFTokenID { get; set; }
 
         /// <inheritdoc />
         public string NFTokenSellOffer { get; set; }
@@ -49,7 +47,6 @@ namespace Xrpl.Models.Transactions
     /// </summary>
     public interface INFTokenAcceptOffer : ITransactionCommon
     {
-        string NFTokenID { get; set; } //todo unknown field
         /// <summary>
         /// Identifies the NFTokenOffer that offers to sell the NFToken.<br/>
         /// In direct mode this field is optional, but either NFTokenSellOffer or  NFTokenBuyOffer must be specified.<br/>
@@ -68,6 +65,14 @@ namespace Xrpl.Models.Transactions
         /// If specified, the fee must be such that, prior to accounting for the transfer fee charged by the issuer, the amount that the seller would receive is at least as much as the amount indicated in the sell offer.<br/>
         /// This functionality is intended to allow the owner of an NFToken to offer their token for sale to a third party broker, who may then attempt to sell the NFToken on for a larger amount, without the broker having to own the NFToken or custody funds.<br/>
         /// Note: in brokered mode, the offers referenced by NFTokenBuyOffer and NFTokenSellOffer must both specify the same NFTokenID; that is, both must be for the same NFToken.
+        /// <para>
+        /// The transaction itself carries no NFTokenID field - the token is whichever one both
+        /// offers are for. Brokered mode also needs three distinct accounts: rippled checks the
+        /// owner of each offer against the submitter separately, not as alternatives, so a broker
+        /// who is also the buyer or the seller gets <c>tecCANT_ACCEPT_OWN_NFTOKEN_OFFER</c>. The
+        /// two blocks in its <c>preclaim</c> read like a choice between direct and brokered mode
+        /// and are not one - both run in brokered mode.
+        /// </para>
         /// </summary>
         [JsonConverter(typeof(CurrencyConverter))]
         public Currency NFTokenBrokerFee { get; set; }
@@ -76,9 +81,6 @@ namespace Xrpl.Models.Transactions
     /// <inheritdoc cref="INFTokenAcceptOffer" />
     public class NFTokenAcceptOfferResponse : TransactionResponse, INFTokenAcceptOffer
     {
-        /// <inheritdoc />
-        public string NFTokenID { get; set; }
-
         /// <inheritdoc />
         public string NFTokenSellOffer { get; set; }
 
@@ -127,6 +129,19 @@ namespace Xrpl.Models.Transactions
 
             if ((!can_get_value_NFTokenSellOffer && !can_get_value_NFTokenBuyOffer) || (NFTokenSellOffer is null && NFTokenBuyOffer is null))
                 throw new ValidationException("NFTokenAcceptOffer: must set either NFTokenSellOffer or NFTokenBuyOffer");
+
+            // Brokered mode takes two different offers. Naming the same one twice is a guaranteed
+            // refusal - the offer's owner is compared with the submitter on both sides, so one of
+            // the two comparisons is the account against itself and the node answers
+            // tecCANT_ACCEPT_OWN_NFTOKEN_OFFER. That is a tec: it reaches a ledger and costs the
+            // fee. One comparison here, with nothing to ask the node, saves it.
+            if (NFTokenSellOffer is string sellOffer &&
+                NFTokenBuyOffer is string buyOffer &&
+                string.Equals(sellOffer, buyOffer, StringComparison.OrdinalIgnoreCase))
+            {
+                throw new ValidationException(
+                    "NFTokenAcceptOffer: NFTokenSellOffer and NFTokenBuyOffer must be two different offers");
+            }
         }
 
     }
