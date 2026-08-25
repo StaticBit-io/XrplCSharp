@@ -83,7 +83,18 @@ namespace Xrpl.Tests.ClientLib
             Assert.AreEqual(12345u, info.Serial, "Clio sends this as nft_serial, whatever the documentation calls it.");
             Assert.IsFalse(string.IsNullOrEmpty(info.URI));
             Assert.IsTrue(info.Validated.Value);
+
+            // The other half of the claim, and the half the assertions above cannot make: that
+            // nothing Clio sends was missed. Reading eleven properties correctly says nothing about
+            // a twelfth quietly landing in UnknownFields - which is the bar this repository already
+            // set for modelled fields, a property declared AND the field gone from here.
+            Assert.IsTrue(
+                info.UnknownFields is null || info.UnknownFields.Count == 0,
+                $"nft_info fields the model does not declare: {Describe(info.UnknownFields)}");
         }
+
+        private static string Describe(System.Collections.Generic.IDictionary<string, System.Text.Json.JsonElement> unknown) =>
+            unknown is null ? "none" : string.Join(", ", unknown.Keys);
 
         [TestMethod]
         public void TestUNFTHistoryRequestCarriesItsPagination()
@@ -159,6 +170,10 @@ namespace Xrpl.Tests.ClientLib
             Assert.IsInstanceOfType<INFTokenMint>(
                 entry.Transaction,
                 "History is read through the I-interfaces; the request type never matches what a ledger sends.");
+
+            Assert.IsTrue(
+                history.UnknownFields is null || history.UnknownFields.Count == 0,
+                $"nft_history fields the model does not declare: {Describe(history.UnknownFields)}");
         }
 
         /// <summary>
