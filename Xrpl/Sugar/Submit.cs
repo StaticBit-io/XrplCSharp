@@ -473,15 +473,30 @@ public static class SubmitSugar
                 string txResult = txResponse.Meta?.TransactionResult;
                 if (txResult != null && !txResult.StartsWith("tes") && txResult != "terQUEUED")
                 {
-                    throw new RippleException($"Final tx result is not success: {txResult}");
+                    // Applied to a ledger: the fee was taken and there is a transaction to look up,
+                    // so the summary travels with the failure. The message is unchanged - what a
+                    // caller needs in order to act sits beside it, not inside it.
+                    throw new TransactionFailedException(
+                        $"Final tx result is not success: {txResult}",
+                        engineResult: txResult,
+                        hash: txHash,
+                        result: txResponse);
                 }
                 return txResponse;
             }
 
             if (submissionResult != "tesSUCCESS" && submissionResult != "terQUEUED")
             {
-            	// Ошибочная транзакция тоже финальна, не валидируется сетью в большинстве случаев.
-                throw new RippleException($"Final tx result is not success: {submissionResult}");
+                // Reached when the transaction is not validated yet and the node's provisional
+                // answer was already a failure. Final enough to stop waiting on - but not all the
+                // same kind of failure: a tem or a tef never reaches a ledger and costs nothing,
+                // while a tec was applied and the fee is gone, it simply has not been validated at
+                // the moment this is noticed. Hence no summary here for either, and hence
+                // ReachedLedger reading the code rather than the absence of one.
+                throw new TransactionFailedException(
+                    $"Final tx result is not success: {submissionResult}",
+                    engineResult: submissionResult,
+                    hash: txHash);
             }
 
             // Не валидирована и не txnNotFound → просто ждём дальше после проверки текущего леджера
