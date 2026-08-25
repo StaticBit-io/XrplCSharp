@@ -614,8 +614,21 @@ namespace Xrpl.Wallet
         /// <param name="multisign">Specify true/false to use multisign or actual address (classic/x-address) to make multisign tx request.</param>
         /// <param name="signingFor"></param>
         /// <returns>A Wallet derived from the seed.</returns>
+        /// <exception cref="ValidationException">
+        /// When the transaction carries <c>Memos</c> a node would refuse locally - see
+        /// <see cref="MemoRules"/>.
+        /// </exception>
         public SignatureResult Sign(Dictionary<string, object> transaction, bool multisign = false, string? signingFor = null)
         {
+            // Checked before anything is signed, because this is the last point where the refusal
+            // is still cheap. A memo the node rejects fails in passesLocalChecks: the transaction is
+            // not relayed, reaches no ledger and costs no fee, but the consumer has by then built,
+            // autofilled and signed it, and the node's answer does not say which field was at
+            // fault. Every branch below signs, and every signing path in the SDK arrives here, so
+            // this is the one place that covers them all.
+            transaction.TryGetValue("Memos", out object memos);
+            MemoRules.Validate(memos);
+
             // 1) специальный кейс Batch inner-part
             if (string.Equals($"{transaction[nameof(ITransactionCommon.TransactionType)]}", "Batch", StringComparison.OrdinalIgnoreCase))
             {
