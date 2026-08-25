@@ -608,6 +608,31 @@ namespace Xrpl.Wallet
 
 
         /// <summary>
+        /// Refuses a transaction whose memos a node would refuse locally, before it is signed.
+        /// </summary>
+        /// <remarks>
+        /// <para>
+        /// A memo past the limit fails rippled's <c>passesLocalChecks</c>: the transaction is not
+        /// relayed, reaches no ledger and costs no fee - but the consumer has by then built,
+        /// autofilled and signed it, and the node's answer does not say which field was at fault.
+        /// This is the last point where the refusal is still free.
+        /// </para>
+        /// <para>
+        /// Called from every public entry that signs a transaction dictionary rather than from
+        /// <see cref="Sign(Dictionary{string, object}, bool, string?)"/> alone, which would not have
+        /// been enough: <c>SignAsBatchPart</c>, <c>SignAsSponsor</c> and
+        /// <c>SignAsLoanCounterparty</c> each sign on their own, and the SDK's own multi-batch
+        /// submission calls the first of them directly. The typed overloads convert and delegate to
+        /// these, so guarding the four dictionary ones covers every way in.
+        /// </para>
+        /// </remarks>
+        private static void GuardMemos(Dictionary<string, object> transaction)
+        {
+            transaction.TryGetValue("Memos", out object memos);
+            MemoRules.Validate(memos);
+        }
+
+        /// <summary>
         /// Signs a transaction offline.
         /// </summary>
         /// <param name="transaction">A transaction to be signed offline.</param>
@@ -620,14 +645,7 @@ namespace Xrpl.Wallet
         /// </exception>
         public SignatureResult Sign(Dictionary<string, object> transaction, bool multisign = false, string? signingFor = null)
         {
-            // Checked before anything is signed, because this is the last point where the refusal
-            // is still cheap. A memo the node rejects fails in passesLocalChecks: the transaction is
-            // not relayed, reaches no ledger and costs no fee, but the consumer has by then built,
-            // autofilled and signed it, and the node's answer does not say which field was at
-            // fault. Every branch below signs, and every signing path in the SDK arrives here, so
-            // this is the one place that covers them all.
-            transaction.TryGetValue("Memos", out object memos);
-            MemoRules.Validate(memos);
+            GuardMemos(transaction);
 
             // 1) специальный кейс Batch inner-part
             if (string.Equals($"{transaction[nameof(ITransactionCommon.TransactionType)]}", "Batch", StringComparison.OrdinalIgnoreCase))
@@ -792,6 +810,7 @@ namespace Xrpl.Wallet
         }
         public SignatureResult SignAsBatchPart(Dictionary<string, object> transaction, bool multisign, string? signingFor)
         {
+            GuardMemos(transaction);
             VerifyBatchSubmitter(transaction, signingFor, false);
 
             // 1) Стандартизируем вход в JsonObject
@@ -1154,6 +1173,8 @@ namespace Xrpl.Wallet
         /// </summary>
         public SignatureResult SignAsLoanCounterparty(Dictionary<string, object> transaction)
         {
+            GuardMemos(transaction);
+
             JsonObject tx = JsonNode.Parse(JsonSerializer.Serialize(transaction, XrplJsonOptions.Default))?.AsObject()
                 ?? throw new ValidationException("Failed to serialize transaction to JSON");
 
@@ -1218,6 +1239,8 @@ namespace Xrpl.Wallet
         /// </summary>
         public SignatureResult SignAsSponsor(Dictionary<string, object> transaction)
         {
+            GuardMemos(transaction);
+
             JsonObject tx = JsonNode.Parse(JsonSerializer.Serialize(transaction, XrplJsonOptions.Default))?.AsObject()
                 ?? throw new ValidationException("Failed to serialize transaction to JSON");
 

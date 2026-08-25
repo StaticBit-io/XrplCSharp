@@ -169,7 +169,15 @@ namespace Xrpl.Models.Transactions
                 return;
             }
 
-            string hex = value.GetValue<string>();
+            // Not a string at all - a number, say. Reading it as one would throw
+            // InvalidOperationException from inside the JSON reader: neither an exception a caller
+            // of this SDK expects nor a message that names the field. The codec refuses it and says
+            // which member is wrong, so it is left to do that.
+            if (value is not JsonValue jsonValue || !jsonValue.TryGetValue(out string hex))
+            {
+                return;
+            }
+
             if (string.IsNullOrEmpty(hex))
             {
                 return;

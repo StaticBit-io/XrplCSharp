@@ -214,6 +214,110 @@ namespace Xrpl.Tests.Models
         }
 
         /// <summary>
+        /// The rule holds for the helpers that sign without going through <c>Sign</c>.
+        /// </summary>
+        /// <remarks>
+        /// <c>Sign</c> is not the only public way into a signature: <c>SignAsSponsor</c>,
+        /// <c>SignAsLoanCounterparty</c> and <c>SignAsBatchPart</c> each sign on their own, and the
+        /// SDK's own multi-batch submission calls the last of them directly (<c>Submit.cs</c>). A
+        /// guard on <c>Sign</c> alone would therefore have left the batch path unchecked - which is
+        /// how this was found, in review.
+        /// </remarks>
+        [TestMethod]
+        public void TestUSigningAsSponsorIsCheckedToo()
+        {
+            XrplWallet wallet = XrplWallet.FromSeed(Seed);
+            Dictionary<string, object> tx = Payment(wallet);
+            tx["Sponsor"] = wallet.ClassicAddress;
+            tx["Memos"] = new List<object> { Memo(HexOf(LargestMemoDataInOneMemo + 1)) };
+
+            ValidationException error = Assert.ThrowsExactly<ValidationException>(
+                () => wallet.SignAsSponsor(tx));
+
+            StringAssert.Contains(error.Message, "1025 bytes");
+        }
+
+        /// <summary>
+        /// The same for the borrower's co-signature on a <c>LoanSet</c>.
+        /// </summary>
+        [TestMethod]
+        public void TestUSigningAsLoanCounterpartyIsCheckedToo()
+        {
+            XrplWallet wallet = XrplWallet.FromSeed(Seed);
+            Dictionary<string, object> tx = Payment(wallet);
+            tx["TransactionType"] = "LoanSet";
+            tx["Counterparty"] = wallet.ClassicAddress;
+            tx["Memos"] = new List<object> { Memo(HexOf(LargestMemoDataInOneMemo + 1)) };
+
+            ValidationException error = Assert.ThrowsExactly<ValidationException>(
+                () => wallet.SignAsLoanCounterparty(tx));
+
+            StringAssert.Contains(error.Message, "1025 bytes");
+        }
+
+        /// <summary>
+        /// And for a batch part - the one the SDK itself signs directly.
+        /// </summary>
+        [TestMethod]
+        public void TestUSigningABatchPartIsCheckedToo()
+        {
+            XrplWallet wallet = XrplWallet.FromSeed(Seed);
+            Dictionary<string, object> tx = Payment(wallet);
+            tx["TransactionType"] = "Batch";
+            tx["Memos"] = new List<object> { Memo(HexOf(LargestMemoDataInOneMemo + 1)) };
+
+            ValidationException error = Assert.ThrowsExactly<ValidationException>(
+                () => wallet.SignAsBatchPart(tx, multisign: false, signingFor: wallet.ClassicAddress));
+
+            StringAssert.Contains(error.Message, "1025 bytes");
+        }
+
+        /// <summary>
+        /// A <c>MemoType</c> that is not a string at all is the codec's to refuse, not these rules'.
+        /// </summary>
+        /// <remarks>
+        /// Reading it as a string would throw <c>InvalidOperationException</c> from deep inside
+        /// <c>System.Text.Json</c> - neither the exception a caller of the SDK expects nor a message
+        /// that names the field. The same principle as the rules the codec already owns: what these
+        /// rules cannot read, they leave alone.
+        /// </remarks>
+        [TestMethod]
+        public void TestUANonStringMemoTypeIsLeftToTheCodec()
+        {
+            XrplWallet wallet = XrplWallet.FromSeed(Seed);
+            Dictionary<string, object> tx = Payment(wallet);
+            tx["Memos"] = new List<object>
+            {
+                new Dictionary<string, object>
+                {
+                    {
+                        "Memo", new Dictionary<string, object>
+                        {
+                            { "MemoType", 42 },
+                            { "MemoData", "72656E74" },
+                        }
+                    },
+                },
+            };
+
+            Exception error = null;
+            try
+            {
+                wallet.Sign(tx);
+            }
+            catch (Exception thrown)
+            {
+                error = thrown;
+            }
+
+            Assert.IsNotNull(error, "A MemoType that is not a string cannot end up on the wire.");
+            Assert.IsNotInstanceOfType<InvalidOperationException>(
+                error,
+                $"A non-string MemoType must be reported by whoever owns that rule, not leaked as a " +
+                $"JSON reader's own exception. Got: {error}");
+        }
+
+        /// <summary>
         /// The measurement is the node's own: the array's serialized length, without the array's
         /// own markers.
         /// </summary>
