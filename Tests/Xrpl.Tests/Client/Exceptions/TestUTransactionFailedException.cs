@@ -62,6 +62,42 @@ namespace Xrpl.Tests.Client.Exceptions
         }
 
         /// <summary>
+        /// A <c>tec</c> reported before the ledger closed is still a <c>tec</c>: applied, fee taken,
+        /// and no summary to hand over yet.
+        /// </summary>
+        /// <remarks>
+        /// <para>
+        /// This is the case the whole design of <see cref="TransactionFailedException.ReachedLedger"/>
+        /// turns on, and the one an integration run found: the same failure is reported at one of
+        /// two moments depending on whether the ledger closed before the first poll. Reading the
+        /// answer off <see cref="TransactionFailedException.Result"/> would make it depend on which
+        /// moment won that race, and a caller would be told the fee was not taken when it was.
+        /// </para>
+        /// <para>
+        /// Without this test the two above pass either way - a <c>tec</c> with a summary and a
+        /// <c>tem</c> without one give the same answer under both readings. Only this combination
+        /// tells them apart, which is why it is written down rather than left to the integration
+        /// test, whose branch depends on ledger timing.
+        /// </para>
+        /// </remarks>
+        [TestMethod]
+        public void TestUATecWithoutASummaryStillReachedALedger()
+        {
+            TransactionFailedException error = new TransactionFailedException(
+                "Final tx result is not success: tecNO_DST_INSUF_XRP",
+                engineResult: "tecNO_DST_INSUF_XRP",
+                hash: "5F8A1B2C3D4E5F60718293A4B5C6D7E8F90A1B2C3D4E5F60718293A4B5C6D7E8");
+
+            Assert.IsNull(error.Result, "Precondition: this is the moment before validation.");
+            Assert.IsTrue(
+                error.ReachedLedger,
+                "A tec was applied whether or not the summary has arrived - the fee is gone either way.");
+            Assert.IsFalse(
+                string.IsNullOrEmpty(error.Hash),
+                "And the hash, which is what an explorer needs, is there in this case too.");
+        }
+
+        /// <summary>
         /// Existing code keeps working: the type and the message are both unchanged from a
         /// consumer's point of view.
         /// </summary>

@@ -487,9 +487,12 @@ public static class SubmitSugar
 
             if (submissionResult != "tesSUCCESS" && submissionResult != "terQUEUED")
             {
-            	// Ошибочная транзакция тоже финальна, не валидируется сетью в большинстве случаев.
-                // No summary: this one was refused before a ledger, so nothing was charged and
-                // there is nothing to show. ReachedLedger tells the two apart.
+                // Reached when the transaction is not validated yet and the node's provisional
+                // answer was already a failure. Final enough to stop waiting on - but not all the
+                // same kind of failure: a tem or a tef never reaches a ledger and costs nothing,
+                // while a tec was applied and the fee is gone, it simply has not been validated at
+                // the moment this is noticed. Hence no summary here for either, and hence
+                // ReachedLedger reading the code rather than the absence of one.
                 throw new TransactionFailedException(
                     $"Final tx result is not success: {submissionResult}",
                     engineResult: submissionResult,
