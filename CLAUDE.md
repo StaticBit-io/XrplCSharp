@@ -230,6 +230,8 @@ Reference: [xrpl-codec-gen](https://github.com/RichardAH/xrpl-codec-gen)
 
 ## Development Notes
 
+- Documentation language: English. Prose, headings, and examples in English; do not mix languages
+- Commit messages are English too — subject and body. This repository is public, and its history is part of what a reader sees; 36 of the 562 subjects on `dev` are Russian, and no more are to be added
 - No `Directory.Build.props` or `global.json` — versions are managed per `.csproj`
 - No centralized package management — each project specifies its own NuGet versions
 - `test.runsettings` configures MSTest parallel execution at class level
