@@ -25,7 +25,16 @@ jobs:
       run: |
         set -euo pipefail
 
-        version=$(sed -n 's:.*<PackageVersion>\(.*\)</PackageVersion>.*:\1:p' Xrpl/Xrpl.csproj | head -1)
+        # No pipe into head: under `set -o pipefail` that only holds while the
+        # file has a single <PackageVersion>, and would start failing the day a
+        # second one appears. awk takes the first match and exits.
+        version=$(awk 'match($0, /<PackageVersion>[^<]+<\/PackageVersion>/) {
+                         s = substr($0, RSTART, RLENGTH)
+                         sub(/<PackageVersion>/, "", s)
+                         sub(/<\/PackageVersion>/, "", s)
+                         print s
+                         exit
+                       }' Xrpl/Xrpl.csproj)
         if [ -z "$version" ]; then
           echo "::error file=Xrpl/Xrpl.csproj::No <PackageVersion> found."
           exit 1
@@ -52,11 +61,17 @@ jobs:
           exit 1
         fi
 
-        # GitHub caps release bodies at 125000 characters and this changelog
-        # runs long: 11.0.0.0 was 98638. Truncate rather than fail, and say so.
+        # GitHub caps release bodies at 125000 characters and this changelog runs
+        # long - 11.0.0.0 came to 98638 - so truncate rather than fail, and say
+        # so. By whole lines, not bytes: these notes carry non-ASCII characters
+        # and a byte cut would split one, handing the API a body that is not
+        # valid UTF-8. LC_ALL=C makes awk's length() count bytes, which is the
+        # unit the cap is expressed in.
         limit=120000
         if [ "$(wc -c < release-notes.md)" -gt "$limit" ]; then
-          head -c "$limit" release-notes.md > release-notes.trimmed
+          LC_ALL=C awk -v limit="$limit" '
+            { n += length($0) + 1; if (n > limit) exit; print }
+          ' release-notes.md > release-notes.trimmed
           printf '\n\n---\n\n*Truncated at %s characters. The full entry is in [CHANGES.md](https://github.com/%s/blob/release/CHANGES.md).*\n' \
             "$limit" "$GITHUB_REPOSITORY" >> release-notes.trimmed
           mv release-notes.trimmed release-notes.md
