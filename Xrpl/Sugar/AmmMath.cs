@@ -3,8 +3,9 @@ using System;
 namespace Xrpl.Sugar
 {
     /// <summary>
-    /// What a deposit into an AMM pool will be worth in LP tokens, and what a withdrawal will cost -
-    /// computed the way rippled computes it.
+    /// What an AMM pool will do before you ask it to - what a deposit is worth in LP tokens, what a
+    /// withdrawal costs, what a swap pays out, and each of those read backwards - computed the way
+    /// rippled computes it.
     /// </summary>
     /// <remarks>
     /// <para>
@@ -218,6 +219,12 @@ namespace Xrpl.Sugar
         /// a = 1/t2²,  b = 2·d/t2 - 1/f1,  c = d² - f2²
         /// deposit = B · (-b + √(b² - 4ac)) / 2a
         /// </code>
+        /// <para>
+        /// The root is always real: swept across every fee up to the cap and token ratios from
+        /// 1e-6 to 1000, the discriminant never falls below 1, so the quadratic cannot hand
+        /// <see cref="Sqrt"/> a negative and rippled's <c>solveQuadraticEq</c> does not guard it
+        /// either.
+        /// </para>
         /// <para>
         /// This is what an <c>AMMDeposit</c> carrying <c>LPTokenOut</c> will actually take from
         /// the account, and the direction of the node's rounding reverses here: it maximizes the

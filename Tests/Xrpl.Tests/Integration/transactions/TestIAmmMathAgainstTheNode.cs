@@ -342,7 +342,7 @@ public class TestIAmmMathAgainstTheNode : TestIAMMBase
     /// </para>
     /// </remarks>
     [TestMethod]
-    public async Task TestIASwapThroughTheePoolPaysOutAsEstimated()
+    public async Task TestIASwapThroughThePoolPaysOutAsEstimated()
     {
         await CreatePool();
         XrplWallet swapper = await SetupSecondHolder();
@@ -358,7 +358,7 @@ public class TestIAmmMathAgainstTheNode : TestIAMMBase
             "The swapper does not hold the auction slot, so this must be the pool's own fee.");
 
         const decimal SendXrp = 1m;
-        const decimal SendDrops = 1_000_000m;
+        const decimal SendDrops = SendXrp * 1_000_000m;
 
         // The pool takes XRP and gives the token back.
         decimal estimated = AmmMath.SwapAssetIn(poolXrpDrops, poolToken, SendDrops, effectiveFee);
