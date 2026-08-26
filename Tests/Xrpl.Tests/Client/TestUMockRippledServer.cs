@@ -129,10 +129,16 @@ public class TestUMockRippledServer
                 server.GetConnectedClientCount(),
                 "A server that was never told to listen cannot have accepted anyone.");
 
+            Assert.IsFalse(
+                server.GetSocket().IsBound,
+                "The constructor must not bind - that is the whole point of the split.");
+
             // Binding happens here, not in the constructor - and doing it explicitly must work.
             server.StartListening();
 
-            Assert.IsNotNull(server.GetSocket(), "Listening should leave a bound socket behind.");
+            Assert.IsTrue(
+                server.GetSocket().IsBound,
+                "StartListening must actually bind; asserting the socket is merely non-null would pass even if it did nothing.");
         }
         finally
         {
