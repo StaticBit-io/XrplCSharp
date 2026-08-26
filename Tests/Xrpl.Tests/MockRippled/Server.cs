@@ -142,7 +142,16 @@ namespace Xrpl.Tests.MockRippled
         private IPEndPoint _endPoint;
 
         /// <summary>The connected clients to the server </summary>
-        private List<MockClient> _clients = new List<MockClient>();
+        /// <remarks>
+        /// Mutated from socket callbacks, which run on thread-pool threads, and read from the
+        /// test thread - so every touch goes through <see cref="_clientsLock"/>. Without it a
+        /// client connecting while another disconnects can corrupt the list, and enumerating it
+        /// during either throws <see cref="InvalidOperationException"/> on a thread where nothing
+        /// is left to catch it.
+        /// </remarks>
+        private readonly List<MockClient> _clients = new List<MockClient>();
+
+        private readonly object _clientsLock = new object();
 
         #endregion
 
@@ -161,9 +170,6 @@ namespace Xrpl.Tests.MockRippled
 
             //Console.WriteLine("Copyright © 2017 - MazyModz. Created by Dennis Andersson. All rights reserved.\n\n");
             //Console.WriteLine("WebSocket Server Started\nListening on {0}:{1}\n", GetEndPoint().Address.ToString(), GetEndPoint().Port);
-
-            // Start the server
-            start();
         }
 
         #endregion
@@ -189,8 +195,11 @@ namespace Xrpl.Tests.MockRippled
         /// <returns>The connected client at the index, returns null if the index is out of bounds</returns>
         public MockClient GetConnectedClient(int Index)
         {
-            if (Index < 0 || Index >= _clients.Count) return null;
-            return _clients[Index];
+            lock (_clientsLock)
+            {
+                if (Index < 0 || Index >= _clients.Count) return null;
+                return _clients[Index];
+            }
         }
 
         /// <summary>Gets a connected client with the given guid</summary>
@@ -198,9 +207,12 @@ namespace Xrpl.Tests.MockRippled
         /// <returns>The client with the given id, return null if no client with the guid could be found</returns>
         public MockClient GetConnectedClient(string Guid)
         {
-            foreach (MockClient client in _clients)
+            lock (_clientsLock)
             {
-                if (client.GetGuid() == Guid) return client;
+                foreach (MockClient client in _clients)
+                {
+                    if (client.GetGuid() == Guid) return client;
+                }
             }
             return null;
         }
@@ -210,9 +222,12 @@ namespace Xrpl.Tests.MockRippled
         /// <returns>The connected client with the given socket, returns null if no client with the socket was found</returns>
         public MockClient GetConnectedClient(Socket Socket)
         {
-            foreach (MockClient client in _clients)
+            lock (_clientsLock)
             {
-                if (client.GetSocket() == Socket) return client;
+                foreach (MockClient client in _clients)
+                {
+                    if (client.GetSocket() == Socket) return client;
+                }
             }
             return null;
         }
@@ -221,7 +236,10 @@ namespace Xrpl.Tests.MockRippled
         /// <returns>The number of connected clients</returns>
         public int GetConnectedClientCount()
         {
-            return _clients.Count;
+            lock (_clientsLock)
+            {
+                return _clients.Count;
+            }
         }
 
         #endregion
@@ -229,9 +247,16 @@ namespace Xrpl.Tests.MockRippled
         #region Methods
 
         /// <summary>
-        /// Starts the listen server when a server object is created
+        /// Binds the listen socket and starts accepting connections.
         /// </summary>
-        private void start()
+        /// <remarks>
+        /// Separate from the constructor on purpose. While this ran from there, the socket was
+        /// accepting before the caller had bound a single handler, so a client that connected in
+        /// that window raised its events into nothing: the connect was invisible, and a request
+        /// arriving before OnMessageReceived was bound went unanswered, which a test sees as a
+        /// timeout rather than as a race. Bind first, then call this.
+        /// </remarks>
+        public void StartListening()
         {
             // Bind the socket and start listending
             GetSocket().Bind(GetEndPoint());
@@ -278,11 +303,15 @@ namespace Xrpl.Tests.MockRippled
                 // it to the list of connected clients
                 MockClient client = new MockClient(this, clientSocket);
                 clientSocket = null;
-                _clients.Add(client);
+                lock (_clientsLock)
+                {
+                    _clients.Add(client);
+                }
 
-                // Call the event when a client has connected to the listen server
-                if (OnClientConnected == null) throw new Exception("Server error: event OnClientConnected is not bound!");
-                OnClientConnected(this, new OnClientConnectedHandler(client));
+                // No subscriber is a legitimate state for an event, not a server fault. These
+                // fire from socket callbacks on thread-pool threads, where a throw is not a
+                // failed assertion but a dead process - see ClientDisconnect below.
+                OnClientConnected?.Invoke(this, new OnClientConnectedHandler(client));
             }
             catch (ObjectDisposedException)
             {
@@ -328,8 +357,7 @@ namespace Xrpl.Tests.MockRippled
         /// <param name="Message">The message that the client sent</param>
         public void ReceiveMessage(MockClient Client, string Message)
         {
-            if (OnMessageReceived == null) throw new Exception("Server error: event OnMessageReceived is not bound!");
-            OnMessageReceived(this, new OnMessageReceivedHandler(Client, Message));
+            OnMessageReceived?.Invoke(this, new OnMessageReceivedHandler(Client, Message));
         }
 
         /// <summary>Called when a client disconnectes, calls event OnClientDisconnected</summary>
@@ -337,11 +365,17 @@ namespace Xrpl.Tests.MockRippled
         public void ClientDisconnect(MockClient Client)
         {
             // Remove the client from the connected clients list
-            _clients.Remove(Client);
+            lock (_clientsLock)
+            {
+                _clients.Remove(Client);
+            }
 
-            // Call the OnClientDisconnected event
-            if (OnClientDisconnected == null) throw new Exception("Server error: OnClientDisconnected is not bound!");
-            OnClientDisconnected(this, new OnClientDisconnectedHandler(Client));
+            // This used to throw when nothing was subscribed, and it is the reason the whole test
+            // host died: MockClient.messageCallback calls this from inside its own catch block, on
+            // a thread-pool thread, so the exception escaped a catch and had nowhere left to go.
+            // A run aborted that way reports one failed job while an unknown number of tests never
+            // ran at all - a failure that hides its own size.
+            OnClientDisconnected?.Invoke(this, new OnClientDisconnectedHandler(Client));
         }
 
         #endregion
@@ -360,8 +394,7 @@ namespace Xrpl.Tests.MockRippled
             Client.GetSocket().Send(frameMessage);
 
             // Call the on send message callback event 
-            if (OnSendMessage == null) throw new Exception("Server error: event OnSendMessage is not bound!");
-            OnSendMessage(this, new OnSendMessageHandler(Client, Data));
+            OnSendMessage?.Invoke(this, new OnSendMessageHandler(Client, Data));
         }
 
         /// <summary>Called after a message was sent</summary>
