@@ -111,12 +111,15 @@ namespace Xrpl.Models.Transactions
         {
             get
             {
-                if ((TakerPays.ValueAsXrp ?? TakerPays.ValueAsNumber) != 0)
-                {
-                    return (TakerGets.ValueAsXrp ?? TakerGets.ValueAsNumber) /
-                           (TakerPays.ValueAsXrp ?? TakerPays.ValueAsNumber);
-                }
-                return 0;
+                // Both sides are read before the denominator is tested. Reading them lazily made
+                // whether this threw depend on an unrelated field: an out-of-range TakerGets went
+                // unnoticed whenever TakerPays happened to be zero, so the exception documented
+                // above was not one a caller could rely on. It also parsed TakerPays twice, and
+                // ValueAsNumber parses the string on every read.
+                decimal takerPays = TakerPays.ValueAsXrp ?? TakerPays.ValueAsNumber;
+                decimal takerGets = TakerGets.ValueAsXrp ?? TakerGets.ValueAsNumber;
+
+                return takerPays != 0 ? takerGets / takerPays : 0;
             }
         }
         /// <summary>

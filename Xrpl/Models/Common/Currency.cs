@@ -123,7 +123,14 @@ public class Currency
             // Tell the two failures apart rather than reporting both as a bad format. double
             // spans the whole ledger range, so parsing there succeeds exactly when the string is
             // a real number that decimal simply cannot hold.
-            if (double.TryParse(Value, AmountStyles, CultureInfo.InvariantCulture, out _))
+            //
+            // IsFinite matters: double.TryParse accepts "NaN", "Infinity" and "-Infinity" whatever
+            // NumberStyles it is given, because those symbols are matched separately from the
+            // numeric ones. Without the check, a string that is not a quantity at all would be
+            // reported as a quantity too large - which is the sort of confident wrong answer this
+            // property is being changed to stop giving.
+            if (double.TryParse(Value, AmountStyles, CultureInfo.InvariantCulture, out double asDouble)
+                && double.IsFinite(asDouble))
             {
                 throw new AmountOutOfRangeException(Value);
             }

@@ -117,6 +117,56 @@ namespace XrplTests.Xrpl.Models
         }
 
         /// <summary>
+        /// A non-finite string is not a quantity too large, and must not be reported as one.
+        /// </summary>
+        /// <remarks>
+        /// <c>double.TryParse</c> accepts <c>NaN</c>, <c>Infinity</c> and <c>-Infinity</c> whatever
+        /// <c>NumberStyles</c> it is handed, because those symbols are matched separately from the
+        /// numeric ones. Since the check that separates "will not fit" from "is not a number" runs
+        /// through <c>double</c>, without a finiteness test these would come back as
+        /// <see cref="AmountOutOfRangeException"/> - a confident answer about magnitude for a
+        /// string that has none.
+        /// </remarks>
+        [TestMethod]
+        public void ValueAsNumber_NonFiniteStrings_AreFormatErrorsNotRangeErrors()
+        {
+            foreach (string value in new[] { "NaN", "Infinity", "-Infinity" })
+            {
+                Assert.ThrowsExactly<FormatException>(
+                    () => _ = Iou(value).ValueAsNumber,
+                    $"'{value}' is not a quantity at all, let alone one that is too large.");
+            }
+        }
+
+        /// <summary>
+        /// An out-of-range numerator is refused even when the denominator is zero.
+        /// </summary>
+        /// <remarks>
+        /// <c>Offer.AmountEach</c> returns zero when <c>TakerPays</c> is zero. While it read the
+        /// two sides lazily, that early return meant an unrepresentable <c>TakerGets</c> slipped
+        /// through unnoticed - so whether the documented exception appeared depended on the value
+        /// of an unrelated field, which is not a contract anyone can hold you to.
+        /// </remarks>
+        [TestMethod]
+        public void AmountEach_OutOfRangeNumerator_ThrowsEvenWithAZeroDenominator()
+        {
+            Offer offer = new Offer { TakerGets = Iou("9e80"), TakerPays = Iou("0") };
+
+            Assert.ThrowsExactly<AmountOutOfRangeException>(() => _ = offer.AmountEach);
+        }
+
+        /// <summary>
+        /// A zero denominator on its own still yields zero rather than dividing.
+        /// </summary>
+        [TestMethod]
+        public void AmountEach_ZeroDenominator_IsZero()
+        {
+            Offer offer = new Offer { TakerGets = Iou("100"), TakerPays = Iou("0") };
+
+            Assert.AreEqual(0m, offer.AmountEach);
+        }
+
+        /// <summary>
         /// The two properties that compute rather than read fail the same single way.
         /// </summary>
         /// <remarks>
