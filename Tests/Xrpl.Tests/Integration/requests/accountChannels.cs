@@ -4,6 +4,7 @@ using Xrpl.Models.Common;
 using Xrpl.Models.Ledger;
 using Xrpl.Models.Methods;
 
+using Xrpl.Client;
 // https://github.com/XRPLF/xrpl.js/blob/main/packages/xrpl/test/integration/requests/accountChannels.ts
 
 namespace XrplTests.Xrpl.ClientLib.Integration
@@ -26,7 +27,7 @@ namespace XrplTests.Xrpl.ClientLib.Integration
         {
             LedgerIndex index = new LedgerIndex(LedgerIndexType.Validated);
             AccountChannelsRequest request = new AccountChannelsRequest(runner.wallet.ClassicAddress) { LedgerIndex = index };
-            AccountChannels response = await runner.client.AccountChannels(request);
+            AccountChannels response = await runner.client.AccountChannels(request).Typed();
             Assert.IsNotNull(response);
         }
     }

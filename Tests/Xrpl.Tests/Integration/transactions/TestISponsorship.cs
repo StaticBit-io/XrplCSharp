@@ -56,7 +56,7 @@ public class TestISponsorship
         {
             Type = LedgerEntryType.Sponsorship,
         };
-        AccountObjects response = await client.AccountObjects(request);
+        AccountObjects response = await client.AccountObjects(request).Typed();
 
         return response?.AccountObjectList?
             .OfType<LOSponsorship>()

@@ -20,7 +20,7 @@ namespace Xrpl.Models.Transactions
         public string Owner { get; set; }
 
         /// <inheritdoc />
-        public uint OfferSequence { get; set; }
+        public uint? OfferSequence { get; set; }
     }
 
     /// <summary>
@@ -32,7 +32,7 @@ namespace Xrpl.Models.Transactions
         /// Transaction sequence (or Ticket number) of EscrowCreate transaction that.<br/>
         /// created the escrow to cancel.
         /// </summary>
-        uint OfferSequence { get; set; }
+        uint? OfferSequence { get; set; }
         /// <summary>
         /// Address of the source account that funded the escrow.
         /// </summary>
@@ -43,7 +43,7 @@ namespace Xrpl.Models.Transactions
     public class EscrowCancelResponse : TransactionResponse, IEscrowCancel
     {
         /// <inheritdoc />
-        public uint OfferSequence { get; set; }
+        public uint? OfferSequence { get; set; }
         /// <inheritdoc />
         public string Owner { get; set; }
     }

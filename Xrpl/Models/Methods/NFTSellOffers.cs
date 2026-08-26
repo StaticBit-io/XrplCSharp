@@ -12,7 +12,7 @@ namespace Xrpl.Models.Methods
     /// <summary>
     /// Response expected from an  <see cref="NFTSellOffersRequest"/> .
     /// </summary>
-    public class NFTSellOffers //todo rename to NFTSellOffersResponse extends BaseResponse
+    public class NFTSellOffers : BaseMethodResult//todo rename to NFTSellOffersResponse extends BaseResponse
     {
 
         /// <summary>
@@ -28,7 +28,7 @@ namespace Xrpl.Models.Methods
         public string TokenID { get; set; }
     }
 
-    public class NFTOffer: IDestination
+    public class NFTOffer : BaseMethodResult, IDestination
     {
         [JsonPropertyName("amount")]
         [JsonConverter(typeof(CurrencyConverter))]

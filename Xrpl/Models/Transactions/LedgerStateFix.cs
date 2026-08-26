@@ -15,7 +15,7 @@ namespace Xrpl.Models.Transactions
         /// <summary>
         /// The type of ledger fix to apply.
         /// </summary>
-        ushort LedgerFixType { get; set; }
+        ushort? LedgerFixType { get; set; }
 
         /// <summary>
         /// The owner account whose ledger objects need fixing.
@@ -33,7 +33,7 @@ namespace Xrpl.Models.Transactions
 
         /// <inheritdoc />
         [JsonPropertyName("LedgerFixType")]
-        public ushort LedgerFixType { get; set; }
+        public ushort? LedgerFixType { get; set; }
 
         /// <inheritdoc />
         [JsonPropertyName("Owner")]
@@ -49,7 +49,7 @@ namespace Xrpl.Models.Transactions
     {
         /// <inheritdoc />
         [JsonPropertyName("LedgerFixType")]
-        public ushort LedgerFixType { get; set; }
+        public ushort? LedgerFixType { get; set; }
 
         /// <inheritdoc />
         [JsonPropertyName("Owner")]

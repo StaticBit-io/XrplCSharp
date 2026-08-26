@@ -18,7 +18,7 @@ namespace Xrpl.Models.Transactions
         }
 
         /// <inheritdoc />
-        public uint OfferSequence { get; set; }
+        public uint? OfferSequence { get; set; }
     }
 
     /// <summary>
@@ -32,14 +32,14 @@ namespace Xrpl.Models.Transactions
         /// It is not considered an error if the offer.<br/>
         /// specified does not exist.
         /// </summary>
-        uint OfferSequence { get; set; }
+        uint? OfferSequence { get; set; }
     }
 
     /// <inheritdoc cref="IOfferCancel" />
     public class OfferCancelResponse : TransactionResponse, IOfferCancel
     {
         /// <inheritdoc />
-        public uint OfferSequence { get; set; }
+        public uint? OfferSequence { get; set; }
     }
 
     public partial class Validation

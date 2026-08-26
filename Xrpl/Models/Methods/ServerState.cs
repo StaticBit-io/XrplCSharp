@@ -18,13 +18,13 @@ namespace Xrpl.Models.Methods
         }
     }
 
-    public class ServerState //todo rename to ServerInfoResponse extends BaseResponse 
+    public class ServerState : BaseMethodResult//todo rename to ServerInfoResponse extends BaseResponse 
     {
         [JsonPropertyName("state")]
         public State State { get; set; }
     }
 
-    public class State
+    public class State : BaseMethodResult
     {
         /// <summary>
         /// The version number of the running rippled version.
@@ -169,7 +169,7 @@ namespace Xrpl.Models.Methods
     /// <summary>
     /// Information about the most recent fully-validated ledger.
     /// </summary>
-    public class StateLedger
+    public class StateLedger : BaseMethodResult
     {
         /// <summary>
         /// The time since the ledger was closed, in seconds.
@@ -195,17 +195,17 @@ namespace Xrpl.Models.Methods
         public string Hash { get; set; }
 
         /// <summary>
-        /// Minimum amount of XRP (not drops) necessary for every account to.<br/>
+        /// (May be omitted) Minimum amount of XRP (not drops) necessary for every account to.<br/>
         /// Keep in reserve.
         /// </summary>
         [JsonPropertyName("reserve_base")]
-        public uint ReserveBase { get; set; }
+        public uint? ReserveBase { get; set; }
 
         /// <summary>
-        /// Amount of XRP (not drops) added to the account reserve for each  object an account owns in the ledger.
+        /// (May be omitted) Amount of XRP (not drops) added to the account reserve for each  object an account owns in the ledger.
         /// </summary>
         [JsonPropertyName("reserve_inc")]
-        public uint ReserveInc { get; set; }
+        public uint? ReserveInc { get; set; }
 
         /// <summary>
         /// The ledger index of the latest validated ledger.

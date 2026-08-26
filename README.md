@@ -9,12 +9,12 @@ A pure C# implementation for interacting with the XRP Ledger, the `XrplCSharp` l
 // create a network client
 using System.Diagnostics;
 using Xrpl.Client;
+using Xrpl.Models.Methods;
+using Xrpl.Wallet;
+
 var client = new XrplClient("wss://s.altnet.rippletest.net:51233");
-client.OnConnected += async () =>
-{
-    Debug.WriteLine("CONNECTED");
-};
 await client.Connect();
+Debug.WriteLine("CONNECTED");
 
 // create a wallet on the testnet
 XrplWallet testWallet = XrplWallet.Generate();
@@ -27,8 +27,29 @@ Debug.WriteLine(testWallet);
 // look up account info
 string account = "rBtXmAdEYcno9LWRnAGfT9qBxCeDvuVRZo";
 AccountInfoRequest request = new AccountInfoRequest(account);
-AccountInfo accountInfo = await client.AccountInfo(request);
+AccountInfo accountInfo = await client.AccountInfo(request).Typed();
 Debug.WriteLine(accountInfo);
+```
+
+Every request also hands back the bytes the node actually sent, beside the typed
+projection. The typed model is lossy by nature — it drops members it has no property
+for — so anything that has to *show* or *verify* what a node said reads the raw text:
+
+```csharp
+// continuing from the example above
+XrplResponse<AccountInfo> response = await client.AccountInfo(request);
+
+AccountInfo typed = response.Result;                // the projection
+string asTheNodeSentIt = response.Raw.ToString();   // byte for byte, as the node sent it
+string status = response.Status;                    // the envelope reaches you too
+```
+
+Three ways to read the same call, depending on what you need:
+
+```csharp
+AccountInfo info = await client.AccountInfo(request).Typed();   // the projection alone
+var (info, raw) = await client.AccountInfo(request);            // both
+XrplResponse<AccountInfo> r = await client.AccountInfo(request); // the whole envelope
 ```
 
 ## Installation and supported versions
@@ -71,12 +92,12 @@ Use the `Xrpl.Client` library to create a network client for connecting to the X
 ```csharp
 using System.Diagnostics;
 using Xrpl.Client;
+using Xrpl.Models.Methods;
+using Xrpl.Wallet;
+
 var client = new XrplClient("wss://s.altnet.rippletest.net:51233");
-client.OnConnected += async () =>
-{
-    Debug.WriteLine("CONNECTED");
-};
 await client.Connect();
+Debug.WriteLine("CONNECTED");
 ```
 
 ### Manage keys and wallets
@@ -143,7 +164,7 @@ using Xrpl.Sugar;
 
 string classicAddress = "rBtXmAdEYcno9LWRnAGfT9qBxCeDvuVRZo";
 AccountInfoRequest request = new AccountInfoRequest(wallet.ClassicAddress);
-AccountInfo accountInfo = await client.AccountInfo(request);
+AccountInfo accountInfo = await client.AccountInfo(request).Typed();
 
 Payment tx = new Payment()
 {
@@ -162,12 +183,33 @@ In most cases, you can specify the minimum [transaction cost](https://xrpl.org/t
 
 ```csharp
 using System.Diagnostics;
-using Xrpl.Models.Transactions;
+using Xrpl.Models.Methods;
 FeeRequest feeRequest = new FeeRequest();
-Fee fee = await client.Fee(feeRequest);
+Fee fee = await client.Fee(feeRequest).Typed();
 Debug.WriteLine(fee);
 // 10
 ```
+
+#### Read transaction history through the `I` interfaces
+
+A transaction that comes back from the ledger — `account_tx`, `tx`, `SubmitAndWait` — is a *response*
+type: `NFTokenCreateOfferResponse`, not `NFTokenCreateOffer`. Matching on the request type compiles,
+warns about nothing and finds nothing:
+
+```csharp
+foreach (TransactionSummary summary in history.Transactions)
+{
+    if (summary.Transaction is NFTokenCreateOffer request) { }  // never matches
+    if (summary.Transaction is INFTokenCreateOffer offer)       // this is the one
+    {
+        Debug.WriteLine(offer.NFTokenID);
+    }
+}
+```
+
+Request and response types come in pairs that share an `I` interface — use those to read what the
+ledger sent, and the request types only to send. The five `ConfidentialMPT` transactions are the
+exception: neither half declares an interface, so for those there is nothing to match on yet.
 
 
 ## Contributing

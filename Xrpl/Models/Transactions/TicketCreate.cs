@@ -18,7 +18,7 @@ namespace Xrpl.Models.Transactions
 
 
         /// <inheritdoc />
-        public uint TicketCount { get; set; }
+        public uint? TicketCount { get; set; }
     }
 
     /// <summary>
@@ -30,14 +30,14 @@ namespace Xrpl.Models.Transactions
         /// How many Tickets to create.<br/>
         /// This must be a positive number and cannot cause the account to own more than 250 Tickets after executing this transaction.
         /// </summary>
-        public uint TicketCount { get; set; }
+        public uint? TicketCount { get; set; }
     }
 
     /// <inheritdoc cref="ITicketCreate" />
     public class TicketCreateResponse : TransactionResponse, ITicketCreate
     {
         /// <inheritdoc/>
-        public uint TicketCount { get; set; }
+        public uint? TicketCount { get; set; }
     }
 
     public partial class Validation

@@ -15,6 +15,7 @@ using Xrpl.Models.Utils;
 using Xrpl.Sugar;
 using Xrpl.Wallet;
 
+using Xrpl.Client;
 namespace XrplTests.Xrpl.ClientLib.Integration;
 
 [TestClass]
@@ -121,7 +122,7 @@ public class TestIBatch
         Console.WriteLine("NEXT");
 
         var request = new AccountInfoRequest(owner.ClassicAddress);
-        var accountInfo = await runner.client.AccountInfo(request);
+        var accountInfo = await runner.client.AccountInfo(request).Typed();
 
         //var flags = BatchGlobalFlags.tfInnerBatchTxn;
         // Внутренний Payment #1
@@ -557,7 +558,7 @@ public class TestIBatch
 
     private static async Task<bool> SetSigners(XrplWallet owner, XrplWallet signer1, XrplWallet signer2)
     {
-        var acc = await runner.client.AccountInfo(new AccountInfoRequest(owner.ClassicAddress){SignerLists = true});
+        var acc = await runner.client.AccountInfo(new AccountInfoRequest(owner.ClassicAddress){SignerLists = true}).Typed();
         if (acc.SignerLists is { Length: > 0 })
         {
             return true;
@@ -586,7 +587,7 @@ public class TestIBatch
 
     private static async Task<bool> DisableMaster(XrplWallet owner)
     {
-        var acc = await runner.client.AccountInfo(new AccountInfoRequest(owner.ClassicAddress));
+        var acc = await runner.client.AccountInfo(new AccountInfoRequest(owner.ClassicAddress)).Typed();
         if (acc.AccountFlags.DisableMasterKey)
         {
             return true;

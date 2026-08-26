@@ -6,6 +6,7 @@ using Xrpl.Models.Methods;
 using Xrpl.Models.Transactions;
 using Xrpl.Wallet;
 
+using Xrpl.Client;
 // https://github.com/XRPLF/xrpl.js/blob/main/packages/xrpl/test/integration/transactions/offerCancel.ts
 
 namespace XrplTests.Xrpl.ClientLib.Integration
@@ -43,7 +44,7 @@ namespace XrplTests.Xrpl.ClientLib.Integration
 
             // sequence
             AccountOffersRequest request1 = new AccountOffersRequest(runner.wallet.ClassicAddress);
-            AccountOffers response1 = await runner.client.AccountOffers(request1);
+            AccountOffers response1 = await runner.client.AccountOffers(request1).Typed();
             uint sequence = (uint)response1.Offers[0].Sequence;
             
             // actually test OfferCancel
@@ -56,7 +57,7 @@ namespace XrplTests.Xrpl.ClientLib.Integration
             await Utils.TestTransaction(runner.client, txJson, runner.wallet);
 
             AccountOffersRequest request2 = new AccountOffersRequest(runner.wallet.ClassicAddress);
-            AccountOffers response2 = await runner.client.AccountOffers(request1);
+            AccountOffers response2 = await runner.client.AccountOffers(request2).Typed();
             Assert.IsEmpty(response2.Offers);
         }
     }

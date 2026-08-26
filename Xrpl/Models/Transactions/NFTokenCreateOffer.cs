@@ -171,7 +171,7 @@ namespace Xrpl.Models.Transactions
             
             if (tx.TryGetValue("Flags", out var Flags) &&
                 Flags is uint {} flags 
-                && Utils.Index.IsFlagEnabled(flags,(uint)NFTokenCreateOfferFlags.tfSellNFToken))
+                && Utils.ModelUtils.IsFlagEnabled(flags,(uint)NFTokenCreateOfferFlags.tfSellNFToken))
             {
                 ValidateNFTokenSellOfferCases(tx);
             }

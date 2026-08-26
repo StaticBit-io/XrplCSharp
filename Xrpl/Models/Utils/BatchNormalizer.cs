@@ -99,10 +99,22 @@ public static class BatchNormalizer
             var ai = await client.AccountInfo(new AccountInfoRequest(account)
             {
                 LedgerIndex = new LedgerIndex(LedgerIndexType.Current)
-            }, cancellationToken);
-            var start = ai.AccountData.Sequence;
-            nextSeqByAccount[account] = start;
-            return start;
+            }, cancellationToken).Typed();
+            // account_info for the current ledger always returns a full AccountRoot with a Sequence;
+            // a missing AccountData (or a missing Sequence within it) means a malformed node response
+            // and must fail loudly rather than dereference a null AccountData or silently treat it as 0.
+            if (ai.AccountData is null)
+            {
+                throw new ValidationException($"account_info response for '{account}' did not include account_data.");
+            }
+
+            uint? start = ai.AccountData.Sequence;
+            if (start == null)
+            {
+                throw new ValidationException($"account_info response for '{account}' did not include the account's Sequence.");
+            }
+            nextSeqByAccount[account] = start.Value;
+            return start.Value;
         }
 
         void Bump(string account)
@@ -168,7 +180,12 @@ public static class BatchNormalizer
     /// </summary>
     public static string ComputeInnerTxId(this JsonObject normalizedInnerTx)
     {
-        var st = Xrpl.BinaryCodec.Types.StObject.FromJson(JsonNode.Parse(normalizedInnerTx.ToJsonString()));
+        // Strict: this id is what the outer Batch signature commits to. Parsed leniently, a
+        // member the codec does not know would be dropped from the bytes being hashed, so the
+        // signature would fix an inner transaction other than the one the caller was shown - and
+        // nothing would say so. Strict without the signing filter, because an id covers the whole
+        // transaction, signing fields and not.
+        var st = Xrpl.BinaryCodec.Types.StObject.FromJsonStrict(JsonNode.Parse(normalizedInnerTx.ToJsonString()));
         var bytes = st.ToBytes();
 
         var prefix = Xrpl.BinaryCodec.Util.Bits.GetBytes((uint)Xrpl.BinaryCodec.Hashing.HashPrefix.TransactionId);

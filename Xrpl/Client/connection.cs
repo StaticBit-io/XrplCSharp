@@ -83,6 +83,9 @@ public class Connection
 
     public event OnDisconnect OnDisconnect;
 
+    /// <inheritdoc cref="IXrplClient.OnSessionEnded" />
+    public event OnSessionEnded OnSessionEnded;
+
     public event OnPing OnPing;
 
     public event OnLedgerClosed OnLedgerClosed;
@@ -255,6 +258,21 @@ public class Connection
         /// Default: 30 seconds.
         /// </summary>
         public TimeSpan ConnectionAcquisitionTimeout { get; set; } = TimeSpan.FromMinutes(5);
+
+        /// <summary>
+        /// How many stream messages may wait for the consumer before the oldest are discarded.
+        /// </summary>
+        /// <remarks>
+        /// Stream events are handed to a background reader through a bounded channel, so a slow
+        /// handler never blocks the receive loop. What it does instead is fall behind, and past
+        /// this many queued messages the oldest are dropped to make room -
+        /// <see cref="Connection.DroppedStreamMessages"/> counts them.
+        /// <para>
+        /// Raise it for a consumer that must not miss events and can absorb the memory (each slot
+        /// holds one frame); lower it to bound memory harder, accepting more loss. Default 10 000.
+        /// </para>
+        /// </remarks>
+        public int StreamMessageQueueCapacity { get; set; } = 10000;
     }
 
     private void ValidateConfig()
@@ -339,14 +357,14 @@ public class Connection
     /// the ownership-guarded writes in <see cref="ReconnectLoopAsync"/>.
     /// </summary>
     /// <remarks>
+    /// <para>
     /// Not every touch of these fields is covered: the per-iteration <c>_reconnectAttempts++</c> in
     /// <see cref="ReconnectLoopAsync"/>, the plain resets in <c>ChangeServer</c> and
     /// <c>OnceClose</c>, and the "is a loop already running" pre-checks in
     /// <c>OnConnectionFailed</c> and <c>OnceClose</c> (which read <c>_reconnectLoop</c>, a
     /// non-volatile field, outside the lock) all still run outside it. Those predate this lock; do
     /// not read the list above as "all three fields are always synchronized".
-    /// </remarks>
-    /// <remarks>
+    /// </para>
     /// <para>
     /// <c>volatile</c> alone was not enough: it makes each individual access atomic, not the
     /// sequence of them. The stop path used to read the field three times in a row (Cancel,
@@ -400,7 +418,161 @@ public class Connection
     // to prevent head-of-line blocking that causes ping timeouts under high stream load
     // Channel is created per-session to prevent cross-session message leakage
     // Using Channel<T> instead of BlockingCollection for true async support in WebAssembly
-    private Channel<string>? _streamMessageChannel = null;
+    // Carries the raw frame bytes, not text: stream events pair themselves with the frame the same
+    // way a query response does, through AttachFrame, so their Raw/RawTransaction is available
+    // without a second UTF-8 encode of a string that was itself decoded from these same bytes.
+    // The frame travels wrapped in SessionFrame, which names the session that produced it.
+    private Channel<SessionFrame>? _streamMessageChannel = null;
+
+    private long _droppedStreamMessages;
+
+    private long _staleSessionFramesDropped;
+
+    private long _fallbackDispatchedStreamMessages;
+
+    /// <summary>
+    /// How many stream frames were dispatched outside the queue.
+    /// </summary>
+    /// <remarks>
+    /// The fallback path holds none of the queue's guarantees: no capacity bound, no eviction
+    /// counting, no single-reader ordering. Three things send a frame down it - the processor not
+    /// being up yet, the processor having been stopped, and the channel refusing a write because
+    /// its writer is already completed - and none of them were visible from outside until this
+    /// counter existed.
+    /// <para>
+    /// Cumulative over the life of the connection, and a non-zero value is not by itself a fault:
+    /// a client that was driven before it connected, or after it disconnected, legitimately has
+    /// frames here. What means something is an increase across a connect: the startup window this
+    /// counter was added to measure is closed, so the number should not move while a connection is
+    /// being established.
+    /// </para>
+    /// </remarks>
+    public long FallbackDispatchedStreamMessages => Interlocked.Read(ref _fallbackDispatchedStreamMessages);
+
+    /// <summary>
+    /// How many stream frames were discarded because they came from a session that is no longer
+    /// active.
+    /// </summary>
+    /// <remarks>
+    /// A socket being retired keeps delivering until its graceful close finishes, so a handful of
+    /// frames can arrive after a reconnect or <c>ChangeServer</c> has already moved on. They are
+    /// dropped rather than delivered: after a change of network they would otherwise describe a
+    /// different chain entirely. Counted separately from
+    /// <see cref="DroppedStreamMessages"/>, which is about consumers falling behind - these two
+    /// mean different things and a non-zero value here is normal right after a reconnect.
+    /// </remarks>
+    public long StaleSessionFramesDropped => Interlocked.Read(ref _staleSessionFramesDropped);
+
+    /// <summary>
+    /// The id of the session serving this connection, or <see langword="null"/> if there is none.
+    /// </summary>
+    /// <remarks>
+    /// Exists for tests, which need to name the session a frame came from - something only the
+    /// socket callbacks can otherwise do.
+    /// </remarks>
+    internal long? ActiveSessionId
+    {
+        get
+        {
+            lock (_sessionLock)
+            {
+                return _activeSession?.SessionId;
+            }
+        }
+    }
+
+    /// <summary>
+    /// Whether the background message processor is up, i.e. whether stream frames are queued
+    /// rather than taking the fallback path.
+    /// </summary>
+    /// <remarks>
+    /// Exists for tests. <c>OnceOpen</c> now starts the processor before it resolves the waiters
+    /// through <c>connectionManager.ResolveAllAwaiting()</c> and before the <c>OnConnected</c>
+    /// callback, so a returned <c>Connect()</c> does imply a queue - it did not until the ping
+    /// timer stopped taking the processor down with it.
+    /// <para>
+    /// <c>Volatile.Read</c> rather than a plain read or <c>_messageProcessorLock</c>: the field is
+    /// written under that lock, and holding it here would mean waiting out
+    /// <c>StopMessageProcessorInternal</c>, which blocks up to two seconds on the reader task.
+    /// </para>
+    /// </remarks>
+    internal bool IsMessageProcessorRunning => Volatile.Read(ref _streamMessageChannel) != null;
+
+    /// <summary>
+    /// Whether the ping timer is up.
+    /// </summary>
+    /// <remarks>
+    /// Exists for tests, and for one question in particular: the ping timer starts at the very end
+    /// of <c>OnceOpen</c>, after <c>Connect()</c> has already returned, so a test that wants to
+    /// know the processor survived <see cref="StartPingTimer"/> has to wait for it rather than
+    /// assume it. Without that wait such a test can pass by asserting too early - before the thing
+    /// it is testing has had a chance to go wrong.
+    /// <para>
+    /// The signal is exact for that purpose: <see cref="StartPingTimer"/> begins by calling
+    /// <see cref="StopPingTimerSync"/>, which clears this field, and only assigns it afterwards.
+    /// Seeing it non-null therefore means the teardown step - the one that used to take the
+    /// message processor with it - is already behind us.
+    /// </para>
+    /// </remarks>
+    internal bool IsPingTimerRunning => Volatile.Read(ref _pingCts) != null;
+
+    /// <summary>
+    /// Completes the stream channel's writer without clearing the channel, reproducing the state
+    /// <c>StopMessageProcessorInternal</c> leaves behind for anyone who read
+    /// <c>_streamMessageChannel</c> just before it was cleared.
+    /// </summary>
+    /// <remarks>
+    /// Exists for tests: in production that state lasts between one field read and one call, and
+    /// is not reachable deliberately.
+    /// </remarks>
+    internal void CompleteStreamChannelWriterForTests()
+    {
+        _streamMessageChannel?.Writer.Complete();
+    }
+
+    /// <summary>
+    /// Marks the session serving this connection as retiring, reproducing the window
+    /// <c>ChangeServer</c> and the reconnect loop open between <c>MarkAsRetiring()</c> and the
+    /// installation of the replacement session.
+    /// </summary>
+    /// <remarks>
+    /// Exists for tests: in production that window is reachable only by racing a real reconnect.
+    /// Marks it exactly the way the two production paths do, under <c>_sessionLock</c>.
+    /// <para>
+    /// Returns the id rather than leaving the caller to read <see cref="ActiveSessionId"/>
+    /// separately: two lock acquisitions would let a reconnect swap the session in between, and a
+    /// test that then named the id it read first would be exercising the mismatch path it was
+    /// written to avoid - silently, and only sometimes.
+    /// </para>
+    /// </remarks>
+    /// <returns>
+    /// The id of the session that was marked, or <see langword="null"/> if there is none.
+    /// </returns>
+    internal long? MarkActiveSessionRetiringForTests()
+    {
+        lock (_sessionLock)
+        {
+            _activeSession?.MarkAsRetiring();
+            return _activeSession?.SessionId;
+        }
+    }
+
+    /// <summary>
+    /// How many stream messages have been discarded because the consumer fell behind.
+    /// </summary>
+    /// <remarks>
+    /// The queue feeding stream handlers is bounded (see
+    /// <see cref="ConnectionOptions.StreamMessageQueueCapacity"/>) and discards the oldest message
+    /// when full, so a slow handler costs events rather than stalling the socket. That discard used
+    /// to be entirely silent: nothing threw, nothing logged, and a consumer building state from the
+    /// stream simply drifted from the ledger with no way to notice. This counter is the way to
+    /// notice - non-zero and rising means handlers are not keeping up.
+    /// <para>
+    /// Counts across the lifetime of this connection, including across reconnects and
+    /// <c>ChangeServer</c>, since the same object serves them all.
+    /// </para>
+    /// </remarks>
+    public long DroppedStreamMessages => Interlocked.Read(ref _droppedStreamMessages);
     private CancellationTokenSource? _messageProcessorCts = null;
     private Task? _messageProcessorTask = null;
     private readonly object _messageProcessorLock = new();
@@ -474,6 +646,72 @@ public class Connection
         }
     }
 
+    /// <summary>
+    /// Announces that <paramref name="session"/> has ended, once and only once.
+    /// </summary>
+    /// <remarks>
+    /// <para>
+    /// A session that ends because its socket closed is announced from <see cref="OnceClose"/>,
+    /// alongside <see cref="OnDisconnect"/>. The two paths that retire a session deliberately -
+    /// <see cref="ChangeServer"/> and <see cref="RetireCurrentSessionAndReconnectAsync"/> - mark it
+    /// retiring before the socket goes, which makes <see cref="OnceClose"/> return early by design,
+    /// so each has to speak for itself. For the fast-reconnect path a
+    /// <see cref="XrpConnectionState.RestoringConnection"/> status at least went out; for
+    /// <see cref="ChangeServer"/> nothing did, and that is issue #123: the client reported
+    /// <c>Connected</c> while the subscriptions, which the node keeps against the old connection,
+    /// were gone for good.
+    /// </para>
+    /// <para>
+    /// The once-per-session guard lives on the session rather than here, for a narrow race the
+    /// retiring check does not cover: a socket can close by itself in the moment before the
+    /// retirement marks its session, and then <see cref="OnceClose"/> sees a live session and
+    /// announces the loss just as the retirement announces the switch. One session, two causes,
+    /// and the consumer must still hear about it once.
+    /// </para>
+    /// <para>
+    /// A throwing consumer handler must not reach the caller. <see cref="ChangeServer"/> calls
+    /// this after it has torn the old socket down and before it connects the new one, so an
+    /// escaping exception would leave the client with no socket, no session and no reconnect
+    /// loop - the same reason <see cref="SetConnectionState"/> contains its handler.
+    /// </para>
+    /// </remarks>
+    /// <param name="session">The session that ended; <c>null</c> when there was none, and then
+    /// nothing is announced.</param>
+    /// <param name="reason">What ended it.</param>
+    /// <param name="description">Human-readable detail, for the consumer's log.</param>
+    private async Task NotifySessionEndedAsync(
+        ConnectionSession? session,
+        SessionEndReason reason,
+        string description)
+    {
+        // A session that never got a connected socket carries nothing to lose, and its close
+        // callback would otherwise announce an end for every failed retry.
+        if (session?.IsOpened != true)
+        {
+            return;
+        }
+
+        if (!session.TryMarkEndNotified())
+        {
+            return;
+        }
+
+        OnSessionEnded handler = OnSessionEnded;
+        if (handler is null)
+        {
+            return;
+        }
+
+        try
+        {
+            await handler.Invoke(reason, description);
+        }
+        catch (Exception notifyError)
+        {
+            Debug.WriteLine($"{DateTime.Now}OnSessionEnded handler threw for {reason}: {notifyError.Message}");
+        }
+    }
+
     private ReconnectInfo BuildReconnectInfo(int? explicitAttempt = null, TimeSpan? delay = null)
     {
         var attempt = explicitAttempt ?? _reconnectAttempts;
@@ -524,8 +762,11 @@ public class Connection
         // 1. Quick state cleanup - stop reconnect loop
         StopReconnectLoop();
         
-        // 2. Cancel ping timer (but don't wait yet)
+        // 2. Cancel ping timer and the message processor (but don't wait yet). Stopping the
+        // processor is explicit since StopPingTimerSync no longer does it as a side effect - this
+        // session's queue goes with the session.
         StopPingTimerSync();
+        StopMessageProcessor();
         
         // 3. Reject all pending requests BEFORE waiting for ping
         // This allows the ping handler to receive OperationCanceledException and exit quickly
@@ -567,6 +808,17 @@ public class Connection
             // 6. Fire-and-forget GRACEFUL disposal - no blocking
             _ = RetireOldSessionAsync(oldSession, oldSocket);
         }
+
+        // The consumer's subscriptions belonged to the session just retired and do not follow the
+        // client to the new server. Nothing else on this path says so - the socket's own close
+        // callback is filtered out as a retiring session, and the status notification above reads
+        // Connecting, which is what a first connection reports too. Announced before the new
+        // connection is opened, so a consumer cannot see OnConnected for the new session and only
+        // afterwards learn that the old one is gone.
+        await NotifySessionEndedAsync(
+            oldSession,
+            SessionEndReason.ServerChanged,
+            $"Switched to {server}. Subscriptions from the previous connection are no longer in effect.");
 
         // 7. Update config for new server
         url = server;
@@ -660,8 +912,10 @@ public class Connection
         // New session is created immediately without waiting.
         // Callbacks check session ID to ignore retiring sessions.
 
-        // 4. Stop ping timer (but don't wait yet)
+        // 4. Stop ping timer and the message processor (but don't wait yet) - the queue belongs
+        // to the session being retired.
         StopPingTimerSync();
+        StopMessageProcessor();
         
         // 5. Reject all pending requests BEFORE waiting for ping
         // This allows the ping handler to receive OperationCanceledException and exit quickly
@@ -702,6 +956,13 @@ public class Connection
             // 9. Fire-and-forget GRACEFUL disposal - no blocking
             _ = RetireOldSessionAsync(oldSession, oldSocket);
         }
+
+        // Same as ChangeServer: the session being retired took the subscriptions with it, and the
+        // socket's own close callback will be filtered out as retiring. The RestoringConnection
+        // status above reports that the connection is being rebuilt, not that everything bound to
+        // the old one is gone - a consumer had to infer the second from the first.
+        await NotifySessionEndedAsync(oldSession, SessionEndReason.ConnectionLost, reason)
+            .ConfigureAwait(false);
 
         // 10. Clear ping/network drop socket tracking (old socket is retired)
         // CRITICAL: If not cleared, these stale references would cause OnConnectionFailed
@@ -1069,8 +1330,11 @@ public class Connection
                 try
                 {
                     // Use fast-path processing to prioritize ping/pong responses
-                    // and prevent head-of-line blocking from high-volume stream data
-                    await IOnMessageFastPath(m);
+                    // and prevent head-of-line blocking from high-volume stream data.
+                    // The session travels with the frame so a late arrival from a socket being
+                    // retired can be told apart from one on the live connection - see
+                    // EnqueueStreamMessage.
+                    await IOnMessageFastPath(m, capturedSession.SessionId);
                 }
                 catch (Exception ex)
                 {
@@ -1120,6 +1384,7 @@ public class Connection
 
         ClearReconnectState(); // Clear all reconnect state on user disconnect
         StopPingTimerSync();
+        StopMessageProcessor();
         
         // Reject pending requests so ping handler can exit quickly
         requestManager.RejectAllWithCancellation();
@@ -1175,6 +1440,7 @@ public class Connection
 
         ClearReconnectState(); // Clear all reconnect state on user disconnect
         StopPingTimerSync();
+        StopMessageProcessor();
         
         // Reject pending requests so ping handler can exit quickly
         requestManager.RejectAllWithCancellation();
@@ -1742,7 +2008,7 @@ public class Connection
             ? null
             : new AdminCredentials(config.AdminUser, config.AdminPassword);
 
-    public async Task<Dictionary<string, object>> Request(
+    public async Task<XrplResponse<Dictionary<string, object>>> Request(
         Dictionary<string, object> request,
         TimeSpan? timeout = null,
         RequestFailurePolicy? policyOverride = null,
@@ -1760,10 +2026,11 @@ public class Connection
             requestManager.Reject(_request.Id, error);
         }
 
-        return await _request.Promise;
+        object resolved = await _request.Promise;
+        return XrplResponse.From<Dictionary<string, object>>(resolved);
     }
 
-    public async Task<object> GRequest<T, R>(
+    public async Task<XrplResponse<T>> GRequest<T, R>(
         R request,
         TimeSpan? timeout = null,
         RequestFailurePolicy? policyOverride = null,
@@ -1781,7 +2048,8 @@ public class Connection
             requestManager.Reject(_request.Id, error);
         }
 
-        return await _request.Promise;
+        object resolved = await _request.Promise;
+        return XrplResponse.From<T>(resolved);
     }
 
     public string GetUrl() => url;
@@ -1794,11 +2062,17 @@ public class Connection
     {
         // Check if this callback is from the active session (not retiring)
         bool isActiveSession;
+        ConnectionSession? openedSession = null;
         lock (_sessionLock)
         {
             isActiveSession = _activeSession != null &&
                               _activeSession.SessionId == sessionId &&
                               !_activeSession.IsRetiring;
+
+            if (isActiveSession)
+            {
+                openedSession = _activeSession;
+            }
         }
 
         if (!isActiveSession) // Callback from a retired session - ignore silently
@@ -1841,6 +2115,19 @@ public class Connection
 
         connectedSocket.ResetIntentionalDisconnect();
 
+        // The session has a socket that connected, and only from here can it hold subscriptions -
+        // which is what makes its end worth announcing. Sessions are created before the connect
+        // attempt, so without this a server that is down would announce one ended session per
+        // retry, each of them a connection that never was.
+        openedSession.MarkAsOpened();
+
+        // Before ResolveAllAwaiting and before the OnConnected callback, because both hand control
+        // to consumer code that subscribes - and the node can answer that subscription while the
+        // handler is still running. Frames arriving with no channel take the fallback: outside the
+        // capacity, uncounted by DroppedStreamMessages and dispatched concurrently, so the first
+        // events after connecting were exactly the ones that could arrive out of order.
+        StartMessageProcessor();
+
         try
         {
             connectionManager.ResolveAllAwaiting();
@@ -1862,9 +2149,6 @@ public class Connection
         // Start ping timer AFTER connection is fully established and all callbacks completed
         // This is outside try/catch to ensure it always runs on successful connection
         StartPingTimer();
-        
-        // Start background message processor for stream messages
-        StartMessageProcessor();
     }
 
     /// <summary>
@@ -1921,6 +2205,18 @@ public class Connection
                 $"OnConnected handler failed {failures} time(s) in a row: {error.Message}. Giving up after {config.MaxReconnectAttempts} attempts. Call Connect() to retry.",
                 ConnectionCloseSeverity.Error);
 
+            // Rejected here, before Disconnect(), and with the reason that is actually true. The
+            // requests in flight are being stopped because this client gave up connecting, not
+            // because anyone cancelled them - and Disconnect() rejects with cancellation, which is
+            // right for a close the caller asked for and wrong for a failure. Connect() is where
+            // that difference shows: it is two operations, the connection and the server_info that
+            // SetNetworkId sends straight after, and the socket really does open for a moment
+            // before a failing handler brings it down. A caller that got as far as the second
+            // operation was told its own request had been cancelled, having cancelled nothing.
+            requestManager.RejectAll(new NotConnectedException(
+                $"Gave up connecting to {url}: the OnConnected handler failed {failures} time(s) in a row. " +
+                $"Call Connect() to retry."));
+
             await Disconnect();
             return;
         }
@@ -1932,6 +2228,7 @@ public class Connection
             reconnect: BuildReconnectInfo(failures));
 
         StopPingTimerSync();
+        StopMessageProcessor();
         requestManager.RejectAllWithCancellation();
         await WaitForPingToFinishAsync();
 
@@ -2012,12 +2309,17 @@ public class Connection
         // Check if this callback is from a retiring session using session ID
         bool isActiveSession;
         var isRetiringSession = false;
+
+        // The session object itself, not just the verdict about it: the end-of-session
+        // announcement below is guarded per session, and only the object carries that guard.
+        ConnectionSession? closingSession = null;
         lock (_sessionLock)
         {
             if (_activeSession != null)
             {
                 if (_activeSession.SessionId == sessionId)
                 {
+                    closingSession = _activeSession;
                     // Same session - but check if it's marked as retiring
                     isActiveSession = !_activeSession.IsRetiring;
                     isRetiringSession = _activeSession.IsRetiring;
@@ -2064,8 +2366,10 @@ public class Connection
             return;
         }
 
-        // Only stop ping timer for current socket
+        // Only for the current socket - and the message processor goes with it, this connection
+        // is over.
         StopPingTimerSync();
+        StopMessageProcessor();
 
         // Check if this is a network drop (FailureReason set by WebSocketClient)
         var isNetworkDrop = closingSocket.FailureReason == SocketFailureReason.NetworkDrop;
@@ -2109,6 +2413,16 @@ public class Connection
                 await OnDisconnect?.Invoke(code, userMessage)!;
             }
         }
+
+        // The socket that carried this session has closed for real, so the session is over too.
+        // OnDisconnect above says a socket closed; this says what the consumer actually has to act
+        // on - that the subscriptions held against it are gone. Raised here as well as on the two
+        // deliberate retirement paths so that one subscription is enough to cover every way a
+        // session can end.
+        await NotifySessionEndedAsync(
+            closingSession,
+            intentionalDisconnect ? SessionEndReason.UserDisconnected : SessionEndReason.ConnectionLost,
+            userMessage);
 
         if (intentionalDisconnect)
         {
@@ -2697,6 +3011,29 @@ public class Connection
         }
     }
 
+    /// <summary>
+    /// Stops the ping timer, and nothing else.
+    /// </summary>
+    /// <remarks>
+    /// It used to stop the message processor too, which tied two unrelated lifecycles together:
+    /// <see cref="StartPingTimer"/> begins by calling this, so starting the processor before the
+    /// ping timer had it torn down again moments later - and that is what forced
+    /// <see cref="StartMessageProcessor"/> to the very end of <c>OnceOpen</c>, after the
+    /// <c>OnConnected</c> callback, leaving every frame answered during that callback to the
+    /// fallback path. The processor is now stopped explicitly wherever a connection genuinely
+    /// ends: <see cref="Disconnect"/>, <see cref="DisconnectAndWaitAsync"/>, <c>OnceClose</c>,
+    /// <c>OnConnectHandlerFailedAsync</c>, <see cref="ChangeServer"/> and
+    /// <c>RetireCurrentSessionAndReconnectAsync</c> - the same six places the side effect used to
+    /// fire, so when the processor stops is unchanged; only the spurious stop inside
+    /// <see cref="StartPingTimer"/> is gone.
+    /// <para>
+    /// <c>ReconnectLoopAsync</c> retires a session without stopping the processor, and deliberately
+    /// so: it did not stop it before this change either, <c>OnceClose</c> has already run by the
+    /// time it retries, and <see cref="StartMessageProcessor"/> tears down any leftover when the
+    /// next connection opens. Adding a stop there would discard frames still queued from before the
+    /// drop, on a path where nothing shows that is wanted.
+    /// </para>
+    /// </remarks>
     private void StopPingTimerSync()
     {
         var cts = _pingCts;
@@ -2719,8 +3056,6 @@ public class Connection
         wasmTimer?.Dispose();
 
         cts?.Dispose();
-        
-        StopMessageProcessor();
     }
 
     /// <summary>
@@ -2911,17 +3246,22 @@ public class Connection
             
             // Create new session-bound channel and CTS
             // Using bounded channel to prevent memory issues under high load
-            _streamMessageChannel = System.Threading.Channels.Channel.CreateBounded<string>(new BoundedChannelOptions(10000)
-            {
-                SingleReader = true,
-                SingleWriter = false,
-                FullMode = BoundedChannelFullMode.DropOldest
-            });
+            // itemDropped runs inside TryWrite, i.e. on the receive loop, so it does no more than
+            // increment: raising an event or logging here would put consumer code back on the path
+            // this channel exists to keep it off. Callers read DroppedStreamMessages instead.
+            _streamMessageChannel = System.Threading.Channels.Channel.CreateBounded<SessionFrame>(
+                new BoundedChannelOptions(Math.Max(1, config?.StreamMessageQueueCapacity ?? 10000))
+                {
+                    SingleReader = true,
+                    SingleWriter = false,
+                    FullMode = BoundedChannelFullMode.DropOldest
+                },
+                itemDropped: _ => Interlocked.Increment(ref _droppedStreamMessages));
             _messageProcessorCts = new CancellationTokenSource();
-            
+
             var channel = _streamMessageChannel;
             var cts = _messageProcessorCts;
-            
+
             // Use truly async reader - works correctly in WebAssembly single-threaded environment
             _messageProcessorTask = Task.Run(async () =>
             {
@@ -2930,18 +3270,18 @@ public class Connection
                     var reader = channel.Reader;
                     while (await reader.WaitToReadAsync(cts.Token).ConfigureAwait(false))
                     {
-                        while (reader.TryRead(out var message))
+                        while (reader.TryRead(out SessionFrame item))
                         {
                             if (cts.Token.IsCancellationRequested)
                                 return;
 
                             try
                             {
-                                await ProcessStreamMessageAsync(message).ConfigureAwait(false);
+                                await ProcessSessionFrameAsync(item).ConfigureAwait(false);
                             }
                             catch (Exception ex)
                             {
-                                await NotifyStreamProcessingErrorAsync(ex, message).ConfigureAwait(false);
+                                await NotifyStreamProcessingErrorAsync(ex, item.Frame).ConfigureAwait(false);
                             }
                         }
                     }
@@ -3009,32 +3349,49 @@ public class Connection
     /// Processes a single stream message (transaction, ledger, etc.) in the background.
     /// This is the async version of stream handling, decoupled from the receive loop.
     /// </summary>
-    private async Task ProcessStreamMessageAsync(string message)
+    /// <remarks>
+    /// Takes the frame rather than text for the same reason the response path does: a stream
+    /// message is not wrapped in a "result" envelope, so the frame IS the event, and each typed
+    /// event pairs itself with it through <see cref="BaseStream.AttachFrame(byte[])"/> - the same
+    /// mechanism <see cref="RequestManager.HandleResponse(byte[])"/> uses for <see cref="BaseResponse"/>
+    /// - so a consumer's <see cref="BaseStream.Raw"/> is the exact bytes rippled sent, not a
+    /// re-encode of a string that was itself decoded from them. Text is materialized only for
+    /// <see cref="OnWarning"/>/<see cref="OnServerWarning"/>/<see cref="OnError"/>, which predate
+    /// this change and still take a string, and only when something is listening.
+    /// </remarks>
+    private async Task ProcessStreamMessageAsync(byte[] frame)
     {
         lastActivityTime = DateTime.UtcNow;
+
+        // Lazily materialized, and shared by every caller below: rippled can attach both warnings
+        // to the same message, and a null frame - OnMessage(null), routed rather than raised at
+        // the entry point - must not throw again here, out of the very report that is supposed to
+        // surface it.
+        string text = null;
+        string Text() => text ??= (frame is null ? null : Encoding.UTF8.GetString(frame));
 
         BaseResponse data;
         try
         {
-            data = JsonSerializer.Deserialize<BaseResponse>(message, XrplJsonOptions.Default);
+            data = JsonSerializer.Deserialize<BaseResponse>(frame, XrplJsonOptions.Default);
         }
         catch (Exception error)
         {
             if (OnError is not null)
             {
-                await OnError?.Invoke(error: "error", errorMessage: "badMessage", error.Message, message)!;
+                await OnError?.Invoke(error: "error", errorMessage: "badMessage", error.Message, Text())!;
             }
             return;
         }
 
         if (data.Warning != null && OnWarning is not null)
         {
-            await OnWarning.Invoke(data.Warning, message);
+            await OnWarning.Invoke(data.Warning, Text());
         }
 
         if (data.Warnings is { Count: > 0, } && OnServerWarning is not null)
         {
-            await OnServerWarning.Invoke(data.Warnings, message);
+            await OnServerWarning.Invoke(data.Warnings, Text());
         }
 
         // Process stream messages by type
@@ -3045,7 +3402,8 @@ public class Connection
             {
                 case ResponseStreamType.ledgerClosed:
                 {
-                    var response = JsonSerializer.Deserialize<LedgerStream>(message, XrplJsonOptions.Default);
+                    var response = JsonSerializer.Deserialize<LedgerStream>(frame, XrplJsonOptions.Default);
+                    response.AttachFrame(frame);
                     if (OnLedgerClosed is not null)
                     {
                         await OnLedgerClosed.Invoke(response)!;
@@ -3055,7 +3413,8 @@ public class Connection
 
                 case ResponseStreamType.validationReceived:
                 {
-                    var response = JsonSerializer.Deserialize<ValidationStream>(message, XrplJsonOptions.Default);
+                    var response = JsonSerializer.Deserialize<ValidationStream>(frame, XrplJsonOptions.Default);
+                    response.AttachFrame(frame);
                     if (OnValidationReceived is not null)
                     {
                         await OnValidationReceived.Invoke(response)!;
@@ -3065,7 +3424,8 @@ public class Connection
 
                 case ResponseStreamType.transaction:
                 {
-                    var response = JsonSerializer.Deserialize<TransactionStream>(message, XrplJsonOptions.Default);
+                    var response = JsonSerializer.Deserialize<TransactionStream>(frame, XrplJsonOptions.Default);
+                    response.AttachFrame(frame);
                     if (OnTransaction is not null)
                     {
                         await OnTransaction.Invoke(response)!;
@@ -3075,7 +3435,8 @@ public class Connection
 
                 case ResponseStreamType.peerStatusChange:
                 {
-                    var response = JsonSerializer.Deserialize<PeerStatusStream>(message, XrplJsonOptions.Default);
+                    var response = JsonSerializer.Deserialize<PeerStatusStream>(frame, XrplJsonOptions.Default);
+                    response.AttachFrame(frame);
                     if (OnPeerStatusChange is not null)
                     {
                         await OnPeerStatusChange.Invoke(response)!;
@@ -3085,7 +3446,8 @@ public class Connection
 
                 case ResponseStreamType.consensusPhase:
                 {
-                    var response = JsonSerializer.Deserialize<ConsensusStream>(message, XrplJsonOptions.Default);
+                    var response = JsonSerializer.Deserialize<ConsensusStream>(frame, XrplJsonOptions.Default);
+                    response.AttachFrame(frame);
                     if (OnConsensusPhase is not null)
                     {
                         await OnConsensusPhase.Invoke(response)!;
@@ -3095,7 +3457,8 @@ public class Connection
 
                 case ResponseStreamType.path_find:
                 {
-                    var response = JsonSerializer.Deserialize<PathFindStream>(message, XrplJsonOptions.Default);
+                    var response = JsonSerializer.Deserialize<PathFindStream>(frame, XrplJsonOptions.Default);
+                    response.AttachFrame(frame);
                     if (OnPathFind is not null)
                     {
                         await OnPathFind.Invoke(response)!;
@@ -3105,7 +3468,8 @@ public class Connection
 
                 case ResponseStreamType.manifestReceived:
                 {
-                    var response = JsonSerializer.Deserialize<ManifestStream>(message, XrplJsonOptions.Default);
+                    var response = JsonSerializer.Deserialize<ManifestStream>(frame, XrplJsonOptions.Default);
+                    response.AttachFrame(frame);
                     if (OnManifestReceived is not null)
                     {
                         await OnManifestReceived.Invoke(response)!;
@@ -3115,7 +3479,8 @@ public class Connection
 
                 case ResponseStreamType.bookChanges:
                 {
-                    var response = JsonSerializer.Deserialize<BookChangesStream>(message, XrplJsonOptions.Default);
+                    var response = JsonSerializer.Deserialize<BookChangesStream>(frame, XrplJsonOptions.Default);
+                    response.AttachFrame(frame);
                     if (OnBookChanges is not null)
                     {
                         await OnBookChanges.Invoke(response)!;
@@ -3125,7 +3490,8 @@ public class Connection
 
                 case ResponseStreamType.serverStatus:
                 {
-                    var response = JsonSerializer.Deserialize<ServerStatusStream>(message, XrplJsonOptions.Default);
+                    var response = JsonSerializer.Deserialize<ServerStatusStream>(frame, XrplJsonOptions.Default);
+                    response.AttachFrame(frame);
                     if (OnServerStatus is not null)
                     {
                         await OnServerStatus.Invoke(response)!;
@@ -3135,7 +3501,8 @@ public class Connection
 
                 case ResponseStreamType.error:
                 {
-                    var response = JsonSerializer.Deserialize<ErrorResponse>(message, XrplJsonOptions.Default);
+                    var response = JsonSerializer.Deserialize<ErrorResponse>(frame, XrplJsonOptions.Default);
+                    response.AttachFrame(frame);
                     if (OnError is not null)
                     {
                         await OnError.Invoke(response.Error, response.ErrorMessage, response.ErrorCode?.ToString(), response);
@@ -3163,16 +3530,31 @@ public class Connection
     /// </summary>
     private Task IOnMessageFastPath(string message)
     {
-        return IOnMessageFastPath(message, null);
+        return IOnMessageFastPath(message, null, sessionId: null);
     }
 
     /// <summary>
     /// Overload for a message still in its wire form, used by the socket callback. See
-    /// <see cref="IOnMessageFastPath(string, byte[])"/> for why the bytes are kept as they are.
+    /// <see cref="IOnMessageFastPath(string, byte[], long?)"/> for why the bytes are kept as they are.
     /// </summary>
-    private Task IOnMessageFastPath(byte[] utf8Message)
+    /// <remarks>
+    /// Internal rather than private so a test can drive the actual production entry point - the
+    /// one <see cref="WebSocketClient.OnBinaryMessage"/> calls with the frame the socket produced -
+    /// instead of only <see cref="OnMessage(string)"/>, where <c>Frame()</c> always synthesizes a
+    /// fresh byte array from the string rather than reusing one. <c>InternalsVisibleTo</c> to
+    /// <c>Xrpl.Tests</c> is already declared in the project file for this reason.
+    /// </remarks>
+    internal Task IOnMessageFastPath(byte[] utf8Message)
     {
-        return IOnMessageFastPath(null, utf8Message);
+        return IOnMessageFastPath(null, utf8Message, sessionId: null);
+    }
+
+    /// <summary>
+    /// As above, for a frame whose originating session is known.
+    /// </summary>
+    internal Task IOnMessageFastPath(byte[] utf8Message, long? sessionId)
+    {
+        return IOnMessageFastPath(null, utf8Message, sessionId);
     }
 
     /// <summary>
@@ -3188,10 +3570,17 @@ public class Connection
     /// <remarks>
     /// A response is parsed straight out of <paramref name="utf8Message"/> when it is the one
     /// present, so the UTF-16 copy of the message - twice its byte length - is never made for the
-    /// common case. Everything that genuinely needs text (stream messages, the warning and error
-    /// callbacks) asks for it through <c>Text()</c>, which materializes it once and only then.
+    /// common case. Stream messages are routed on through <c>Frame()</c>, which likewise reuses
+    /// <paramref name="utf8Message"/> when present rather than encoding a fresh copy of
+    /// <paramref name="message"/> - the frame stream events pair themselves with is exactly the
+    /// bytes the socket produced. Only the warning and error callbacks, which still take a string,
+    /// ask for text at all, through <c>Text()</c>, and materialize it once and only then.
     /// </remarks>
-    private async Task IOnMessageFastPath(string message, byte[] utf8Message)
+    /// <param name="sessionId">
+    /// The session whose socket produced this frame, or <see langword="null"/> when the caller has
+    /// no session to name - <see cref="OnMessage(string)"/>, which anyone may call directly.
+    /// </param>
+    private async Task IOnMessageFastPath(string message, byte[] utf8Message, long? sessionId)
     {
         lastActivityTime = DateTime.UtcNow;
 
@@ -3206,6 +3595,16 @@ public class Connection
 
             return message;
         }
+
+        // The stream path now runs on the frame, not on text: encodes only when the binary
+        // callback did not already hand one over, mirroring RequestManager.HandleResponse(string)'s
+        // own Encoding.UTF8.GetBytes fallback for the same reason - so OnMessage(string), still a
+        // public entry point, keeps working without a frame of its own to reuse. A null message
+        // stays null rather than throwing out of Encoding.UTF8.GetBytes here: OnMessage(null) used
+        // to travel down to the stream processor and be reported through OnError as a bad message
+        // rather than raised at the entry point, and that must keep being true now that the
+        // pipeline carries bytes instead of text.
+        byte[] Frame() => utf8Message ?? (message is null ? null : Encoding.UTF8.GetBytes(message));
 
         // Scan message for "id" property to detect response messages
         var isResponse = utf8Message is null ? IsLikelyResponse(message) : IsLikelyResponse(utf8Message);
@@ -3262,7 +3661,7 @@ public class Connection
             {
                 // Message has "id" but no matching pending request — this is an async
                 // follow-up (e.g. path_find updates). Route to stream processing.
-                EnqueueStreamMessage(Text());
+                EnqueueStreamMessage(Frame(), sessionId);
                 return;
             }
 
@@ -3297,51 +3696,186 @@ public class Connection
         {
             // This is a stream message (no "id") - process asynchronously
             // to avoid blocking the receive loop and causing ping timeouts
-            EnqueueStreamMessage(Text());
+            EnqueueStreamMessage(Frame(), sessionId);
         }
     }
 
     /// <summary>
-    /// Routes a message to stream processing (Channel or fire-and-forget).<br/>
-    /// Used for both regular stream messages (no "id") and async follow-ups
-    /// that have "id" but no matching pending request (e.g. path_find updates).
+    /// A stream frame together with the session whose socket produced it.
     /// </summary>
-    private void EnqueueStreamMessage(string message)
+    /// <remarks>
+    /// The session has to ride along in the queue, not just be checked on the way in: the channel
+    /// is rebuilt per session by <see cref="StartMessageProcessor"/>, and between the check and
+    /// the write nothing holds the two together. Carrying the id lets the reader ask the question
+    /// again at the only moment that decides anything - just before handlers run.
+    /// </remarks>
+    /// <param name="Frame">The raw UTF-8 frame.</param>
+    /// <param name="SessionId">
+    /// The session whose socket produced it, or <see langword="null"/> when the caller had none to
+    /// name.
+    /// </param>
+    private readonly record struct SessionFrame(byte[] Frame, long? SessionId);
+
+    /// <summary>
+    /// Whether a frame carrying this session id belongs to the connection as it stands right now.
+    /// </summary>
+    /// <remarks>
+    /// Matching the id is not enough: <c>ChangeServer</c> and the reconnect loop call
+    /// <c>MarkAsRetiring()</c> on the session while it is still <c>_activeSession</c>, and only
+    /// <c>ConnectInternalAsync</c> installs its replacement. Frames arriving in that window carry
+    /// the id of the very session being retired, so the retiring flag is part of the test - as
+    /// <c>OnceOpen</c> and the other lifecycle guards do it, and under the same lock, since
+    /// <c>IsRetiring</c> is a plain bool published only by <c>_sessionLock</c>.
+    /// <para>
+    /// A <see langword="null"/> id means the caller cannot name a session
+    /// (<see cref="OnMessage(string)"/>, which anyone may call): nothing to compare, so nothing is
+    /// rejected.
+    /// </para>
+    /// </remarks>
+    private bool IsFromLiveSession(long? sessionId)
     {
-        if (OperatingSystem.IsBrowser())
+        if (sessionId is null)
         {
-            _ = ProcessStreamMessageFireAndForgetAsync(message);
+            return true;
         }
-        else
+
+        lock (_sessionLock)
         {
-            var channel = _streamMessageChannel;
-            if (channel != null)
-            {
-                if (!channel.Writer.TryWrite(message))
-                {
-                    Debug.WriteLine($"{DateTime.Now}Warning: Stream message channel full, message dropped");
-                }
-            }
-            else
-            {
-                _ = ProcessStreamMessageFireAndForgetAsync(message);
-            }
+            return _activeSession != null &&
+                   _activeSession.SessionId == sessionId &&
+                   !_activeSession.IsRetiring;
         }
     }
-    
+
     /// <summary>
-    /// Fire-and-forget stream message processing for single-threaded environments like WebAssembly.
-    /// Uses ConfigureAwait(false) to prevent deadlocks and allow proper continuation scheduling.
+    /// Hands a stream message to the background processor.
     /// </summary>
-    private async Task ProcessStreamMessageFireAndForgetAsync(string message)
+    /// <remarks>
+    /// Used for ordinary stream messages (no <c>id</c>) and for follow-ups carrying an <c>id</c>
+    /// that matches no pending request, such as <c>path_find</c> updates.
+    /// <para>
+    /// Browsers used to take a separate path here - one fire-and-forget task per frame, bypassing
+    /// the queue entirely, so <see cref="ConnectionOptions.StreamMessageQueueCapacity"/> did not
+    /// apply, <see cref="DroppedStreamMessages"/> stayed at zero however far handlers fell behind,
+    /// the backlog was bounded by nothing, and concurrent dispatch could hand handlers events out
+    /// of the order the node sent them. The queue was built for this environment in the first
+    /// place ("true async support in WebAssembly single-threaded environment" on
+    /// <see cref="StartMessageProcessor"/>), and measurement confirmed it works there: running the
+    /// Blazor demo against mainnet, the queue delivered 1 004 transactions over 52 s (19.2 tx/s,
+    /// 13 ledgers) with no console errors and timestamps in order - against 462 over 33 s
+    /// (13.9 tx/s) on the bypass. So the platforms no longer diverge: capacity, eviction counting
+    /// and single-reader ordering hold on every target.
+    /// </para>
+    /// <para>
+    /// The startup window is closed too: <see cref="StartMessageProcessor"/> used to run at the
+    /// very end of <c>OnceOpen</c>, after the <c>OnConnected</c> callback, so a handler
+    /// subscribing there saw its first frames answered before the channel existed and they took
+    /// the fallback below - outside the capacity, the eviction count and the ordering. It now runs
+    /// before the callback. That was not a one-line change: <see cref="StartPingTimer"/> begins
+    /// with <c>StopPingTimerSync</c>, which used to stop the message processor as well, so an
+    /// earlier start was torn down again moments later; see the remarks on
+    /// <see cref="StopPingTimerSync"/>.
+    /// </para>
+    /// <para>
+    /// The fallback stays, because it is still reachable: <see cref="OnMessage(string)"/> on a
+    /// client that never connected, anything arriving after the processor is stopped, and a write
+    /// the channel refuses because its writer is already completed.
+    /// </para>
+    /// </remarks>
+    private void EnqueueStreamMessage(byte[] frame, long? sessionId = null)
     {
+        // A retiring socket keeps delivering while InitiateGracefulCloseAsync completes, and that
+        // close runs fire-and-forget alongside the new connection. Without this its last frames
+        // reach handlers as if they were current - stale after a reconnect, and from an entirely
+        // different chain after a ChangeServer between networks.
+        //
+        // Checking here only saves a queue slot. It cannot be the guarantee: the channel is
+        // rebuilt per session and the swap is under _messageProcessorLock, not _sessionLock, so
+        // between this answer and the write below the session can retire and its replacement
+        // install a new channel - and the frame would land in that one. The answer that counts is
+        // the one the reader asks in ProcessSessionFrameAsync, immediately before handlers run.
+        if (!IsFromLiveSession(sessionId))
+        {
+            Interlocked.Increment(ref _staleSessionFramesDropped);
+            return;
+        }
+
+        SessionFrame item = new SessionFrame(frame, sessionId);
+
+        // The channel is bounded with DropOldest, so a full queue is not a refusal: TryWrite
+        // evicts the oldest frame, counts it through itemDropped and reports success. It
+        // refuses only a completed writer - and that happens on the ordinary path, not just in
+        // some corner: StopMessageProcessorInternal completes the writer after clearing
+        // _streamMessageChannel, so a reader that got the reference an instant earlier writes
+        // into a channel that is already closed. StartPingTimer tears the processor down and
+        // StartMessageProcessor builds it again on every connect, so the window recurs.
+        //
+        // A refused frame therefore goes down the fallback rather than disappearing. It still
+        // faces the session check there - fallback and queue meet in ProcessSessionFrameAsync.
+        Channel<SessionFrame>? channel = _streamMessageChannel;
+        if (channel?.Writer.TryWrite(item) == true)
+        {
+            return;
+        }
+
+        Interlocked.Increment(ref _fallbackDispatchedStreamMessages);
+        _ = ProcessStreamMessageFireAndForgetAsync(item);
+    }
+
+    /// <summary>
+    /// Runs a queued frame through the stream handlers, unless its session stopped being the live
+    /// one while it waited.
+    /// </summary>
+    /// <remarks>
+    /// This is where the session check has to be final. A frame can be queued while its session is
+    /// live and dequeued after <c>ChangeServer</c> has moved the client to another network
+    /// entirely - and the queue holds up to
+    /// <see cref="ConnectionOptions.StreamMessageQueueCapacity"/> frames, so the wait is not
+    /// necessarily short. Asking again here costs one uncontended lock per frame, against a JSON
+    /// parse and a handler call.
+    /// </remarks>
+    private Task ProcessSessionFrameAsync(SessionFrame item)
+    {
+        if (!IsFromLiveSession(item.SessionId))
+        {
+            Interlocked.Increment(ref _staleSessionFramesDropped);
+            return Task.CompletedTask;
+        }
+
+        return ProcessStreamMessageAsync(item.Frame);
+    }
+
+    /// <summary>
+    /// Processes a stream frame outside the queue, on its own task.
+    /// </summary>
+    /// <remarks>
+    /// Three ways in, none of them platform-specific since browsers stopped taking a path of their
+    /// own: before <see cref="StartMessageProcessor"/> has run, after the processor was stopped,
+    /// and when the channel refuses the write because its writer is already completed. Ordering
+    /// and the capacity bound do not hold here - that is the cost of not losing the frame.
+    /// <c>ConfigureAwait(false)</c> throughout, to keep continuations off a captured context.
+    /// <para>
+    /// The yield is what makes "fire and forget" true. Without it an async method runs on the
+    /// caller's thread up to its first real await, and the first real await inside
+    /// <see cref="ProcessStreamMessageAsync"/> comes after
+    /// <c>JsonSerializer.Deserialize</c> - so the receive loop would pay for parsing every frame
+    /// that takes this path, plus whatever a handler does before its own first await. That is
+    /// precisely the head-of-line blocking the queue exists to prevent, and the fallback would
+    /// have reintroduced it for the startup window, for a stopped processor and for a refused
+    /// write.
+    /// </para>
+    /// </remarks>
+    private async Task ProcessStreamMessageFireAndForgetAsync(SessionFrame item)
+    {
+        await Task.Yield();
+
         try
         {
-            await ProcessStreamMessageAsync(message).ConfigureAwait(false);
+            await ProcessSessionFrameAsync(item).ConfigureAwait(false);
         }
         catch (Exception ex)
         {
-            await NotifyStreamProcessingErrorAsync(ex, message).ConfigureAwait(false);
+            await NotifyStreamProcessingErrorAsync(ex, item.Frame).ConfigureAwait(false);
         }
     }
 
@@ -3352,7 +3886,7 @@ public class Connection
     /// bugs are observable. The message loop is always kept alive: cancellation is ignored, and an
     /// exception thrown by the <see cref="OnError"/> handler itself is contained.
     /// </summary>
-    private async Task NotifyStreamProcessingErrorAsync(Exception ex, string message)
+    private async Task NotifyStreamProcessingErrorAsync(Exception ex, byte[] frame)
     {
         Debug.WriteLine($"{DateTime.Now}Stream message processing error: {ex.Message}");
 
@@ -3369,7 +3903,12 @@ public class Connection
 
         try
         {
-            await handler.Invoke(error: "error", errorMessage: "streamHandlerError", message: ex.Message, data: message).ConfigureAwait(false);
+            // Materialized only here, on the failure path: OnError's data parameter predates the
+            // frame and still takes text, and nothing before this point needed a string at all.
+            // Guarded against a null frame - OnMessage(null) reaches this path too - so the report
+            // itself cannot throw and swallow the very failure it exists to surface.
+            string text = frame is null ? null : Encoding.UTF8.GetString(frame);
+            await handler.Invoke(error: "error", errorMessage: "streamHandlerError", message: ex.Message, data: text).ConfigureAwait(false);
         }
         catch (Exception notifyEx)
         {

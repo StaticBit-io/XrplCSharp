@@ -12,7 +12,7 @@ namespace Xrpl.Models.Transactions
         public string Amendment { get; set; }
 
         /// <inheritdoc />
-        public uint LedgerSequence { get; set; }
+        public uint? LedgerSequence { get; set; }
     }
 
     public interface IEnableAmendment : ITransactionCommon
@@ -27,7 +27,7 @@ namespace Xrpl.Models.Transactions
         /// The ledger index where this pseudo-transaction appears.<br/>
         /// This distinguishes the pseudo-transaction from other occurrences of the same change.
         /// </summary>
-        uint LedgerSequence { get; set; }
+        uint? LedgerSequence { get; set; }
     }
 
     public class EnableAmendmentResponse : TransactionResponse, IEnableAmendment
@@ -35,6 +35,6 @@ namespace Xrpl.Models.Transactions
         /// <inheritdoc />
         public string Amendment { get; set; }
         /// <inheritdoc />
-        public uint LedgerSequence { get; set; }
+        public uint? LedgerSequence { get; set; }
     }
 }

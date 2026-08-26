@@ -25,10 +25,18 @@ namespace Xrpl.Models.Methods
     /// <summary>
     /// Response expected by a  <see cref="NoRippleCheckRequest"/> .
     /// </summary>
-    public class NoRippleCheck //todo rename to NoRippleCheckResponse extends BaseResponse
+    public class NoRippleCheck : BaseMethodResult//todo rename to NoRippleCheckResponse extends BaseResponse
     {
+        /// <summary>
+        /// The ledger index of the current in-progress ledger, if the resolved ledger is open.
+        /// </summary>
+        /// <remarks>
+        /// rippled's shared <c>lookupLedger</c> helper (RPCLedgerHelpers.cpp) sets this only in the
+        /// <c>else</c> branch of <c>if (!ledger-&gt;open())</c> — a closed/validated ledger sends
+        /// <c>ledger_hash</c>/<c>ledger_index</c> instead and omits this member entirely.
+        /// </remarks>
         [JsonPropertyName("ledger_current_index")]
-        public uint LedgerCurrentIndex { get; set; }
+        public uint? LedgerCurrentIndex { get; set; }
 
         /// <summary>
         /// Array of strings with human-readable descriptions of the problems.<br/>

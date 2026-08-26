@@ -15,12 +15,6 @@ namespace Xrpl.Models.Ledger
     /// </summary>
     public class LOEscrow : BaseLedgerEntry, IDestination
     {
-        public LOEscrow()
-        {
-            LedgerEntryType = LedgerEntryType.Escrow;
-        }
-
-
         /// <summary>
         /// The address of the owner (sender) of this held payment.<br/>
         /// This is the account that provided the funds, and gets it back if the held payment is
@@ -104,11 +98,25 @@ namespace Xrpl.Models.Ledger
         /// <summary>
         /// The index of the ledger that contains the transaction that most recently modified this object.
         /// </summary>
-        public uint PreviousTxnLgrSeq { get; set; }
+        public uint? PreviousTxnLgrSeq { get; set; }
 
-        //todo not found field Flags: number
-        //A bit-map of boolean flags. No flags are defined for the Escrow type, so
-        //this value is always 0.
+        /// <summary>
+        /// A bit-map of boolean flags.
+        /// </summary>
+        /// <remarks>
+        /// Left undeclared on the reasoning that no <c>lsfEscrow*</c> flag exists, so the value is
+        /// always zero and modelling it buys nothing. The field arrives all the same - on every
+        /// deleted Escrow node in transaction metadata - and an undeclared field is not an absent
+        /// one: it went to <c>UnknownFields</c> untyped.
+        /// <para>
+        /// A plain number rather than an enum, deliberately: sibling entries type theirs
+        /// (<c>LOOffer.OfferFlags</c> and the rest) because their flags are defined, and inventing
+        /// an empty enum here would claim a vocabulary that does not exist. If <c>lsfEscrow*</c>
+        /// flags are ever defined, this becomes that enum.
+        /// </para>
+        /// </remarks>
+        [JsonPropertyName("Flags")]
+        public uint? Flags { get; set; }
 
     
         /// <summary>Sequence (or ticket) of the EscrowCreate transaction that created this escrow.</summary>

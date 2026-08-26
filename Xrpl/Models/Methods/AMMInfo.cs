@@ -48,7 +48,7 @@ public class AMMInfoRequest : BaseLedgerRequest
 /// <summary>
 /// Response expected from an <see cref="AMMInfoRequest"/>.
 /// </summary>
-public class AMMInfoResponse
+public class AMMInfoResponse : BaseMethodResult
 {
     [JsonPropertyName("amm")]
     public AMMInfo Amm { get; set; }
@@ -72,7 +72,7 @@ public class AMMInfoResponse
     public bool? Validated { get; set; }
 }
 
-public class AMMInfo
+public class AMMInfo : BaseMethodResult
 {
     /// <summary>
     /// The account that tracks the balance of LPTokens between the AMM instance via Trustline.

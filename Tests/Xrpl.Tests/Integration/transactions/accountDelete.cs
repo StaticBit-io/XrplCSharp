@@ -8,6 +8,7 @@ using Xrpl.Models.Methods;
 using Xrpl.Models.Transactions;
 using Xrpl.Wallet;
 
+using Xrpl.Client;
 // https://github.com/XRPLF/xrpl.js/blob/main/packages/xrpl/test/integration/transactions/accountDelete.ts
 
 namespace XrplTests.Xrpl.ClientLib.Integration
@@ -38,7 +39,7 @@ namespace XrplTests.Xrpl.ClientLib.Integration
 
             LedgerIndex index = new LedgerIndex(LedgerIndexType.Validated);
             AccountChannelsRequest request = new AccountChannelsRequest(runner.wallet.ClassicAddress) { LedgerIndex = index };
-            AccountChannels response = await runner.client.AccountChannels(request);
+            AccountChannels response = await runner.client.AccountChannels(request).Typed();
             Assert.IsNotNull(response);
             AccountDelete tx = new AccountDelete
             {

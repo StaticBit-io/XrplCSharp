@@ -9,12 +9,6 @@ namespace Xrpl.Models.Methods;
 
 public class LONFTokenPage : BaseLedgerEntry
 {
-
-    public LONFTokenPage()
-    {
-        //The type of ledger object (0x0074).
-        LedgerEntryType = LedgerEntryType.NFTokenPage;
-    }
     [JsonConverter(typeof(NumberOrStringConverter))]
     public string Flags { get; set; }
     /// <summary>
@@ -35,7 +29,8 @@ public class LONFTokenPage : BaseLedgerEntry
     /// <summary>
     /// The sequence of the ledger that contains the transaction that most recently modified this NFTokenPage object.
     /// </summary>
-    public long PreviousTxnLgrSeq { get; set; }
+    // UInt32 per definitions.json, matching every other ledger entry's PreviousTxnLgrSeq; the prior `long` was wider than the protocol field.
+    public uint? PreviousTxnLgrSeq { get; set; }
 
         /// <summary>The locator of the next page, if any, in the owner's NFToken directory.</summary>
         [JsonPropertyName("NextPageMin")]

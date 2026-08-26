@@ -11,7 +11,7 @@ namespace Xrpl.Models.Methods
     /// <summary>
     /// Expected response from an  <see cref="AccountTransactionsRequest"/>.
     /// </summary>
-    public class AccountTransactions  //todo rename to response
+    public class AccountTransactions : BaseMethodResult //todo rename to response
     {
         /// <summary>
         /// Unique Address identifying the related account.
@@ -90,7 +90,7 @@ namespace Xrpl.Models.Methods
         public bool Validated { get; set; }
     }
 
-    public class TransactionSummary : IAccountTransaction //todo rename to AccountTransaction
+    public class TransactionSummary : BaseMethodResult, IAccountTransaction //todo rename to AccountTransaction
     {
         private TransactionResponse _transaction;
         private string _hash;
@@ -103,6 +103,44 @@ namespace Xrpl.Models.Methods
         [JsonPropertyName("close_time_iso")]
         [JsonConverter(typeof(FromStringDateTimeConverter))]
         public DateTime? CloseTimeIso { get; set; }
+
+        /// <summary>
+        /// The compact transaction identifier, when rippled reports one.
+        /// </summary>
+        /// <remarks>
+        /// Covers the singular <c>tx</c> method, where <c>ctid</c> sits beside <c>tx_json</c> —
+        /// this property reads it from there. <c>account_tx</c> instead nests <c>ctid</c> inside
+        /// <c>tx_json</c> itself, which lands on
+        /// <see cref="Xrpl.Models.Transactions.IBaseTransactionResponse.Ctid"/> on the deserialized
+        /// transaction, not here.
+        /// </remarks>
+        [JsonPropertyName("ctid")]
+        public string? Ctid { get; set; }
+
+        /// <summary>
+        /// If binary is True, then this is a hex string of the transaction metadata.
+        /// </summary>
+        /// <remarks>
+        /// API v2 with <c>binary: true</c>. rippled sends this as a top-level sibling of
+        /// <c>tx_blob</c> instead of the usual <c>meta</c> field, and the <c>meta</c> field is
+        /// absent entirely — so <see cref="MetaBinaryConverter"/>'s string branch, which handles
+        /// API v1's <c>"meta": "&lt;hex&gt;"</c>, never runs for this shape. API v1 binary mode
+        /// puts the same hex string in <see cref="Meta.MetaBlob"/> instead, reached through
+        /// <see cref="Meta"/> below.
+        /// </remarks>
+        [JsonPropertyName("meta_blob")]
+        public string? MetaBlob { get; set; }
+
+        /// <summary>
+        /// If binary is True, then this is a hex string of the transaction itself.
+        /// </summary>
+        /// <remarks>
+        /// API v2 with <c>binary: true</c>. rippled sends this as a top-level sibling of
+        /// <c>meta_blob</c> instead of the usual <c>tx_json</c> field, and <c>tx_json</c> is
+        /// absent entirely — so <see cref="Transaction"/> below is null for this shape.
+        /// </remarks>
+        [JsonPropertyName("tx_blob")]
+        public string? TxBlob { get; set; }
 
         /// <summary>
         /// A hex string of the ledger version that included this transaction.
@@ -134,8 +172,27 @@ namespace Xrpl.Models.Methods
         /// JSON object defining the transaction.
         /// </summary>
         /// <remarks>
+        /// <para>
         /// rippled wraps the transaction in <c>tx_json</c> under API v2 and in <c>tx</c> under API v1;
         /// both envelopes populate this property.
+        /// </para>
+        /// <para>
+        /// <b>Match on the <c>I</c>-interface, not on the request type.</b> What arrives here is a
+        /// <see cref="TransactionResponse"/> - an <c>NFTokenCreateOfferResponse</c>, say - and never
+        /// the request type of the same name. So:
+        /// </para>
+        /// <code>
+        /// if (summary.Transaction is NFTokenCreateOffer request)  // never matches
+        /// if (summary.Transaction is INFTokenCreateOffer offer)   // this is the one
+        /// </code>
+        /// <para>
+        /// The first line compiles, warns about nothing and quietly finds nothing, which looks
+        /// exactly like the response having failed to parse - so the search starts in the wrong
+        /// place. Request and response types come in pairs that share an <c>I</c>-interface; use
+        /// those to read history, and the request types only to send. The five
+        /// <c>ConfidentialMPT</c> transactions are the exception - neither half declares an
+        /// interface, so for those there is nothing to match on yet.
+        /// </para>
         /// </remarks>
         [JsonPropertyName("tx_json")]
         public TransactionResponse Transaction

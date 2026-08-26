@@ -194,9 +194,9 @@ namespace Xrpl.Client
         }
 
         /// <summary>
-        /// Set the Action to call when the connection fails.
+        /// Set the Action to call when the socket reports an error.
         /// </summary>
-        /// <param name="onConnectionError">The Action to call</param>
+        /// <param name="onError">The Action to call</param>
         /// <returns>Self</returns>
         internal WebSocketClient OnError(Func<Exception, WebSocketClient, Task> onError)
         {
@@ -538,6 +538,30 @@ namespace Xrpl.Client
                     }
 
                     CallOnMessage(completeMessage);
+                }
+
+                // Reached only when the loop ended without throwing - its condition went false
+                // between iterations. Every other way out of this method reports the close; this
+                // one reported nothing, so a caller waiting to hear that the connection ended
+                // simply never heard.
+                //
+                // It is not a rare corner. A message handler runs inline here, on this thread, and
+                // the request continuation it completes runs inline in turn - so a caller that
+                // disconnects right after the response that woke it does so inside CallOnMessage
+                // above. The loop comes back round to find the cancellation already set, leaves by
+                // its condition, and the disconnect is never announced. That is what made a user
+                // Disconnect() silent against a fast peer while looking correct against a slow one.
+                //
+                // Classified the same way as the catches below: cancelled or disposed is a normal
+                // close, a socket that simply stopped being Open is a drop.
+                if (_isIntentionalDisconnect || _cancellationToken.IsCancellationRequested || IsDisposed)
+                {
+                    await CallOnDisconnectedAsync(WebSocketCloseStatus.NormalClosure, "Client disconnected").ConfigureAwait(false);
+                }
+                else
+                {
+                    FailureReason = SocketFailureReason.NetworkDrop;
+                    await CallOnDisconnectedAsync(WebSocketCloseStatus.EndpointUnavailable, "Connection is no longer open").ConfigureAwait(false);
                 }
             }
             catch (OperationCanceledException) when (_isIntentionalDisconnect || _cancellationToken.IsCancellationRequested || IsDisposed)

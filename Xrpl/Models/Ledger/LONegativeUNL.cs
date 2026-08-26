@@ -10,10 +10,6 @@ namespace Xrpl.Models.Ledger
     /// </summary>
     public class LONegativeUNL : BaseLedgerEntry
     {
-        public LONegativeUNL()
-        {
-            LedgerEntryType = LedgerEntryType.NegativeUNL;
-        }
         /// <summary>
         /// A list of trusted validators that are currently disabled.
         /// </summary>

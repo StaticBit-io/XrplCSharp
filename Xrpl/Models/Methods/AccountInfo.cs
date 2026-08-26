@@ -11,7 +11,7 @@ namespace Xrpl.Models.Methods
     /// <summary>
     /// Response expected from an <see cref="AccountInfoRequest"/>.
     /// </summary>
-    public class AccountInfo //todo rename to AccountInfoResponse
+    public class AccountInfo : BaseMethodResult //todo rename to AccountInfoResponse
     {
         /// <summary>
         /// The AccountRoot ledger object with this account's information, as stored in the ledger.
@@ -34,14 +34,14 @@ namespace Xrpl.Models.Methods
         /// The ledger index of the current in-progress ledger, which was used when retrieving this information.
         /// </summary>
         [JsonPropertyName("ledger_current_index")]
-        public int LedgerCurrentIndex { get; set; }
+        public int? LedgerCurrentIndex { get; set; }
         /// <summary>
         /// The ledger index of the ledger version used when retrieving this
         ///information.The information does not contain any changes from ledger
         /// versions newer than this one.
         /// </summary>
         [JsonPropertyName("ledger_index")]
-        public int LedgerIndex { get; set; }
+        public int? LedgerIndex { get; set; }
         /// <summary>
         /// Information about queued transactions sent by this account.<br/>
         /// This information describes the state of the local rippled server, which may be different from other servers in the peer-to-peer XRP Ledger network.<br/>
@@ -64,7 +64,7 @@ namespace Xrpl.Models.Methods
     }
 
 
-    public class PseudoAccountInfo
+    public class PseudoAccountInfo : BaseMethodResult
     {
         [JsonPropertyName("type")]
         public string Type { get; set; }
@@ -74,7 +74,7 @@ namespace Xrpl.Models.Methods
     /// <summary>
     /// Information about each queued transaction from address.
     /// </summary>
-    public class AccountQueueTransaction 
+    public class AccountQueueTransaction : BaseMethodResult
     {
         /// <summary>
         /// Whether this transaction changes this address's ways of authorizing transactions.
@@ -102,7 +102,7 @@ namespace Xrpl.Models.Methods
         [JsonPropertyName("seq")]
         public int Sequence { get; set; }
     }
-    public sealed class AccountInfoAccountFlags
+    public sealed class AccountInfoAccountFlags : BaseMethodResult
     {
         /// <summary>
         /// Enable rippling on this address's trust lines by default. Required for issuing addresses; discouraged for others.
@@ -196,7 +196,7 @@ namespace Xrpl.Models.Methods
     /// This information describes the state of the local rippled server, which may be different from other servers in the peer-to-peer XRP Ledger network.<br/>
     /// Some fields may be omitted because the values are calculated "lazily" by the queuing mechanism.
     /// </summary>
-    public class AccountQueueData
+    public class AccountQueueData : BaseMethodResult
     {
         /// <summary>
         /// Whether a transaction in the queue changes this address's ways of authorizing transactions.

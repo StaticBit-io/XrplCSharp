@@ -12,20 +12,20 @@ namespace Xrpl.Models.Methods
     /// Each element in the alternatives array represents a path from one possible
     /// source currency to the destination account and currency.
     /// </summary>
-    public class PathAlternative
+    public class PathAlternative : BaseMethodResult
     {
         /// <summary>
         /// Array of arrays of objects defining payment paths.
         /// </summary>
         [JsonPropertyName("paths_computed")]
-        public List<List<Path>> PathsComputed { get; set; }
+        public List<List<PathStep>> PathsComputed { get; set; }
 
         /// <summary>
         /// (Deprecated) Array of arrays of objects defining canonical payment paths.<br/>
         /// May be present in server responses but should be disregarded.
         /// </summary>
         [JsonPropertyName("paths_canonical")]
-        public List<List<Path>> PathsCanonical { get; set; }
+        public List<List<PathStep>> PathsCanonical { get; set; }
 
         /// <summary>
         /// Currency Amount that the source would have to send along this path
@@ -47,7 +47,7 @@ namespace Xrpl.Models.Methods
     /// <summary>
     /// Response expected from a path_find create, close, or status request.
     /// </summary>
-    public class PathFindResponse
+    public class PathFindResponse : BaseMethodResult
     {
         /// <summary>
         /// Array of objects with suggested paths to take.<br/>
@@ -161,7 +161,7 @@ namespace Xrpl.Models.Methods
         /// or to check the overall cost to make a payment along a certain path.
         /// </summary>
         [JsonPropertyName("paths")]
-        public List<List<Path>> Paths { get; set; }
+        public List<List<PathStep>> Paths { get; set; }
     }
 
     /// <summary>

@@ -7,6 +7,7 @@ using Microsoft.VisualStudio.TestTools.UnitTesting;
 using Xrpl.Models.Methods;
 using Xrpl.Models.Transactions;
 
+using Xrpl.Client;
 namespace XrplTests.Xrpl.ClientLib.Integration
 {
     [TestClass]
@@ -28,7 +29,7 @@ namespace XrplTests.Xrpl.ClientLib.Integration
             TakerAmount takerGets = new TakerAmount { Currency = "XRP" };
             TakerAmount takerPays = new TakerAmount { Currency = "USD", Issuer = runner.wallet.ClassicAddress };
             BookOffersRequest request = new BookOffersRequest() { TakerGets = takerGets, TakerPays = takerPays };
-            BookOffers bookOffers = await runner.client.BookOffers(request);
+            BookOffers bookOffers = await runner.client.BookOffers(request).Typed();
             Assert.IsNotNull(bookOffers);
         }
     }

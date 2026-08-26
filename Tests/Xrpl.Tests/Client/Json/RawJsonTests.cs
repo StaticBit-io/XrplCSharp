@@ -1,0 +1,357 @@
+using Microsoft.VisualStudio.TestTools.UnitTesting;
+
+using System;
+using System.Buffers;
+using System.Text;
+using System.Text.Json;
+
+using Xrpl.Client.Json;
+using Xrpl.Models.Ledger;
+
+namespace XrplTests.Client.Json;
+
+/// <summary>
+/// Pins the contract of the window a consumer is handed onto the bytes a node actually sent:
+/// it aliases the frame rather than copying it, detaches only through <see cref="RawJson.ToArray"/>,
+/// rejects a window that does not lie inside its frame, and round-trips through a
+/// <see cref="Utf8JsonWriter"/> byte-for-byte — including the zero-length window an absent
+/// response member produces.
+/// </summary>
+[TestClass]
+public class TestURawJson
+{
+    [TestMethod]
+    public void TestURawJsonRendersTheOriginalBytes()
+    {
+        // `{"result": {"a" : 1} }` — the inner object starts at byte 11 and is 9 bytes long.
+        byte[] frame = Encoding.UTF8.GetBytes("{\"result\": {\"a\" : 1} }");
+        RawJson raw = new RawJson(frame, 11, 9);
+
+        Assert.AreEqual("{\"a\" : 1}", raw.ToString());
+        Assert.AreEqual(9, raw.Length);
+        Assert.IsFalse(raw.IsEmpty);
+    }
+
+    [TestMethod]
+    public void TestURawJsonDefaultIsEmpty()
+    {
+        RawJson raw = default;
+
+        Assert.IsTrue(raw.IsEmpty);
+        Assert.AreEqual(string.Empty, raw.ToString());
+        Assert.AreEqual(0, raw.Span.Length);
+        Assert.AreEqual(0, raw.Length);
+        Assert.AreEqual(0, default(RawJson).ToArray().Length);
+    }
+
+    [TestMethod]
+    public void TestURawJsonSpanAliasesTheFrame()
+    {
+        byte[] frame = Encoding.UTF8.GetBytes("{\"result\":{\"a\":1}}");
+        RawJson raw = new RawJson(frame, 10, 7);
+
+        frame[12] = (byte)'b';
+
+        // Not a copy: the window addresses the frame's own bytes, so the frame's mutation shows.
+        Assert.AreEqual("{\"b\":1}", raw.ToString());
+    }
+
+    [TestMethod]
+    public void TestURawJsonToArrayDetachesFromTheFrame()
+    {
+        byte[] frame = Encoding.UTF8.GetBytes("{\"result\":{\"a\":1}}");
+        byte[] copy = new RawJson(frame, 10, 7).ToArray();
+
+        frame[12] = (byte)'b';
+
+        CollectionAssert.AreEqual(Encoding.UTF8.GetBytes("{\"a\":1}"), copy);
+    }
+
+    /// <summary>The shape an absent member produces: a live frame with a zero-length window.</summary>
+    [TestMethod]
+    public void TestURawJsonZeroLengthWindowIsEmpty()
+    {
+        byte[] frame = Encoding.UTF8.GetBytes("{\"id\":\"7\"}");
+        RawJson raw = new RawJson(frame, 0, 0);
+
+        Assert.IsTrue(raw.IsEmpty);
+        Assert.AreEqual(0, raw.Length);
+        Assert.AreEqual(string.Empty, raw.ToString());
+    }
+
+    [TestMethod]
+    public void TestURawJsonWriteToEmitsTheBytesVerbatim()
+    {
+        byte[] frame = Encoding.UTF8.GetBytes("{\"result\": {\"a\" : 1,\"b\":[2, 3]} }");
+        RawJson raw = new RawJson(frame, 11, 20);
+
+        ArrayBufferWriter<byte> buffer = new ArrayBufferWriter<byte>();
+        using (Utf8JsonWriter writer = new Utf8JsonWriter(buffer))
+        {
+            writer.WriteStartObject();
+            writer.WritePropertyName("result");
+            raw.WriteTo(writer);
+            writer.WriteEndObject();
+        }
+
+        Assert.AreEqual("{\"result\":{\"a\" : 1,\"b\":[2, 3]}}", Encoding.UTF8.GetString(buffer.WrittenSpan));
+    }
+
+    /// <summary>Regression: a zero-length window used to reach WriteRawValue and throw.</summary>
+    [TestMethod]
+    public void TestURawJsonWriteToEmitsNullForAnEmptyWindow()
+    {
+        byte[] frame = Encoding.UTF8.GetBytes("{\"id\":\"7\"}");
+
+        Assert.AreEqual("null", Write(new RawJson(frame, 0, 0)));
+        Assert.AreEqual("null", Write(default));
+
+        static string Write(RawJson raw)
+        {
+            ArrayBufferWriter<byte> buffer = new ArrayBufferWriter<byte>();
+            using (Utf8JsonWriter writer = new Utf8JsonWriter(buffer))
+            {
+                raw.WriteTo(writer);
+            }
+
+            return Encoding.UTF8.GetString(buffer.WrittenSpan);
+        }
+    }
+
+    [TestMethod]
+    public void TestURawJsonWriteToRejectsANullWriter()
+    {
+        // Constructed on its own line so the assert below targets only WriteTo: a (null, 0, 0)
+        // window is the valid empty-frame shape and does not throw, but folding construction into
+        // the assert expression would let a future constructor regression pass this test for the
+        // wrong reason.
+        RawJson raw = new RawJson(null, 0, 0);
+
+        Assert.ThrowsExactly<ArgumentNullException>(() => raw.WriteTo(null));
+    }
+
+    [TestMethod]
+    public void TestURawJsonRejectsAWindowOutsideTheFrame()
+    {
+        byte[] frame = Encoding.UTF8.GetBytes("{\"a\":1}");
+
+        Assert.ThrowsExactly<ArgumentOutOfRangeException>(() => new RawJson(frame, 3, 99));
+        Assert.ThrowsExactly<ArgumentOutOfRangeException>(() => new RawJson(frame, -1, 2));
+        Assert.ThrowsExactly<ArgumentOutOfRangeException>(() => new RawJson(frame, 0, -2));
+    }
+
+    /// <summary>Length is bytes, not characters.</summary>
+    [TestMethod]
+    public void TestURawJsonLengthIsInBytes()
+    {
+        byte[] frame = Encoding.UTF8.GetBytes("{\"v\":\"é中😀\"}");
+        RawJson raw = new RawJson(frame, 5, frame.Length - 6);
+
+        Assert.AreEqual("\"é中😀\"", raw.ToString());
+        Assert.AreEqual(frame.Length - 6, raw.Length);
+    }
+
+    /// <summary>
+    /// Equality is identity of the window, not of the bytes: same frame, same bounds. Comparing
+    /// content is what Span is for. Pinned here because this is a public contract — changing it
+    /// later is a breaking change, and an untested contract drifts just as quietly as an unstated one.
+    /// </summary>
+    [TestMethod]
+    public void TestURawJsonEqualityIsIdentityOfTheWindow()
+    {
+        // Two windows onto one frame, each a complete JSON value: the constructor validates that
+        // now, so the arbitrary byte ranges this test used before ("{\"a" and the like) no longer
+        // construct. Identity is still what is under test - same bytes, different windows.
+        byte[] frame = Encoding.UTF8.GetBytes("[1,2]");
+        byte[] twin = Encoding.UTF8.GetBytes("[1,2]");
+
+        Assert.IsTrue(new RawJson(frame, 1, 1) == new RawJson(frame, 1, 1));
+        Assert.IsTrue(new RawJson(frame, 1, 1) != new RawJson(frame, 3, 1));
+        Assert.IsTrue(new RawJson(frame, 1, 1) != new RawJson(twin, 1, 1));
+        Assert.IsTrue(default(RawJson) == default(RawJson));
+        Assert.IsFalse(new RawJson(frame, 1, 1).Equals("not a RawJson"));
+
+        // The bounds have to reach the hash: the default struct hash used the frame reference alone,
+        // so two different windows onto one frame collided.
+        Assert.AreNotEqual(new RawJson(frame, 1, 1).GetHashCode(), new RawJson(frame, 3, 1).GetHashCode());
+    }
+
+    /// <summary>
+    /// The payload is deliberately awkward: the key differs in case and the number arrives as a
+    /// string. Both are read only because XrplJsonOptions.Default sets PropertyNameCaseInsensitive
+    /// and AllowReadingFromString — under bare options this deserializes to zero, which is what
+    /// makes the test able to tell the two apart.
+    /// </summary>
+    [TestMethod]
+    public void TestURawJsonDeserializesWithLibraryOptions()
+    {
+        byte[] frame = Encoding.UTF8.GetBytes("{\"result\":{\"Ledger_Index\":\"9\",\"marker\":\"AABB\"}}");
+        RawJson raw = new RawJson(frame, 10, frame.Length - 11);
+
+        LOLedgerData typed = raw.Deserialize<LOLedgerData>();
+
+        Assert.IsNotNull(typed);
+        Assert.AreEqual(9u, typed.LedgerIndex);
+        Assert.AreEqual("AABB", typed.Marker.ToString());
+    }
+
+    [TestMethod]
+    public void TestURawJsonDeserializeOnAnEmptyWindowReturnsDefault()
+    {
+        Assert.IsNull(default(RawJson).Deserialize<LOLedgerData>());
+    }
+
+    [TestMethod]
+    public void TestURawJsonToJsonElementOwnsItsData()
+    {
+        byte[] frame = Encoding.UTF8.GetBytes("{\"result\":{\"a\":1}}");
+        JsonElement element = new RawJson(frame, 10, 7).ToJsonElement();
+
+        // Wipe the whole window the element was parsed from, not just one byte: if the element
+        // aliased the frame instead of copying out of it, this would corrupt every field it reads.
+        Array.Clear(frame, 10, 7);
+
+        Assert.AreEqual(1, element.GetProperty("a").GetInt32());
+    }
+
+    [TestMethod]
+    public void TestURawJsonToJsonElementOnAnEmptyWindowIsUndefined()
+    {
+        Assert.AreEqual(JsonValueKind.Undefined, default(RawJson).ToJsonElement().ValueKind);
+    }
+
+    /// <summary>The property is found whether it comes first or after another top-level member.</summary>
+    [TestMethod]
+    public void TestURawJsonFindsAPropertyAtTheTopLevel()
+    {
+        Assert.IsTrue(Window("{\"marker\":1,\"a\":2}").HasTopLevelProperty("marker"u8));
+
+        // Reaching it means the preceding member, itself an object holding an array, was skipped
+        // whole rather than walked into.
+        Assert.IsTrue(Window("{\"a\":{\"b\":[1,2]},\"marker\":1}").HasTopLevelProperty("marker"u8));
+    }
+
+    /// <summary>A property of the same name nested inside another member is not the top-level one.</summary>
+    [TestMethod]
+    public void TestURawJsonDoesNotMistakeANestedOccurrenceForTopLevel()
+    {
+        Assert.IsFalse(Window("{\"a\":[{\"marker\":1}]}").HasTopLevelProperty("marker"u8));
+    }
+
+    /// <summary>
+    /// Matching follows the serializer, which reads the same document with
+    /// <c>PropertyNameCaseInsensitive = true</c> — a key that fills a typed property must not read
+    /// as absent here. Was untested: the only case-insensitivity test in this branch went through
+    /// <c>JsonSlice</c>, so reverting this method alone to an ordinal comparison broke nothing.
+    /// </summary>
+    [TestMethod]
+    public void TestURawJsonMatchesTheTopLevelPropertyRegardlessOfCase()
+    {
+        Assert.IsTrue(Window("{\"MARKER\":1}").HasTopLevelProperty("marker"u8));
+        Assert.IsTrue(Window("{\"Marker\":1}").HasTopLevelProperty("marker"u8));
+        Assert.IsFalse(Window("{\"marker_extra\":1}").HasTopLevelProperty("marker"u8));
+    }
+
+    /// <summary>
+    /// Case folding applies to letters only.
+    /// </summary>
+    /// <remarks>
+    /// The pairs below differ from the target by exactly 0x20 — the bit that folds a letter's
+    /// case — while being non-letters: <c>{</c> (0x7B) against <c>[</c> (0x5B), and DEL (0x7F)
+    /// against <c>_</c> (0x5F). A comparison that flipped that bit unconditionally would match
+    /// them, so these are what actually pin the guard.
+    ///
+    /// An earlier version of this test used <c>_</c> against <c>?</c>, which differ by 0x60, not
+    /// 0x20 — no fold could ever have confused them, so removing the guard entirely left the test
+    /// green. Verified the current pairs by mutation: they turn red.
+    /// </remarks>
+    [TestMethod]
+    public void TestURawJsonFoldsLettersOnlyWhenMatchingAPropertyName()
+    {
+        Assert.IsFalse(Window("{\"tx{json\":1}").HasTopLevelProperty("tx[json"u8));
+        Assert.IsFalse(Window("{\"txjson\":1}").HasTopLevelProperty("tx_json"u8));
+        Assert.IsTrue(Window("{\"TX_JSON\":1}").HasTopLevelProperty("tx_json"u8));
+    }
+
+    /// <summary>
+    /// The public constructor rejects a window that is not exactly one JSON value.
+    /// </summary>
+    /// <remarks>
+    /// <see cref="RawJson.WriteTo"/> writes the window through without validating - that is the
+    /// point of the type - so a partial or malformed window would be spliced verbatim into the
+    /// document being written and corrupt it with no exception anywhere. Checking once at
+    /// construction costs nothing per write; the internal <c>Trusted</c> path skips it for bounds
+    /// the SDK already produced through <c>Utf8JsonReader.Skip()</c>.
+    /// </remarks>
+    [TestMethod]
+    public void TestURawJsonRejectsAWindowThatIsNotOneCompleteValue()
+    {
+        byte[] frame = Encoding.UTF8.GetBytes("{\"a\":1} {\"b\":2}");
+
+        // Throws, not ThrowsExactly: a truncated or malformed window surfaces as
+        // JsonReaderException, which derives from JsonException, while the "two values" case is
+        // raised as JsonException directly. The contract is the base type.
+        //
+        // Partial: the window stops inside the object.
+        Assert.Throws<JsonException>(() => new RawJson(frame, 0, 4));
+
+        // Two values: legal JSON individually, not one value together.
+        Assert.Throws<JsonException>(() => new RawJson(frame, 0, frame.Length));
+
+        // Malformed outright.
+        byte[] broken = Encoding.UTF8.GetBytes("{\"a\":}");
+        Assert.Throws<JsonException>(() => new RawJson(broken, 0, broken.Length));
+
+        // One complete value, with surrounding whitespace, is fine.
+        byte[] padded = Encoding.UTF8.GetBytes("  {\"a\":1}  ");
+        Assert.AreEqual(padded.Length, new RawJson(padded, 0, padded.Length).Length);
+    }
+
+    /// <summary>
+    /// The frame is aliased, not copied: mutating it afterwards changes what the window reads.
+    /// </summary>
+    /// <remarks>
+    /// No check can prevent this - validation happens once, at construction - so it is pinned as
+    /// documented behaviour rather than left for someone to discover. <see cref="RawJson.ToArray"/>
+    /// is the way out when the buffer is not the caller's alone.
+    /// </remarks>
+    [TestMethod]
+    public void TestURawJsonAliasesTheFrameRatherThanCopyingIt()
+    {
+        byte[] frame = Encoding.UTF8.GetBytes("[1,2]");
+        RawJson window = new RawJson(frame, 1, 1);
+        byte[] detached = window.ToArray();
+
+        Assert.AreEqual("1", window.ToString());
+
+        frame[1] = (byte)'9';
+
+        Assert.AreEqual("9", window.ToString(), "the window reads through to the frame - mutating it changes what the window sees");
+        Assert.AreEqual("1", Encoding.UTF8.GetString(detached), "ToArray detaches, which is the documented way to keep the bytes");
+    }
+
+    /// <summary>An empty object, a non-object document, and an empty window all answer false.</summary>
+    [TestMethod]
+    public void TestURawJsonHasNoTopLevelPropertyOnANonObjectOrEmptyInput()
+    {
+        Assert.IsFalse(Window("{}").HasTopLevelProperty("marker"u8));
+        Assert.IsFalse(Window("[1,2]").HasTopLevelProperty("marker"u8));
+        Assert.IsFalse(default(RawJson).HasTopLevelProperty("marker"u8));
+    }
+
+    /// <summary>
+    /// Works only because the scan goes through ValueTextEquals, which unescapes. Swapping it for
+    /// a raw byte comparison would pass every other case here and break this one silently.
+    /// </summary>
+    [TestMethod]
+    public void TestURawJsonMatchesAnEscapedTopLevelKey()
+    {
+        Assert.IsTrue(Window("{\"\\u006darker\":1}").HasTopLevelProperty("marker"u8));
+    }
+
+    private static RawJson Window(string json)
+    {
+        byte[] frame = Encoding.UTF8.GetBytes(json);
+        return new RawJson(frame, 0, frame.Length);
+    }
+}

@@ -14,6 +14,7 @@ using Xrpl.Models.Transactions;
 using Xrpl.Utils.Hashes;
 using Xrpl.Wallet;
 
+using Xrpl.Client;
 namespace XrplTests.Xrpl.ClientLib.Integration
 {
     [TestClass]
@@ -43,7 +44,7 @@ namespace XrplTests.Xrpl.ClientLib.Integration
                 DestinationAccount = wallet2.ClassicAddress,
             };
 
-            DepositAuthorized response = await runner.client.DepositAuthorized(request);
+            DepositAuthorized response = await runner.client.DepositAuthorized(request).Typed();
 
             Assert.IsNotNull(response);
             Assert.AreEqual(runner.wallet.ClassicAddress, response.SourceAccount);
@@ -92,7 +93,7 @@ namespace XrplTests.Xrpl.ClientLib.Integration
                 Credentials = new List<string> { credentialId },
             };
 
-            DepositAuthorized response = await runner.client.DepositAuthorized(request);
+            DepositAuthorized response = await runner.client.DepositAuthorized(request).Typed();
 
             Assert.IsNotNull(response);
             Assert.AreEqual(walletSubject.ClassicAddress, response.SourceAccount);

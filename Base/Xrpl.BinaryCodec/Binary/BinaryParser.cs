@@ -26,11 +26,10 @@ namespace Xrpl.BinaryCodec.Binary
         /// </summary>
         /// <returns></returns>
         public int ReadOneInt() => ReadOne() & 0xFF;
-        /// <summary> Consume the first n bytes of the BinaryParser </summary>
-        /// <param name="n">n the number of bytes to skip</param>
+        /// <summary> The next byte in the BinaryParser, without consuming it </summary>
         public abstract byte Peek();
-        /// <summary> todo </summary>
-        /// <param name="n">n the number of bytes to skip</param>
+        /// <summary> Consume the first n bytes of the BinaryParser </summary>
+        /// <param name="n">the number of bytes to skip</param>
         public abstract void Skip(int n);
         /// <summary>  read the byte from the BinaryParser by current cursor position </summary>
         public abstract byte ReadOne();

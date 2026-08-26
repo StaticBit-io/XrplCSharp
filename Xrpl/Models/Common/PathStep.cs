@@ -2,14 +2,33 @@ using System.Text.Json.Serialization;
 using Xrpl.Models.Enums;
 //https://github.com/XRPLF/xrpl.js/blob/b20c05c3680d80344006d20c44b4ae1c3b0ffcac/packages/xrpl/src/models/common/index.ts#L62
 //https://xrpl.org/paths.html#path-steps
-namespace Xrpl.Models.Methods
+namespace Xrpl.Models.Common
 {
     /// <summary>
-    /// A path set is an array.<br/>
-    /// Each member of the path set is another array that represents an individual path.<br/>
-    /// Each member of a path is an object that specifies the step.
+    /// One step of one path: where the payment goes next, not the whole route.
     /// </summary>
-    public class Path //todo rename to path steps?
+    /// <remarks>
+    /// A path set is an array of paths, and a path is an array of these. The nesting reads
+    /// correctly now that the name does: <c>List&lt;List&lt;PathStep&gt;&gt;</c> is a list of paths,
+    /// where the old <c>List&lt;List&lt;Path&gt;&gt;</c> read as a list of lists of paths.
+    /// <para>
+    /// Named <c>Path</c> until 11.0.0.0, which collided with <see cref="System.IO.Path"/> - any file
+    /// with <c>using Xrpl.Models.Methods;</c> and implicit usings on could not write
+    /// <c>Path.Combine</c> - and with <c>Xrpl.BinaryCodec.Types.Path</c>, which is a whole path
+    /// rather than a step, so the same name meant a container in one half of the SDK and its
+    /// element in the other. Everything around it already said step: <see cref="PathStepType"/>,
+    /// <c>Validation.IsPathStep</c>, and xrpl.js, where this is <c>PathStep</c>.
+    /// </para>
+    /// </remarks>
+    // No unknown-field capture here on purpose: a Path step is not only read off a
+    // ripple_path_find/path_find response, it is fed straight back into an outgoing
+    // Payment (Transactions/Payment.cs Paths) and PathFindCreateRequest. Capturing
+    // unknown members would let a field read from one node's response ride back out
+    // inside a transaction the user never put it in - and worse, StObject.FromJson
+    // passes signingOnly only to the top level, so a nested unknown member reaches the
+    // displayed tx_json but not the signed blob. Show-one-sign-another, the exact
+    // failure this branch exists to remove, arriving from the outgoing side.
+    public class PathStep
     {
         /// <summary>
         /// (Optional) If present, this path step represents rippling through the specified address.<br/>

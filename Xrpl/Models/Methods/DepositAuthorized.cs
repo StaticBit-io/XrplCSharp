@@ -57,7 +57,7 @@ namespace Xrpl.Models.Methods
     /// <summary>
     /// Response expected from a <see cref="DepositAuthorizedRequest"/>.
     /// </summary>
-    public class DepositAuthorized
+    public class DepositAuthorized : BaseMethodResult
     {
         /// <summary>
         /// Whether the specified source account is authorized to send payments directly to the destination account.

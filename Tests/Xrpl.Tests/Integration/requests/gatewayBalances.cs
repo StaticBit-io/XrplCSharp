@@ -118,7 +118,7 @@ public class TestIGatewayBalances
             Strict = true,
             HotWallet = hotWallet.ClassicAddress,
         };
-        GatewayBalancesResponse response = await client.GatewayBalances(request);
+        GatewayBalancesResponse response = await client.GatewayBalances(request).Typed();
 
         Assert.IsNotNull(response);
         Assert.AreEqual(issuer.ClassicAddress, response.Account);

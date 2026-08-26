@@ -239,7 +239,7 @@ public class TestIDynamicMPT : TestIMPTokenBase
     private static async Task<LOMPTokenIssuance> ReadIssuance(string issuanceId)
     {
         LedgerEntryRequest request = new LedgerEntryRequest { MptIssuance = issuanceId };
-        LedgerEntryResponse response = await client.LedgerEntry(request);
+        LedgerEntryResponse response = await client.LedgerEntry(request).Typed();
 
         Assert.IsNotNull(response?.Node, "ledger_entry should return the MPTokenIssuance node");
         Assert.IsInstanceOfType(response.Node, typeof(LOMPTokenIssuance), "Node should deserialize to LOMPTokenIssuance");

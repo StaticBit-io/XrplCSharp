@@ -597,18 +597,19 @@ namespace Xrpl.Models.Transactions
         [JsonPropertyName("PreviousTxnLgrSeq")]
         public uint? PreviousTxnLgrSeq { get; set; }
         /// <summary>
-        /// <remarks>
-        /// DeletedNode <br/>
-        /// The content fields of the ledger object immediately before it was deleted.<br/>
-        /// Which fields are present depends on what type of ledger object was created.
-        /// </remarks>
-        /// <remarks>
-        /// ModifiedNode <br/>
-        /// The content fields of the ledger object after applying any changes from this transaction.<br/>
-        /// Which fields are present depends on what type of ledger object was created.<br/>
-        /// This omits the PreviousTxnID and PreviousTxnLgrSeq fields, even though most types of ledger objects have them.
-        /// </remarks>
+        /// The content fields of the ledger object, read differently depending on the node type.
         /// </summary>
+        /// <remarks>
+        /// <para>
+        /// <c>DeletedNode</c>: the fields as they were immediately before the object was deleted.
+        /// Which fields are present depends on what type of ledger object it was.
+        /// </para>
+        /// <para>
+        /// <c>ModifiedNode</c>: the fields after applying any changes from this transaction. Which
+        /// fields are present depends on the object type, and this omits <c>PreviousTxnID</c> and
+        /// <c>PreviousTxnLgrSeq</c> even though most types of ledger object carry them.
+        /// </para>
+        /// </remarks>
         public BaseLedgerEntry? FinalFields { get; set; }
 
         /// <summary>
@@ -743,6 +744,18 @@ namespace Xrpl.Models.Transactions
         string ToJson();
         Dictionary<string, object> ToDictionary();
     }
+    /// <summary>
+    /// A transaction on its way to a node: built by a caller, signed, submitted.
+    /// </summary>
+    /// <remarks>
+    /// The converter is declared here as well as on the implementing class because
+    /// System.Text.Json picks one by the <b>declared</b> type: a variable typed as this interface
+    /// does not inherit the class's attribute, and without it a transaction held in such a variable
+    /// was written as the interface - every field of its actual type missing, and no exception to
+    /// say so. It happened to work through <see cref="Xrpl.Client.Json.XrplJsonOptions.Default"/>,
+    /// whose converter list makes up for a missing attribute, and only there.
+    /// </remarks>
+    [JsonConverter(typeof(TransactionRequestConverter))]
     public interface ITransactionRequest : ITransactionCommon
     {
     }
@@ -750,6 +763,12 @@ namespace Xrpl.Models.Transactions
     /// <summary>
     /// Every transaction has the same set of common fields.
     /// </summary>
+    /// <remarks>
+    /// The converter is declared here for the same reason as on <see cref="ITransactionRequest"/>:
+    /// System.Text.Json picks one by the declared type, so without it a transaction held in a
+    /// variable of this type was written as the interface rather than as what it is.
+    /// </remarks>
+    [JsonConverter(typeof(TransactionResponseConverter))]
     public interface ITransactionResponse : IBaseTransactionResponse, ITransactionCommon
     {
         /// <summary>

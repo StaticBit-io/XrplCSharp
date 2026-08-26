@@ -11,8 +11,10 @@ namespace Xrpl.Models.Ledger
     /// Flags of a DirectoryNode ledger object.
     /// </summary>
     /// <remarks>
-    /// <see cref="LODirectoryNode.Flags"/> stays a raw <c>uint</c> for backwards compatibility;
-    /// test a bit with <c>(dir.Flags &amp; (uint)DirectoryNodeFlags.lsfNFTokenBuyOffers) != 0</c>.
+    /// <see cref="LODirectoryNode.Flags"/> is still a <c>uint</c>-based bit-mask, but is now nullable
+    /// (**breaking**) to express absence (e.g. inside PreviousFields), where a required field can
+    /// legitimately be missing. A lifted <c>!=</c> returns true when either side is null, so check
+    /// presence explicitly: <c>dir.Flags is { } f &amp;&amp; (f &amp; (uint)DirectoryNodeFlags.lsfNFTokenBuyOffers) != 0</c>.
     /// </remarks>
     [System.Flags]
     public enum DirectoryNodeFlags : uint
@@ -34,18 +36,13 @@ namespace Xrpl.Models.Ledger
     public class LODirectoryNode : BaseLedgerEntry
     {
 
-        public LODirectoryNode()
-        {
-            LedgerEntryType = LedgerEntryType.DirectoryNode;
-        }
-
         /// <summary>
         /// A bit-map of boolean flags enabled for this directory.
         /// See <see cref="DirectoryNodeFlags"/> for the values the protocol defines.
         /// </summary>
-        public uint Flags { get; set; }
+        public uint? Flags { get; set; }
         /// <summary>
-        /// The ID of root object for this directory. 
+        /// The ID of root object for this directory.
         /// </summary>
         public string RootIndex { get; set; }
         /// <summary>

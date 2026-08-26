@@ -13,7 +13,7 @@ namespace Xrpl.Models.Methods;
 /// <summary>
 /// Response expected from an <see cref="AccountLinesRequest"/>.
 /// </summary>
-public class AccountLines //todo rename to AccountLinesResponse
+public class AccountLines : BaseMethodResult//todo rename to AccountLinesResponse
 {
     /// <summary>
     /// Unique Address of the account this request corresponds to.<br/>
@@ -55,6 +55,19 @@ public class AccountLines //todo rename to AccountLinesResponse
     [JsonPropertyName("marker")]
     public object Marker { get; set; } 
 
+    /// <summary>
+    /// Whether the ledger this answer was read from is validated.
+    /// </summary>
+    /// <remarks>
+    /// rippled writes this through <c>lookupLedger</c>, unconditionally, so it arrives on every
+    /// <c>account_lines</c> answer. Every sibling result model - <c>AccountInfo</c>,
+    /// <c>AccountObjects</c>, <c>AccountNFTs</c>, <c>AccountCurrencies</c>, <c>NoRippleCheck</c> -
+    /// has always declared it; this one alone did not, so it landed in <c>UnknownFields</c> and
+    /// callers had no typed way to tell a validated answer from a provisional one.
+    /// </remarks>
+    [JsonPropertyName("validated")]
+    public bool? Validated { get; set; }
+
     [JsonPropertyName("limit")]
     public int? Limit { get; set; }
 }
@@ -62,7 +75,7 @@ public class AccountLines //todo rename to AccountLinesResponse
 /// <summary>
 /// Trust line objects.
 /// </summary>
-public class TrustLine
+public class TrustLine : BaseMethodResult
 {
     /// <summary>
     /// The unique Address of the counterparty to this trust line.

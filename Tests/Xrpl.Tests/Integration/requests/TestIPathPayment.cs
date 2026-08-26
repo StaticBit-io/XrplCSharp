@@ -98,7 +98,7 @@ namespace XrplTests.Xrpl.ClientLib.Integration
                     destinationAmount: destinationAmount
                 );
 
-                RipplePathFindResponse pathResponse = await client.RipplePathFind(pathRequest);
+                RipplePathFindResponse pathResponse = await client.RipplePathFind(pathRequest).Typed();
 
                 Assert.IsNotNull(pathResponse, "ripple_path_find response should not be null");
                 Assert.IsNotNull(pathResponse.Alternatives, "Alternatives should not be null");
@@ -262,7 +262,7 @@ namespace XrplTests.Xrpl.ClientLib.Integration
 
                 // Verify offer exists
                 AccountOffersRequest offersReq = new AccountOffersRequest(walletMaker.ClassicAddress);
-                AccountOffers offersResp = await client.AccountOffers(offersReq);
+                AccountOffers offersResp = await client.AccountOffers(offersReq).Typed();
                 int offerCount = offersResp?.Offers?.Count ?? 0;
                 Console.WriteLine($"[CrossCurrency] Maker has {offerCount} offer(s)");
                 Assert.IsTrue(offerCount > 0, "Maker offer must exist before pathfinding");
@@ -287,7 +287,7 @@ namespace XrplTests.Xrpl.ClientLib.Integration
                     }
                 };
 
-                RipplePathFindResponse pathResponse = await client.RipplePathFind(pathRequest);
+                RipplePathFindResponse pathResponse = await client.RipplePathFind(pathRequest).Typed();
 
                 Assert.IsNotNull(pathResponse, "ripple_path_find response should not be null");
                 Assert.IsNotNull(pathResponse.Alternatives, "Alternatives should not be null");
@@ -305,8 +305,8 @@ namespace XrplTests.Xrpl.ClientLib.Integration
                     {
                         for (int i = 0; i < alt.PathsComputed.Count; i++)
                         {
-                            List<Path> steps = alt.PathsComputed[i];
-                            foreach (Path step in steps)
+                            List<PathStep> steps = alt.PathsComputed[i];
+                            foreach (PathStep step in steps)
                             {
                                 Console.WriteLine($"[CrossCurrency]     step: type={step.Type} account={step.Account} currency={step.CurrencyCode} issuer={step.Issuer}");
                             }
@@ -476,7 +476,7 @@ namespace XrplTests.Xrpl.ClientLib.Integration
                     SendMax = sendMax
                 };
 
-                RipplePathFindResponse pathResponse = await client.RipplePathFind(pathRequest);
+                RipplePathFindResponse pathResponse = await client.RipplePathFind(pathRequest).Typed();
 
                 Assert.IsNotNull(pathResponse, "ripple_path_find response should not be null");
                 Assert.IsNotNull(pathResponse.Alternatives, "Alternatives should not be null");
@@ -598,7 +598,7 @@ namespace XrplTests.Xrpl.ClientLib.Integration
                     SendMax = sendMax
                 };
 
-                RipplePathFindResponse pathResponse = await client.RipplePathFind(pathRequest);
+                RipplePathFindResponse pathResponse = await client.RipplePathFind(pathRequest).Typed();
 
                 Assert.IsNotNull(pathResponse, "ripple_path_find response should not be null");
                 Assert.IsNotNull(pathResponse.Alternatives, "Alternatives should not be null");

@@ -22,27 +22,29 @@ namespace Xrpl.Tests
         private XrplClient _client;
         private int _port;
 
+        private static Dictionary<string, object> ServerInfoResult() => new Dictionary<string, object>
+        {
+            { "type", "response" },
+            { "status", "success" },
+            { "result", new Dictionary<string, object>
+                {
+                    { "info", new Dictionary<string, object>
+                        {
+                            { "build_version", "test-mock" },
+                            { "complete_ledgers", "1-1" },
+                            { "server_state", "full" },
+                        }
+                    },
+                }
+            },
+        };
+
         [TestInitialize]
         public void MyTestInitialize()
         {
             _port = TestUtils.GetFreePort();
             _mockedRippled = new CreateMockRippled(_port) { suppressOutput = true };
-            _mockedRippled.AddResponse("server_info", new Dictionary<string, object>
-            {
-                { "type", "response" },
-                { "status", "success" },
-                { "result", new Dictionary<string, object>
-                    {
-                        { "info", new Dictionary<string, object>
-                            {
-                                { "build_version", "test-mock" },
-                                { "complete_ledgers", "1-1" },
-                                { "server_state", "full" },
-                            }
-                        },
-                    }
-                },
-            });
+            _mockedRippled.AddResponse("server_info", ServerInfoResult());
 
             Thread tcpListenerThread = new Thread(() => _mockedRippled.Start()) { IsBackground = true };
             tcpListenerThread.Start();
@@ -72,6 +74,127 @@ namespace Xrpl.Tests
                 ConnectionAttemptTimeout = TimeSpan.FromSeconds(10),
                 UseCustomPing = false,
             });
+
+        /// <summary>
+        /// A handler failure the client recovers from must not reach the caller at all - not even
+        /// as a different exception. The connect succeeded; saying otherwise is simply wrong.
+        /// </summary>
+        /// <remarks>
+        /// The reconnect path exists for exactly this: a handler that fails once and works on the
+        /// next attempt. But the teardown in between rejects whatever the caller had in flight, and
+        /// the caller is inside <c>SetNetworkId</c> by then - so <c>Connect()</c> threw
+        /// <c>OperationCanceledException</c> while the client went on to connect. Measured before
+        /// the fix: the caller got a cancellation and <c>IsConnected()</c> was <c>true</c> three
+        /// seconds later.
+        /// <para>
+        /// Asking "is it connected now?" in that catch would not have worked either: at that moment
+        /// the socket has just been torn down and the recovery has not finished, so the honest
+        /// answer is no. The wait is what makes the difference between a connection being rebuilt
+        /// and a client that gave up.
+        /// </para>
+        /// </remarks>
+        [TestMethod]
+        public async Task TestRecoveredHandlerFailureWithRequestInFlightStillConnects()
+        {
+            _mockedRippled.AddDelayedResponse("server_info", ServerInfoResult(), TimeSpan.FromSeconds(2));
+
+            _client = CreateClient(maxReconnectAttempts: 5, stopAfterMaxAttempts: true);
+
+            int calls = 0;
+            _client.OnConnected += async () =>
+            {
+                int call = Interlocked.Increment(ref calls);
+                await Task.Delay(TimeSpan.FromMilliseconds(400));
+
+                if (call == 1)
+                {
+                    throw new InvalidOperationException("first attempt fails, the next one works");
+                }
+            };
+
+            Exception connectError = null;
+            try
+            {
+                await _client.Connect();
+            }
+            catch (Exception error)
+            {
+                connectError = error;
+            }
+
+            Assert.IsNull(
+                connectError,
+                $"The client recovered and connected, so Connect() must not report a failure. " +
+                $"Got: {connectError}");
+            // Both of these say the run really was the scenario this test is about, rather than a
+            // connect that quietly did nothing: the client ended up connected, and it got there
+            // through a handler that failed once and ran again.
+            Assert.IsTrue(
+                _client.connection.IsConnected(),
+                "The client must have ended up connected.");
+            Assert.IsTrue(
+                Volatile.Read(ref calls) >= 2,
+                $"The handler must have failed once and run again, but ran {Volatile.Read(ref calls)} time(s).");
+        }
+
+        /// <summary>
+        /// Giving up must reach the caller as <see cref="NotConnectedException"/> even when the
+        /// caller had a request in flight at the moment the client gave up - issue #122.
+        /// </summary>
+        /// <remarks>
+        /// <para>
+        /// <c>Connect()</c> is two operations, not one: the connection itself, and the
+        /// <c>server_info</c> that <c>SetNetworkId</c> sends straight after it. The socket really
+        /// does open for a moment before the failing handler brings it down, so the wait can return
+        /// successfully and the caller can already be inside that second operation when the give-up
+        /// path tears everything down. Whatever rejects the in-flight request then decides what the
+        /// caller sees - and none of the candidates is the right answer:
+        /// <c>OperationCanceledException</c> says the caller cancelled something they never
+        /// cancelled, <c>DisconnectedException</c> says a working connection went away.
+        /// </para>
+        /// <para>
+        /// The delayed answer is what makes this deterministic. Answered at once, the window is
+        /// reachable only by luck: the assertion failed on CI about every other run and never once
+        /// in 37 local runs, which is why the issue sat open with the mechanism unproven. Holding
+        /// <c>server_info</c> back puts the request in flight for certain.
+        /// </para>
+        /// </remarks>
+        [TestMethod]
+        public async Task TestGivingUpWithARequestInFlightStillReportsNotConnected()
+        {
+            // Ten times longer than the give-up below takes, so the request is certainly still
+            // pending when it happens.
+            _mockedRippled.AddDelayedResponse("server_info", ServerInfoResult(), TimeSpan.FromSeconds(5));
+
+            _client = CreateClient(maxReconnectAttempts: 1, stopAfterMaxAttempts: true);
+
+            // A handler that works before it fails is the realistic case - a subscribe that gets
+            // some way in before falling over - and it is also what makes this test mean anything.
+            // While it runs the socket is open, so the wait for a connection returns successfully
+            // and the caller reaches the second operation. With a handler that throws at once the
+            // client gives up first, the caller never gets there, and the test passes vacuously.
+            _client.OnConnected += async () =>
+            {
+                await Task.Delay(TimeSpan.FromMilliseconds(400));
+                throw new InvalidOperationException("handler always fails");
+            };
+
+            Exception connectError = null;
+            try
+            {
+                await _client.Connect();
+            }
+            catch (Exception error)
+            {
+                connectError = error;
+            }
+
+            Assert.IsInstanceOfType<NotConnectedException>(
+                connectError,
+                $"Giving up must unblock the caller with NotConnectedException whatever rejected the " +
+                $"request it had in flight, got: {connectError?.GetType().Name ?? "no exception"}. " +
+                $"Full exception: {connectError}");
+        }
 
         /// <summary>
         /// A transient failure inside <c>OnConnected</c> (e.g. a subscribe that timed out because the
@@ -155,7 +278,7 @@ namespace Xrpl.Tests
                 { "command", "server_info" },
             };
 
-            Dictionary<string, object> response = await _client.Request(request);
+            Dictionary<string, object> response = await _client.Request(request).Typed();
             Assert.IsNotNull(response, "Request after recovery must succeed.");
         }
 

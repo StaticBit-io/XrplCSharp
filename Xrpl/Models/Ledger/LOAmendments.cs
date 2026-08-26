@@ -24,10 +24,6 @@ namespace Xrpl.Models.Ledger
     /// </summary>
     public class LOAmendments : BaseLedgerEntry
     {
-        public LOAmendments()
-        {
-            LedgerEntryType = LedgerEntryType.Amendments;
-        }
         /// <summary>
         /// Array of objects describing the status of amendments that have majority support but are not yet enabled.<br/>
         /// If omitted, there are no pending amendments with majority support.
@@ -42,7 +38,7 @@ namespace Xrpl.Models.Ledger
         /// A bit-map of boolean flags.<br/>
         /// No flags are defined for the Amendments object type, so this value is always 0.
         /// </summary>
-        public uint Flags { get; set; }
+        public uint? Flags { get; set; }
 
         /// <summary>
         /// The identifying hash of the transaction that most recently modified this object.

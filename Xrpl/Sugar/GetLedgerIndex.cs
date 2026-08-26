@@ -7,6 +7,7 @@ using Xrpl.Models.Common;
 using Xrpl.Models.Ledger;
 using Xrpl.Models.Methods;
 
+using Xrpl.Client.Exceptions;
 // https://github.com/XRPLF/xrpl.js/blob/main/packages/xrpl/src/sugar/getLedgerIndex.ts
 
 namespace Xrpl.Sugar
@@ -22,8 +23,16 @@ namespace Xrpl.Sugar
         {
             LedgerIndex index = new LedgerIndex(LedgerIndexType.Current);
             LedgerRequest request = new LedgerRequest() { LedgerIndex = index };
-            LOLedger ledgerResponse = await client.Ledger(request, cancellationToken);
-            LedgerEntity ledger = (LedgerEntity)ledgerResponse.LedgerEntity;
+            LOLedger ledgerResponse = await client.Ledger(request, cancellationToken).Typed();
+            // See DomainAccess for why this is checked rather than cast: a missing "ledger" member
+            // casts to null and faults later, a binary response is a different concrete type.
+            if (ledgerResponse.LedgerEntity is not LedgerEntity ledger)
+            {
+                throw new ValidationException(
+                    "Ledger response did not include a JSON ledger object"
+                    + (ledgerResponse.LedgerEntity is null ? "." : " - got " + ledgerResponse.LedgerEntity.GetType().Name + ", which a binary request produces."));
+            }
+
             return Convert.ToUInt32(ledger.LedgerIndex);
         }
     }

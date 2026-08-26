@@ -7,7 +7,7 @@ namespace Xrpl.Models.Methods
     /// <summary>
     /// Response expected from an  <see cref="NFTBuyOffersRequest"/> ..
     /// </summary>
-    public class NFTBuyOffers //todo rename to  NFTBuyOffersResponse extends BaseResponse 
+    public class NFTBuyOffers : BaseMethodResult//todo rename to  NFTBuyOffersResponse extends BaseResponse 
     {
 
         /// <summary>

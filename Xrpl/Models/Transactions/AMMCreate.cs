@@ -30,7 +30,7 @@ namespace Xrpl.Models.Transactions
         [JsonConverter(typeof(CurrencyConverter))]
         public Xrpl.Models.Common.Currency Amount2 { get; set; }
         /// <inheritdoc />
-        public uint TradingFee { get; set; }
+        public uint? TradingFee { get; set; }
     }
     /// <summary>
     /// AMMCreate is used to create AccountRoot and the corresponding AMM ledger entries.
@@ -54,7 +54,7 @@ namespace Xrpl.Models.Transactions
         /// A value of 1 is equivalent to 1/10 bps or 0.001%, allowing trading fee
         /// between 0% and 1%.
         /// </summary>
-        public uint TradingFee { get; set; }
+        public uint? TradingFee { get; set; }
     }
 
     /// <inheritdoc cref="IAMMCreate" />
@@ -69,7 +69,7 @@ namespace Xrpl.Models.Transactions
         [JsonConverter(typeof(CurrencyConverter))]
         public Currency Amount2 { get; set; }
         /// <inheritdoc />
-        public uint TradingFee { get; set; }
+        public uint? TradingFee { get; set; }
 
         #endregion
     }

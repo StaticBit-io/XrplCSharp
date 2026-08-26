@@ -53,6 +53,24 @@ namespace Xrpl.BinaryCodec.Types
             if (token is not JsonObject obj)
                 throw new InvalidJsonException("XChainBridge must be a JSON object.");
 
+            // Exactly these four, by name. A fifth member used to be read past in silence and left
+            // out of whatever blob or id this bridge ended up in.
+            //
+            // Counting alone would not do it: three of the four plus one unknown member also comes
+            // to four, and the check would pass while the missing one reached AccountId.FromJson or
+            // Issue.FromJson as null - reporting whatever those make of nothing rather than naming
+            // the member that does not belong.
+            if (obj.Count != 4
+                || !obj.ContainsKey("LockingChainDoor")
+                || !obj.ContainsKey("LockingChainIssue")
+                || !obj.ContainsKey("IssuingChainDoor")
+                || !obj.ContainsKey("IssuingChainIssue"))
+            {
+                throw new InvalidJsonException(
+                    "XChainBridge object must contain exactly 'LockingChainDoor', 'LockingChainIssue', " +
+                    "'IssuingChainDoor' and 'IssuingChainIssue'.");
+            }
+
             AccountId lockingDoor = AccountId.FromJson(obj["LockingChainDoor"]);
             Issue lockingIssue = Issue.FromJson(obj["LockingChainIssue"]);
             AccountId issuingDoor = AccountId.FromJson(obj["IssuingChainDoor"]);

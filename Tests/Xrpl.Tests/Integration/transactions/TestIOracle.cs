@@ -162,7 +162,7 @@ public class TestIOracle
         {
             Type = LedgerEntryType.Oracle,
         };
-        var response = await client.AccountObjects(request);
+        var response = await client.AccountObjects(request).Typed();
         var oracle = response?.AccountObjectList?.OfType<LOOracle>().FirstOrDefault();
         Assert.IsNotNull(oracle, "the Oracle object must deserialize from the node response");
 
@@ -530,7 +530,7 @@ public class TestIOracle
     private static async Task<DateTime> GetLedgerCloseTimeAsync()
     {
         var ledgerRequest = new LedgerRequest { LedgerIndex = new LedgerIndex(LedgerIndexType.Validated) };
-        var ledgerResponse = await client.Ledger(ledgerRequest);
+        var ledgerResponse = await client.Ledger(ledgerRequest).Typed();
         var ledgerEntity = ledgerResponse.LedgerEntity as LedgerEntity;
         var closeTime = ledgerEntity?.CloseTime ?? DateTime.UtcNow;
         Console.WriteLine($"Ledger close_time: {closeTime:u}");
@@ -566,7 +566,7 @@ public class TestIOracle
         AccountObjects response;
         try
         {
-            response = await client.AccountObjects(request);
+            response = await client.AccountObjects(request).Typed();
         }
         catch (Exception ex)
         {

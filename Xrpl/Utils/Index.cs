@@ -1,5 +1,4 @@
 ﻿using System;
-using System.Collections.Generic;
 using System.Text.Json.Nodes;
 
 using Xrpl.AddressCodec;
@@ -57,9 +56,17 @@ namespace Xrpl.Utils
             return XrplAddressCodec.IsValidXAddress(address) || XrplCodec.IsValidClassicAddress(address);
         }
     
+        /// <summary>
+        /// True when the node reported a <c>marker</c>, meaning more pages follow.
+        /// </summary>
+        /// <remarks>
+        /// Read off the raw result rather than a parsed projection: the previous form compared
+        /// against <c>Dictionary&lt;string, object&gt;</c>, which the member never was, so it
+        /// answered false for every response including paged ones.
+        /// </remarks>
         public static bool HasNextPage(this BaseResponse response)
         {
-            return response.Result is Dictionary<string, object> dict && dict.ContainsKey("marker");
+            return response is not null && response.RawResult.HasTopLevelProperty("marker"u8);
         }
     }
 }

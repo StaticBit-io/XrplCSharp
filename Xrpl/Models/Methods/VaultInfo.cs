@@ -27,7 +27,7 @@ namespace Xrpl.Models.Methods
     /// <summary>
     /// Response expected from a <see cref="VaultInfoRequest"/>.
     /// </summary>
-    public class VaultInfoResponse
+    public class VaultInfoResponse : BaseMethodResult
     {
         /// <summary>
         /// The vault ledger object.

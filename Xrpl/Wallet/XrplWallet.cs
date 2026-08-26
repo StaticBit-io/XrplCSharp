@@ -48,14 +48,53 @@ namespace Xrpl.Wallet
             return JsonSerializer.Deserialize<Dictionary<string, object>>(dic.ToString(), XrplJsonOptions.Default);
         }
 
+        /// <summary>
+        /// The signed blob decoded back into a typed transaction.
+        /// </summary>
+        /// <exception cref="ValidationException">
+        /// The blob carries a top-level field no model property claims, so the returned object
+        /// would not represent it. Signing that object again produces a blob missing the field -
+        /// which is how a co-signature could be dropped: <c>CounterpartySignature</c> and
+        /// <c>SponsorSignature</c> exist in <c>definitions.json</c> and survive the codec, but no
+        /// request model declares them, so a round trip through here used to discard them
+        /// silently. Failing loudly is the point: the caller is told what would have been lost
+        /// rather than submitting a transaction the node will reject for a missing signature.
+        /// For those two flows use the blob-level helpers (<c>LoanSigningHelper.BrokerSign</c>,
+        /// <c>SponsorSigningHelper.SubmitterSign</c>), which never leave the blob.
+        /// </exception>
         public ITransactionRequest GetTx()
         {
             if (TxBlob == null)
             {
                 throw new NullReferenceException(nameof(TxBlob));
             }
-            return JsonSerializer.Deserialize<TransactionRequest>(
-                XrplBinaryCodec.Decode(TxBlob).ToString(), XrplJsonOptions.Default);
+
+            JsonObject decoded = XrplBinaryCodec.Decode(TxBlob).AsObject();
+            ITransactionRequest transaction = JsonSerializer.Deserialize<TransactionRequest>(
+                decoded.ToString(), XrplJsonOptions.Default);
+
+            string reemitted = JsonSerializer.Serialize(transaction, transaction.GetType(), XrplJsonOptions.Default);
+            using JsonDocument roundTripped = JsonDocument.Parse(reemitted);
+
+            List<string> dropped = new List<string>();
+            foreach (KeyValuePair<string, JsonNode> member in decoded)
+            {
+                if (!roundTripped.RootElement.TryGetProperty(member.Key, out _))
+                {
+                    dropped.Add(member.Key);
+                }
+            }
+
+            if (dropped.Count > 0)
+            {
+                throw new ValidationException(
+                    "Decoding this blob into a typed transaction would drop "
+                    + string.Join(", ", dropped)
+                    + " - no model property carries it, so signing the result would produce a blob without it. "
+                    + "Work from TxBlob instead (see LoanSigningHelper/SponsorSigningHelper for the co-signing flows).");
+            }
+
+            return transaction;
         }
     }
     public enum TextWalletKdf
@@ -569,14 +608,45 @@ namespace Xrpl.Wallet
 
 
         /// <summary>
+        /// Refuses a transaction whose memos a node would refuse locally, before it is signed.
+        /// </summary>
+        /// <remarks>
+        /// <para>
+        /// A memo past the limit fails rippled's <c>passesLocalChecks</c>: the transaction is not
+        /// relayed, reaches no ledger and costs no fee - but the consumer has by then built,
+        /// autofilled and signed it, and the node's answer does not say which field was at fault.
+        /// This is the last point where the refusal is still free.
+        /// </para>
+        /// <para>
+        /// Called from every public entry that signs a transaction dictionary rather than from
+        /// <see cref="Sign(Dictionary{string, object}, bool, string?)"/> alone, which would not have
+        /// been enough: <c>SignAsBatchPart</c>, <c>SignAsSponsor</c> and
+        /// <c>SignAsLoanCounterparty</c> each sign on their own, and the SDK's own multi-batch
+        /// submission calls the first of them directly. The typed overloads convert and delegate to
+        /// these, so guarding the four dictionary ones covers every way in.
+        /// </para>
+        /// </remarks>
+        private static void GuardMemos(Dictionary<string, object> transaction)
+        {
+            transaction.TryGetValue("Memos", out object memos);
+            MemoRules.Validate(memos);
+        }
+
+        /// <summary>
         /// Signs a transaction offline.
         /// </summary>
         /// <param name="transaction">A transaction to be signed offline.</param>
         /// <param name="multisign">Specify true/false to use multisign or actual address (classic/x-address) to make multisign tx request.</param>
         /// <param name="signingFor"></param>
         /// <returns>A Wallet derived from the seed.</returns>
+        /// <exception cref="ValidationException">
+        /// When the transaction carries <c>Memos</c> a node would refuse locally - see
+        /// <see cref="MemoRules"/>.
+        /// </exception>
         public SignatureResult Sign(Dictionary<string, object> transaction, bool multisign = false, string? signingFor = null)
         {
+            GuardMemos(transaction);
+
             // 1) специальный кейс Batch inner-part
             if (string.Equals($"{transaction[nameof(ITransactionCommon.TransactionType)]}", "Batch", StringComparison.OrdinalIgnoreCase))
             {
@@ -740,6 +810,7 @@ namespace Xrpl.Wallet
         }
         public SignatureResult SignAsBatchPart(Dictionary<string, object> transaction, bool multisign, string? signingFor)
         {
+            GuardMemos(transaction);
             VerifyBatchSubmitter(transaction, signingFor, false);
 
             // 1) Стандартизируем вход в JsonObject
@@ -1072,9 +1143,14 @@ namespace Xrpl.Wallet
         /// <b>V3 (sequential) — borrower signs first, passes to broker:</b>
         /// <code>
         /// var withCounterparty = borrowerWallet.SignAsLoanCounterparty(preparedTx);
-        /// var final = brokerWallet.Sign(withCounterparty.GetTx());
+        /// var final = LoanSigningHelper.BrokerSign(withCounterparty.TxBlob, brokerWallet);
         /// await client.SubmitRequest(final.TxBlob);
         /// </code>
+        /// Note the blob, not <c>GetTx()</c>: no request model declares
+        /// <c>CounterpartySignature</c>, so decoding into a typed transaction and signing that
+        /// would produce a blob without the co-signature. <c>BrokerSign</c> stays at the blob
+        /// level, stripping the co-signature to compute the preimage and restoring it afterwards.
+        /// <see cref="SignatureResult.GetTx"/> now refuses such a blob rather than losing it.
         ///
         /// <b>V2 (parallel) — both sign independently, then combine:</b>
         /// <code>
@@ -1097,6 +1173,8 @@ namespace Xrpl.Wallet
         /// </summary>
         public SignatureResult SignAsLoanCounterparty(Dictionary<string, object> transaction)
         {
+            GuardMemos(transaction);
+
             JsonObject tx = JsonNode.Parse(JsonSerializer.Serialize(transaction, XrplJsonOptions.Default))?.AsObject()
                 ?? throw new ValidationException("Failed to serialize transaction to JSON");
 
@@ -1161,6 +1239,8 @@ namespace Xrpl.Wallet
         /// </summary>
         public SignatureResult SignAsSponsor(Dictionary<string, object> transaction)
         {
+            GuardMemos(transaction);
+
             JsonObject tx = JsonNode.Parse(JsonSerializer.Serialize(transaction, XrplJsonOptions.Default))?.AsObject()
                 ?? throw new ValidationException("Failed to serialize transaction to JSON");
 
