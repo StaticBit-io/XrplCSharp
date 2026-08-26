@@ -288,7 +288,14 @@ namespace Xrpl.Tests.MockRippled
                 // Gets the client thats trying to connect to the server
                 clientSocket = GetSocket().EndAccept(AsyncResult);
 
-                // Read the handshake updgrade request
+                // Read the handshake updgrade request.
+                // Bounded on purpose: BeginAccept can complete synchronously when a connection is
+                // already pending, in which case this callback - and this blocking read - runs on
+                // the thread that called StartListening, which holds _serverLock. A client that
+                // connects and then says nothing would hold up Stop() for as long as it stayed
+                // quiet. Five seconds is far longer than a real handshake and far shorter than
+                // forever.
+                clientSocket.ReceiveTimeout = 5000;
                 byte[] handshakeBuffer = new byte[1024];
                 int handshakeReceived = clientSocket.Receive(handshakeBuffer);
 
@@ -303,10 +310,7 @@ namespace Xrpl.Tests.MockRippled
                 // it to the list of connected clients
                 MockClient client = new MockClient(this, clientSocket);
                 clientSocket = null;
-                lock (_clientsLock)
-                {
-                    _clients.Add(client);
-                }
+                TrackClient(client);
 
                 // No subscriber is a legitimate state for an event, not a server fault. These
                 // fire from socket callbacks on thread-pool threads, where a throw is not a
@@ -358,6 +362,22 @@ namespace Xrpl.Tests.MockRippled
         public void ReceiveMessage(MockClient Client, string Message)
         {
             OnMessageReceived?.Invoke(this, new OnMessageReceivedHandler(Client, Message));
+        }
+
+        /// <summary>Records a connected client. Paired with <see cref="ClientDisconnect"/>.</summary>
+        /// <remarks>
+        /// Extracted from the accept callback so a test can drive the add side of the list without a
+        /// socket handshake. Without it the only reachable mutation is removing a client that is not
+        /// there, and <c>List&lt;T&gt;.Remove</c> leaves its version counter alone in that case - so a
+        /// concurrency test built on it exercises no mutual exclusion at all and passes with the lock
+        /// removed entirely.
+        /// </remarks>
+        internal void TrackClient(MockClient Client)
+        {
+            lock (_clientsLock)
+            {
+                _clients.Add(Client);
+            }
         }
 
         /// <summary>Called when a client disconnectes, calls event OnClientDisconnected</summary>
