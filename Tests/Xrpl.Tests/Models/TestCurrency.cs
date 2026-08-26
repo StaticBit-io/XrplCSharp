@@ -190,6 +190,58 @@ namespace XrplTests.Xrpl.Models
                 "This used to return decimal.MaxValue as an exchange rate, silently.");
         }
 
+        /// <summary>
+        /// <c>ToString</c> shows the amount instead of failing on it.
+        /// </summary>
+        /// <remarks>
+        /// By convention <see cref="object.ToString"/> does not throw, and the places it is reached
+        /// from - logging, string interpolation, a debugger's watch window - are exactly where
+        /// someone would be while working out why an amount is unusual. Letting the getter throw
+        /// through it would hide the value at the moment it is most wanted.
+        /// </remarks>
+        [TestMethod]
+        public void ToString_OutOfRangeAmount_ShowsTheRawValue()
+        {
+            Assert.AreEqual("USD: 9e80", Iou("9e80").ToString());
+            Assert.AreEqual("USD: -9e80", Iou("-9e80").ToString());
+            Assert.AreEqual("USD: NaN", Iou("NaN").ToString());
+
+            // Anything it can render, it still renders the same way.
+            Assert.AreEqual("USD: 100", Iou("100").ToString());
+        }
+
+        /// <summary>
+        /// Writing <see cref="decimal.MaxValue"/> produces an amount that cannot be read back.
+        /// </summary>
+        /// <remarks>
+        /// <para>
+        /// Documented rather than fixed. The setter formats with <c>G16</c>, which rounds the
+        /// mantissa to nearest - and near the ceiling that rounds <em>up</em>, past what
+        /// <see cref="decimal"/> holds. So the SDK can write a string the ledger would accept
+        /// (16-digit mantissa, exponent 13) and then refuse to read it.
+        /// </para>
+        /// <para>
+        /// The window is the last ~7e12 below <see cref="decimal.MaxValue"/>, reachable only by
+        /// assigning a number no token amount would be. Changing how the setter rounds would touch
+        /// every round trip in the type to rescue a value nobody writes. Pinned here so the next
+        /// person meets a decision rather than a surprise.
+        /// </para>
+        /// </remarks>
+        [TestMethod]
+        public void ValueAsNumber_WritingDecimalMaxValue_RoundsUpBeyondWhatCanBeRead()
+        {
+            Currency currency = new Currency { CurrencyCode = "USD", Issuer = "rIssuer" };
+            currency.ValueAsNumber = decimal.MaxValue;
+
+            Assert.AreEqual("7.922816251426434E+28", currency.Value);
+            Assert.ThrowsExactly<AmountOutOfRangeException>(() => _ = currency.ValueAsNumber);
+
+            // Just below the rounding boundary the round trip is intact, which is what makes the
+            // line above an edge rather than a broken setter.
+            currency.ValueAsNumber = 79228162514264330000000000000m;
+            Assert.AreEqual(79228162514264330000000000000m, currency.ValueAsNumber);
+        }
+
         #endregion
 
         #region Round-trip ValueAsNumber (G16 fix verification)

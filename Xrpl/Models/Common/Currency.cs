@@ -178,9 +178,28 @@ public class Currency
 
     #region Overrides of Object
 
+    /// <summary>
+    /// A readable form of the amount.
+    /// </summary>
+    /// <remarks>
+    /// Falls back to the raw <see cref="Value"/> for an amount outside what <see cref="decimal"/>
+    /// can hold, rather than letting <see cref="ValueAsNumber"/> throw through it. By convention
+    /// <see cref="object.ToString"/> does not throw, and the places it is called from - logging,
+    /// string interpolation, a debugger's watch window - are exactly where someone would be while
+    /// working out why an amount is unusual. Failing there hides the value instead of showing it.
+    /// </remarks>
     public override string ToString()
     {
-        return CurrencyValidName == "XRP" ? $"XRP: {ValueAsXrp:0.######}" : $"{CurrencyValidName}: {ValueAsNumber:0.###############}";
+        try
+        {
+            return CurrencyValidName == "XRP"
+                ? $"XRP: {ValueAsXrp:0.######}"
+                : $"{CurrencyValidName}: {ValueAsNumber:0.###############}";
+        }
+        catch (Exception exception) when (exception is AmountOutOfRangeException or FormatException)
+        {
+            return $"{CurrencyValidName}: {Value}";
+        }
     }
 
     public override bool Equals(object o) { return o is Currency model && model.Issuer == Issuer && model.CurrencyCode == CurrencyCode; }
