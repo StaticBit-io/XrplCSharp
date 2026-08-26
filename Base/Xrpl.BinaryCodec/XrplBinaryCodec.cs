@@ -29,7 +29,7 @@ namespace Xrpl.BinaryCodec
         /// and <see cref="EncodeForMultiSigning"/> all route through it.
         /// </remarks>
         /// <remarks>
-        /// The cost was smaller than the usual telling of this bug suggests: since .NET 8
+        /// The cost was smaller than the usual telling of this bug suggests: since .NET 7
         /// System.Text.Json shares a caching context between structurally equal options instances,
         /// so type metadata was not rebuilt per call - had it been, the gap below would be orders of
         /// magnitude rather than 1.7x. What was paid is an allocation and a structural-equality

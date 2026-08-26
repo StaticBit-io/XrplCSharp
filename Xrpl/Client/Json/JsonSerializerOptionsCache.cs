@@ -13,7 +13,7 @@ namespace Xrpl.Client.Json
     /// <remarks>
     /// Building those options inside Read/Write cost an allocation, a copy of the whole converter list and a
     /// structural-equality lookup in System.Text.Json's caching-context pool — once per converted value, so
-    /// once per element of a collection. Type metadata itself was not rebuilt: since .NET 8 System.Text.Json
+    /// once per element of a collection. Type metadata itself was not rebuilt: since .NET 7 System.Text.Json
     /// shares a caching context between structurally equal options instances, which is what kept the per-call
     /// copy from being far worse than it was. That pool is capped (64 contexts); caching here removes the
     /// dependency on it as well.<br/>
