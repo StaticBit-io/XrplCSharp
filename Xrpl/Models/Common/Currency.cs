@@ -2,6 +2,7 @@ using System.Text.Json.Serialization;
 
 using System;
 using System.Globalization;
+using Xrpl.Client.Exceptions;
 using System.Linq;
 using System.Text;
 using System.Text.RegularExpressions;
@@ -79,56 +80,58 @@ public class Currency
     public string CurrencyValidName => CurrencyCode.CurrencyReadableName();
 
     /// <summary>
+    /// What the ledger's amount string allows: a sign, a decimal point and an exponent, and
+    /// nothing else. Surrounding whitespace is not accepted, because the node never sends it.
+    /// </summary>
+    private const NumberStyles AmountStyles =
+        NumberStyles.AllowLeadingSign | NumberStyles.AllowDecimalPoint | NumberStyles.AllowExponent;
+
+    /// <summary>
     /// decimal currency amount (drops for XRP)
     /// </summary>
+    /// <remarks>
+    /// <para>
+    /// <see cref="decimal"/> does not cover the range XRPL allows an issued currency: the ledger
+    /// reaches roughly <c>1e96</c> and down to <c>1e-81</c>, this type stops at about
+    /// <c>7.9e28</c>. Amounts above that throw <see cref="AmountOutOfRangeException"/> rather than
+    /// being answered with a number that is not the one the node sent.
+    /// </para>
+    /// <para>
+    /// Amounts below <c>1e-28</c> return zero instead of throwing, and the asymmetry is deliberate.
+    /// A balance of <c>1e-81</c> rounded to zero is zero at any scale a caller can act on, so
+    /// failing over it would cost more than it protects; an amount of <c>1e96</c> reported as
+    /// <c>7.9e28</c> is wrong by 67 orders of magnitude and is worth stopping for.
+    /// </para>
+    /// </remarks>
+    /// <exception cref="AmountOutOfRangeException">The amount exceeds what <see cref="decimal"/> can hold.</exception>
+    /// <exception cref="FormatException">The amount is not a number at all.</exception>
     [JsonIgnore]
     public decimal ValueAsNumber
     {
         get
         {
-            try
+            if (string.IsNullOrWhiteSpace(Value))
             {
-                return string.IsNullOrWhiteSpace(Value)
-                    ? 0
-                    : decimal.Parse(
-                        Value,
-                        NumberStyles.AllowLeadingSign
-                        | (NumberStyles.AllowLeadingSign & NumberStyles.AllowDecimalPoint)
-                        | (NumberStyles.AllowLeadingSign & NumberStyles.AllowExponent)
-                        | (NumberStyles.AllowLeadingSign & NumberStyles.AllowExponent & NumberStyles.AllowDecimalPoint)
-                        | (NumberStyles.AllowExponent & NumberStyles.AllowDecimalPoint)
-                        | NumberStyles.AllowExponent
-                        | NumberStyles.AllowDecimalPoint,
-                        CultureInfo.InvariantCulture);
+                return 0;
             }
-            catch (Exception e)
+
+            if (decimal.TryParse(Value, AmountStyles, CultureInfo.InvariantCulture, out decimal amount))
             {
-                try
-                {
-                    var num = double.Parse(
-                        Value,
-                        (NumberStyles.Float & NumberStyles.AllowExponent) | NumberStyles.AllowExponent | NumberStyles.AllowDecimalPoint,
-                        CultureInfo.InvariantCulture);
-                    var valid = $"{num:#########e00}";
-                    if (valid.Contains(value: "e-"))
-                    {
-                        return 0;
-                    }
-
-                    if (valid.Contains(value: '-'))
-                    {
-                        return decimal.MinValue;
-                    }
-
-                    return decimal.MaxValue;
-                }
-                catch (Exception exception)
-                {
-                    Console.WriteLine(exception);
-                    throw;
-                }
+                return amount;
             }
+
+            // Tell the two failures apart rather than reporting both as a bad format. double
+            // spans the whole ledger range, so parsing there succeeds exactly when the string is
+            // a real number that decimal simply cannot hold.
+            if (double.TryParse(Value, AmountStyles, CultureInfo.InvariantCulture, out _))
+            {
+                throw new AmountOutOfRangeException(Value);
+            }
+
+            throw new FormatException(
+                $"The amount '{Value}' is not a number in the form the XRP Ledger uses.");
         }
+
         set => Value = value.ToString(
             CurrencyCode == "XRP"
                 ? "G0"

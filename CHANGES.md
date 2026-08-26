@@ -1,5 +1,16 @@
 # Changes
 
+## Unreleased
+
+* **An amount the ledger allows but `decimal` cannot hold is refused, not guessed at** (#148). `Currency.ValueAsNumber` answered such values three different ways: a positive one clamped to `decimal.MaxValue`, a negative one threw `FormatException`, and a very small one quietly became zero. XRPL issued currency runs from `1e-81` to roughly `1e96` - a 16-digit mantissa with an exponent in `[-96, 80]`, per rippled's `STAmount` - while `decimal` stops near `7.9e28`, so this cannot be parsed away; the only choice is how to fail.
+  * the clamp is gone. An amount above the range now throws `AmountOutOfRangeException`, which carries the value as the node sent it. Returning `7.9e28` for `1e96` is wrong by 67 orders of magnitude, and it did not stay contained: `GetBalanceChanges` subtracts two balances, so the clamped value went on to throw `OverflowException` from arithmetic instead
+  * the negative case was a parse bug. The fallback's `NumberStyles` expression came to `AllowExponent | AllowDecimalPoint` - `AllowLeadingSign` was missing, so no negative value could reach the branch meant to handle it. The primary parse was correct all along, despite six `&` terms that all evaluate to zero
+  * **an amount below `1e-28` still returns zero, and the asymmetry is deliberate.** A balance of `1e-81` rounded to zero is zero at any scale a caller can act on; failing over it would cost more than it protects. An amount of `1e96` reported as `7.9e28` is not in that category
+  * the threshold is nowhere near the protocol's ceiling: `1e29` is barely above `decimal.MaxValue` and was already unreachable. A token with a large supply meets this without going anywhere near the ledger's limits
+  * `Offer.AmountEach` reads the same property on both sides of an order and divides them. Anyone may place an offer in their own token at any value the protocol allows, so it fails the same way - and used to return a plausible-looking exchange rate that was wrong by 67 orders of magnitude, without throwing. Both it and `GetBalanceChanges` now say so in their own documentation rather than leaving it to be discovered
+  * `Console.WriteLine(exception)` is out of the parse path. A library does not write to the console
+  * **breaking in effect, if not in signature**: code that read an out-of-range amount used to get a number and now gets an exception. Representing the full range instead of refusing it is #150
+
 ## 11.0.0.0 08/26/2026
 
 ### Migration at a glance

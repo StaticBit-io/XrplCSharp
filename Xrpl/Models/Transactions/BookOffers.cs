@@ -4,6 +4,7 @@ using System;
 using System.Collections.Generic;
 
 using Xrpl.Client.Json.Converters;
+using Xrpl.Client.Exceptions;
 using Xrpl.Models.Common;
 using Xrpl.Models.Enums;
 using Xrpl.Models.Methods;
@@ -98,6 +99,14 @@ namespace Xrpl.Models.Transactions
         /// <summary>
         /// The exchange rate, as the ratio taker_gets divided by taker_pays.
         /// </summary>
+        /// <remarks>
+        /// Anyone may place an offer in their own token at any value the protocol allows, so both
+        /// sides of this ratio are untrusted input. An amount beyond what <see cref="decimal"/>
+        /// holds throws <see cref="AmountOutOfRangeException"/> rather than yielding a rate that
+        /// looks usable and is not - see issue #148. Guard this when walking an order book that is
+        /// not your own.
+        /// </remarks>
+        /// <exception cref="AmountOutOfRangeException">Either side exceeds what <see cref="decimal"/> can hold.</exception>
         public decimal AmountEach
         {
             get
