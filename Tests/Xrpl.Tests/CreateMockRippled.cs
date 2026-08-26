@@ -277,17 +277,10 @@ namespace Xrpl.Tests
 
             Server server = new Server(new IPEndPoint(IPAddress.Parse("127.0.0.1"), this._port));
 
-            lock (_serverLock)
-            {
-                if (_stopped)
-                {
-                    // Stop() already ran - do not leave this listener accepting behind the test's back.
-                    StopServer(server);
-                    return;
-                }
-
-                _server = server;
-            }
+            // Handlers first, listening afterwards. The server used to start accepting from its
+            // own constructor, which left a window where a client could connect - and disconnect,
+            // or send a request - before anything was subscribed. That window is what crashed the
+            // test host, and it is closed here rather than only survived.
 
             // Bind the event for when a client connected
             server.OnClientConnected += (object sender, OnClientConnectedHandler e) =>
@@ -392,6 +385,23 @@ namespace Xrpl.Tests
                 //e.GetClient().GetServer().ClientDisconnect(e.GetClient());
                 string clientGuid = e.GetClient().GetGuid();
             };
+
+            lock (_serverLock)
+            {
+                if (_stopped)
+                {
+                    // Stop() already ran - do not leave this listener accepting behind the test's back.
+                    StopServer(server);
+                    return;
+                }
+
+                _server = server;
+
+                // Inside the lock, so Stop() cannot slip between publishing the server and it
+                // beginning to accept: whichever takes the lock first wins outright, and a Stop()
+                // that follows closes a socket that is genuinely listening.
+                server.StartListening();
+            }
         }
     }
 }
