@@ -211,35 +211,78 @@ namespace XrplTests.Xrpl.Models
         }
 
         /// <summary>
-        /// Writing <see cref="decimal.MaxValue"/> produces an amount that cannot be read back.
+        /// Writing the largest <see cref="decimal"/> produces an amount that can be read back.
         /// </summary>
         /// <remarks>
         /// <para>
-        /// Documented rather than fixed. The setter formats with <c>G16</c>, which rounds the
-        /// mantissa to nearest - and near the ceiling that rounds <em>up</em>, past what
-        /// <see cref="decimal"/> holds. So the SDK can write a string the ledger would accept
-        /// (16-digit mantissa, exponent 13) and then refuse to read it.
+        /// The setter formats with <c>G16</c> to keep the ledger's sixteen significant digits,
+        /// rounding to nearest - which is what rippled does, so it is not a place to be clever.
+        /// The one input that could not serve is the top of <see cref="decimal"/>'s own range,
+        /// where rounding to nearest rounds <em>up</em>, past what the type holds: the SDK wrote a
+        /// string it then refused to read.
         /// </para>
         /// <para>
-        /// The window is the last ~7e12 below <see cref="decimal.MaxValue"/>, reachable only by
-        /// assigning a number no token amount would be. Changing how the setter rounds would touch
-        /// every round trip in the type to rescue a value nobody writes. Pinned here so the next
-        /// person meets a decision rather than a surprise.
+        /// There the sixteenth digit is truncated instead. Truncating cannot overflow, because
+        /// dropping digits only ever moves a number toward zero.
         /// </para>
         /// </remarks>
         [TestMethod]
-        public void ValueAsNumber_WritingDecimalMaxValue_RoundsUpBeyondWhatCanBeRead()
+        public void ValueAsNumber_WritingTheLargestDecimal_CanBeReadBack()
         {
-            Currency currency = new Currency { CurrencyCode = "USD", Issuer = "rIssuer" };
-            currency.ValueAsNumber = decimal.MaxValue;
+            foreach (decimal edge in new[] { decimal.MaxValue, decimal.MinValue })
+            {
+                Currency currency = new Currency { CurrencyCode = "USD", Issuer = "rIssuer" };
+                currency.ValueAsNumber = edge;
 
-            Assert.AreEqual("7.922816251426434E+28", currency.Value);
-            Assert.ThrowsExactly<AmountOutOfRangeException>(() => _ = currency.ValueAsNumber);
+                decimal readBack = currency.ValueAsNumber;
 
-            // Just below the rounding boundary the round trip is intact, which is what makes the
-            // line above an edge rather than a broken setter.
-            currency.ValueAsNumber = 79228162514264330000000000000m;
-            Assert.AreEqual(79228162514264330000000000000m, currency.ValueAsNumber);
+                Assert.IsTrue(
+                    Math.Abs(readBack) <= Math.Abs(edge),
+                    $"Truncation moves toward zero; {currency.Value} came back as {readBack}.");
+            }
+        }
+
+        /// <summary>
+        /// A dust remainder survives being read, written and encoded for the ledger.
+        /// </summary>
+        /// <remarks>
+        /// <para>
+        /// Balances like <c>0.000000000000000001</c> do arrive from the network, and the SDK has to
+        /// be able to send one back. They are safe here because smallness is not the constraint -
+        /// the ledger's limit is sixteen <em>significant</em> digits, and dust carries one.
+        /// </para>
+        /// <para>
+        /// Pinned because the obvious way to bound precision destroys exactly these. Truncating to
+        /// sixteen <em>decimal places</em> rather than significant digits turns <c>1e-18</c> into
+        /// zero: a remainder would silently disappear, and the SDK would send nothing where a
+        /// balance stood. This test fails if anyone reaches for that.
+        /// </para>
+        /// </remarks>
+        [TestMethod]
+        public void ValueAsNumber_DustRemainders_SurviveTheWholeRoundTrip()
+        {
+            foreach (string fromTheWire in new[]
+                     {
+                         "0.000000000000000001",          // 1e-18
+                         "1e-18",
+                         "0.0000000000000000000000001",   // 1e-25
+                         "1e-28",                         // the smallest decimal holds
+                         "-0.000000000000000001",
+                     })
+            {
+                Currency incoming = new Currency { CurrencyCode = "USD", Issuer = "rIssuer", Value = fromTheWire };
+                decimal amount = incoming.ValueAsNumber;
+
+                Assert.AreNotEqual(0m, amount, $"'{fromTheWire}' must not read as nothing.");
+
+                Currency outgoing = new Currency { CurrencyCode = "USD", Issuer = "rIssuer" };
+                outgoing.ValueAsNumber = amount;
+
+                Assert.AreEqual(
+                    amount,
+                    outgoing.ValueAsNumber,
+                    $"'{fromTheWire}' must survive being written back; it became '{outgoing.Value}'.");
+            }
         }
 
         #endregion
@@ -346,15 +389,68 @@ namespace XrplTests.Xrpl.Models
             Assert.AreEqual("1500000", currency.Value);
         }
 
+        /// <summary>
+        /// An amount already at the ledger's precision survives a round trip untouched.
+        /// </summary>
+        /// <remarks>
+        /// <para>
+        /// This was called <c>NeverRoundsUp</c> and asserted that a round trip must not increase a
+        /// value. That is not a property of the ledger: <c>G16</c> rounds to nearest, and so does
+        /// rippled - <c>Number</c>'s default mode is <c>ToNearest</c> - so an amount carrying more
+        /// than sixteen significant digits can legitimately come back larger. The old name
+        /// promised an invariant the protocol does not have.
+        /// </para>
+        /// <para>
+        /// It also could not have caught a violation. The value it used has exactly sixteen
+        /// significant digits, so there is nothing for <c>G16</c> to round in either direction; the
+        /// assertion passed for a value where it could not fail.
+        /// </para>
+        /// <para>
+        /// What is worth pinning is the property that does hold: an amount the ledger could have
+        /// sent goes out again unchanged.
+        /// </para>
+        /// </remarks>
         [TestMethod]
-        public void ValueAsNumber_16Digits_NeverRoundsUp()
+        public void ValueAsNumber_AtLedgerPrecision_RoundTripsUnchanged()
         {
-            Currency currency = new Currency { CurrencyCode = "USD", Issuer = "rIssuer", Value = "316227.7660168379" };
-            decimal original = currency.ValueAsNumber;
-            currency.ValueAsNumber = original;
-            decimal afterRoundTrip = decimal.Parse(currency.Value, CultureInfo.InvariantCulture);
-            Assert.IsTrue(afterRoundTrip <= original,
-                $"Round-trip must not increase value: original={original}, afterRoundTrip={afterRoundTrip}");
+            foreach (string atPrecision in new[]
+                     {
+                         "316227.7660168379",     // an AMM LP token amount
+                         "9999999999999999",      // the largest mantissa
+                         "1000000000000000",      // the smallest
+                         "0.1234567890123457",
+                     })
+            {
+                Currency currency = new Currency { CurrencyCode = "USD", Issuer = "rIssuer", Value = atPrecision };
+                decimal original = currency.ValueAsNumber;
+
+                currency.ValueAsNumber = original;
+
+                Assert.AreEqual(
+                    original,
+                    currency.ValueAsNumber,
+                    $"'{atPrecision}' is already at ledger precision and must survive intact.");
+            }
+        }
+
+        /// <summary>
+        /// Beyond sixteen digits the value rounds to nearest, and may grow. That is the ledger's
+        /// own behaviour, not a defect.
+        /// </summary>
+        /// <remarks>
+        /// Stated as a test because the opposite was previously asserted, and because a reader who
+        /// finds a value that grew will otherwise reach for the same wrong fix: rippled's
+        /// <c>Number</c> defaults to <c>RoundingMode::ToNearest</c>, so truncating here would move
+        /// the SDK away from the protocol rather than toward it.
+        /// </remarks>
+        [TestMethod]
+        public void ValueAsNumber_BeyondLedgerPrecision_RoundsToNearestAsTheLedgerDoes()
+        {
+            Currency currency = new Currency { CurrencyCode = "USD", Issuer = "rIssuer" };
+            currency.ValueAsNumber = 1.2345678901234565m;
+
+            Assert.AreEqual("1.234567890123457", currency.Value);
+            Assert.IsTrue(currency.ValueAsNumber > 1.2345678901234565m, "Rounding to nearest went up here, as it should.");
         }
 
         #endregion

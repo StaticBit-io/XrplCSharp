@@ -102,6 +102,15 @@ public class Currency
     /// failing over it would cost more than it protects; an amount of <c>1e96</c> reported as
     /// <c>7.9e28</c> is wrong by 67 orders of magnitude and is worth stopping for.
     /// </para>
+    /// <para>
+    /// Writing rounds to the ledger's sixteen significant digits; the binary codec, given a string
+    /// with more than sixteen, refuses it outright. That looks inconsistent and is not: the two see
+    /// different inputs. A string with seventeen digits cannot arrive from the network - rippled
+    /// normalises the mantissa into <c>[1e15, 1e16)</c> before serialising - so the codec only ever
+    /// meets one a caller wrote by hand, where refusing is right. This setter meets a computed
+    /// <see cref="decimal"/>, which routinely carries 28 digits: <see cref="Xrpl.Sugar.AmmMath"/>
+    /// returns such values. Rounding them is the service, not a loss.
+    /// </para>
     /// </remarks>
     /// <exception cref="AmountOutOfRangeException">The amount exceeds what <see cref="decimal"/> can hold.</exception>
     /// <exception cref="FormatException">The amount is not a number at all.</exception>
@@ -139,12 +148,66 @@ public class Currency
                 $"The amount '{Value}' is not a number in the form the XRP Ledger uses.");
         }
 
-        set => Value = value.ToString(
-            CurrencyCode == "XRP"
-                ? "G0"
-                : "G16",
-            CultureInfo.InvariantCulture);
+        set
+        {
+            if (CurrencyCode == "XRP")
+            {
+                Value = value.ToString("G0", CultureInfo.InvariantCulture);
+                return;
+            }
+
+            // G16 keeps the sixteen significant digits the ledger allows, rounding to nearest -
+            // which is what rippled does too, so this is not a place to be clever. The one input
+            // it cannot serve is the top of decimal's own range: there, rounding to nearest rounds
+            // *up*, past what decimal holds, and the SDK would write a string it could not read
+            // back. Only then is the sixteenth digit truncated instead.
+            string formatted = value.ToString("G16", CultureInfo.InvariantCulture);
+
+            if (!decimal.TryParse(formatted, AmountStyles, CultureInfo.InvariantCulture, out _))
+            {
+                formatted = TruncateToLedgerPrecision(value).ToString("G16", CultureInfo.InvariantCulture);
+            }
+
+            Value = formatted;
+        }
     }
+
+    /// <summary>
+    /// The same number with its digits beyond the ledger's sixteen dropped rather than rounded.
+    /// </summary>
+    /// <remarks>
+    /// Reached only when rounding would carry the value past <see cref="decimal.MaxValue"/>.
+    /// Truncating cannot: dropping digits only ever moves a number toward zero.
+    /// </remarks>
+    private static decimal TruncateToLedgerPrecision(decimal value)
+    {
+        if (value == 0m)
+        {
+            return 0m;
+        }
+
+        int magnitude = (int)Math.Floor(Math.Log10((double)Math.Abs(value)));
+        int digitsToDrop = magnitude - (LedgerSignificantDigits - 1);
+
+        if (digitsToDrop <= 0)
+        {
+            return value;
+        }
+
+        decimal scale = 1m;
+        for (int i = 0; i < digitsToDrop; i++)
+        {
+            scale *= 10m;
+        }
+
+        return Math.Truncate(value / scale) * scale;
+    }
+
+    /// <summary>
+    /// How many significant digits an issued-currency amount carries on the ledger.
+    /// </summary>
+    /// <remarks>rippled's <c>STAmount</c> normalises the mantissa into <c>[1e15, 1e16)</c>.</remarks>
+    private const int LedgerSignificantDigits = 16;
 
     /// <summary>
     /// XRP token amount (non drops value)
