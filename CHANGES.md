@@ -1,6 +1,6 @@
 # Changes
 
-## Unreleased
+## 11.1.0.0 08/27/2026
 
 * **The signing path builds its `JsonSerializerOptions` once** (#147). `XrplBinaryCodec.ObjectToJsonNode` constructed a fresh instance on every call, and every signing operation goes through it - `Encode`, `EncodeForSigning`, `EncodeForSigningClaim` and `EncodeForMultiSigning` all route there. Measured end to end on `EncodeForSigning`, 50 000 calls: **1075.8 ms and 14458 B/op before, 621.8 ms and 13601 B/op after** - 1.73x, and 857 fewer bytes each call. The encoded blob is unchanged, hashing identically either way.
   * not the catastrophe this bug is usually described as: since .NET 7 System.Text.Json shares a caching context between structurally equal options instances, so type metadata was not being rebuilt per call - had it been, the gap would be orders of magnitude rather than 1.7x. What was paid is an allocation and a structural-equality lookup in a pool capped at 64 contexts
