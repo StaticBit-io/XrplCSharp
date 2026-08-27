@@ -74,11 +74,20 @@ public class VaultDataFormat
     public string Website { get; set; }
 
     /// <summary>
+    /// Built once rather than per call. Colder than the codec's signing path, but the same
+    /// mistake, and an options instance is not the place to express "compact" one call at a time.
+    /// </summary>
+    private static readonly JsonSerializerOptions CompactOptions = new JsonSerializerOptions
+    {
+        DefaultIgnoreCondition = JsonIgnoreCondition.WhenWritingNull
+    };
+
+    /// <summary>
     /// Serializes to compact JSON, then hex-encodes for the Data field.
     /// </summary>
     public string ToHex()
     {
-        string json = JsonSerializer.Serialize(this, new JsonSerializerOptions { DefaultIgnoreCondition = JsonIgnoreCondition.WhenWritingNull });
+        string json = JsonSerializer.Serialize(this, CompactOptions);
         return Convert.ToHexString(Encoding.UTF8.GetBytes(json));
     }
 
