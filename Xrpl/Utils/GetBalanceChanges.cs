@@ -2,6 +2,7 @@
 using System.Linq;
 
 using Xrpl.Models;
+using Xrpl.Client.Exceptions;
 using Xrpl.Models.Common;
 using Xrpl.Models.Ledger;
 using Xrpl.Models.Transactions;
@@ -153,8 +154,24 @@ public static class BalanceChanges
     /// <summary>
     /// Computes balance changes per account from transaction metadata.
     /// </summary>
+    /// <remarks>
+    /// <para>
+    /// This walks every affected node and computes a delta for every account on the payment path,
+    /// not only the one the caller has in mind. The amounts it reads are therefore untrusted: it
+    /// is enough for a payment to route through an offer in somebody's own token for a value
+    /// beyond <see cref="decimal"/> to reach this code, and then
+    /// <see cref="AmountOutOfRangeException"/> comes out - see issue #148.
+    /// </para>
+    /// <para>
+    /// That matters most to anything that re-reads history. A monitor catching up over a ledger
+    /// range, an indexer or a reconciler meets the same transaction on every pass, so an unguarded
+    /// call does not fail once, it stops there permanently. Catch it and decide what an
+    /// unrepresentable balance means for you; issue #150 tracks representing it instead.
+    /// </para>
+    /// </remarks>
     /// <param name="metadata">Transaction metadata including affected nodes.</param>
     /// <returns>Dictionary mapping account addresses to balance changes (XRP string or IssuedCurrencyAmount).</returns>
+    /// <exception cref="AmountOutOfRangeException">An amount in the metadata exceeds what <see cref="decimal"/> can hold.</exception>
     public static Dictionary<string, List<Currency>> GetBalanceChanges(ITransactionMetadata metadata)
     {
         var list = new List<BalanceChange>();

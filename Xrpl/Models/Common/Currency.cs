@@ -2,6 +2,7 @@ using System.Text.Json.Serialization;
 
 using System;
 using System.Globalization;
+using Xrpl.Client.Exceptions;
 using System.Linq;
 using System.Text;
 using System.Text.RegularExpressions;
@@ -79,62 +80,134 @@ public class Currency
     public string CurrencyValidName => CurrencyCode.CurrencyReadableName();
 
     /// <summary>
+    /// What the ledger's amount string allows: a sign, a decimal point and an exponent, and
+    /// nothing else. Surrounding whitespace is not accepted, because the node never sends it.
+    /// </summary>
+    private const NumberStyles AmountStyles =
+        NumberStyles.AllowLeadingSign | NumberStyles.AllowDecimalPoint | NumberStyles.AllowExponent;
+
+    /// <summary>
     /// decimal currency amount (drops for XRP)
     /// </summary>
+    /// <remarks>
+    /// <para>
+    /// <see cref="decimal"/> does not cover the range XRPL allows an issued currency: the ledger
+    /// reaches roughly <c>1e96</c> and down to <c>1e-81</c>, this type stops at about
+    /// <c>7.9e28</c>. Amounts above that throw <see cref="AmountOutOfRangeException"/> rather than
+    /// being answered with a number that is not the one the node sent.
+    /// </para>
+    /// <para>
+    /// Amounts below <c>1e-28</c> return zero instead of throwing, and the asymmetry is deliberate.
+    /// A balance of <c>1e-81</c> rounded to zero is zero at any scale a caller can act on, so
+    /// failing over it would cost more than it protects; an amount of <c>1e96</c> reported as
+    /// <c>7.9e28</c> is wrong by 67 orders of magnitude and is worth stopping for.
+    /// </para>
+    /// <para>
+    /// Writing rounds to the ledger's sixteen significant digits; the binary codec, given a string
+    /// with more than sixteen, refuses it outright. That looks inconsistent and is not: the two see
+    /// different inputs. A string with seventeen digits cannot arrive from the network - rippled
+    /// normalises the mantissa into <c>[1e15, 1e16)</c> before serialising - so the codec only ever
+    /// meets one a caller wrote by hand, where refusing is right. This setter meets a computed
+    /// <see cref="decimal"/>, which routinely carries 28 digits: <see cref="Xrpl.Sugar.AmmMath"/>
+    /// returns such values. Rounding them is the service, not a loss.
+    /// </para>
+    /// </remarks>
+    /// <exception cref="AmountOutOfRangeException">The amount exceeds what <see cref="decimal"/> can hold.</exception>
+    /// <exception cref="FormatException">The amount is not a number at all.</exception>
     [JsonIgnore]
     public decimal ValueAsNumber
     {
         get
         {
-            try
+            if (string.IsNullOrWhiteSpace(Value))
             {
-                return string.IsNullOrWhiteSpace(Value)
-                    ? 0
-                    : decimal.Parse(
-                        Value,
-                        NumberStyles.AllowLeadingSign
-                        | (NumberStyles.AllowLeadingSign & NumberStyles.AllowDecimalPoint)
-                        | (NumberStyles.AllowLeadingSign & NumberStyles.AllowExponent)
-                        | (NumberStyles.AllowLeadingSign & NumberStyles.AllowExponent & NumberStyles.AllowDecimalPoint)
-                        | (NumberStyles.AllowExponent & NumberStyles.AllowDecimalPoint)
-                        | NumberStyles.AllowExponent
-                        | NumberStyles.AllowDecimalPoint,
-                        CultureInfo.InvariantCulture);
+                return 0;
             }
-            catch (Exception e)
+
+            if (decimal.TryParse(Value, AmountStyles, CultureInfo.InvariantCulture, out decimal amount))
             {
-                try
-                {
-                    var num = double.Parse(
-                        Value,
-                        (NumberStyles.Float & NumberStyles.AllowExponent) | NumberStyles.AllowExponent | NumberStyles.AllowDecimalPoint,
-                        CultureInfo.InvariantCulture);
-                    var valid = $"{num:#########e00}";
-                    if (valid.Contains(value: "e-"))
-                    {
-                        return 0;
-                    }
-
-                    if (valid.Contains(value: '-'))
-                    {
-                        return decimal.MinValue;
-                    }
-
-                    return decimal.MaxValue;
-                }
-                catch (Exception exception)
-                {
-                    Console.WriteLine(exception);
-                    throw;
-                }
+                return amount;
             }
+
+            // Tell the two failures apart rather than reporting both as a bad format. double
+            // spans the whole ledger range, so parsing there succeeds exactly when the string is
+            // a real number that decimal simply cannot hold.
+            //
+            // IsFinite matters: double.TryParse accepts "NaN", "Infinity" and "-Infinity" whatever
+            // NumberStyles it is given, because those symbols are matched separately from the
+            // numeric ones. Without the check, a string that is not a quantity at all would be
+            // reported as a quantity too large - which is the sort of confident wrong answer this
+            // property is being changed to stop giving.
+            if (double.TryParse(Value, AmountStyles, CultureInfo.InvariantCulture, out double asDouble)
+                && double.IsFinite(asDouble))
+            {
+                throw new AmountOutOfRangeException(Value);
+            }
+
+            throw new FormatException(
+                $"The amount '{Value}' is not a number in the form the XRP Ledger uses.");
         }
-        set => Value = value.ToString(
-            CurrencyCode == "XRP"
-                ? "G0"
-                : "G16",
-            CultureInfo.InvariantCulture);
+
+        set
+        {
+            if (CurrencyCode == "XRP")
+            {
+                Value = value.ToString("G0", CultureInfo.InvariantCulture);
+                return;
+            }
+
+            // G16 keeps the sixteen significant digits the ledger allows, rounding to nearest -
+            // which is what rippled does too, so this is not a place to be clever. The one input
+            // it cannot serve is the top of decimal's own range: there, rounding to nearest rounds
+            // *up*, past what decimal holds, and the SDK would write a string it could not read
+            // back. Only then is the sixteenth digit truncated instead.
+            string formatted = value.ToString("G16", CultureInfo.InvariantCulture);
+
+            if (!decimal.TryParse(formatted, AmountStyles, CultureInfo.InvariantCulture, out _))
+            {
+                formatted = TruncateToLedgerPrecision(value).ToString("G16", CultureInfo.InvariantCulture);
+            }
+
+            Value = formatted;
+        }
     }
+
+    /// <summary>
+    /// The same number with its digits beyond the ledger's sixteen dropped rather than rounded.
+    /// </summary>
+    /// <remarks>
+    /// Reached only when rounding would carry the value past <see cref="decimal.MaxValue"/>.
+    /// Truncating cannot: dropping digits only ever moves a number toward zero.
+    /// </remarks>
+    private static decimal TruncateToLedgerPrecision(decimal value)
+    {
+        if (value == 0m)
+        {
+            return 0m;
+        }
+
+        int magnitude = (int)Math.Floor(Math.Log10((double)Math.Abs(value)));
+        int digitsToDrop = magnitude - (LedgerSignificantDigits - 1);
+
+        if (digitsToDrop <= 0)
+        {
+            return value;
+        }
+
+        decimal scale = 1m;
+        for (int i = 0; i < digitsToDrop; i++)
+        {
+            scale *= 10m;
+        }
+
+        return Math.Truncate(value / scale) * scale;
+    }
+
+    /// <summary>
+    /// How many significant digits an issued-currency amount carries on the ledger.
+    /// </summary>
+    /// <remarks>rippled's <c>STAmount</c> normalises the mantissa into <c>[1e15, 1e16)</c>.</remarks>
+    private const int LedgerSignificantDigits = 16;
 
     /// <summary>
     /// XRP token amount (non drops value)
@@ -168,9 +241,28 @@ public class Currency
 
     #region Overrides of Object
 
+    /// <summary>
+    /// A readable form of the amount.
+    /// </summary>
+    /// <remarks>
+    /// Falls back to the raw <see cref="Value"/> for an amount outside what <see cref="decimal"/>
+    /// can hold, rather than letting <see cref="ValueAsNumber"/> throw through it. By convention
+    /// <see cref="object.ToString"/> does not throw, and the places it is called from - logging,
+    /// string interpolation, a debugger's watch window - are exactly where someone would be while
+    /// working out why an amount is unusual. Failing there hides the value instead of showing it.
+    /// </remarks>
     public override string ToString()
     {
-        return CurrencyValidName == "XRP" ? $"XRP: {ValueAsXrp:0.######}" : $"{CurrencyValidName}: {ValueAsNumber:0.###############}";
+        try
+        {
+            return CurrencyValidName == "XRP"
+                ? $"XRP: {ValueAsXrp:0.######}"
+                : $"{CurrencyValidName}: {ValueAsNumber:0.###############}";
+        }
+        catch (Exception exception) when (exception is AmountOutOfRangeException or FormatException)
+        {
+            return $"{CurrencyValidName}: {Value}";
+        }
     }
 
     public override bool Equals(object o) { return o is Currency model && model.Issuer == Issuer && model.CurrencyCode == CurrencyCode; }

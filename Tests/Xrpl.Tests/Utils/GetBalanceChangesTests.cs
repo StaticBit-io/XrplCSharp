@@ -3,6 +3,7 @@
 using System.Linq;
 using System.Text.Json;
 
+using Xrpl.Client.Exceptions;
 using Xrpl.Client.Json;
 
 using Xrpl.Models.Transactions;
@@ -66,6 +67,73 @@ public class TestUGetBalanceChanges
         Assert.AreEqual("-639.11146416", issuerTokenBuyerChanges.Value);
         Assert.AreEqual(buyer, issuerTokenBuyerChanges.Issuer);
     }
+    /// <summary>
+    /// An amount the ledger allows but <c>decimal</c> cannot hold stops this, and says so.
+    /// </summary>
+    /// <remarks>
+    /// <para>
+    /// The exception is documented on <c>GetBalanceChanges</c> itself, so it is exercised through
+    /// <c>GetBalanceChanges</c> rather than by imitating the subtraction it performs. A test that
+    /// mimics the arithmetic proves the arithmetic; it does not prove that this method reaches it,
+    /// which is what the documentation promises a caller.
+    /// </para>
+    /// <para>
+    /// The balance below is negative, which is the ordinary shape for a <c>RippleState</c> node
+    /// from the low account's side, and it is out of range - so it exercises the case that used to
+    /// fail with <c>FormatException</c> before the parse fix, and now names the real problem.
+    /// </para>
+    /// </remarks>
+    [TestMethod]
+    public void TestUGetBalanceChanges_AmountBeyondDecimal_ThrowsRatherThanReportingSomethingElse()
+    {
+        Meta metadata = JsonSerializer.Deserialize<Meta>(metaDataOutOfRange, XrplJsonOptions.Default);
+
+        AmountOutOfRangeException error = Assert.ThrowsExactly<AmountOutOfRangeException>(
+            () => BalanceChanges.GetBalanceChanges(metadata));
+
+        Assert.AreEqual("-9999999999999999e80", error.Value);
+    }
+
+    private const string metaDataOutOfRange = @"{
+        ""AffectedNodes"": [
+          {
+            ""ModifiedNode"": {
+              ""FinalFields"": {
+                ""Balance"": {
+                  ""currency"": ""USD"",
+                  ""issuer"": ""rrrrrrrrrrrrrrrrrrrrBZbvji"",
+                  ""value"": ""-9999999999999999e80""
+                },
+                ""Flags"": 1114112,
+                ""HighLimit"": {
+                  ""currency"": ""USD"",
+                  ""issuer"": ""rXPMxBeefHGxx2K7g5qmmWq3gFsgawkoa"",
+                  ""value"": ""0""
+                },
+                ""HighNode"": ""0"",
+                ""LowLimit"": {
+                  ""currency"": ""USD"",
+                  ""issuer"": ""rLiooJRSKeiNfRJcDBUhu4rcjQjGLWqa4p"",
+                  ""value"": ""1000000000""
+                },
+                ""LowNode"": ""0""
+              },
+              ""LedgerEntryType"": ""RippleState"",
+              ""LedgerIndex"": ""1BC0B4F0B0C0B0F0B0C0B0F0B0C0B0F0B0C0B0F0B0C0B0F0B0C0B0F0B0C0B0F0"",
+              ""PreviousFields"": {
+                ""Balance"": {
+                  ""currency"": ""USD"",
+                  ""issuer"": ""rrrrrrrrrrrrrrrrrrrrBZbvji"",
+                  ""value"": ""-100""
+                }
+              }
+            }
+          }
+        ],
+        ""TransactionIndex"": 0,
+        ""TransactionResult"": ""tesSUCCESS""
+      }";
+
     private const string metaData_1 = @"{
     ""AffectedNodes"": [
         {
