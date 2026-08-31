@@ -169,7 +169,7 @@ public sealed class BatchSignStatus
     /// <summary>The batch's root account: the top-level Account field.</summary>
     public string Root { get; init; }
 
-    /// <summary>Every distinct account that originates an inner transaction (RawTransactions.RawTransaction.Account).</summary>
+    /// <summary>Distinct non-root accounts that must sign the batch, following rippled's Batch::preflight requiredSigners: each inner transaction's Delegate when it has one and its Account otherwise, plus any Counterparty, plus any Sponsor carrying a SponsorSignature.</summary>
     public IReadOnlyList<string> InnerRequired { get; init; } = Array.Empty<string>();
 
     /// <summary>Those of InnerRequired that already carry a signature in BatchSigners.</summary>
@@ -207,7 +207,7 @@ public static class BatchSignStatusExtensions
         }
 
         // Reuse the existing utility to obtain the root and the raw accounts
-        var accs = tx.GetBatchSignerAccounts(); // Root + Raw (distinct) :contentReference[oaicite:0]{index=0}
+        var accs = tx.GetBatchSignerAccounts(); // Root + Raw (distinct)
         var root = accs.Root;
         var requiredInner = accs.Raw
             .Distinct(StringComparer.OrdinalIgnoreCase)

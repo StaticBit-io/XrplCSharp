@@ -1268,8 +1268,8 @@ namespace Xrpl.Wallet
         /// <summary>
         /// Merges several partially signed Batch transactions (txBlob in hex) into one final blob.
         /// Conditions:
-        ///  - Every input blob must be a Batch and carry an IDENTICAL body, apart from SigningPubKey/TxnSignature/BatchSigners.
-        ///  - Only the signatures in BatchSigners are merged - and, where there are no BatchSigners, the outer signature.
+        ///  - Every input blob must be a Batch and carry an IDENTICAL body, apart from SigningPubKey/TxnSignature/BatchSigners/Signers.
+        ///  - BatchSigners and root Signers are both merged. Where the inputs carry no root Signers, an identical outer signature is carried over, whether or not there are BatchSigners.
         ///  - BatchSigners are sorted by Account; the nested Signers by Signer.Account.
         /// </summary>
         public static SignatureResult CombineBatchSigners(params string[] txBlobs)
