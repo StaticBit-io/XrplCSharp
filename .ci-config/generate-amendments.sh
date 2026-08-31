@@ -41,8 +41,15 @@
 # This list is shared by every target config, so an entry must be a name BOTH
 # binaries know (a Supported::No declaration counts): a name unknown to one of
 # them lands in that stand's [features] and rippled rejects it at startup.
-# Example of what does NOT belong here: LendingProtocolV1_1 — Supported::No on
-# develop, absent from the 3.2.0 macro entirely.
+#
+# LendingProtocolV1_1 used to be the example of what does NOT belong here, being
+# Supported::No on develop and absent from the release macro entirely. Both
+# halves have since stopped being true - the CI stand moved to 3.3.0, which
+# declares it, and develop marked it Supported::Yes on 2026-08-26 - so it is no
+# longer an example of anything. As of this writing no amendment fits that
+# shape: every Supported::No name on develop is also known to 3.3.0. The rule
+# still stands; it simply has no live instance to point at, which is why the
+# check below is on the name rather than on a list of exceptions.
 EXTRA_FEATURES="MPTokensV2"
 
 set -euo pipefail
