@@ -889,8 +889,8 @@ public static class XrplErrorClassifier
 
     private static IReadOnlyList<string> ExtractWarnings(ErrorResponse response)
     {
-        // Подстрой под свою BaseResponse, если там есть Warnings.
-        // Сейчас это safe-заглушка.
+        // Collect the warning messages worth surfacing; an absent or empty
+        // Warnings list yields an empty result rather than null.
         var result = new List<string>();
 
         if (response.Warnings is not { Count: > 0 } warnings)
@@ -905,7 +905,7 @@ public static class XrplErrorClassifier
 
             if (id == 2001)
             {
-                // информационное сообщение, ответ получен от Clio: обычно это не причина ошибки.
+                // An informational message: an answer came from Clio, which is usually not the cause of an error.
                 continue;
             }
             else if (!string.IsNullOrWhiteSpace(msg))

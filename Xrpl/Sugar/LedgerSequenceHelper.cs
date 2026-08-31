@@ -21,7 +21,7 @@ public static class LedgerSequenceHelper
         if (transaction is Dictionary<string, object> dictDyn)
             return TryGetUint(dictDyn, "LastLedgerSequence");
 
-        // 2) твой тип
+        // 2) your own type
         if (transaction is TransactionRequest txc)
             return txc.LastLedgerSequence;
 
@@ -45,7 +45,7 @@ public static class LedgerSequenceHelper
     {
         if (value is null) return null;
 
-        // если dynamic внутри оказался JsonNode/JsonElement
+        // in case the dynamic turns out to hold a JsonNode or JsonElement
         if (value is JsonNode jn)
         {
             if (jn is JsonValue jv)
@@ -83,7 +83,7 @@ public static class LedgerSequenceHelper
 
                 case string str:
                     str = str.Trim();
-                    // на всякий: "123", "123.0"
+                    // just in case: "123", "123.0"
                     if (uint.TryParse(str, NumberStyles.Integer, CultureInfo.InvariantCulture, out var parsedU))
                         return parsedU;
                     if (decimal.TryParse(str, NumberStyles.Number, CultureInfo.InvariantCulture, out var dec) &&
@@ -101,7 +101,7 @@ public static class LedgerSequenceHelper
                     return (uint)f;
 
                 default:
-                    // последний шанс: Convert (поймает boxed-числа)
+                    // last resort: Convert, which catches boxed numbers
                     var conv = Convert.ToUInt64(value, CultureInfo.InvariantCulture);
                     return conv <= uint.MaxValue ? (uint)conv : null;
             }
