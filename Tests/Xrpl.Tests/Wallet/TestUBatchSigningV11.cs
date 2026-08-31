@@ -1,5 +1,6 @@
 using System;
 using System.Collections.Generic;
+using System.Globalization;
 using System.Text.Json;
 using System.Text.Json.Nodes;
 
@@ -35,6 +36,17 @@ namespace Xrpl.Tests.Wallet.Tests
             ["Fee"] = "0",
             ["SigningPubKey"] = "",
             ["Flags"] = TfInnerBatchTxn
+        };
+
+        // An inner transaction as a caller may well hand it over: none of the three
+        // fields normalisation is responsible for is present.
+        private static JsonObject UnnormalizedInnerPayment(string account, string destination, uint sequence) => new JsonObject
+        {
+            ["TransactionType"] = "Payment",
+            ["Account"] = account,
+            ["Destination"] = destination,
+            ["Amount"] = "1000000",
+            ["Sequence"] = sequence
         };
 
         private static Dictionary<string, object> BuildBatchDictionary(JsonObject outer) =>
@@ -210,6 +222,44 @@ namespace Xrpl.Tests.Wallet.Tests
 
             Assert.ThrowsExactly<Xrpl.Client.Exceptions.ValidationException>(() =>
                 participant.SignAsBatchPart(BuildBatchDictionary(outer), multisign: false, signingFor: participant.ClassicAddress));
+        }
+
+        [TestMethod]
+        public void TestUSignAsBatchPart_EmittedBlobCarriesNormalizedInnerTransactions()
+        {
+            XrplWallet submitter = XrplWallet.Generate();
+            XrplWallet participant = XrplWallet.Generate();
+            XrplWallet destination = XrplWallet.Generate();
+
+            JsonObject inner = UnnormalizedInnerPayment(participant.ClassicAddress, destination.ClassicAddress, 7);
+            JsonObject outer = BuildOuterBatch(submitter.ClassicAddress, 3, inner);
+
+            SignatureResult result = participant.SignAsBatchPart(BuildBatchDictionary(outer), multisign: false, signingFor: participant.ClassicAddress);
+
+            JsonNode decoded = XrplBinaryCodec.Decode(result.TxBlob);
+            JsonObject decodedInner = decoded["RawTransactions"]?.AsArray()?[0]?["RawTransaction"]?.AsObject()
+                ?? throw new AssertFailedException("Decoded blob has no inner RawTransaction.");
+
+            Assert.AreEqual("0", decodedInner["Fee"]?.GetValue<string>(),
+                "Fee of the inner transaction in the emitted blob.");
+            Assert.AreEqual(string.Empty, decodedInner["SigningPubKey"]?.GetValue<string>(),
+                "SigningPubKey of the inner transaction in the emitted blob.");
+
+            // Read through the JSON text: the numeric type backing the node depends on how
+            // the codec built it, and a TryGetValue that guesses wrong would quietly read 0.
+            JsonNode flagsNode = decodedInner["Flags"]
+                ?? throw new AssertFailedException("Inner transaction in the emitted blob carries no Flags.");
+            uint decodedFlags = uint.Parse(flagsNode.ToJsonString(), CultureInfo.InvariantCulture);
+            Assert.AreEqual(TfInnerBatchTxn, decodedFlags & TfInnerBatchTxn,
+                "tfInnerBatchTxn of the inner transaction in the emitted blob.");
+
+            // The point of the three assertions above: the batch preimage commits to the
+            // txIDs of the NORMALISED inner transactions, so the blob has to carry those
+            // same transactions. Were it to carry the originals, the signature would
+            // attest to something the blob does not contain.
+            string signedTxId = ((JsonObject)inner.DeepClone()).NormalizeInnerTransaction().ComputeInnerTxId();
+            Assert.AreEqual(signedTxId, decodedInner.ComputeInnerTxId(),
+                "The inner transaction in the blob must hash to the txID the signature was made over.");
         }
 
         [TestMethod]
