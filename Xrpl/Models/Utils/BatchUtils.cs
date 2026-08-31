@@ -87,15 +87,20 @@ public static class BatchUtils
         if (!tx.TryGetValue("RawTransactions", out var rawTransactions) || rawTransactions is null)
             throw new ValidationException("Batch transaction must have RawTransactions field.");
 
+        // An element that is not an object used to reach the deserializer and come back out as
+        // "Expected StartObject token" from a converter - the first thing a caller sees about a
+        // malformed batch, naming neither the field nor the position. This is the gate every
+        // batch-signing path passes through, so it is refused here, as every other malformed
+        // input in this file is.
         var raws = rawTransactions switch
         {
-            JsonArray ja => ja.Select(n => JsonSerializer.Deserialize<Dictionary<string, object>>(
-                                n.ToJsonString(), XrplJsonOptions.Default))
+            JsonArray ja => ja.Select((n, i) => n is JsonObject
+                                ? JsonSerializer.Deserialize<Dictionary<string, object>>(
+                                    n.ToJsonString(), XrplJsonOptions.Default)!
+                                : throw new ValidationException($"RawTransactions[{i}] must be an object."))
                          .ToList(),
             IEnumerable ie => ie.Cast<object>()
-                    .Select(o => o as Dictionary<string, object>
-                              ?? JsonSerializer.Deserialize<Dictionary<string, object>>(
-                                  JsonSerializer.Serialize(o, XrplJsonOptions.Default), XrplJsonOptions.Default)!)
+                    .Select((o, i) => o as Dictionary<string, object> ?? ToRawDictionary(o, i))
                     .ToList(),
             _ => throw new ValidationException("RawTransactions must be array/collection.")
         };
@@ -155,6 +160,21 @@ public static class BatchUtils
             Root = root,
             Raw = rawAccounts
         };
+    }
+
+    // Serializing first and inspecting the result keeps every shape that legitimately turns up
+    // here - a typed RawTransactionWrapper, an IDictionary, a JsonObject - while a JSON value
+    // that is not an object is named by position rather than failing inside a converter.
+    private static Dictionary<string, object> ToRawDictionary(object element, int index)
+    {
+        JsonNode node = JsonNode.Parse(JsonSerializer.Serialize(element, XrplJsonOptions.Default))
+            ?? throw new ValidationException($"RawTransactions[{index}] must be an object.");
+
+        if (node is not JsonObject)
+            throw new ValidationException($"RawTransactions[{index}] must be an object.");
+
+        return JsonSerializer.Deserialize<Dictionary<string, object>>(
+            node.ToJsonString(), XrplJsonOptions.Default)!;
     }
 }
 

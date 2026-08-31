@@ -829,9 +829,17 @@ namespace Xrpl.Wallet
                 throw new ValidationException("Batch.RawTransactions length must be between 1 and 8.");
 
             var normalizedInners = new List<JsonObject>(innerTransactions.Count);
-            // 3) Walk the inner transactions and validate them against XLS-56
-            foreach (var item in innerTransactions.Where(n => n is JsonObject).Select(n => n!.AsObject()))
+            // 3) Walk the inner transactions and validate them against XLS-56.
+            // The loop is indexed rather than filtered on `n is JsonObject`. Such an element cannot
+            // reach here today - VerifyBatchSubmitter runs GetBatchSignerAccounts first, which
+            // refuses it - so this cannot fire; it is kept because a silent skip is the wrong thing
+            // to leave behind should that order ever change, and because every other malformed
+            // input in this loop is refused rather than dropped.
+            for (int i = 0; i < innerTransactions.Count; i++)
             {
+                JsonObject item = innerTransactions[i] as JsonObject
+                    ?? throw new ValidationException($"Batch.RawTransactions[{i}] must be an object.");
+
                 var innerTx = item["RawTransaction"]?.AsObject()
                               ?? throw new ValidationException("RawTransaction must be an object.");
                 // TransactionType is required, and must not be Batch

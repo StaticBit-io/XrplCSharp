@@ -278,6 +278,26 @@ namespace Xrpl.Tests.Wallet.Tests
         }
 
         [TestMethod]
+        public void TestUSignAsBatchPart_NonObjectRawTransactionsEntry_Throws()
+        {
+            XrplWallet submitter = XrplWallet.Generate();
+            XrplWallet participant = XrplWallet.Generate();
+            XrplWallet destination = XrplWallet.Generate();
+
+            JsonObject inner = InnerPayment(participant.ClassicAddress, destination.ClassicAddress, 20);
+            JsonObject outer = BuildOuterBatch(submitter.ClassicAddress, 3, inner);
+            outer["RawTransactions"]!.AsArray().Add(JsonValue.Create("not an object"));
+
+            // Such an entry is neither validated nor normalised and its txID never reaches the
+            // batch preimage, yet it stays in the transaction that gets encoded into the blob.
+            Xrpl.Client.Exceptions.ValidationException error = Assert.ThrowsExactly<Xrpl.Client.Exceptions.ValidationException>(() =>
+                participant.SignAsBatchPart(BuildBatchDictionary(outer), multisign: false, signingFor: participant.ClassicAddress));
+
+            StringAssert.Contains(error.Message, "[1]",
+                "The failure must name the offending index.");
+        }
+
+        [TestMethod]
         public void TestUNormalizeInnerTransaction_LeavesItsArgumentUntouched()
         {
             XrplWallet participant = XrplWallet.Generate();
