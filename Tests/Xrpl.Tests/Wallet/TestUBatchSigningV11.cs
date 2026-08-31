@@ -75,7 +75,7 @@ namespace Xrpl.Tests.Wallet.Tests
             var txIds = new List<string>(inners.Length);
             foreach (JsonObject inner in inners)
             {
-                JsonObject normalized = ((JsonObject)inner.DeepClone()).NormalizeInnerTransaction();
+                JsonObject normalized = inner.NormalizeInnerTransaction();
                 txIds.Add(normalized.ComputeInnerTxId());
             }
             return XrplBinaryCodec.EncodeForSigningBatch(outerAccount, outerSequence, flags, txIds);
@@ -257,7 +257,7 @@ namespace Xrpl.Tests.Wallet.Tests
             // txIDs of the NORMALISED inner transactions, so the blob has to carry those
             // same transactions. Were it to carry the originals, the signature would
             // attest to something the blob does not contain.
-            string signedTxId = ((JsonObject)inner.DeepClone()).NormalizeInnerTransaction().ComputeInnerTxId();
+            string signedTxId = inner.NormalizeInnerTransaction().ComputeInnerTxId();
             Assert.AreEqual(signedTxId, decodedInner.ComputeInnerTxId(),
                 "The inner transaction in the blob must hash to the txID the signature was made over.");
 
@@ -275,6 +275,31 @@ namespace Xrpl.Tests.Wallet.Tests
             byte[] signerAccountId = XrplCodec.DecodeAccountID(participant.ClassicAddress);
             Assert.IsTrue(XrplKeypairs.Verify(Concat(preimage, signerAccountId), signature, participant.PublicKey),
                 "The signature must cover a preimage built from the normalised inner transactions.");
+        }
+
+        [TestMethod]
+        public void TestUNormalizeInnerTransaction_LeavesItsArgumentUntouched()
+        {
+            XrplWallet participant = XrplWallet.Generate();
+            XrplWallet destination = XrplWallet.Generate();
+
+            JsonObject source = UnnormalizedInnerPayment(participant.ClassicAddress, destination.ClassicAddress, 7);
+            source["LastLedgerSequence"] = 500u;
+            string before = source.ToJsonString();
+
+            JsonObject normalized = source.NormalizeInnerTransaction();
+
+            Assert.AreEqual(before, source.ToJsonString(),
+                "NormalizeInnerTransaction must leave the transaction it was given alone.");
+            Assert.AreNotSame(source, normalized,
+                "NormalizeInnerTransaction must return an object of its own.");
+
+            // And the returned object is the normalised one, so the guarantee above is not
+            // bought by the method having quietly stopped doing its work.
+            Assert.AreEqual("0", normalized["Fee"]?.GetValue<string>());
+            Assert.AreEqual(string.Empty, normalized["SigningPubKey"]?.GetValue<string>());
+            Assert.IsNull(normalized["LastLedgerSequence"],
+                "LastLedgerSequence must be absent from the normalised result.");
         }
 
         [TestMethod]
