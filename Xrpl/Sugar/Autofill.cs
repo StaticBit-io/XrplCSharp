@@ -640,19 +640,19 @@ namespace Xrpl.Sugar
         {
             dict = null!;
 
-            // Приводим к JsonObject максимально рано
+            // Convert to a JsonObject as early as possible
             JsonObject entry = item as JsonObject
                 ?? JsonNode.Parse(JsonSerializer.Serialize(item, XrplJsonOptions.Default))?.AsObject();
             if (entry == null) return false;
 
-            // Достаём RawTransaction
+            // Fetch RawTransaction
             JsonNode rawNode = entry["RawTransaction"];
             if (rawNode == null) return false;
             JsonObject raw = rawNode as JsonObject
                 ?? JsonNode.Parse(rawNode.ToJsonString())?.AsObject();
             if (raw == null) return false;
 
-            // В словарь
+            // Into the dictionary
             var tmp = JsonSerializer.Deserialize<Dictionary<string, object>>(raw.ToJsonString(), XrplJsonOptions.Default);
             if (tmp == null) return false;
 

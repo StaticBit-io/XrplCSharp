@@ -409,24 +409,24 @@ public static class CurrencyExtensions
         if (string.IsNullOrWhiteSpace(currencyCode))
             return currencyCode;
 
-        // Стандартный 3-символьный код
+        // Standard three-character code
         if (currencyCode.Length == 3)
         {
             return currencyCode.Trim();
         }
 
-        // Проверка на 40-символьный шестнадцатеричный код
+        // Check for a 40-character hexadecimal code
         if (currencyCode.IsHexCurrencyCode())
         {
             string hex = currencyCode;
 
-            // Устаревший код с демереджем (начинается с 01)
+            // Legacy demurrage code, which begins with 01
             if (hex.StartsWith("01"))
             {
                 return ConvertDemurrageToUTF8(currencyCode);
             }
 
-            // XLS-16d NFT Metadata (начинается с 02)
+            // XLS-16d NFT metadata, which begins with 02
             if (hex.StartsWith("02"))
             {
                 string xlf15d = Encoding.UTF8.GetString(HexToBytes(hex)).Substring(8, Math.Min(maxLength, hex.Length / 2 - 8)).Trim();
@@ -441,7 +441,7 @@ public static class CurrencyExtensions
                 return $"LP {currencyCode[2..6]}..";
             }
 
-            // Обычный шестнадцатеричный код
+            // An ordinary hexadecimal code
             var decodedHex = hex.FromHexString().Replace("\0", null).Trim('\0');
             if (string.IsNullOrWhiteSpace(decodedHex))
             {
@@ -458,24 +458,24 @@ public static class CurrencyExtensions
         if (string.IsNullOrWhiteSpace(currencyCode))
             return false;
 
-        // Стандартный 3-символьный код
+        // Standard three-character code
         if (currencyCode.Length == 3 && currencyCode.Trim().ToLower() != "xrp")
         {
             return true;
         }
 
-        // Проверка на 40-символьный шестнадцатеричный код
+        // Check for a 40-character hexadecimal code
         if (currencyCode.IsHexCurrencyCode())
         {
             string hex = currencyCode;
 
-            // Устаревший код с демереджем (начинается с 01)
+            // Legacy demurrage code, which begins with 01
             if (hex.StartsWith("01"))
             {
                 return false;
             }
 
-            // XLS-16d NFT Metadata (начинается с 02)
+            // XLS-16d NFT metadata, which begins with 02
             if (hex.StartsWith("02"))
             {
                 return false;
@@ -486,7 +486,7 @@ public static class CurrencyExtensions
                 return false;
             }
 
-            // Обычный шестнадцатеричный код
+            // An ordinary hexadecimal code
             return true;
         }
 
@@ -497,10 +497,10 @@ public static class CurrencyExtensions
         byte[] bytes = HexToBytes(demurrageCode);
         string code = $"{(char)bytes[1]}{(char)bytes[2]}{(char)bytes[3]}";
 
-        // Вычисление процентной ставки
+        // Interest rate computation
         int interestStart = (bytes[4] << 24) | (bytes[5] << 16) | (bytes[6] << 8) | bytes[7];
         double interestPeriod = BitConverter.ToDouble(bytes.Skip(8).Take(8).Reverse().ToArray(), 0);
-        const int yearSeconds = 31536000; // Фиксированное количество секунд в году
+        const int yearSeconds = 31536000; // A fixed number of seconds in a year
         double interestAfterYear = Math.Pow(Math.E, (interestStart + yearSeconds - interestStart) / interestPeriod);
         double interest = (interestAfterYear * 100) - 100;
 
