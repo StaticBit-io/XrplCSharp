@@ -926,7 +926,8 @@ namespace Xrpl.Wallet
                     ["SigningPubKey"] = this.PublicKey,
                     ["TxnSignature"] = signature
                     // For a multi-signature under THIS SAME account, replace the pair above with "Signers": [ { Signer{Account,SigningPubKey,TxnSignature} }, ... ]
-                    // Each Signer signs over that same preimage.
+                    // A nested Signer signs a longer preimage than the single form above:
+                    // batch-preimage + BatchSigner.Account(20) + that signer's own account ID(20).
                 };
                 batchSigners.Add(new JsonObject { ["BatchSigner"] = signerObj });
 

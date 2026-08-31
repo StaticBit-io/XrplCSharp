@@ -28,7 +28,7 @@ public static class BatchNormalizer
     /// - adds the tfInnerBatchTxn flag;
     /// - removes TxnSignature, Signers, LastLedgerSequence;
     /// - forces Fee = "0" (as a string) and SigningPubKey = "".
-    /// Returns a new JsonObject; the original is left alone.
+    /// Mutates source in place and returns that same instance.
     /// </summary>
     public static JsonObject NormalizeInnerTransaction(this JsonObject source)
     {
