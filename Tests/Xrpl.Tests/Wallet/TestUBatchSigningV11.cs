@@ -260,6 +260,21 @@ namespace Xrpl.Tests.Wallet.Tests
             string signedTxId = ((JsonObject)inner.DeepClone()).NormalizeInnerTransaction().ComputeInnerTxId();
             Assert.AreEqual(signedTxId, decodedInner.ComputeInnerTxId(),
                 "The inner transaction in the blob must hash to the txID the signature was made over.");
+
+            // That equality alone still leaves one half unpinned: it says the blob agrees with a
+            // txID computed here, not that the signature was made over a preimage containing it.
+            // A regression hashing the originals into the preimage while writing the normalised
+            // form into the blob would satisfy everything above. So verify the signature against
+            // a preimage built from the normalised inner transactions.
+            JsonObject batchSigner = decoded["BatchSigners"]?.AsArray()?[0]?["BatchSigner"]?.AsObject()
+                ?? throw new AssertFailedException("BatchSigners missing in signed tx.");
+            string signature = batchSigner["TxnSignature"]?.GetValue<string>()
+                ?? throw new AssertFailedException("TxnSignature missing.");
+
+            byte[] preimage = ComputeBasePreimage(submitter.ClassicAddress, 3, TfAllOrNothing, inner);
+            byte[] signerAccountId = XrplCodec.DecodeAccountID(participant.ClassicAddress);
+            Assert.IsTrue(XrplKeypairs.Verify(Concat(preimage, signerAccountId), signature, participant.PublicKey),
+                "The signature must cover a preimage built from the normalised inner transactions.");
         }
 
         [TestMethod]
