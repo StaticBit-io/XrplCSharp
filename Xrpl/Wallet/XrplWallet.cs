@@ -853,8 +853,14 @@ namespace Xrpl.Wallet
                 if (innerTx["SigningPubKey"] != null && innerTx["SigningPubKey"]?.GetValue<string>() != "")
                     throw new ValidationException("Inner tx SigningPubKey must be empty string when present.");
 
-                // Normalise for the txid computation (Fee="0", SigningPubKey="", + tfInnerBatchTxn)
-                normalizedInners.Add(innerTx.NormalizeInnerTransaction());
+                // Normalise for the txid computation (Fee="0", SigningPubKey="", + tfInnerBatchTxn).
+                // The normalised form has to go back into `outer`: the blob is encoded from it
+                // further down, while the batch preimage commits to the txIDs computed here. Were
+                // the two to diverge, the signature would attest to transactions the blob does not
+                // carry.
+                JsonObject normalizedInner = innerTx.NormalizeInnerTransaction();
+                item["RawTransaction"] = normalizedInner;
+                normalizedInners.Add(normalizedInner);
             }
 
 

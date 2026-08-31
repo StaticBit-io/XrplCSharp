@@ -1,5 +1,13 @@
 # Changes
 
+## 11.2.0.0
+
+* **`NormalizeInnerTransaction` no longer rewrites the transaction it is given** (#157). The method strips `TxnSignature`, `Signers` and `LastLedgerSequence` and overwrites `Fee`, `SigningPubKey` and `Flags`. It did that to the caller's own `JsonObject` and returned that same instance, so anything a consumer held and passed in came back altered. It now normalises a copy and leaves the argument alone.
+  * the two overloads no longer disagree. `NormalizeInnerTransaction(object)` rewrote its argument when the runtime type happened to be a `JsonObject` and did not when it was anything else - the same call, with aliasing decided by a type test the caller cannot see
+  * **`SignAsBatchPart` depended on the mutation, and not visibly.** It normalises each inner transaction, hashes the results into the batch preimage, and finally encodes `outer` into the blob - and the normalised fields reached that blob only because normalisation rewrote the objects living inside `outer`. The call site read as though it merely collected a list for the txIDs. It now writes the normalised transaction back explicitly, which is what the old code achieved by side effect
+  * nothing pinned any of this. The batch fixture supplied inner transactions that already carried `Fee = "0"`, `SigningPubKey = ""` and `tfInnerBatchTxn`, so normalisation was a no-op on them: making the method return a copy left all 1215 unit tests green while the emitted blob carried inner transactions the signature never committed to. Both halves are now pinned - that the blob carries normalised inners, and that the signature covers a preimage built from them (#158)
+  * a caller who relied on the old behaviour was relying on something the documentation denied until it was corrected in #156
+
 ## 11.1.0.0 08/27/2026
 
 * **The signing path builds its `JsonSerializerOptions` once** (#147). `XrplBinaryCodec.ObjectToJsonNode` constructed a fresh instance on every call, and every signing operation goes through it - `Encode`, `EncodeForSigning`, `EncodeForSigningClaim` and `EncodeForMultiSigning` all route there. Measured end to end on `EncodeForSigning`, 50 000 calls: **1075.8 ms and 14458 B/op before, 621.8 ms and 13601 B/op after** - 1.73x, and 857 fewer bytes each call. The encoded blob is unchanged, hashing identically either way.
