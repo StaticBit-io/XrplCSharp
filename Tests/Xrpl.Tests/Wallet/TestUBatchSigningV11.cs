@@ -293,8 +293,60 @@ namespace Xrpl.Tests.Wallet.Tests
             Xrpl.Client.Exceptions.ValidationException error = Assert.ThrowsExactly<Xrpl.Client.Exceptions.ValidationException>(() =>
                 participant.SignAsBatchPart(BuildBatchDictionary(outer), multisign: false, signingFor: participant.ClassicAddress));
 
-            StringAssert.Contains(error.Message, "[1]",
-                "The failure must name the offending index.");
+            // Compared whole, not searched for "[1]": both layers that could refuse this name the
+            // same index, and only the full text says which one did.
+            Assert.AreEqual("RawTransactions[1] must be an object.", error.Message);
+        }
+
+        [TestMethod]
+        public void TestUGetBatchSignerAccounts_JsonArrayOfSerializableWrappers_Accepted()
+        {
+            XrplWallet submitter = XrplWallet.Generate();
+            XrplWallet participant = XrplWallet.Generate();
+            XrplWallet destination = XrplWallet.Generate();
+
+            // JsonArray.Add<T> wraps a non-JsonNode value in a JsonValue rather than a JsonObject.
+            // It still writes a JSON object, so it belongs here - judging the element by its
+            // runtime type instead of by what it serializes to would refuse it.
+            JsonArray rawArray = new JsonArray();
+            rawArray.Add(new Dictionary<string, object>
+            {
+                ["RawTransaction"] = InnerPayment(participant.ClassicAddress, destination.ClassicAddress, 20)
+            });
+
+            Dictionary<string, object> tx = new Dictionary<string, object>
+            {
+                ["TransactionType"] = "Batch",
+                ["Account"] = submitter.ClassicAddress,
+                ["RawTransactions"] = rawArray
+            };
+
+            BatchSignerAccounts accounts = tx.GetBatchSignerAccounts();
+
+            Assert.AreEqual(submitter.ClassicAddress, accounts.Root);
+            Assert.AreEqual(1, accounts.Raw.Count);
+            Assert.AreEqual(participant.ClassicAddress, accounts.Raw[0]);
+        }
+
+        [TestMethod]
+        public void TestUGetBatchSignerAccounts_NonObjectRawTransaction_Throws()
+        {
+            XrplWallet submitter = XrplWallet.Generate();
+
+            Dictionary<string, object> tx = new Dictionary<string, object>
+            {
+                ["TransactionType"] = "Batch",
+                ["Account"] = submitter.ClassicAddress,
+                ["RawTransactions"] = new List<object>
+                {
+                    new Dictionary<string, object> { ["RawTransaction"] = "not an object" }
+                }
+            };
+
+            Xrpl.Client.Exceptions.ValidationException error = Assert.ThrowsExactly<Xrpl.Client.Exceptions.ValidationException>(
+                () => tx.GetBatchSignerAccounts());
+
+            Assert.AreEqual("RawTransactions[0].RawTransaction must be an object.", error.Message);
         }
 
         [TestMethod]

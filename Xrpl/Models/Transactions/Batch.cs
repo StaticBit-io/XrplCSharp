@@ -169,7 +169,7 @@ public partial class Validation
             var wrapper = rawTxs[i];
             if (wrapper is not IDictionary<string, object> { } wrapperDict)
             {
-                throw new ArgumentException($"Batch: RawTransactions[{i}] is null.");
+                throw new ArgumentException($"Batch: RawTransactions[{i}] must be an object.");
             }
 
             if (!wrapperDict.TryGetValue("RawTransaction", out var innerTxObj) ||

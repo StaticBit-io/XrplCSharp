@@ -94,13 +94,10 @@ public static class BatchUtils
         // input in this file is.
         var raws = rawTransactions switch
         {
-            JsonArray ja => ja.Select((n, i) => n is JsonObject
-                                ? JsonSerializer.Deserialize<Dictionary<string, object>>(
-                                    n.ToJsonString(), XrplJsonOptions.Default)!
-                                : throw new ValidationException($"RawTransactions[{i}] must be an object."))
-                         .ToList(),
+            JsonArray ja => ja.Select((n, i) => ToObjectDictionary(n, $"RawTransactions[{i}]")).ToList(),
             IEnumerable ie => ie.Cast<object>()
-                    .Select((o, i) => o as Dictionary<string, object> ?? ToRawDictionary(o, i))
+                    .Select((o, i) => o as Dictionary<string, object>
+                                      ?? ToObjectDictionary(o, $"RawTransactions[{i}]"))
                     .ToList(),
             _ => throw new ValidationException("RawTransactions must be array/collection.")
         };
@@ -108,15 +105,16 @@ public static class BatchUtils
         var rawAccounts = new List<string>();
         var seen = new HashSet<string>(StringComparer.OrdinalIgnoreCase);
 
-        foreach (var wrapper in raws)
+        for (int i = 0; i < raws.Count; i++)
         {
+            Dictionary<string, object> wrapper = raws[i];
+
             if (!wrapper.TryGetValue("RawTransaction", out var rawTxObj) || rawTxObj is null)
                 throw new ValidationException("Each RawTransactions item must contain RawTransaction.");
 
             // convert to pure dictionary
             var rawTx = rawTxObj as Dictionary<string, object>
-                        ?? JsonSerializer.Deserialize<Dictionary<string, object>>(
-                            JsonSerializer.Serialize(rawTxObj, XrplJsonOptions.Default), XrplJsonOptions.Default)!;
+                        ?? ToObjectDictionary(rawTxObj, $"RawTransactions[{i}].RawTransaction");
 
             wrapper["RawTransaction"] = rawTx;
 
@@ -162,19 +160,20 @@ public static class BatchUtils
         };
     }
 
-    // Serializing first and inspecting the result keeps every shape that legitimately turns up
-    // here - a typed RawTransactionWrapper, an IDictionary, a JsonObject - while a JSON value
-    // that is not an object is named by position rather than failing inside a converter.
-    private static Dictionary<string, object> ToRawDictionary(object element, int index)
+    // Judged by what the element serializes to, never by its runtime type. Every shape that
+    // legitimately turns up here - a typed RawTransactionWrapper, an IDictionary, a JsonObject,
+    // a JsonValue wrapping a POCO - writes a JSON object and is accepted; a JSON value that is
+    // not an object is named rather than left to fail inside a converter.
+    private static Dictionary<string, object> ToObjectDictionary(object? element, string what)
     {
-        JsonNode node = JsonNode.Parse(JsonSerializer.Serialize(element, XrplJsonOptions.Default))
-            ?? throw new ValidationException($"RawTransactions[{index}] must be an object.");
+        string json = element is JsonNode node
+            ? node.ToJsonString()
+            : JsonSerializer.Serialize(element, XrplJsonOptions.Default);
 
-        if (node is not JsonObject)
-            throw new ValidationException($"RawTransactions[{index}] must be an object.");
+        if (JsonNode.Parse(json) is not JsonObject)
+            throw new ValidationException($"{what} must be an object.");
 
-        return JsonSerializer.Deserialize<Dictionary<string, object>>(
-            node.ToJsonString(), XrplJsonOptions.Default)!;
+        return JsonSerializer.Deserialize<Dictionary<string, object>>(json, XrplJsonOptions.Default)!;
     }
 }
 
