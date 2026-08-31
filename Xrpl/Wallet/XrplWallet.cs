@@ -1392,8 +1392,9 @@ namespace Xrpl.Wallet
             }
             else
             {
-                // 6) Outer signature: if it is the same across every blob, keep it,
-                // whether or not BatchSigners are present.
+                // 6) Outer signature: blobs carrying neither TxnSignature nor SigningPubKey take
+                // no part; the first pair found is kept, and a later pair that differs from it is
+                // a conflict. Applies whether or not BatchSigners are present.
                 string? outSig = null, outPub = null;
                 bool gotOuter = false;
 

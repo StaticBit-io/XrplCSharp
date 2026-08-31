@@ -130,10 +130,11 @@ namespace Xrpl.Keypairs
                 return "ED" + expanded[32..64].ToHex();
             }
 
-            // XRPL secp256k1: "00" prefix (33 bytes, first byte = 0x00) - BigInteger needs it without the sign byte
+            // XRPL secp256k1: "00" prefix (33 bytes, first byte = 0x00) - the prefix is stripped, leaving the 32-byte scalar
             // BIP-39 secp256k1: the raw 32 bytes - straight into BigInteger
+            // The leading 1 is BigInteger's sign argument; the magnitude after it is unsigned.
             var privKeyBigInt = keyBytes.Length == 33 && keyBytes[0] == 0x00
-                ? new BigInteger(1, keyBytes[1..])   // drop the "00" sign byte
+                ? new BigInteger(1, keyBytes[1..])   // drop the "00" prefix
                 : new BigInteger(1, keyBytes);        // the raw 32 bytes
 
             return K256KeyGenerator.ComputePublicKey(privKeyBigInt).GetEncoded(true).ToHex();

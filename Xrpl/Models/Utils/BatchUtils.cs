@@ -172,7 +172,7 @@ public sealed class BatchSignStatus
     /// <summary>Distinct non-root accounts that must sign the batch, following rippled's Batch::preflight requiredSigners: each inner transaction's Delegate when it has one and its Account otherwise, plus any Counterparty, plus any Sponsor carrying a SponsorSignature.</summary>
     public IReadOnlyList<string> InnerRequired { get; init; } = Array.Empty<string>();
 
-    /// <summary>Those of InnerRequired that already carry a signature in BatchSigners.</summary>
+    /// <summary>Every BatchSigners account found to carry a signature. Not filtered to InnerRequired, so an account that signed without being required appears here too.</summary>
     public IReadOnlyList<string> InnerSigned { get; init; } = Array.Empty<string>();
 
     /// <summary>Those of InnerRequired that carry NO signature in BatchSigners yet.</summary>

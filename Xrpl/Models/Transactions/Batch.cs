@@ -277,7 +277,10 @@ public partial class Validation
                     throw new ArgumentException($"Batch: BatchSigners[{i}].Account is required.");
                 }
 
-                // BatchV1_1: duplicates, and signing by an account outside the batch, both draw temBAD_SIGNER from the server
+                // BatchV1_1: rippled Batch::preflight answers temBAD_SIGNER for a duplicate signer,
+                // for the outer Batch account appearing among the signers, for an unsorted
+                // BatchSigners array, and for any signer that is not exactly the next required
+                // one. The two checks below cover the first two cases.
                 string signerAccount = $"{accountObj}";
                 if (!seenAccounts.Add(signerAccount))
                     throw new ArgumentException($"Batch: BatchSigners[{i}].Account '{signerAccount}' is duplicated (temBAD_SIGNER).");
