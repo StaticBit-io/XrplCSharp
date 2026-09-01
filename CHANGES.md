@@ -13,6 +13,10 @@
   * `SignAsBatchPart` no longer filters its inner-transaction loop on `n is JsonObject` either. That guard cannot fire - the gate above refuses such an element first, shown by mutation - but a silent skip is the wrong thing to leave behind, and every other malformed input in that loop is refused rather than dropped
   * `Batch.Validate` called such an element null in its message when it was, for instance, a string. It now says what is actually wrong
 
+* **`GetBatchSignerAccounts` no longer rewrites the batch it is asked to report on** (#161). The method returns the root account and the accounts required to sign, and it also replaced `RawTransactions[i].RawTransaction` in the caller's own dictionary with a converted copy - the `IEnumerable` branch aliases an element that is already a `Dictionary`, so the assignment landed in the caller's object. It is the gate every batch-signing path reaches through `VerifyBatchSubmitter`, so this happened on every signature.
+  * the conversion is still made, for reading; only the store-back is gone. No consumer needed it: every reader of `RawTransaction` works from a `JsonNode` built by re-serializing the transaction, not from the dictionary that was passed in
+  * that the two representations sign identically is now pinned by a test of its own, since it is the property that makes dropping the store-back safe rather than merely tidy
+
 ## 11.1.0.0 08/27/2026
 
 * **The signing path builds its `JsonSerializerOptions` once** (#147). `XrplBinaryCodec.ObjectToJsonNode` constructed a fresh instance on every call, and every signing operation goes through it - `Encode`, `EncodeForSigning`, `EncodeForSigningClaim` and `EncodeForMultiSigning` all route there. Measured end to end on `EncodeForSigning`, 50 000 calls: **1075.8 ms and 14458 B/op before, 621.8 ms and 13601 B/op after** - 1.73x, and 857 fewer bytes each call. The encoded blob is unchanged, hashing identically either way.

@@ -112,11 +112,13 @@ public static class BatchUtils
             if (!wrapper.TryGetValue("RawTransaction", out var rawTxObj) || rawTxObj is null)
                 throw new ValidationException("Each RawTransactions item must contain RawTransaction.");
 
-            // convert to pure dictionary
+            // Converted for reading only. The result is deliberately not stored back into the
+            // wrapper: in the IEnumerable branch above, an element that is already a dictionary is
+            // the caller's own, so an assignment here would rewrite the batch this method was only
+            // asked to report on. Nothing downstream needs the stored form - every consumer of
+            // RawTransaction reads it from a JsonNode built by re-serializing the transaction.
             var rawTx = rawTxObj as Dictionary<string, object>
                         ?? ToObjectDictionary(rawTxObj, $"RawTransactions[{i}].RawTransaction");
-
-            wrapper["RawTransaction"] = rawTx;
 
             if (!rawTx.TryGetValue("Account", out object accObj) || accObj is null)
                 throw new ValidationException("Each RawTransaction must contain Account.");

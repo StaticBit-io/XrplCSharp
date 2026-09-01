@@ -298,6 +298,71 @@ namespace Xrpl.Tests.Wallet.Tests
             Assert.AreEqual("RawTransactions[1] must be an object.", error.Message);
         }
 
+        private static Dictionary<string, object> BatchWithWrapperValue(string outerAccount, object rawTransactionValue) =>
+            new Dictionary<string, object>
+            {
+                ["TransactionType"] = "Batch",
+                ["Account"] = outerAccount,
+                ["Sequence"] = 3u,
+                ["Flags"] = TfAllOrNothing,
+                ["Fee"] = "40",
+                ["RawTransactions"] = new List<object>
+                {
+                    new Dictionary<string, object> { ["RawTransaction"] = rawTransactionValue }
+                }
+            };
+
+        [TestMethod]
+        public void TestUSignAsBatchPart_InnerRepresentationDoesNotChangeTheBlob()
+        {
+            XrplWallet submitter = XrplWallet.Generate();
+            XrplWallet participant = XrplWallet.Generate();
+            XrplWallet destination = XrplWallet.Generate();
+
+            JsonObject inner = InnerPayment(participant.ClassicAddress, destination.ClassicAddress, 20);
+
+            // The same batch twice: one wrapper holds a JsonObject, the other an equivalent
+            // Dictionary. They describe the same transaction, so they must sign to the same blob.
+            Dictionary<string, object> asNode = BatchWithWrapperValue(submitter.ClassicAddress, inner.DeepClone());
+            Dictionary<string, object> asDictionary = BatchWithWrapperValue(
+                submitter.ClassicAddress,
+                JsonSerializer.Deserialize<Dictionary<string, object>>(inner.ToJsonString(), XrplJsonOptions.Default)!);
+
+            SignatureResult fromNode = participant.SignAsBatchPart(asNode, multisign: false, signingFor: participant.ClassicAddress);
+            SignatureResult fromDictionary = participant.SignAsBatchPart(asDictionary, multisign: false, signingFor: participant.ClassicAddress);
+
+            Assert.AreEqual(fromDictionary.TxBlob, fromNode.TxBlob,
+                "The representation the caller happened to use must not change what gets signed.");
+        }
+
+        [TestMethod]
+        public void TestUGetBatchSignerAccounts_LeavesTheCallersDictionaryAlone()
+        {
+            XrplWallet submitter = XrplWallet.Generate();
+            XrplWallet participant = XrplWallet.Generate();
+            XrplWallet destination = XrplWallet.Generate();
+
+            JsonObject inner = InnerPayment(participant.ClassicAddress, destination.ClassicAddress, 20);
+            Dictionary<string, object> wrapper = new Dictionary<string, object> { ["RawTransaction"] = inner };
+
+            Dictionary<string, object> tx = new Dictionary<string, object>
+            {
+                ["TransactionType"] = "Batch",
+                ["Account"] = submitter.ClassicAddress,
+                ["RawTransactions"] = new List<object> { wrapper }
+            };
+
+            BatchSignerAccounts accounts = tx.GetBatchSignerAccounts();
+
+            Assert.AreSame(inner, wrapper["RawTransaction"],
+                "The method reports the accounts of a batch; it must not rewrite the batch it was given.");
+
+            // And the guarantee is not bought by the method having stopped doing its work.
+            Assert.AreEqual(submitter.ClassicAddress, accounts.Root);
+            Assert.AreEqual(1, accounts.Raw.Count);
+            Assert.AreEqual(participant.ClassicAddress, accounts.Raw[0]);
+        }
+
         [TestMethod]
         public void TestUGetBatchSignerAccounts_JsonArrayOfSerializableWrappers_Accepted()
         {
