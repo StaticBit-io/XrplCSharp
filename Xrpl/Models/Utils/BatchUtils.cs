@@ -87,15 +87,17 @@ public static class BatchUtils
         if (!tx.TryGetValue("RawTransactions", out var rawTransactions) || rawTransactions is null)
             throw new ValidationException("Batch transaction must have RawTransactions field.");
 
+        // An element that is not an object used to reach the deserializer and come back out as
+        // "Expected StartObject token" from a converter - the first thing a caller sees about a
+        // malformed batch, naming neither the field nor the position. This is the gate every
+        // batch-signing path passes through, so it is refused here, as every other malformed
+        // input in this file is.
         var raws = rawTransactions switch
         {
-            JsonArray ja => ja.Select(n => JsonSerializer.Deserialize<Dictionary<string, object>>(
-                                n.ToJsonString(), XrplJsonOptions.Default))
-                         .ToList(),
+            JsonArray ja => ja.Select((n, i) => ToObjectDictionary(n, $"RawTransactions[{i}]")).ToList(),
             IEnumerable ie => ie.Cast<object>()
-                    .Select(o => o as Dictionary<string, object>
-                              ?? JsonSerializer.Deserialize<Dictionary<string, object>>(
-                                  JsonSerializer.Serialize(o, XrplJsonOptions.Default), XrplJsonOptions.Default)!)
+                    .Select((o, i) => o as Dictionary<string, object>
+                                      ?? ToObjectDictionary(o, $"RawTransactions[{i}]"))
                     .ToList(),
             _ => throw new ValidationException("RawTransactions must be array/collection.")
         };
@@ -103,15 +105,16 @@ public static class BatchUtils
         var rawAccounts = new List<string>();
         var seen = new HashSet<string>(StringComparer.OrdinalIgnoreCase);
 
-        foreach (var wrapper in raws)
+        for (int i = 0; i < raws.Count; i++)
         {
+            Dictionary<string, object> wrapper = raws[i];
+
             if (!wrapper.TryGetValue("RawTransaction", out var rawTxObj) || rawTxObj is null)
                 throw new ValidationException("Each RawTransactions item must contain RawTransaction.");
 
             // convert to pure dictionary
             var rawTx = rawTxObj as Dictionary<string, object>
-                        ?? JsonSerializer.Deserialize<Dictionary<string, object>>(
-                            JsonSerializer.Serialize(rawTxObj, XrplJsonOptions.Default), XrplJsonOptions.Default)!;
+                        ?? ToObjectDictionary(rawTxObj, $"RawTransactions[{i}].RawTransaction");
 
             wrapper["RawTransaction"] = rawTx;
 
@@ -155,6 +158,22 @@ public static class BatchUtils
             Root = root,
             Raw = rawAccounts
         };
+    }
+
+    // Judged by what the element serializes to, never by its runtime type. Every shape that
+    // legitimately turns up here - a typed RawTransactionWrapper, an IDictionary, a JsonObject,
+    // a JsonValue wrapping a POCO - writes a JSON object and is accepted; a JSON value that is
+    // not an object is named rather than left to fail inside a converter.
+    private static Dictionary<string, object> ToObjectDictionary(object? element, string what)
+    {
+        string json = element is JsonNode node
+            ? node.ToJsonString()
+            : JsonSerializer.Serialize(element, XrplJsonOptions.Default);
+
+        if (JsonNode.Parse(json) is not JsonObject)
+            throw new ValidationException($"{what} must be an object.");
+
+        return JsonSerializer.Deserialize<Dictionary<string, object>>(json, XrplJsonOptions.Default)!;
     }
 }
 
