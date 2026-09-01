@@ -24,25 +24,30 @@ public static class BatchNormalizer
     private const uint TF_INNER_BATCH_TXN = (uint)XrplGlobalFlags.tfInnerBatchTxn;
 
     /// <summary>
-    /// Нормализует внутреннюю транзакцию по правилам XLS‑56:
-    /// - добавляет флаг tfInnerBatchTxn;
-    /// - удаляет TxnSignature, Signers, LastLedgerSequence;
-    /// - принудительно выставляет Fee = "0" (строка), SigningPubKey = "".
-    /// Возвращает новый JsonObject (исходник не меняется).
+    /// Normalises an inner transaction under the XLS-56 rules:
+    /// - adds the tfInnerBatchTxn flag;
+    /// - removes TxnSignature, Signers, LastLedgerSequence;
+    /// - forces Fee = "0" (as a string) and SigningPubKey = "".
+    /// Returns a new JsonObject; source is left untouched.
     /// </summary>
     public static JsonObject NormalizeInnerTransaction(this JsonObject source)
     {
         if (source == null) throw new ArgumentNullException(nameof(source));
 
-        source.Remove("TxnSignature");
-        source.Remove("Signers");
-        source.Remove("LastLedgerSequence");
+        // Normalise a copy. A caller who hands over a transaction is not offering to
+        // have it stripped of its signature fields, and the object overload already
+        // behaves this way for every input that is not already a JsonObject.
+        JsonObject normalized = (JsonObject)source.DeepClone();
 
-        source["Fee"] = "0";
-        source["SigningPubKey"] = "";
+        normalized.Remove("TxnSignature");
+        normalized.Remove("Signers");
+        normalized.Remove("LastLedgerSequence");
+
+        normalized["Fee"] = "0";
+        normalized["SigningPubKey"] = "";
 
         uint flags = 0;
-        JsonNode fv = source["Flags"];
+        JsonNode fv = normalized["Flags"];
         if (fv != null)
         {
             if (fv is JsonValue jv)
@@ -57,13 +62,13 @@ public static class BatchNormalizer
         if ((flags & TF_INNER_BATCH_TXN) == 0)
             flags |= TF_INNER_BATCH_TXN;
 
-        source["Flags"] = flags;
+        normalized["Flags"] = flags;
 
-        return source;
+        return normalized;
     }
 
     /// <summary>
-    /// Нормализует внутреннюю транзакцию (object → JsonObject).
+    /// Normalises an inner transaction (object -> JsonObject).
     /// </summary>
     public static JsonObject NormalizeInnerTransaction(object source)
     {
@@ -75,7 +80,7 @@ public static class BatchNormalizer
     }
 
     /// <summary>
-    /// Нормализует внутреннюю транзакцию (object → JsonObject).
+    /// Normalises an inner transaction (object -> JsonObject).
     /// </summary>
     public static async Task NormalizeBatchTransaction(
         this IXrplClient client,
@@ -175,8 +180,8 @@ public static class BatchNormalizer
     }
 
     /// <summary>
-    /// Вычисляет transactionID для нормализованной внутренней транзакции.
-    /// Алгоритм: txid = SHA512Half( HashPrefix.TXN + STObject(tx).ToBytes() ).
+    /// Computes the transactionID of a normalised inner transaction.
+    /// The algorithm: txid = SHA512Half( HashPrefix.TXN + STObject(tx).ToBytes() ).
     /// </summary>
     public static string ComputeInnerTxId(this JsonObject normalizedInnerTx)
     {

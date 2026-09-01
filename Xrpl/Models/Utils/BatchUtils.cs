@@ -18,8 +18,8 @@ namespace Xrpl.Models.Utils;
 public static class BatchUtils
 {
     /// <summary>
-    /// Превращает список произвольных «обычных» транзакций (твоих C# моделей) во внутренние RawTransactions
-    /// с нужными полями для Batch (Fee= "0", SigningPubKey = "", + tfInnerBatchTxn; без TxnSignature/Signers/LastLedgerSequence).
+    /// Turns a list of ordinary transactions - your own C# models - into the inner RawTransactions
+    /// a Batch needs (Fee = "0", SigningPubKey = "", + tfInnerBatchTxn; no TxnSignature/Signers/LastLedgerSequence).
     /// </summary>
     public static Batch Build(string account, IEnumerable<ITransactionRequest> transactions, BatchFlags? mode = null, List<BatchSigner>? batchSigners = null)
     {
@@ -37,25 +37,25 @@ public static class BatchUtils
         var batchInnerTxs = transactions.Select(ToBatchTx);
         batch.RawTransactions.AddRange(batchInnerTxs);
 
-        // Валидация как в xrpl.js
+        // Validated the way xrpl.js validates
         Xrpl.Models.Transactions.Validation.Validate(JsonSerializer.Deserialize<Dictionary<string, object>>(batch.ToJson(), XrplJsonOptions.Default));
         return batch;
     }
 
     public static RawTransactionWrapper ToBatchTx(this ITransactionRequest tx)
     {
-        // 1) Запрещаем Batch внутри Batch
+        // 1) A Batch inside a Batch is refused
         if (tx.TransactionType == TransactionType.Batch)
             throw new ArgumentException("Nested Batch is not allowed.");
 
-        // 2) Удаляем запрещённые/нестабильные для Batch поля
+        // 2) Drop the fields a Batch forbids, and those that are not stable inside one
         tx.TransactionSignature = null;
         tx.Signers = null;
         tx.LastLedgerSequence = null;
 
-        // 3) Принудительные поля
+        // 3) Fields forced to a fixed value
         tx.Fee = new Xrpl.Models.Common.Currency() { Value = "0" };
-        tx.SigningPublicKey = ""; // пустая строка
+        tx.SigningPublicKey = ""; // the empty string
         if (tx.Flags != null)
         {
             tx.Flags |= (uint)XrplGlobalFlags.tfInnerBatchTxn;
@@ -87,15 +87,17 @@ public static class BatchUtils
         if (!tx.TryGetValue("RawTransactions", out var rawTransactions) || rawTransactions is null)
             throw new ValidationException("Batch transaction must have RawTransactions field.");
 
+        // An element that is not an object used to reach the deserializer and come back out as
+        // "Expected StartObject token" from a converter - the first thing a caller sees about a
+        // malformed batch, naming neither the field nor the position. This is the gate every
+        // batch-signing path passes through, so it is refused here, as every other malformed
+        // input in this file is.
         var raws = rawTransactions switch
         {
-            JsonArray ja => ja.Select(n => JsonSerializer.Deserialize<Dictionary<string, object>>(
-                                n.ToJsonString(), XrplJsonOptions.Default))
-                         .ToList(),
+            JsonArray ja => ja.Select((n, i) => ToObjectDictionary(n, $"RawTransactions[{i}]")).ToList(),
             IEnumerable ie => ie.Cast<object>()
-                    .Select(o => o as Dictionary<string, object>
-                              ?? JsonSerializer.Deserialize<Dictionary<string, object>>(
-                                  JsonSerializer.Serialize(o, XrplJsonOptions.Default), XrplJsonOptions.Default)!)
+                    .Select((o, i) => o as Dictionary<string, object>
+                                      ?? ToObjectDictionary(o, $"RawTransactions[{i}]"))
                     .ToList(),
             _ => throw new ValidationException("RawTransactions must be array/collection.")
         };
@@ -103,17 +105,20 @@ public static class BatchUtils
         var rawAccounts = new List<string>();
         var seen = new HashSet<string>(StringComparer.OrdinalIgnoreCase);
 
-        foreach (var wrapper in raws)
+        for (int i = 0; i < raws.Count; i++)
         {
+            Dictionary<string, object> wrapper = raws[i];
+
             if (!wrapper.TryGetValue("RawTransaction", out var rawTxObj) || rawTxObj is null)
                 throw new ValidationException("Each RawTransactions item must contain RawTransaction.");
 
-            // convert to pure dictionary
+            // Converted for reading only. The result is deliberately not stored back into the
+            // wrapper: in the IEnumerable branch above, an element that is already a dictionary is
+            // the caller's own, so an assignment here would rewrite the batch this method was only
+            // asked to report on. Nothing downstream needs the stored form - every consumer of
+            // RawTransaction reads it from a JsonNode built by re-serializing the transaction.
             var rawTx = rawTxObj as Dictionary<string, object>
-                        ?? JsonSerializer.Deserialize<Dictionary<string, object>>(
-                            JsonSerializer.Serialize(rawTxObj, XrplJsonOptions.Default), XrplJsonOptions.Default)!;
-
-            wrapper["RawTransaction"] = rawTx;
+                        ?? ToObjectDictionary(rawTxObj, $"RawTransactions[{i}].RawTransaction");
 
             if (!rawTx.TryGetValue("Account", out object accObj) || accObj is null)
                 throw new ValidationException("Each RawTransaction must contain Account.");
@@ -156,6 +161,22 @@ public static class BatchUtils
             Raw = rawAccounts
         };
     }
+
+    // Judged by what the element serializes to, never by its runtime type. Every shape that
+    // legitimately turns up here - a typed RawTransactionWrapper, an IDictionary, a JsonObject,
+    // a JsonValue wrapping a POCO - writes a JSON object and is accepted; a JSON value that is
+    // not an object is named rather than left to fail inside a converter.
+    private static Dictionary<string, object> ToObjectDictionary(object? element, string what)
+    {
+        string json = element is JsonNode node
+            ? node.ToJsonString()
+            : JsonSerializer.Serialize(element, XrplJsonOptions.Default);
+
+        if (JsonNode.Parse(json) is not JsonObject)
+            throw new ValidationException($"{what} must be an object.");
+
+        return JsonSerializer.Deserialize<Dictionary<string, object>>(json, XrplJsonOptions.Default)!;
+    }
 }
 
 public sealed class BatchSignerAccounts
@@ -166,35 +187,35 @@ public sealed class BatchSignerAccounts
 }
 public sealed class BatchSignStatus
 {
-    /// <summary>Root-аккаунт батча (поле Account верхнего уровня).</summary>
+    /// <summary>The batch's root account: the top-level Account field.</summary>
     public string Root { get; init; }
 
-    /// <summary>Список всех уникальных аккаунтов-инициаторов внутренних транзакций (RawTransactions.RawTransaction.Account).</summary>
+    /// <summary>Distinct non-root accounts that must sign the batch, following rippled's Batch::preflight requiredSigners: each inner transaction's Delegate when it has one and its Account otherwise, plus any Counterparty, plus any Sponsor carrying a SponsorSignature.</summary>
     public IReadOnlyList<string> InnerRequired { get; init; } = Array.Empty<string>();
 
-    /// <summary>Аккаунты из InnerRequired, которые уже имеют подписи в BatchSigners.</summary>
+    /// <summary>Every BatchSigners account found to carry a signature. Not filtered to InnerRequired, so an account that signed without being required appears here too.</summary>
     public IReadOnlyList<string> InnerSigned { get; init; } = Array.Empty<string>();
 
-    /// <summary>Аккаунты из InnerRequired, по которым ещё НЕТ подписи в BatchSigners.</summary>
+    /// <summary>Those of InnerRequired that carry NO signature in BatchSigners yet.</summary>
     public IReadOnlyList<string> InnerMissing { get; init; } = Array.Empty<string>();
 
-    /// <summary>Есть ли у корня одиночная подпись (TxnSignature + SigningPubKey).</summary>
+    /// <summary>Whether the root carries a single signature (TxnSignature + SigningPubKey).</summary>
     public bool RootSignedSingle { get; init; }
 
-    /// <summary>Есть ли у корня XRPL-мультиподпись (Signers[]).</summary>
+    /// <summary>Whether the root carries an XRPL multi-signature (Signers[]).</summary>
     public bool RootSignedMulti { get; init; }
 
-    /// <summary>Все ли внутренние аккаунты подписали батч.</summary>
+    /// <summary>Whether every inner account has signed the batch.</summary>
     public bool AllInnerSigned => InnerMissing.Count == 0;
 
-    /// <summary>Есть ли хоть какая-то подпись корня (single или multi).</summary>
+    /// <summary>Whether the root carries any signature at all, single or multi.</summary>
     public bool IsRootSigned => RootSignedSingle || RootSignedMulti;
 }
 
 public static class BatchSignStatusExtensions
 {
     /// <summary>
-    /// Строит статус подписи батч-транзакции из tx-словаря.
+    /// Builds the signing status of a batch transaction from a tx dictionary.
     /// </summary>
     public static BatchSignStatus GetBatchSignStatus(this Dictionary<string, object> tx)
     {
@@ -206,20 +227,20 @@ public static class BatchSignStatusExtensions
             throw new ValidationException("GetBatchSignStatus: TransactionType must be 'Batch'.");
         }
 
-        // Используем уже существующую утилиту, чтобы получить Root + Raw-аккаунты
-        var accs = tx.GetBatchSignerAccounts(); // Root + Raw (distinct) :contentReference[oaicite:0]{index=0}
+        // Reuse the existing utility to obtain the root and the raw accounts
+        var accs = tx.GetBatchSignerAccounts(); // Root + Raw (distinct)
         var root = accs.Root;
         var requiredInner = accs.Raw
             .Distinct(StringComparer.OrdinalIgnoreCase)
             .ToList();
 
-        // Преобразуем в JsonObject, чтобы удобнее читать BatchSigners
+        // Convert to a JsonObject, which makes BatchSigners easier to read
         JsonObject outer = JsonNode.Parse(
             JsonSerializer.Serialize(tx, XrplJsonOptions.Default))?.AsObject();
 
         var signedInner = new HashSet<string>(StringComparer.OrdinalIgnoreCase);
 
-        // BatchSigners: [{ BatchSigner: { Account, SigningPubKey/TxnSignature или Signers[] } }, ...]
+        // BatchSigners: [{ BatchSigner: { Account, SigningPubKey/TxnSignature or Signers[] } }, ...]
         JsonArray batchSignersArray = outer?["BatchSigners"] as JsonArray;
         if (batchSignersArray != null)
         {
@@ -231,7 +252,7 @@ public static class BatchSignStatusExtensions
                 if (string.IsNullOrWhiteSpace(acc))
                     continue;
 
-                // Проверяем, есть ли реальная подпись
+                // Check whether there is a real signature
                 bool hasSignature = false;
 
                 JsonArray signersArr = bs["Signers"] as JsonArray;
@@ -256,8 +277,8 @@ public static class BatchSignStatusExtensions
             .Where(a => !signedInner.Contains(a))
             .ToList();
 
-        // Смотрим подпись корня: либо single (TxnSignature + SigningPubKey),
-        // либо мульти (Signers[]).
+        // Look at the root signature: either single (TxnSignature + SigningPubKey)
+        // or multi (Signers[]).
         bool rootSingle = false;
         bool rootMulti = false;
 
@@ -287,7 +308,7 @@ public static class BatchSignStatusExtensions
     }
 
     /// <summary>
-    /// Быстро проверить полноту подписи батча (по inner-аккаунтам и, опционально, по корню).
+    /// Quickly check whether a batch is fully signed, over the inner accounts and optionally the root.
     /// </summary>
     public static bool IsFullySignedBatch(this Dictionary<string, object> tx, bool requireRoot = false)
     {
@@ -296,7 +317,7 @@ public static class BatchSignStatusExtensions
     }
 
     /// <summary>
-    /// Удобный хелпер для статуса по SignatureResult.
+    /// Convenience helper for the status of a SignatureResult.
     /// </summary>
     public static BatchSignStatus GetBatchSignStatus(this SignatureResult signed)
     {
@@ -307,7 +328,7 @@ public static class BatchSignStatusExtensions
     }
 
     /// <summary>
-    /// Удобный хелпер для статуса по hex-blob (tx_blob).
+    /// Convenience helper for the status of a hex blob (tx_blob).
     /// </summary>
     public static BatchSignStatus GetBatchSignStatus(this string txBlob)
     {

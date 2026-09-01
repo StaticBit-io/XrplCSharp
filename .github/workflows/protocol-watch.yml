@@ -127,16 +127,63 @@ jobs:
             exit 0
           fi
 
-          # Build a comment with per-file history links; a path missing from the
-          # current snapshot was removed/renamed upstream - do not link a 404 blob
+          # Build a comment with per-file history links and the actual diff; a path
+          # missing from the current snapshot was removed/renamed upstream - do not
+          # link a 404 blob.
+          #
+          # The diff is the point of this comment. Naming the files that moved still
+          # leaves the operator to fetch two blobs and compare them by hand, which is
+          # the work the watch exists to save. Both blob shas are already known here -
+          # the baseline holds the old one, the snapshot the new - so the content can
+          # be fetched by sha and diffed directly.
+          #
+          # Rendering a diff is best-effort while the notification is not: a blob
+          # fetch that fails leaves the file listed with its links and a note, rather
+          # than aborting a run whose job is to tell somebody that something changed.
+          DIFF_LINES_PER_FILE=80
+
+          fetch_blob() {
+            gh api "repos/$UPSTREAM/git/blobs/$1" --jq '.content' 2>/dev/null | base64 -d 2>/dev/null
+          }
+
           files=$(echo "$changed" | jq -r '.[]')
           lines=""
           for f in $files; do
-            if [ "$(echo "$current" | jq --arg f "$f" 'has($f)')" = "true" ]; then
-              lines="$lines- \`$f\` — [history](https://github.com/$UPSTREAM/commits/$UPSTREAM_REF/$f) · [current](https://github.com/$UPSTREAM/blob/$head_sha/$f)"$'\n'
-            else
+            if [ "$(echo "$current" | jq --arg f "$f" 'has($f)')" != "true" ]; then
               lines="$lines- \`$f\` — **removed or renamed upstream** · [history](https://github.com/$UPSTREAM/commits/$UPSTREAM_REF/$f)"$'\n'
+              continue
             fi
+
+            lines="$lines- \`$f\` — [history](https://github.com/$UPSTREAM/commits/$UPSTREAM_REF/$f) · [current](https://github.com/$UPSTREAM/blob/$head_sha/$f)"$'\n'
+
+            new_sha=$(echo "$current" | jq -r --arg f "$f" '.[$f]')
+            old_sha=$(echo "$stored" | jq -r --arg f "$f" '.[$f] // empty')
+
+            if [ -z "$old_sha" ]; then
+              lines="$lines"'  <br>**new file upstream** — nothing to diff against.'$'\n'
+              continue
+            fi
+
+            if ! fetch_blob "$old_sha" > /tmp/pw_old 2>/dev/null || ! fetch_blob "$new_sha" > /tmp/pw_new 2>/dev/null; then
+              lines="$lines"'  <br>*(could not fetch both blobs to render a diff — follow the links above)*'$'\n'
+              continue
+            fi
+
+            body=$(diff -U2 /tmp/pw_old /tmp/pw_new || true)
+            # Drop diff's own ---/+++ header: the file is already named above.
+            body=$(printf '%s\n' "$body" | tail -n +3)
+            total=$(printf '%s\n' "$body" | wc -l)
+
+            if [ "$total" -gt "$DIFF_LINES_PER_FILE" ]; then
+              body=$(printf '%s\n' "$body" | head -n "$DIFF_LINES_PER_FILE")
+              body="$body"$'\n'"... truncated at $DIFF_LINES_PER_FILE of $total lines — see the links above"
+            fi
+
+            lines="$lines"$'\n'"  <details><summary>diff</summary>"$'\n\n'"  \`\`\`diff"$'\n'
+            while IFS= read -r dl; do
+              lines="$lines  $dl"$'\n'
+            done <<< "$body"
+            lines="$lines"'  ```'$'\n\n'"  </details>"$'\n\n'
           done
           # Idempotency: if the notification for this head_sha is already posted
           # (a previous run died between comment and baseline update), skip the

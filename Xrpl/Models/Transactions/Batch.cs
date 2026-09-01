@@ -82,7 +82,7 @@ public sealed class Batch : TransactionRequest, IBatch
 {
     public Batch() => TransactionType = TransactionType.Batch;
 
-    // Допустимо — 0 или 1 режим (бит из BatchFlags) вместе с обычными глобальными флагами.
+    // Permitted: zero or one mode bit from BatchFlags, alongside the ordinary global flags.
     [JsonPropertyName("Flags")]
     [JsonIgnore(Condition = JsonIgnoreCondition.WhenWritingNull)]
     public new BatchFlags? Flags
@@ -103,7 +103,7 @@ public sealed class Batch : TransactionRequest, IBatch
 
 public sealed class BatchResponse : TransactionResponse, IBatch
 {
-    // Допустимо — 0 или 1 режим (бит из BatchFlags) вместе с обычными глобальными флагами.
+    // Permitted: zero or one mode bit from BatchFlags, alongside the ordinary global flags.
     [JsonPropertyName("Flags")]
     [JsonIgnore(Condition = JsonIgnoreCondition.WhenWritingNull)]
     public new BatchFlags? Flags
@@ -169,7 +169,7 @@ public partial class Validation
             var wrapper = rawTxs[i];
             if (wrapper is not IDictionary<string, object> { } wrapperDict)
             {
-                throw new ArgumentException($"Batch: RawTransactions[{i}] is null.");
+                throw new ArgumentException($"Batch: RawTransactions[{i}] must be an object.");
             }
 
             if (!wrapperDict.TryGetValue("RawTransaction", out var innerTxObj) ||
@@ -277,13 +277,16 @@ public partial class Validation
                     throw new ArgumentException($"Batch: BatchSigners[{i}].Account is required.");
                 }
 
-                // BatchV1_1: дубликаты и подпись внешним аккаунтом → temBAD_SIGNER на сервере
+                // BatchV1_1: rippled Batch::preflight answers temBAD_SIGNER for a duplicate signer,
+                // for the outer Batch account appearing among the signers, for an unsorted
+                // BatchSigners array, and for any signer that is not exactly the next required
+                // one. The two checks below cover the first two cases.
                 string signerAccount = $"{accountObj}";
                 if (!seenAccounts.Add(signerAccount))
                     throw new ArgumentException($"Batch: BatchSigners[{i}].Account '{signerAccount}' is duplicated (temBAD_SIGNER).");
                 if (outerAccount != null && string.Equals(signerAccount, outerAccount, StringComparison.Ordinal))
                     throw new ArgumentException($"Batch: BatchSigners[{i}].Account must not equal the outer Batch Account (temBAD_SIGNER).");
-                // SigningPubKey / TxnSignature / Signers — опциональны
+                // SigningPubKey / TxnSignature / Signers are optional
             }
         }
     }

@@ -270,7 +270,7 @@ public static class SubmitSugar
         var root = JsonNode.Parse(JsonSerializer.Serialize(txJson, XrplJsonOptions.Default))?.AsObject();
         var rawArray = root["RawTransactions"]?.AsArray() ?? new JsonArray();
 
-        // 1) подписи владельцев внутренних tx
+        // 1) signatures of the owners of the inner transactions
         var partialBlobs = new List<string>();
         foreach (var entry in rawArray.Where(n => n is JsonObject).Select(n => n!.AsObject()))
         {
@@ -281,11 +281,11 @@ public static class SubmitSugar
             }
             if (mainAcc == acct)
             {
-                // не ставим подписи на внутри батча для аккаунта создателя, только верхняя подпись
+                // No inner-batch signature for the creator's account: only the outer one
                 continue;
             }
 
-            // account_info со списком подписантов
+            // account_info, for the list of signers
             var ai = await client.AccountInfo(
                 new AccountInfoRequest(acct)
                 {
@@ -332,10 +332,10 @@ public static class SubmitSugar
             }
         }
 
-        // 2) склейка внутренних подписей
+        // 2) splice the inner signatures together
         var combined = XrplWallet.CombineBatchSigners(partialBlobs.ToArray());
         var combinedJson = JsonNode.Parse(XrplBinaryCodec.Decode(combined.TxBlob).ToJsonString())?.AsObject();
-        // 3) корневая подпись: single-sig ИЛИ multi-sig по наличию SignerList у корня
+        // 3) root signature: single-sig OR multi-sig, depending on whether the root has a SignerList
         var aiRoot = await client.AccountInfo(
             new AccountInfoRequest(mainAcc)
             {
@@ -351,7 +351,7 @@ public static class SubmitSugar
         var rootHasSL = aiRoot.SignerLists?.Length > 0 && aiRoot.AccountFlags.DisableMasterKey;
         if (!rootHasSL)
         {
-            // обычная подпись плательщика комиссии (должен быть в wallets)
+            // the ordinary signature of the fee payer, who must be among wallets
             if (!walletByAddr.TryGetValue(mainAcc, out var main))
                 throw new ValidationException($"Main account {mainAcc} not found in provided wallets");
             var final = main.Sign(JsonSerializer.Deserialize<Dictionary<string, object>>(combinedJson.ToJsonString(), XrplJsonOptions.Default));
@@ -361,13 +361,13 @@ public static class SubmitSugar
         }
         else
         {
-            // мультисиг корня: берём из wallets только тех, кто входит в SignerList(main)
+            // root multi-signature: take from wallets only those in SignerList(main)
             var sl = aiRoot.SignerLists[0];
             var (picked, sum, quorum) = BatchSigningHelper.PickWalletsForQuorum(sl, walletByAddr);
 
             if (sum < quorum) throw new ValidationException($"Not enough signer wallets for root multisig {mainAcc}.");
 
-            //// корневой мультисиг: обязательно пустой SPK и без TxnSignature
+            //// root multi-signature: an empty SPK is required, and no TxnSignature
             //combinedJson.Remove("TxnSignature");
             //combinedJson["SigningPubKey"] = "";
 
@@ -430,7 +430,7 @@ public static class SubmitSugar
         {
             cancellationToken.ThrowIfCancellationRequested();
 
-            // Ждём закрытие следующего леджера
+            // Wait for the next ledger to close
             await Task.Delay(LEDGER_CLOSE_TIME, cancellationToken);
 
             TransactionSummary txResponse;
@@ -445,7 +445,7 @@ public static class SubmitSugar
             }
             catch (RippledException ex) when (ex.Response?.Error == XrplErrorCodes.TxnNotFound)
             {
-            	// Если у нас есть LastLedgerSequence и мы его уже перешагнули — транзакция точно не попадёт в леджер
+            	// With a LastLedgerSequence already stepped past, the transaction cannot reach a ledger
                 var latestLedger = await client.GetLedgerIndex(cancellationToken);
                 if (lastLedgerSequence.HasValue && latestLedger > lastLedgerSequence.Value)
                 {
@@ -499,7 +499,7 @@ public static class SubmitSugar
                     hash: txHash);
             }
 
-            // Не валидирована и не txnNotFound → просто ждём дальше после проверки текущего леджера
+            // Neither validated nor txnNotFound - keep waiting, after checking the current ledger
             var currentLedger = await client.GetLedgerIndex(cancellationToken);
             if (lastLedgerSequence.HasValue && currentLedger > lastLedgerSequence.Value)
             {

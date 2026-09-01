@@ -155,24 +155,24 @@ namespace Xrpl.BinaryCodec
 
             var list = new BytesList();
 
-            // 1) Префикс "BCH\0"
+            // 1) The "BCH\0" prefix
             list.Put(Bits.GetBytes((uint)HashPrefix.Batch));
 
-            // 2) Account внешней Batch-транзакции (20 байт)
+            // 2) Account of the outer Batch transaction (20 bytes)
             byte[] outerAccountId = new AccountId(outerAccount).Buffer;
             if (outerAccountId.Length != 20) throw new ArgumentException("outerAccount must decode to 20 bytes.");
             list.Put(outerAccountId);
 
-            // 3) Sequence внешней Batch-транзакции (UInt32 BE)
+            // 3) Sequence of the outer Batch transaction (UInt32 BE)
             list.Put(new Uint32(outerSequence).ToBytes());
 
             // 4) Flags (UInt32 BE)
             list.Put(new Uint32(flags).ToBytes());
 
-            // 5) Количество txIDs (UInt32 BE)
+            // 5) The number of txIDs (UInt32 BE)
             list.Put(new Uint32((uint)txIDs.Count()).ToBytes());
 
-            // 6) Каждый txid как 32 байта
+            // 6) Each txid as 32 bytes
             foreach (var id in txIDs)
             {
                 var raw = Hash256.FromHex(id).Buffer; // validate hex string

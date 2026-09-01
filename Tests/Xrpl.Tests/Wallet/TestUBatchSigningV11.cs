@@ -1,5 +1,6 @@
 using System;
 using System.Collections.Generic;
+using System.Globalization;
 using System.Text.Json;
 using System.Text.Json.Nodes;
 
@@ -37,6 +38,17 @@ namespace Xrpl.Tests.Wallet.Tests
             ["Flags"] = TfInnerBatchTxn
         };
 
+        // An inner transaction as a caller may well hand it over: none of the three
+        // fields normalisation is responsible for is present.
+        private static JsonObject UnnormalizedInnerPayment(string account, string destination, uint sequence) => new JsonObject
+        {
+            ["TransactionType"] = "Payment",
+            ["Account"] = account,
+            ["Destination"] = destination,
+            ["Amount"] = "1000000",
+            ["Sequence"] = sequence
+        };
+
         private static Dictionary<string, object> BuildBatchDictionary(JsonObject outer) =>
             JsonSerializer.Deserialize<Dictionary<string, object>>(outer.ToJsonString(), XrplJsonOptions.Default)
                 ?? throw new InvalidOperationException("Failed to build tx dictionary.");
@@ -63,7 +75,7 @@ namespace Xrpl.Tests.Wallet.Tests
             var txIds = new List<string>(inners.Length);
             foreach (JsonObject inner in inners)
             {
-                JsonObject normalized = ((JsonObject)inner.DeepClone()).NormalizeInnerTransaction();
+                JsonObject normalized = inner.NormalizeInnerTransaction();
                 txIds.Add(normalized.ComputeInnerTxId());
             }
             return XrplBinaryCodec.EncodeForSigningBatch(outerAccount, outerSequence, flags, txIds);
@@ -210,6 +222,221 @@ namespace Xrpl.Tests.Wallet.Tests
 
             Assert.ThrowsExactly<Xrpl.Client.Exceptions.ValidationException>(() =>
                 participant.SignAsBatchPart(BuildBatchDictionary(outer), multisign: false, signingFor: participant.ClassicAddress));
+        }
+
+        [TestMethod]
+        public void TestUSignAsBatchPart_EmittedBlobCarriesNormalizedInnerTransactions()
+        {
+            XrplWallet submitter = XrplWallet.Generate();
+            XrplWallet participant = XrplWallet.Generate();
+            XrplWallet destination = XrplWallet.Generate();
+
+            JsonObject inner = UnnormalizedInnerPayment(participant.ClassicAddress, destination.ClassicAddress, 7);
+            JsonObject outer = BuildOuterBatch(submitter.ClassicAddress, 3, inner);
+
+            SignatureResult result = participant.SignAsBatchPart(BuildBatchDictionary(outer), multisign: false, signingFor: participant.ClassicAddress);
+
+            JsonNode decoded = XrplBinaryCodec.Decode(result.TxBlob);
+            JsonObject decodedInner = decoded["RawTransactions"]?.AsArray()?[0]?["RawTransaction"]?.AsObject()
+                ?? throw new AssertFailedException("Decoded blob has no inner RawTransaction.");
+
+            Assert.AreEqual("0", decodedInner["Fee"]?.GetValue<string>(),
+                "Fee of the inner transaction in the emitted blob.");
+            Assert.AreEqual(string.Empty, decodedInner["SigningPubKey"]?.GetValue<string>(),
+                "SigningPubKey of the inner transaction in the emitted blob.");
+
+            // Read through the JSON text: the numeric type backing the node depends on how
+            // the codec built it, and a TryGetValue that guesses wrong would quietly read 0.
+            JsonNode flagsNode = decodedInner["Flags"]
+                ?? throw new AssertFailedException("Inner transaction in the emitted blob carries no Flags.");
+            uint decodedFlags = uint.Parse(flagsNode.ToJsonString(), CultureInfo.InvariantCulture);
+            Assert.AreEqual(TfInnerBatchTxn, decodedFlags & TfInnerBatchTxn,
+                "tfInnerBatchTxn of the inner transaction in the emitted blob.");
+
+            // The point of the three assertions above: the batch preimage commits to the
+            // txIDs of the NORMALISED inner transactions, so the blob has to carry those
+            // same transactions. Were it to carry the originals, the signature would
+            // attest to something the blob does not contain.
+            string signedTxId = inner.NormalizeInnerTransaction().ComputeInnerTxId();
+            Assert.AreEqual(signedTxId, decodedInner.ComputeInnerTxId(),
+                "The inner transaction in the blob must hash to the txID the signature was made over.");
+
+            // That equality alone still leaves one half unpinned: it says the blob agrees with a
+            // txID computed here, not that the signature was made over a preimage containing it.
+            // A regression hashing the originals into the preimage while writing the normalised
+            // form into the blob would satisfy everything above. So verify the signature against
+            // a preimage built from the normalised inner transactions.
+            JsonObject batchSigner = decoded["BatchSigners"]?.AsArray()?[0]?["BatchSigner"]?.AsObject()
+                ?? throw new AssertFailedException("BatchSigners missing in signed tx.");
+            string signature = batchSigner["TxnSignature"]?.GetValue<string>()
+                ?? throw new AssertFailedException("TxnSignature missing.");
+
+            byte[] preimage = ComputeBasePreimage(submitter.ClassicAddress, 3, TfAllOrNothing, inner);
+            byte[] signerAccountId = XrplCodec.DecodeAccountID(participant.ClassicAddress);
+            Assert.IsTrue(XrplKeypairs.Verify(Concat(preimage, signerAccountId), signature, participant.PublicKey),
+                "The signature must cover a preimage built from the normalised inner transactions.");
+        }
+
+        [TestMethod]
+        public void TestUSignAsBatchPart_NonObjectRawTransactionsEntry_Throws()
+        {
+            XrplWallet submitter = XrplWallet.Generate();
+            XrplWallet participant = XrplWallet.Generate();
+            XrplWallet destination = XrplWallet.Generate();
+
+            JsonObject inner = InnerPayment(participant.ClassicAddress, destination.ClassicAddress, 20);
+            JsonObject outer = BuildOuterBatch(submitter.ClassicAddress, 3, inner);
+            outer["RawTransactions"]!.AsArray().Add(JsonValue.Create("not an object"));
+
+            // Such an entry is neither validated nor normalised and its txID never reaches the
+            // batch preimage, yet it stays in the transaction that gets encoded into the blob.
+            Xrpl.Client.Exceptions.ValidationException error = Assert.ThrowsExactly<Xrpl.Client.Exceptions.ValidationException>(() =>
+                participant.SignAsBatchPart(BuildBatchDictionary(outer), multisign: false, signingFor: participant.ClassicAddress));
+
+            // Compared whole, not searched for "[1]": both layers that could refuse this name the
+            // same index, and only the full text says which one did.
+            Assert.AreEqual("RawTransactions[1] must be an object.", error.Message);
+        }
+
+        private static Dictionary<string, object> BatchWithWrapperValue(string outerAccount, object rawTransactionValue) =>
+            new Dictionary<string, object>
+            {
+                ["TransactionType"] = "Batch",
+                ["Account"] = outerAccount,
+                ["Sequence"] = 3u,
+                ["Flags"] = TfAllOrNothing,
+                ["Fee"] = "40",
+                ["RawTransactions"] = new List<object>
+                {
+                    new Dictionary<string, object> { ["RawTransaction"] = rawTransactionValue }
+                }
+            };
+
+        [TestMethod]
+        public void TestUSignAsBatchPart_InnerRepresentationDoesNotChangeTheBlob()
+        {
+            XrplWallet submitter = XrplWallet.Generate();
+            XrplWallet participant = XrplWallet.Generate();
+            XrplWallet destination = XrplWallet.Generate();
+
+            JsonObject inner = InnerPayment(participant.ClassicAddress, destination.ClassicAddress, 20);
+
+            // The same batch twice: one wrapper holds a JsonObject, the other an equivalent
+            // Dictionary. They describe the same transaction, so they must sign to the same blob.
+            Dictionary<string, object> asNode = BatchWithWrapperValue(submitter.ClassicAddress, inner.DeepClone());
+            Dictionary<string, object> asDictionary = BatchWithWrapperValue(
+                submitter.ClassicAddress,
+                JsonSerializer.Deserialize<Dictionary<string, object>>(inner.ToJsonString(), XrplJsonOptions.Default)!);
+
+            SignatureResult fromNode = participant.SignAsBatchPart(asNode, multisign: false, signingFor: participant.ClassicAddress);
+            SignatureResult fromDictionary = participant.SignAsBatchPart(asDictionary, multisign: false, signingFor: participant.ClassicAddress);
+
+            Assert.AreEqual(fromDictionary.TxBlob, fromNode.TxBlob,
+                "The representation the caller happened to use must not change what gets signed.");
+        }
+
+        [TestMethod]
+        public void TestUGetBatchSignerAccounts_LeavesTheCallersDictionaryAlone()
+        {
+            XrplWallet submitter = XrplWallet.Generate();
+            XrplWallet participant = XrplWallet.Generate();
+            XrplWallet destination = XrplWallet.Generate();
+
+            JsonObject inner = InnerPayment(participant.ClassicAddress, destination.ClassicAddress, 20);
+            Dictionary<string, object> wrapper = new Dictionary<string, object> { ["RawTransaction"] = inner };
+
+            Dictionary<string, object> tx = new Dictionary<string, object>
+            {
+                ["TransactionType"] = "Batch",
+                ["Account"] = submitter.ClassicAddress,
+                ["RawTransactions"] = new List<object> { wrapper }
+            };
+
+            BatchSignerAccounts accounts = tx.GetBatchSignerAccounts();
+
+            Assert.AreSame(inner, wrapper["RawTransaction"],
+                "The method reports the accounts of a batch; it must not rewrite the batch it was given.");
+
+            // And the guarantee is not bought by the method having stopped doing its work.
+            Assert.AreEqual(submitter.ClassicAddress, accounts.Root);
+            Assert.AreEqual(1, accounts.Raw.Count);
+            Assert.AreEqual(participant.ClassicAddress, accounts.Raw[0]);
+        }
+
+        [TestMethod]
+        public void TestUGetBatchSignerAccounts_JsonArrayOfSerializableWrappers_Accepted()
+        {
+            XrplWallet submitter = XrplWallet.Generate();
+            XrplWallet participant = XrplWallet.Generate();
+            XrplWallet destination = XrplWallet.Generate();
+
+            // JsonArray.Add<T> wraps a non-JsonNode value in a JsonValue rather than a JsonObject.
+            // It still writes a JSON object, so it belongs here - judging the element by its
+            // runtime type instead of by what it serializes to would refuse it.
+            JsonArray rawArray = new JsonArray();
+            rawArray.Add(new Dictionary<string, object>
+            {
+                ["RawTransaction"] = InnerPayment(participant.ClassicAddress, destination.ClassicAddress, 20)
+            });
+
+            Dictionary<string, object> tx = new Dictionary<string, object>
+            {
+                ["TransactionType"] = "Batch",
+                ["Account"] = submitter.ClassicAddress,
+                ["RawTransactions"] = rawArray
+            };
+
+            BatchSignerAccounts accounts = tx.GetBatchSignerAccounts();
+
+            Assert.AreEqual(submitter.ClassicAddress, accounts.Root);
+            Assert.AreEqual(1, accounts.Raw.Count);
+            Assert.AreEqual(participant.ClassicAddress, accounts.Raw[0]);
+        }
+
+        [TestMethod]
+        public void TestUGetBatchSignerAccounts_NonObjectRawTransaction_Throws()
+        {
+            XrplWallet submitter = XrplWallet.Generate();
+
+            Dictionary<string, object> tx = new Dictionary<string, object>
+            {
+                ["TransactionType"] = "Batch",
+                ["Account"] = submitter.ClassicAddress,
+                ["RawTransactions"] = new List<object>
+                {
+                    new Dictionary<string, object> { ["RawTransaction"] = "not an object" }
+                }
+            };
+
+            Xrpl.Client.Exceptions.ValidationException error = Assert.ThrowsExactly<Xrpl.Client.Exceptions.ValidationException>(
+                () => tx.GetBatchSignerAccounts());
+
+            Assert.AreEqual("RawTransactions[0].RawTransaction must be an object.", error.Message);
+        }
+
+        [TestMethod]
+        public void TestUNormalizeInnerTransaction_LeavesItsArgumentUntouched()
+        {
+            XrplWallet participant = XrplWallet.Generate();
+            XrplWallet destination = XrplWallet.Generate();
+
+            JsonObject source = UnnormalizedInnerPayment(participant.ClassicAddress, destination.ClassicAddress, 7);
+            source["LastLedgerSequence"] = 500u;
+            string before = source.ToJsonString();
+
+            JsonObject normalized = source.NormalizeInnerTransaction();
+
+            Assert.AreEqual(before, source.ToJsonString(),
+                "NormalizeInnerTransaction must leave the transaction it was given alone.");
+            Assert.AreNotSame(source, normalized,
+                "NormalizeInnerTransaction must return an object of its own.");
+
+            // And the returned object is the normalised one, so the guarantee above is not
+            // bought by the method having quietly stopped doing its work.
+            Assert.AreEqual("0", normalized["Fee"]?.GetValue<string>());
+            Assert.AreEqual(string.Empty, normalized["SigningPubKey"]?.GetValue<string>());
+            Assert.IsNull(normalized["LastLedgerSequence"],
+                "LastLedgerSequence must be absent from the normalised result.");
         }
 
         [TestMethod]
