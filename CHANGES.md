@@ -1,6 +1,6 @@
 # Changes
 
-## 11.2.0.0
+## 11.2.0.0 01/09/2026
 
 * **`NormalizeInnerTransaction` no longer rewrites the transaction it is given** (#157). The method strips `TxnSignature`, `Signers` and `LastLedgerSequence` and overwrites `Fee`, `SigningPubKey` and `Flags`. It did that to the caller's own `JsonObject` and returned that same instance, so anything a consumer held and passed in came back altered. It now normalises a copy and leaves the argument alone.
   * the two overloads no longer disagree. `NormalizeInnerTransaction(object)` rewrote its argument when the runtime type happened to be a `JsonObject` and did not when it was anything else - the same call, with aliasing decided by a type test the caller cannot see
@@ -17,7 +17,7 @@
   * the conversion is still made, for reading; only the store-back is gone. No consumer needed it: every reader of `RawTransaction` works from a `JsonNode` built by re-serializing the transaction, not from the dictionary that was passed in
   * that the two representations sign identically is now pinned by a test of its own, since it is the property that makes dropping the store-back safe rather than merely tidy
 
-## 11.1.0.0 08/27/2026
+## 11.1.0.0 27/08/2026
 
 * **The signing path builds its `JsonSerializerOptions` once** (#147). `XrplBinaryCodec.ObjectToJsonNode` constructed a fresh instance on every call, and every signing operation goes through it - `Encode`, `EncodeForSigning`, `EncodeForSigningClaim` and `EncodeForMultiSigning` all route there. Measured end to end on `EncodeForSigning`, 50 000 calls: **1075.8 ms and 14458 B/op before, 621.8 ms and 13601 B/op after** - 1.73x, and 857 fewer bytes each call. The encoded blob is unchanged, hashing identically either way.
   * not the catastrophe this bug is usually described as: since .NET 7 System.Text.Json shares a caching context between structurally equal options instances, so type metadata was not being rebuilt per call - had it been, the gap would be orders of magnitude rather than 1.7x. What was paid is an allocation and a structural-equality lookup in a pool capped at 64 contexts
@@ -38,7 +38,7 @@
   * `Console.WriteLine(exception)` is out of the parse path. A library does not write to the console
   * **breaking in effect, if not in signature**: code that read an out-of-range amount used to get a number and now gets an exception. Representing the full range instead of refusing it is #150
 
-## 11.0.0.0 08/26/2026
+## 11.0.0.0 26/08/2026
 
 ### Migration at a glance
 
@@ -354,7 +354,7 @@ The entries below are grouped by what changed, not by the order the levels were 
   * **a frame the channel refuses no longer vanishes.** `TryWrite` was called for its side effect and its result ignored, on the reasoning that a `DropOldest` channel never refuses - which is true of a full queue (it evicts, counts through `itemDropped` and reports success) and false of a completed one. `StopMessageProcessorInternal` completes the writer *after* clearing `_streamMessageChannel`, so whoever read the reference an instant earlier writes into a closed channel and the frame was dropped with nothing to show for it. Not a corner case: `StartPingTimer` tears the processor down and `StartMessageProcessor` builds it again on every connect. Such a frame now takes the fallback path, where it still faces the session check
   * `Connection.StaleSessionFramesDropped` counts what was discarded, kept separate from `DroppedStreamMessages` because the two mean different things: a non-zero value here is normal right after a reconnect, while the other means consumers are falling behind. Also on `IXrplClient`, next to `DroppedStreamMessages` - a counter nobody can read is not observability. **New interface member, with a default body** forwarding to `connection`: an external implementation of `IXrplClient` keeps compiling and may override it
 
-## 10.12.0.0 08/16/2026
+## 10.12.0.0 16/08/2026
 
 * **`Request(Dictionary<string, object>)` never delivered the API version, so one client spoke two protocol versions** (**breaking**) — it stamped the version under `nameof(ApiVersion)`, literally `"ApiVersion"`. A dictionary is serialized verbatim, and rippled knows only `api_version`: it ignores unknown fields and answers on its default, API v1. Measured on mainnet, the three spellings are not equivalent — `api_version: 2` returns the v2 shape, while `"ApiVersion": 2` and no version field at all both return v1. So `client.AccountInfo(…)` went out as v2 while `client.Request(new Dictionary { ["command"] = "account_info" })` on the *same client* went out as v1, and response shapes differed between the two with nothing to signal it. The typed path was never affected: `BaseRequest.ApiVersion` carries `[JsonPropertyName("api_version")]`.
   * the key is now the wire name, and a version the caller put in the dictionary themselves is still respected. The junk `"ApiVersion"` field no longer rides along on every request
@@ -381,7 +381,7 @@ The entries below are grouped by what changed, not by the order the levels were 
   * `TestUResponseParsing` pins the behaviour that had to survive — the untyped node handed through is self-contained and readable after a forced gen2 collection, a typed model deserializes to the same values, the `string` and UTF-8 overloads agree, a missing `result` still completes, an `error` status still rejects with the parsed `ErrorResponse` attached, a null message does not throw out of the entry point — and holds two allocation budgets at 4x the response size. The first measures `RequestManager` alone, per thread so the class-parallel run cannot perturb it (1.89x now). The second runs 20 pages through `Connection` over a real socket, because nothing else in the suite can see *which* overload the client picks: it reads the process-wide counter and is therefore kept out of the parallel pass, and it separates the two paths with room on both sides — 2.18x as bound, 4.84x with the string callback bound instead. `PagedResponseServer` reuses one response frame per connection and rewrites the id in place so the server contributes nothing to what the client is measured on
 * **`error` responses were deserialized a third time** — the `status == "error"` branch of `HandleResponse` re-parsed the whole message into an `ErrorResponse` inside a `try`/`catch` that swallowed everything, to build the exception's `Response`. The message had already been deserialized into an `ErrorResponse` at the top of the same method; the second parse only produced an equal copy, and on a large error payload it was a second large-object allocation on a path that is already failing
 
-## 10.11.1.0 08/13/2026
+## 10.11.1.0 13/08/2026
 
 * **Fix infinite recursion in `LONFTokenConverter.Write` — the metadata of an NFT transaction could not be serialized at all** — regression introduced in 10.3.0.0 with the `Newtonsoft.Json` → `System.Text.Json` migration; affects every release from 10.3.0.0 on. `JsonSerializer.Serialize(tx.Meta)` threw `JsonException: A possible object cycle was detected` for any transaction whose `AffectedNodes` contain an `NFTokenPage`, which is every `NFTokenMint`, `NFTokenBurn`, `NFTokenAcceptOffer` and `NFTokenModify` that touched a page. Verified against mainnet on all six NFT transaction types — the four above failed, `NFTokenCreateOffer` and `NFTokenCancelOffer` (no page in their metadata) went through:
   * The converter broke its own recursion the way the other polymorphic converters do — strip itself from `options.Converters` via `JsonSerializerOptionsCache.WithoutConverter<T>` and re-enter the serializer. That works only for a converter that is *registered in the list*. `LONFTokenConverter` is declared as a `[JsonConverter]` **attribute on the `NFToken` type itself** (`LONFTokenPage.cs`), and a converter attached to a type outranks the options list, so System.Text.Json handed the value straight back to `Write` no matter what the list looked like. The frame repeated until the writer hit `MaxDepth`. Raising `MaxDepth` is not a workaround: at 64 and 128 it is a catchable `JsonException`, at 256 the stack overflows and the process dies
@@ -393,7 +393,7 @@ The entries below are grouped by what changed, not by the order the levels were 
 * **Reflection on the per-response path is gone** — `Resolve`, `Reject` and `ObserveTaskException` reached for `TrySetResult`, `TrySetException` and `Task` through `GetType().GetMethod(...)` + `Invoke` on every single response. `TaskInfo` now carries typed `SetResult`/`SetException` delegates and the `CompletionTask` itself, wired when the request is created. The properties were added rather than substituted: `TaskInfo` is public, so instances built outside `RequestManager` keep the old reflective path
 * **Dead `tasks` field removed from `XrplClient`** — `private readonly ConcurrentDictionary<int, TaskInfo> tasks` was never assigned and never read, so it was permanently null; a leftover from when the client tracked pending requests itself, which `RequestManager` has done for a long time
 
-## 10.11.0.0 08/04/2026
+## 10.11.0.0 04/08/2026
 
 * **MPT path steps (`0x40`)** — `PathSet` only knew the three classic hop-type bits (`0x01` account, `0x10` currency, `0x20` issuer). rippled added `STPathElement::TypeMpt = 0x40` in **3.2.0**, so a hop can now carry a 24-byte `MPTokenIssuanceID` instead of a currency. The gap was silent in both directions: `FromParser` matched none of its masks on a `0x40` byte, produced an empty hop and left the 24 MPTID bytes unread — every following byte was then parsed at the wrong offset — while `SynthesizeType` had no way to emit the bit at all. Now handled end to end:
   * `PathHop.MptIssuanceId` (`Hash192`) with a second constructor, `HasMpt()` and the `TypeMpt`/`TypeAll` byte constants; `currency` and `mpt_issuance_id` in one step throw `InvalidJsonException`, matching rippled, which throws `bad path element: MPT and Currency`
@@ -494,7 +494,7 @@ The entries below are grouped by what changed, not by the order the levels were 
 * **`WaitForConnectionAsync` now rechecks the permanent-disconnect flag on every iteration**, not only once on entry. A caller already blocked there when the client is disconnected — by `Disconnect()` from another thread, or by the give-up path above — used to sit out the whole `ConnectionAcquisitionTimeout` (default five minutes) and then receive a generic `TimeoutException`. It now returns the actual reason immediately as a `NotConnectedException`
 * **`WebSocketClient.SendMessageAsync` no longer swallows send failures silently** — it is `async void` and is invoked without `await` from `Connection.WebsocketSendAsync`, so a failed send could be reported to nobody: the pending request simply sat there until its 40-second `RequestTimeout` expired. The socket's error callback (previously dead code — nothing ever invoked or wired it) now carries the exception to `Connection.OnError` with `errorMessage = "socketSendError"`. Report-only: a failed send does not by itself mean the connection is gone, so this path never triggers a reconnect and the request is still bounded by `RequestTimeout` — but the cause is no longer invisible during diagnosis
 
-## 10.10.0.0 07/29/2026
+## 10.10.0.0 29/07/2026
 * **`ConnectionOptions.authorization` did nothing — now it does** — the option was public on `XrplClient.ClientOptions` since the xrpl.js port, but `Connection.CreateWebSocket` was a block of commented-out JS pseudocode ending in `WebSocketClient.Create(url); // todo add options`, and `WebSocketClient` had no parameter to receive them. Nothing the caller set on `authorization`, `headers`, `proxy`, `trustedCertificates`, `key`, `passphrase` or `certificate` ever reached the socket:
   * `authorization` now produces `Authorization: Basic base64(value)` on the WebSocket upgrade handshake, matching xrpl.js `createWebSocket` — the value is the raw `user:password` pair, the SDK does the base64
   * `headers` are put on the handshake as-is; the type changed from `Dictionary<string, object>` to `Dictionary<string, string>` to match xrpl.js and drop the `ToString()` ambiguity (**source-breaking**, but the property was inert, so no working code can depend on it)
@@ -535,7 +535,7 @@ The entries below are grouped by what changed, not by the order the levels were 
   * `TestIProtocolFieldSets` sets `Expiration` on the mint-time NFT offer but never checked it read back; asserted now, closing the last unverified field of the corrected `NFTokenMint` set
   * test-only tidying: the parse-floor literal is shared instead of duplicated (`RippledTransactionFormats.MinimumExpectedTransactions`), the common-field set both conformance surfaces subtract now comes from one helper (`RippledTransactionFormats.CommonFields`), and a redundant `Link` on the vendored fixture is dropped
 
-## 10.9.1.0 07/27/2026
+## 10.9.1.0 27/07/2026
 * **Fix `account_tx` losing the payment amount and, on API v1, the whole transaction** — a silent regression introduced by the 10.3.0.0 `Newtonsoft.Json` → `System.Text.Json` migration; affects every release from 10.3.0.0 on:
   * `Payment`/`PaymentResponse.DeliverMax` — the private set-only alias that maps API v2's `DeliverMax` onto `Amount` was carried over from Newtonsoft (which deserializes attributed non-public members) but `System.Text.Json` skips non-public members without `[JsonInclude]`. Every Payment read through `AccountTransactions`, `TxV2` or the transaction streams came back with `Amount = null` — no exception, no diagnostic. `Tx()` was unaffected because it pins `ApiVersion = 1`, and `meta.delivered_amount` kept parsing correctly, which is why the loss went unnoticed. The alias stays set-only, so `DeliverMax` is still never serialized back out
   * `TransactionSummary` now accepts both envelopes: rippled wraps the transaction in `tx_json` under API v2 and in `tx` under API v1 — only `tx_json` was mapped, so `Transaction` was `null` for the entire history whenever `ApiVersion = 1` was requested. `Hash` and `LedgerIndex` live inside the envelope under API v1 and fall back to it accordingly (previously `Hash` came back empty, breaking hash-based lookups over the returned list)
@@ -543,7 +543,7 @@ The entries below are grouped by what changed, not by the order the levels were 
 
 * **`GetDomainAccess` sugar helper** — client-side implementation of the `domain_access` check proposed in [XRPLF/rippled#7743](https://github.com/XRPLF/rippled/issues/7743): answers whether an account can use a permissioned domain (permissioned DEX, vaults) and why not. One `ledger_entry` domain lookup plus up to 10 parallel keylet `ledger_entry` credential lookups, all pinned to the same validated ledger; result mirrors the proposed API (`HasAccess` + `InvalidCredentials` with `Accepted`/`Expired` diagnostics, empty list = no matching credential). Semantics match rippled `credentials::validDomain`/`checkExpired`: lsfAccepted required, expired only when close time is strictly past `Expiration`, no owner shortcut, client-side expiry check (rippled deletes expired credentials lazily)
 
-## 10.9.0.0 07/16/2026
+## 10.9.0.0 16/07/2026
 * **Unified hex helpers ([#40](https://github.com/StaticBit-io/XrplCSharp/issues/40))** — seven overlapping implementations consolidated into two canonical utilities; **breaking removals** (no `[Obsolete]` grace period):
   * Canonical byte-level pair: `Xrpl.AddressCodec.Utils.ToHex(byte[])` / `FromHex(string)` (renamed from `FromBytesToHex`/`FromHexToBytes`); canonical string-level: `Xrpl.Utils.StringConversion` (+`Xrpl.Models.Utils.HexStringHelper` for validated/padded VL fields)
   * Removed: the global-namespace `ExtensionHelpers` class from `Xrpl.AddressCodec` (leaked `ToHex`/`FromHex` into every consumer's scope), the byte-identical `Xrpl.Client.Extensions.ExtensionHelpers` duplicate (the CS0121 ambiguity trap with `StringConversion`), dead internal copies in `Xrpl.Keypairs`/`Xrpl.BinaryCodec`
@@ -552,7 +552,7 @@ The entries below are grouped by what changed, not by the order the levels were 
   * Fix `IsHexCurrencyCode`: the regex lacked `^…$` anchors — any longer string containing 40 consecutive hex chars passed as a currency code
   * Pinning suite `TestUHexHelpers` locks the unified behavior (case, null-trim, anchoring, round-trips)
 
-## 10.8.0.0 07/14/2026
+## 10.8.0.0 14/07/2026
 * **Unified signing & submission for sponsored transactions ([#43](https://github.com/StaticBit-io/XrplCSharp/issues/43))** — the standard `Sign`/`SubmitAndWait` now handle XLS-68 end-to-end, no helper choice required:
   * `Sign` routes by role: a wallet matching `tx.Sponsor` produces the sponsor co-signature; the submitter path preserves an existing `SponsorSignature` and guards against a `SigningPubKey` mismatch. `multisign: true` is untouched — Signer entries are section-agnostic per rippled `STTx::checkMultiSign` (identical preimage for `tx.Signers` and `SponsorSignature.Signers`), so the role is decided at composition time
   * `SignatureComposer.ComposeSignatures` (offline, explicit sponsor signers) and `client.ComposeSignatures` (ledger-driven SignerList routing with ambiguity/unknown-signer errors) assemble a fully signed transaction from partially signed blobs
@@ -567,7 +567,7 @@ The entries below are grouped by what changed, not by the order the levels were 
 * Fixes accumulated since 10.7.0: TxFormat interface parity for `AMMDeposit.TradingFee`, `Uint64.FromJson` TryGetValue parsing, MPT validators mirror rippled preflight (`MutableFlags` masks, `TransferFee` vs confidential-balances rule), `LONFTokenPage.NextPageMin` doc, gateway_balances integration test rebuilt on the standalone node
 * Release-review pass (PR #48): `SignMulti` preserves the submitter's `SigningPubKey` for LoanSet `Counterparty` multisign parts (the XLS-66 mirror of the sponsor preimage rule); smart `SubmitAndWait` recognizes a multisigned main signature (`Signers`) and skips autofill whenever any signature material is present (a co-signature freezes the body); `SignatureObject` enforces the two protocol shapes (single vs multisig, no empty/mixed forms) and `Combine` rejects structurally unsigned material; `DomainID` validation on MPT issuance transactions (64-char hex; non-zero + `tfMPTRequireAuth` required on Create, zero legal on Set as domain clear — per rippled preflight); `Xrpl.BinaryCodec` package version bumped to 10.8.0 (the codec changed since 10.7.0); Sponsorship guide corrects `SponsorshipTransfer` actors (Create/Reassign are submitted by the sponsee) and documents the sponsee-side `SponsorshipSet` deletion via `CounterpartySponsor`; ConfidentialMPT guide describes the integration test accurately (plain issuance, generic `tem`/`tec` assertion); protocol-watch workflow fails closed on a corrupted baseline, marks removed upstream files and skips duplicate notifications via a `head_sha` marker
 
-## 10.7.0.0 07/13/2026
+## 10.7.0.0 13/07/2026
 * Protocol-completeness pass driven by a field-level diff against rippled `develop` (`server_definitions` @ `8306ac77`):
   * `definitions.json`: add `HighSponsor`/`LowSponsor` (XLS-68 RippleState reserve sponsors); fix `isVLEncoded` on `Sponsor`/`Sponsee`/`CounterpartySponsor` (AccountID fields are VL-encoded); align `Generic` attributes with the node
   * Transaction models: `NFTokenMint` + `Amount`/`Destination`/`Expiration` (NFTokenMintOffer); `MPTokenIssuanceSet` + `MutableFlags`/`TransferFee`/`MPTokenMetadata`/`DomainID`/`IssuerEncryptionKey`/`AuditorEncryptionKey`; `MPTokenIssuanceCreate` + `MutableFlags`/`DomainID`; `AMMDeposit` + `TradingFee`; `LedgerStateFix` + `BookDirectory`; `VaultDelete` + `MemoData`; `SetFee` + XRPFees drops fields
@@ -581,7 +581,7 @@ The entries below are grouped by what changed, not by the order the levels were 
 * `ValidateAccountSet`: `SetFlag`/`ClearFlag` asf-range checks extracted into a shared helper
 * Unit tests pinning the new fields (binary round-trips) and the dispatch fix; full integration suite (238 tests) green against xrpld `8306ac77` with all amendments active
 
-## 10.6.0.0 07/10/2026
+## 10.6.0.0 10/07/2026
 * **Sponsored Fees & Reserves (XLS-68, `Sponsor` amendment)** — merged into rippled `develop` on 07/10/2026 ([rippled #7350](https://github.com/XRPLF/rippled/pull/7350)):
   * New transaction models `SponsorshipSet` (91) and `SponsorshipTransfer` (90) with tf-flag enums per rippled `TxFlags.h`; `LOSponsorship` ledger object (0x90)
   * Common transaction fields `Sponsor` and `SponsorFlags` (`SponsorCoverage`: `spfSponsorFee` = 1, `spfSponsorReserve` = 2) on all transactions
@@ -595,13 +595,13 @@ The entries below are grouped by what changed, not by the order the levels were 
 * Fix binary-codec JSON decode of base-ten UInt64 fields (`MPTAmount`, `LockedAmount`, `OutstandingAmount`, `MaximumAmount`, `ConfidentialOutstandingAmount`): `Decode` now emits decimal strings matching rippled (`kSmdBaseTen`) instead of 16-digit hex — pre-existing gap surfaced by the new round-trip tests
 * Tests: binary round-trips for all five ConfidentialMPT transactions and SponsorshipSet; validation tests mirroring rippled preflight; `TestIConfidentialMPT` negative e2e (bogus proof is rejected by ConfidentialTransfer domain logic, not the parser — proving the node parses our encoding)
 
-## 10.5.1.0 07/04/2026
+## 10.5.1.0 04/07/2026
 * Fix `SignAsBatchPart` with `TicketSequence`: when the outer Batch used a ticket and had no `Sequence`, the value `0` was applied only to the signing preimage while the serialized blob omitted the required `Sequence: 0` field, producing a malformed transaction on submit. The field is now written into the transaction as well; signatures are unaffected (the preimage already used `0`). Found by review on the 10.5.0.0 release PR
 * Add a unit test covering the `TicketSequence`-present / `Sequence`-absent signing path (blob carries `Sequence: 0`, signature verifies over the zero-sequence preimage)
 * Correct the `EncodeForSigningBatch` XML doc: `outerAccount` accepts a classic base58 r-address only (the 40-char hex form was never supported by this overload)
 * Harden the nightly amendment stand: admin RPC/WS ports (5005/5006/6006) in `docker-compose.batchv11.yml` are now published to `127.0.0.1` only
 
-## 10.5.0.0 07/03/2026
+## 10.5.0.0 03/07/2026
 * **BREAKING**: Align Batch (XLS-56) signing with the `BatchV1_1` amendment ([rippled #6446](https://github.com/XRPLF/rippled/pull/6446), merged into `develop` 07/01/2026). The signing preimage now includes the outer `Account` (20 bytes) and outer `Sequence` (4 bytes) after the `BCH\0` prefix; `NetworkID` is removed from the preimage. `XrplBinaryCodec.EncodeForSigningBatch` signature changed to `(string outerAccount, uint outerSequence, uint flags, IEnumerable<string> txIDs)`. Signatures produced by the previous format are rejected by rippled once `BatchV1_1` is active
 * `SignAsBatchPart` single-sig now binds the signature to the `BatchSigner` account id (`finishMultiSigningData` equivalent); inner multisign binds `owner(20) + signer(20)` account ids — both per the audit hardening in BatchV1_1
 * Reject duplicate `BatchSigner` accounts locally (`SortBatchSigners`, `ValidateBatch`) and a `BatchSigner` equal to the outer `Account` — early fail instead of `temBAD_SIGNER` from the server
@@ -620,18 +620,18 @@ The entries below are grouped by what changed, not by the order the levels were 
 * **New package `Xrpl.X402.AspNetCore`** — ASP.NET Core server middleware: a `RequirePayment` endpoint filter plus `LedgerSettlingFacilitator` (settles locally) and `T54Facilitator` (delegates to a t54 facilitator)
 * Live interop with the t54 testnet facilitator confirmed on-chain for both XRP and RLUSD/IOU (`/verify` → `isValid:true`, `/settle` settles)
 
-## 10.4.2.0 06/05/2026
+## 10.4.2.0 05/06/2026
 * Fix thread-unsafe request id assignment in `RequestManager` — concurrent requests on a single connection (e.g. `Task.WhenAll` over several `BookOffers`) could collide on the same id and throw `Response with id '$<guid>' is already pending` or drop a pending promise. Removed the shared `nextId` field; each call now generates its own `Guid` and registers via a single atomic `ConcurrentDictionary.TryAdd`, enabling parallel requests on one connection
 * Surface exceptions thrown by stream handlers (`OnLedgerClosed`, `OnTransaction`, etc.) through the `OnError` event instead of swallowing them into a debug trace — consumer bugs are now observable, while the message loop stays alive and a throwing `OnError` handler is contained
 * Clarify in XML docs that `Xrpl.Client.Exceptions.TimeoutException` is not `System.TimeoutException` (it derives from `XrplException`), to avoid mismatched `catch` clauses
 
-## 10.4.1.0 05/28/2026
+## 10.4.1.0 28/05/2026
 * Fix `IouValue` (IOU token amount) parsing to accept a trailing decimal point (e.g. `"128700."`), aligning with `xrpl.js` / `ripple-binary-codec` and `rippled` `STAmount` reference behavior — previously the stricter validation regex rejected a value with no digits after the dot, breaking signing of transactions (e.g. `AMMDeposit` via WalletConnect) that carried such amounts
 * Relax IOU value regex fractional group from `(\.(\d+))?` to `(\.(\d*))?` while adding a `(?=\.?\d)` lookahead that still requires at least one mantissa digit — so trailing/leading dots (`"128700."`, `".5"`) parse but bare-dot inputs (`"."`, `".e10"`) are rejected, matching BigNumber; deduplicate the regex by reusing the single `IouValue.ValueRegex` constant in `AmountValue.cs` and `ExtenstionHelpers.cs`
 * Native XRP (drops) and MPT amount parsing unchanged; mantissa/exponent math, `ToString()` output, and `ToBytes()` round-trip preserved bit-for-bit for already-valid values
 * Add unit tests verifying `"128700."` and `"1."` parse identically to their dot-less forms (same mantissa/exponent/precision and `ToBytes()` blob) and regression tests for existing values
 
-## 10.4.0.0 05/13/2026
+## 10.4.0.0 13/05/2026
 * Sync `Xrpl.BinaryCodec` enums with upstream `definitions.json` from [xrpl.js](https://github.com/XRPLF/xrpl.js)
 * Add 24 missing `TransactionType` entries: XChain (8), Vault (6), Loan (9), LedgerStateFix, DelegateSet, Batch, NFTokenModify, PermissionedDomainSet/Delete, CredentialCreate/Accept/Delete, MPToken (4), DID (2), Oracle (2), AMMClawback
 * Add 16 missing `LedgerEntryType` entries: Bridge, XChainOwnedClaimID, XChainOwnedCreateAccountClaimID, MPTokenIssuance, MPToken, Oracle, Credential, PermissionedDomain, Delegate, Vault, LoanBroker, Loan, DID, NegativeUNL, NFTokenOffer, NFTokenPage
