@@ -135,6 +135,14 @@ namespace Xrpl.Wallet
         /// Checks the attestation's signature against its own fields and public key,
         /// the way rippled's <c>attestationPreflight</c> does (temXCHAIN_BAD_PROOF otherwise).
         /// </summary>
+        /// <remarks>
+        /// Cryptographic only. It says the signature matches the fields and the key, and nothing
+        /// about whether that key may speak for <c>AttestationSignerAccount</c> or whether that
+        /// account is on the door's SignerList. rippled decides both at preclaim
+        /// (<c>checkAttestationPublicKey</c>: tecNO_PERMISSION, or
+        /// tecXCHAIN_BAD_PUBLIC_KEY_ACCOUNT_PAIR when the key is neither the master nor the
+        /// regular key of that account), and it needs a ledger to do it.
+        /// </remarks>
         public static bool VerifyClaimAttestation(XChainAddClaimAttestation attestation)
         {
             if (attestation is null) throw new ArgumentNullException(nameof(attestation));
@@ -153,7 +161,8 @@ namespace Xrpl.Wallet
         }
 
         /// <summary>
-        /// Checks the account-create attestation's signature; see <see cref="VerifyClaimAttestation"/>.
+        /// Checks the account-create attestation's signature; see
+        /// <see cref="VerifyClaimAttestation"/>, including what it does not check.
         /// </summary>
         public static bool VerifyAccountCreateAttestation(XChainAddAccountCreateAttestation attestation)
         {
