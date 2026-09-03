@@ -36,7 +36,7 @@ public class TestIClawback
     const string CurrencyCode = "CLW";
     static bool issuerInitialized = false;
     static bool holderInitialized = false;
-    public static TestNodeType nodeType = TestNodeType.Standalone;
+    public static TestNodeType nodeType = IntegrationTestConfig.CurrentNodeType;
 
     [ClassInitialize]
     public static async Task MyClassInitializeAsync(TestContext testContext)

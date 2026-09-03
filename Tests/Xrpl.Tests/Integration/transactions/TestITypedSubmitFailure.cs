@@ -28,7 +28,7 @@ public class TestITypedSubmitFailure
     [ClassInitialize]
     public static async Task ClassInitializeAsync(TestContext testContext)
     {
-        client = await IntegrationTestConfig.CreateClientAsync(TestNodeType.Standalone);
+        client = await IntegrationTestConfig.CreateClientAsync();
         wallet = await Utils.GenerateFundedWallet(client);
     }
 

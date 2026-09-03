@@ -15,7 +15,8 @@ namespace Xrpl.Tests.Integration
     /// Verifies that <see cref="XrplClient.ClientOptions.AdminUser"/>/<see cref="XrplClient.ClientOptions.AdminPassword"/>
     /// actually unlock rippled admin commands over WebSocket.
     /// <para>
-    /// Runs against <c>[port_ws_admin_auth]</c> of the standalone stand (port 6007), which sets
+    /// Runs against <c>[port_ws_admin_auth]</c> of the standalone stand (port 6007, or the URL in
+    /// <c>XRPL_TEST_ADMIN_AUTH_URL</c> for a stand published on other ports), which sets
     /// <c>admin_user</c>/<c>admin_password</c>. rippled carries these credentials in the request JSON,
     /// not in an HTTP header — Basic auth on the ws handshake is never checked by the node itself.
     /// </para>
@@ -25,7 +26,8 @@ namespace Xrpl.Tests.Integration
     {
         private const string AdminUser = "xrpl_admin";
         private const string AdminPassword = "xrpl_admin_secret";
-        private const string ServerUrl = "ws://127.0.0.1:6007";
+        private static readonly string ServerUrl =
+            Environment.GetEnvironmentVariable("XRPL_TEST_ADMIN_AUTH_URL") is { Length: > 0 } url ? url.Trim() : "ws://127.0.0.1:6007";
 
         private static readonly Dictionary<string, object> LedgerAccept = new()
         {

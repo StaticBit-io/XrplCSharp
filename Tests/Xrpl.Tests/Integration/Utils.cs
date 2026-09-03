@@ -85,12 +85,23 @@ namespace XrplTests.Xrpl.ClientLib.Integration
         public const decimal MinBalanceThreshold = 50m;
 
         /// <summary>
+        /// Environment variable that replaces the WebSocket URL for any node type,
+        /// e.g. a standalone stand on non-default ports or a private devnet node.
+        /// </summary>
+        public const string NodeUrlEnvironmentVariable = "XRPL_TEST_NODE_URL";
+
+        /// <summary>
         /// Gets the WebSocket URL for the specified node type.
+        /// <see cref="NodeUrlEnvironmentVariable"/>, when set, wins over the built-in defaults.
         /// </summary>
         /// <param name="nodeType">The type of node to connect to.</param>
         /// <returns>WebSocket URL string.</returns>
         public static string GetNodeUrl(TestNodeType nodeType)
         {
+            string overrideUrl = Environment.GetEnvironmentVariable(NodeUrlEnvironmentVariable);
+            if (!string.IsNullOrWhiteSpace(overrideUrl))
+                return overrideUrl.Trim();
+
             return nodeType switch
             {
                 TestNodeType.TestNet => "wss://s.altnet.rippletest.net:51233",
@@ -103,7 +114,7 @@ namespace XrplTests.Xrpl.ClientLib.Integration
 
         /// <summary>
         /// Gets the node type from the XRPL_TEST_NODE environment variable.
-        /// Defaults to TestNet if not set or invalid.
+        /// Defaults to Standalone when the variable is not set.
         /// </summary>
         private static TestNodeType GetNodeTypeFromEnvironment()
         {
@@ -164,13 +175,7 @@ namespace XrplTests.Xrpl.ClientLib.Integration
         /// <param name="nodeType">Optional node type override.</param>
         public static async Task FundWalletAsync(IXrplClient client, XrplWallet wallet, TestNodeType? nodeType = null)
         {
-            var type = nodeType ?? client.Url() switch
-            {
-                { } url when url.Contains("altnet") => TestNodeType.TestNet,
-                { } url when url.Contains("devnet") => TestNodeType.DevNet,
-                { } url when url.Contains("localhost") => TestNodeType.Standalone,
-                _ => TestNodeType.MainNet,
-            };
+            TestNodeType type = nodeType ?? CurrentNodeType;
 
             if (type == TestNodeType.Standalone)
             {
@@ -226,63 +231,41 @@ namespace XrplTests.Xrpl.ClientLib.Integration
             }
         }
 
-        private static XrplWallet FaucetFiller = null;
+        /// <summary>
+        /// Number of faucet calls attempted for one wallet before giving up.
+        /// </summary>
+        private const int FaucetAttempts = 3;
 
         /// <summary>
-        /// Funds a wallet from the testnet/devnet faucet.
-        /// Serialized via StandaloneLock to prevent FaucetFiller sequence conflicts.
+        /// Funds a wallet straight from the testnet/devnet faucet.
+        /// Calls are serialized via StandaloneLock so parallel test classes do not
+        /// hammer the faucet rate limit; each failed call is retried with a growing delay.
         /// </summary>
         private static async Task FundFromFaucetAsync(IXrplClient client, XrplWallet wallet)
         {
             await StandaloneLock.FaucetFunding.WaitAsync();
             try
             {
-                if (FaucetFiller is null)
+                for (int attempt = 1; ; attempt++)
                 {
-                    FaucetFiller = XrplWallet.Generate();
-                    Console.WriteLine($"[IntegrationTest] FaucetFiller generated {FaucetFiller.ClassicAddress}");
-                    var result = await client.FundWallet(FaucetFiller);
-                    Console.WriteLine($"[IntegrationTest] FaucetFiller funded {FaucetFiller.ClassicAddress}: {result.Balance} XRP");
-                }
-
-                if (await client.GetXrpFreeBalance(FaucetFiller.ClassicAddress) is { } balance and > 50)
-                {
-                    await FundFromFaucetFillerAsync(client, wallet, 10);
-                }
-                else
-                {
-                    var result = await client.FundWallet(FaucetFiller);
-                    Console.WriteLine($"[IntegrationTest] FaucetFiller funded {FaucetFiller.ClassicAddress}: {result.Balance} XRP");
-                    await FundFromFaucetFillerAsync(client, wallet, 10);
+                    try
+                    {
+                        await client.FundWallet(wallet);
+                        decimal balance = await client.GetXrpFreeBalance(wallet.ClassicAddress);
+                        Console.WriteLine($"[IntegrationTest] Faucet funded {wallet.ClassicAddress}: {balance} XRP");
+                        return;
+                    }
+                    catch (Exception ex) when (attempt < FaucetAttempts)
+                    {
+                        Console.WriteLine($"[IntegrationTest] Faucet attempt {attempt}/{FaucetAttempts} for {wallet.ClassicAddress} failed: {ex.Message}");
+                        await Task.Delay(TimeSpan.FromSeconds(5 * attempt));
+                    }
                 }
             }
             finally
             {
                 StandaloneLock.FaucetFunding.Release();
             }
-        }
-
-        /// <summary>
-        /// Funds a wallet from the faucetFiller.
-        /// </summary>
-        private static async Task FundFromFaucetFillerAsync(IXrplClient client, XrplWallet wallet, decimal xrpSize)
-        {
-            Payment payment = new Payment
-            {
-                Account = FaucetFiller.ClassicAddress,
-                Destination = wallet.ClassicAddress,
-                Amount = new Currency { ValueAsXrp = xrpSize, CurrencyCode = "XRP" }
-            };
-
-            var values = JsonSerializer.Deserialize<Dictionary<string, object>>(payment.ToJson(), global::Xrpl.Client.Json.XrplJsonOptions.Default);
-            var response = await client.SubmitAndWait(values, FaucetFiller, autofill: true);
-
-            if (response.Meta.TransactionResult != "tesSUCCESS")
-            {
-                throw new Exception($"Filler funding failed: {response.Meta.TransactionResult}");
-            }
-
-            Console.WriteLine($"[IntegrationTest] Filler funded {wallet.ClassicAddress}");
         }
 
         /// <summary>
@@ -377,12 +360,17 @@ namespace XrplTests.Xrpl.ClientLib.Integration
 
         public static async Task LedgerAccept(IXrplClient client)
         {
-            var request = new BaseRequest { Command = "ledger_accept" };
-            await client.AnyRequest(request);
+            await IntegrationTestConfig.LedgerAcceptAsync(client);
         }
 
         public static async Task FundAccount(IXrplClient client, XrplWallet wallet)
         {
+            if (!IntegrationTestConfig.IsStandalone())
+            {
+                await IntegrationTestConfig.FundWalletAsync(client, wallet);
+                return;
+            }
+
             await StandaloneLock.MasterFunding.WaitAsync();
             try
             {

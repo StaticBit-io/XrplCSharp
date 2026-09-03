@@ -18,10 +18,22 @@ public class TestIXChainBridge : TestIXChainBridgeBase
     private static IXrplClient client;
     protected override IXrplClient GetClient() => client;
 
+    private static bool xchainEnabled;
+
     [ClassInitialize]
     public static async Task ClassInitializeAsync(TestContext testContext)
     {
         client = await CreateStandaloneClient();
+        xchainEnabled = await AmendmentGuard.IsEnabledAsync(client, AmendmentGuard.XChainBridge);
+    }
+
+    [TestInitialize]
+    public void CheckXChainBridgeAmendment()
+    {
+        if (!xchainEnabled)
+        {
+            Assert.Inconclusive("XChainBridge amendment is not enabled on the test node.");
+        }
     }
 
     [ClassCleanup]

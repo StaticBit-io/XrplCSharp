@@ -30,7 +30,7 @@ namespace Xrpl.Tests.Integration;
 [TestCategory("TestI")]
 public class TestIConnectionStates
 {
-    private static string LocalServer => IntegrationTestConfig.GetNodeUrl(TestNodeType.Standalone);
+    private static string LocalServer => IntegrationTestConfig.GetNodeUrl(IntegrationTestConfig.CurrentNodeType);
 
     /// <summary>
     /// The same node under a different URL spelling — enough to exercise a real server switch

@@ -24,7 +24,7 @@ public class TestIDID
     public TestContext TestContext { get; set; }
     public static IXrplClient client;
 
-    public static TestNodeType nodeType = TestNodeType.Standalone;
+    public static TestNodeType nodeType = IntegrationTestConfig.CurrentNodeType;
     [ClassInitialize]
     public static async Task MyClassInitializeAsync(TestContext testContext)
     {

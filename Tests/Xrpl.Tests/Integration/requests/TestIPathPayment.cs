@@ -18,7 +18,7 @@ namespace XrplTests.Xrpl.ClientLib.Integration
     public class TestIPathPayment
     {
         public TestContext TestContext { get; set; }
-        public static TestNodeType nodeType = TestNodeType.Standalone;
+        public static TestNodeType nodeType = IntegrationTestConfig.CurrentNodeType;
 
         const string CurrencyCode = "PPT";
 

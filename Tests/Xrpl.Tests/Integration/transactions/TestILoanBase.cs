@@ -24,7 +24,7 @@ public abstract class TestILoanBase
 {
     public TestContext TestContext { get; set; }
     protected abstract IXrplClient GetClient();
-    protected static TestNodeType nodeType = TestNodeType.Standalone;
+    protected static TestNodeType nodeType = IntegrationTestConfig.CurrentNodeType;
 
     protected static void ValidateResult(Submit res)
     {
@@ -374,6 +374,6 @@ public abstract class TestILoanBase
 
     protected static async Task<IXrplClient> CreateStandaloneClient()
     {
-        return await IntegrationTestConfig.CreateClientAsync(TestNodeType.Standalone);
+        return await IntegrationTestConfig.CreateClientAsync();
     }
 }
