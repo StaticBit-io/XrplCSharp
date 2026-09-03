@@ -107,13 +107,32 @@ public class TestIBatchInnerTypes
     /// <remarks>
     /// Strictly: rippled's time gates are <c>now &gt; mark</c> (<c>after()</c> in View.cpp), so a
     /// close time equal to the mark is still too early. Standalone close times move in coarse
-    /// steps and land on equality readily, which is where this was found; on devnet the next
-    /// step came within seconds and hid it.
+    /// steps and land on equality readily.
+    /// <para>
+    /// Bounded, because a ledger that stops advancing is a node failure and a test that waits on
+    /// it forever reports nothing. The failure names the last close time seen and how far short
+    /// of the mark it was, which separates a stalled node from a mark set too far ahead.
+    /// </para>
     /// </remarks>
     private static async Task WaitForCloseTimeAsync(DateTime target)
     {
-        while (await ValidatedCloseTimeAsync() <= target)
+        TimeSpan budget = TimeSpan.FromSeconds(90);
+        System.Diagnostics.Stopwatch elapsed = System.Diagnostics.Stopwatch.StartNew();
+        DateTime lastSeen = DateTime.MinValue;
+
+        while (true)
         {
+            lastSeen = await ValidatedCloseTimeAsync();
+            if (lastSeen > target)
+                return;
+
+            if (elapsed.Elapsed >= budget)
+            {
+                Assert.Fail(
+                    $"the validated close time did not pass {target:O} within {budget.TotalSeconds:F0}s; " +
+                    $"last seen {lastSeen:O}, short by {(target - lastSeen).TotalSeconds:F1}s");
+            }
+
             await Task.Delay(TimeSpan.FromSeconds(3));
         }
     }
