@@ -1,4 +1,6 @@
 using System;
+using System.Collections.Generic;
+using System.Linq;
 using System.Text.Json;
 using System.Text.Json.Nodes;
 
@@ -41,6 +43,24 @@ namespace Xrpl.Wallet
     /// // Broker receives the partially signed blob, adds TxnSignature:
     /// var final = LoanSigningHelper.BrokerSign(withCounterparty.TxBlob, brokerWallet);
     /// await client.SubmitRequest(final.TxBlob);
+    /// </code>
+    ///
+    /// <b>Multisig borrower (Counterparty with a SignerList):</b> each signer of the
+    /// borrower's list produces a portable Signer entry with the standard multisign
+    /// call, and the composer places them under <c>CounterpartySignature.Signers</c>
+    /// (rippled verifies them against the counterparty's SignerList over the same
+    /// multisign preimage as <c>tx.Signers</c>). Autofill with the signer count so the
+    /// fee covers them (rippled <c>LoanSet::calculateBaseFee</c> charges one base fee
+    /// per counterparty signer):
+    /// <code>
+    /// var prepared = LoanSigningHelper.PrepareForSigning(await client.Autofill(loanTx.ToDictionary(), signersCount: 2), brokerWallet);
+    /// var brokerPart = brokerWallet.Sign(prepared);
+    /// var part1 = signer1.Sign(prepared, multisign: true);
+    /// var part2 = signer2.Sign(prepared, multisign: true);
+    /// // ledger-driven routing (looks up the Counterparty's SignerList):
+    /// var composed = await client.ComposeSignatures(new[] { brokerPart.TxBlob, part1.TxBlob, part2.TxBlob });
+    /// // or offline, naming the borrower's signers:
+    /// var offline = LoanSigningHelper.CombineLoanSignatures(new[] { brokerPart.TxBlob, part1.TxBlob, part2.TxBlob }, new[] { signer1.ClassicAddress, signer2.ClassicAddress });
     /// </code>
     /// </summary>
     public static class LoanSigningHelper
@@ -131,6 +151,26 @@ namespace Xrpl.Wallet
             RequireLoanSet(brokerSignedBlob, "Broker");
             RequireLoanSet(counterpartySignedBlob, "Counterparty");
             return CoSigningEngine.Combine(brokerSignedBlob, counterpartySignedBlob, "CounterpartySignature", "Counterparty");
+        }
+
+        /// <summary>
+        /// Combines a broker part with the portable Signer entries of a multisig
+        /// borrower: entries from <paramref name="counterpartySignerAccounts"/> land in
+        /// <c>CounterpartySignature.Signers</c>, any other entry in <c>tx.Signers</c>
+        /// (a multisig broker). Offline; for ledger-driven routing use
+        /// <c>IXrplClient.ComposeSignatures</c>.
+        /// </summary>
+        /// <param name="partBlobs">The broker's blob and the borrower-side multisign parts.</param>
+        /// <param name="counterpartySignerAccounts">Accounts of the borrower's SignerList.</param>
+        public static SignatureResult CombineLoanSignatures(
+            IEnumerable<string> partBlobs,
+            IReadOnlyCollection<string> counterpartySignerAccounts)
+        {
+            List<string> parts = partBlobs?.ToList()
+                ?? throw new ValidationException("At least one partially signed blob is required.");
+            foreach (string blob in parts)
+                RequireLoanSet(blob, "Part");
+            return SignatureComposer.ComposeSignatures(parts, null, counterpartySignerAccounts);
         }
 
         /// <summary>

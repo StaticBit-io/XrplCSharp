@@ -18,17 +18,18 @@ namespace Xrpl.Sugar
 {
     /// <summary>
     /// Ledger-driven signature composition (#43): routes portable multisig
-    /// Signer entries into tx.Signers or SponsorSignature.Signers by looking
-    /// up the SignerLists of the transaction's Account and Sponsor.
+    /// Signer entries into tx.Signers, SponsorSignature.Signers or
+    /// CounterpartySignature.Signers by looking up the SignerLists of the
+    /// transaction's Account, Sponsor and (for LoanSet) Counterparty.
     /// </summary>
     public static class ComposeSugar
     {
         /// <summary>
         /// Composes a fully signed transaction from partially signed blobs,
         /// resolving each Signer entry's section from the ledger SignerLists.
-        /// A signer present in both lists is an explicit error — use the
+        /// A signer present in more than one list is an explicit error — use the
         /// offline <see cref="SignatureComposer.ComposeSignatures"/> overload
-        /// with explicit sponsor signers for that case.
+        /// with explicit side signers for that case.
         /// </summary>
         public static async Task<SignatureResult> ComposeSignatures(
             this IXrplClient client,
@@ -43,6 +44,11 @@ namespace Xrpl.Sugar
             string account = first["Account"]?.GetValue<string>()
                 ?? throw new ValidationException("Transaction is missing the Account field.");
             string? sponsor = first["Sponsor"]?.GetValue<string>();
+            // XLS-66: the LoanSet borrower co-signs through CounterpartySignature, with its own
+            // SignerList when it is a multisig account
+            string? counterparty = string.Equals(first["TransactionType"]?.GetValue<string>(), "LoanSet", StringComparison.OrdinalIgnoreCase)
+                ? first["Counterparty"]?.GetValue<string>()
+                : null;
 
             // Which signer accounts actually appear across the parts?
             HashSet<string> seenSigners = new HashSet<string>(StringComparer.Ordinal);
@@ -51,39 +57,51 @@ namespace Xrpl.Sugar
                 JsonObject part = XrplBinaryCodec.Decode(blob).AsObject();
                 CollectSignerAccounts(part["Signers"] as JsonArray, seenSigners);
                 CollectSignerAccounts(part["SponsorSignature"]?["Signers"] as JsonArray, seenSigners);
+                CollectSignerAccounts(part["CounterpartySignature"]?["Signers"] as JsonArray, seenSigners);
             }
 
             HashSet<string> sponsorSide = new HashSet<string>(StringComparer.Ordinal);
+            HashSet<string> counterpartySide = new HashSet<string>(StringComparer.Ordinal);
             LOSignerList? accountSignerList = null;
             LOSignerList? sponsorSignerList = null;
+            LOSignerList? counterpartySignerList = null;
             if (seenSigners.Count > 0)
             {
                 accountSignerList = await GetSignerList(client, account, cancellationToken).ConfigureAwait(false);
                 sponsorSignerList = sponsor is null
                     ? null
                     : await GetSignerList(client, sponsor, cancellationToken).ConfigureAwait(false);
+                counterpartySignerList = counterparty is null
+                    ? null
+                    : await GetSignerList(client, counterparty, cancellationToken).ConfigureAwait(false);
                 HashSet<string> accountList = ToAccountSet(accountSignerList);
                 HashSet<string> sponsorList = ToAccountSet(sponsorSignerList);
+                HashSet<string> counterpartyList = ToAccountSet(counterpartySignerList);
 
                 foreach (string signer in seenSigners)
                 {
                     bool inAccount = accountList.Contains(signer);
                     bool inSponsor = sponsorList.Contains(signer);
-                    if (inAccount && inSponsor)
-                        throw new ValidationException($"Ambiguous signer role for {signer}: present in both the Account's and the Sponsor's SignerList. Compose offline with explicit sponsor signers.");
-                    if (!inAccount && !inSponsor)
-                        throw new ValidationException($"Unknown signer {signer}: not in the Account's SignerList{(sponsor is null ? "" : " or the Sponsor's SignerList")}.");
+                    bool inCounterparty = counterpartyList.Contains(signer);
+                    int roles = (inAccount ? 1 : 0) + (inSponsor ? 1 : 0) + (inCounterparty ? 1 : 0);
+                    if (roles > 1)
+                        throw new ValidationException($"Ambiguous signer role for {signer}: present in more than one of the Account's, the Sponsor's and the Counterparty's SignerLists. Compose offline with explicit side signers.");
+                    if (roles == 0)
+                        throw new ValidationException($"Unknown signer {signer}: not in the Account's SignerList{(sponsor is null ? "" : ", the Sponsor's SignerList")}{(counterparty is null ? "" : ", the Counterparty's SignerList")}.");
                     if (inSponsor)
                         sponsorSide.Add(signer);
+                    if (inCounterparty)
+                        counterpartySide.Add(signer);
                 }
             }
 
-            SignatureResult composed = SignatureComposer.ComposeSignatures(parts, sponsorSide);
+            SignatureResult composed = SignatureComposer.ComposeSignatures(parts, sponsorSide, counterpartySide);
 
             // Quorum pre-check by weights, for each side using the multisig form
             JsonObject result = XrplBinaryCodec.Decode(composed.TxBlob).AsObject();
             ValidateQuorum(accountSignerList, result["Signers"] as JsonArray, "Account");
             ValidateQuorum(sponsorSignerList, result["SponsorSignature"]?["Signers"] as JsonArray, "Sponsor");
+            ValidateQuorum(counterpartySignerList, result["CounterpartySignature"]?["Signers"] as JsonArray, "Counterparty");
 
             return composed;
         }

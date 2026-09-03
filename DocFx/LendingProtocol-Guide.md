@@ -326,6 +326,37 @@ await client.SubmitRequest(fullySigned.TxBlob);
 
 > **Important:** Do not use `brokerWallet.Sign()` on a partially signed LoanSet blob — it does not handle `CounterpartySignature` correctly. Always use `LoanSigningHelper.BrokerSign()` for the V3 pattern.
 
+### Multisig Borrower (Counterparty with a SignerList)
+
+`CounterpartySignature` takes the multisig form when the borrower is a multisig account: an empty `SigningPubKey` and a `Signers` array that the node checks against the **counterparty's** SignerList, over the same multisign preimage as `tx.Signers`. Each signer of the borrower's list signs with the standard multisign call; the composer places the entries.
+
+```csharp
+// The fee covers one base fee per counterparty signer (rippled LoanSet::calculateBaseFee),
+// so autofill with the signer count before anyone signs
+Dictionary<string, object> autofilled = await client.Autofill(loanTx.ToDictionary(), signersCount: 2);
+JsonObject prepared = LoanSigningHelper.PrepareForSigning(
+    JsonNode.Parse(JsonSerializer.Serialize(autofilled, XrplJsonOptions.Default)).AsObject(), brokerWallet);
+var preparedDict = JsonSerializer.Deserialize<Dictionary<string, object>>(prepared.ToJsonString(), XrplJsonOptions.Default);
+
+// Broker: single main signature. Borrower's signers: portable multisign entries
+SignatureResult brokerPart = brokerWallet.Sign(new Dictionary<string, object>(preparedDict));
+SignatureResult part1 = signer1.Sign(new Dictionary<string, object>(preparedDict), multisign: true);
+SignatureResult part2 = signer2.Sign(new Dictionary<string, object>(preparedDict), multisign: true);
+
+// Ledger-driven: the composer looks the signers up in the Counterparty's SignerList
+// and pre-checks the quorum by weight
+SignatureResult composed = await client.ComposeSignatures(new[] { brokerPart.TxBlob, part1.TxBlob, part2.TxBlob });
+
+// Offline: name the borrower's signers yourself
+SignatureResult offline = LoanSigningHelper.CombineLoanSignatures(
+    new[] { brokerPart.TxBlob, part1.TxBlob, part2.TxBlob },
+    new[] { signer1.ClassicAddress, signer2.ClassicAddress });
+
+await client.SubmitRequest(composed.TxBlob);
+```
+
+A signer that appears in more than one SignerList (the broker's, the sponsor's, the borrower's) is an error for the ledger-driven composer; compose offline with explicit sides in that case.
+
 ### Key Points
 
 - Both parties sign the **same** preimage (the transaction serialized for signing, without any signature fields)
