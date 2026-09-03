@@ -150,10 +150,41 @@ public class TestIBatchInnerTypes
         {
             JsonObject inner = wrapper["RawTransaction"].AsObject();
             string hash = inner.ComputeInnerTxId().ToUpperInvariant();
-            TransactionResponse innerTx = await client.TxV1(new TxRequest(hash)).Typed();
+            TransactionResponse innerTx = await LookUpInnerAsync(hash, inner["TransactionType"].GetValue<string>());
             inners.Add(new InnerResult(hash, inner["TransactionType"].GetValue<string>(), innerTx.Meta?.TransactionResult, innerTx.Meta));
         }
         return inners;
+    }
+
+    /// <summary>
+    /// Reads one inner transaction back by the id computed from the signed blob.
+    /// </summary>
+    /// <remarks>
+    /// Reading a just-validated transaction is a poll, not a single call. The outer Batch is
+    /// validated by the time this runs and its inners were applied in the same ledger, but the
+    /// node answers <c>txnNotFound</c> for a short window before they are queryable, and a
+    /// single attempt turned that into an intermittent failure.
+    /// </remarks>
+    private static async Task<TransactionResponse> LookUpInnerAsync(string hash, string transactionType)
+    {
+        const int MaxAttempts = 10;
+        for (int attempt = 1; ; attempt++)
+        {
+            try
+            {
+                return await client.TxV1(new TxRequest(hash)).Typed();
+            }
+            catch (RippledException ex) when (attempt < MaxAttempts && ex.Message.Contains("txnNotFound"))
+            {
+                await Task.Delay(TimeSpan.FromSeconds(2));
+            }
+            catch (RippledException ex) when (ex.Message.Contains("txnNotFound"))
+            {
+                throw new AssertFailedException(
+                    $"the inner {transactionType} {hash} never appeared in the ledger after {MaxAttempts} lookups; " +
+                    "either it was not applied or the id computed from the signed blob does not match the node's", ex);
+            }
+        }
     }
 
     private static void AssertAllInnersSucceeded(IReadOnlyList<InnerResult> inners)
