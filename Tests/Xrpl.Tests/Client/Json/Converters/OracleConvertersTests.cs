@@ -1,6 +1,7 @@
 using Microsoft.VisualStudio.TestTools.UnitTesting;
 
 using System;
+using System.Collections.Generic;
 using System.Text.Json;
 using System.Text.Json.Serialization;
 
@@ -96,6 +97,19 @@ public class TestUOracleCurrencyConverter
         Assert.AreEqual("USD", result.Currency);
     }
 
+    /// <summary>
+    /// A currency code is 160 bits the ledger does not constrain, so a nonstandard one that is
+    /// not text comes back as the hex the node sent rather than throwing out of the converter.
+    /// </summary>
+    [TestMethod]
+    public void Read_HexCode40Chars_NonPrintable_ReturnsHexUnchanged()
+    {
+        string hex = "0158415500000000C1F76FF6ECB0BAC600000000"; // legacy demurrage code
+        string json = $"{{\"Currency\": \"{hex}\"}}";
+        Model result = JsonSerializer.Deserialize<Model>(json, XrplJsonOptions.Default);
+        Assert.AreEqual(hex, result.Currency);
+    }
+
     [TestMethod]
     public void Read_Null_ReturnsNull()
     {
@@ -167,11 +181,26 @@ public class TestUOracleHexStringConverter
         Assert.AreEqual("test", result.Provider);
     }
 
+    /// <summary>
+    /// Provider, AssetClass and URI are Blob fields; rippled checks their length and nothing
+    /// else (OracleSet::preflight), so an oracle published by anyone may hold arbitrary bytes.
+    /// Refusing one threw out of the converter and took the whole response with it: a single
+    /// third-party oracle made a ledger_data page from devnet unreadable.
+    /// </summary>
     [TestMethod]
-    public void Read_HexDecodedNonPrintable_ThrowsJsonException()
+    public void Read_HexDecodedNonPrintable_ReturnsHexUnchanged()
     {
         string json = "{\"Provider\": \"01\"}";
-        Helper.ThrowsException<JsonException>(() => JsonSerializer.Deserialize<Model>(json, XrplJsonOptions.Default));
+        Model result = JsonSerializer.Deserialize<Model>(json, XrplJsonOptions.Default);
+        Assert.AreEqual("01", result.Provider);
+    }
+
+    [TestMethod]
+    public void Read_NonAsciiPlainText_ReturnsAsIs()
+    {
+        string json = JsonSerializer.Serialize(new Dictionary<string, string> { ["Provider"] = "\u0001\u0002x" });
+        Model result = JsonSerializer.Deserialize<Model>(json, XrplJsonOptions.Default);
+        Assert.AreEqual("\u0001\u0002x", result.Provider);
     }
 
     [TestMethod]
