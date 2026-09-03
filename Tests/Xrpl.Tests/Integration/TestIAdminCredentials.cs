@@ -5,6 +5,7 @@ using System.Collections.Generic;
 using System.Threading.Tasks;
 
 using Xrpl.Client;
+using XrplTests.Xrpl.ClientLib.Integration;
 using Xrpl.Client.Exceptions;
 
 using XrplTests;
@@ -49,6 +50,22 @@ namespace Xrpl.Tests.Integration
             }
 
             return new XrplClient(ServerUrl, options);
+        }
+
+        /// <summary>
+        /// The credentials under test are configured in the stand's own rippled.cfg, and the
+        /// port that checks them exists only there, so the class has nothing to say about a
+        /// public network.
+        /// </summary>
+        [TestInitialize]
+        public void RequireStandaloneStand()
+        {
+            if (!IntegrationTestConfig.IsStandalone())
+            {
+                Assert.Inconclusive(
+                    "The admin-auth port is a standalone-stand configuration ([port_ws_admin_auth] in .ci-config/rippled.cfg); " +
+                    "it does not exist on a public network.");
+            }
         }
 
         [TestMethod]

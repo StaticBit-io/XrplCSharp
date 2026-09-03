@@ -455,6 +455,18 @@ namespace XrplTests.Xrpl.ClientLib.Integration
             return wallet;
         }
 
+        /// <summary>
+        /// Waits until the transaction is in a ledger and checks the result recorded there.
+        /// </summary>
+        /// <remarks>
+        /// This used to look the transaction up once, immediately after submission, and ignore
+        /// what came back. On the standalone stand the caller had just forced a ledger close, so
+        /// the lookup happened to succeed; on any network where ledgers close on their own it
+        /// raced, and nothing was asserted about the result either way. It is a poll now, and the
+        /// result the ledger recorded is checked - which is what the callers of
+        /// <see cref="TestTransaction(IXrplClient, Dictionary{string, object}, XrplWallet)"/>
+        /// were assumed to be verifying all along.
+        /// </remarks>
         public static async Task VerifySubmittedTransaction(IXrplClient client, object tx, string? hashTx = null)
         {
             string hash;
@@ -467,8 +479,36 @@ namespace XrplTests.Xrpl.ClientLib.Integration
             else
                 hash = HashLedger.HashSignedTx(JsonNode.Parse(
                     JsonSerializer.Serialize(tx, global::Xrpl.Client.Json.XrplJsonOptions.Default)));
-            TxRequest request = new TxRequest(hash);
-            TransactionResponse data = await client.TxV1(request).Typed();
+
+            const int MaxAttempts = 20;
+            for (int attempt = 1; ; attempt++)
+            {
+                string ledgerResult = null;
+                try
+                {
+                    // Metadata is written when the transaction is applied in a ledger, so its
+                    // presence is what separates a settled result from a provisional one
+                    TransactionResponse data = await client.TxV1(new TxRequest(hash)).Typed();
+                    ledgerResult = data.Meta?.TransactionResult;
+                }
+                catch (RippledException error) when (error.Message.Contains("txnNotFound"))
+                {
+                    // Submitted, not yet in a ledger this node will answer for
+                }
+
+                if (ledgerResult is not null)
+                {
+                    Assert.AreEqual("tesSUCCESS", ledgerResult, $"transaction {hash} was recorded with {ledgerResult}");
+                    return;
+                }
+
+                if (attempt == MaxAttempts)
+                {
+                    Assert.Fail($"transaction {hash} did not reach a ledger after {MaxAttempts} lookups.");
+                }
+
+                await Task.Delay(TimeSpan.FromSeconds(2));
+            }
         }
 
         public static async Task TestTransaction(IXrplClient client, Dictionary<string, object> transaction, XrplWallet wallet)
