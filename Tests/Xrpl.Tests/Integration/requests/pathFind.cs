@@ -44,6 +44,10 @@ namespace XrplTests.Xrpl.ClientLib.Integration
             IXrplClient pfClient = await IntegrationTestConfig.CreateClientAsync(nodeType);
             try
             {
+                // A public endpoint is a cluster: the account was funded over the client above,
+                // and this connection may be on a server that has not seen it yet
+                await IntegrationTestConfig.WaitForAccountAsync(pfClient, wallet.ClassicAddress);
+
                 Currency destinationAmount = new Currency
                 {
                     CurrencyCode = "USD",
@@ -78,6 +82,10 @@ namespace XrplTests.Xrpl.ClientLib.Integration
             IXrplClient pfClient = await IntegrationTestConfig.CreateClientAsync(nodeType);
             try
             {
+                // A public endpoint is a cluster: the account was funded over the client above,
+                // and this connection may be on a server that has not seen it yet
+                await IntegrationTestConfig.WaitForAccountAsync(pfClient, wallet.ClassicAddress);
+
                 Currency destinationAmount = new Currency
                 {
                     CurrencyCode = "USD",
@@ -113,6 +121,10 @@ namespace XrplTests.Xrpl.ClientLib.Integration
             IXrplClient pfClient = await IntegrationTestConfig.CreateClientAsync(nodeType);
             try
             {
+                // A public endpoint is a cluster: the account was funded over the client above,
+                // and this connection may be on a server that has not seen it yet
+                await IntegrationTestConfig.WaitForAccountAsync(pfClient, wallet.ClassicAddress);
+
                 Currency destinationAmount = new Currency
                 {
                     CurrencyCode = "USD",

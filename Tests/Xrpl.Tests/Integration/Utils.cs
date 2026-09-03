@@ -26,7 +26,18 @@ namespace XrplTests.Xrpl.ClientLib.Integration
     internal static class StandaloneLock
     {
         internal static readonly SemaphoreSlim MasterFunding = new(1, 1);
-        internal static readonly SemaphoreSlim FaucetFunding = new(1, 1);
+
+        /// <summary>
+        /// Limits how many faucet calls are in flight at once.
+        /// </summary>
+        /// <remarks>
+        /// It was one, from a time when every call went through a shared filler wallet whose
+        /// sequence could not take concurrency. Each call now funds its own destination and
+        /// shares nothing, so the only reason left to hold a limit is the faucet's own rate
+        /// limit. Fully serialised, funding a run's worth of accounts took minutes that
+        /// individual tests spent inside their own timeouts.
+        /// </remarks>
+        internal static readonly SemaphoreSlim FaucetFunding = new(3, 3);
     }
 
     /// <summary>
@@ -214,6 +225,33 @@ namespace XrplTests.Xrpl.ClientLib.Integration
             {
                 await FundWalletAsync(client, wallet, nodeType);
                 Console.WriteLine($"[IntegrationTest] Funded new account {wallet.ClassicAddress}");
+            }
+        }
+
+        /// <summary>
+        /// Waits until <paramref name="address"/> is visible on <paramref name="client"/>.
+        /// </summary>
+        /// <remarks>
+        /// Funding confirms the account on the connection that funded it, and on a standalone
+        /// stand that is the whole network. A public endpoint is a cluster behind one name, so a
+        /// second connection can land on a server that has not seen the account yet and answer
+        /// <c>srcActNotFound</c> for it - which is what the path-finding tests, the only ones
+        /// that open a second client, hit intermittently on devnet.
+        /// </remarks>
+        public static async Task WaitForAccountAsync(IXrplClient client, string address)
+        {
+            const int MaxAttempts = 15;
+            for (int attempt = 1; ; attempt++)
+            {
+                try
+                {
+                    await client.AccountInfo(new AccountInfoRequest(address)).Typed();
+                    return;
+                }
+                catch (RippleException) when (attempt < MaxAttempts)
+                {
+                    await Task.Delay(TimeSpan.FromSeconds(2));
+                }
             }
         }
 
