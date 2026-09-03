@@ -161,6 +161,10 @@ public partial class Validation
         List<object> rawTxs = rawTxsEnumerable.Cast<object>().ToList();
         if (rawTxs.Count == 0)
             throw new ArgumentException("Batch: RawTransactions is required and must be non-empty.");
+        // rippled Batch::preflight: a Batch wrapping a single transaction is rejected with
+        // temARRAY_EMPTY, the same code as for no inners at all - one inner is not a batch
+        if (rawTxs.Count < 2)
+            throw new ArgumentException("Batch: RawTransactions must contain at least 2 transactions (rippled answers temARRAY_EMPTY to a single inner).");
         if (rawTxs.Count > 8)
             throw new ArgumentException("Batch: RawTransactions length must be <= 8.");
 

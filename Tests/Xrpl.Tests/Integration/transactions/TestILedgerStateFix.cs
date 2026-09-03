@@ -3,6 +3,7 @@ using System.Threading.Tasks;
 using Microsoft.VisualStudio.TestTools.UnitTesting;
 
 using Xrpl.Client;
+using Xrpl.Client.Exceptions;
 using Xrpl.Models.Methods;
 using Xrpl.Models.Transactions;
 using Xrpl.Sugar;
@@ -12,24 +13,31 @@ namespace XrplTests.Xrpl.ClientLib.Integration;
 
 [TestClass]
 [TestCategory("LedgerStateFix")]
-//[Ignore("LedgerStateFix requires the LedgerStateFix amendment which may not be available on standalone")]
 public class TestILedgerStateFix
 {
     public TestContext TestContext { get; set; }
     private static IXrplClient client;
-    private static TestNodeType nodeType = TestNodeType.Standalone;
+    private static TestNodeType nodeType = IntegrationTestConfig.CurrentNodeType;
 
     [ClassInitialize]
     public static async Task ClassInitializeAsync(TestContext testContext)
     {
-        client = await IntegrationTestConfig.CreateClientAsync(TestNodeType.Standalone);
+        client = await IntegrationTestConfig.CreateClientAsync();
     }
 
     [ClassCleanup]
     public static void ClassCleanup() => client?.Dispose();
 
+    /// <summary>
+    /// LedgerStateFix only repairs real corruption (a broken NFT page chain), so on a
+    /// healthy account rippled answers tecFAILED_PROCESSING. The transaction is submitted
+    /// WITHOUT fail_hard on purpose: with it a tec result is dropped from the open ledger
+    /// and never validated, so nothing would prove the node accepted the transaction at all.
+    /// Without it the tec result is applied, the fee is claimed and the transaction reaches
+    /// a validated ledger like any other.
+    /// </summary>
     [TestMethod]
-    public async Task TestLedgerStateFix_Basic()
+    public async Task TestLedgerStateFix_Basic_ReachesValidatedLedger()
     {
         XrplWallet wallet = XrplWallet.Generate();
         await IntegrationTestConfig.TryFundWalletAsync(client, wallet, nodeType);
@@ -40,18 +48,22 @@ public class TestILedgerStateFix
             LedgerFixType = 1,
             Owner = wallet.ClassicAddress,
         };
-        // Autofill automatically sets the reserve fee for LedgerStateFix (>= owner reserve, 0.2 XRP)
+        // Autofill sets the reserve-level fee LedgerStateFix requires (>= owner reserve)
         tx = await client.Autofill(tx);
 
-        // Use fail_hard to avoid paying the high fee if the transaction would fail
-        var result = await client.Submit(tx, wallet, true, true);
+        string result;
+        try
+        {
+            TransactionSummary summary = await client.SubmitAndWait(tx, wallet, autofill: false);
+            result = summary.Meta?.TransactionResult;
+        }
+        catch (TransactionFailedException ex)
+        {
+            result = ex.Message;
+        }
 
-        // tecFAILED_PROCESSING is expected on a healthy account — LedgerStateFix only
-        // succeeds when there is an actual ledger corruption to repair (e.g. broken NFT directory).
-        // On a fresh wallet with no issues, the network correctly rejects the fix attempt.
-        string txResult = result.EngineResult;
         Assert.IsTrue(
-            txResult is "tesSUCCESS" or "tecFAILED_PROCESSING",
-            $"Expected tesSUCCESS or tecFAILED_PROCESSING, got: {txResult}");
+            result is not null && (result.Contains("tesSUCCESS") || result.Contains("tecFAILED_PROCESSING")),
+            $"Expected tesSUCCESS or tecFAILED_PROCESSING, got: {result}");
     }
 }

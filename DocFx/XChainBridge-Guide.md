@@ -215,16 +215,22 @@ XChainAddClaimAttestation attestation = new XChainAddClaimAttestation
     XChainClaimID = "1",
     Amount = new Currency { Value = "1000000", CurrencyCode = "XRP" },
     OtherChainSource = walletUser.ClassicAddress,
-    AttestationSignerAccount = witnessAccount.ClassicAddress,
     AttestationRewardAccount = witnessAccount.ClassicAddress,
-    PublicKey = witnessPublicKeyHex,
-    Signature = attestationSignatureHex,
     WasLockingChainSend = 1,  // 1 = locking chain, 0 = issuing chain
     Destination = destinationAddress,
 };
+
+// The witness signs the attested facts (not the transaction): PublicKey, Signature and,
+// when unset, AttestationSignerAccount are filled from the witness wallet
+XChainAttestationSigner.SignClaimAttestation(attestation, witnessAccount);
+
 attestation = await client.Autofill(attestation);
 TransactionSummary result = await client.SubmitAndWait(attestation, witnessAccount, true);
 ```
+
+The signed message is the canonical serialization of the attested fields alone (rippled `AttestationClaim::message`): no hash prefix, no `Account`, `Fee` or `Sequence`, so any funded account can submit the transaction and the node still verifies the signature against `PublicKey`. The key must be the master or regular key of `AttestationSignerAccount`, and that account must be on the door's `SignerList`. `XChainAttestationSigner.VerifyClaimAttestation` checks a received attestation the same way the node does before it is submitted. `XChainAddAccountCreateAttestation` is signed with `SignAccountCreateAttestation`.
+
+The amount carries the issue of the chain the send happened on: an attestation for a commit on the locking chain names the `LockingChainIssue`, one for the issuing chain the `IssuingChainIssue`.
 
 ### 5. Claim Value (Receive on Destination Chain)
 

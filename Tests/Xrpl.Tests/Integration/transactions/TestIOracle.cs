@@ -32,7 +32,7 @@ public class TestIOracle
     public TestContext TestContext { get; set; }
     public static IXrplClient client;
 
-    public static TestNodeType nodeType = TestNodeType.Standalone;
+    public static TestNodeType nodeType = IntegrationTestConfig.CurrentNodeType;
 
     private static bool priceOracleAmendmentActive;
 

@@ -20,7 +20,10 @@ namespace XrplTests.Xrpl.ClientLib.Integration
         private static TestNodeType nodeType = IntegrationTestConfig.CurrentNodeType;
 
         [TestMethod]
-        [Timeout(60000)]
+        // Sized for a public network: funding comes from a faucet whose calls are serialised
+        // across the run, and the transaction has to wait for a ledger to close on its own
+        // rather than one the test forces. On the standalone stand this is never approached.
+        [Timeout(300000)]
         public async Task TestRequestMethod()
         {
             IXrplClient client = await IntegrationTestConfig.CreateClientAsync(nodeType);

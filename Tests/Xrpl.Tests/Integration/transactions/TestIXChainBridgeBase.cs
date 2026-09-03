@@ -19,7 +19,7 @@ public abstract class TestIXChainBridgeBase
 {
     public TestContext TestContext { get; set; }
     protected abstract IXrplClient GetClient();
-    protected static TestNodeType nodeType = TestNodeType.Standalone;
+    protected static TestNodeType nodeType = IntegrationTestConfig.CurrentNodeType;
 
     /// <summary>
     /// Genesis account address — required as IssuingChainDoor for XRP-XRP bridges in standalone mode.
@@ -119,6 +119,6 @@ public abstract class TestIXChainBridgeBase
 
     protected static async Task<IXrplClient> CreateStandaloneClient()
     {
-        return await IntegrationTestConfig.CreateClientAsync(TestNodeType.Standalone);
+        return await IntegrationTestConfig.CreateClientAsync();
     }
 }

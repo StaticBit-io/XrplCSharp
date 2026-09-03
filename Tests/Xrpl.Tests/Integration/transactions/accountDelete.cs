@@ -27,6 +27,21 @@ namespace XrplTests.Xrpl.ClientLib.Integration
             runner = await new SetupIntegration().SetupClient(ServerUrl.serverUrl);
         }
 
+        /// <summary>
+        /// rippled refuses to delete an account until 256 ledgers have passed since it was
+        /// created (tecTOO_SOON). The test forces those closes with ledger_accept, which only a
+        /// standalone stand permits; on a public network it would have to wait them out in real
+        /// time, and that is rippled's rule under test rather than anything about the SDK.
+        /// </summary>
+        [TestInitialize]
+        public void RequireStandaloneStand()
+        {
+            if (!IntegrationTestConfig.IsStandalone())
+            {
+                Assert.Inconclusive("Deleting an account needs 256 forced ledger closes, which only the standalone stand allows.");
+            }
+        }
+
         [TestMethod]
         public async Task TestRequestMethod()
         {

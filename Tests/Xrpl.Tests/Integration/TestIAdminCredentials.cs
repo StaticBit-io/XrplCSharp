@@ -5,6 +5,7 @@ using System.Collections.Generic;
 using System.Threading.Tasks;
 
 using Xrpl.Client;
+using XrplTests.Xrpl.ClientLib.Integration;
 using Xrpl.Client.Exceptions;
 
 using XrplTests;
@@ -15,7 +16,8 @@ namespace Xrpl.Tests.Integration
     /// Verifies that <see cref="XrplClient.ClientOptions.AdminUser"/>/<see cref="XrplClient.ClientOptions.AdminPassword"/>
     /// actually unlock rippled admin commands over WebSocket.
     /// <para>
-    /// Runs against <c>[port_ws_admin_auth]</c> of the standalone stand (port 6007), which sets
+    /// Runs against <c>[port_ws_admin_auth]</c> of the standalone stand (port 6007, or the URL in
+    /// <c>XRPL_TEST_ADMIN_AUTH_URL</c> for a stand published on other ports), which sets
     /// <c>admin_user</c>/<c>admin_password</c>. rippled carries these credentials in the request JSON,
     /// not in an HTTP header — Basic auth on the ws handshake is never checked by the node itself.
     /// </para>
@@ -25,7 +27,8 @@ namespace Xrpl.Tests.Integration
     {
         private const string AdminUser = "xrpl_admin";
         private const string AdminPassword = "xrpl_admin_secret";
-        private const string ServerUrl = "ws://127.0.0.1:6007";
+        private static readonly string ServerUrl =
+            Environment.GetEnvironmentVariable("XRPL_TEST_ADMIN_AUTH_URL") is { Length: > 0 } url ? url.Trim() : "ws://127.0.0.1:6007";
 
         private static readonly Dictionary<string, object> LedgerAccept = new()
         {
@@ -47,6 +50,22 @@ namespace Xrpl.Tests.Integration
             }
 
             return new XrplClient(ServerUrl, options);
+        }
+
+        /// <summary>
+        /// The credentials under test are configured in the stand's own rippled.cfg, and the
+        /// port that checks them exists only there, so the class has nothing to say about a
+        /// public network.
+        /// </summary>
+        [TestInitialize]
+        public void RequireStandaloneStand()
+        {
+            if (!IntegrationTestConfig.IsStandalone())
+            {
+                Assert.Inconclusive(
+                    "The admin-auth port is a standalone-stand configuration ([port_ws_admin_auth] in .ci-config/rippled.cfg); " +
+                    "it does not exist on a public network.");
+            }
         }
 
         [TestMethod]

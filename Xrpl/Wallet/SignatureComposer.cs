@@ -14,40 +14,98 @@ namespace Xrpl.Wallet
     /// <summary>
     /// Composes a fully signed transaction from partially signed blobs (#43).
     /// Devices sign with whatever keys they hold — single main signature,
-    /// sponsor co-signature, or portable multisig Signer entries — and the
-    /// composer routes everything into the right sections. Signer entries are
-    /// section-agnostic by protocol (identical preimage for tx.Signers and
-    /// SponsorSignature.Signers, see rippled STTx::checkMultiSign), so only
-    /// the composer needs to know which signer belongs to which side.
+    /// sponsor or counterparty co-signature, or portable multisig Signer
+    /// entries — and the composer routes everything into the right sections.
+    /// Signer entries are section-agnostic by protocol (identical preimage for
+    /// tx.Signers, SponsorSignature.Signers and CounterpartySignature.Signers,
+    /// see rippled STTx::checkMultiSign), so only the composer needs to know
+    /// which signer belongs to which side.
     /// </summary>
     public static class SignatureComposer
     {
+        private const string SponsorField = "SponsorSignature";
+        private const string CounterpartyField = "CounterpartySignature";
+
         // SigningPubKey is intentionally NOT stripped: it is part of every signing
         // preimage, so all parts of one transaction must agree on it - a mismatch
         // means the parts were signed over different submitter forms.
-        private static readonly string[] SignatureFields = { "TxnSignature", "Signers", "SponsorSignature" };
+        private static readonly string[] SignatureFields = { "TxnSignature", "Signers", SponsorField, CounterpartyField };
+
+        /// <summary>
+        /// One inner co-signature section (SponsorSignature or CounterpartySignature)
+        /// being assembled: either a single signature or a set of Signer entries.
+        /// </summary>
+        private sealed class InnerSection
+        {
+            public InnerSection(string field, string label, HashSet<string> signerAccounts)
+            {
+                Field = field;
+                Label = label;
+                SignerAccounts = signerAccounts;
+            }
+
+            public string Field { get; }
+            public string Label { get; }
+            public HashSet<string> SignerAccounts { get; }
+            public SignatureObject? Single { get; set; }
+            public JsonArray Entries { get; } = new JsonArray();
+        }
 
         /// <summary>
         /// Offline composition. Signer entries from accounts listed in
         /// <paramref name="sponsorSignerAccounts"/> go into
-        /// <c>SponsorSignature.Signers</c>; all other entries go into
-        /// <c>tx.Signers</c>. For ledger-driven routing use the
-        /// <c>IXrplClient.ComposeSignatures</c> extension instead.
+        /// <c>SponsorSignature.Signers</c>, entries from
+        /// <paramref name="counterpartySignerAccounts"/> into
+        /// <c>CounterpartySignature.Signers</c> (XLS-66 LoanSet borrower with a
+        /// SignerList); all other entries go into <c>tx.Signers</c>. For
+        /// ledger-driven routing use the <c>IXrplClient.ComposeSignatures</c>
+        /// extension instead.
         /// </summary>
+        /// <param name="partBlobs">Partially signed blobs of the same transaction.</param>
+        /// <param name="sponsorSignerAccounts">Accounts whose Signer entries belong to the sponsor's SignerList.</param>
+        /// <param name="counterpartySignerAccounts">Accounts whose Signer entries belong to the LoanSet counterparty's SignerList.</param>
+        public static SignatureResult ComposeSignatures(
+            IEnumerable<string> partBlobs,
+            IReadOnlyCollection<string>? sponsorSignerAccounts = null,
+            IReadOnlyCollection<string>? counterpartySignerAccounts = null)
+        {
+            return Compose(partBlobs, sponsorSignerAccounts, counterpartySignerAccounts);
+        }
+
+        /// <summary>
+        /// The two-argument form, for sponsor-side routing only.
+        /// </summary>
+        /// <remarks>
+        /// Kept as its own overload rather than folded into the three-argument method above.
+        /// Adding a parameter with a default is source-compatible but not binary-compatible: an
+        /// assembly compiled against the two-argument signature emits a call to a method that
+        /// would no longer exist, and fails at run time rather than at build.
+        /// </remarks>
         /// <param name="partBlobs">Partially signed blobs of the same transaction.</param>
         /// <param name="sponsorSignerAccounts">Accounts whose Signer entries belong to the sponsor's SignerList.</param>
         public static SignatureResult ComposeSignatures(
             IEnumerable<string> partBlobs,
-            IReadOnlyCollection<string>? sponsorSignerAccounts = null)
+            IReadOnlyCollection<string>? sponsorSignerAccounts)
+        {
+            return Compose(partBlobs, sponsorSignerAccounts, null);
+        }
+
+        private static SignatureResult Compose(
+            IEnumerable<string> partBlobs,
+            IReadOnlyCollection<string>? sponsorSignerAccounts,
+            IReadOnlyCollection<string>? counterpartySignerAccounts)
         {
             List<JsonObject> parts = partBlobs?.Select(b => XrplBinaryCodec.Decode(b).AsObject()).ToList()
                 ?? throw new ValidationException("At least one partially signed blob is required.");
             if (parts.Count == 0)
                 throw new ValidationException("At least one partially signed blob is required.");
 
-            HashSet<string> sponsorSide = new HashSet<string>(
-                (sponsorSignerAccounts ?? Array.Empty<string>()).Select(SignerUtilities.NormalizeClassicAddress),
-                StringComparer.Ordinal);
+            InnerSection sponsor = new InnerSection(SponsorField, "sponsor", ToSet(sponsorSignerAccounts));
+            InnerSection counterparty = new InnerSection(CounterpartyField, "counterparty", ToSet(counterpartySignerAccounts));
+            InnerSection[] sections = { sponsor, counterparty };
+
+            foreach (string shared in sponsor.SignerAccounts.Intersect(counterparty.SignerAccounts, StringComparer.Ordinal))
+                throw new ValidationException($"Ambiguous signer role for {shared}: listed as both a sponsor-side and a counterparty-side signer.");
 
             // All parts must agree on every non-signature field
             JsonObject canonical = parts[0].WithoutFields(SignatureFields);
@@ -59,17 +117,14 @@ namespace Xrpl.Wallet
 
             string? mainPubKey = null;
             string? mainSignature = null;
-            SignatureObject? sponsorSingle = null;
             JsonArray accountEntries = new JsonArray();
-            JsonArray sponsorEntries = new JsonArray();
 
             void RouteEntry(JsonNode entry)
             {
                 string account = entry?["Signer"]?["Account"]?.GetValue<string>()
                     ?? throw new ValidationException("Signer entry is missing the Account field.");
-                JsonArray target = sponsorSide.Contains(SignerUtilities.NormalizeClassicAddress(account))
-                    ? sponsorEntries
-                    : accountEntries;
+                string normalized = SignerUtilities.NormalizeClassicAddress(account);
+                JsonArray target = sections.FirstOrDefault(s => s.SignerAccounts.Contains(normalized))?.Entries ?? accountEntries;
                 target.Add(entry.DeepClone());
             }
 
@@ -93,43 +148,20 @@ namespace Xrpl.Wallet
                         RouteEntry(entry!);
                 }
 
-                if (part["SponsorSignature"] is JsonObject sponsorJson)
+                foreach (InnerSection section in sections)
                 {
-                    SignatureObject parsed = SignatureObject.FromJsonObject(sponsorJson);
-                    if (parsed.Signers is { Count: > 0 })
-                    {
-                        // Entries pre-placed under SponsorSignature.Signers keep their
-                        // explicit role: the producer asserted the sponsor side, so they
-                        // are NOT re-routed by sponsorSide (offline compose may have none)
-                        foreach (SignatureObject inner in parsed.Signers)
-                        {
-                            if (string.IsNullOrEmpty(inner.Account))
-                                throw new ValidationException("A SponsorSignature Signers entry is missing the Account field.");
-                            if (string.IsNullOrEmpty(inner.SigningPubKey) || string.IsNullOrEmpty(inner.TxnSignature))
-                                throw new ValidationException("A SponsorSignature Signers entry is missing SigningPubKey or TxnSignature.");
-                            sponsorEntries.Add(new JsonObject
-                            {
-                                ["Signer"] = SignatureObject
-                                    .Single(inner.SigningPubKey, inner.TxnSignature, inner.Account)
-                                    .ToJsonObject(),
-                            });
-                        }
-                    }
-                    else if (!string.IsNullOrEmpty(parsed.TxnSignature))
-                    {
-                        if (sponsorSingle is not null &&
-                            (!string.Equals(sponsorSingle.TxnSignature, parsed.TxnSignature, StringComparison.Ordinal) ||
-                             !string.Equals(sponsorSingle.SigningPubKey, parsed.SigningPubKey, StringComparison.Ordinal)))
-                            throw new ValidationException("Multiple conflicting sponsor signatures supplied.");
-                        sponsorSingle = parsed;
-                    }
+                    if (part[section.Field] is JsonObject innerJson)
+                        CollectInner(section, innerJson);
                 }
             }
 
             if (mainSignature is not null && accountEntries.Count > 0)
                 throw new ValidationException("Both a single main signature and main-side Signer entries were supplied; a transaction carries one or the other.");
-            if (sponsorSingle is not null && sponsorEntries.Count > 0)
-                throw new ValidationException("Both a single sponsor signature and sponsor-side Signer entries were supplied; SponsorSignature carries one or the other.");
+            foreach (InnerSection section in sections)
+            {
+                if (section.Single is not null && section.Entries.Count > 0)
+                    throw new ValidationException($"Both a single {section.Label} signature and {section.Label}-side Signer entries were supplied; {section.Field} carries one or the other.");
+            }
             if (mainSignature is null && accountEntries.Count == 0)
                 throw new ValidationException("No main signature material supplied. The transaction is not signed by all participants.");
 
@@ -145,21 +177,64 @@ namespace Xrpl.Wallet
                 result["Signers"] = SignerUtilities.DedupeAndSortSigners(accountEntries);
             }
 
-            if (sponsorSingle is not null)
+            foreach (InnerSection section in sections)
             {
-                result["SponsorSignature"] = sponsorSingle.ToJsonObject();
-            }
-            else if (sponsorEntries.Count > 0)
-            {
-                result["SponsorSignature"] = new JsonObject
+                if (section.Single is not null)
                 {
-                    ["SigningPubKey"] = "",
-                    ["Signers"] = SignerUtilities.DedupeAndSortSigners(sponsorEntries),
-                };
+                    result[section.Field] = section.Single.ToJsonObject();
+                }
+                else if (section.Entries.Count > 0)
+                {
+                    result[section.Field] = new JsonObject
+                    {
+                        ["SigningPubKey"] = "",
+                        ["Signers"] = SignerUtilities.DedupeAndSortSigners(section.Entries),
+                    };
+                }
             }
 
             string txBlob = XrplBinaryCodec.Encode(result);
             return new SignatureResult(txBlob, HashLedger.HashSignedTx(txBlob));
         }
+
+        /// <summary>
+        /// Folds one part's inner signature object into its section. Entries
+        /// pre-placed under the section's Signers keep their explicit role: the
+        /// producer asserted the side, so they are NOT re-routed by the account
+        /// sets (offline compose may have none).
+        /// </summary>
+        private static void CollectInner(InnerSection section, JsonObject innerJson)
+        {
+            SignatureObject parsed = SignatureObject.FromJsonObject(innerJson);
+            if (parsed.Signers is { Count: > 0 })
+            {
+                foreach (SignatureObject inner in parsed.Signers)
+                {
+                    if (string.IsNullOrEmpty(inner.Account))
+                        throw new ValidationException($"A {section.Field} Signers entry is missing the Account field.");
+                    if (string.IsNullOrEmpty(inner.SigningPubKey) || string.IsNullOrEmpty(inner.TxnSignature))
+                        throw new ValidationException($"A {section.Field} Signers entry is missing SigningPubKey or TxnSignature.");
+                    section.Entries.Add(new JsonObject
+                    {
+                        ["Signer"] = SignatureObject
+                            .Single(inner.SigningPubKey, inner.TxnSignature, inner.Account)
+                            .ToJsonObject(),
+                    });
+                }
+            }
+            else if (!string.IsNullOrEmpty(parsed.TxnSignature))
+            {
+                if (section.Single is not null &&
+                    (!string.Equals(section.Single.TxnSignature, parsed.TxnSignature, StringComparison.Ordinal) ||
+                     !string.Equals(section.Single.SigningPubKey, parsed.SigningPubKey, StringComparison.Ordinal)))
+                    throw new ValidationException($"Multiple conflicting {section.Label} signatures supplied.");
+                section.Single = parsed;
+            }
+        }
+
+        private static HashSet<string> ToSet(IReadOnlyCollection<string>? accounts) =>
+            new HashSet<string>(
+                (accounts ?? Array.Empty<string>()).Select(SignerUtilities.NormalizeClassicAddress),
+                StringComparer.Ordinal);
     }
 }

@@ -22,7 +22,7 @@ public class TestIGatewayBalances
     public TestContext TestContext { get; set; }
 
     static IXrplClient client;
-    private static TestNodeType nodeType = TestNodeType.Standalone;
+    private static TestNodeType nodeType = IntegrationTestConfig.CurrentNodeType;
 
     [ClassInitialize]
     public static async Task MyClassInitializeAsync(TestContext testContext)

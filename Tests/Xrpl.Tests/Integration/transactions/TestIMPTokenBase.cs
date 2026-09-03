@@ -16,7 +16,19 @@ public abstract class TestIMPTokenBase
 {
     public TestContext TestContext { get; set; }
     protected abstract IXrplClient GetClient();
-    protected static TestNodeType nodeType = TestNodeType.Standalone;
+    protected static TestNodeType nodeType = IntegrationTestConfig.CurrentNodeType;
+
+    private static bool? _mptokensV1Enabled;
+
+    [TestInitialize]
+    public async Task CheckMPTokensV1Amendment()
+    {
+        _mptokensV1Enabled ??= await AmendmentGuard.IsEnabledAsync(GetClient(), AmendmentGuard.MPTokensV1);
+        if (!_mptokensV1Enabled.Value)
+        {
+            Assert.Inconclusive("MPTokensV1 amendment is not enabled on the test node.");
+        }
+    }
 
     protected static void ValidateResult(Submit res)
     {
@@ -56,6 +68,6 @@ public abstract class TestIMPTokenBase
 
     protected static async Task<IXrplClient> CreateStandaloneClient()
     {
-        return await IntegrationTestConfig.CreateClientAsync(TestNodeType.Standalone);
+        return await IntegrationTestConfig.CreateClientAsync();
     }
 }

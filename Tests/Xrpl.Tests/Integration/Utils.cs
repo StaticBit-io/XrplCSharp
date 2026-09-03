@@ -26,7 +26,18 @@ namespace XrplTests.Xrpl.ClientLib.Integration
     internal static class StandaloneLock
     {
         internal static readonly SemaphoreSlim MasterFunding = new(1, 1);
-        internal static readonly SemaphoreSlim FaucetFunding = new(1, 1);
+
+        /// <summary>
+        /// Limits how many faucet calls are in flight at once.
+        /// </summary>
+        /// <remarks>
+        /// It was one, from a time when every call went through a shared filler wallet whose
+        /// sequence could not take concurrency. Each call now funds its own destination and
+        /// shares nothing, so the only reason left to hold a limit is the faucet's own rate
+        /// limit. Fully serialised, funding a run's worth of accounts took minutes that
+        /// individual tests spent inside their own timeouts.
+        /// </remarks>
+        internal static readonly SemaphoreSlim FaucetFunding = new(3, 3);
     }
 
     /// <summary>
@@ -85,12 +96,23 @@ namespace XrplTests.Xrpl.ClientLib.Integration
         public const decimal MinBalanceThreshold = 50m;
 
         /// <summary>
+        /// Environment variable that replaces the WebSocket URL for any node type,
+        /// e.g. a standalone stand on non-default ports or a private devnet node.
+        /// </summary>
+        public const string NodeUrlEnvironmentVariable = "XRPL_TEST_NODE_URL";
+
+        /// <summary>
         /// Gets the WebSocket URL for the specified node type.
+        /// <see cref="NodeUrlEnvironmentVariable"/>, when set, wins over the built-in defaults.
         /// </summary>
         /// <param name="nodeType">The type of node to connect to.</param>
         /// <returns>WebSocket URL string.</returns>
         public static string GetNodeUrl(TestNodeType nodeType)
         {
+            string overrideUrl = Environment.GetEnvironmentVariable(NodeUrlEnvironmentVariable);
+            if (!string.IsNullOrWhiteSpace(overrideUrl))
+                return overrideUrl.Trim();
+
             return nodeType switch
             {
                 TestNodeType.TestNet => "wss://s.altnet.rippletest.net:51233",
@@ -103,7 +125,7 @@ namespace XrplTests.Xrpl.ClientLib.Integration
 
         /// <summary>
         /// Gets the node type from the XRPL_TEST_NODE environment variable.
-        /// Defaults to TestNet if not set or invalid.
+        /// Defaults to Standalone when the variable is not set.
         /// </summary>
         private static TestNodeType GetNodeTypeFromEnvironment()
         {
@@ -164,13 +186,7 @@ namespace XrplTests.Xrpl.ClientLib.Integration
         /// <param name="nodeType">Optional node type override.</param>
         public static async Task FundWalletAsync(IXrplClient client, XrplWallet wallet, TestNodeType? nodeType = null)
         {
-            var type = nodeType ?? client.Url() switch
-            {
-                { } url when url.Contains("altnet") => TestNodeType.TestNet,
-                { } url when url.Contains("devnet") => TestNodeType.DevNet,
-                { } url when url.Contains("localhost") => TestNodeType.Standalone,
-                _ => TestNodeType.MainNet,
-            };
+            TestNodeType type = nodeType ?? CurrentNodeType;
 
             if (type == TestNodeType.Standalone)
             {
@@ -178,7 +194,7 @@ namespace XrplTests.Xrpl.ClientLib.Integration
             }
             else if (type == TestNodeType.TestNet || type == TestNodeType.DevNet)
             {
-                await FundFromFaucetAsync(client, wallet);
+                await FundFromFaucetAsync(client, wallet, type);
             }
             else
             {
@@ -213,6 +229,97 @@ namespace XrplTests.Xrpl.ClientLib.Integration
         }
 
         /// <summary>
+        /// Waits until <paramref name="address"/> is visible on <paramref name="client"/>.
+        /// </summary>
+        /// <remarks>
+        /// Funding confirms the account on the connection that funded it, and on a standalone
+        /// stand that is the whole network. A public endpoint is a cluster behind one name, so a
+        /// second connection can land on a server that has not seen the account yet and answer
+        /// <c>srcActNotFound</c> for it - which is what the path-finding tests, the only ones
+        /// that open a second client, hit intermittently on devnet.
+        /// </remarks>
+        public static async Task WaitForAccountAsync(IXrplClient client, string address)
+        {
+            const int MaxAttempts = 15;
+            for (int attempt = 1; ; attempt++)
+            {
+                try
+                {
+                    await client.AccountInfo(new AccountInfoRequest(address)).Typed();
+                    return;
+                }
+                catch (RippleException) when (attempt < MaxAttempts)
+                {
+                    await Task.Delay(TimeSpan.FromSeconds(2));
+                }
+            }
+        }
+
+        /// <summary>
+        /// Runs a path-finding request, retrying while the node answers <c>srcActNotFound</c>.
+        /// </summary>
+        /// <remarks>
+        /// Funding confirms the account on the validated ledger, but rippled answers path finding
+        /// from a ledger snapshot of its own that can lag behind it, so a freshly created source
+        /// can be absent from path finding for a few ledgers after it plainly exists. Seen on
+        /// devnet; the stand closes ledgers on demand and never shows it.
+        /// </remarks>
+        public static async Task<T> RetryWhileSourceMissingAsync<T>(Func<Task<T>> request)
+        {
+            const int MaxAttempts = 10;
+            for (int attempt = 1; ; attempt++)
+            {
+                try
+                {
+                    return await request();
+                }
+                catch (RippledException error) when (attempt < MaxAttempts && error.Message.Contains("srcActNotFound"))
+                {
+                    await Task.Delay(TimeSpan.FromSeconds(2));
+                }
+            }
+        }
+
+        /// <summary>
+        /// Tops a wallet up until it holds at least <paramref name="minimumXrp"/>.
+        /// A public faucet hands out a fixed amount per call (100 XRP on devnet), which is less
+        /// than some flows need in one account - a lending broker funds a vault and its cover -
+        /// so the call is repeated instead of assumed to be enough. On the standalone stand the
+        /// master payment covers any realistic minimum and the loop exits after the first check.
+        /// </summary>
+        /// <param name="client">Connected XRPL client.</param>
+        /// <param name="wallet">Wallet to top up.</param>
+        /// <param name="minimumXrp">Balance the wallet must reach.</param>
+        /// <param name="nodeType">Optional node type override.</param>
+        public static async Task EnsureBalanceAsync(
+            IXrplClient client, XrplWallet wallet, decimal minimumXrp, TestNodeType? nodeType = null)
+        {
+            const int MaxTopUps = 6;
+            for (int attempt = 0; ; attempt++)
+            {
+                decimal balance;
+                try
+                {
+                    balance = await client.GetXrpFreeBalance(wallet.ClassicAddress);
+                }
+                catch (Exception)
+                {
+                    // The account does not exist yet: fund it before reading a balance again
+                    balance = 0m;
+                }
+
+                if (balance >= minimumXrp)
+                    return;
+
+                if (attempt == MaxTopUps)
+                    throw new InvalidOperationException(
+                        $"Could not fund {wallet.ClassicAddress} up to {minimumXrp} XRP after {MaxTopUps} top-ups (balance {balance} XRP).");
+
+                await FundWalletAsync(client, wallet, nodeType);
+            }
+        }
+
+        /// <summary>
         /// Funds multiple wallets, checking balance before each.
         /// </summary>
         /// <param name="client">Connected XRPL client.</param>
@@ -226,63 +333,55 @@ namespace XrplTests.Xrpl.ClientLib.Integration
             }
         }
 
-        private static XrplWallet FaucetFiller = null;
+        /// <summary>
+        /// Number of faucet calls attempted for one wallet before giving up.
+        /// </summary>
+        private const int FaucetAttempts = 3;
 
         /// <summary>
-        /// Funds a wallet from the testnet/devnet faucet.
-        /// Serialized via StandaloneLock to prevent FaucetFiller sequence conflicts.
+        /// The faucet that funds accounts on <paramref name="type"/>.
         /// </summary>
-        private static async Task FundFromFaucetAsync(IXrplClient client, XrplWallet wallet)
+        private static string FaucetHostFor(TestNodeType type) => type switch
+        {
+            TestNodeType.DevNet => WalletSugar.FaucetNetwork.Devnet,
+            TestNodeType.TestNet => WalletSugar.FaucetNetwork.Testnet,
+            _ => throw new InvalidOperationException($"There is no faucet for {type}."),
+        };
+
+        /// <summary>
+        /// Funds a wallet straight from the testnet/devnet faucet.
+        /// Calls are serialized via StandaloneLock so parallel test classes do not
+        /// hammer the faucet rate limit; each failed call is retried with a growing delay.
+        /// </summary>
+        private static async Task FundFromFaucetAsync(IXrplClient client, XrplWallet wallet, TestNodeType type)
         {
             await StandaloneLock.FaucetFunding.WaitAsync();
             try
             {
-                if (FaucetFiller is null)
+                for (int attempt = 1; ; attempt++)
                 {
-                    FaucetFiller = XrplWallet.Generate();
-                    Console.WriteLine($"[IntegrationTest] FaucetFiller generated {FaucetFiller.ClassicAddress}");
-                    var result = await client.FundWallet(FaucetFiller);
-                    Console.WriteLine($"[IntegrationTest] FaucetFiller funded {FaucetFiller.ClassicAddress}: {result.Balance} XRP");
-                }
-
-                if (await client.GetXrpFreeBalance(FaucetFiller.ClassicAddress) is { } balance and > 50)
-                {
-                    await FundFromFaucetFillerAsync(client, wallet, 10);
-                }
-                else
-                {
-                    var result = await client.FundWallet(FaucetFiller);
-                    Console.WriteLine($"[IntegrationTest] FaucetFiller funded {FaucetFiller.ClassicAddress}: {result.Balance} XRP");
-                    await FundFromFaucetFillerAsync(client, wallet, 10);
+                    try
+                    {
+                        // The host is named rather than left to WalletSugar.GetFaucetHost, which
+                        // infers it from the connection URL and throws when it recognises nothing:
+                        // XRPL_TEST_NODE_URL may point at a node whose hostname says nothing about
+                        // which network it is on.
+                        await client.FundWallet(wallet, FaucetHostFor(type));
+                        decimal balance = await client.GetXrpFreeBalance(wallet.ClassicAddress);
+                        Console.WriteLine($"[IntegrationTest] Faucet funded {wallet.ClassicAddress}: {balance} XRP");
+                        return;
+                    }
+                    catch (Exception ex) when (attempt < FaucetAttempts)
+                    {
+                        Console.WriteLine($"[IntegrationTest] Faucet attempt {attempt}/{FaucetAttempts} for {wallet.ClassicAddress} failed: {ex.Message}");
+                        await Task.Delay(TimeSpan.FromSeconds(5 * attempt));
+                    }
                 }
             }
             finally
             {
                 StandaloneLock.FaucetFunding.Release();
             }
-        }
-
-        /// <summary>
-        /// Funds a wallet from the faucetFiller.
-        /// </summary>
-        private static async Task FundFromFaucetFillerAsync(IXrplClient client, XrplWallet wallet, decimal xrpSize)
-        {
-            Payment payment = new Payment
-            {
-                Account = FaucetFiller.ClassicAddress,
-                Destination = wallet.ClassicAddress,
-                Amount = new Currency { ValueAsXrp = xrpSize, CurrencyCode = "XRP" }
-            };
-
-            var values = JsonSerializer.Deserialize<Dictionary<string, object>>(payment.ToJson(), global::Xrpl.Client.Json.XrplJsonOptions.Default);
-            var response = await client.SubmitAndWait(values, FaucetFiller, autofill: true);
-
-            if (response.Meta.TransactionResult != "tesSUCCESS")
-            {
-                throw new Exception($"Filler funding failed: {response.Meta.TransactionResult}");
-            }
-
-            Console.WriteLine($"[IntegrationTest] Filler funded {wallet.ClassicAddress}");
         }
 
         /// <summary>
@@ -377,12 +476,17 @@ namespace XrplTests.Xrpl.ClientLib.Integration
 
         public static async Task LedgerAccept(IXrplClient client)
         {
-            var request = new BaseRequest { Command = "ledger_accept" };
-            await client.AnyRequest(request);
+            await IntegrationTestConfig.LedgerAcceptAsync(client);
         }
 
         public static async Task FundAccount(IXrplClient client, XrplWallet wallet)
         {
+            if (!IntegrationTestConfig.IsStandalone())
+            {
+                await IntegrationTestConfig.FundWalletAsync(client, wallet);
+                return;
+            }
+
             await StandaloneLock.MasterFunding.WaitAsync();
             try
             {
@@ -428,6 +532,18 @@ namespace XrplTests.Xrpl.ClientLib.Integration
             return wallet;
         }
 
+        /// <summary>
+        /// Waits until the transaction is in a ledger and checks the result recorded there.
+        /// </summary>
+        /// <remarks>
+        /// This used to look the transaction up once, immediately after submission, and ignore
+        /// what came back. On the standalone stand the caller had just forced a ledger close, so
+        /// the lookup happened to succeed; on any network where ledgers close on their own it
+        /// raced, and nothing was asserted about the result either way. It is a poll now, and the
+        /// result the ledger recorded is checked - which is what the callers of
+        /// <see cref="TestTransaction(IXrplClient, Dictionary{string, object}, XrplWallet)"/>
+        /// were assumed to be verifying all along.
+        /// </remarks>
         public static async Task VerifySubmittedTransaction(IXrplClient client, object tx, string? hashTx = null)
         {
             string hash;
@@ -440,8 +556,36 @@ namespace XrplTests.Xrpl.ClientLib.Integration
             else
                 hash = HashLedger.HashSignedTx(JsonNode.Parse(
                     JsonSerializer.Serialize(tx, global::Xrpl.Client.Json.XrplJsonOptions.Default)));
-            TxRequest request = new TxRequest(hash);
-            TransactionResponse data = await client.TxV1(request).Typed();
+
+            const int MaxAttempts = 20;
+            for (int attempt = 1; ; attempt++)
+            {
+                string ledgerResult = null;
+                try
+                {
+                    // Metadata is written when the transaction is applied in a ledger, so its
+                    // presence is what separates a settled result from a provisional one
+                    TransactionResponse data = await client.TxV1(new TxRequest(hash)).Typed();
+                    ledgerResult = data.Meta?.TransactionResult;
+                }
+                catch (RippledException error) when (error.Message.Contains("txnNotFound"))
+                {
+                    // Submitted, not yet in a ledger this node will answer for
+                }
+
+                if (ledgerResult is not null)
+                {
+                    Assert.AreEqual("tesSUCCESS", ledgerResult, $"transaction {hash} was recorded with {ledgerResult}");
+                    return;
+                }
+
+                if (attempt == MaxAttempts)
+                {
+                    Assert.Fail($"transaction {hash} did not reach a ledger after {MaxAttempts} lookups.");
+                }
+
+                await Task.Delay(TimeSpan.FromSeconds(2));
+            }
         }
 
         public static async Task TestTransaction(IXrplClient client, Dictionary<string, object> transaction, XrplWallet wallet)
