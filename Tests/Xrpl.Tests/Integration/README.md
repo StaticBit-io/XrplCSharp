@@ -41,6 +41,8 @@ XRPL_TEST_NODE_URL=ws://localhost:7016 dotnet test Tests/Xrpl.Tests/Xrpl.Tests.c
 XRPL_TEST_NODE=devnet dotnet test Tests/Xrpl.Tests/Xrpl.Tests.csproj --settings test.runsettings --filter "FullyQualifiedName~TestIBatchInnerTypes|FullyQualifiedName~TestISponsoredTypes"
 ```
 
+A public faucet hands out a fixed 100 XRP per call, less than a single account needs in some flows (a lending broker funds a 100 XRP vault and a 50 XRP cover). `IntegrationTestConfig.EnsureBalanceAsync` tops an account up to a stated minimum by calling the faucet again; on the standalone stand the master payment covers any realistic minimum and it returns after the first check.
+
 Amendment-gated classes check the network through `AmendmentGuard` and mark themselves inconclusive when the amendment is not active there, so a broad filter is safe on any profile. The GitHub workflow `devnet-coverage.yml` (manual dispatch) runs the coverage-oriented classes against devnet this way.
 
 ## Coverage matrices

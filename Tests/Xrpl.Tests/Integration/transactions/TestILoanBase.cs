@@ -94,6 +94,10 @@ public abstract class TestILoanBase
     /// </summary>
     protected static async Task<string> CreateBroker(IXrplClient client, XrplWallet wallet)
     {
+        // The vault deposit (100 XRP) and the broker cover (50 XRP) below exceed a single
+        // faucet payout, so the account is topped up before anything is spent
+        await IntegrationTestConfig.EnsureBalanceAsync(client, wallet, 200m);
+
         string vaultId = await CreateVaultForBroker(client, wallet);
 
         // Deposit XRP into the vault so the broker has funds to lend

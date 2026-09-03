@@ -218,6 +218,45 @@ namespace XrplTests.Xrpl.ClientLib.Integration
         }
 
         /// <summary>
+        /// Tops a wallet up until it holds at least <paramref name="minimumXrp"/>.
+        /// A public faucet hands out a fixed amount per call (100 XRP on devnet), which is less
+        /// than some flows need in one account - a lending broker funds a vault and its cover -
+        /// so the call is repeated instead of assumed to be enough. On the standalone stand the
+        /// master payment covers any realistic minimum and the loop exits after the first check.
+        /// </summary>
+        /// <param name="client">Connected XRPL client.</param>
+        /// <param name="wallet">Wallet to top up.</param>
+        /// <param name="minimumXrp">Balance the wallet must reach.</param>
+        /// <param name="nodeType">Optional node type override.</param>
+        public static async Task EnsureBalanceAsync(
+            IXrplClient client, XrplWallet wallet, decimal minimumXrp, TestNodeType? nodeType = null)
+        {
+            const int MaxTopUps = 6;
+            for (int attempt = 0; ; attempt++)
+            {
+                decimal balance;
+                try
+                {
+                    balance = await client.GetXrpFreeBalance(wallet.ClassicAddress);
+                }
+                catch (Exception)
+                {
+                    // The account does not exist yet: fund it before reading a balance again
+                    balance = 0m;
+                }
+
+                if (balance >= minimumXrp)
+                    return;
+
+                if (attempt == MaxTopUps)
+                    throw new InvalidOperationException(
+                        $"Could not fund {wallet.ClassicAddress} up to {minimumXrp} XRP after {MaxTopUps} top-ups (balance {balance} XRP).");
+
+                await FundWalletAsync(client, wallet, nodeType);
+            }
+        }
+
+        /// <summary>
         /// Funds multiple wallets, checking balance before each.
         /// </summary>
         /// <param name="client">Connected XRPL client.</param>
