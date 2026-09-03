@@ -12,6 +12,8 @@
   * reading is total now: bytes that are text are decoded, and anything else comes back as the hex the node sent. Writing still requires printable ASCII, so a value that came back as hex is not something to hand straight back
   * the test that pinned the old behaviour asserted the throw. It now asserts the value survives, and a nonstandard currency code the SDK cannot render as text is pinned the same way
 
+* **`SignatureComposer.ComposeSignatures` keeps its two-argument form as an overload.** The counterparty routing above needed a third argument, and giving it a default would have been source-compatible but not binary-compatible: an assembly compiled against the two-argument signature emits a call to a method that would no longer exist, so it would fail at run time rather than at build. Both forms are pinned.
+
 * **A Batch with one inner transaction is refused before it reaches a node.** rippled `Batch::preflight` answers `temARRAY_EMPTY` to fewer than two inners - the same code as for none at all - while the SDK's `Validation.ValidateBatch` only refused an empty `RawTransactions`. Five of sixteen new inner-type batches failed on the stand that way before the rule was found. The validation now says what the node would: at least two, at most eight.
 
 * **A LoanSet borrower with a SignerList can co-sign.** `CounterpartySignature` (XLS-66) accepts the multisig form - an empty `SigningPubKey` and a `Signers` array that rippled checks against the *counterparty's* SignerList over the same multisign preimage as `tx.Signers` (`STTx::checkMultiSign` with the inner object) - but nothing in the SDK could produce it. Each signer of the borrower's list now signs with the standard `Sign(tx, multisign: true)`, and the composer places the entries:

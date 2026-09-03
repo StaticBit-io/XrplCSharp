@@ -69,6 +69,32 @@ namespace Xrpl.Wallet
             IReadOnlyCollection<string>? sponsorSignerAccounts = null,
             IReadOnlyCollection<string>? counterpartySignerAccounts = null)
         {
+            return Compose(partBlobs, sponsorSignerAccounts, counterpartySignerAccounts);
+        }
+
+        /// <summary>
+        /// The two-argument form, for sponsor-side routing only.
+        /// </summary>
+        /// <remarks>
+        /// Kept as its own overload rather than folded into the three-argument method above.
+        /// Adding a parameter with a default is source-compatible but not binary-compatible: an
+        /// assembly compiled against the two-argument signature emits a call to a method that
+        /// would no longer exist, and fails at run time rather than at build.
+        /// </remarks>
+        /// <param name="partBlobs">Partially signed blobs of the same transaction.</param>
+        /// <param name="sponsorSignerAccounts">Accounts whose Signer entries belong to the sponsor's SignerList.</param>
+        public static SignatureResult ComposeSignatures(
+            IEnumerable<string> partBlobs,
+            IReadOnlyCollection<string>? sponsorSignerAccounts)
+        {
+            return Compose(partBlobs, sponsorSignerAccounts, null);
+        }
+
+        private static SignatureResult Compose(
+            IEnumerable<string> partBlobs,
+            IReadOnlyCollection<string>? sponsorSignerAccounts,
+            IReadOnlyCollection<string>? counterpartySignerAccounts)
+        {
             List<JsonObject> parts = partBlobs?.Select(b => XrplBinaryCodec.Decode(b).AsObject()).ToList()
                 ?? throw new ValidationException("At least one partially signed blob is required.");
             if (parts.Count == 0)

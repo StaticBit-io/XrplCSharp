@@ -121,6 +121,29 @@ namespace XrplTests.Xrpl.Wallet
             StringAssert.Contains(ex.Message, "Ambiguous signer role");
         }
 
+        /// <summary>
+        /// The two-argument form still exists as its own overload. Folding it into the
+        /// three-argument method with a default would be source-compatible and binary-breaking:
+        /// an assembly compiled against it would call a method that no longer exists.
+        /// </summary>
+        [TestMethod]
+        public void TestUCompose_TwoArgumentOverload_RoutesSponsorSideOnly()
+        {
+            Dictionary<string, object> prepared = Prepared();
+            prepared["SigningPubKey"] = "";
+            SignatureResult sponsorSigner = Signer1.Sign(new Dictionary<string, object>(prepared), multisign: true);
+            SignatureResult otherSigner = Stranger.Sign(new Dictionary<string, object>(prepared), multisign: true);
+
+            SignatureResult composed = SignatureComposer.ComposeSignatures(
+                new[] { sponsorSigner.TxBlob, otherSigner.TxBlob },
+                new[] { Signer1.ClassicAddress });
+
+            JsonObject decoded = XrplBinaryCodec.Decode(composed.TxBlob).AsObject();
+            Assert.AreEqual(1, decoded["SponsorSignature"]["Signers"].AsArray().Count);
+            Assert.AreEqual(1, decoded["Signers"].AsArray().Count);
+            Assert.IsNull(decoded["CounterpartySignature"], "the two-argument form routes nothing to the counterparty side");
+        }
+
         [TestMethod]
         public void TestUCombine_SingleAndMultisigCounterparty_Throws()
         {
