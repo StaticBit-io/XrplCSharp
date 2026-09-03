@@ -208,7 +208,16 @@ namespace Xrpl.Client.Json.Converters
             for (int i = 0; i < 20 && bytes[i] != 0; i++)
                 length++;
 
-            return OracleAsciiValidation.IsPrintableAscii(bytes.AsSpan(0, length))
+            // Everything after the text has to be padding for the text to be the whole value.
+            // A code like 5553440001... would otherwise read as "USD" and lose the 0x01 when it
+            // was written back, and a code of twenty zero bytes would read as an empty string.
+            for (int i = length; i < 20; i++)
+            {
+                if (bytes[i] != 0)
+                    return hex;
+            }
+
+            return length > 0 && OracleAsciiValidation.IsPrintableAscii(bytes.AsSpan(0, length))
                 ? Encoding.ASCII.GetString(bytes, 0, length)
                 : hex;
         }
