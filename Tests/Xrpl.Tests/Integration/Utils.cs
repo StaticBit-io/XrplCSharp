@@ -194,7 +194,7 @@ namespace XrplTests.Xrpl.ClientLib.Integration
             }
             else if (type == TestNodeType.TestNet || type == TestNodeType.DevNet)
             {
-                await FundFromFaucetAsync(client, wallet);
+                await FundFromFaucetAsync(client, wallet, type);
             }
             else
             {
@@ -249,6 +249,31 @@ namespace XrplTests.Xrpl.ClientLib.Integration
                     return;
                 }
                 catch (RippleException) when (attempt < MaxAttempts)
+                {
+                    await Task.Delay(TimeSpan.FromSeconds(2));
+                }
+            }
+        }
+
+        /// <summary>
+        /// Runs a path-finding request, retrying while the node answers <c>srcActNotFound</c>.
+        /// </summary>
+        /// <remarks>
+        /// Funding confirms the account on the validated ledger, but rippled answers path finding
+        /// from a ledger snapshot of its own that can lag behind it, so a freshly created source
+        /// can be absent from path finding for a few ledgers after it plainly exists. Seen on
+        /// devnet; the stand closes ledgers on demand and never shows it.
+        /// </remarks>
+        public static async Task<T> RetryWhileSourceMissingAsync<T>(Func<Task<T>> request)
+        {
+            const int MaxAttempts = 10;
+            for (int attempt = 1; ; attempt++)
+            {
+                try
+                {
+                    return await request();
+                }
+                catch (RippledException error) when (attempt < MaxAttempts && error.Message.Contains("srcActNotFound"))
                 {
                     await Task.Delay(TimeSpan.FromSeconds(2));
                 }
@@ -314,11 +339,21 @@ namespace XrplTests.Xrpl.ClientLib.Integration
         private const int FaucetAttempts = 3;
 
         /// <summary>
+        /// The faucet that funds accounts on <paramref name="type"/>.
+        /// </summary>
+        private static string FaucetHostFor(TestNodeType type) => type switch
+        {
+            TestNodeType.DevNet => WalletSugar.FaucetNetwork.Devnet,
+            TestNodeType.TestNet => WalletSugar.FaucetNetwork.Testnet,
+            _ => throw new InvalidOperationException($"There is no faucet for {type}."),
+        };
+
+        /// <summary>
         /// Funds a wallet straight from the testnet/devnet faucet.
         /// Calls are serialized via StandaloneLock so parallel test classes do not
         /// hammer the faucet rate limit; each failed call is retried with a growing delay.
         /// </summary>
-        private static async Task FundFromFaucetAsync(IXrplClient client, XrplWallet wallet)
+        private static async Task FundFromFaucetAsync(IXrplClient client, XrplWallet wallet, TestNodeType type)
         {
             await StandaloneLock.FaucetFunding.WaitAsync();
             try
@@ -327,7 +362,11 @@ namespace XrplTests.Xrpl.ClientLib.Integration
                 {
                     try
                     {
-                        await client.FundWallet(wallet);
+                        // The host is named rather than left to WalletSugar.GetFaucetHost, which
+                        // infers it from the connection URL and throws when it recognises nothing:
+                        // XRPL_TEST_NODE_URL may point at a node whose hostname says nothing about
+                        // which network it is on.
+                        await client.FundWallet(wallet, FaucetHostFor(type));
                         decimal balance = await client.GetXrpFreeBalance(wallet.ClassicAddress);
                         Console.WriteLine($"[IntegrationTest] Faucet funded {wallet.ClassicAddress}: {balance} XRP");
                         return;

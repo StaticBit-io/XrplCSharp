@@ -125,9 +125,18 @@ public class TestISponsoredTypes
         return entity.CloseTime ?? throw new InvalidOperationException("validated ledger has no close_time");
     }
 
+    /// <summary>
+    /// Waits until the validated close time is strictly past <paramref name="target"/>.
+    /// </summary>
+    /// <remarks>
+    /// Strictly: rippled's time gates are <c>now &gt; mark</c> (<c>after()</c> in View.cpp), so a
+    /// close time equal to the mark is still too early and the escrow case below would submit its
+    /// <c>EscrowCancel</c> a tick short. Standalone close times move in coarse steps and land on
+    /// equality readily.
+    /// </remarks>
     private static async Task WaitForCloseTimeAsync(DateTime target)
     {
-        while (await ValidatedCloseTimeAsync() < target)
+        while (await ValidatedCloseTimeAsync() <= target)
         {
             await Task.Delay(TimeSpan.FromSeconds(3));
         }

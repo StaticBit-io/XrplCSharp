@@ -94,9 +94,23 @@ public class TestIMemoLimits
     /// One byte over, and the node refuses it - which is what the local check exists to save the
     /// caller from discovering after signing.
     /// </summary>
+    /// <remarks>
+    /// Standalone only, and the reason is the <c>secret</c> below. Hearing the node refuse this
+    /// means letting the node sign it, because the SDK's own rules stop it before a signature
+    /// exists - and node-side signing puts the seed on the wire. That is acceptable to a node
+    /// running on this machine and not to one someone else operates, which is what the profile
+    /// can now point at. The rule under test is rippled's and does not vary by network, so the
+    /// stand answers the question just as well.
+    /// </remarks>
     [TestMethod]
     public async Task TestIMemoOverTheLimitIsRefusedByTheNode()
     {
+        if (!IntegrationTestConfig.IsStandalone())
+        {
+            Assert.Inconclusive(
+                "This test signs on the node, which sends the wallet's seed to it. Only run against the local stand.");
+        }
+
         Dictionary<string, object> tx = PaymentWithMemo(LargestMemoDataInOneMemo + 1);
         tx["Fee"] = "12";
         AccountInfo account = (await client.AccountInfo(new AccountInfoRequest(wallet.ClassicAddress))).Result;
