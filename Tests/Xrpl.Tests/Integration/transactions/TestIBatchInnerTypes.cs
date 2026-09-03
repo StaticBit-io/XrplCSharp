@@ -101,9 +101,18 @@ public class TestIBatchInnerTypes
         return entity.CloseTime ?? throw new InvalidOperationException("validated ledger has no close_time");
     }
 
+    /// <summary>
+    /// Waits until the validated close time is strictly past <paramref name="target"/>.
+    /// </summary>
+    /// <remarks>
+    /// Strictly: rippled's time gates are <c>now &gt; mark</c> (<c>after()</c> in View.cpp), so a
+    /// close time equal to the mark is still too early. Standalone close times move in coarse
+    /// steps and land on equality readily, which is where this was found; on devnet the next
+    /// step came within seconds and hid it.
+    /// </remarks>
     private static async Task WaitForCloseTimeAsync(DateTime target)
     {
-        while (await ValidatedCloseTimeAsync() < target)
+        while (await ValidatedCloseTimeAsync() <= target)
         {
             await Task.Delay(TimeSpan.FromSeconds(3));
         }
@@ -181,8 +190,12 @@ public class TestIBatchInnerTypes
             catch (RippledException ex) when (ex.Message.Contains("txnNotFound"))
             {
                 throw new AssertFailedException(
-                    $"the inner {transactionType} {hash} never appeared in the ledger after {MaxAttempts} lookups; " +
-                    "either it was not applied or the id computed from the signed blob does not match the node's", ex);
+                    $"the inner {transactionType} {hash} never appeared in the ledger after {MaxAttempts} lookups. " +
+                    "Under tfAllOrNothing that is what a failing sibling looks like: rippled discards the whole " +
+                    "batch view (apply.cpp), so no inner is committed, while the outer Batch still validates with " +
+                    "tesSUCCESS and the failing inner's own result is recorded nowhere. Re-run the case under " +
+                    "tfIndependent to see which inner failed and why. The other explanation is an id computed " +
+                    "from the signed blob that does not match the node's.", ex);
             }
         }
     }
@@ -349,7 +362,10 @@ public class TestIBatchInnerTypes
 
         await WaitForCloseTimeAsync(closeTime + EscrowCancelMargin);
 
-        Batch settle = NewBatch(owner, BatchFlags.tfAllOrNothing,
+        // tfIndependent, not tfAllOrNothing: both inners are time-gated, and under
+        // tfAllOrNothing one of them being a tick early reverts the batch and leaves neither
+        // recorded, so the failure says nothing about which gate was missed
+        Batch settle = NewBatch(owner, BatchFlags.tfIndependent,
             new EscrowFinish { Account = owner.ClassicAddress, Owner = owner.ClassicAddress, OfferSequence = outerSequence + 1 }.ToBatchTx(),
             new EscrowCancel { Account = owner.ClassicAddress, Owner = owner.ClassicAddress, OfferSequence = outerSequence + 2 }.ToBatchTx());
         AssertAllInnersSucceeded(await SubmitBatchAsync(settle, owner));
