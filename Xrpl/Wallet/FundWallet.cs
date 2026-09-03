@@ -1,4 +1,4 @@
-using System;
+﻿using System;
 using System.Collections.Generic;
 using System.Linq;
 using System.Net.Http;
@@ -57,9 +57,9 @@ namespace Xrpl.Wallet
     public static class WalletSugar
     {
         //Interval to check an account balance
-        static int INTERVAL_SECONDS = 1;
+        const int INTERVAL_SECONDS = 1;
         //Maximum attempts to retrieve a balance
-        static int MAX_ATTEMPTS = 20;
+        const int MAX_ATTEMPTS = 20;
 
         public class Funded
         {
@@ -235,23 +235,13 @@ namespace Xrpl.Wallet
             {
                 // Check at regular interval if the address is enabled on the XRPL and funded
                 double updatedBalance = await GetUpdatedBalance(
-                  client,
-                  classicAddress,
-                  startingBalance
+                    client,
+                    walletToFund.ClassicAddress,
+                    startingBalance
                 );
                 if (updatedBalance > startingBalance)
                 {
-                    Funded funded = new Funded(
-                        walletToFund,
-                        Convert.ToDouble(
-                            await GetUpdatedBalance(
-                                client,
-                                walletToFund.ClassicAddress,
-                                startingBalance
-                            )
-                        )
-                    );
-                    return funded;
+                    return new Funded(walletToFund, updatedBalance);
                 }
                 else
                 {
@@ -268,75 +258,52 @@ namespace Xrpl.Wallet
             }
         }
 
-        private static int attempts = MAX_ATTEMPTS;
-        private static double finalBalance;
-        private static System.Timers.Timer aTimer;
-
-        private static double _originalBalance;
-        private static string _address;
-        private static IXrplClient _client;
-
-        private static async void OnTimedEventAsync(Object source, ElapsedEventArgs e)
-        {
-            // This piece of code will run after every 1000 ms
-            if (attempts < 0)
-            {
-                finalBalance = _originalBalance;
-                aTimer.Enabled = false;
-            }
-            else
-            {
-                attempts -= 1;
-            }
-
-            try
-            {
-                double newBalance = 0;
-                try
-                {
-                    newBalance = Convert.ToDouble(await _client.GetXrpBalance(_address));
-                }
-                catch (XrplException err)
-                {
-
-                }
-                catch (RippleException err)
-                {
-                    /* newBalance remains undefined */
-                }
-
-                if (newBalance > _originalBalance)
-                {
-                    finalBalance = newBalance;
-                    aTimer.Enabled = false;
-                }
-            }
-            catch (Exception err) when (err is RippledException or InvalidCastException)
-            {
-                aTimer.Enabled = false;
-                throw new XRPLFaucetException($"Unable to check if the address {_address} balance has increased.Error: {err.Message}");
-            }
-        }
-
-        private static async Task<double> GetUpdatedBalance(
+        /// <summary>
+        /// Polls until the funded account's balance rises above <paramref name="originalBalance"/>,
+        /// and returns that balance; returns <paramref name="originalBalance"/> unchanged when the
+        /// budget of <see cref="MAX_ATTEMPTS"/> polls runs out.
+        /// </summary>
+        /// <remarks>
+        /// Every piece of state here belongs to the call. The previous implementation drove a
+        /// <see cref="System.Timers.Timer"/> through static fields - the poll budget, the address,
+        /// the balances and the result - which broke it two ways: the budget was never reset, so
+        /// after roughly twenty polls every later call reported failure without polling at all,
+        /// and two concurrent calls overwrote each other's address and result, so one wallet's
+        /// balance could be reported for another.
+        /// </remarks>
+        internal static async Task<double> GetUpdatedBalance(
             IXrplClient client,
             string address,
             double originalBalance
         )
         {
-            _client = client;
-            _address = address;
-            _originalBalance = originalBalance;
-            aTimer = new System.Timers.Timer(1000);
-            aTimer.Elapsed += (sender, e) => OnTimedEventAsync(sender, e);
-            aTimer.Enabled = true;
-            aTimer.Start();
-            while (aTimer.Enabled)
+            for (int attempt = 0; attempt < MAX_ATTEMPTS; attempt++)
             {
-                Task.Delay(1000).Wait();
+                // The faucet payment needs a ledger to close, so wait before the first read
+                await Task.Delay(TimeSpan.FromSeconds(INTERVAL_SECONDS)).ConfigureAwait(false);
+
+                double newBalance;
+                try
+                {
+                    newBalance = Convert.ToDouble(await client.GetXrpBalance(address).ConfigureAwait(false));
+                }
+                catch (XrplException)
+                {
+                    // The account is not on the ledger yet: the faucet payment has not been validated
+                    continue;
+                }
+                catch (RippleException)
+                {
+                    continue;
+                }
+
+                if (newBalance > originalBalance)
+                {
+                    return newBalance;
+                }
             }
-            aTimer.Stop();
-            return finalBalance;
+
+            return originalBalance;
         }
 
         public static string GetFaucetHost(IXrplClient client)
