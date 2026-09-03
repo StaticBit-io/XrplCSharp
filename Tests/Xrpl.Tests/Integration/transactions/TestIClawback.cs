@@ -30,8 +30,13 @@ public class TestIClawback
     public TestContext TestContext { get; set; }
     public static IXrplClient client;
 
-    static XrplWallet walletIssuer = XrplWallet.FromNormalizedText("clawback issuer account test");
-    static XrplWallet walletHolder = XrplWallet.FromNormalizedText("clawback holder account test");
+    // Generated per run, never derived from a fixed phrase. A phrase is the same account on
+    // every network, so on a public one it is shared with everyone who ever ran this test:
+    // the state it starts from is whatever they left, and the setup below disables a master
+    // key on it. On the standalone stand a derived account also carried state between runs,
+    // which let a "create" test quietly pass as a modify.
+    static XrplWallet walletIssuer = XrplWallet.Generate();
+    static XrplWallet walletHolder = XrplWallet.Generate();
 
     const string CurrencyCode = "CLW";
     static bool issuerInitialized = false;

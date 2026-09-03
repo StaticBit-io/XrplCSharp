@@ -22,10 +22,15 @@ public class TestIMultisign
     public TestContext TestContext { get; set; }
     public static SetupIntegration runner;
 
-    static XrplWallet walletMultiSign = XrplWallet.FromNormalizedText("multisign payment test account");
-    static XrplWallet walletMultiSigner_1 = XrplWallet.FromNormalizedText("multisign payment signer 1");
-    static XrplWallet walletMultiSigner_2 = XrplWallet.FromNormalizedText("multisign payment signer 2");
-    static XrplWallet walletDestination = XrplWallet.FromNormalizedText("multisign payment destination");
+    // Generated per run, never derived from a fixed phrase. A phrase is the same account on
+    // every network, so on a public one it is shared with everyone who ever ran this test:
+    // the state it starts from is whatever they left, and the setup below disables a master
+    // key on it. On the standalone stand a derived account also carried state between runs,
+    // which let a "create" test quietly pass as a modify.
+    static XrplWallet walletMultiSign = XrplWallet.Generate();
+    static XrplWallet walletMultiSigner_1 = XrplWallet.Generate();
+    static XrplWallet walletMultiSigner_2 = XrplWallet.Generate();
+    static XrplWallet walletDestination = XrplWallet.Generate();
 
     [ClassInitialize]
     public static async Task MyClassInitializeAsync(TestContext testContext)

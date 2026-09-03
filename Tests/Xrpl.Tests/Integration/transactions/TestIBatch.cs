@@ -28,14 +28,19 @@ public class TestIBatch
     public TestContext TestContext { get; set; }
     public static SetupIntegration runner;
 
-    static XrplWallet walletPrimary = XrplWallet.FromNormalizedText("primary test account");
-    static XrplWallet walletSecondary_1 = XrplWallet.FromNormalizedText("secondary test account 1");
-    static XrplWallet walletSecondary_2 = XrplWallet.FromNormalizedText("secondary test account 2");
-    static XrplWallet walletMultiSign = XrplWallet.FromNormalizedText("multi sign test account");
-    static XrplWallet walletMultiSigner_1 = XrplWallet.FromNormalizedText("multi sign test account 1");
-    static XrplWallet walletMultiSigner_2 = XrplWallet.FromNormalizedText("multi sign test account 2");
-    static XrplWallet walletRegularKey = XrplWallet.FromNormalizedText("regular key test account");
-    static XrplWallet walletRegularKey_signer = XrplWallet.FromNormalizedText("regular key test account signer");
+    // Generated per run, never derived from a fixed phrase. A phrase is the same account on
+    // every network, so on a public one it is shared with everyone who ever ran this test:
+    // the state it starts from is whatever they left, and the setup below disables a master
+    // key on it. On the standalone stand a derived account also carried state between runs,
+    // which let a "create" test quietly pass as a modify.
+    static XrplWallet walletPrimary = XrplWallet.Generate();
+    static XrplWallet walletSecondary_1 = XrplWallet.Generate();
+    static XrplWallet walletSecondary_2 = XrplWallet.Generate();
+    static XrplWallet walletMultiSign = XrplWallet.Generate();
+    static XrplWallet walletMultiSigner_1 = XrplWallet.Generate();
+    static XrplWallet walletMultiSigner_2 = XrplWallet.Generate();
+    static XrplWallet walletRegularKey = XrplWallet.Generate();
+    static XrplWallet walletRegularKey_signer = XrplWallet.Generate();
 
     [ClassInitialize]
     public static async Task MyClassInitializeAsync(TestContext testContext)
