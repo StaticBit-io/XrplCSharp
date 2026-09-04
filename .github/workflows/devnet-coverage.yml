@@ -38,7 +38,7 @@ on:
         description: dotnet test --filter expression
         type: string
         default: >-
-          FullyQualifiedName~TestIBatchInnerTypes|FullyQualifiedName~TestISponsoredTypes|FullyQualifiedName~TestIAMMMpt|FullyQualifiedName~TestIXChainAttestation|FullyQualifiedName~TestILoanMultisig|FullyQualifiedName~TestIXChainBridge|FullyQualifiedName~TestIBatch|FullyQualifiedName~TestISponsorship|FullyQualifiedName~TestILedgerStateFix
+          FullyQualifiedName~TestIBatchInnerTypes|FullyQualifiedName~TestISponsoredTypes|FullyQualifiedName~TestISponsoredVaultLoan|FullyQualifiedName~TestIAMMMpt|FullyQualifiedName~TestIXChainAttestation|FullyQualifiedName~TestILoanMultisig|FullyQualifiedName~TestIXChainBridge|FullyQualifiedName~TestIBatch|FullyQualifiedName~TestISponsorship|FullyQualifiedName~TestILedgerStateFix
 
 env:
   DOTNET_VERSION: '10.0.x'
