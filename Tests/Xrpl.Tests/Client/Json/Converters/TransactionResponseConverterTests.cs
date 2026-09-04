@@ -174,4 +174,22 @@ public class TestUTransactionResponseConverter
         Assert.AreEqual("12", result.Fee);
         Assert.AreEqual(1u, result.Sequence);
     }
+
+    [TestMethod]
+    public void Read_MissingTransactionType_IsUnknownNotTheEnumDefault()
+    {
+        string json = @"{
+            ""Account"": ""rTest"",
+            ""Fee"": ""12"",
+            ""Sequence"": 1
+        }";
+        ITransactionResponse result = JsonSerializer.Deserialize<ITransactionResponse>(json, Options);
+        Assert.IsNotNull(result);
+        Assert.IsInstanceOfType(result, typeof(TransactionResponse));
+        Assert.AreEqual(TransactionType.Unknown, result.TransactionType);
+        Assert.AreNotEqual(TransactionType.AccountSet, result.TransactionType);
+        Assert.AreEqual("rTest", result.Account);
+        Assert.AreEqual("12", result.Fee);
+        Assert.AreEqual(1u, result.Sequence);
+    }
 }

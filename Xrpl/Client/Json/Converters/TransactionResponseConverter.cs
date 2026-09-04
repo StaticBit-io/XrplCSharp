@@ -2,6 +2,7 @@
 using System.Text.Json;
 using System.Text.Json.Serialization;
 
+using Xrpl.Models;
 using Xrpl.Models.Transactions;
 
 //https://xrpl.org/transaction-types.html
@@ -142,12 +143,17 @@ namespace Xrpl.Client.Json.Converters
         }
 
         /// <summary>
-        /// Private sentinel type for unknown transaction types.
+        /// Private sentinel type for unknown transaction types, including a response that
+        /// carries no TransactionType at all.
         /// Using a distinct type avoids the cached converter mapping for TransactionResponse
         /// in System.Text.Json's shared TypeInfoResolver, which causes infinite recursion.
+        /// The constructor sets the property because when the field is missing there is
+        /// nothing for <see cref="TransactionTypeConverter"/> to read, and the enum's default
+        /// is AccountSet - a silently wrong type rather than an unknown one.
         /// </summary>
         private class TransactionResponseUnknown : TransactionResponse, ITransactionResponse
         {
+            public TransactionResponseUnknown() => TransactionType = TransactionType.Unknown;
         }
 
         /// <summary> read  <see cref="ITransactionResponse"/>   from json object </summary>
