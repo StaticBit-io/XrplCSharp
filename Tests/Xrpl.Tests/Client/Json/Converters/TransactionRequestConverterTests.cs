@@ -3,6 +3,7 @@ using System.Text.Json;
 using Microsoft.VisualStudio.TestTools.UnitTesting;
 
 using Xrpl.Client.Json;
+using Xrpl.Models;
 using Xrpl.Models.Transactions;
 
 namespace XrplTests.Client.Json.Converters;
@@ -156,5 +157,22 @@ public class TestUTransactionRequestConverter
         }";
         ITransactionRequest result = JsonSerializer.Deserialize<ITransactionRequest>(json, Options);
         Assert.IsNotNull(result);
+        Assert.AreEqual(TransactionType.Unknown, result.TransactionType);
+        Assert.AreEqual("rTest", result.Account);
+    }
+
+    [TestMethod]
+    public void Read_MissingTransactionType_IsUnknownNotTheEnumDefault()
+    {
+        string json = @"{
+            ""Account"": ""rTest"",
+            ""Fee"": ""12"",
+            ""Sequence"": 1
+        }";
+        ITransactionRequest result = JsonSerializer.Deserialize<ITransactionRequest>(json, Options);
+        Assert.IsNotNull(result);
+        Assert.AreEqual(TransactionType.Unknown, result.TransactionType);
+        Assert.AreNotEqual(TransactionType.AccountSet, result.TransactionType);
+        Assert.AreEqual("rTest", result.Account);
     }
 }

@@ -2,6 +2,7 @@
 using System.Text.Json;
 using System.Text.Json.Serialization;
 
+using Xrpl.Models;
 using Xrpl.Models.Transactions;
 
 namespace Xrpl.Client.Json.Converters;
@@ -138,8 +139,15 @@ public class TransactionRequestConverter : JsonConverter<ITransactionRequest>
         };
     }
 
+    /// <summary>
+    /// Sentinel for a transaction the SDK does not recognise, including one that carries no
+    /// TransactionType at all. The constructor sets the property because in that second case
+    /// there is nothing in the JSON for <see cref="TransactionTypeConverter"/> to read, and
+    /// the enum's default is AccountSet - a silently wrong type rather than an unknown one.
+    /// </summary>
     private class TransactionUnknown : TransactionRequest, ITransactionRequest
     {
+        public TransactionUnknown() => TransactionType = TransactionType.Unknown;
     }
 
     /// <summary> read  <see cref="ITransactionRequest"/>   from json object </summary>
