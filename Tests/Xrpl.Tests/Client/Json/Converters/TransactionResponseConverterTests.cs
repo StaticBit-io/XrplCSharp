@@ -189,5 +189,7 @@ public class TestUTransactionResponseConverter
         Assert.AreEqual(TransactionType.Unknown, result.TransactionType);
         Assert.AreNotEqual(TransactionType.AccountSet, result.TransactionType);
         Assert.AreEqual("rTest", result.Account);
+        Assert.AreEqual("12", result.Fee);
+        Assert.AreEqual(1u, result.Sequence);
     }
 }
