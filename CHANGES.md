@@ -1,5 +1,13 @@
 # Changes
 
+## Unreleased
+
+* **The `Sponsor` field is exercised on the Vault and Loan transaction types, and on the bridge attestations.** These are the types rippled forbids inside a Batch (`Batch::preflight` kDisabledTxTypes), so whether they take a sponsor at all was worth establishing rather than assuming. They do: `preflight1Sponsor` in `Transactor.cpp` constrains only `spfSponsorReserve`, through the allow-list in `isReserveSponsorAllowed`, and no Vault or Loan type is on it. Fee sponsorship is unconstrained.
+  * **a sponsored `LoanSet` carries three signatures at once** - the broker's own, the borrower's `CounterpartySignature` and the sponsor's `SponsorSignature` - and this is the first time the composer has had to place all three in one transaction
+  * `LoanBrokerCoverWithdraw`, `LoanBrokerCoverClawback` and `LoanManage` had never been submitted to a node by any test. Clawing broker cover back is the asset issuer's move and rippled refuses it on a native asset, so that case needs an IOU-backed vault whose issuer is a third account
+  * two rules from `LoanBrokerSet::preflight` that are easy to trip, now written down where the test lives: `VaultID` is required even when the transaction updates a broker that already exists, and a transaction naming a `LoanBrokerID` may not carry `ManagementFeeRate`, `CoverRateMinimum` or `CoverRateLiquidation` - those are set once, at creation, and an update carrying one is `temINVALID`
+  * `VaultDelete.MemoData` is left out. The field is optional on rippled's develop branch and the release build the CI stand runs answers `temDISABLED` for it, so a test carrying it would report the stand's version rather than anything about the SDK
+
 ## 11.3.0.0 03/09/2026
 
 * **`FundWallet` works more than once per process.** The faucet helper polled for the funded balance through a `System.Timers.Timer` driven by static fields - the poll budget, the address, the two balances and the result - and the budget was initialised once and never reset. It bought twenty polls for the lifetime of the process: the first few wallets were funded, and from then on every call reported `Unable to fund address with faucet after waiting 1 * 20 seconds` without polling at all. Anyone funding a second wallet on testnet or devnet hit this, which is every integration suite and most tutorials.

@@ -59,12 +59,17 @@ public class TestIXChainAttestation : TestIXChainBridgeBase
 
     private static Currency Iou(string issuer, string value) => new Currency { CurrencyCode = TestCurrencyCode, Issuer = issuer, Value = value };
 
+    /// <summary>Submits a setup transaction and fails loudly if the ledger refuses it.</summary>
     private static async Task SubmitAsync(ITransactionRequest tx, XrplWallet signer)
     {
         ITransactionRequest autofilled = await client.Autofill(tx);
         ValidateResult(await client.SubmitAndWait(autofilled, signer, true));
     }
 
+    /// <summary>
+    /// Makes <paramref name="witnesses"/> the door's signer list, which is where rippled looks to
+    /// decide whether an attestation counts and how many are needed.
+    /// </summary>
     private static async Task SetWitnessesAsync(XrplWallet door, uint quorum, params XrplWallet[] witnesses)
     {
         await SubmitAsync(new SignerListSet
@@ -77,6 +82,35 @@ public class TestIXChainAttestation : TestIXChainBridgeBase
         }, door);
     }
 
+    /// <summary>Opens a fee sponsorship, and skips the test when XLS-68 is not on the node.</summary>
+    private static async Task OpenSponsorshipAsync(XrplWallet sponsor, XrplWallet sponsee)
+    {
+        if (!await AmendmentGuard.IsEnabledAsync(client, AmendmentGuard.Sponsor))
+        {
+            Assert.Inconclusive("Sponsor amendment (XLS-68) is not enabled on the test node.");
+        }
+
+        await SubmitAsync(new SponsorshipSet
+        {
+            Account = sponsor.ClassicAddress,
+            Sponsee = sponsee.ClassicAddress,
+            FeeAmountDelta = new Currency { ValueAsXrp = 20m },
+            RemainingOwnerCountDelta = 10,
+        }, sponsor);
+    }
+
+    /// <summary>Stamps the sponsor onto the transaction and submits it with both signatures.</summary>
+    private static async Task SubmitSponsoredAsync<T>(T tx, XrplWallet sponsee, XrplWallet sponsor)
+        where T : TransactionRequest
+    {
+        tx.Sponsor = sponsor.ClassicAddress;
+        tx.SponsorFlags = SponsorCoverage.spfSponsorFee;
+        TransactionSummary res = await client.SubmitAndWaitSponsored(tx, sponsee, sponsor);
+        Assert.IsTrue(res.Meta?.TransactionResult is "tesSUCCESS",
+            $"sponsored {tx.TransactionType} must validate with tesSUCCESS, got {res.Meta?.TransactionResult}");
+    }
+
+    /// <summary>What <paramref name="holder"/> holds of the issuer's currency, zero if no line exists.</summary>
     private static async Task<decimal> IouBalanceAsync(string holder, string issuer)
     {
         AccountLines lines = await client.AccountLines(new AccountLinesRequest(holder)).Typed();
@@ -84,6 +118,7 @@ public class TestIXChainAttestation : TestIXChainBridgeBase
         return line?.BalanceAsNumber ?? 0m;
     }
 
+    /// <summary>How many objects of one type the account owns, for asserting a claim id came or went.</summary>
     private static async Task<int> CountObjectsAsync(string account, LedgerEntryType type)
     {
         AccountObjects objects = await client.AccountObjects(new AccountObjectsRequest(account) { Type = type }).Typed();
@@ -123,6 +158,11 @@ public class TestIXChainAttestation : TestIXChainBridgeBase
         return new IouBridge(door, issuer, witness, user, recipient, bridge);
     }
 
+    /// <summary>
+    /// The unsigned attestation for the commit made in <see cref="CommitOnIouBridgeAsync"/>. A null
+    /// <paramref name="destination"/> leaves the funds for an explicit XChainClaim instead of
+    /// having them delivered when quorum is reached.
+    /// </summary>
     private static XChainAddClaimAttestation ClaimAttestation(IouBridge setup, string destination) => new XChainAddClaimAttestation
     {
         Account = setup.Witness.ClassicAddress,
@@ -136,6 +176,10 @@ public class TestIXChainAttestation : TestIXChainBridgeBase
         XChainClaimID = "1",
     };
 
+    /// <summary>
+    /// One witness on a quorum of one: the attestation both proves the commit and releases the
+    /// funds, because it names a destination.
+    /// </summary>
     [TestMethod]
     public async Task TestXChainAddClaimAttestation_WithDestination_DeliversOnQuorum()
     {
@@ -150,6 +194,10 @@ public class TestIXChainAttestation : TestIXChainBridgeBase
         Assert.AreEqual(0, await CountObjectsAsync(setup.Recipient.ClassicAddress, LedgerEntryType.XChainOwnedClaimID), "the claim id is consumed by the delivery");
     }
 
+    /// <summary>
+    /// Without a destination on the attestation the funds wait, and the recipient collects them
+    /// with an explicit XChainClaim carrying a DestinationTag.
+    /// </summary>
     [TestMethod]
     public async Task TestXChainClaim_AfterAttestationWithoutDestination_UsesDestinationTag()
     {
@@ -173,6 +221,10 @@ public class TestIXChainAttestation : TestIXChainBridgeBase
         Assert.AreEqual(0, await CountObjectsAsync(setup.Recipient.ClassicAddress, LedgerEntryType.XChainOwnedClaimID));
     }
 
+    /// <summary>
+    /// A correctly signed attestation from an account that is not on the door's signer list is
+    /// refused with tecNO_PERMISSION, and nothing is delivered.
+    /// </summary>
     [TestMethod]
     public async Task TestXChainAddClaimAttestation_UnlistedWitness_IsRejected()
     {
@@ -192,6 +244,10 @@ public class TestIXChainAttestation : TestIXChainBridgeBase
         Assert.AreEqual(0m, await IouBalanceAsync(setup.Recipient.ClassicAddress, setup.Issuer.ClassicAddress));
     }
 
+    /// <summary>
+    /// Two witnesses, quorum of two: the first attestation is parked on the door in an
+    /// XChainOwnedCreateAccountClaimID, and the second creates the account from the door's funds.
+    /// </summary>
     [TestMethod]
     public async Task TestXChainAddAccountCreateAttestation_TwoWitnesses_CreatesTheAccountOnQuorum()
     {
@@ -238,5 +294,84 @@ public class TestIXChainAttestation : TestIXChainBridgeBase
         AccountInfo info = await client.AccountInfo(new AccountInfoRequest(created.ClassicAddress)).Typed();
         Assert.AreEqual("20000000", info.AccountData.Balance.Value, "the created account holds the committed amount");
         Assert.AreEqual(0, await CountObjectsAsync(door.ClassicAddress, LedgerEntryType.XChainOwnedCreateAccountClaimID), "the create-account claim id is consumed");
+    }
+    /// <summary>
+    /// The witness half with the fee sponsored: an attestation is a transaction like any other,
+    /// and a witness that does not hold XRP of its own is the obvious reason to sponsor one.
+    /// </summary>
+    [TestMethod]
+    public async Task Sponsored_XChainAddClaimAttestation_And_XChainClaim()
+    {
+        IouBridge setup = await CommitOnIouBridgeAsync();
+        XrplWallet sponsor = XrplWallet.Generate();
+        await IntegrationTestConfig.TryFundWalletsAsync(client, nodeType, sponsor);
+        await OpenSponsorshipAsync(sponsor, setup.Witness);
+        await OpenSponsorshipAsync(sponsor, setup.Recipient);
+
+        // No Destination: the funds wait for an explicit claim, which is what makes the
+        // sponsored XChainClaim below reachable in the same flow
+        XChainAddClaimAttestation attestation =
+            XChainAttestationSigner.SignClaimAttestation(ClaimAttestation(setup, destination: null), setup.Witness);
+        await SubmitSponsoredAsync(attestation, setup.Witness, sponsor);
+        Assert.AreEqual(0m, await IouBalanceAsync(setup.Recipient.ClassicAddress, setup.Issuer.ClassicAddress));
+
+        await SubmitSponsoredAsync(new XChainClaim
+        {
+            Account = setup.Recipient.ClassicAddress,
+            XChainBridge = setup.Bridge,
+            XChainClaimID = "1",
+            Destination = setup.Recipient.ClassicAddress,
+            Amount = Iou(setup.Issuer.ClassicAddress, "100"),
+        }, setup.Recipient, sponsor);
+
+        Assert.AreEqual(100m, await IouBalanceAsync(setup.Recipient.ClassicAddress, setup.Issuer.ClassicAddress));
+        Assert.AreEqual(0, await CountObjectsAsync(setup.Recipient.ClassicAddress, LedgerEntryType.XChainOwnedClaimID));
+    }
+
+    /// <summary>
+    /// The account-create attestation with its fee sponsored, the counterpart to the claim
+    /// attestation above.
+    /// </summary>
+    [TestMethod]
+    public async Task Sponsored_XChainAddAccountCreateAttestation()
+    {
+        XrplWallet door = XrplWallet.Generate();
+        XrplWallet witness = XrplWallet.Generate();
+        XrplWallet user = XrplWallet.Generate();
+        XrplWallet sponsor = XrplWallet.Generate();
+        XrplWallet created = XrplWallet.Generate();
+        await IntegrationTestConfig.TryFundWalletsAsync(client, nodeType, door, witness, user, sponsor);
+
+        XChainBridgeModel bridge = CreateXrpTestBridge(door.ClassicAddress);
+        await SubmitAsync(new XChainCreateBridge { Account = door.ClassicAddress, XChainBridge = bridge, SignatureReward = Drops("100"), MinAccountCreateAmount = Drops("10000000") }, door);
+        await SetWitnessesAsync(door, 1, witness);
+        await SubmitAsync(new XChainAccountCreateCommit
+        {
+            Account = user.ClassicAddress,
+            XChainBridge = bridge,
+            Destination = created.ClassicAddress,
+            Amount = Drops("20000000"),
+            SignatureReward = Drops("100"),
+        }, user);
+
+        await OpenSponsorshipAsync(sponsor, witness);
+
+        XChainAddAccountCreateAttestation attestation = XChainAttestationSigner.SignAccountCreateAttestation(new XChainAddAccountCreateAttestation
+        {
+            Account = witness.ClassicAddress,
+            XChainBridge = bridge,
+            XChainAccountCreateCount = "1",
+            Amount = Drops("20000000"),
+            SignatureReward = Drops("100"),
+            OtherChainSource = user.ClassicAddress,
+            Destination = created.ClassicAddress,
+            AttestationRewardAccount = witness.ClassicAddress,
+            WasLockingChainSend = 0,
+        }, witness);
+
+        await SubmitSponsoredAsync(attestation, witness, sponsor);
+
+        AccountInfo info = await client.AccountInfo(new AccountInfoRequest(created.ClassicAddress)).Typed();
+        Assert.AreEqual("20000000", info.AccountData.Balance.Value, "quorum of one creates the account from the door's funds");
     }
 }
