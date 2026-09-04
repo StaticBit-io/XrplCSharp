@@ -55,32 +55,16 @@ public class TestIXChainAttestation : TestIXChainBridgeBase
     [ClassCleanup]
     public static void ClassCleanup() => client?.Dispose();
 
-    private static Currency Drops(string drops) => new Currency { Value = drops, CurrencyCode = "XRP" };
+    private static Task SubmitAsync(ITransactionRequest tx, XrplWallet signer) => SubmitAsync(client, tx, signer);
 
-    private static Currency Iou(string issuer, string value) => new Currency { CurrencyCode = TestCurrencyCode, Issuer = issuer, Value = value };
+    private static Task SetWitnessesAsync(XrplWallet door, uint quorum, params XrplWallet[] witnesses)
+        => SetWitnessesAsync(client, door, quorum, witnesses);
 
-    /// <summary>Submits a setup transaction and fails loudly if the ledger refuses it.</summary>
-    private static async Task SubmitAsync(ITransactionRequest tx, XrplWallet signer)
-    {
-        ITransactionRequest autofilled = await client.Autofill(tx);
-        ValidateResult(await client.SubmitAndWait(autofilled, signer, true));
-    }
+    private static Task<decimal> IouBalanceAsync(string holder, string issuer) => IouBalanceAsync(client, holder, issuer);
 
-    /// <summary>
-    /// Makes <paramref name="witnesses"/> the door's signer list, which is where rippled looks to
-    /// decide whether an attestation counts and how many are needed.
-    /// </summary>
-    private static async Task SetWitnessesAsync(XrplWallet door, uint quorum, params XrplWallet[] witnesses)
-    {
-        await SubmitAsync(new SignerListSet
-        {
-            Account = door.ClassicAddress,
-            SignerQuorum = quorum,
-            SignerEntries = witnesses
-                .Select(w => new SignerEntryWrapper { SignerEntry = new SignerEntry { Account = w.ClassicAddress, SignerWeight = 1 } })
-                .ToList(),
-        }, door);
-    }
+    private static Task<int> CountObjectsAsync(string account, LedgerEntryType type) => CountObjectsAsync(client, account, type);
+
+    private static Task<IouBridge> CommitOnIouBridgeAsync() => CommitOnIouBridgeAsync(client);
 
     /// <summary>Opens a fee sponsorship, and skips the test when XLS-68 is not on the node.</summary>
     private static async Task OpenSponsorshipAsync(XrplWallet sponsor, XrplWallet sponsee)
@@ -109,72 +93,6 @@ public class TestIXChainAttestation : TestIXChainBridgeBase
         Assert.IsTrue(res.Meta?.TransactionResult is "tesSUCCESS",
             $"sponsored {tx.TransactionType} must validate with tesSUCCESS, got {res.Meta?.TransactionResult}");
     }
-
-    /// <summary>What <paramref name="holder"/> holds of the issuer's currency, zero if no line exists.</summary>
-    private static async Task<decimal> IouBalanceAsync(string holder, string issuer)
-    {
-        AccountLines lines = await client.AccountLines(new AccountLinesRequest(holder)).Typed();
-        TrustLine line = lines.TrustLines?.FirstOrDefault(l => l.Account == issuer && l.Currency == TestCurrencyCode);
-        return line?.BalanceAsNumber ?? 0m;
-    }
-
-    /// <summary>How many objects of one type the account owns, for asserting a claim id came or went.</summary>
-    private static async Task<int> CountObjectsAsync(string account, LedgerEntryType type)
-    {
-        AccountObjects objects = await client.AccountObjects(new AccountObjectsRequest(account) { Type = type }).Typed();
-        return objects.AccountObjectList?.Count ?? 0;
-    }
-
-    private sealed record IouBridge(XrplWallet Door, XrplWallet Issuer, XrplWallet Witness, XrplWallet User, XrplWallet Recipient, XChainBridgeModel Bridge);
-
-    /// <summary>
-    /// Locking door, IOU issuer, one witness, a user holding 1000 USD and a recipient
-    /// with a trust line; bridge created on the door with the witness as its signer list;
-    /// claim id 1 created by the recipient; 100 USD committed by the user.
-    /// </summary>
-    private static async Task<IouBridge> CommitOnIouBridgeAsync()
-    {
-        XrplWallet door = XrplWallet.Generate();
-        XrplWallet issuer = XrplWallet.Generate();
-        XrplWallet witness = XrplWallet.Generate();
-        XrplWallet user = XrplWallet.Generate();
-        XrplWallet recipient = XrplWallet.Generate();
-        await IntegrationTestConfig.TryFundWalletsAsync(client, nodeType, door, issuer, witness, user, recipient);
-
-        await EnableDefaultRipple(client, issuer);
-        await SetupTrustLine(client, door, issuer.ClassicAddress);
-        await SetupTrustLine(client, user, issuer.ClassicAddress);
-        await SetupTrustLine(client, recipient, issuer.ClassicAddress);
-        await SubmitAsync(new Payment { Account = issuer.ClassicAddress, Destination = user.ClassicAddress, Amount = Iou(issuer.ClassicAddress, "1000") }, issuer);
-
-        // The issuing door only has to be an address in the spec: nothing on this ledger looks it up
-        XChainBridgeModel bridge = CreateIouTestBridge(door.ClassicAddress, issuer.ClassicAddress, XrplWallet.Generate().ClassicAddress);
-        await SubmitAsync(new XChainCreateBridge { Account = door.ClassicAddress, XChainBridge = bridge, SignatureReward = Drops("100") }, door);
-        await SetWitnessesAsync(door, 1, witness);
-
-        await SubmitAsync(new XChainCreateClaimID { Account = recipient.ClassicAddress, XChainBridge = bridge, SignatureReward = Drops("100"), OtherChainSource = user.ClassicAddress }, recipient);
-        await SubmitAsync(new XChainCommit { Account = user.ClassicAddress, XChainBridge = bridge, XChainClaimID = "1", Amount = Iou(issuer.ClassicAddress, "100"), OtherChainDestination = recipient.ClassicAddress }, user);
-
-        return new IouBridge(door, issuer, witness, user, recipient, bridge);
-    }
-
-    /// <summary>
-    /// The unsigned attestation for the commit made in <see cref="CommitOnIouBridgeAsync"/>. A null
-    /// <paramref name="destination"/> leaves the funds for an explicit XChainClaim instead of
-    /// having them delivered when quorum is reached.
-    /// </summary>
-    private static XChainAddClaimAttestation ClaimAttestation(IouBridge setup, string destination) => new XChainAddClaimAttestation
-    {
-        Account = setup.Witness.ClassicAddress,
-        XChainBridge = setup.Bridge,
-        OtherChainSource = setup.User.ClassicAddress,
-        // The attested send is on the issuing chain, so the amount carries the issuing chain issue
-        Amount = new Currency { CurrencyCode = TestCurrencyCode, Issuer = setup.Bridge.IssuingChainDoor, Value = "100" },
-        AttestationRewardAccount = setup.Witness.ClassicAddress,
-        Destination = destination,
-        WasLockingChainSend = 0,
-        XChainClaimID = "1",
-    };
 
     /// <summary>
     /// One witness on a quorum of one: the attestation both proves the commit and releases the
