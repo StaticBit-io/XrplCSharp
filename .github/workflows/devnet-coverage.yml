@@ -7,9 +7,14 @@ name: Devnet Coverage
 # codes, and the classes below are the ones that submit exactly that surface.
 #
 # Not part of CI on purpose: wallets are funded from the public faucet (rate-limited,
-# ~100 XRP per call), the run depends on a third-party network, and a red result here
+# 100 XRP per call), the run depends on a third-party network, and a red result here
 # says nothing about a pull request. Run it by hand when an amendment needs traffic or
 # before a release to see the SDK against a real network.
+#
+# Keep the default filter in step with the classes that carry coverage-oriented traffic.
+# TestIXChainAttestation and TestILoanMultisig were written after this workflow and were
+# missing from it for a while: between them they are the only traffic for both attestation
+# transaction types, XChainClaim, and LoanSet.CounterpartySignature.Signers.
 #
 # The test profile comes from the environment (Tests/Xrpl.Tests/Integration/Utils.cs):
 #   XRPL_TEST_NODE      - testnet | devnet | standalone (funding and ledger_accept policy)
@@ -33,7 +38,7 @@ on:
         description: dotnet test --filter expression
         type: string
         default: >-
-          FullyQualifiedName~TestIBatchInnerTypes|FullyQualifiedName~TestISponsoredTypes|FullyQualifiedName~TestIAMMMpt|FullyQualifiedName~TestIXChainBridge|FullyQualifiedName~TestIBatch|FullyQualifiedName~TestISponsorship|FullyQualifiedName~TestILedgerStateFix
+          FullyQualifiedName~TestIBatchInnerTypes|FullyQualifiedName~TestISponsoredTypes|FullyQualifiedName~TestIAMMMpt|FullyQualifiedName~TestIXChainAttestation|FullyQualifiedName~TestILoanMultisig|FullyQualifiedName~TestIXChainBridge|FullyQualifiedName~TestIBatch|FullyQualifiedName~TestISponsorship|FullyQualifiedName~TestILedgerStateFix
 
 env:
   DOTNET_VERSION: '10.0.x'
