@@ -59,12 +59,17 @@ public class TestIXChainAttestation : TestIXChainBridgeBase
 
     private static Currency Iou(string issuer, string value) => new Currency { CurrencyCode = TestCurrencyCode, Issuer = issuer, Value = value };
 
+    /// <summary>Submits a setup transaction and fails loudly if the ledger refuses it.</summary>
     private static async Task SubmitAsync(ITransactionRequest tx, XrplWallet signer)
     {
         ITransactionRequest autofilled = await client.Autofill(tx);
         ValidateResult(await client.SubmitAndWait(autofilled, signer, true));
     }
 
+    /// <summary>
+    /// Makes <paramref name="witnesses"/> the door's signer list, which is where rippled looks to
+    /// decide whether an attestation counts and how many are needed.
+    /// </summary>
     private static async Task SetWitnessesAsync(XrplWallet door, uint quorum, params XrplWallet[] witnesses)
     {
         await SubmitAsync(new SignerListSet
@@ -105,6 +110,7 @@ public class TestIXChainAttestation : TestIXChainBridgeBase
             $"sponsored {tx.TransactionType} must validate with tesSUCCESS, got {res.Meta?.TransactionResult}");
     }
 
+    /// <summary>What <paramref name="holder"/> holds of the issuer's currency, zero if no line exists.</summary>
     private static async Task<decimal> IouBalanceAsync(string holder, string issuer)
     {
         AccountLines lines = await client.AccountLines(new AccountLinesRequest(holder)).Typed();
@@ -112,6 +118,7 @@ public class TestIXChainAttestation : TestIXChainBridgeBase
         return line?.BalanceAsNumber ?? 0m;
     }
 
+    /// <summary>How many objects of one type the account owns, for asserting a claim id came or went.</summary>
     private static async Task<int> CountObjectsAsync(string account, LedgerEntryType type)
     {
         AccountObjects objects = await client.AccountObjects(new AccountObjectsRequest(account) { Type = type }).Typed();
@@ -151,6 +158,11 @@ public class TestIXChainAttestation : TestIXChainBridgeBase
         return new IouBridge(door, issuer, witness, user, recipient, bridge);
     }
 
+    /// <summary>
+    /// The unsigned attestation for the commit made in <see cref="CommitOnIouBridgeAsync"/>. A null
+    /// <paramref name="destination"/> leaves the funds for an explicit XChainClaim instead of
+    /// having them delivered when quorum is reached.
+    /// </summary>
     private static XChainAddClaimAttestation ClaimAttestation(IouBridge setup, string destination) => new XChainAddClaimAttestation
     {
         Account = setup.Witness.ClassicAddress,
@@ -164,6 +176,10 @@ public class TestIXChainAttestation : TestIXChainBridgeBase
         XChainClaimID = "1",
     };
 
+    /// <summary>
+    /// One witness on a quorum of one: the attestation both proves the commit and releases the
+    /// funds, because it names a destination.
+    /// </summary>
     [TestMethod]
     public async Task TestXChainAddClaimAttestation_WithDestination_DeliversOnQuorum()
     {
@@ -178,6 +194,10 @@ public class TestIXChainAttestation : TestIXChainBridgeBase
         Assert.AreEqual(0, await CountObjectsAsync(setup.Recipient.ClassicAddress, LedgerEntryType.XChainOwnedClaimID), "the claim id is consumed by the delivery");
     }
 
+    /// <summary>
+    /// Without a destination on the attestation the funds wait, and the recipient collects them
+    /// with an explicit XChainClaim carrying a DestinationTag.
+    /// </summary>
     [TestMethod]
     public async Task TestXChainClaim_AfterAttestationWithoutDestination_UsesDestinationTag()
     {
@@ -201,6 +221,10 @@ public class TestIXChainAttestation : TestIXChainBridgeBase
         Assert.AreEqual(0, await CountObjectsAsync(setup.Recipient.ClassicAddress, LedgerEntryType.XChainOwnedClaimID));
     }
 
+    /// <summary>
+    /// A correctly signed attestation from an account that is not on the door's signer list is
+    /// refused with tecNO_PERMISSION, and nothing is delivered.
+    /// </summary>
     [TestMethod]
     public async Task TestXChainAddClaimAttestation_UnlistedWitness_IsRejected()
     {
@@ -220,6 +244,10 @@ public class TestIXChainAttestation : TestIXChainBridgeBase
         Assert.AreEqual(0m, await IouBalanceAsync(setup.Recipient.ClassicAddress, setup.Issuer.ClassicAddress));
     }
 
+    /// <summary>
+    /// Two witnesses, quorum of two: the first attestation is parked on the door in an
+    /// XChainOwnedCreateAccountClaimID, and the second creates the account from the door's funds.
+    /// </summary>
     [TestMethod]
     public async Task TestXChainAddAccountCreateAttestation_TwoWitnesses_CreatesTheAccountOnQuorum()
     {
@@ -300,6 +328,10 @@ public class TestIXChainAttestation : TestIXChainBridgeBase
         Assert.AreEqual(0, await CountObjectsAsync(setup.Recipient.ClassicAddress, LedgerEntryType.XChainOwnedClaimID));
     }
 
+    /// <summary>
+    /// The account-create attestation with its fee sponsored, the counterpart to the claim
+    /// attestation above.
+    /// </summary>
     [TestMethod]
     public async Task Sponsored_XChainAddAccountCreateAttestation()
     {

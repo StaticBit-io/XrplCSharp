@@ -69,6 +69,7 @@ public class TestISponsoredVaultLoan : TestILoanBase
 
     #region Helpers
 
+    /// <summary>Submits a setup transaction unsponsored, and fails loudly if the ledger refuses it.</summary>
     private static async Task SubmitPlainAsync(ITransactionRequest tx, XrplWallet signer, string context)
     {
         ITransactionRequest autofilled = await client.Autofill(tx);
