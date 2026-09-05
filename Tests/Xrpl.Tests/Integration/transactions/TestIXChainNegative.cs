@@ -62,7 +62,8 @@ public class TestIXChainNegative : TestIXChainBridgeBase
         TransactionFailedException ex = await Assert.ThrowsExactlyAsync<TransactionFailedException>(
             () => client.SubmitAndWait(autofilled, signer, true),
             $"{tx.TransactionType} must be refused with {expectedCode}");
-        StringAssert.Contains(ex.Message, expectedCode);
+        Assert.AreEqual(expectedCode, ex.EngineResult);
+        Assert.IsTrue(ex.ReachedLedger, $"{expectedCode} is a tec: the transaction is in a ledger and the fee was taken");
     }
 
     /// <summary>
