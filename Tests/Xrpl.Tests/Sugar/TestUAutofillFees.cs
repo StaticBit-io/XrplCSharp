@@ -627,7 +627,7 @@ public class TestUAutofillFees
 /// Minimal mock IXrplClient for fee calculation tests.
 /// Implements required methods for CalculateFeePerTransactionType.
 /// </summary>
-internal sealed class FeeTestClient : IXrplClient
+internal class FeeTestClient : IXrplClient
 {
     private readonly string _feeXrp;
     private readonly uint _reserveInc;
@@ -724,7 +724,9 @@ internal sealed class FeeTestClient : IXrplClient
     public Task<XrplResponse<ServerFeatures>> ServerFeatures(string feature = null, CancellationToken cancellationToken = default) => throw new NotImplementedException();
 
     public Task<uint> GetLedgerIndex(CancellationToken cancellationToken = default) => Task.FromResult(100u);
-    public Task<string> GetXrpBalance(string address, CancellationToken cancellationToken = default) => throw new NotSupportedException();
+    // virtual, so a test that needs a balance can answer one without a second 180-line
+    // substitute; this class answers nothing here, as before
+    public virtual Task<string> GetXrpBalance(string address, CancellationToken cancellationToken = default) => throw new NotSupportedException();
 
     public Task<Dictionary<string, object>> Autofill(Dictionary<string, object> tx, int? signersCount = null, CancellationToken cancellationToken = default) => throw new NotSupportedException();
     public Task<T> Autofill<T>(T tx, int? signersCount = null, CancellationToken cancellationToken = default) where T : ITransactionRequest => throw new NotSupportedException();
