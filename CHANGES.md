@@ -1,6 +1,6 @@
 # Changes
 
-## 11.3.0.0 03/09/2026
+## 11.3.0.0 05/09/2026
 
 * **`EasyTimer` is gone** (**breaking**). The class sat in `Xrpl.Wallet` as a pair of `System.Timers.Timer` wrappers named after JavaScript's `setInterval` and `setTimeout`, because the file around it is a port of xrpl.js's `fundWallet.ts`. Nothing ever called it: across every revision of `FundWallet.cs` back to October 2022 there is not one use, and the faucet poll it was presumably written for drove a `System.Timers.Timer` through static fields instead - the design that produced the once-per-process poll budget fixed in 11.3.0.0. It is removed rather than deprecated because there is nothing to migrate to that is not already better: `System.Timers.Timer` is public, documented and one line away.
   * for anyone who did reference it, the wrappers were not worth keeping. Neither could report a failure - the callback ran on a timer thread with nothing to observe it - `SetInterval` let callbacks overlap when the work outlasted the interval, and stopping either one depended on the caller holding the returned handle
