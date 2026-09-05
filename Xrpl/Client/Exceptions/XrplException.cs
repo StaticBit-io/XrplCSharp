@@ -142,6 +142,14 @@ namespace Xrpl.Client.Exceptions
         public XRPLFaucetException(string message = null) : base(message)
         {
         }
+
+        /// <summary>
+        /// Keeps the failure that caused this one. A faucet call fails through the network, the
+        /// JSON or the node, and without the cause the caller is left with a sentence.
+        /// </summary>
+        public XRPLFaucetException(string message, Exception? InnerException) : base(message, InnerException)
+        {
+        }
     }
     /// <summary>
     /// Exception thrown when xrpl.js cannot retrieve a transaction, ledger, account, etc.
