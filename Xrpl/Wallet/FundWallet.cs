@@ -109,6 +109,7 @@ namespace Xrpl.Wallet
             public static readonly string NFTDevnet = "faucet-nft.ripple.com";
         }
 
+        /// <inheritdoc cref="FundWallet(IXrplClient, XrplWallet, string, CancellationToken)"/>
         public static Task<Funded> FundWallet(this IXrplClient client, XrplWallet? wallet = null, string? faucetHost = null)
             => FundWallet(client, wallet, faucetHost, CancellationToken.None);
 
@@ -118,6 +119,16 @@ namespace Xrpl.Wallet
         /// the reason this overload exists: a cancelled call reports cancellation rather than a
         /// faucet failure.
         /// </summary>
+        /// <remarks>
+        /// <para>
+        /// A <paramref name="wallet"/> of <c>null</c> means one is generated here, and it is handed
+        /// back only on success - the returned <see cref="Funded"/> is the only reference to it.
+        /// The faucet may already have created and paid that account by the time the call fails or
+        /// is cancelled, and the seed goes with the stack frame: the funds are then unreachable and
+        /// a retry strands another account. Pass a wallet whenever the answer has to survive a
+        /// failure, which is every case where the account is meant to be used again.
+        /// </para>
+        /// </remarks>
         public static async Task<Funded> FundWallet(this IXrplClient client, XrplWallet? wallet, string? faucetHost, CancellationToken cancellationToken)
         {
             //if (!client.IsConnected())
