@@ -88,6 +88,26 @@ namespace Xrpl.Tests.Wallet.Tests
             Assert.IsNull(outcome.LastReadFailure, "the ledger answered - it just had nothing to report");
         }
 
+        /// <summary>
+        /// The client raises a token-less OperationCanceledException for every pending request
+        /// when the connection drops (RequestManager.RejectAllWithCancellation), so the type
+        /// alone cannot mean "the caller gave up" - only the token can say so.
+        /// </summary>
+        [TestMethod]
+        public void CallerCancellation_IsTheTokenAndNotTheExceptionType()
+        {
+            using CancellationTokenSource cancelled = new CancellationTokenSource();
+            cancelled.Cancel();
+            OperationCanceledException dropped = new OperationCanceledException("Connection was intentionally closed.");
+
+            Assert.IsFalse(WalletSugar.IsCallerCancellation(dropped, CancellationToken.None),
+                "a dropped connection is not the caller giving up");
+            Assert.IsTrue(WalletSugar.IsCallerCancellation(dropped, cancelled.Token),
+                "the same exception with a cancelled token is");
+            Assert.IsFalse(WalletSugar.IsCallerCancellation(new DisconnectedException("x"), cancelled.Token),
+                "an unrelated failure is not cancellation, whatever the token says");
+        }
+
         [TestMethod]
         public async Task Poll_HonoursCancellationRatherThanWaitingOutItsBudget()
         {

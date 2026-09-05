@@ -132,7 +132,7 @@ namespace Xrpl.Wallet
             {
                 startingBalance = Convert.ToDouble(await client.GetXrpBalance(walletToFund.ClassicAddress, cancellationToken).ConfigureAwait(false));
             }
-            catch (Exception err) when (err is not OperationCanceledException)
+            catch (Exception err) when (!IsCallerCancellation(err, cancellationToken))
             {
                 /* startingBalance remains '0': the account is usually not on the ledger yet */
             }
@@ -164,17 +164,27 @@ namespace Xrpl.Wallet
         }
 
         /// <summary>
-        /// Whether <paramref name="err"/> is the transport failing rather than the caller giving
-        /// up. <see cref="HttpClient"/> reports its own <see cref="HttpClient.Timeout"/> as a
-        /// <see cref="TaskCanceledException"/>, which is an <see cref="OperationCanceledException"/>
-        /// and so is indistinguishable by type from a cancelled call - the token is what tells
-        /// them apart, and only the caller's own cancellation is allowed through untouched.
+        /// Whether the caller asked to stop. An <see cref="OperationCanceledException"/> is not
+        /// evidence of that on its own, and the type is the only thing two very different events
+        /// have in common: <see cref="HttpClient"/> reports its own
+        /// <see cref="HttpClient.Timeout"/> as one, and this library's WebSocket client raises one
+        /// with no token behind it for every pending request whenever the connection drops
+        /// (<c>RequestManager.RejectAllWithCancellation</c>). Only the token can say, so it is
+        /// what every catch filter in this file asks.
+        /// </summary>
+        internal static bool IsCallerCancellation(Exception err, CancellationToken cancellationToken)
+        {
+            return err is OperationCanceledException && cancellationToken.IsCancellationRequested;
+        }
+
+        /// <summary>
+        /// Whether <paramref name="err"/> is the transport failing rather than the caller giving up.
         /// </summary>
         private static bool IsTransportFailure(Exception err, CancellationToken cancellationToken)
         {
             if (err is OperationCanceledException)
             {
-                return !cancellationToken.IsCancellationRequested;
+                return !IsCallerCancellation(err, cancellationToken);
             }
 
             return err is HttpRequestException || err is IOException;
@@ -357,7 +367,7 @@ namespace Xrpl.Wallet
                     cancellationToken
                 ).ConfigureAwait(false);
             }
-            catch (Exception err) when (err is not OperationCanceledException and not XRPLFaucetException)
+            catch (Exception err) when (!IsCallerCancellation(err, cancellationToken) && err is not XRPLFaucetException)
             {
                 // The cause travels with it: reading a balance fails through the network, the node
                 // or the JSON, and a caller handed only the sentence cannot tell which
@@ -367,16 +377,14 @@ namespace Xrpl.Wallet
 
             if (poll.Balance <= startingBalance)
             {
-                string waited = $"within {INTERVAL_SECONDS} * {MAX_ATTEMPTS} seconds";
-                // The poll swallows a failed read and tries again, because at first there is
-                // nothing to read. If the balance never rose, the last such failure is the whole
-                // account of why, and without it this blames the faucet for a client-side outage
-                throw poll.LastReadFailure is null
-                    ? new XRPLFaucetException(
-                        $"The faucet accepted the request for {fundedAddress}, but the balance of {walletToFund.ClassicAddress} did not rise above {startingBalance} {waited}")
-                    : new XRPLFaucetException(
-                        $"The faucet accepted the request for {fundedAddress}, but the balance of {walletToFund.ClassicAddress} could not be read {waited}: {poll.LastReadFailure.Message}",
-                        poll.LastReadFailure);
+                // One sentence, and it is the one that is always true: the balance did not rise.
+                // What the last failed read was cannot pick the wording - an account the faucet
+                // never paid answers actNotFound on every attempt, so a failure is present in
+                // exactly the ordinary case - but it is the only account of a client-side outage,
+                // so it rides along as the cause.
+                throw new XRPLFaucetException(
+                    $"The faucet accepted the request for {fundedAddress}, but the balance of {walletToFund.ClassicAddress} did not rise above {startingBalance} within {INTERVAL_SECONDS} * {MAX_ATTEMPTS} seconds",
+                    poll.LastReadFailure);
             }
 
             return new Funded(walletToFund, poll.Balance);
