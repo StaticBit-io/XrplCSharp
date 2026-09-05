@@ -10,7 +10,6 @@ using System.Text.Json.Serialization;
 using System.Text.RegularExpressions;
 using System.Threading;
 using System.Threading.Tasks;
-using System.Timers;
 
 using Xrpl.AddressCodec;
 using Xrpl.Client;
@@ -21,42 +20,6 @@ using Xrpl.Client.Json;
 
 namespace Xrpl.Wallet
 {
-    public static class EasyTimer
-    {
-        public static IDisposable SetInterval(Action method, int delayInMilliseconds)
-        {
-            System.Timers.Timer timer = new System.Timers.Timer(delayInMilliseconds);
-            timer.Elapsed += (source, e) =>
-            {
-                method();
-            };
-
-            timer.Enabled = true;
-            timer.Start();
-
-            // Returns a stop handle which can be used for stopping
-            // the timer, if required
-            return timer as IDisposable;
-        }
-
-        public static IDisposable SetTimeout(Action method, int delayInMilliseconds)
-        {
-            System.Timers.Timer timer = new System.Timers.Timer(delayInMilliseconds);
-            timer.Elapsed += (source, e) =>
-            {
-                method();
-            };
-
-            timer.AutoReset = false;
-            timer.Enabled = true;
-            timer.Start();
-
-            // Returns a stop handle which can be used for stopping
-            // the timer, if required
-            return timer as IDisposable;
-        }
-    }
-
     public static class WalletSugar
     {
         //Interval to check an account balance
