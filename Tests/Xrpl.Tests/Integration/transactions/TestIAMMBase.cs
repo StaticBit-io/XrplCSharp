@@ -27,11 +27,19 @@ public abstract class TestIAMMBase
     protected XrplWallet walletIssuer;
     protected XrplWallet walletHolder;
     protected const string CurrencyCode = "AML";
-    protected static TestNodeType nodeType = TestNodeType.Standalone;
+    protected static TestNodeType nodeType = IntegrationTestConfig.CurrentNodeType;
+
+    private static bool? _ammEnabled;
 
     [TestInitialize]
     public async Task TestInitialize()
     {
+        _ammEnabled ??= await AmendmentGuard.IsEnabledAsync(GetClient(), AmendmentGuard.AMM);
+        if (!_ammEnabled.Value)
+        {
+            Assert.Inconclusive("AMM amendment is not enabled on the test node.");
+        }
+
         walletIssuer = XrplWallet.Generate();
         walletHolder = XrplWallet.Generate();
 
@@ -211,6 +219,6 @@ public abstract class TestIAMMBase
 
     protected static async Task<IXrplClient> CreateStandaloneClient()
     {
-        return await IntegrationTestConfig.CreateClientAsync(TestNodeType.Standalone);
+        return await IntegrationTestConfig.CreateClientAsync();
     }
 }

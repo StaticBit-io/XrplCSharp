@@ -24,7 +24,7 @@ public abstract class TestILoanBase
 {
     public TestContext TestContext { get; set; }
     protected abstract IXrplClient GetClient();
-    protected static TestNodeType nodeType = TestNodeType.Standalone;
+    protected static TestNodeType nodeType = IntegrationTestConfig.CurrentNodeType;
 
     protected static void ValidateResult(Submit res)
     {
@@ -94,6 +94,10 @@ public abstract class TestILoanBase
     /// </summary>
     protected static async Task<string> CreateBroker(IXrplClient client, XrplWallet wallet)
     {
+        // The vault deposit (100 XRP) and the broker cover (50 XRP) below exceed a single
+        // faucet payout, so the account is topped up before anything is spent
+        await IntegrationTestConfig.EnsureBalanceAsync(client, wallet, 200m);
+
         string vaultId = await CreateVaultForBroker(client, wallet);
 
         // Deposit XRP into the vault so the broker has funds to lend
@@ -374,6 +378,6 @@ public abstract class TestILoanBase
 
     protected static async Task<IXrplClient> CreateStandaloneClient()
     {
-        return await IntegrationTestConfig.CreateClientAsync(TestNodeType.Standalone);
+        return await IntegrationTestConfig.CreateClientAsync();
     }
 }

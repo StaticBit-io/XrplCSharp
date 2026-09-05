@@ -13,6 +13,7 @@ using Xrpl.Models.Methods;
 using Xrpl.Models.Transactions;
 using Xrpl.Models.Utils;
 using Xrpl.Sugar;
+using Xrpl.Utils.Hashes;
 using Xrpl.Wallet;
 
 using Xrpl.Client;
@@ -28,14 +29,19 @@ public class TestIBatch
     public TestContext TestContext { get; set; }
     public static SetupIntegration runner;
 
-    static XrplWallet walletPrimary = XrplWallet.FromNormalizedText("primary test account");
-    static XrplWallet walletSecondary_1 = XrplWallet.FromNormalizedText("secondary test account 1");
-    static XrplWallet walletSecondary_2 = XrplWallet.FromNormalizedText("secondary test account 2");
-    static XrplWallet walletMultiSign = XrplWallet.FromNormalizedText("multi sign test account");
-    static XrplWallet walletMultiSigner_1 = XrplWallet.FromNormalizedText("multi sign test account 1");
-    static XrplWallet walletMultiSigner_2 = XrplWallet.FromNormalizedText("multi sign test account 2");
-    static XrplWallet walletRegularKey = XrplWallet.FromNormalizedText("regular key test account");
-    static XrplWallet walletRegularKey_signer = XrplWallet.FromNormalizedText("regular key test account signer");
+    // Generated per run, never derived from a fixed phrase. A phrase is the same account on
+    // every network, so on a public one it is shared with everyone who ever ran this test:
+    // the state it starts from is whatever they left, and the setup below disables a master
+    // key on it. On the standalone stand a derived account also carried state between runs,
+    // which let a "create" test quietly pass as a modify.
+    static XrplWallet walletPrimary = XrplWallet.Generate();
+    static XrplWallet walletSecondary_1 = XrplWallet.Generate();
+    static XrplWallet walletSecondary_2 = XrplWallet.Generate();
+    static XrplWallet walletMultiSign = XrplWallet.Generate();
+    static XrplWallet walletMultiSigner_1 = XrplWallet.Generate();
+    static XrplWallet walletMultiSigner_2 = XrplWallet.Generate();
+    static XrplWallet walletRegularKey = XrplWallet.Generate();
+    static XrplWallet walletRegularKey_signer = XrplWallet.Generate();
 
     [ClassInitialize]
     public static async Task MyClassInitializeAsync(TestContext testContext)
@@ -87,7 +93,7 @@ public class TestIBatch
         // #v1
         var res = await runner.client.SubmitMulti(tx, new List<XrplWallet>() { walletMultiSigner_1, walletMultiSigner_2 }, true);
 
-        ValidateResult(res);
+        await ValidateResultAsync(res);
     }
 
     [TestMethod]
@@ -100,7 +106,7 @@ public class TestIBatch
         var sig2 = walletMultiSigner_2.Sign(stx1, true);
         var stx2 = sig2.GetTx();
         var res = await runner.client.SubmitRequest(sig2.TxBlob, true);
-        ValidateResult(res);
+        await ValidateResultAsync(res);
     }
 
     [TestMethod]
@@ -113,7 +119,7 @@ public class TestIBatch
         var sig2 = walletMultiSigner_2.Sign(stx1, true);
         var singed = Signer.Multisign([sig1.TxBlob, sig2.TxBlob]);
         var res = await runner.client.SubmitRequest(singed, true);
-        ValidateResult(res);
+        await ValidateResultAsync(res);
     }
 
     private static async Task<Batch> GetTxForSingleMultiSign()
@@ -178,7 +184,7 @@ public class TestIBatch
 
         //#v1
         var res = await runner.client.SubmitMultiBatch(batch, new[] { walletPrimary, walletSecondary_1, walletSecondary_2 }, true);
-        ValidateResult(res);
+        await ValidateResultAsync(res);
     }
 
     [TestMethod]
@@ -192,7 +198,7 @@ public class TestIBatch
         var combined = XrplWallet.CombineBatchSigners(new[] { sig1.TxBlob, sig2.TxBlob});
         var sig3 = walletPrimary.Sign(combined.GetTx());
         var res = await runner.client.SubmitRequest(sig3.TxBlob, true);
-        ValidateResult(res);
+        await ValidateResultAsync(res);
     }
 
     [TestMethod]
@@ -206,7 +212,7 @@ public class TestIBatch
         var sig3 = walletSecondary_2.Sign(batch);
         var combined = XrplWallet.CombineBatchSigners(new[] { sig1.TxBlob, sig2.TxBlob,sig3.TxBlob });
         var res = await runner.client.SubmitRequest(combined.TxBlob, true);
-        ValidateResult(res);
+        await ValidateResultAsync(res);
     }
 
     [TestMethod]
@@ -219,7 +225,7 @@ public class TestIBatch
         var sig2 = walletSecondary_2.Sign(sig1.GetTx());
         var sig3 = walletPrimary.Sign(sig2.GetTx());
         var res = await runner.client.SubmitRequest(sig3.TxBlob, true);
-        ValidateResult(res);
+        await ValidateResultAsync(res);
     }
 
     [TestMethod]
@@ -233,7 +239,7 @@ public class TestIBatch
         var sig3 = walletSecondary_1.Sign(sig2.GetTx());
         var tx = sig3.GetTxDictionary();
         var res = await runner.client.SubmitRequest(sig3.TxBlob, true);
-        ValidateResult(res);
+        await ValidateResultAsync(res);
     }
 
     private static async Task<Batch> GetTxForBatchMultiAccounts()
@@ -290,7 +296,7 @@ public class TestIBatch
 
         var res = await runner.client.SubmitMultiBatch(batch, new[] { w1, w2, owner, signer1, signer2 }, true);
 
-        ValidateResult(res);
+        await ValidateResultAsync(res);
     }
 
     [TestMethod]
@@ -304,7 +310,7 @@ public class TestIBatch
         var combined = XrplWallet.CombineBatchSigners(sig1.TxBlob,sig2.TxBlob,sig3.TxBlob,sig4.TxBlob);
         var res = await runner.client.SubmitRequest(combined.TxBlob, true);
 
-        ValidateResult(res);
+        await ValidateResultAsync(res);
     }
 
     [TestMethod]
@@ -317,7 +323,7 @@ public class TestIBatch
         var sig2 = w2.Sign(sig1.GetTx());
         var res = await runner.client.SubmitRequest(sig2.TxBlob, true);
 
-        ValidateResult(res);
+        await ValidateResultAsync(res);
     }
 
     [TestMethod]
@@ -330,7 +336,7 @@ public class TestIBatch
         var sig4 = signer2.Sign(sig3.GetTx(), true);
         var res = await runner.client.SubmitRequest(sig4.TxBlob, true);
 
-        ValidateResult(res);
+        await ValidateResultAsync(res);
     }
 
     private static async Task<(XrplWallet owner, XrplWallet signer1, XrplWallet signer2, XrplWallet w1, XrplWallet w2, Batch batch)> GetMultiAccountBatchWithTopMultiSign()
@@ -391,7 +397,7 @@ public class TestIBatch
         var (owner, signer1, signer2, w1, w2, batch) = await GetBatchMultiAccountsWithInnerMultiSign();
 
         var res = await runner.client.SubmitMultiBatch(batch, new[] { w1, w2, owner, signer1, signer2 }, true);
-        ValidateResult(res);
+        await ValidateResultAsync(res);
     }
 
 
@@ -405,7 +411,7 @@ public class TestIBatch
         var sig4 = signer2.Sign(batch, true, owner.ClassicAddress);
         var combined = XrplWallet.CombineBatchSigners(sig1.TxBlob, sig2.TxBlob, sig3.TxBlob, sig4.TxBlob);
         var res = await runner.client.SubmitRequest(combined.TxBlob, true);
-        ValidateResult(res);
+        await ValidateResultAsync(res);
     }
 
     [TestMethod]
@@ -418,7 +424,7 @@ public class TestIBatch
         var sig2 = w2.Sign(sig1.GetTx());
         var json = sig2.GetTx().ToJson();
         var res = await runner.client.SubmitRequest(sig2.TxBlob, true);
-        ValidateResult(res);
+        await ValidateResultAsync(res);
     }
 
     [TestMethod]
@@ -431,7 +437,7 @@ public class TestIBatch
         var sig4 = signer2.Sign(sig3.GetTx(), true, owner.ClassicAddress);
         var res = await runner.client.SubmitRequest(sig4.TxBlob, true);
 
-        ValidateResult(res);
+        await ValidateResultAsync(res);
     }
 
 
@@ -499,7 +505,7 @@ public class TestIBatch
 
         var combined = XrplWallet.CombineBatchSigners(new[] { sig1.TxBlob, sig2.TxBlob, sig3.TxBlob, sig1_dup.TxBlob, sig2_dup.TxBlob });
         var res = await runner.client.SubmitRequest(combined.TxBlob, true);
-        ValidateResult(res);
+        await ValidateResultAsync(res);
     }
 
     [TestMethod]
@@ -516,7 +522,7 @@ public class TestIBatch
         var combined = XrplWallet.CombineBatchSigners(sig1.TxBlob, sig2.TxBlob, sig3.TxBlob, sig4.TxBlob, sig3_dup.TxBlob);
         var res = await runner.client.SubmitRequest(combined.TxBlob, true);
 
-        ValidateResult(res);
+        await ValidateResultAsync(res);
     }
 
     #endregion
@@ -536,21 +542,61 @@ public class TestIBatch
 
     #endregion
 
-    private static void ValidateResult(Submit res)
+    /// <summary>
+    /// Checks the engine result, then waits until the transaction is in a ledger and checks the
+    /// result the ledger recorded.
+    /// </summary>
+    /// <remarks>
+    /// An engine result is provisional: it says what one node made of the transaction against
+    /// its open ledger, not what the network settled on, and <c>terQUEUED</c> says it has not
+    /// been applied at all. Asserting on it alone let these tests pass on a batch that never
+    /// reached a ledger, and it left the account sequences unsettled - the next test autofilled
+    /// against a ledger that did not yet carry the previous submission and got
+    /// <c>tefPAST_SEQ</c>, which is how this surfaced when the class was first run against
+    /// devnet instead of the standalone stand.
+    /// </remarks>
+    private static async Task ValidateResultAsync(Submit res)
     {
         if (res is not { EngineResult: "tesSUCCESS" or "terQUEUED" })
         {
             throw new RippleException($"Invalid result, {res.EngineResult}");
         }
-    }
 
-    private void ValidateResult(TransactionSummary res)
-    {
-        if (res is not { Meta: { TransactionResult: "tesSUCCESS" or "terQUEUED" } })
+        string hash = HashLedger.HashSignedTx(res.TxBlob);
+        const int MaxAttempts = 15;
+        for (int attempt = 1; ; attempt++)
         {
-            throw new RippleException($"Invalid result, {res.Meta.TransactionResult}");
+            string ledgerResult = null;
+            try
+            {
+                // Metadata is written when the transaction is applied in a ledger, so its
+                // presence is what separates a settled result from the provisional one above
+                TransactionResponse tx = await runner.client.TxV1(new TxRequest(hash)).Typed();
+                ledgerResult = tx.Meta?.TransactionResult;
+            }
+            catch (RippledException ex) when (ex.Message.Contains("txnNotFound"))
+            {
+                // Submitted, not yet in a ledger this node will answer for
+            }
+
+            if (ledgerResult is not null)
+            {
+                if (ledgerResult != "tesSUCCESS")
+                {
+                    throw new RippleException($"Invalid result in the ledger, {ledgerResult}");
+                }
+                return;
+            }
+
+            if (attempt == MaxAttempts)
+            {
+                throw new RippleException($"Transaction {hash} did not reach a ledger after {MaxAttempts} lookups.");
+            }
+
+            await Task.Delay(TimeSpan.FromSeconds(2));
         }
     }
+
 
 
     #region Signer

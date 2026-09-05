@@ -139,6 +139,16 @@ namespace Xrpl.Tests.Wallet.Tests
         }
 
         [TestMethod]
+        public async Task TestUValidateBatch_SingleInner_Throws()
+        {
+            // rippled Batch::preflight answers temARRAY_EMPTY to fewer than two inners
+            Dictionary<string, object> batch = ToDict(OuterBatch(InnerPayment(Other.ClassicAddress)));
+
+            var ex = await Assert.ThrowsExactlyAsync<System.ArgumentException>(() => Validation.ValidateBatch(batch));
+            StringAssert.Contains(ex.Message, "at least 2");
+        }
+
+        [TestMethod]
         public async Task TestUValidateBatch_OuterReserveSponsorship_Throws()
         {
             Dictionary<string, object> batch = ToDict(OuterBatch(

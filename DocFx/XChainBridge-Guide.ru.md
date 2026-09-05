@@ -215,16 +215,22 @@ XChainAddClaimAttestation attestation = new XChainAddClaimAttestation
     XChainClaimID = "1",
     Amount = new Currency { Value = "1000000", CurrencyCode = "XRP" },
     OtherChainSource = walletUser.ClassicAddress,
-    AttestationSignerAccount = witnessAccount.ClassicAddress,
     AttestationRewardAccount = witnessAccount.ClassicAddress,
-    PublicKey = witnessPublicKeyHex,
-    Signature = attestationSignatureHex,
     WasLockingChainSend = 1,  // 1 = locking chain, 0 = issuing chain
     Destination = destinationAddress,
 };
+
+// Witness подписывает аттестуемые факты (не транзакцию): PublicKey, Signature и,
+// если не задан, AttestationSignerAccount заполняются из кошелька witness-сервера
+XChainAttestationSigner.SignClaimAttestation(attestation, witnessAccount);
+
 attestation = await client.Autofill(attestation);
 TransactionSummary result = await client.SubmitAndWait(attestation, witnessAccount, true);
 ```
+
+Подписывается каноническая сериализация только аттестуемых полей (rippled `AttestationClaim::message`): без хеш-префикса, без `Account`, `Fee` и `Sequence`, поэтому отправить транзакцию может любой профинансированный аккаунт, а нода всё равно проверит подпись по `PublicKey`. Ключ обязан быть мастер- или regular-ключом `AttestationSignerAccount`, а сам аккаунт — входить в `SignerList` door-аккаунта. `XChainAttestationSigner.VerifyClaimAttestation` проверяет полученную аттестацию так же, как нода, ещё до отправки. `XChainAddAccountCreateAttestation` подписывается через `SignAccountCreateAttestation`.
+
+Сумма указывается в валюте той цепочки, где произошла отправка: аттестация commit на locking chain несёт `LockingChainIssue`, на issuing chain — `IssuingChainIssue`.
 
 ### 5. Claim (получение на целевой цепочке)
 

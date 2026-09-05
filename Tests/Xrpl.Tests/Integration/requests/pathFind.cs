@@ -44,6 +44,14 @@ namespace XrplTests.Xrpl.ClientLib.Integration
             IXrplClient pfClient = await IntegrationTestConfig.CreateClientAsync(nodeType);
             try
             {
+                // A public endpoint is a cluster: the account was funded over the client above,
+                // and this connection may be on a server that has not seen it yet
+                await IntegrationTestConfig.WaitForAccountAsync(pfClient, wallet.ClassicAddress);
+
+                // A public endpoint is a cluster: the account was funded over the client above,
+                // and this connection may be on a server that has not seen it yet
+                await IntegrationTestConfig.WaitForAccountAsync(pfClient, wallet.ClassicAddress);
+
                 Currency destinationAmount = new Currency
                 {
                     CurrencyCode = "USD",
@@ -57,7 +65,8 @@ namespace XrplTests.Xrpl.ClientLib.Integration
                     destinationAmount: destinationAmount
                 );
 
-                PathFindResponse response = await pfClient.PathFind(request).Typed();
+                PathFindResponse response = await IntegrationTestConfig.RetryWhileSourceMissingAsync(
+                    () => pfClient.PathFind(request).Typed());
                 Assert.IsNotNull(response);
                 Assert.IsNotNull(response.Alternatives);
                 Assert.AreEqual(wallet.ClassicAddress, response.DestinationAccount);
@@ -78,6 +87,14 @@ namespace XrplTests.Xrpl.ClientLib.Integration
             IXrplClient pfClient = await IntegrationTestConfig.CreateClientAsync(nodeType);
             try
             {
+                // A public endpoint is a cluster: the account was funded over the client above,
+                // and this connection may be on a server that has not seen it yet
+                await IntegrationTestConfig.WaitForAccountAsync(pfClient, wallet.ClassicAddress);
+
+                // A public endpoint is a cluster: the account was funded over the client above,
+                // and this connection may be on a server that has not seen it yet
+                await IntegrationTestConfig.WaitForAccountAsync(pfClient, wallet.ClassicAddress);
+
                 Currency destinationAmount = new Currency
                 {
                     CurrencyCode = "USD",
@@ -91,7 +108,8 @@ namespace XrplTests.Xrpl.ClientLib.Integration
                     destinationAmount: destinationAmount
                 );
 
-                await pfClient.PathFind(createRequest);
+                await IntegrationTestConfig.RetryWhileSourceMissingAsync(
+                    () => pfClient.PathFind(createRequest));
 
                 PathFindCloseRequest closeRequest = new PathFindCloseRequest();
                 PathFindResponse closeResponse = await pfClient.PathFindClose(closeRequest).Typed();
@@ -113,6 +131,14 @@ namespace XrplTests.Xrpl.ClientLib.Integration
             IXrplClient pfClient = await IntegrationTestConfig.CreateClientAsync(nodeType);
             try
             {
+                // A public endpoint is a cluster: the account was funded over the client above,
+                // and this connection may be on a server that has not seen it yet
+                await IntegrationTestConfig.WaitForAccountAsync(pfClient, wallet.ClassicAddress);
+
+                // A public endpoint is a cluster: the account was funded over the client above,
+                // and this connection may be on a server that has not seen it yet
+                await IntegrationTestConfig.WaitForAccountAsync(pfClient, wallet.ClassicAddress);
+
                 Currency destinationAmount = new Currency
                 {
                     CurrencyCode = "USD",
@@ -126,7 +152,8 @@ namespace XrplTests.Xrpl.ClientLib.Integration
                     destinationAmount: destinationAmount
                 );
 
-                await pfClient.PathFind(createRequest);
+                await IntegrationTestConfig.RetryWhileSourceMissingAsync(
+                    () => pfClient.PathFind(createRequest));
 
                 PathFindStatusRequest statusRequest = new PathFindStatusRequest();
                 PathFindResponse statusResponse = await pfClient.PathFindStatus(statusRequest).Typed();
@@ -148,6 +175,9 @@ namespace XrplTests.Xrpl.ClientLib.Integration
             await IntegrationTestConfig.TryFundWalletAsync(client, wallet, nodeType);
 
             IXrplClient streamClient = await IntegrationTestConfig.CreateClientAsync(nodeType);
+            // A public endpoint is a cluster: the account was funded over the client above,
+            // and this connection may be on a server that has not seen it yet
+            await IntegrationTestConfig.WaitForAccountAsync(streamClient, wallet.ClassicAddress);
 
             List<PathFindStream> received = new List<PathFindStream>();
             TaskCompletionSource<bool> tcs = new TaskCompletionSource<bool>();
@@ -178,7 +208,8 @@ namespace XrplTests.Xrpl.ClientLib.Integration
                     destinationAmount: destinationAmount
                 );
 
-                PathFindResponse response = await streamClient.PathFind(request).Typed();
+                PathFindResponse response = await IntegrationTestConfig.RetryWhileSourceMissingAsync(
+                    () => streamClient.PathFind(request).Typed());
                 Assert.IsNotNull(response, "Initial path_find create response should not be null");
                 Console.WriteLine($"[PathFind RPC] destination={response.DestinationAccount}, alternatives={response.Alternatives?.Count}");
 
@@ -317,7 +348,8 @@ namespace XrplTests.Xrpl.ClientLib.Integration
                     SendMax = sendMax
                 };
 
-                PathFindResponse response = await pfClient.PathFind(request).Typed();
+                PathFindResponse response = await IntegrationTestConfig.RetryWhileSourceMissingAsync(
+                    () => pfClient.PathFind(request).Typed());
 
                 Assert.IsNotNull(response, "path_find create response should not be null");
                 Assert.IsNotNull(response.Alternatives, "Alternatives should not be null");
@@ -440,7 +472,8 @@ namespace XrplTests.Xrpl.ClientLib.Integration
                     SendMax = sendMax
                 };
 
-                PathFindResponse response = await pfClient.PathFind(request).Typed();
+                PathFindResponse response = await IntegrationTestConfig.RetryWhileSourceMissingAsync(
+                    () => pfClient.PathFind(request).Typed());
 
                 Assert.IsNotNull(response, "path_find create response should not be null");
                 Assert.IsNotNull(response.Alternatives, "Alternatives should not be null");

@@ -326,6 +326,37 @@ await client.SubmitRequest(fullySigned.TxBlob);
 
 > **Важно:** Не используйте `brokerWallet.Sign()` для частично подписанного LoanSet blob — он не обрабатывает `CounterpartySignature` корректно. Всегда используйте `LoanSigningHelper.BrokerSign()` для паттерна V3.
 
+### Заёмщик с мультиподписью (Counterparty со SignerList)
+
+Когда заёмщик — мультиподписной аккаунт, `CounterpartySignature` принимает мультиподписную форму: пустой `SigningPubKey` и массив `Signers`, который нода сверяет со SignerList **контрагента** по тому же прообразу мультиподписи, что и `tx.Signers`. Каждый подписант из списка заёмщика подписывает стандартным вызовом мультиподписи; композитор расставляет записи по секциям.
+
+```csharp
+// Комиссия покрывает по одной базовой комиссии на каждого подписанта контрагента
+// (rippled LoanSet::calculateBaseFee), поэтому autofill выполняется с числом подписантов до подписания
+Dictionary<string, object> autofilled = await client.Autofill(loanTx.ToDictionary(), signersCount: 2);
+JsonObject prepared = LoanSigningHelper.PrepareForSigning(
+    JsonNode.Parse(JsonSerializer.Serialize(autofilled, XrplJsonOptions.Default)).AsObject(), brokerWallet);
+var preparedDict = JsonSerializer.Deserialize<Dictionary<string, object>>(prepared.ToJsonString(), XrplJsonOptions.Default);
+
+// Брокер: одиночная основная подпись. Подписанты заёмщика: переносимые записи мультиподписи
+SignatureResult brokerPart = brokerWallet.Sign(new Dictionary<string, object>(preparedDict));
+SignatureResult part1 = signer1.Sign(new Dictionary<string, object>(preparedDict), multisign: true);
+SignatureResult part2 = signer2.Sign(new Dictionary<string, object>(preparedDict), multisign: true);
+
+// По данным реестра: композитор находит подписантов в SignerList контрагента
+// и заранее проверяет кворум по весам
+SignatureResult composed = await client.ComposeSignatures(new[] { brokerPart.TxBlob, part1.TxBlob, part2.TxBlob });
+
+// Оффлайн: подписанты заёмщика перечисляются явно
+SignatureResult offline = LoanSigningHelper.CombineLoanSignatures(
+    new[] { brokerPart.TxBlob, part1.TxBlob, part2.TxBlob },
+    new[] { signer1.ClassicAddress, signer2.ClassicAddress });
+
+await client.SubmitRequest(composed.TxBlob);
+```
+
+Подписант, входящий более чем в один SignerList (брокера, спонсора, заёмщика), для композитора по данным реестра является ошибкой; в таком случае необходимо собирать подписи оффлайн с явным указанием сторон.
+
 ### Ключевые моменты
 
 - Обе стороны подписывают **одинаковый** прообраз (транзакция, сериализованная для подписи, без полей подписей)

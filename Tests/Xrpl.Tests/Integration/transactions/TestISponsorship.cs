@@ -23,12 +23,12 @@ public class TestISponsorship
 
     public TestContext TestContext { get; set; }
     private static IXrplClient client;
-    private static TestNodeType nodeType = TestNodeType.Standalone;
+    private static TestNodeType nodeType = IntegrationTestConfig.CurrentNodeType;
 
     [ClassInitialize]
     public static async Task ClassInitializeAsync(TestContext testContext)
     {
-        client = await IntegrationTestConfig.CreateClientAsync(TestNodeType.Standalone);
+        client = await IntegrationTestConfig.CreateClientAsync();
         sponsorAmendmentActive = await AmendmentGuard.IsEnabledAsync(client, AmendmentGuard.Sponsor);
     }
 

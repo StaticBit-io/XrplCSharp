@@ -38,6 +38,25 @@ public static class AmendmentGuard
     /// <summary>Amendment id of PermissionedDomains / XLS-80 (sha512half of the name).</summary>
     public const string PermissionedDomains = "A730EB18A9D4BB52502C898589558B4CCEB4BE10044500EE5581137A2E80E849";
 
+    /// <summary>Amendment id of AMM / XLS-30 (sha512half of the name).</summary>
+    public const string AMM = "8CC0774A3BF66D1D22E76BBDA8E8A232E6B6313834301B3B23E8601196AE6455";
+
+    /// <summary>Amendment id of AMMClawback / XLS-73 (sha512half of the name).</summary>
+    public const string AMMClawback = "726F944886BCDF7433203787E93DD9AA87FAB74DFE3AF4785BA03BEFC97ADA1F";
+
+    /// <summary>Amendment id of MPTokensV1 / XLS-33 (sha512half of the name).</summary>
+    public const string MPTokensV1 = "950AE2EA4654E47F04AA8739C0B214E242097E802FD372D24047A89AB1F5EC38";
+
+    /// <summary>
+    /// Amendment id of MPTokensV2 / XLS-62 (sha512half of the name). On the standalone
+    /// stands it is a [features] Rules preset, not an on-ledger amendment, so the guard
+    /// reports it disabled there even though MPT-in-AMM transactors work.
+    /// </summary>
+    public const string MPTokensV2 = "BE2D87DF21B690ED1497B593FDC013CC04276302380B1BD50A033DCF8DEFB2EB";
+
+    /// <summary>Amendment id of XChainBridge / XLS-38 (sha512half of the name).</summary>
+    public const string XChainBridge = "C98D98EE9616ACD36E81FDEB8D41D349BF5F1B41DD64A0ABC1FE9AA5EA267E9C";
+
     public static async Task<bool> IsEnabledAsync(IXrplClient client, string amendmentId)
     {
         try

@@ -1,0 +1,86 @@
+name: Devnet Coverage
+
+# Manual run of selected integration classes against a public network instead of the
+# standalone stand. The point is amendment coverage: the XRPL Foundation dashboard
+# (https://amendments-staging.xrpl.foundation) scores every amendment by the validated
+# devnet transactions that exercised its transaction types, fields, flags and result
+# codes, and the classes below are the ones that submit exactly that surface.
+#
+# Not part of CI on purpose: wallets are funded from the public faucet (rate-limited,
+# 100 XRP per call), the run depends on a third-party network, and a red result here
+# says nothing about a pull request. Run it by hand when an amendment needs traffic or
+# before a release to see the SDK against a real network.
+#
+# Keep the default filter in step with the classes that carry coverage-oriented traffic.
+# TestIXChainAttestation and TestILoanMultisig were written after this workflow and were
+# missing from it for a while: between them they are the only traffic for both attestation
+# transaction types, XChainClaim, and LoanSet.CounterpartySignature.Signers.
+#
+# The test profile comes from the environment (Tests/Xrpl.Tests/Integration/Utils.cs):
+#   XRPL_TEST_NODE      - testnet | devnet | standalone (funding and ledger_accept policy)
+#   XRPL_TEST_NODE_URL  - WebSocket URL, overrides the built-in default for the profile
+# Classes gated by AmendmentGuard skip themselves (Inconclusive) when the network does not
+# have the amendment, so the filter can stay broad.
+
+on:
+  workflow_dispatch:
+    inputs:
+      network:
+        description: Network profile (funding + ledger policy)
+        type: choice
+        options: [devnet, testnet]
+        default: devnet
+      node_url:
+        description: WebSocket URL (leave empty for the profile default)
+        type: string
+        default: ''
+      filter:
+        description: dotnet test --filter expression
+        type: string
+        default: >-
+          FullyQualifiedName~TestIBatchInnerTypes|FullyQualifiedName~TestISponsoredTypes|FullyQualifiedName~TestISponsoredVaultLoan|FullyQualifiedName~TestIAMMMpt|FullyQualifiedName~TestIXChainAttestation|FullyQualifiedName~TestIXChainNegative|FullyQualifiedName~TestILoanMultisig|FullyQualifiedName~TestIXChainBridge|FullyQualifiedName~TestIBatch|FullyQualifiedName~TestISponsorship|FullyQualifiedName~TestILedgerStateFix
+
+env:
+  DOTNET_VERSION: '10.0.x'
+
+permissions:
+  contents: read
+
+concurrency:
+  group: devnet-coverage
+  cancel-in-progress: false
+
+jobs:
+  devnet:
+    runs-on: ubuntu-latest
+    timeout-minutes: 90
+
+    steps:
+    - uses: actions/checkout@v4
+
+    - name: Use .NET ${{ env.DOTNET_VERSION }}
+      uses: actions/setup-dotnet@v4
+      with:
+        dotnet-version: ${{ env.DOTNET_VERSION }}
+
+    - name: Build
+      run: dotnet build Tests/Xrpl.Tests/Xrpl.Tests.csproj
+
+    - name: Run against ${{ inputs.network }}
+      env:
+        XRPL_TEST_NODE: ${{ inputs.network }}
+        XRPL_TEST_NODE_URL: ${{ inputs.node_url }}
+      run: >-
+        dotnet test Tests/Xrpl.Tests/Xrpl.Tests.csproj --no-build --verbosity normal
+        --settings test.runsettings
+        --filter "${{ inputs.filter }}"
+        --logger "trx;LogFileName=devnet-coverage.trx"
+        --results-directory TestResults
+
+    - name: Upload results
+      if: always()
+      uses: actions/upload-artifact@v4
+      with:
+        name: devnet-coverage-${{ inputs.network }}-${{ github.run_id }}
+        path: TestResults/devnet-coverage.trx
+        if-no-files-found: ignore

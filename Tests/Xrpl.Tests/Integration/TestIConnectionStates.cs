@@ -30,14 +30,26 @@ namespace Xrpl.Tests.Integration;
 [TestCategory("TestI")]
 public class TestIConnectionStates
 {
-    private static string LocalServer => IntegrationTestConfig.GetNodeUrl(TestNodeType.Standalone);
+    private static string LocalServer => IntegrationTestConfig.GetNodeUrl(IntegrationTestConfig.CurrentNodeType);
 
     /// <summary>
     /// The same node under a different URL spelling — enough to exercise a real server switch
     /// (teardown plus reconnect to a new endpoint) without a second container.
     /// </summary>
-    private static string LocalServerAlternateSpelling =>
-        LocalServer.Replace("localhost", "127.0.0.1", StringComparison.OrdinalIgnoreCase);
+    /// <remarks>
+    /// Null when the spelling cannot be varied, which is any address that does not say
+    /// <c>localhost</c>. Switching to the string already in use is not a server switch, and the
+    /// assertion that the client passed through Connecting would hold without one, so the test
+    /// that needs it skips instead of passing on nothing.
+    /// </remarks>
+    private static string LocalServerAlternateSpelling
+    {
+        get
+        {
+            string alternate = LocalServer.Replace("localhost", "127.0.0.1", StringComparison.OrdinalIgnoreCase);
+            return string.Equals(alternate, LocalServer, StringComparison.Ordinal) ? null : alternate;
+        }
+    }
 
     /// <summary>
     /// A closed port on the loopback interface: refuses immediately and, unlike a bogus
@@ -193,6 +205,13 @@ public class TestIConnectionStates
     [TestMethod]
     public async Task TestChangeServer_SwitchesSuccessfully()
     {
+        string alternate = LocalServerAlternateSpelling;
+        if (alternate is null)
+        {
+            Assert.Inconclusive(
+                $"There is no second spelling of {LocalServer} to switch to, so this would assert a switch that did not happen.");
+        }
+
         List<XrpConnectionState> stateChanges = new List<XrpConnectionState>();
 
         XrplClient client = new XrplClient(LocalServer, LocalOptions());
@@ -208,7 +227,7 @@ public class TestIConnectionStates
 
         stateChanges.Clear();
 
-        await client.ChangeServer(LocalServerAlternateSpelling, LocalOptions());
+        await client.ChangeServer(alternate, LocalOptions());
         await WaitForStateAsync(client, XrpConnectionState.Connected, "Should be Connected after ChangeServer");
 
         Assert.IsTrue(

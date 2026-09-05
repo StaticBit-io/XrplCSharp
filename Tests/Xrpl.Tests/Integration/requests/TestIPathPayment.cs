@@ -18,7 +18,7 @@ namespace XrplTests.Xrpl.ClientLib.Integration
     public class TestIPathPayment
     {
         public TestContext TestContext { get; set; }
-        public static TestNodeType nodeType = TestNodeType.Standalone;
+        public static TestNodeType nodeType = IntegrationTestConfig.CurrentNodeType;
 
         const string CurrencyCode = "PPT";
 
@@ -98,7 +98,8 @@ namespace XrplTests.Xrpl.ClientLib.Integration
                     destinationAmount: destinationAmount
                 );
 
-                RipplePathFindResponse pathResponse = await client.RipplePathFind(pathRequest).Typed();
+                RipplePathFindResponse pathResponse = await IntegrationTestConfig.RetryWhileSourceMissingAsync(
+                    () => client.RipplePathFind(pathRequest).Typed());
 
                 Assert.IsNotNull(pathResponse, "ripple_path_find response should not be null");
                 Assert.IsNotNull(pathResponse.Alternatives, "Alternatives should not be null");
@@ -287,7 +288,8 @@ namespace XrplTests.Xrpl.ClientLib.Integration
                     }
                 };
 
-                RipplePathFindResponse pathResponse = await client.RipplePathFind(pathRequest).Typed();
+                RipplePathFindResponse pathResponse = await IntegrationTestConfig.RetryWhileSourceMissingAsync(
+                    () => client.RipplePathFind(pathRequest).Typed());
 
                 Assert.IsNotNull(pathResponse, "ripple_path_find response should not be null");
                 Assert.IsNotNull(pathResponse.Alternatives, "Alternatives should not be null");
@@ -476,7 +478,8 @@ namespace XrplTests.Xrpl.ClientLib.Integration
                     SendMax = sendMax
                 };
 
-                RipplePathFindResponse pathResponse = await client.RipplePathFind(pathRequest).Typed();
+                RipplePathFindResponse pathResponse = await IntegrationTestConfig.RetryWhileSourceMissingAsync(
+                    () => client.RipplePathFind(pathRequest).Typed());
 
                 Assert.IsNotNull(pathResponse, "ripple_path_find response should not be null");
                 Assert.IsNotNull(pathResponse.Alternatives, "Alternatives should not be null");
@@ -598,7 +601,8 @@ namespace XrplTests.Xrpl.ClientLib.Integration
                     SendMax = sendMax
                 };
 
-                RipplePathFindResponse pathResponse = await client.RipplePathFind(pathRequest).Typed();
+                RipplePathFindResponse pathResponse = await IntegrationTestConfig.RetryWhileSourceMissingAsync(
+                    () => client.RipplePathFind(pathRequest).Typed());
 
                 Assert.IsNotNull(pathResponse, "ripple_path_find response should not be null");
                 Assert.IsNotNull(pathResponse.Alternatives, "Alternatives should not be null");

@@ -19,7 +19,7 @@ public class TestIEscrow
     public TestContext TestContext { get; set; }
     public static IXrplClient client;
 
-    private static TestNodeType nodeType = TestNodeType.Standalone;
+    private static TestNodeType nodeType = IntegrationTestConfig.CurrentNodeType;
 
     /// <summary>
     /// How far ahead of the last validated close time an escrow's <c>FinishAfter</c> is placed.

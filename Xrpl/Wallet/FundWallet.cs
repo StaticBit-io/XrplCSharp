@@ -1,13 +1,15 @@
-using System;
+﻿using System;
 using System.Collections.Generic;
 using System.Linq;
+using System.IO;
 using System.Net.Http;
 using System.Net.Http.Headers;
 using System.Text;
 using System.Text.Json;
 using System.Text.Json.Serialization;
+using System.Text.RegularExpressions;
+using System.Threading;
 using System.Threading.Tasks;
-using System.Timers;
 
 using Xrpl.AddressCodec;
 using Xrpl.Client;
@@ -18,48 +20,12 @@ using Xrpl.Client.Json;
 
 namespace Xrpl.Wallet
 {
-    public static class EasyTimer
-    {
-        public static IDisposable SetInterval(Action method, int delayInMilliseconds)
-        {
-            System.Timers.Timer timer = new System.Timers.Timer(delayInMilliseconds);
-            timer.Elapsed += (source, e) =>
-            {
-                method();
-            };
-
-            timer.Enabled = true;
-            timer.Start();
-
-            // Returns a stop handle which can be used for stopping
-            // the timer, if required
-            return timer as IDisposable;
-        }
-
-        public static IDisposable SetTimeout(Action method, int delayInMilliseconds)
-        {
-            System.Timers.Timer timer = new System.Timers.Timer(delayInMilliseconds);
-            timer.Elapsed += (source, e) =>
-            {
-                method();
-            };
-
-            timer.AutoReset = false;
-            timer.Enabled = true;
-            timer.Start();
-
-            // Returns a stop handle which can be used for stopping
-            // the timer, if required
-            return timer as IDisposable;
-        }
-    }
-
     public static class WalletSugar
     {
         //Interval to check an account balance
-        static int INTERVAL_SECONDS = 1;
+        const int INTERVAL_SECONDS = 1;
         //Maximum attempts to retrieve a balance
-        static int MAX_ATTEMPTS = 20;
+        const int MAX_ATTEMPTS = 20;
 
         public class Funded
         {
@@ -106,7 +72,27 @@ namespace Xrpl.Wallet
             public static readonly string NFTDevnet = "faucet-nft.ripple.com";
         }
 
-        public static async Task<Funded> FundWallet(this IXrplClient client, XrplWallet? wallet = null, string? faucetHost = null)
+        /// <inheritdoc cref="FundWallet(IXrplClient, XrplWallet, string, CancellationToken)"/>
+        public static Task<Funded> FundWallet(this IXrplClient client, XrplWallet? wallet = null, string? faucetHost = null)
+            => FundWallet(client, wallet, faucetHost, CancellationToken.None);
+
+        /// <summary>
+        /// Funds a wallet from the network's faucet, giving up when <paramref name="cancellationToken"/>
+        /// is cancelled. The wait for the faucet payment to be validated is tens of seconds, which is
+        /// the reason this overload exists: a cancelled call reports cancellation rather than a
+        /// faucet failure.
+        /// </summary>
+        /// <remarks>
+        /// <para>
+        /// A <paramref name="wallet"/> of <c>null</c> means one is generated here, and it is handed
+        /// back only on success - the returned <see cref="Funded"/> is the only reference to it.
+        /// The faucet may already have created and paid that account by the time the call fails or
+        /// is cancelled, and the seed goes with the stack frame: the funds are then unreachable and
+        /// a retry strands another account. Pass a wallet whenever the answer has to survive a
+        /// failure, which is every case where the account is meant to be used again.
+        /// </para>
+        /// </remarks>
+        public static async Task<Funded> FundWallet(this IXrplClient client, XrplWallet? wallet, string? faucetHost, CancellationToken cancellationToken)
         {
             //if (!client.IsConnected())
             //{
@@ -118,11 +104,11 @@ namespace Xrpl.Wallet
             double startingBalance = 0;
             try
             {
-                startingBalance = Convert.ToDouble(await client.GetXrpBalance(walletToFund.ClassicAddress));
+                startingBalance = Convert.ToDouble(await client.GetXrpBalance(walletToFund.ClassicAddress, cancellationToken).ConfigureAwait(false));
             }
-            catch
+            catch (Exception err) when (!IsCallerCancellation(err, cancellationToken))
             {
-                /* startingBalance remains '0' */
+                /* startingBalance remains '0': the account is usually not on the ledger yet */
             }
 
             // Create the POST request body
@@ -134,7 +120,55 @@ namespace Xrpl.Wallet
             string jsonData = JsonSerializer.Serialize(json, XrplJsonOptions.Default);
             byte[] postBody = Encoding.UTF8.GetBytes(jsonData);
             Dictionary<string, object> httpOptions = GetHTTPOptions(client, postBody, faucetHost);
-            return await ReturnPromise(httpOptions, client, startingBalance, walletToFund, jsonData);
+            return await ReturnPromise(httpOptions, client, startingBalance, walletToFund, jsonData, cancellationToken).ConfigureAwait(false);
+        }
+
+        /// <summary>
+        /// One client for the process. A new <see cref="HttpClient"/> per call holds its socket
+        /// open past disposal and exhausts the pool under any load, and the faucet host varies,
+        /// so the address goes on the request rather than on the client.
+        /// </summary>
+        private static readonly HttpClient FaucetClient = CreateFaucetClient();
+
+        private static HttpClient CreateFaucetClient()
+        {
+            // A client that lives as long as the process keeps the address it first resolved
+            // unless the handler is told to retire pooled connections. Faucet hosts do move, and
+            // the per-call client this replaced re-resolved every time by accident of being new.
+            SocketsHttpHandler handler = new SocketsHttpHandler
+            {
+                PooledConnectionLifetime = TimeSpan.FromMinutes(2),
+            };
+            HttpClient httpsClient = new HttpClient(handler);
+            httpsClient.DefaultRequestHeaders.Accept.Add(new MediaTypeWithQualityHeaderValue("application/json"));
+            return httpsClient;
+        }
+
+        /// <summary>
+        /// Whether the caller asked to stop. An <see cref="OperationCanceledException"/> is not
+        /// evidence of that on its own, and the type is the only thing two very different events
+        /// have in common: <see cref="HttpClient"/> reports its own
+        /// <see cref="HttpClient.Timeout"/> as one, and this library's WebSocket client raises one
+        /// with no token behind it for every pending request whenever the connection drops
+        /// (<c>RequestManager.RejectAllWithCancellation</c>). Only the token can say, so it is
+        /// what every catch filter in this file asks.
+        /// </summary>
+        internal static bool IsCallerCancellation(Exception err, CancellationToken cancellationToken)
+        {
+            return err is OperationCanceledException && cancellationToken.IsCancellationRequested;
+        }
+
+        /// <summary>
+        /// Whether <paramref name="err"/> is the transport failing rather than the caller giving up.
+        /// </summary>
+        private static bool IsTransportFailure(Exception err, CancellationToken cancellationToken)
+        {
+            if (err is OperationCanceledException)
+            {
+                return !IsCallerCancellation(err, cancellationToken);
+            }
+
+            return err is HttpRequestException || err is IOException;
         }
 
         private static async Task<Funded> ReturnPromise(
@@ -142,29 +176,53 @@ namespace Xrpl.Wallet
               IXrplClient client,
               double startingBalance,
               XrplWallet walletToFund,
-              string postBody
+              string postBody,
+              CancellationToken cancellationToken
         )
         {
-            HttpClient httpsClient = new HttpClient();
-            httpsClient.BaseAddress = new Uri($"https://{(string)options["hostname"]}");
-            httpsClient.DefaultRequestHeaders.Accept.Add(new MediaTypeWithQualityHeaderValue("application/json"));
-            StringContent contentData = new StringContent(postBody, Encoding.UTF8, "application/json");
-            var response = await httpsClient.PostAsync((string)options["path"], contentData);
-            var row = await response.Content.ReadAsStringAsync();
-            if (!response.IsSuccessStatusCode)
+            string hostname = (string)options["hostname"];
+            Uri endpoint = new Uri($"https://{hostname}{(string)options["path"]}");
+
+            using StringContent contentData = new StringContent(postBody, Encoding.UTF8, "application/json");
+
+            HttpResponseMessage response;
+            try
             {
-                Console.WriteLine(response.StatusCode);
-                Console.WriteLine(row);
+                response = await FaucetClient.PostAsync(endpoint, contentData, cancellationToken).ConfigureAwait(false);
             }
-            HttpContent content = response.Content;
-            byte[] chunks = await content.ReadAsByteArrayAsync();
-            return await OnEnd(
-                response,
-                chunks,
-                client,
-                startingBalance,
-                walletToFund
-            );
+            catch (Exception err) when (IsTransportFailure(err, cancellationToken))
+            {
+                throw new XRPLFaucetException($"The faucet at {hostname} could not be reached: {err.Message}", err);
+            }
+
+            using (response)
+            {
+                byte[] chunks;
+                try
+                {
+                    chunks = await response.Content.ReadAsByteArrayAsync(cancellationToken).ConfigureAwait(false);
+                }
+                catch (Exception err) when (IsTransportFailure(err, cancellationToken))
+                {
+                    throw new XRPLFaucetException(
+                        $"The faucet at {hostname} answered {(int)response.StatusCode} {response.StatusCode} but the body could not be read: {err.Message}", err);
+                }
+
+                if (!response.IsSuccessStatusCode)
+                {
+                    throw new XRPLFaucetException(
+                        $"The faucet at {hostname} answered {(int)response.StatusCode} {response.StatusCode}: {Redact(Encoding.UTF8.GetString(chunks))}");
+                }
+
+                return await OnEnd(
+                    response,
+                    chunks,
+                    client,
+                    startingBalance,
+                    walletToFund,
+                    cancellationToken
+                ).ConfigureAwait(false);
+            }
         }
 
         private static Dictionary<string, object> GetHTTPOptions(
@@ -191,152 +249,228 @@ namespace Xrpl.Wallet
             byte[] chunks,
             IXrplClient client,
             double startingBalance,
-            XrplWallet walletToFund
+            XrplWallet walletToFund,
+            CancellationToken cancellationToken
         )
         {
-            // Get Content Headers
             string body = Encoding.UTF8.GetString(chunks);
+
+            // TryGetValues, because a response without a Content-Type is still a response - a
+            // proxy between here and the faucet can send one - and GetValues throws on a header
+            // that is not there, which reports the wrong thing about the wrong party
+            string contentType = response.Content.Headers.TryGetValues("Content-Type", out IEnumerable<string> values)
+                ? values.FirstOrDefault()
+                : null;
+
             // "application/json; charset=utf-8"
-            if (response.Content.Headers.GetValues("Content-Type").First().StartsWith("application/json"))
+            if (contentType != null && contentType.StartsWith("application/json", StringComparison.OrdinalIgnoreCase))
             {
                 return await ProcessSuccessfulResponse(
                     client,
                     body,
                     startingBalance,
-                    walletToFund
-                );
+                    walletToFund,
+                    cancellationToken
+                ).ConfigureAwait(false);
             }
-            else
+
+            throw new XRPLFaucetException(
+                $"The faucet answered {(int)response.StatusCode} {response.StatusCode} with content type {contentType ?? "(none)"} rather than JSON: {Redact(body)}");
+        }
+
+        /// <summary>
+        /// What may be repeated back from a faucet body. A successful response carries the funded
+        /// wallet's seed in <c>account.secret</c>, and an exception message is the one thing a
+        /// caller is certain to log, so the value of anything that names a secret is masked and
+        /// the rest is capped. Quoting the body is still worth it: a rate limit says so in it.
+        /// </summary>
+        internal static string Redact(string body)
+        {
+            if (string.IsNullOrEmpty(body))
             {
-                Dictionary<string, object> errorResponse = new Dictionary<string, object>
-                {
-                    { "statusCode", response.StatusCode },
-                    { "contentType", response.Content.Headers.GetValues("Content-Type").First() },
-                    { "body", body },
-                };
-                return await Task.FromException<Funded>(new XRPLFaucetException($"Content type is not application json {errorResponse.ToString()}"));
+                return body;
             }
+
+            string masked = SecretValue.Replace(body, "$1\"***\"");
+            return masked.Length <= MaxQuotedBody ? masked : masked.Substring(0, MaxQuotedBody) + "...";
+        }
+
+        private const int MaxQuotedBody = 512;
+
+        private static readonly Regex SecretValue = new Regex(
+            "(\"(?:secret|seed|master_seed|master_seed_hex|private_key|passphrase|xAddress)\"\\s*:\\s*)\"[^\"]*\"",
+            RegexOptions.IgnoreCase | RegexOptions.Compiled);
+
+        /// <summary>
+        /// The address the faucet says it funded. The body is a third party's HTTP response, so
+        /// each way of being wrong is named here rather than surfacing further along as a
+        /// <see cref="NullReferenceException"/> with nothing to say about the faucet.
+        /// </summary>
+        internal static string ReadFaucetAddress(string body)
+        {
+            FaucetWallet faucetWallet;
+            try
+            {
+                faucetWallet = JsonSerializer.Deserialize<FaucetWallet>(body, XrplJsonOptions.Default);
+            }
+            catch (JsonException err)
+            {
+                throw new XRPLFaucetException($"The faucet response is not JSON this can read: {err.Message}", err);
+            }
+
+            string classicAddress = faucetWallet?.Account?.ClassicAddress;
+            if (string.IsNullOrEmpty(classicAddress))
+            {
+                throw new XRPLFaucetException($"The faucet response carries no account address: {Redact(body)}");
+            }
+
+            return classicAddress;
         }
 
         private static async Task<Funded> ProcessSuccessfulResponse(
               IXrplClient client,
               string body,
               double startingBalance,
-              XrplWallet walletToFund
+              XrplWallet walletToFund,
+              CancellationToken cancellationToken
         )
         {
-            FaucetWallet faucetWallet = JsonSerializer.Deserialize<FaucetWallet>(body, XrplJsonOptions.Default);
-            string classicAddress = faucetWallet.Account.ClassicAddress;
-            if (classicAddress == null)
-            {
-                return await Task.FromException<Funded>(new XRPLFaucetException("The faucet account is undefined"));
-            }
+            string fundedAddress = ReadFaucetAddress(body);
+
+            PollOutcome poll;
             try
             {
                 // Check at regular interval if the address is enabled on the XRPL and funded
-                double updatedBalance = await GetUpdatedBalance(
-                  client,
-                  classicAddress,
-                  startingBalance
-                );
-                if (updatedBalance > startingBalance)
-                {
-                    Funded funded = new Funded(
-                        walletToFund,
-                        Convert.ToDouble(
-                            await GetUpdatedBalance(
-                                client,
-                                walletToFund.ClassicAddress,
-                                startingBalance
-                            )
-                        )
-                    );
-                    return funded;
-                }
-                else
-                {
-                    throw new XRPLFaucetException($"Unable to fund address with faucet after waiting {INTERVAL_SECONDS} * {MAX_ATTEMPTS} seconds");
-                }
+                poll = await PollForFundedBalance(
+                    client,
+                    walletToFund.ClassicAddress,
+                    startingBalance,
+                    cancellationToken
+                ).ConfigureAwait(false);
             }
-            catch (Exception err)
+            catch (Exception err) when (!IsCallerCancellation(err, cancellationToken) && err is not XRPLFaucetException)
             {
-                if (err is Exception)
-                {
-                    return await Task.FromException<Funded>(new XRPLFaucetException(err.Message));
-                }
-                return await Task.FromException<Funded>(err);
+                // The cause travels with it: reading a balance fails through the network, the node
+                // or the JSON, and a caller handed only the sentence cannot tell which
+                throw new XRPLFaucetException(
+                    $"Could not read the balance of {walletToFund.ClassicAddress} while waiting for the faucet: {err.Message}", err);
             }
+
+            if (poll.Balance <= startingBalance)
+            {
+                // One sentence, and it is the one that is always true: the balance did not rise.
+                // What the last failed read was cannot pick the wording - an account the faucet
+                // never paid answers actNotFound on every attempt, so a failure is present in
+                // exactly the ordinary case - but it is the only account of a client-side outage,
+                // so it rides along as the cause.
+                throw new XRPLFaucetException(
+                    $"The faucet accepted the request for {fundedAddress}, but the balance of {walletToFund.ClassicAddress} did not rise above {startingBalance} within {INTERVAL_SECONDS} * {MAX_ATTEMPTS} seconds",
+                    poll.LastReadFailure);
+            }
+
+            return new Funded(walletToFund, poll.Balance);
         }
 
-        private static int attempts = MAX_ATTEMPTS;
-        private static double finalBalance;
-        private static System.Timers.Timer aTimer;
-
-        private static double _originalBalance;
-        private static string _address;
-        private static IXrplClient _client;
-
-        private static async void OnTimedEventAsync(Object source, ElapsedEventArgs e)
-        {
-            // This piece of code will run after every 1000 ms
-            if (attempts < 0)
-            {
-                finalBalance = _originalBalance;
-                aTimer.Enabled = false;
-            }
-            else
-            {
-                attempts -= 1;
-            }
-
-            try
-            {
-                double newBalance = 0;
-                try
-                {
-                    newBalance = Convert.ToDouble(await _client.GetXrpBalance(_address));
-                }
-                catch (XrplException err)
-                {
-
-                }
-                catch (RippleException err)
-                {
-                    /* newBalance remains undefined */
-                }
-
-                if (newBalance > _originalBalance)
-                {
-                    finalBalance = newBalance;
-                    aTimer.Enabled = false;
-                }
-            }
-            catch (Exception err) when (err is RippledException or InvalidCastException)
-            {
-                aTimer.Enabled = false;
-                throw new XRPLFaucetException($"Unable to check if the address {_address} balance has increased.Error: {err.Message}");
-            }
-        }
-
-        private static async Task<double> GetUpdatedBalance(
+        /// <summary>
+        /// Polls until the funded account's balance rises above <paramref name="originalBalance"/>,
+        /// and returns that balance; returns <paramref name="originalBalance"/> unchanged when the
+        /// budget of <see cref="MAX_ATTEMPTS"/> polls runs out.
+        /// </summary>
+        /// <remarks>
+        /// Every piece of state here belongs to the call. The previous implementation drove a
+        /// <see cref="System.Timers.Timer"/> through static fields - the poll budget, the address,
+        /// the balances and the result - which broke it two ways: the budget was never reset, so
+        /// after roughly twenty polls every later call reported failure without polling at all,
+        /// and two concurrent calls overwrote each other's address and result, so one wallet's
+        /// balance could be reported for another.
+        /// </remarks>
+        internal static async Task<double> GetUpdatedBalance(
             IXrplClient client,
             string address,
-            double originalBalance
+            double originalBalance,
+            CancellationToken cancellationToken = default
         )
         {
-            _client = client;
-            _address = address;
-            _originalBalance = originalBalance;
-            aTimer = new System.Timers.Timer(1000);
-            aTimer.Elapsed += (sender, e) => OnTimedEventAsync(sender, e);
-            aTimer.Enabled = true;
-            aTimer.Start();
-            while (aTimer.Enabled)
+            return (await PollForFundedBalance(client, address, originalBalance, cancellationToken).ConfigureAwait(false)).Balance;
+        }
+
+        /// <summary>
+        /// The balance the poll ended on, and the last reason it could not read one. Not being
+        /// able to read is the normal case at first - the account is not on the ledger until the
+        /// faucet payment validates - so the loop keeps going; but if the balance never rises,
+        /// that last failure is the only account of why, and dropping it leaves the caller with
+        /// a message blaming the faucet for what may have been a disconnected client.
+        /// </summary>
+        internal readonly struct PollOutcome
+        {
+            public PollOutcome(double balance, Exception lastReadFailure)
             {
-                Task.Delay(1000).Wait();
+                Balance = balance;
+                LastReadFailure = lastReadFailure;
             }
-            aTimer.Stop();
-            return finalBalance;
+
+            public double Balance { get; }
+
+            public Exception LastReadFailure { get; }
+        }
+
+        /// <summary>
+        /// Whether a failed balance read is worth another attempt. Not being able to read is the
+        /// ordinary state of this wait: the account is not on the ledger until the faucet payment
+        /// validates, which arrives as an <see cref="XrplException"/>. A connection that dropped
+        /// and is expected back says the same thing through a token-less
+        /// <see cref="OperationCanceledException"/>, and abandoning the wait for it while
+        /// retrying a request timeout for the full budget had the asymmetry backwards.
+        /// </summary>
+        private static bool IsRetryableReadFailure(Exception err, CancellationToken cancellationToken)
+        {
+            if (err is OperationCanceledException)
+            {
+                return !IsCallerCancellation(err, cancellationToken);
+            }
+
+            return err is XrplException || err is RippleException;
+        }
+
+        internal static async Task<PollOutcome> PollForFundedBalance(
+            IXrplClient client,
+            string address,
+            double originalBalance,
+            CancellationToken cancellationToken = default,
+            int attempts = MAX_ATTEMPTS,
+            int intervalSeconds = INTERVAL_SECONDS
+        )
+        {
+            Exception lastReadFailure = null;
+
+            for (int attempt = 0; attempt < attempts; attempt++)
+            {
+                // The faucet payment needs a ledger to close, so wait before the first read
+                await Task.Delay(TimeSpan.FromSeconds(intervalSeconds), cancellationToken).ConfigureAwait(false);
+
+                double newBalance;
+                try
+                {
+                    newBalance = Convert.ToDouble(await client.GetXrpBalance(address, cancellationToken).ConfigureAwait(false));
+                }
+                catch (Exception err) when (IsRetryableReadFailure(err, cancellationToken))
+                {
+                    // The account is not on the ledger yet and the faucet payment has not been
+                    // validated, or the connection dropped and is expected back
+                    lastReadFailure = err;
+                    continue;
+                }
+
+                if (newBalance > originalBalance)
+                {
+                    return new PollOutcome(newBalance, null);
+                }
+
+                // A reading that did not rise is not a failure to read
+                lastReadFailure = null;
+            }
+
+            return new PollOutcome(originalBalance, lastReadFailure);
         }
 
         public static string GetFaucetHost(IXrplClient client)

@@ -36,6 +36,22 @@ namespace Xrpl.Client.Json.Converters
             }
         }
 
+        /// <summary>
+        /// Whether every byte is printable ASCII, which is what a value the ledger holds as text
+        /// looks like. A value that is not is still legitimate: rippled checks the length of
+        /// Provider, AssetClass and URI and nothing else (OracleSet::preflight), so they are
+        /// Blob fields carrying arbitrary bytes.
+        /// </summary>
+        internal static bool IsPrintableAscii(ReadOnlySpan<byte> bytes)
+        {
+            for (int i = 0; i < bytes.Length; i++)
+            {
+                if (bytes[i] < 0x20 || bytes[i] > 0x7E)
+                    return false;
+            }
+            return true;
+        }
+
         internal static bool IsHexString(ReadOnlySpan<char> value)
         {
             for (int i = 0; i < value.Length; i++)
@@ -137,7 +153,6 @@ namespace Xrpl.Client.Json.Converters
             // Standard currency code (exactly three characters), per XRPL Currency type JSON display rules.
             if (value.Length == 3)
             {
-                OracleAsciiValidation.ValidatePrintableAsciiChars(value.AsSpan(), "Oracle currency code");
                 return value;
             }
 
@@ -147,12 +162,9 @@ namespace Xrpl.Client.Json.Converters
                 return DecodeOracleCurrency(value);
             }
 
-            OracleAsciiValidation.ValidatePrintableAsciiChars(value.AsSpan(), "Oracle currency code");
-            if (value.Length > 20)
-            {
-                throw new JsonException("Oracle currency plain text must be at most 20 ASCII characters.");
-            }
-
+            // Anything else is handed back as it arrived. A currency code is 160 bits the
+            // ledger does not constrain, so what a third party published is not ours to refuse
+            // on the way in; the write path still holds callers to a code it can encode.
             return value;
         }
 
@@ -196,8 +208,18 @@ namespace Xrpl.Client.Json.Converters
             for (int i = 0; i < 20 && bytes[i] != 0; i++)
                 length++;
 
-            OracleAsciiValidation.ValidatePrintableAsciiBytes(bytes.AsSpan(0, length), "Oracle currency code");
-            return Encoding.ASCII.GetString(bytes, 0, length);
+            // Everything after the text has to be padding for the text to be the whole value.
+            // A code like 5553440001... would otherwise read as "USD" and lose the 0x01 when it
+            // was written back, and a code of twenty zero bytes would read as an empty string.
+            for (int i = length; i < 20; i++)
+            {
+                if (bytes[i] != 0)
+                    return hex;
+            }
+
+            return length > 0 && OracleAsciiValidation.IsPrintableAscii(bytes.AsSpan(0, length))
+                ? Encoding.ASCII.GetString(bytes, 0, length)
+                : hex;
         }
     }
 
@@ -227,7 +249,6 @@ namespace Xrpl.Client.Json.Converters
             if (value.Length % 2 == 0 && OracleAsciiValidation.IsHexString(value.AsSpan()))
                 return DecodeHexString(value);
 
-            OracleAsciiValidation.ValidatePrintableAsciiChars(value.AsSpan(), "Oracle hex string");
             return value;
         }
 
@@ -249,6 +270,18 @@ namespace Xrpl.Client.Json.Converters
             writer.WriteStringValue(Convert.ToHexString(bytes));
         }
 
+        /// <summary>
+        /// Decodes the hex to text when it is printable ASCII, and otherwise hands back the hex
+        /// the node sent.
+        /// </summary>
+        /// <remarks>
+        /// Reading is total on purpose. These are Blob fields whose bytes rippled does not
+        /// constrain, so an oracle published by anyone else may hold whatever it likes; refusing
+        /// such a value threw out of the converter and took the whole response with it, which is
+        /// how this was found - one third-party oracle in a <c>ledger_data</c> page from devnet
+        /// made the page unreadable. Writing still requires text, so a value that came back as
+        /// hex is not something to send straight back.
+        /// </remarks>
         private static string DecodeHexString(string hex)
         {
             byte[] bytes = new byte[hex.Length / 2];
@@ -257,8 +290,9 @@ namespace Xrpl.Client.Json.Converters
                 bytes[i] = Convert.ToByte(hex.Substring(i * 2, 2), 16);
             }
 
-            OracleAsciiValidation.ValidatePrintableAsciiBytes(bytes, "Oracle hex string");
-            return Encoding.ASCII.GetString(bytes);
+            return OracleAsciiValidation.IsPrintableAscii(bytes)
+                ? Encoding.ASCII.GetString(bytes)
+                : hex;
         }
     }
 }

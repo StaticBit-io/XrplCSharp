@@ -28,7 +28,7 @@ public class TestIConfidentialMPT
 
     public TestContext TestContext { get; set; }
     private static IXrplClient client;
-    private static TestNodeType nodeType = TestNodeType.Standalone;
+    private static TestNodeType nodeType = IntegrationTestConfig.CurrentNodeType;
 
     [ClassInitialize]
     public static async Task ClassInitializeAsync(TestContext testContext)

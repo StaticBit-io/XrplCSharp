@@ -95,11 +95,11 @@ jobs:
       run: dotnet restore
     - name: Build
       run: dotnet build
+    # The standalone profile is the default (XRPL_TEST_NODE unset -> ws://localhost:6006);
+    # a stand on other ports or a public network is selected with XRPL_TEST_NODE_URL /
+    # XRPL_TEST_NODE, see Tests/Xrpl.Tests/Integration/README.md and devnet-coverage.yml.
     - name: Test Integration
       run: dotnet test Tests/Xrpl.Tests/Xrpl.Tests.csproj --verbosity normal --settings test.runsettings --filter "TestI"
-      env:
-        HOST: localhost
-        PORT: 6006
 
     # x402 integration tests: hermetic E2E against the standalone rippled above.
     # The live t54 interop tests (TestCategory=Live) are excluded — they are the only tests

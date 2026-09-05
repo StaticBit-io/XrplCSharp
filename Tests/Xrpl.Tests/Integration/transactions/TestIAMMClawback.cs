@@ -35,12 +35,12 @@ public class TestIAMMClawback
     private XrplWallet walletHolder;
 
     const string CurrencyCode = "AMC";
-    public static TestNodeType nodeType = TestNodeType.Standalone;
+    public static TestNodeType nodeType = IntegrationTestConfig.CurrentNodeType;
 
     [ClassInitialize]
     public static async Task ClassInitializeAsync(TestContext testContext)
     {
-        client = await IntegrationTestConfig.CreateClientAsync(TestNodeType.Standalone);
+        client = await IntegrationTestConfig.CreateClientAsync();
     }
 
     [ClassCleanup]
@@ -49,9 +49,17 @@ public class TestIAMMClawback
         client?.Dispose();
     }
 
+    private static bool? _ammClawbackEnabled;
+
     [TestInitialize]
     public async Task TestInitialize()
     {
+        _ammClawbackEnabled ??= await AmendmentGuard.IsEnabledAsync(client, AmendmentGuard.AMMClawback);
+        if (!_ammClawbackEnabled.Value)
+        {
+            Assert.Inconclusive("AMMClawback amendment is not enabled on the test node.");
+        }
+
         walletIssuer = XrplWallet.Generate();
         walletHolder = XrplWallet.Generate();
 

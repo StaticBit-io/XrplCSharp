@@ -24,7 +24,7 @@ public class TestIDID
     public TestContext TestContext { get; set; }
     public static IXrplClient client;
 
-    public static TestNodeType nodeType = TestNodeType.Standalone;
+    public static TestNodeType nodeType = IntegrationTestConfig.CurrentNodeType;
     [ClassInitialize]
     public static async Task MyClassInitializeAsync(TestContext testContext)
     {
@@ -97,6 +97,21 @@ public class TestIDID
 
     #endregion
 
+    /// <summary>
+    /// A fresh, funded account for one test.
+    /// Generated per run, never derived from a fixed phrase. A phrase is the same account on
+    /// every network, so on a public one it is shared with everyone who ever ran this test:
+    /// the state it starts from is whatever they left, and the setup below disables a master
+    /// key on it. On the standalone stand a derived account also carried state between runs,
+    /// which let a "create" test quietly pass as a modify.
+    /// </summary>
+    private static async Task<XrplWallet> NewFundedWalletAsync()
+    {
+        XrplWallet wallet = XrplWallet.Generate();
+        await IntegrationTestConfig.TryFundWalletAsync(client, wallet, nodeType);
+        return wallet;
+    }
+
     #region DIDSet Tests
 
     /// <summary>
@@ -105,8 +120,7 @@ public class TestIDID
     [TestMethod]
     public async Task TestDIDSet_CreateWithData()
     {
-        var wallet = XrplWallet.FromNormalizedText("did create with data test");
-        await IntegrationTestConfig.TryFundWalletAsync(client, wallet, nodeType);
+        XrplWallet wallet = await NewFundedWalletAsync();
 
         var didSet = new DIDSet
         {
@@ -134,8 +148,7 @@ public class TestIDID
     [TestMethod]
     public async Task TestDIDSet_CreateWithAllFields()
     {
-        var wallet = XrplWallet.FromNormalizedText("did all fields test");
-        await IntegrationTestConfig.TryFundWalletAsync(client, wallet, nodeType);
+        XrplWallet wallet = await NewFundedWalletAsync();
 
         var didSet = new DIDSet
         {
@@ -165,8 +178,7 @@ public class TestIDID
     [TestMethod]
     public async Task TestDIDSet_UpdateExisting()
     {
-        var wallet = XrplWallet.FromNormalizedText("did update test");
-        await IntegrationTestConfig.TryFundWalletAsync(client, wallet, nodeType);
+        XrplWallet wallet = await NewFundedWalletAsync();
 
         var createDID = new DIDSet
         {
@@ -216,8 +228,7 @@ public class TestIDID
     [TestMethod]
     public async Task TestDIDDelete_DeleteExisting()
     {
-        var wallet = XrplWallet.FromNormalizedText("did delete test");
-        await IntegrationTestConfig.TryFundWalletAsync(client, wallet, nodeType);
+        XrplWallet wallet = await NewFundedWalletAsync();
 
         var createDID = new DIDSet
         {
@@ -267,8 +278,7 @@ public class TestIDID
     [TestMethod]
     public async Task TestDID_FullLifecycle()
     {
-        var wallet = XrplWallet.FromNormalizedText("did lifecycle test");
-        await IntegrationTestConfig.TryFundWalletAsync(client, wallet, nodeType);
+        XrplWallet wallet = await NewFundedWalletAsync();
 
         Console.WriteLine($"Starting DID lifecycle test for: {wallet.ClassicAddress}");
 

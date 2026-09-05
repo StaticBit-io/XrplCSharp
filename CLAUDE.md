@@ -172,6 +172,8 @@ dotnet test Tests/Xrpl.Tests/Xrpl.Tests.csproj --settings test.runsettings --fil
 docker compose -f .ci-config/docker-compose.batchv11.yml down
 ```
 
+The node under test is selected through the environment, not in code: `XRPL_TEST_NODE` (`standalone` default, `devnet`, `testnet`) picks the funding policy, `XRPL_TEST_NODE_URL` overrides the WebSocket URL (a stand on other ports, a private node). See `Tests/Xrpl.Tests/Integration/README.md`.
+
 Amendment-dependent test classes use `Tests/Xrpl.Tests/Integration/AmendmentGuard.cs`: `ClassInitialize` checks the Amendments ledger object and marks tests inconclusive (skipped, exit 0) when the amendment is not active — so these tests are safe on the CI stand and run for real on the nightly stand. To gate a new test class, add the amendment id constant to `AmendmentGuard` and call `Assert.Inconclusive` from `TestInitialize` when inactive.
 
 Nightly stand specifics (see comments in `Dockerfile.nightly` / `rippled.batchv11.cfg`):
@@ -199,6 +201,7 @@ Output goes to `docs/` directory. Published to GitHub Pages.
 | `protocol-watch.yml` | Weekly cron (Mon 06:00 UTC); manual | Diffs rippled develop `*.macro` protocol files vs the baseline in the `protocol-watch` tracking issue; comments there on changes |
 | `release-watch.yml` | Weekly cron (Mon 06:30 UTC); manual | Checks the CI stand against the latest stable rippled release; when a newer release has a Docker image, regenerates the stand config (`generate-amendments.sh`), smoke-tests it and opens a bump PR (via GitHub App `RELEASE_WATCH_APP_ID`/`RELEASE_WATCH_APP_PRIVATE_KEY` or `RELEASE_WATCH_PAT`; falls back to a `release-watch` issue comment) |
 | `definitions-watch.yml` | Weekly cron (Mon 07:00 UTC); manual | Raises the nightly stand and diffs `definitions.json` against its `server_definitions`; red when the node has fields the SDK lacks. Its horizon is the nightly pin, so a stale pin makes it report on the past |
+| `devnet-coverage.yml` | Manual only | Runs the coverage-oriented integration classes (`TestIBatchInnerTypes`, `TestISponsoredTypes`, `TestIAMMMpt`, XChain, Sponsorship, Batch) against devnet or testnet with faucet funding; feeds the XRPL Foundation amendment dashboard. Never part of CI |
 | `nightly-pin-watch.yml` | Weekly cron (Mon 05:00 UTC); manual | Checks the nightly `xrpld` pin against the nightly apt channel; once it is older than `MAX_PIN_AGE_DAYS` (21), runs `bump-nightly-pin.sh`, starts the stand on the new pin, and opens a bump PR (same credential ladder as release-watch; falls back to a `nightly-pin-watch` issue comment) |
 
 Integration tests do **not** run on PRs into `dev` — `dev` uses a GitHub merge queue, and the `integration` job runs on the `merge_group` event against the merge result before the merge lands ("Merge when ready" button). Promotion PRs into `release` still run the full suite directly. New pushes to a PR cancel its in-flight CI run (`concurrency`, PR events only).
