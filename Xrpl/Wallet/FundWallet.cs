@@ -6,6 +6,7 @@ using System.Net.Http.Headers;
 using System.Text;
 using System.Text.Json;
 using System.Text.Json.Serialization;
+using System.Text.RegularExpressions;
 using System.Threading;
 using System.Threading.Tasks;
 using System.Timers;
@@ -147,6 +148,20 @@ namespace Xrpl.Wallet
             return await ReturnPromise(httpOptions, client, startingBalance, walletToFund, jsonData, cancellationToken).ConfigureAwait(false);
         }
 
+        /// <summary>
+        /// One client for the process. A new <see cref="HttpClient"/> per call holds its socket
+        /// open past disposal and exhausts the pool under any load, and the faucet host varies,
+        /// so the address goes on the request rather than on the client.
+        /// </summary>
+        private static readonly HttpClient FaucetClient = CreateFaucetClient();
+
+        private static HttpClient CreateFaucetClient()
+        {
+            HttpClient httpsClient = new HttpClient();
+            httpsClient.DefaultRequestHeaders.Accept.Add(new MediaTypeWithQualityHeaderValue("application/json"));
+            return httpsClient;
+        }
+
         private static async Task<Funded> ReturnPromise(
               Dictionary<string, object> options,
               IXrplClient client,
@@ -157,36 +172,38 @@ namespace Xrpl.Wallet
         )
         {
             string hostname = (string)options["hostname"];
-            HttpClient httpsClient = new HttpClient();
-            httpsClient.BaseAddress = new Uri($"https://{hostname}");
-            httpsClient.DefaultRequestHeaders.Accept.Add(new MediaTypeWithQualityHeaderValue("application/json"));
-            StringContent contentData = new StringContent(postBody, Encoding.UTF8, "application/json");
+            Uri endpoint = new Uri($"https://{hostname}{(string)options["path"]}");
+
+            using StringContent contentData = new StringContent(postBody, Encoding.UTF8, "application/json");
 
             HttpResponseMessage response;
             try
             {
-                response = await httpsClient.PostAsync((string)options["path"], contentData, cancellationToken).ConfigureAwait(false);
+                response = await FaucetClient.PostAsync(endpoint, contentData, cancellationToken).ConfigureAwait(false);
             }
             catch (HttpRequestException err)
             {
                 throw new XRPLFaucetException($"The faucet at {hostname} could not be reached: {err.Message}", err);
             }
 
-            byte[] chunks = await response.Content.ReadAsByteArrayAsync(cancellationToken).ConfigureAwait(false);
-            if (!response.IsSuccessStatusCode)
+            using (response)
             {
-                throw new XRPLFaucetException(
-                    $"The faucet at {hostname} answered {(int)response.StatusCode} {response.StatusCode}: {Encoding.UTF8.GetString(chunks)}");
-            }
+                byte[] chunks = await response.Content.ReadAsByteArrayAsync(cancellationToken).ConfigureAwait(false);
+                if (!response.IsSuccessStatusCode)
+                {
+                    throw new XRPLFaucetException(
+                        $"The faucet at {hostname} answered {(int)response.StatusCode} {response.StatusCode}: {Redact(Encoding.UTF8.GetString(chunks))}");
+                }
 
-            return await OnEnd(
-                response,
-                chunks,
-                client,
-                startingBalance,
-                walletToFund,
-                cancellationToken
-            ).ConfigureAwait(false);
+                return await OnEnd(
+                    response,
+                    chunks,
+                    client,
+                    startingBalance,
+                    walletToFund,
+                    cancellationToken
+                ).ConfigureAwait(false);
+            }
         }
 
         private static Dictionary<string, object> GetHTTPOptions(
@@ -239,8 +256,31 @@ namespace Xrpl.Wallet
             }
 
             throw new XRPLFaucetException(
-                $"The faucet answered {(int)response.StatusCode} {response.StatusCode} with content type {contentType ?? "(none)"} rather than JSON: {body}");
+                $"The faucet answered {(int)response.StatusCode} {response.StatusCode} with content type {contentType ?? "(none)"} rather than JSON: {Redact(body)}");
         }
+
+        /// <summary>
+        /// What may be repeated back from a faucet body. A successful response carries the funded
+        /// wallet's seed in <c>account.secret</c>, and an exception message is the one thing a
+        /// caller is certain to log, so the value of anything that names a secret is masked and
+        /// the rest is capped. Quoting the body is still worth it: a rate limit says so in it.
+        /// </summary>
+        internal static string Redact(string body)
+        {
+            if (string.IsNullOrEmpty(body))
+            {
+                return body;
+            }
+
+            string masked = SecretValue.Replace(body, "$1\"***\"");
+            return masked.Length <= MaxQuotedBody ? masked : masked.Substring(0, MaxQuotedBody) + "...";
+        }
+
+        private const int MaxQuotedBody = 512;
+
+        private static readonly Regex SecretValue = new Regex(
+            "(\"(?:secret|seed|master_seed|master_seed_hex|private_key|passphrase|xAddress)\"\\s*:\\s*)\"[^\"]*\"",
+            RegexOptions.IgnoreCase | RegexOptions.Compiled);
 
         /// <summary>
         /// The address the faucet says it funded. The body is a third party's HTTP response, so
@@ -262,7 +302,7 @@ namespace Xrpl.Wallet
             string classicAddress = faucetWallet?.Account?.ClassicAddress;
             if (string.IsNullOrEmpty(classicAddress))
             {
-                throw new XRPLFaucetException($"The faucet response carries no account address: {body}");
+                throw new XRPLFaucetException($"The faucet response carries no account address: {Redact(body)}");
             }
 
             return classicAddress;

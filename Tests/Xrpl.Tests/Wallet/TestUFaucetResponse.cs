@@ -73,6 +73,45 @@ namespace Xrpl.Tests.Wallet.Tests
                 "the parse failure is the cause and has to survive the wrapping");
         }
 
+        /// <summary>
+        /// The faucet hands back the funded wallet's seed, and an exception message is the one
+        /// thing a caller is certain to log. Quoting a body verbatim put that seed in the log.
+        /// </summary>
+        [TestMethod]
+        public void ReadFaucetAddress_NeverRepeatsTheSeedBackInTheMessage()
+        {
+            const string seed = "sEd7f3s4YGCyMLpqBBSGw6dHDGXQqL9";
+            string body = @"{""account"": {""secret"": """ + seed + @"""}, ""error"": ""Rate limit exceeded""}";
+
+            XRPLFaucetException ex = Assert.ThrowsExactly<XRPLFaucetException>(() => WalletSugar.ReadFaucetAddress(body));
+
+            Assert.IsFalse(ex.Message.Contains(seed), "the seed must not reach the message");
+            StringAssert.Contains(ex.Message, "Rate limit exceeded", "the rest of the body is why it is quoted at all");
+        }
+
+        [TestMethod]
+        public void Redact_MasksEveryNameThatCanCarryAKey()
+        {
+            string body = @"{""secret"": ""s1"", ""seed"": ""s2"", ""master_seed"": ""s3"", ""private_key"": ""s4"", ""account"": ""rKeepMe""}";
+
+            string redacted = WalletSugar.Redact(body);
+
+            foreach (string secret in new[] { "s1", "s2", "s3", "s4" })
+            {
+                Assert.IsFalse(redacted.Contains(@"""" + secret + @""""), $"{secret} survived redaction: {redacted}");
+            }
+            StringAssert.Contains(redacted, "rKeepMe", "an address is not a secret and stays readable");
+        }
+
+        [TestMethod]
+        public void Redact_CapsALongBodySoAMessageStaysAMessage()
+        {
+            string redacted = WalletSugar.Redact(new string('x', 4000));
+
+            Assert.IsTrue(redacted.Length < 600, $"expected a capped body, got {redacted.Length} characters");
+            StringAssert.EndsWith(redacted, "...");
+        }
+
         [TestMethod]
         public void FaucetException_KeepsTheCauseItWasGiven()
         {
