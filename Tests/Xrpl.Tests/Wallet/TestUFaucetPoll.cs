@@ -93,6 +93,24 @@ namespace Xrpl.Tests.Wallet.Tests
         /// when the connection drops (RequestManager.RejectAllWithCancellation), so the type
         /// alone cannot mean "the caller gave up" - only the token can say so.
         /// </summary>
+        /// <summary>
+        /// A reconnect is the more recoverable of the two transient failures, and the loop used
+        /// to abandon the wait for it while retrying a node timeout for the full budget.
+        /// </summary>
+        [TestMethod]
+        public async Task Poll_RetriesAfterAConnectionDrop_AndReportsTheBalanceWhenItArrives()
+        {
+            ScriptedBalanceClient client = new ScriptedBalanceClient(
+                Throws(new OperationCanceledException("Connection was intentionally closed.")),
+                () => "100");
+
+            WalletSugar.PollOutcome outcome = await WalletSugar.PollForFundedBalance(
+                client, "rTest", 0, default, attempts: 3, intervalSeconds: 0);
+
+            Assert.AreEqual(100d, outcome.Balance, "the drop was transient and the next read answered");
+            Assert.AreEqual(2, client.Calls);
+        }
+
         [TestMethod]
         public void CallerCancellation_IsTheTokenAndNotTheExceptionType()
         {

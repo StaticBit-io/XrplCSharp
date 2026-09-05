@@ -158,7 +158,14 @@ namespace Xrpl.Wallet
 
         private static HttpClient CreateFaucetClient()
         {
-            HttpClient httpsClient = new HttpClient();
+            // A client that lives as long as the process keeps the address it first resolved
+            // unless the handler is told to retire pooled connections. Faucet hosts do move, and
+            // the per-call client this replaced re-resolved every time by accident of being new.
+            SocketsHttpHandler handler = new SocketsHttpHandler
+            {
+                PooledConnectionLifetime = TimeSpan.FromMinutes(2),
+            };
+            HttpClient httpsClient = new HttpClient(handler);
             httpsClient.DefaultRequestHeaders.Accept.Add(new MediaTypeWithQualityHeaderValue("application/json"));
             return httpsClient;
         }
@@ -433,6 +440,24 @@ namespace Xrpl.Wallet
             public Exception LastReadFailure { get; }
         }
 
+        /// <summary>
+        /// Whether a failed balance read is worth another attempt. Not being able to read is the
+        /// ordinary state of this wait: the account is not on the ledger until the faucet payment
+        /// validates, which arrives as an <see cref="XrplException"/>. A connection that dropped
+        /// and is expected back says the same thing through a token-less
+        /// <see cref="OperationCanceledException"/>, and abandoning the wait for it while
+        /// retrying a request timeout for the full budget had the asymmetry backwards.
+        /// </summary>
+        private static bool IsRetryableReadFailure(Exception err, CancellationToken cancellationToken)
+        {
+            if (err is OperationCanceledException)
+            {
+                return !IsCallerCancellation(err, cancellationToken);
+            }
+
+            return err is XrplException || err is RippleException;
+        }
+
         internal static async Task<PollOutcome> PollForFundedBalance(
             IXrplClient client,
             string address,
@@ -454,14 +479,10 @@ namespace Xrpl.Wallet
                 {
                     newBalance = Convert.ToDouble(await client.GetXrpBalance(address, cancellationToken).ConfigureAwait(false));
                 }
-                catch (XrplException err)
+                catch (Exception err) when (IsRetryableReadFailure(err, cancellationToken))
                 {
-                    // The account is not on the ledger yet: the faucet payment has not been validated
-                    lastReadFailure = err;
-                    continue;
-                }
-                catch (RippleException err)
-                {
+                    // The account is not on the ledger yet and the faucet payment has not been
+                    // validated, or the connection dropped and is expected back
                     lastReadFailure = err;
                     continue;
                 }
