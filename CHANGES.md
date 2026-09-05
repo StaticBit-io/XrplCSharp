@@ -1,6 +1,10 @@
 # Changes
 
-## Unreleased
+## 11.3.0.0 03/09/2026
+
+* **`EasyTimer` is gone** (**breaking**). The class sat in `Xrpl.Wallet` as a pair of `System.Timers.Timer` wrappers named after JavaScript's `setInterval` and `setTimeout`, because the file around it is a port of xrpl.js's `fundWallet.ts`. Nothing ever called it: across every revision of `FundWallet.cs` back to October 2022 there is not one use, and the faucet poll it was presumably written for drove a `System.Timers.Timer` through static fields instead - the design that produced the once-per-process poll budget fixed in 11.3.0.0. It is removed rather than deprecated because there is nothing to migrate to that is not already better: `System.Timers.Timer` is public, documented and one line away.
+  * for anyone who did reference it, the wrappers were not worth keeping. Neither could report a failure - the callback ran on a timer thread with nothing to observe it - `SetInterval` let callbacks overlap when the work outlasted the interval, and stopping either one depended on the caller holding the returned handle
+
 
 * **The `Sponsor` field is exercised on the Vault and Loan transaction types, and on the bridge attestations.** These are the types rippled forbids inside a Batch (`Batch::preflight` kDisabledTxTypes), so whether they take a sponsor at all was worth establishing rather than assuming. They do: `preflight1Sponsor` in `Transactor.cpp` constrains only `spfSponsorReserve`, through the allow-list in `isReserveSponsorAllowed`, and no Vault or Loan type is on it. Fee sponsorship is unconstrained.
   * **a sponsored `LoanSet` carries three signatures at once** - the broker's own, the borrower's `CounterpartySignature` and the sponsor's `SponsorSignature` - and this is the first time the composer has had to place all three in one transaction
@@ -8,7 +12,6 @@
   * two rules from `LoanBrokerSet::preflight` that are easy to trip, now written down where the test lives: `VaultID` is required even when the transaction updates a broker that already exists, and a transaction naming a `LoanBrokerID` may not carry `ManagementFeeRate`, `CoverRateMinimum` or `CoverRateLiquidation` - those are set once, at creation, and an update carrying one is `temINVALID`
   * `VaultDelete.MemoData` is left out. The field is optional on rippled's develop branch and the release build the CI stand runs answers `temDISABLED` for it, so a test carrying it would report the stand's version rather than anything about the SDK
 
-## 11.3.0.0 03/09/2026
 
 * **`FundWallet` works more than once per process.** The faucet helper polled for the funded balance through a `System.Timers.Timer` driven by static fields - the poll budget, the address, the two balances and the result - and the budget was initialised once and never reset. It bought twenty polls for the lifetime of the process: the first few wallets were funded, and from then on every call reported `Unable to fund address with faucet after waiting 1 * 20 seconds` without polling at all. Anyone funding a second wallet on testnet or devnet hit this, which is every integration suite and most tutorials.
   * the concurrent case was the dangerous half. Two overlapping calls overwrote each other's address and result, so a caller could be handed another wallet's balance and treat an unfunded wallet as funded. All of that state now belongs to the call.
