@@ -4582,6 +4582,11 @@ public class Connection
             1009 => (ConnectionCloseSeverity.Warning, "Message too large (1009)." + suffix),
             1010 => (ConnectionCloseSeverity.Error, "Mandatory WebSocket extension is missing (1010)." + suffix),
             1011 => (ConnectionCloseSeverity.Error, "Internal server error (1011)." + suffix),
+            // A close with no code at all reaches the default arm too, and interpolating a null
+            // int? there produced "Connection closed with code ." - a sentence with a hole in it,
+            // reported for the commonest close of all: a peer that went away without a frame.
+            null => (ConnectionCloseSeverity.Warning, "Connection closed without a code." + suffix),
+
             _ => (ConnectionCloseSeverity.Warning, $"Connection closed with code {code}." + suffix),
         };
     }

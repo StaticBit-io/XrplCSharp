@@ -238,9 +238,14 @@ internal static class Program
     /// <summary>
     /// An operation another one overtook reports the winner rather than a bare cancellation.
     /// </summary>
+    /// <remarks>
+    /// The overtaking operation here is a second switch. A <c>Disconnect()</c> overtaking a switch
+    /// is the other half of the same rule and reports <c>ClientDisconnectedException</c>, because
+    /// the reaction a consumer owes it is the opposite one.
+    /// </remarks>
     private static async Task AnOperationThatWasOvertaken()
     {
-        Scenario("A switch that a Disconnect overtook");
+        Scenario("A switch that another switch overtook");
 
         XrplClient client = await Connected(new XrplClient.ClientOptions
         {
@@ -254,19 +259,28 @@ internal static class Program
 
         Trace(client);
 
-        // Issued from the switch's own status notification, which lands it inside the switch every
-        // time. A consumer meets this shape whenever a status handler reacts to the connection.
-        bool disconnecting = false;
+        // Issued from the first switch's own status notification, which lands it inside that
+        // switch every time. A consumer meets this shape whenever a status handler reacts to the
+        // connection - "this node is not answering, go to the other one" is exactly such a
+        // handler.
+        bool overtaking = false;
         client.connection.OnConnectionStatus += status =>
         {
-            if (status.ConnectionState == XrpConnectionState.RestoringConnection && !disconnecting)
+            if (status.ConnectionState == XrpConnectionState.RestoringConnection && !overtaking)
             {
-                disconnecting = true;
-                _ = Swallow(client.Disconnect());
+                overtaking = true;
+                _ = Swallow(client.connection.ChangeServer(_server));
             }
         };
 
         Report(await Caught(() => client.connection.ChangeServer(UnusedEndpoint())));
+
+        Console.WriteLine($"  the winner is where the client ended up - IsConnected: {client.connection.IsConnected()}");
+
+        // A Disconnect() that overtakes a switch reports ClientDisconnectedException instead: the
+        // client is down because it was asked to be, which calls for the opposite reaction, so the
+        // two cases do not share a type.
+        await client.Disconnect();
     }
 
     /// <summary>

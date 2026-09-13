@@ -68,7 +68,7 @@ Indented two spaces is what the caller got:
 | A switch to a node that is down | `ReconnectExhaustedException`, then recovery | A stopped client stays stopped, and one call brings it back |
 | The consumer disconnects | `ClientDisconnectedException` | Never fail over here — the client was asked to be down |
 | A broken `OnConnected` handler | `ConnectHandlerFailedException` | The node is fine and this side is broken. The handler's own exception is the `InnerException` |
-| A switch a `Disconnect` overtook | `ConnectionSupersededException` | The overtaken operation names the winner instead of a bare cancellation |
+| A switch another switch overtook | `ConnectionSupersededException` | The overtaken operation names the winner instead of a bare cancellation. A `Disconnect()` overtaking a switch is the other half of the rule and reports `ClientDisconnectedException` — the opposite reaction, so not the same type |
 
 ## What to take from it
 
