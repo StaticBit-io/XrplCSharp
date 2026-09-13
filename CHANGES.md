@@ -1,6 +1,6 @@
 # Changes
 
-## 11.5.0.0 12/09/2026
+## 11.5.0.0 13/09/2026
 
 * **What happened to the connection is readable from the type, instead of the message text** (the follow-up to #179). 11.4.0 made the behaviour correct - one owner per transition, an operation that was overtaken says so - but gave the caller no way to read that answer. `NotConnectedException` carried five different events and `OperationCanceledException` two, so the only way to tell "the consumer disconnected the client" from "this endpoint is not answering" was to classify by message text - which the release notes of 11.3.2.0 told consumers not to do, while the library gave them no type capable of it.
   * six new exception types, all deriving from the ones thrown today, so no `catch` clause changes meaning and no task changes status: `ClientDisconnectedException` and `ReconnectExhaustedException` (attempts spent, budget configured), `RequestRefusedException` for a request the caller asked not to have wait, `ConnectHandlerFailedException` (how many times the handler failed, and the handler's own exception), `ConnectionClosedPermanentlyException` for a node that closed with a code this client does not retry after, and `NotConnectingException` for a client with no attempt in progress. `ConnectionSupersededException` derives from `OperationCanceledException` and names the transition that took over and where it left the client
