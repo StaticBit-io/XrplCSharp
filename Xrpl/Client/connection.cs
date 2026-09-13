@@ -2802,6 +2802,10 @@ public class Connection
             connectionManager.RejectAllAwaiting(new NotConnectedException(error.Message));
         }
 
+        // Read once, before anything is announced, and used both for what is announced and for
+        // what is done about it.
+        bool willReconnect = !wasOpen || isNetworkDrop;
+
         if (isNetworkDrop)
         {
             SetConnectionState(
@@ -2833,17 +2837,26 @@ public class Connection
         }
         else
         {
-            // True initial connection failure - no reconnect in progress
+            // True initial connection failure - no reconnect in progress.
+            //
+            // Whether a reason is named is decided by the same condition that decides whether a
+            // reconnect follows, and reads it from the same variable, so the two cannot come to
+            // say different things. A reason means the client stopped - that is what
+            // ConnectionStopReason.None exists to distinguish - and naming one here while the
+            // retry below is about to start would hand a consumer a reason to fail over to
+            // another server while this one is still being dialled.
             SetConnectionState(
                 XrpConnectionState.Disconnected,
                 $"Initial connection failed: {error.Message}",
                 ConnectionCloseSeverity.Error,
-                stopReason: ConnectionStopReason.InitialConnectionFailed);
+                stopReason: willReconnect
+                    ? ConnectionStopReason.None
+                    : ConnectionStopReason.InitialConnectionFailed);
         }
 
         // Start reconnect for initial connection failures and network drops. For a network drop
         // wasOpen is true, and the client still needs to reconnect.
-        if (!wasOpen || isNetworkDrop)
+        if (willReconnect)
         {
             if (OnDisconnect is not null)
             {

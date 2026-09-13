@@ -778,6 +778,78 @@ namespace Xrpl.Tests
         }
 
         /// <summary>
+        /// A failure the client is about to retry names no reason for stopping, because it has not
+        /// stopped.
+        /// </summary>
+        /// <remarks>
+        /// <para>
+        /// <see cref="ConnectionStopReason"/> is defined as why the client stopped, and
+        /// <see cref="ConnectionStopReason.None"/> as "this notification is not an ending". A
+        /// reason on a notification that is followed by a reconnect breaks that definition in the
+        /// way that costs something: a consumer reading any reason as terminal fails over to
+        /// another server while this one is still being dialled.
+        /// </para>
+        /// <para>
+        /// The first handshake against a server that is not up is exactly that case - it is
+        /// reported, and then retried. Whether a reason is named now follows the same condition
+        /// that decides whether the retry happens, so the two cannot say different things.
+        /// </para>
+        /// </remarks>
+        [TestMethod]
+        public async Task TestUAFailureTheClientWillRetryNamesNoStopReason()
+        {
+            int port = TestUtils.GetFreePort(); // nothing is listening, and nothing will be
+
+            List<ConnectionStatusInfo> statuses = new List<ConnectionStatusInfo>();
+
+            _client = new XrplClient($"ws://127.0.0.1:{port}", new XrplClient.ClientOptions
+            {
+                ReconnectBaseDelay = TimeSpan.FromMilliseconds(100),
+                ReconnectMaxDelay = TimeSpan.FromMilliseconds(200),
+                MaxReconnectAttempts = 1000,
+                StopAfterMaxAttempts = false,     // it will keep trying, so it never stops
+                ConnectionAttemptTimeout = TimeSpan.FromSeconds(2),
+                ConnectionAcquisitionTimeout = TimeSpan.FromSeconds(3),
+                UseCustomPing = false,
+            });
+
+            _client.connection.OnConnectionStatus += status =>
+            {
+                lock (statuses)
+                {
+                    statuses.Add(status);
+                }
+            };
+
+            try
+            {
+                await _client.Connect();
+            }
+            catch (Exception)
+            {
+                // The connection never comes up; the subject here is what was announced on the way.
+            }
+
+            await Task.Delay(TimeSpan.FromMilliseconds(500));
+
+            List<ConnectionStatusInfo> claimingAnEnding;
+            bool stillTrying;
+            string trace;
+            lock (statuses)
+            {
+                claimingAnEnding = statuses.FindAll(s => s.StopReason != ConnectionStopReason.None);
+                stillTrying = statuses.Exists(s => s.ConnectionState == XrpConnectionState.RestoringConnection);
+                trace = string.Join(" | ", statuses.ConvertAll(x => $"{x.ConnectionState}/{x.StopReason}"));
+            }
+
+            Assert.IsTrue(stillTrying, $"Precondition: the client has to be retrying. Sequence was: {trace}");
+            Assert.AreEqual(
+                0,
+                claimingAnEnding.Count,
+                $"A client that is still dialling must not name a reason for having stopped. Sequence was: {trace}");
+        }
+
+        /// <summary>
         /// A client that spent its reconnect budget stays stopped.
         /// </summary>
         /// <remarks>
