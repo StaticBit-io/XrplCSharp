@@ -2,6 +2,7 @@ using Microsoft.VisualStudio.TestTools.UnitTesting;
 
 using System;
 using System.Collections.Generic;
+using System.Diagnostics;
 using System.Threading;
 using System.Threading.Tasks;
 
@@ -1643,6 +1644,206 @@ namespace Xrpl.Tests
                     TimeSpan.FromSeconds(15),
                     clock.Elapsed,
                     "The waiter has to be woken by the client giving up, not by its own 30s timeout.");
+            }
+            finally
+            {
+                mock.Stop();
+            }
+        }
+
+        /// <summary>
+        /// A caller who asks after the reconnect loop has given up is told the budget was spent -
+        /// the same thing the status stream told them a moment earlier.
+        /// </summary>
+        /// <remarks>
+        /// <para>
+        /// The natural shape of a failover is to hear
+        /// <see cref="ConnectionStopReason.ReconnectExhausted"/> on the status stream and then
+        /// confirm it on the wait before switching servers. That caller arrives after the sequence
+        /// has ended - no socket, no cancellation source, a Disconnected state - which is also,
+        /// exactly, what a client nobody has called <c>Connect()</c> on looks like. The wait used
+        /// to answer that reading first, so the same client reported <c>ReconnectExhausted</c> or
+        /// <c>NotConnecting</c> depending only on whether the caller had happened to park before
+        /// the loop stopped, and the outcome this API exists to deliver was the one a consumer
+        /// could not get.
+        /// </para>
+        /// <para>
+        /// The assertion is made against the status stream rather than against a literal: what
+        /// matters is that the two ways of asking agree.
+        /// </para>
+        /// </remarks>
+        [TestMethod]
+        public async Task TestUTheWaitAndTheStatusStreamAgreeAfterTheBudgetIsSpent()
+        {
+            int deadPort = TestUtils.GetFreePort(); // nothing is listening there, and never will be
+            _client = new XrplClient($"ws://127.0.0.1:{deadPort}", new XrplClient.ClientOptions
+            {
+                ReconnectBaseDelay = TimeSpan.FromMilliseconds(50),
+                ReconnectMaxDelay = TimeSpan.FromMilliseconds(100),
+                MaxReconnectAttempts = 2,
+                StopAfterMaxAttempts = true,
+                ConnectionAttemptTimeout = TimeSpan.FromMilliseconds(500),
+                ConnectionAcquisitionTimeout = TimeSpan.FromSeconds(10),
+                UseCustomPing = false,
+            });
+
+            TaskCompletionSource<bool> stopped =
+                new TaskCompletionSource<bool>(TaskCreationOptions.RunContinuationsAsynchronously);
+
+            _client.connection.OnConnectionStatus += info =>
+            {
+                if (info.StopReason == ConnectionStopReason.ReconnectExhausted)
+                {
+                    stopped.TrySetResult(true);
+                }
+            };
+
+            try
+            {
+                await _client.Connect();
+            }
+            catch (NotConnectedException)
+            {
+                // What this caller was told is not the subject; what a later one is told is.
+            }
+
+            await stopped.Task.WaitAsync(TimeSpan.FromSeconds(20));
+
+            ConnectionWaitOutcome outcome =
+                await _client.connection.WaitForConnectionOutcomeAsync(TimeSpan.FromSeconds(1));
+
+            Assert.AreEqual(
+                ConnectionWaitOutcome.ReconnectExhausted,
+                outcome,
+                "The status stream said the budget was spent; a caller asking straight afterwards must be told the same.");
+
+            ReconnectExhaustedException error = await Assert.ThrowsExactlyAsync<ReconnectExhaustedException>(
+                async () => await _client.connection.WaitForConnectionAsync(TimeSpan.FromSeconds(1)));
+
+            Assert.AreEqual(2, error.MaxAttempts, "The budget the client was configured with.");
+        }
+
+        /// <summary>
+        /// A close code this client does not reconnect after ends the wait, rather than leaving it
+        /// to run out its timeout.
+        /// </summary>
+        /// <remarks>
+        /// <para>
+        /// 1002, 1003, 1007 and 1010 are the codes after which no reconnect is started at all -
+        /// the node is saying that retrying against it is pointless. The status stream has reported
+        /// that ending for as long as <see cref="ConnectionStopReason.ClosedPermanently"/> has
+        /// existed; the wait could not, because the ending leaves nothing behind to recognise it
+        /// by: no socket, no reconnect loop, and an attempt counter the close path resets to zero.
+        /// A caller already parked was woken by the announcement, found nothing, and parked again -
+        /// to be told, a whole acquisition timeout later, that the connection "was not established
+        /// in time" about a connection the consumer had already been told was over.
+        /// </para>
+        /// <para>
+        /// The waiter here arrives after the close, which is answered through the wait's entry;
+        /// the parked case is the same terminal reached through the wake.
+        /// </para>
+        /// </remarks>
+        [TestMethod]
+        public async Task TestUAPermanentCloseEndsTheWaitInsteadOfRunningItOut()
+        {
+            using ClosesWithCodeServer server = new ClosesWithCodeServer(closeCode: 1003);
+
+            _client = new XrplClient(server.Url, new XrplClient.ClientOptions
+            {
+                ConnectionAttemptTimeout = TimeSpan.FromSeconds(5),
+                ConnectionAcquisitionTimeout = TimeSpan.FromSeconds(30),
+                UseCustomPing = false,
+            });
+
+            await _client.Connect();
+            Assert.IsTrue(_client.connection.IsConnected(), "Precondition: connected to the server.");
+
+            TaskCompletionSource<bool> closed =
+                new TaskCompletionSource<bool>(TaskCreationOptions.RunContinuationsAsynchronously);
+
+            _client.connection.OnConnectionStatus += info =>
+            {
+                if (info.StopReason == ConnectionStopReason.ClosedPermanently)
+                {
+                    closed.TrySetResult(true);
+                }
+            };
+
+            server.CloseNow();
+            await closed.Task.WaitAsync(TimeSpan.FromSeconds(20));
+
+            // A generous timeout on purpose: a wait that has to be answered by a terminal must not
+            // be seen to pass because its own deadline was short.
+            ConnectionClosedPermanentlyException error =
+                await Assert.ThrowsExactlyAsync<ConnectionClosedPermanentlyException>(
+                    async () => await _client.connection.WaitForConnectionAsync(TimeSpan.FromSeconds(30)));
+
+            Assert.IsInstanceOfType<NotConnectedException>(error, "catch (NotConnectedException) must keep catching this.");
+
+            ConnectionWaitOutcome outcome =
+                await _client.connection.WaitForConnectionOutcomeAsync(TimeSpan.FromSeconds(30));
+
+            Assert.AreEqual(
+                ConnectionWaitOutcome.ClosedPermanently,
+                outcome,
+                "The outcome and the stop reason are two views of one event and must name it the same.");
+        }
+
+        /// <summary>
+        /// A wait whose timeout is an exact multiple of the system clock tick still ends on its own
+        /// deadline, and ends promptly.
+        /// </summary>
+        /// <remarks>
+        /// Both readings of the clock are quantised to the tick - 15.625 ms on Windows - so the
+        /// elapsed time is always a whole number of ticks, and a timeout that is itself a whole
+        /// number of them is hit exactly rather than passed. A strict deadline comparison then
+        /// declined to fire while the remaining time was already zero, and the loop went round
+        /// again with nothing to await: a spin on the connection's own lock until the clock moved.
+        /// One second is 64 ticks exactly, as is the default acquisition timeout of five minutes.
+        /// </remarks>
+        [TestMethod]
+        public async Task TestUAWaitWhoseTimeoutLandsOnAClockTickStillTimesOut()
+        {
+            int port = TestUtils.GetFreePort();
+            CreateMockRippled mock = StartMock(port);
+
+            try
+            {
+                _client = new XrplClient($"ws://127.0.0.1:{port}", new XrplClient.ClientOptions
+                {
+                    ReconnectBaseDelay = TimeSpan.FromSeconds(30),
+                    ReconnectMaxDelay = TimeSpan.FromSeconds(30),
+                    MaxReconnectAttempts = 50,
+                    StopAfterMaxAttempts = false,
+                    ConnectionAttemptTimeout = TimeSpan.FromSeconds(2),
+                    ConnectionAcquisitionTimeout = TimeSpan.FromSeconds(4),
+                    UseCustomPing = false,
+                });
+
+                await _client.Connect();
+
+                int deadPort = TestUtils.GetFreePort();
+                Task switching = _client.connection.ChangeServer($"ws://127.0.0.1:{deadPort}");
+
+                Stopwatch clock = Stopwatch.StartNew();
+                await Assert.ThrowsExactlyAsync<System.TimeoutException>(
+                    async () => await _client.connection.WaitForConnectionAsync(TimeSpan.FromSeconds(1)));
+                clock.Stop();
+
+                Assert.IsLessThan(
+                    TimeSpan.FromSeconds(10),
+                    clock.Elapsed,
+                    "The wait has to end on its own deadline rather than spin past it.");
+
+                try
+                {
+                    await switching;
+                }
+                catch (Exception)
+                {
+                    // The switch to a dead port is scenery; it never settles, and how it gives up
+                    // is the subject of other tests.
+                }
             }
             finally
             {

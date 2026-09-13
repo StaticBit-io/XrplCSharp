@@ -143,6 +143,29 @@ namespace Xrpl.Client.Exceptions
     }
 
     /// <summary>
+    /// The node closed the connection with a status code this client does not reconnect after, and
+    /// no reconnect was started.
+    /// </summary>
+    /// <remarks>
+    /// <para>
+    /// Distinct from <see cref="ClientDisconnectedException"/>, which says the consumer took the
+    /// client down, and from <see cref="ReconnectExhaustedException"/>, which says this client
+    /// tried and ran out of budget. Here nothing was tried, because the close code said retrying
+    /// against this server is pointless - a protocol error, an unacceptable payload, a policy
+    /// violation. Reconnecting to the same endpoint is the one reaction that is certainly wrong;
+    /// a consumer with another server should use it, and one without should surface the close.
+    /// </para>
+    /// <para>
+    /// The status stream reports the same event as
+    /// <c>ConnectionStopReason.ClosedPermanently</c>.
+    /// </para>
+    /// </remarks>
+    public class ConnectionClosedPermanentlyException : NotConnectedException
+    {
+        public ConnectionClosedPermanentlyException(string message = null) : base(message) { }
+    }
+
+    /// <summary>
     /// The request was refused at once because the client was not connected and the policy in force
     /// is <c>RequestFailurePolicy.ImmediateFail</c>.
     /// </summary>

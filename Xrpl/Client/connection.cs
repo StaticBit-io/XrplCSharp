@@ -164,6 +164,13 @@ public enum ConnectionWaitOutcome
     /// <summary>The client gave up because its <c>OnConnected</c> handler kept failing.</summary>
     ConnectHandlerFailed,
 
+    /// <summary>
+    /// The node closed the connection with a code this client does not reconnect after, and no
+    /// reconnect was started. The counterpart of
+    /// <see cref="ConnectionStopReason.ClosedPermanently"/>.
+    /// </summary>
+    ClosedPermanently,
+
     /// <summary>There is no connection and no attempt to make one: <c>Connect()</c> is due.</summary>
     NotConnecting,
 }
@@ -494,7 +501,31 @@ public class Connection
     /// precisely when asking again is the consumer's decision and allowed.
     /// </para>
     /// </remarks>
-    private long _reconnectExhaustedGeneration = 0;
+    private long _reconnectExhaustedGeneration = NoGeneration;
+
+    /// <summary>
+    /// Not any generation. Generations are counted from zero and the first transition raises the
+    /// counter to one, so zero is the generation of a client nobody has called <c>Connect()</c>
+    /// on yet - a real value, and the wrong one to spell "no generation" with: every field below
+    /// that used zero for it answered its own question with "yes" on a brand-new client.
+    /// </summary>
+    private const long NoGeneration = -1;
+
+    /// <summary>
+    /// The generation whose connection the node closed with a code this client does not reconnect
+    /// after, or <see cref="NoGeneration"/>. Keyed by generation for the same reason as
+    /// <see cref="_reconnectExhaustedGeneration"/>, and read by the same waiter.
+    /// </summary>
+    /// <remarks>
+    /// The status stream has reported this ending since <c>ConnectionStopReason</c> existed, and
+    /// the wait could not: no socket, no loop, no flag, so a caller already parked was woken by
+    /// the announcement, found nothing that reads as an ending, and parked again on a signal that
+    /// nothing was going to complete - spending the whole acquisition timeout, five minutes by
+    /// default, to be told the connection "was not established in time" about a connection the
+    /// consumer had already been told was closed for good. The two views of one event have to
+    /// agree, which is the entire premise of this work.
+    /// </remarks>
+    private long _closedPermanentlyGeneration = NoGeneration;
 
     // Number of consecutive times the consumer OnConnected handler threw.
     // Not part of the reconnect state: OnceOpen clears the reconnect state before invoking the handler,
@@ -1212,11 +1243,41 @@ public class Connection
         string message,
         ConnectionCloseSeverity severity = ConnectionCloseSeverity.Info,
         ReconnectInfo? reconnect = null,
-        ConnectionStopReason stopReason = ConnectionStopReason.None)
+        ConnectionStopReason stopReason = ConnectionStopReason.None,
+        long? announcingGeneration = null)
     {
+        bool stateChanged = false;
+        bool suppressed = false;
 
-        var stateChanged = _currentConnectionState != newState;
-        _currentConnectionState = newState;
+        // The two questions this guard asks and the publication it guards are one critical
+        // section, and that is the whole of the point. Who owns the connection, and whether this
+        // generation's reconnect sequence has already been declared over, are both written under
+        // this lock by other threads. Asked outside it, an answer is a snapshot with no shelf
+        // life: a caller reads "the sequence is still running", loses the processor, and publishes
+        // its status after the loop has ended the sequence and announced the ending - which is a
+        // non-terminal status standing as the last word about a client nothing is rebuilding.
+        //
+        // It replaces the ownership checks that used to sit at the call sites. Three of them
+        // existed, one was missing, and the missing one was invisible for as long as the
+        // deduplication happened to swallow what it let through.
+        //
+        // A terminal announcement is never suppressed by the seal - it is the seal - and callers
+        // that pass no generation speak for the client as a whole rather than for one transition
+        // of it, and are not guarded at all.
+        lock (_transitionLock)
+        {
+            if (announcingGeneration is long generation &&
+                (_generation != generation ||
+                 (_reconnectExhaustedGeneration == generation && stopReason == ConnectionStopReason.None)))
+            {
+                suppressed = true;
+            }
+            else
+            {
+                stateChanged = _currentConnectionState != newState;
+                _currentConnectionState = newState;
+            }
+        }
 
         // Woken here, before everything else this method decides. Whether a status event is worth
         // showing a consumer and whether the connection changed are different questions: the
@@ -1227,6 +1288,15 @@ public class Connection
         // handler must not hold up a caller waiting for the connection, and one that waits on such
         // a caller must not be able to deadlock against it.
         WakeConnectionWaiters();
+
+        // After the wake, deliberately. A suppressed announcement still means something happened
+        // to the connection, and the wait's own predicate reads the same fields under the same
+        // lock: it may have a terminal answer waiting for it even when this particular status is
+        // not worth showing anyone.
+        if (suppressed)
+        {
+            return;
+        }
 
         var hasReconnectInfo = reconnect != null;
         var messageChanged = _previousNotifiedMessage != message;
@@ -1715,8 +1785,6 @@ public class Connection
             return;
         }
 
-        CheckIfNotConnected();
-
         var waitTimeout = timeout ?? config.ConnectionAcquisitionTimeout;
 
         if (waitTimeout != Timeout.InfiniteTimeSpan && waitTimeout <= TimeSpan.Zero)
@@ -1729,6 +1797,13 @@ public class Connection
 
         var startTime = DateTime.UtcNow;
         var hasTimeout = waitTimeout != Timeout.InfiniteTimeSpan;
+
+        // "Nothing is in progress" is a statement about the moment of the call and nothing else,
+        // which is why it is asked once. Asked on every pass it would fire on a caller that is
+        // waiting perfectly correctly: a failed first attempt announces Disconnected and only then
+        // starts the reconnect loop, and in between there is no socket, no loop and no active
+        // state - exactly the reading this answers with "call Connect()".
+        bool firstPass = true;
 
         while (true)
         {
@@ -1773,6 +1848,12 @@ public class Connection
                     // bookkeeping, the bookkeeping for the handler. Reading what is already
                     // published breaks the ring. The second condition stays for the same state
                     // reached without a loop of this generation having run.
+                    else if (_closedPermanentlyGeneration == _generation)
+                    {
+                        terminal = new ConnectionClosedPermanentlyException(
+                            "The node closed the connection with a code this client does not " +
+                            "reconnect after. Call Connect() to try again, or connect to another server.");
+                    }
                     else if (_reconnectExhaustedGeneration == _generation ||
                              (config.StopAfterMaxAttempts &&
                               _reconnectAttempts >= config.MaxReconnectAttempts &&
@@ -1788,8 +1869,25 @@ public class Connection
                             attempts: config.MaxReconnectAttempts,
                             maxAttempts: config.MaxReconnectAttempts);
                     }
+                    // Last of the four, and that order is the whole of what it is for. After a
+                    // sequence ends there is no socket, no cancellation source and a Disconnected
+                    // state - which is also precisely what a client nobody has called Connect() on
+                    // looks like. Asked first, as the entry precondition it used to be, it
+                    // answered "call Connect()" to a caller whose client had just spent its
+                    // reconnect budget: the status stream said ReconnectExhausted, the wait said
+                    // NotConnecting, and the outcome this API exists to deliver was reachable only
+                    // by a caller who happened to be parked here already when the loop gave up.
+                    else if (firstPass &&
+                             ws == null &&
+                             _reconnectCts == null &&
+                             _currentConnectionState == XrpConnectionState.Disconnected)
+                    {
+                        terminal = new NotConnectingException("No connection attempt in progress. Call Connect() first.");
+                    }
                 }
             }
+
+            firstPass = false;
 
             if (connected)
             {
@@ -1801,7 +1899,14 @@ public class Connection
                 throw terminal;
             }
 
-            if (hasTimeout && DateTime.UtcNow - startTime > waitTimeout)
+            // Inclusive. Both readings of the clock are quantised to the system tick - 15.625 ms
+            // on Windows - so elapsed time is always a whole number of ticks, and any timeout that
+            // is itself a whole number of them is hit exactly rather than passed: the default
+            // acquisition timeout of five minutes is 19200 of them. With a strict comparison the
+            // deadline check then declined to fire while the remaining time was already zero, and
+            // the guard below sent the loop round again with no await in it - a spin on the
+            // connection's own lock for the rest of the tick, once per expiring wait.
+            if (hasTimeout && DateTime.UtcNow - startTime >= waitTimeout)
             {
                 throw new System.TimeoutException(
                     $"Connection was not established within {waitTimeout.TotalSeconds:F1} seconds");
@@ -1816,9 +1921,13 @@ public class Connection
                 ? waitTimeout - (DateTime.UtcNow - startTime)
                 : Timeout.InfiniteTimeSpan;
 
+            // Unreachable now that the deadline check above is inclusive, and kept because
+            // "the remaining time is not positive" must never again become "go round again
+            // without awaiting anything".
             if (hasTimeout && remaining <= TimeSpan.Zero)
             {
-                continue;
+                throw new System.TimeoutException(
+                    $"Connection was not established within {waitTimeout.TotalSeconds:F1} seconds");
             }
 
             // Task.WaitAsync refuses any timeout above int.MaxValue milliseconds - about
@@ -1882,6 +1991,10 @@ public class Connection
         catch (ReconnectExhaustedException)
         {
             return ConnectionWaitOutcome.ReconnectExhausted;
+        }
+        catch (ConnectionClosedPermanentlyException)
+        {
+            return ConnectionWaitOutcome.ClosedPermanently;
         }
         catch (NotConnectingException)
         {
@@ -2793,13 +2906,11 @@ public class Connection
             // timer of a handshake outlives the Disconnect() that cancelled it, and this branch
             // then reported "closed permanently" over the disconnect the consumer had already been
             // told about - the last reason they saw being one that does not say who closed it.
-            if (Owns(generation))
-            {
-                SetConnectionState(
-                    XrpConnectionState.Disconnected,
-                    message: "Connection closed permanently.",
-                    stopReason: ConnectionStopReason.ClosedPermanently);
-            }
+            SetConnectionState(
+                XrpConnectionState.Disconnected,
+                message: "Connection closed permanently.",
+                stopReason: ConnectionStopReason.ClosedPermanently,
+                announcingGeneration: generation);
 
             return;
         }
@@ -2852,7 +2963,8 @@ public class Connection
                 XrpConnectionState.RestoringConnection,
                 message: "Network connection lost. Reconnecting...",
                 ConnectionCloseSeverity.Warning,
-                reconnect: BuildReconnectInfo());
+                reconnect: BuildReconnectInfo(),
+                announcingGeneration: generation);
         }
         else if (failedSession?.IsOpened == true)
         {
@@ -2864,7 +2976,8 @@ public class Connection
                 XrpConnectionState.RestoringConnection,
                 $"Connection lost: {error.Message}. Reconnecting...",
                 ConnectionCloseSeverity.Warning,
-                reconnect: BuildReconnectInfo());
+                reconnect: BuildReconnectInfo(),
+                announcingGeneration: generation);
         }
         else if (IsReconnectActive())
         {
@@ -2873,7 +2986,8 @@ public class Connection
                 XrpConnectionState.RestoringConnection,
                 $"Connection attempt failed: {error.Message}",
                 ConnectionCloseSeverity.Warning,
-                reconnect: BuildReconnectInfo());
+                reconnect: BuildReconnectInfo(),
+                announcingGeneration: generation);
         }
         else
         {
@@ -2891,7 +3005,8 @@ public class Connection
                 ConnectionCloseSeverity.Error,
                 stopReason: willReconnect
                     ? ConnectionStopReason.None
-                    : ConnectionStopReason.InitialConnectionFailed);
+                    : ConnectionStopReason.InitialConnectionFailed,
+                announcingGeneration: generation);
         }
 
         // Start reconnect for initial connection failures and network drops. For a network drop
@@ -3600,7 +3715,8 @@ public class Connection
                 XrpConnectionState.Disconnected,
                 noReconnectMessage,
                 ConnectionCloseSeverity.Warning,
-                stopReason: ConnectionStopReason.ClosedPermanently);
+                stopReason: ConnectionStopReason.ClosedPermanently,
+                announcingGeneration: closingGeneration);
             return;
         }
 
@@ -3617,7 +3733,8 @@ public class Connection
                     XrpConnectionState.RestoringConnection,
                     userMessage,
                     severity,
-                    reconnect: firstAttempt);
+                    reconnect: firstAttempt,
+                    announcingGeneration: closingGeneration);
             }
         }
         else
@@ -3627,6 +3744,14 @@ public class Connection
                 if (Owns(closingGeneration))
                 {
                     _reconnectAttempts = 0;
+
+                    // Recorded before the notification, like every other ending: the notification
+                    // runs consumer code, and a caller woken by it reads this under the same lock.
+                    // Resetting the attempt counter just above is what makes recording it
+                    // necessary rather than merely tidy - with the counter back at zero there is
+                    // no residue left anywhere from which a waiter could tell that the connection
+                    // is over rather than between attempts.
+                    _closedPermanentlyGeneration = closingGeneration;
                 }
             }
 
@@ -3635,7 +3760,8 @@ public class Connection
                 XrpConnectionState.Disconnected,
                 noReconnectMessage,
                 ConnectionCloseSeverity.Warning,
-                stopReason: ConnectionStopReason.ClosedPermanently);
+                stopReason: ConnectionStopReason.ClosedPermanently,
+                announcingGeneration: closingGeneration);
         }
     }
 
@@ -3785,11 +3911,17 @@ public class Connection
                         }
                     }
 
+                    // The generation goes with it. Without it this one announcement was the only
+                    // one in the method that spoke for the sequence without saying whose it was:
+                    // a takeover landing between the check above and this line left the loop
+                    // correctly declining to record the exhaustion and then stamping a terminal
+                    // "gave up" over the Connecting the new transition had just reported.
                     SetConnectionState(
                         XrpConnectionState.Disconnected,
                         message: $"Reconnection stopped after {config.MaxReconnectAttempts} attempts.",
                         ConnectionCloseSeverity.Error,
-                        stopReason: ConnectionStopReason.ReconnectExhausted);
+                        stopReason: ConnectionStopReason.ReconnectExhausted,
+                        announcingGeneration: generation);
 
                     break;
                 }
@@ -3803,7 +3935,8 @@ public class Connection
                 XrpConnectionState.RestoringConnection,
                 reconnectMessage,
                 type,
-                reconnect: BuildReconnectInfo(delay: delay));
+                reconnect: BuildReconnectInfo(delay: delay),
+                announcingGeneration: generation);
 
             if (!skipDelay)
             {
