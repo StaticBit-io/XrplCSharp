@@ -1314,13 +1314,21 @@ public class Connection
 
     private ConnectionStopReason _previouslyNotifiedStopReason = ConnectionStopReason.None;
 
+    /// <param name="announcingGeneration">
+    /// The transition this status speaks for. Required rather than optional, and that is the whole
+    /// of its design: an announcement is true only while the transition it belongs to still owns
+    /// the connection, and every time this was left to the call sites to remember, a call site
+    /// forgot. Five separate reviews found five such sites on this branch alone. Passing it is now
+    /// the only way to compile, so the next one cannot be forgotten - it can only be wrong, which
+    /// is a smaller and more visible mistake.
+    /// </param>
     private void SetConnectionState(
         XrpConnectionState newState,
         string message,
+        long announcingGeneration,
         ConnectionCloseSeverity severity = ConnectionCloseSeverity.Info,
         ReconnectInfo? reconnect = null,
-        ConnectionStopReason stopReason = ConnectionStopReason.None,
-        long? announcingGeneration = null)
+        ConnectionStopReason stopReason = ConnectionStopReason.None)
     {
         bool stateChanged = false;
         bool suppressed = false;
@@ -1342,9 +1350,16 @@ public class Connection
         // of it, and are not guarded at all.
         lock (_transitionLock)
         {
-            if (announcingGeneration is long generation &&
-                (_generation != generation ||
-                 (_reconnectExhaustedGeneration == generation && stopReason == ConnectionStopReason.None)))
+            // The seal stops a spent sequence reporting progress it is not making. A connection
+            // that actually came up is not progress-chatter but the fact that contradicts the
+            // seal, and suppressing it would leave the record standing over a client that is up -
+            // every caller told the sequence gave up while the socket carries traffic. So
+            // Connected passes the seal, and only the ownership check applies to it.
+            bool sealedOff = _reconnectExhaustedGeneration == announcingGeneration &&
+                             stopReason == ConnectionStopReason.None &&
+                             newState != XrpConnectionState.Connected;
+
+            if (_generation != announcingGeneration || sealedOff)
             {
                 suppressed = true;
             }
@@ -1359,7 +1374,7 @@ public class Connection
                 // is shown did not happen.
                 if (stopReason != ConnectionStopReason.None)
                 {
-                    _stoppedGeneration = announcingGeneration ?? _generation;
+                    _stoppedGeneration = announcingGeneration;
                     _stoppedReason = stopReason;
                 }
                 else if (newState == XrpConnectionState.Connected)
@@ -1595,7 +1610,10 @@ public class Connection
         {
             // Notified after the takeover, not before it: a handler that answers this with
             // Disconnect() has to win, and it can only win against a transition that has begun.
-            SetConnectionState(XrpConnectionState.Connecting, message: $"ChangeServer: Switching to {server}...");
+            SetConnectionState(
+                XrpConnectionState.Connecting,
+                message: $"ChangeServer: Switching to {server}...",
+                announcingGeneration: generation);
             ThrowIfSuperseded(generation);
 
             // The takeover cleared ws before this sweep, on purpose: the sweep resumes consumer
@@ -1744,7 +1762,7 @@ public class Connection
         SetConnectionState(
             XrpConnectionState.RestoringConnection,
             message: $"{reason} Reconnecting immediately...",
-            ConnectionCloseSeverity.Warning,
+            severity: ConnectionCloseSeverity.Warning,
             reconnect: BuildReconnectInfo(),
             announcingGeneration: generation);
 
@@ -1870,7 +1888,7 @@ public class Connection
             SetConnectionState(
                 XrpConnectionState.RestoringConnection,
                 message: $"Reconnection failed: {ex.Message}. Retrying...",
-                ConnectionCloseSeverity.Warning,
+                severity: ConnectionCloseSeverity.Warning,
                 reconnect: BuildReconnectInfo(),
                 announcingGeneration: generation);
         }
@@ -2149,16 +2167,25 @@ public class Connection
         // it read the answer. Worse than a wrong status: Connect() returned success and started
         // nothing, so nothing was going to reconnect.
         bool alreadyConnected;
+        long connectedGeneration;
         lock (_transitionLock)
         {
             alreadyConnected = IsConnected() &&
                                !_permanentlyDisconnected &&
                                StoppedBecauseLocked() == null;
+            connectedGeneration = _generation;
         }
 
         if (alreadyConnected)
         {
-            SetConnectionState(XrpConnectionState.Connected, message: $"Already connected to {url}");
+            // The generation is captured with the answer, not read at the announcement. A takeover
+            // landing in between makes this publication somebody else's business: untagged, it
+            // would put Connected over the state of the transition that won and clear a record
+            // that is not this call's to clear.
+            SetConnectionState(
+                XrpConnectionState.Connected,
+                message: $"Already connected to {url}",
+                announcingGeneration: connectedGeneration);
             return;
         }
 
@@ -2186,7 +2213,10 @@ public class Connection
         await takeover.ProcessorExit;
 
         Interlocked.Exchange(ref _connectHandlerFailures, value: 0);
-        SetConnectionState(XrpConnectionState.Connecting, message: $"Connecting to {url}...");
+        SetConnectionState(
+            XrpConnectionState.Connecting,
+            message: $"Connecting to {url}...",
+            announcingGeneration: takeover.Generation);
 
         // A session that had opened held the consumer's subscriptions, and retiring it above
         // silences the close callback that would otherwise have announced their loss - the same
@@ -2516,7 +2546,8 @@ public class Connection
                 SetConnectionState(
                     XrpConnectionState.Disconnected,
                     message: "Already disconnected.",
-                    stopReason: stopReason);
+                    stopReason: stopReason,
+                    announcingGeneration: generation);
             }
 
             return 0;
@@ -2530,7 +2561,8 @@ public class Connection
             SetConnectionState(
                 XrpConnectionState.Disconnected,
                 message: "Disconnected by user request.",
-                stopReason: stopReason);
+                stopReason: stopReason,
+                announcingGeneration: generation);
         }
 
         // Announced here as well as from the socket's close callback, which dedups. The callback
@@ -2587,7 +2619,8 @@ public class Connection
                 SetConnectionState(
                     XrpConnectionState.Disconnected,
                     message: "Already disconnected.",
-                    stopReason: ConnectionStopReason.UserDisconnected);
+                    stopReason: ConnectionStopReason.UserDisconnected,
+                    announcingGeneration: generation);
             }
 
             return;
@@ -2600,7 +2633,8 @@ public class Connection
             SetConnectionState(
                 XrpConnectionState.Disconnected,
                 message: "Disconnected by user request.",
-                stopReason: ConnectionStopReason.UserDisconnected);
+                stopReason: ConnectionStopReason.UserDisconnected,
+                announcingGeneration: generation);
         }
 
         // See Disconnect() for why this is announced here and not left to the close callback.
@@ -3091,7 +3125,7 @@ public class Connection
             SetConnectionState(
                 XrpConnectionState.RestoringConnection,
                 message: "Network connection lost. Reconnecting...",
-                ConnectionCloseSeverity.Warning,
+                severity: ConnectionCloseSeverity.Warning,
                 reconnect: BuildReconnectInfo(),
                 announcingGeneration: generation);
         }
@@ -3104,7 +3138,7 @@ public class Connection
             SetConnectionState(
                 XrpConnectionState.RestoringConnection,
                 $"Connection lost: {error.Message}. Reconnecting...",
-                ConnectionCloseSeverity.Warning,
+                severity: ConnectionCloseSeverity.Warning,
                 reconnect: BuildReconnectInfo(),
                 announcingGeneration: generation);
         }
@@ -3114,7 +3148,7 @@ public class Connection
             SetConnectionState(
                 XrpConnectionState.RestoringConnection,
                 $"Connection attempt failed: {error.Message}",
-                ConnectionCloseSeverity.Warning,
+                severity: ConnectionCloseSeverity.Warning,
                 reconnect: BuildReconnectInfo(),
                 announcingGeneration: generation);
         }
@@ -3140,7 +3174,7 @@ public class Connection
             SetConnectionState(
                 XrpConnectionState.Disconnected,
                 $"Initial connection failed: {error.Message}",
-                ConnectionCloseSeverity.Error,
+                severity: ConnectionCloseSeverity.Error,
                 announcingGeneration: generation);
         }
 
@@ -3505,7 +3539,10 @@ public class Connection
             }
 
             Interlocked.Exchange(ref _connectHandlerFailures, value: 0);
-            SetConnectionState(XrpConnectionState.Connected, message: $"Connected {url}");
+            SetConnectionState(
+                XrpConnectionState.Connected,
+                message: $"Connected {url}",
+                announcingGeneration: openedSession.Generation);
         }
         catch (Exception error)
         {
@@ -3611,7 +3648,7 @@ public class Connection
                 XrpConnectionState.Disconnected,
                 message:
                 $"OnConnected handler failed {failures} time(s) in a row: {error.Message}. Giving up after {config.MaxReconnectAttempts} attempts. Call Connect() to retry.",
-                ConnectionCloseSeverity.Error,
+                severity: ConnectionCloseSeverity.Error,
                 stopReason: ConnectionStopReason.ConnectHandlerFailed,
                 announcingGeneration: failedSession.Generation);
 
@@ -3647,7 +3684,7 @@ public class Connection
         SetConnectionState(
             XrpConnectionState.RestoringConnection,
             message: $"OnConnected handler failed: {error.Message}. Reconnecting...",
-            ConnectionCloseSeverity.Warning,
+            severity: ConnectionCloseSeverity.Warning,
             reconnect: BuildReconnectInfo(failures),
             announcingGeneration: failedSession.Generation);
 
@@ -3886,7 +3923,7 @@ public class Connection
             SetConnectionState(
                 XrpConnectionState.Disconnected,
                 noReconnectMessage,
-                ConnectionCloseSeverity.Warning,
+                severity: ConnectionCloseSeverity.Warning,
                 stopReason: ConnectionStopReason.ClosedPermanently,
                 announcingGeneration: closingGeneration);
             return;
@@ -3904,7 +3941,7 @@ public class Connection
                 SetConnectionState(
                     XrpConnectionState.RestoringConnection,
                     userMessage,
-                    severity,
+                    severity: severity,
                     reconnect: firstAttempt,
                     announcingGeneration: closingGeneration);
             }
@@ -3923,7 +3960,7 @@ public class Connection
             SetConnectionState(
                 XrpConnectionState.Disconnected,
                 noReconnectMessage,
-                ConnectionCloseSeverity.Warning,
+                severity: ConnectionCloseSeverity.Warning,
                 stopReason: ConnectionStopReason.ClosedPermanently,
                 announcingGeneration: closingGeneration);
         }
@@ -4083,7 +4120,7 @@ public class Connection
                     SetConnectionState(
                         XrpConnectionState.Disconnected,
                         message: $"Reconnection stopped after {config.MaxReconnectAttempts} attempts.",
-                        ConnectionCloseSeverity.Error,
+                        severity: ConnectionCloseSeverity.Error,
                         stopReason: ConnectionStopReason.ReconnectExhausted,
                         announcingGeneration: generation);
 
@@ -4098,7 +4135,7 @@ public class Connection
             SetConnectionState(
                 XrpConnectionState.RestoringConnection,
                 reconnectMessage,
-                type,
+                severity: type,
                 reconnect: BuildReconnectInfo(delay: delay),
                 announcingGeneration: generation);
 
@@ -4228,7 +4265,7 @@ public class Connection
                 SetConnectionState(
                     XrpConnectionState.RestoringConnection,
                     errorMessage,
-                    severity,
+                    severity: severity,
                     reconnect: BuildReconnectInfo(),
                     announcingGeneration: generation);
             }
