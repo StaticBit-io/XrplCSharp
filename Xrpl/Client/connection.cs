@@ -158,8 +158,13 @@ public enum ConnectionWaitOutcome
     /// <summary>The reconnect loop spent its budget and stopped.</summary>
     ReconnectExhausted,
 
-    /// <summary>The consumer disconnected the client.</summary>
-    Disconnected,
+    /// <summary>
+    /// The consumer disconnected the client. The counterpart of
+    /// <see cref="ConnectionStopReason.UserDisconnected"/>, and named after it: the two enums are
+    /// two views of one event, and a pair that agrees on the event while disagreeing on its name
+    /// is a pair nothing can check.
+    /// </summary>
+    UserDisconnected,
 
     /// <summary>The client gave up because its <c>OnConnected</c> handler kept failing.</summary>
     ConnectHandlerFailed,
@@ -170,6 +175,12 @@ public enum ConnectionWaitOutcome
     /// <see cref="ConnectionStopReason.ClosedPermanently"/>.
     /// </summary>
     ClosedPermanently,
+
+    /// <summary>
+    /// The first connection attempt failed and nothing is retrying it. The counterpart of
+    /// <see cref="ConnectionStopReason.InitialConnectionFailed"/>.
+    /// </summary>
+    InitialConnectionFailed,
 
     /// <summary>There is no connection and no attempt to make one: <c>Connect()</c> is due.</summary>
     NotConnecting,
@@ -512,20 +523,40 @@ public class Connection
     private const long NoGeneration = -1;
 
     /// <summary>
-    /// The generation whose connection the node closed with a code this client does not reconnect
-    /// after, or <see cref="NoGeneration"/>. Keyed by generation for the same reason as
-    /// <see cref="_reconnectExhaustedGeneration"/>, and read by the same waiter.
+    /// The generation that was last announced as stopped, or <see cref="NoGeneration"/>, together
+    /// with the reason it was announced with. Written by <see cref="SetConnectionState"/> for
+    /// every terminal status it actually publishes; read by the wait and by
+    /// <see cref="CheckIfNotConnected"/>.
     /// </summary>
     /// <remarks>
-    /// The status stream has reported this ending since <c>ConnectionStopReason</c> existed, and
-    /// the wait could not: no socket, no loop, no flag, so a caller already parked was woken by
-    /// the announcement, found nothing that reads as an ending, and parked again on a signal that
-    /// nothing was going to complete - spending the whole acquisition timeout, five minutes by
-    /// default, to be told the connection "was not established in time" about a connection the
-    /// consumer had already been told was closed for good. The two views of one event have to
-    /// agree, which is the entire premise of this work.
+    /// <para>
+    /// One record rather than a field per ending, and that is the point of it. Each ending used to
+    /// leave its own residue for a caller to recognise - a flag for the consumer's own disconnect,
+    /// a generation for a spent reconnect budget - and an ending that left none was invisible to
+    /// everyone except the status stream. A caller already parked was woken by the announcement,
+    /// found nothing that reads as an ending, and parked again on a signal nothing was going to
+    /// complete: the whole acquisition timeout, five minutes by default, spent to be told the
+    /// connection "was not established in time" about a connection the consumer had already been
+    /// told was over. Two endings were found that way, in three places, and the third would have
+    /// been found later.
+    /// </para>
+    /// <para>
+    /// Recording it where the announcement happens is what makes the set closed: a terminal reason
+    /// cannot reach a consumer without passing through the one method that writes this, so the
+    /// status stream and the wait cannot come to know different things. Keyed by generation for
+    /// the same reason as <see cref="_reconnectExhaustedGeneration"/>, so nothing has to clear it.
+    /// </para>
+    /// <para>
+    /// <see cref="_reconnectExhaustedGeneration"/> stays beside it and is not folded in: it has a
+    /// second job - <see cref="StartReconnectLoop"/> refuses a generation equal to it - and it is
+    /// deliberately written *before* the announcement, so that a close arriving while the
+    /// notification runs consumer code already finds the sequence marked over.
+    /// </para>
     /// </remarks>
-    private long _closedPermanentlyGeneration = NoGeneration;
+    private long _stoppedGeneration = NoGeneration;
+
+    /// <inheritdoc cref="_stoppedGeneration"/>
+    private ConnectionStopReason _stoppedReason = ConnectionStopReason.None;
 
     // Number of consecutive times the consumer OnConnected handler threw.
     // Not part of the reconnect state: OnceOpen clears the reconnect state before invoking the handler,
@@ -735,6 +766,61 @@ public class Connection
         return gaveUp is null
             ? new ClientDisconnectedException(disconnectedMessage)
             : new ConnectHandlerFailedException(gaveUp.Message, gaveUp.Failures, gaveUp.Error);
+    }
+
+    /// <summary>
+    /// The exception for the ending this generation was announced with, or <c>null</c> when it was
+    /// not announced as stopped.
+    /// </summary>
+    /// <remarks>
+    /// <para>
+    /// The one place that turns a <see cref="ConnectionStopReason"/> into the type a caller gets,
+    /// so that every way of asking - the wait, its outcome value, and the check a request makes -
+    /// answers from the same record and cannot drift apart. Every reason other than
+    /// <see cref="ConnectionStopReason.None"/> is mapped; a reason added without a case here is a
+    /// compile-time hole only in the sense that the switch returns null, which is why the mapping
+    /// is asserted by a test that enumerates the enum.
+    /// </para>
+    /// <para>
+    /// <see cref="ConnectionStopReason.UserDisconnected"/> and
+    /// <see cref="ConnectionStopReason.ConnectHandlerFailed"/> both go through
+    /// <see cref="DisconnectedBecauseLocked"/>, which is what the permanently-disconnected flag
+    /// answers with too, so a caller gets the same type whichever of the two records it is read
+    /// from. The give-up path announces before it calls <c>Disconnect()</c>, so in the moment
+    /// between them the cause is not yet recorded and this answers
+    /// <c>ClientDisconnectedException</c>; it is the right family and a terminal answer, which is
+    /// what the caller is owed - it used to be nothing at all.
+    /// </para>
+    /// <para>Must be called with <see cref="_transitionLock"/> held.</para>
+    /// </remarks>
+    private NotConnectedException? StoppedBecauseLocked()
+    {
+        if (_stoppedGeneration != _generation)
+        {
+            return null;
+        }
+
+        return _stoppedReason switch
+        {
+            ConnectionStopReason.UserDisconnected or ConnectionStopReason.ConnectHandlerFailed =>
+                DisconnectedBecauseLocked("Client has been disconnected. Call Connect() to reconnect."),
+
+            ConnectionStopReason.ReconnectExhausted => new ReconnectExhaustedException(
+                $"Connection failed permanently after {config.MaxReconnectAttempts} attempts. " +
+                "Reconnection has been stopped.",
+                attempts: config.MaxReconnectAttempts,
+                maxAttempts: config.MaxReconnectAttempts),
+
+            ConnectionStopReason.ClosedPermanently => new ConnectionClosedPermanentlyException(
+                "The node closed the connection with a code this client does not reconnect after. " +
+                "Call Connect() to try again, or connect to another server."),
+
+            ConnectionStopReason.InitialConnectionFailed => new InitialConnectionFailedException(
+                "The connection attempt failed and nothing is retrying it. Call Connect() to try " +
+                "again, or connect to another server."),
+
+            _ => null,
+        };
     }
 
     private volatile bool _isIntentionalDisconnect = false;
@@ -1276,6 +1362,16 @@ public class Connection
             {
                 stateChanged = _currentConnectionState != newState;
                 _currentConnectionState = newState;
+
+                // Every ending a consumer is told about is recorded here, in the same critical
+                // section that publishes it, so that the wait cannot know less than the status
+                // stream does. Suppressed announcements are not recorded: an announcement nobody
+                // is shown did not happen.
+                if (stopReason != ConnectionStopReason.None)
+                {
+                    _stoppedGeneration = announcingGeneration ?? _generation;
+                    _stoppedReason = stopReason;
+                }
             }
         }
 
@@ -1848,11 +1944,13 @@ public class Connection
                     // bookkeeping, the bookkeeping for the handler. Reading what is already
                     // published breaks the ring. The second condition stays for the same state
                     // reached without a loop of this generation having run.
-                    else if (_closedPermanentlyGeneration == _generation)
+                    // Whatever this generation was announced as stopped with. Asked before the
+                    // reconnect budget below because that one also answers on its own residue,
+                    // and after the permanently-disconnected flag because that one is set by the
+                    // takeover rather than by an announcement and is therefore true earlier.
+                    else if (StoppedBecauseLocked() is NotConnectedException announced)
                     {
-                        terminal = new ConnectionClosedPermanentlyException(
-                            "The node closed the connection with a code this client does not " +
-                            "reconnect after. Call Connect() to try again, or connect to another server.");
+                        terminal = announced;
                     }
                     else if (_reconnectExhaustedGeneration == _generation ||
                              (config.StopAfterMaxAttempts &&
@@ -1961,7 +2059,7 @@ public class Connection
     /// <remarks>
     /// Each value maps to exactly one of the exceptions
     /// <see cref="WaitForConnectionAsync"/> throws, so the two ways of asking cannot drift apart:
-    /// <see cref="ConnectionWaitOutcome.Disconnected"/> to
+    /// <see cref="ConnectionWaitOutcome.UserDisconnected"/> to
     /// <see cref="ClientDisconnectedException"/>,
     /// <see cref="ConnectionWaitOutcome.ConnectHandlerFailed"/> to
     /// <see cref="ConnectHandlerFailedException"/>,
@@ -1986,7 +2084,7 @@ public class Connection
         }
         catch (ClientDisconnectedException)
         {
-            return ConnectionWaitOutcome.Disconnected;
+            return ConnectionWaitOutcome.UserDisconnected;
         }
         catch (ReconnectExhaustedException)
         {
@@ -1995,6 +2093,10 @@ public class Connection
         catch (ConnectionClosedPermanentlyException)
         {
             return ConnectionWaitOutcome.ClosedPermanently;
+        }
+        catch (InitialConnectionFailedException)
+        {
+            return ConnectionWaitOutcome.InitialConnectionFailed;
         }
         catch (NotConnectingException)
         {
@@ -3186,6 +3288,21 @@ public class Connection
             throw DisconnectedBecause("Client has been disconnected. Call Connect() to reconnect.");
         }
 
+        // The same record the wait reads, and read here for the same reason: a client that gave up
+        // and a client nobody has called Connect() on are indistinguishable by socket, loop and
+        // state, and the check below answers both with "call Connect() first". A consumer who has
+        // just been told on the status stream that this endpoint spent its reconnect budget, and
+        // who then issues a request, was told by the exception that they had never connected -
+        // which is the one distinction the exception family exists to draw.
+        lock (_transitionLock)
+        {
+            NotConnectedException? announced = StoppedBecauseLocked();
+            if (announced != null)
+            {
+                throw announced;
+            }
+        }
+
         // Connecting or RestoringConnection say an attempt is under way even with ws null. So
         // does Connected with ws null: a close is being processed - OnceClose takes the socket out
         // before its first await and reports the state, and starts the loop, after its callbacks -
@@ -3431,12 +3548,17 @@ public class Connection
             // The detailed reason has to be notified BEFORE Disconnect(): Disconnect() moves the state to
             // Disconnected itself, and SetConnectionState only notifies on a state change, so a call after it
             // would be swallowed and the consumer would see "Disconnected by user request." instead.
+            // The generation goes with it, like every other announcement that speaks for one
+            // transition. The ownership check above is read-only and has no await after it, but a
+            // takeover on another thread can still land between the two - and this one announces a
+            // terminal reason, which the deduplication no longer swallows.
             SetConnectionState(
                 XrpConnectionState.Disconnected,
                 message:
                 $"OnConnected handler failed {failures} time(s) in a row: {error.Message}. Giving up after {config.MaxReconnectAttempts} attempts. Call Connect() to retry.",
                 ConnectionCloseSeverity.Error,
-                stopReason: ConnectionStopReason.ConnectHandlerFailed);
+                stopReason: ConnectionStopReason.ConnectHandlerFailed,
+                announcingGeneration: failedSession.Generation);
 
             // The notification above ran consumer code. A handler that answered "gave up" with a
             // ChangeServer has already taken this socket out of ws and is opening another; the
@@ -3744,14 +3866,6 @@ public class Connection
                 if (Owns(closingGeneration))
                 {
                     _reconnectAttempts = 0;
-
-                    // Recorded before the notification, like every other ending: the notification
-                    // runs consumer code, and a caller woken by it reads this under the same lock.
-                    // Resetting the attempt counter just above is what makes recording it
-                    // necessary rather than merely tidy - with the counter back at zero there is
-                    // no residue left anywhere from which a waiter could tell that the connection
-                    // is over rather than between attempts.
-                    _closedPermanentlyGeneration = closingGeneration;
                 }
             }
 

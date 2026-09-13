@@ -166,6 +166,21 @@ namespace Xrpl.Client.Exceptions
     }
 
     /// <summary>
+    /// The first connection attempt failed and no reconnect follows it.
+    /// </summary>
+    /// <remarks>
+    /// Distinct from <see cref="ReconnectExhaustedException"/>: nothing was retried. The client
+    /// never reached a usable connection, so there is no session to fail over from - the reaction
+    /// is to call <c>Connect()</c> again, or to pick another server, rather than to wait.
+    /// The status stream reports the same event as
+    /// <c>ConnectionStopReason.InitialConnectionFailed</c>.
+    /// </remarks>
+    public class InitialConnectionFailedException : NotConnectedException
+    {
+        public InitialConnectionFailedException(string message = null) : base(message) { }
+    }
+
+    /// <summary>
     /// The request was refused at once because the client was not connected and the policy in force
     /// is <c>RequestFailurePolicy.ImmediateFail</c>.
     /// </summary>

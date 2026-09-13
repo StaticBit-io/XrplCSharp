@@ -1850,5 +1850,110 @@ namespace Xrpl.Tests
                 mock.Stop();
             }
         }
+
+        /// <summary>
+        /// Every reason the client can stop for has exactly one outcome a waiter can be told, under
+        /// the same name.
+        /// </summary>
+        /// <remarks>
+        /// <para>
+        /// The two enums are two views of one event, and the defect they exist to remove comes back
+        /// the moment they stop corresponding: an ending announced on the status stream that the
+        /// wait has no way to express leaves a parked caller to sit out its whole timeout and be
+        /// told the connection "was not established in time" about a connection the consumer has
+        /// already been told was over. That happened twice - a close the client does not reconnect
+        /// after, and a first attempt with no retry behind it - and both were found by readers
+        /// rather than by this suite.
+        /// </para>
+        /// <para>
+        /// Asserted over the enum itself rather than over a list written out here, so that a reason
+        /// added later fails this test until it is given its counterpart.
+        /// <see cref="ConnectionStopReason.None"/> is excluded: it is the absence of an ending.
+        /// </para>
+        /// </remarks>
+        [TestMethod]
+        public void TestUEveryStopReasonHasAnOutcomeOfTheSameName()
+        {
+            List<string> missing = new List<string>();
+
+            foreach (ConnectionStopReason reason in Enum.GetValues<ConnectionStopReason>())
+            {
+                if (reason == ConnectionStopReason.None)
+                {
+                    continue;
+                }
+
+                if (!Enum.TryParse(typeof(ConnectionWaitOutcome), reason.ToString(), ignoreCase: false, out object _))
+                {
+                    missing.Add(reason.ToString());
+                }
+            }
+
+            Assert.AreEqual(
+                0,
+                missing.Count,
+                $"ConnectionStopReason values with no ConnectionWaitOutcome of the same name: {string.Join(", ", missing)}. " +
+                "A consumer told this on the status stream has no way to be told it by the wait.");
+        }
+
+        /// <summary>
+        /// A request issued after the client gave up is told that it gave up, not that it was never
+        /// asked to connect.
+        /// </summary>
+        /// <remarks>
+        /// The check every request passes through asks the same question the wait used to ask
+        /// first - is a socket or a reconnect source installed, and is the state anything other
+        /// than Disconnected - and a client that spent its budget answers no to all three, exactly
+        /// as a client nobody has called <c>Connect()</c> on does. So the status stream said the
+        /// endpoint had given up, the wait agreed, and a request on the same client raised
+        /// "no connection attempt in progress. Call Connect() first" - the one distinction this
+        /// exception family exists to draw, contradicted by the third way of asking.
+        /// </remarks>
+        [TestMethod]
+        public async Task TestUARequestAfterTheClientGaveUpNamesGivingUp()
+        {
+            int deadPort = TestUtils.GetFreePort(); // nothing is listening there, and never will be
+            _client = new XrplClient($"ws://127.0.0.1:{deadPort}", new XrplClient.ClientOptions
+            {
+                ReconnectBaseDelay = TimeSpan.FromMilliseconds(50),
+                ReconnectMaxDelay = TimeSpan.FromMilliseconds(100),
+                MaxReconnectAttempts = 2,
+                StopAfterMaxAttempts = true,
+                ConnectionAttemptTimeout = TimeSpan.FromMilliseconds(500),
+                ConnectionAcquisitionTimeout = TimeSpan.FromSeconds(10),
+                UseCustomPing = false,
+            });
+
+            TaskCompletionSource<bool> stopped =
+                new TaskCompletionSource<bool>(TaskCreationOptions.RunContinuationsAsynchronously);
+
+            _client.connection.OnConnectionStatus += info =>
+            {
+                if (info.StopReason == ConnectionStopReason.ReconnectExhausted)
+                {
+                    stopped.TrySetResult(true);
+                }
+            };
+
+            try
+            {
+                await _client.Connect();
+            }
+            catch (NotConnectedException)
+            {
+                // What this caller was told is not the subject.
+            }
+
+            await stopped.Task.WaitAsync(TimeSpan.FromSeconds(20));
+
+            ReconnectExhaustedException error = await Assert.ThrowsExactlyAsync<ReconnectExhaustedException>(
+                async () => await _client.connection.Request(new Dictionary<string, object>
+                {
+                    { "command", "server_info" },
+                }));
+
+            Assert.AreEqual(2, error.MaxAttempts, "The budget the client was configured with.");
+            Assert.IsInstanceOfType<NotConnectedException>(error, "catch (NotConnectedException) must keep catching this.");
+        }
     }
 }
