@@ -2138,7 +2138,23 @@ public class Connection
 
     public async Task Connect(CancellationToken cancellationToken)
     {
-        if (IsConnected())
+        // An open socket alone does not say the client is up, and this is the same question the
+        // wait asks, answered the same way so the two cannot disagree. The give-up path for a
+        // failing OnConnected handler announces the ending, resumes the caller it had waiting, and
+        // disconnects two statements later; a consumer reacting to that announcement with
+        // Connect() - the obvious reaction, and the one the message asks for - found the socket
+        // still open and was told it was already connected, about a connection being torn down as
+        // it read the answer. Worse than a wrong status: Connect() returned success and started
+        // nothing, so nothing was going to reconnect.
+        bool alreadyConnected;
+        lock (_transitionLock)
+        {
+            alreadyConnected = IsConnected() &&
+                               !_permanentlyDisconnected &&
+                               StoppedBecauseLocked() == null;
+        }
+
+        if (alreadyConnected)
         {
             SetConnectionState(XrpConnectionState.Connected, message: $"Already connected to {url}");
             return;
