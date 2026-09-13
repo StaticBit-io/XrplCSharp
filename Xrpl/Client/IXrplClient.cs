@@ -120,6 +120,19 @@ namespace Xrpl.Client
         /// </remarks>
         long StaleSessionFramesDropped => connection.StaleSessionFramesDropped;
 
+        /// <inheritdoc cref="Connection.WaitForConnectionOutcomeAsync"/>
+        /// <remarks>
+        /// Defaulted, like <see cref="DroppedStreamMessages"/>: forwarding to
+        /// <see cref="connection"/> is the only implementation that means anything, and an external
+        /// implementer of this interface should not have to write one. A default member is reached
+        /// only through an interface-typed reference, so <see cref="XrplClient"/> carries its own
+        /// as well.
+        /// </remarks>
+        Task<ConnectionWaitOutcome> WaitForConnectionOutcomeAsync(
+            TimeSpan? timeout = null,
+            CancellationToken cancellationToken = default) =>
+            connection.WaitForConnectionOutcomeAsync(timeout, cancellationToken);
+
         /// <summary>
         /// How many stream frames were dispatched outside the queue, without its ordering or its
         /// capacity bound.
@@ -743,6 +756,12 @@ namespace Xrpl.Client
         /// <inheritdoc />
         public long DroppedStreamMessages => connection.DroppedStreamMessages;
 
+        /// <inheritdoc cref="Connection.WaitForConnectionOutcomeAsync"/>
+        public Task<ConnectionWaitOutcome> WaitForConnectionOutcomeAsync(
+            TimeSpan? timeout = null,
+            CancellationToken cancellationToken = default) =>
+            connection.WaitForConnectionOutcomeAsync(timeout, cancellationToken);
+
         /// <inheritdoc />
         public long StaleSessionFramesDropped => connection.StaleSessionFramesDropped;
 
@@ -913,7 +932,13 @@ namespace Xrpl.Client
             SetSettings(options);
 
             await connection.ChangeServer(server, options, cancellationToken);
-            await SetNetworkId();
+
+            // Carried across a teardown, exactly as Connect() does it. A switch is the same two
+            // operations as a connection - the connection, and the server_info that reads the
+            // network id - and the connection can still be settling when the second one goes out.
+            // Read once and directly, it failed the whole switch on a connection that would have
+            // been up a moment later.
+            await SetNetworkIdWhileConnectingAsync(cancellationToken);
         }
 
         /// <inheritdoc />
@@ -974,7 +999,7 @@ namespace Xrpl.Client
                     return;
                 }
                 catch (Exception error) when (
-                    error is OperationCanceledException or DisconnectedException &&
+                    IsWorthAnotherNetworkIdAttempt(error) &&
                     !cancellationToken.IsCancellationRequested &&
                     attempt < attempts)
                 {
@@ -982,6 +1007,37 @@ namespace Xrpl.Client
                 }
             }
         }
+
+        /// <summary>
+        /// Whether a failed network-id read is worth another attempt.
+        /// </summary>
+        /// <remarks>
+        /// <para>
+        /// The line is drawn between the client's own lifecycle and a peer operation. A connection
+        /// being rebuilt is exactly what this loop exists for, and so is a teardown the client
+        /// performed on itself - giving up on a failing <c>OnConnected</c> handler ends by
+        /// disconnecting, and the request in flight dies with it. Asking again there is what lets
+        /// the wait inside the next attempt report the real reason the client stopped, instead of
+        /// the incidental sweep that happened to kill this request. Which of the two arrives is a
+        /// matter of timing, and the caller of <c>Connect()</c> should not be told a different
+        /// story depending on it.
+        /// </para>
+        /// <para>
+        /// A <c>Connect()</c> or <c>ChangeServer</c> from somewhere else is different: the
+        /// connection belongs to that operation now, asking again would read the network id of a
+        /// server this caller never asked for, and "your operation was overtaken" is the whole
+        /// answer.
+        /// </para>
+        /// </remarks>
+        private static bool IsWorthAnotherNetworkIdAttempt(Exception error) =>
+            error switch
+            {
+                ConnectionSupersededException superseded =>
+                    superseded.Kind is not (ConnectionTransitionKind.Connect or ConnectionTransitionKind.ChangeServer),
+                OperationCanceledException => true,
+                DisconnectedException => true,
+                _ => false,
+            };
 
         private async Task SetNetworkId()
         {

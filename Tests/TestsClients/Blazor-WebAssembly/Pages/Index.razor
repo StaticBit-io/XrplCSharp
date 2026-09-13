@@ -547,8 +547,15 @@
                 CurrentConnectionState = statusInfo.ConnectionState;
                 IsConnected = statusInfo.ConnectionState == XrpConnectionState.Connected;
                 
-                AddStatusMessage($"[{statusInfo.ConnectionState}] {statusInfo.Message}", type);
-                Console.WriteLine($"Connection Status: [{statusInfo.ConnectionState}] {statusInfo.Message}");
+                // The reason is shown only where it means something: on a notification that is not
+                // an ending it is None, and printing that on every line would bury the one place
+                // where "still trying" and "gave up" finally differ by more than their wording.
+                string stopped = statusInfo.StopReason == ConnectionStopReason.None
+                    ? string.Empty
+                    : $" [stopped: {statusInfo.StopReason}]";
+
+                AddStatusMessage($"[{statusInfo.ConnectionState}]{stopped} {statusInfo.Message}", type);
+                Console.WriteLine($"Connection Status: [{statusInfo.ConnectionState}]{stopped} {statusInfo.Message}");
                 StateHasChanged();
             });
         };
