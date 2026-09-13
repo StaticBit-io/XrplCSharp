@@ -1745,7 +1745,8 @@ public class Connection
             XrpConnectionState.RestoringConnection,
             message: $"{reason} Reconnecting immediately...",
             ConnectionCloseSeverity.Warning,
-            reconnect: BuildReconnectInfo());
+            reconnect: BuildReconnectInfo(),
+            announcingGeneration: generation);
 
         // Standing down before the session end is announced still owes that announcement: the
         // takeover retired the session, which silences its own close callback, and whoever took
@@ -1870,7 +1871,8 @@ public class Connection
                 XrpConnectionState.RestoringConnection,
                 message: $"Reconnection failed: {ex.Message}. Retrying...",
                 ConnectionCloseSeverity.Warning,
-                reconnect: BuildReconnectInfo());
+                reconnect: BuildReconnectInfo(),
+                announcingGeneration: generation);
         }
     }
 
@@ -3646,7 +3648,8 @@ public class Connection
             XrpConnectionState.RestoringConnection,
             message: $"OnConnected handler failed: {error.Message}. Reconnecting...",
             ConnectionCloseSeverity.Warning,
-            reconnect: BuildReconnectInfo(failures));
+            reconnect: BuildReconnectInfo(failures),
+            announcingGeneration: failedSession.Generation);
 
         // Always tear down the socket the handler actually ran for. WebSocketClient.Connect invokes its
         // OnConnect callback without awaiting it, so the connect lock can be released while this method is
@@ -4218,11 +4221,16 @@ public class Connection
                 var errorMessage = isNetworkError
                     ? $"Reconnection attempt #{_reconnectAttempts}: network unavailable"
                     : $"Reconnection attempt #{_reconnectAttempts} failed: {ex.Message}";
+                // The ownership check above decides whether to carry on; this decides whether the
+                // status is still this loop's to report, and the two are not the same instant. A
+                // takeover landing between them - a user Disconnect above all - had its own state
+                // overwritten with a RestoringConnection from a loop that was already superseded.
                 SetConnectionState(
                     XrpConnectionState.RestoringConnection,
                     errorMessage,
                     severity,
-                    reconnect: BuildReconnectInfo());
+                    reconnect: BuildReconnectInfo(),
+                    announcingGeneration: generation);
             }
         }
 
