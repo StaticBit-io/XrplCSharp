@@ -196,6 +196,17 @@ namespace Xrpl.Tests
                 Assert.IsGreaterThanOrEqualTo(1, error.Failures, "The handler failed at least once before the client gave up.");
                 Assert.AreSame(thrownByHandler, error.InnerException, "The handler's own failure is what says why.");
                 Assert.IsInstanceOfType<NotConnectedException>(error, "catch (NotConnectedException) must keep catching this.");
+
+                // The value-returning way of asking has to name the same case. It is a separate
+                // path - the exception is caught and translated - so a mapping that is wrong here
+                // is wrong for every consumer who prefers a value to a catch.
+                ConnectionWaitOutcome outcome =
+                    await _client.connection.WaitForConnectionOutcomeAsync(TimeSpan.FromSeconds(5));
+
+                Assert.AreEqual(
+                    ConnectionWaitOutcome.ConnectHandlerFailed,
+                    outcome,
+                    "The outcome and the exception are two ways of asking one question.");
             }
             finally
             {
@@ -561,6 +572,7 @@ namespace Xrpl.Tests
                     }
                 };
 
+                XrplClient disconnected = _client;
                 await _client.Disconnect();
                 _client = null;
 
@@ -572,6 +584,14 @@ namespace Xrpl.Tests
 
                 Assert.IsNotNull(terminal);
                 Assert.AreEqual(ConnectionStopReason.UserDisconnected, terminal.StopReason);
+
+                // And the wait says the same, under the same name. The two enums are two views of
+                // one event, and the pair for the most ordinary ending of all was the one the
+                // suite never asked for - it was also the pair whose names did not match.
+                ConnectionWaitOutcome outcome =
+                    await disconnected.connection.WaitForConnectionOutcomeAsync(TimeSpan.FromSeconds(5));
+
+                Assert.AreEqual(ConnectionWaitOutcome.UserDisconnected, outcome);
             }
             finally
             {

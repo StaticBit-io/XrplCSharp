@@ -124,9 +124,6 @@ public enum ConnectionStopReason
     /// <summary>The client gave up because its <c>OnConnected</c> handler kept failing.</summary>
     ConnectHandlerFailed,
 
-    /// <summary>The first connection never came up.</summary>
-    InitialConnectionFailed,
-
     /// <summary>The connection was closed for good, with no reconnect to follow.</summary>
     ClosedPermanently,
 }
@@ -175,12 +172,6 @@ public enum ConnectionWaitOutcome
     /// <see cref="ConnectionStopReason.ClosedPermanently"/>.
     /// </summary>
     ClosedPermanently,
-
-    /// <summary>
-    /// The first connection attempt failed and nothing is retrying it. The counterpart of
-    /// <see cref="ConnectionStopReason.InitialConnectionFailed"/>.
-    /// </summary>
-    InitialConnectionFailed,
 
     /// <summary>There is no connection and no attempt to make one: <c>Connect()</c> is due.</summary>
     NotConnecting,
@@ -814,10 +805,6 @@ public class Connection
             ConnectionStopReason.ClosedPermanently => new ConnectionClosedPermanentlyException(
                 "The node closed the connection with a code this client does not reconnect after. " +
                 "Call Connect() to try again, or connect to another server."),
-
-            ConnectionStopReason.InitialConnectionFailed => new InitialConnectionFailedException(
-                "The connection attempt failed and nothing is retrying it. Call Connect() to try " +
-                "again, or connect to another server."),
 
             _ => null,
         };
@@ -2094,10 +2081,6 @@ public class Connection
         {
             return ConnectionWaitOutcome.ClosedPermanently;
         }
-        catch (InitialConnectionFailedException)
-        {
-            return ConnectionWaitOutcome.InitialConnectionFailed;
-        }
         catch (NotConnectingException)
         {
             return ConnectionWaitOutcome.NotConnecting;
@@ -3093,21 +3076,27 @@ public class Connection
         }
         else
         {
-            // True initial connection failure - no reconnect in progress.
-            //
-            // Whether a reason is named is decided by the same condition that decides whether a
-            // reconnect follows, and reads it from the same variable, so the two cannot come to
-            // say different things. A reason means the client stopped - that is what
-            // ConnectionStopReason.None exists to distinguish - and naming one here while the
-            // retry below is about to start would hand a consumer a reason to fail over to
+            // A connection that never came up, and one the client is about to dial again: this
+            // path is only reached for a socket that never opened as a session, and a socket that
+            // never opened is always retried - willReconnect below reads the same fact. So no
+            // reason is named here, and there is no reason to name: a reason means the client
+            // stopped, which is what ConnectionStopReason.None exists to distinguish, and naming
+            // one while the retry is about to start would hand a consumer grounds to fail over to
             // another server while this one is still being dialled.
+            //
+            // A ConnectionStopReason.InitialConnectionFailed existed here and was removed before
+            // release rather than kept as a defensive value. It is unreachable by construction,
+            // and that was measured rather than argued: the branch was instrumented and the whole
+            // unit suite run twice - once on the reason, once on willReconnect itself - for zero
+            // hits in 1328 tests. A value no consumer can ever observe is worse than no value,
+            // because it invites a branch that never runs. Adding an enum member later is not a
+            // breaking change; removing one is, which is why this is the right order to be wrong
+            // in. The ending a consumer does get for a connection that never came up and stopped
+            // being retried is ReconnectExhausted, from the loop that stopped retrying it.
             SetConnectionState(
                 XrpConnectionState.Disconnected,
                 $"Initial connection failed: {error.Message}",
                 ConnectionCloseSeverity.Error,
-                stopReason: willReconnect
-                    ? ConnectionStopReason.None
-                    : ConnectionStopReason.InitialConnectionFailed,
                 announcingGeneration: generation);
         }
 
