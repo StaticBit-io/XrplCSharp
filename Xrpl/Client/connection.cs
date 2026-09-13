@@ -717,10 +717,13 @@ public class Connection
     /// Why the client is permanently disconnected, when the reason is not "the consumer asked".
     /// </summary>
     /// <remarks>
-    /// Non-null only while <see cref="_permanentlyDisconnected"/> is set by the path that gives up
-    /// on a failing <c>OnConnected</c> handler. Written and cleared in
-    /// <see cref="TakeOverLocked"/> under <see cref="_transitionLock"/>, in the same statement
-    /// group as the flag, so there is no separate lifetime to keep in step.
+    /// Set by the path that gives up on a failing <c>OnConnected</c> handler, just before it
+    /// announces the ending - the announcement is the first thing anyone can see that ending by,
+    /// and a caller reading the cause a moment later must not be told the consumer disconnected
+    /// the client. The disconnect that path performs is handed the same value, and
+    /// <see cref="TakeOverLocked"/> replaces or clears it under <see cref="_transitionLock"/> in
+    /// the same statement group as <see cref="_permanentlyDisconnected"/>, so a takeover by
+    /// anything else ends its lifetime.
     /// </remarks>
     private ConnectHandlerFailure? _connectHandlerGaveUp;
 
@@ -1359,6 +1362,18 @@ public class Connection
                     _stoppedGeneration = announcingGeneration ?? _generation;
                     _stoppedReason = stopReason;
                 }
+                else if (newState == XrpConnectionState.Connected)
+                {
+                    // An ending is over when the connection is up again, and this is the
+                    // counterpart of recording it. Without it a generation announced as stopped
+                    // that connected anyway - a straggling attempt succeeding after its loop gave
+                    // up - would keep answering every caller with the ending, because the record
+                    // outlives the state it describes and nothing else clears it. Connected is the
+                    // one state that contradicts "stopped"; RestoringConnection does not, which is
+                    // why only this one clears.
+                    _stoppedGeneration = NoGeneration;
+                    _stoppedReason = ConnectionStopReason.None;
+                }
             }
         }
 
@@ -1863,11 +1878,11 @@ public class Connection
 
     public async Task WaitForConnectionAsync(TimeSpan? timeout = null, CancellationToken cancellationToken = default)
     {
-        if (IsConnected())
-        {
-            return;
-        }
-
+        // No fast path on IsConnected() here. The loop below answers the same question one lock
+        // later and answers it with the rest of the state in hand, which is the whole difference:
+        // a socket can be open while the client has already been announced as stopped, and a
+        // caller that reads only the socket is told the connection is up moments after it was told
+        // why it is over.
         var waitTimeout = timeout ?? config.ConnectionAcquisitionTimeout;
 
         if (waitTimeout != Timeout.InfiniteTimeSpan && waitTimeout <= TimeSpan.Zero)
@@ -1911,16 +1926,35 @@ public class Connection
                 ready = _connectionReady.Task;
                 connected = IsConnected();
 
-                if (!connected)
+                // These two are asked whether or not a socket happens to be open, and that is the
+                // opposite of the order this used to have. The give-up path rejects the requests
+                // in flight - which is what resumes the caller inside Connect() - one statement
+                // before it disconnects, so for that moment the socket is still installed and
+                // still open while the consumer has already been told the client gave up. A caller
+                // asking then was told it was connected: a failure reporting itself as success,
+                // and the two ways of asking contradicting each other about one event. The record
+                // read here is written by the announcement that precedes the rejection, so the
+                // ordering is guaranteed rather than raced.
+                //
+                // Re-checked on every pass, not only on entry: the client can be disconnected
+                // while a caller is already waiting here - a user Disconnect(), or the client
+                // giving up on a permanently failing OnConnected handler.
+                if (_permanentlyDisconnected)
                 {
-                    // Re-checked on every pass, not only on entry: the client can be disconnected
-                    // while a caller is already waiting here - a user Disconnect(), or the client
-                    // giving up on a permanently failing OnConnected handler.
-                    if (_permanentlyDisconnected)
-                    {
-                        terminal = DisconnectedBecauseLocked(
-                            "Client has been disconnected. Call Connect() to reconnect.");
-                    }
+                    terminal = DisconnectedBecauseLocked(
+                        "Client has been disconnected. Call Connect() to reconnect.");
+                }
+                // Whatever this generation was announced as stopped with. Asked after the
+                // permanently-disconnected flag because that one is set by the takeover rather
+                // than by an announcement and is therefore true earlier, and before the reconnect
+                // budget below because that one answers on its own residue.
+                else if (StoppedBecauseLocked() is NotConnectedException announced)
+                {
+                    terminal = announced;
+                }
+
+                if (terminal == null && !connected)
+                {
                     // The generation is asked first, and that ordering is what stops a waiter
                     // depending on work that has not happened yet. The loop records the generation
                     // as spent before it announces the fact, and releases its cancellation source
@@ -1931,15 +1965,7 @@ public class Connection
                     // bookkeeping, the bookkeeping for the handler. Reading what is already
                     // published breaks the ring. The second condition stays for the same state
                     // reached without a loop of this generation having run.
-                    // Whatever this generation was announced as stopped with. Asked before the
-                    // reconnect budget below because that one also answers on its own residue,
-                    // and after the permanently-disconnected flag because that one is set by the
-                    // takeover rather than by an announcement and is therefore true earlier.
-                    else if (StoppedBecauseLocked() is NotConnectedException announced)
-                    {
-                        terminal = announced;
-                    }
-                    else if (_reconnectExhaustedGeneration == _generation ||
+                    if (_reconnectExhaustedGeneration == _generation ||
                              (config.StopAfterMaxAttempts &&
                               _reconnectAttempts >= config.MaxReconnectAttempts &&
                               _reconnectCts == null))
@@ -1974,14 +2000,14 @@ public class Connection
 
             firstPass = false;
 
-            if (connected)
-            {
-                return;
-            }
-
             if (terminal != null)
             {
                 throw terminal;
+            }
+
+            if (connected)
+            {
+                return;
             }
 
             // Inclusive. Both readings of the clock are quantised to the system tick - 15.625 ms
@@ -3541,6 +3567,28 @@ public class Connection
             // transition. The ownership check above is read-only and has no await after it, but a
             // takeover on another thread can still land between the two - and this one announces a
             // terminal reason, which the deduplication no longer swallows.
+            ConnectHandlerFailure gaveUp = new ConnectHandlerFailure(
+                $"Gave up connecting to {url}: the OnConnected handler failed {failures} time(s) in a row. " +
+                $"Call Connect() to retry.",
+                failures,
+                error);
+
+            // Recorded before the ending is announced, because the announcement is the first thing
+            // anyone can see it by. A status handler asking what happened - and the caller the
+            // rejection below resumes - reads the cause through this field, and until it was
+            // written here they were told the consumer had disconnected the client: the one thing
+            // that did not happen, and the confusion the whole exception family exists to end. The
+            // disconnect further down is handed the same value, so the two cannot drift; a
+            // takeover landing in between replaces or clears it, which is correct, because then
+            // this path no longer speaks for the connection.
+            lock (_transitionLock)
+            {
+                if (Owns(failedSession.Generation))
+                {
+                    _connectHandlerGaveUp = gaveUp;
+                }
+            }
+
             SetConnectionState(
                 XrpConnectionState.Disconnected,
                 message:
@@ -3567,12 +3615,6 @@ public class Connection
             // SetNetworkId sends straight after, and the socket really does open for a moment
             // before a failing handler brings it down. A caller that got as far as the second
             // operation was told its own request had been cancelled, having cancelled nothing.
-            ConnectHandlerFailure gaveUp = new ConnectHandlerFailure(
-                $"Gave up connecting to {url}: the OnConnected handler failed {failures} time(s) in a row. " +
-                $"Call Connect() to retry.",
-                failures,
-                error);
-
             requestManager.RejectAll(new ConnectHandlerFailedException(gaveUp.Message, gaveUp.Failures, gaveUp.Error));
 
             // The cause travels with the disconnect this path performs. Everything that reports the

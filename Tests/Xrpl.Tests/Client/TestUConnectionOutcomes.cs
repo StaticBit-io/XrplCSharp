@@ -2031,5 +2031,81 @@ namespace Xrpl.Tests
             Assert.AreEqual(2, error.MaxAttempts, "The budget the client was configured with.");
             Assert.IsInstanceOfType<NotConnectedException>(error, "catch (NotConnectedException) must keep catching this.");
         }
+
+        /// <summary>
+        /// A client that has been announced as stopped does not report itself connected, however
+        /// open the socket it is still holding happens to be.
+        /// </summary>
+        /// <remarks>
+        /// <para>
+        /// The give-up path announces the ending, then rejects the requests in flight - which is
+        /// what resumes the caller inside <c>Connect()</c> - and only then disconnects. Between the
+        /// rejection and the disconnect the socket is still installed and still open, so a caller
+        /// asking in that moment was told the connection was up, one instant after being told why
+        /// it was over. The first failure shape there is: an operation reporting success while the
+        /// state it describes is gone.
+        /// </para>
+        /// <para>
+        /// The status notification is the pause point that makes the window deterministic rather
+        /// than raced. It is raised before the rejection, so inside the handler the socket is
+        /// guaranteed to be open and the ending is guaranteed to be recorded - the exact
+        /// interleaving that CI produced and this machine did not.
+        /// </para>
+        /// </remarks>
+        [TestMethod]
+        public async Task TestUAStoppedClientDoesNotCallItselfConnected()
+        {
+            int port = TestUtils.GetFreePort();
+            CreateMockRippled mock = StartMock(port);
+
+            try
+            {
+                _client = new XrplClient($"ws://127.0.0.1:{port}", new XrplClient.ClientOptions
+                {
+                    ReconnectBaseDelay = TimeSpan.FromMilliseconds(100),
+                    ReconnectMaxDelay = TimeSpan.FromMilliseconds(200),
+                    MaxReconnectAttempts = 2,
+                    StopAfterMaxAttempts = true,
+                    ConnectionAttemptTimeout = TimeSpan.FromSeconds(2),
+                    ConnectionAcquisitionTimeout = TimeSpan.FromSeconds(30),
+                    UseCustomPing = false,
+                });
+
+                _client.connection.OnConnected += () => throw new InvalidOperationException("handler is permanently broken");
+
+                bool? socketWasStillOpen = null;
+                ConnectionWaitOutcome? answeredInsideTheWindow = null;
+
+                _client.connection.OnConnectionStatus += status =>
+                {
+                    if (status.StopReason != ConnectionStopReason.ConnectHandlerFailed ||
+                        answeredInsideTheWindow != null)
+                    {
+                        return;
+                    }
+
+                    socketWasStillOpen = _client.connection.IsConnected();
+                    answeredInsideTheWindow = _client.connection
+                        .WaitForConnectionOutcomeAsync(TimeSpan.FromSeconds(5))
+                        .GetAwaiter()
+                        .GetResult();
+                };
+
+                await Assert.ThrowsExactlyAsync<ConnectHandlerFailedException>(async () => await _client.Connect());
+
+                Assert.IsNotNull(answeredInsideTheWindow, "The terminal notification has to be raised for this to test anything.");
+
+                Assert.AreEqual(
+                    ConnectionWaitOutcome.ConnectHandlerFailed,
+                    answeredInsideTheWindow,
+                    socketWasStillOpen == true
+                        ? "Asked while the socket was still open, and the client had already been announced as stopped."
+                        : "Asked after the socket had closed, so this run did not exercise the window - but the answer is the same either way.");
+            }
+            finally
+            {
+                mock.Stop();
+            }
+        }
     }
 }
