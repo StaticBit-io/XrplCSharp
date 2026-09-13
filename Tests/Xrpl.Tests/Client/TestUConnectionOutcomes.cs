@@ -1872,6 +1872,62 @@ namespace Xrpl.Tests
         }
 
         /// <summary>
+        /// A client that gave up comes back when the consumer asks it to, and the switch that asks
+        /// is not answered with the ending the previous one had.
+        /// </summary>
+        /// <remarks>
+        /// <para>
+        /// The whole point of a terminal ending is that the consumer decides what happens next, and
+        /// the decision they make is usually this one: move to another node. Recovery was covered
+        /// through <c>Connect()</c> and, on the WebAssembly stand, through <c>ChangeServer</c>;
+        /// this pins the second in the suite. What it guards against specifically is the wait
+        /// concluding, from state the previous sequence left behind, that a switch which has made
+        /// no attempts has already run out of them - every field it reads to decide that is keyed
+        /// by generation, and this is the test that says so.
+        /// </para>
+        /// </remarks>
+        [TestMethod]
+        public async Task TestUAClientThatGaveUpSwitchesToALiveServer()
+        {
+            int port = TestUtils.GetFreePort();
+            CreateMockRippled mock = StartMock(port);
+
+            try
+            {
+                _client = new XrplClient($"ws://127.0.0.1:{port}", new XrplClient.ClientOptions
+                {
+                    ReconnectBaseDelay = TimeSpan.FromMilliseconds(100),
+                    ReconnectMaxDelay = TimeSpan.FromMilliseconds(200),
+                    MaxReconnectAttempts = 2,
+                    StopAfterMaxAttempts = true,
+                    ConnectionAttemptTimeout = TimeSpan.FromSeconds(2),
+                    ConnectionAcquisitionTimeout = TimeSpan.FromSeconds(30),
+                    UseCustomPing = false,
+                });
+
+                await _client.Connect();
+                Assert.IsTrue(_client.connection.IsConnected(), "Precondition: connected to the mock.");
+
+                int deadPort = TestUtils.GetFreePort(); // nothing is listening there, and never will be
+
+                await Assert.ThrowsExactlyAsync<ReconnectExhaustedException>(
+                    async () => await _client.connection.ChangeServer($"ws://127.0.0.1:{deadPort}"));
+
+                // The consumer's decision, and the client has to honour it rather than answer with
+                // the ending of the sequence that is over.
+                await _client.connection.ChangeServer($"ws://127.0.0.1:{port}");
+
+                Assert.IsTrue(
+                    _client.connection.IsConnected(),
+                    "A client that gave up must still switch to a server that answers.");
+            }
+            finally
+            {
+                mock.Stop();
+            }
+        }
+
+        /// <summary>
         /// Every reason the client can stop for has exactly one outcome a waiter can be told, under
         /// the same name.
         /// </summary>
