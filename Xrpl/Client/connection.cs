@@ -629,6 +629,9 @@ public class Connection
     /// the critical sections that move the connection, and without it every parked waiter would
     /// resume inline there - the same defect as issue #177, in a new place.
     /// </remarks>
+    /// <summary>The longest single wait <see cref="Task.WaitAsync(TimeSpan)"/> accepts.</summary>
+    private static readonly TimeSpan MaxSignalWait = TimeSpan.FromMilliseconds(int.MaxValue);
+
     private static TaskCompletionSource<bool> NewReadySignal() =>
         new TaskCompletionSource<bool>(TaskCreationOptions.RunContinuationsAsynchronously);
 
@@ -1818,9 +1821,17 @@ public class Connection
                 continue;
             }
 
+            // Task.WaitAsync refuses any timeout above int.MaxValue milliseconds - about
+            // twenty-five days - and a caller may legitimately ask to wait longer than that; the
+            // validation above only refuses zero and negative. The polling loop this replaced had
+            // no such ceiling, so passing the remaining time straight through turned a long wait
+            // into an immediate ArgumentOutOfRangeException. The deadline is re-read at the head of
+            // every pass, so a long wait is simply served by several bounded ones.
+            TimeSpan waitSlice = hasTimeout && remaining > MaxSignalWait ? MaxSignalWait : remaining;
+
             try
             {
-                await ready.WaitAsync(remaining, cancellationToken);
+                await ready.WaitAsync(waitSlice, cancellationToken);
             }
             catch (System.TimeoutException)
             {
@@ -2769,21 +2780,32 @@ public class Connection
 
         CompleteDisconnectTcs();
 
+        // Read before the branch below, because that branch speaks about the connection too. A
+        // callback without a session (no caller in this class produces one; the parameter defaults
+        // exist for a null socket) is taken to be about the current transition.
+        long generation = failedSession?.Generation ?? CurrentGeneration();
+
         if (intentionalDisconnect)
         {
             connectionManager.RejectAllAwaitingWithCancellation();
-            SetConnectionState(
-                XrpConnectionState.Disconnected,
-                message: "Connection closed permanently.",
-                stopReason: ConnectionStopReason.ClosedPermanently);
+
+            // Announced only while this callback still speaks for the connection. The attempt
+            // timer of a handshake outlives the Disconnect() that cancelled it, and this branch
+            // then reported "closed permanently" over the disconnect the consumer had already been
+            // told about - the last reason they saw being one that does not say who closed it.
+            if (Owns(generation))
+            {
+                SetConnectionState(
+                    XrpConnectionState.Disconnected,
+                    message: "Connection closed permanently.",
+                    stopReason: ConnectionStopReason.ClosedPermanently);
+            }
+
             return;
         }
 
         // From here on everything is about the connection as a whole - the sweep, the state, the
-        // loop - and that belongs to whoever owns it. A callback without a session (no caller in
-        // this class produces one; the parameter defaults exist for a null socket) is taken to be
-        // about the current transition.
-        long generation = failedSession?.Generation ?? CurrentGeneration();
+        // loop - and that belongs to whoever owns it.
         if (!Owns(generation))
         {
             return;
@@ -2800,6 +2822,24 @@ public class Connection
         else
         {
             connectionManager.RejectAllAwaiting(new NotConnectedException(error.Message));
+        }
+
+        // The tail of a sequence that is over. This generation's reconnect loop spent its budget,
+        // announced it and stopped; the attempt that failed last reports here afterwards, and
+        // everything below would then speak for a connection nobody is rebuilding - a
+        // RestoringConnection carrying a reconnect block, or a Disconnected whose reason says the
+        // notification is not an ending, either of them landing after the terminal one a consumer
+        // was meant to act on. The StartReconnectLoop at the end is refused for the same reason,
+        // so the announcement would describe work that is not going to happen.
+        bool sequenceIsOver;
+        lock (_transitionLock)
+        {
+            sequenceIsOver = _reconnectExhaustedGeneration == generation;
+        }
+
+        if (sequenceIsOver)
+        {
+            return;
         }
 
         // Read once, before anything is announced, and used both for what is announced and for
