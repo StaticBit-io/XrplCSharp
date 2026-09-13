@@ -51,6 +51,39 @@ public enum XrpConnectionState
     RestoringConnection,
 }
 
+/// <summary>
+/// The kind of operation that moved the connection.
+/// </summary>
+/// <remarks>
+/// <para>
+/// Carried by <see cref="Xrpl.Client.Exceptions.ConnectionSupersededException"/>, which is how a
+/// caller learns that its operation was overtaken - and by what. The reaction differs: another
+/// <see cref="ChangeServer"/> put the client on a server the caller did not ask for, while
+/// <see cref="Reconnect"/> means the health check rebuilt the connection to the same one.
+/// </para>
+/// <para>
+/// <see cref="Disconnect"/> is reachable only on a request that was in flight when
+/// <c>Disconnect()</c> swept it. An operation overtaken by a <c>Disconnect()</c> is told the
+/// client is down - <see cref="Xrpl.Client.Exceptions.ClientDisconnectedException"/> - which is
+/// what that path has always reported and what a caller catching
+/// <see cref="Xrpl.Client.Exceptions.NotConnectedException"/> still expects.
+/// </para>
+/// </remarks>
+public enum ConnectionTransitionKind
+{
+    /// <summary>A <c>Connect()</c> from the consumer.</summary>
+    Connect,
+
+    /// <summary>A <c>ChangeServer</c> from the consumer.</summary>
+    ChangeServer,
+
+    /// <summary>A <c>Disconnect()</c> or <c>DisconnectAndWaitAsync()</c> from the consumer.</summary>
+    Disconnect,
+
+    /// <summary>A reconnect the client started on its own, from the health check.</summary>
+    Reconnect,
+}
+
 public class ReconnectInfo
 {
     public int CurrentAttempt { get; set; }
@@ -58,6 +91,90 @@ public class ReconnectInfo
     public int MaxAttempts { get; set; }
 
     public TimeSpan RemainingDelay { get; set; }
+}
+
+/// <summary>
+/// Why the client stopped, on the notification that says it stopped.
+/// </summary>
+/// <remarks>
+/// <para>
+/// <see cref="XrpConnectionState.Disconnected"/> is announced from every ending a connection can
+/// have, and they call for different reactions: a consumer's own disconnect is not a failure, a
+/// spent reconnect budget is a reason to try another server, and a broken <c>OnConnected</c>
+/// handler is a reason to fix the handler rather than move away from a node that is answering.
+/// Until now they differed only in the text of the message.
+/// </para>
+/// <para>
+/// It lives here rather than in <see cref="ReconnectInfo"/> on purpose: filling that in on a
+/// terminal notification would give <c>Reconnect != null</c> a second meaning, when consumers
+/// read it as "a reconnect is in progress".
+/// </para>
+/// </remarks>
+public enum ConnectionStopReason
+{
+    /// <summary>The notification is not a terminal one.</summary>
+    None,
+
+    /// <summary>The consumer called <c>Disconnect()</c> or <c>DisconnectAndWaitAsync()</c>.</summary>
+    UserDisconnected,
+
+    /// <summary>The reconnect loop spent its budget of attempts and stopped.</summary>
+    ReconnectExhausted,
+
+    /// <summary>The client gave up because its <c>OnConnected</c> handler kept failing.</summary>
+    ConnectHandlerFailed,
+
+    /// <summary>The connection was closed for good, with no reconnect to follow.</summary>
+    ClosedPermanently,
+}
+
+/// <summary>
+/// How a wait for the connection ended.
+/// </summary>
+/// <remarks>
+/// <para>
+/// The same events <see cref="Xrpl.Client.Exceptions.NotConnectedException"/> and its subtypes
+/// report, for callers who would rather read an answer than catch one: "it did not come back in
+/// time" is something a caller has to act on, not an exceptional event.
+/// </para>
+/// <para>
+/// A <c>bool</c> would fold "timed out", "gave up" and "nothing is running" into one <c>false</c>,
+/// which is the confusion this whole family of types exists to remove. Two things stay exceptions:
+/// cancellation through the caller's own token, which is the .NET convention, and an invalid
+/// timeout, which is a mistake by the caller rather than an outcome of the connection.
+/// </para>
+/// </remarks>
+public enum ConnectionWaitOutcome
+{
+    /// <summary>The connection is up.</summary>
+    Connected,
+
+    /// <summary>It did not come up within the time allowed.</summary>
+    TimedOut,
+
+    /// <summary>The reconnect loop spent its budget and stopped.</summary>
+    ReconnectExhausted,
+
+    /// <summary>
+    /// The consumer disconnected the client. The counterpart of
+    /// <see cref="ConnectionStopReason.UserDisconnected"/>, and named after it: the two enums are
+    /// two views of one event, and a pair that agrees on the event while disagreeing on its name
+    /// is a pair nothing can check.
+    /// </summary>
+    UserDisconnected,
+
+    /// <summary>The client gave up because its <c>OnConnected</c> handler kept failing.</summary>
+    ConnectHandlerFailed,
+
+    /// <summary>
+    /// The node closed the connection with a code this client does not reconnect after, and no
+    /// reconnect was started. The counterpart of
+    /// <see cref="ConnectionStopReason.ClosedPermanently"/>.
+    /// </summary>
+    ClosedPermanently,
+
+    /// <summary>There is no connection and no attempt to make one: <c>Connect()</c> is due.</summary>
+    NotConnecting,
 }
 
 public class ConnectionStatusInfo
@@ -69,6 +186,9 @@ public class ConnectionStatusInfo
     public ReconnectInfo? Reconnect { get; set; }
 
     public XrpConnectionState ConnectionState { get; set; }
+
+    /// <inheritdoc cref="ConnectionStopReason"/>
+    public ConnectionStopReason StopReason { get; set; }
 }
 
 public class Connection
@@ -363,6 +483,72 @@ public class Connection
 
     private int _reconnectAttempts = 0;
 
+    /// <summary>
+    /// The generation whose reconnect sequence spent its budget and stopped, or <c>0</c>.
+    /// </summary>
+    /// <remarks>
+    /// <para>
+    /// <c>StopAfterMaxAttempts</c> is a promise that the client stops asking, and until this was
+    /// recorded nothing kept it. A sequence that gives up clears the two fields
+    /// <see cref="StartReconnectLoop"/> reads to decide whether one is already running -
+    /// <see cref="_reconnectLoopGeneration"/> and <see cref="_reconnectCts"/> - which is exactly
+    /// what "none is running" looks like. The close of the attempt that failed last arrives after
+    /// that and was indistinguishable from the close that started the whole thing, so a second
+    /// full series ran behind a state that had already reported the client stopped, with the
+    /// attempt counter back at zero.
+    /// </para>
+    /// <para>
+    /// Keyed by generation rather than flagged, so it needs no clearing: generations only ever
+    /// increase, and a <c>Connect()</c> or <c>ChangeServer</c> begins a new one - which is
+    /// precisely when asking again is the consumer's decision and allowed.
+    /// </para>
+    /// </remarks>
+    private long _reconnectExhaustedGeneration = NoGeneration;
+
+    /// <summary>
+    /// Not any generation. Generations are counted from zero and the first transition raises the
+    /// counter to one, so zero is the generation of a client nobody has called <c>Connect()</c>
+    /// on yet - a real value, and the wrong one to spell "no generation" with: every field below
+    /// that used zero for it answered its own question with "yes" on a brand-new client.
+    /// </summary>
+    private const long NoGeneration = -1;
+
+    /// <summary>
+    /// The generation that was last announced as stopped, or <see cref="NoGeneration"/>, together
+    /// with the reason it was announced with. Written by <see cref="SetConnectionState"/> for
+    /// every terminal status it actually publishes; read by the wait and by
+    /// <see cref="CheckIfNotConnected"/>.
+    /// </summary>
+    /// <remarks>
+    /// <para>
+    /// One record rather than a field per ending, and that is the point of it. Each ending used to
+    /// leave its own residue for a caller to recognise - a flag for the consumer's own disconnect,
+    /// a generation for a spent reconnect budget - and an ending that left none was invisible to
+    /// everyone except the status stream. A caller already parked was woken by the announcement,
+    /// found nothing that reads as an ending, and parked again on a signal nothing was going to
+    /// complete: the whole acquisition timeout, five minutes by default, spent to be told the
+    /// connection "was not established in time" about a connection the consumer had already been
+    /// told was over. Two endings were found that way, in three places, and the third would have
+    /// been found later.
+    /// </para>
+    /// <para>
+    /// Recording it where the announcement happens is what makes the set closed: a terminal reason
+    /// cannot reach a consumer without passing through the one method that writes this, so the
+    /// status stream and the wait cannot come to know different things. Keyed by generation for
+    /// the same reason as <see cref="_reconnectExhaustedGeneration"/>, so nothing has to clear it.
+    /// </para>
+    /// <para>
+    /// <see cref="_reconnectExhaustedGeneration"/> stays beside it and is not folded in: it has a
+    /// second job - <see cref="StartReconnectLoop"/> refuses a generation equal to it - and it is
+    /// deliberately written *before* the announcement, so that a close arriving while the
+    /// notification runs consumer code already finds the sequence marked over.
+    /// </para>
+    /// </remarks>
+    private long _stoppedGeneration = NoGeneration;
+
+    /// <inheritdoc cref="_stoppedGeneration"/>
+    private ConnectionStopReason _stoppedReason = ConnectionStopReason.None;
+
     // Number of consecutive times the consumer OnConnected handler threw.
     // Not part of the reconnect state: OnceOpen clears the reconnect state before invoking the handler,
     // so this counter is the only thing that can bound an endlessly failing handler.
@@ -464,6 +650,168 @@ public class Connection
     private readonly object _userInitiatedSocketsLock = new();
 
     private volatile bool _permanentlyDisconnected = false;
+
+    /// <summary>
+    /// What a caller waiting for the connection sleeps on.
+    /// </summary>
+    /// <remarks>
+    /// <para>
+    /// Completed when the connection comes up, and when the client reaches a state it will not come
+    /// back from - a disconnect, or a reconnect loop that spent its budget. A waiter re-reads the
+    /// state after every completion, so the signal only has to say "look again"; the answer itself
+    /// is still decided by the same checks, which is what keeps the wait's behaviour identical to
+    /// the polling loop it replaces.
+    /// </para>
+    /// <para>
+    /// A retirement deliberately does NOT complete it. The connection is being rebuilt, and a
+    /// caller waiting for it - a request under
+    /// <see cref="RequestFailurePolicy.WaitForConnection"/>, above all - has to carry over to the
+    /// new connection rather than be told the old one went away. Waking them there would turn a
+    /// documented carry-over into a failure.
+    /// </para>
+    /// <para>
+    /// Completed with a value rather than an exception: nobody may be waiting, and a faulted task
+    /// with no observer is an unobserved exception. The reason is built at the throw site, where it
+    /// already was.
+    /// </para>
+    /// </remarks>
+    private TaskCompletionSource<bool> _connectionReady = NewReadySignal();
+
+    /// <remarks>
+    /// <c>RunContinuationsAsynchronously</c> is not optional: the signal is completed from inside
+    /// the critical sections that move the connection, and without it every parked waiter would
+    /// resume inline there - the same defect as issue #177, in a new place.
+    /// </remarks>
+    /// <summary>The longest single wait <see cref="Task.WaitAsync(TimeSpan)"/> accepts.</summary>
+    private static readonly TimeSpan MaxSignalWait = TimeSpan.FromMilliseconds(int.MaxValue);
+
+    private static TaskCompletionSource<bool> NewReadySignal() =>
+        new TaskCompletionSource<bool>(TaskCreationOptions.RunContinuationsAsynchronously);
+
+    /// <summary>
+    /// Wakes everyone waiting for the connection, so they re-read the state, and arms a fresh
+    /// signal for the next change in the same breath.
+    /// </summary>
+    /// <remarks>
+    /// Re-arming here rather than where an attempt begins is what makes the wait safe: a
+    /// connection can also go away through its socket's close callback, which continues the
+    /// generation and takes over nothing. Arming only on takeover left the signal standing
+    /// completed after such a close, and a waiter then span on it - awake, re-reading a state that
+    /// said "not connected", until its own timeout. Since a completed signal is replaced in the
+    /// same critical section that completes it, a waiter either holds one that is about to be
+    /// completed or takes the next one on its following pass.
+    /// </remarks>
+    private void WakeConnectionWaiters()
+    {
+        TaskCompletionSource<bool> waking;
+        lock (_transitionLock)
+        {
+            waking = _connectionReady;
+            _connectionReady = NewReadySignal();
+        }
+
+        waking.TrySetResult(true);
+    }
+
+    /// <summary>
+    /// Why the client is permanently disconnected, when the reason is not "the consumer asked".
+    /// </summary>
+    /// <remarks>
+    /// Set by the path that gives up on a failing <c>OnConnected</c> handler, just before it
+    /// announces the ending - the announcement is the first thing anyone can see that ending by,
+    /// and a caller reading the cause a moment later must not be told the consumer disconnected
+    /// the client. The disconnect that path performs is handed the same value, and
+    /// <see cref="TakeOverLocked"/> replaces or clears it under <see cref="_transitionLock"/> in
+    /// the same statement group as <see cref="_permanentlyDisconnected"/>, so a takeover by
+    /// anything else ends its lifetime.
+    /// </remarks>
+    private ConnectHandlerFailure? _connectHandlerGaveUp;
+
+    /// <summary>
+    /// What a failing <c>OnConnected</c> handler cost, kept so that every point reporting the
+    /// resulting disconnect can say what really happened rather than "the client was disconnected".
+    /// </summary>
+    private sealed record ConnectHandlerFailure(string Message, int Failures, Exception? Error);
+
+    /// <summary>
+    /// The exception for "the client is not connected because it was taken down", with the cause
+    /// filled in.
+    /// </summary>
+    /// <remarks>
+    /// A consumer's <c>Disconnect()</c> and the client giving up on a broken handler both leave the
+    /// same state, and both used to be reported as the same bare exception. They call for opposite
+    /// reactions - do nothing versus fix the handler - so they are told apart here, once, instead
+    /// of at each of the three points that report it.
+    /// </remarks>
+    private NotConnectedException DisconnectedBecause(string disconnectedMessage)
+    {
+        lock (_transitionLock)
+        {
+            return DisconnectedBecauseLocked(disconnectedMessage);
+        }
+    }
+
+    /// <inheritdoc cref="DisconnectedBecause"/>
+    /// <remarks>Must be called with <see cref="_transitionLock"/> held.</remarks>
+    private NotConnectedException DisconnectedBecauseLocked(string disconnectedMessage)
+    {
+        ConnectHandlerFailure? gaveUp = _connectHandlerGaveUp;
+
+        return gaveUp is null
+            ? new ClientDisconnectedException(disconnectedMessage)
+            : new ConnectHandlerFailedException(gaveUp.Message, gaveUp.Failures, gaveUp.Error);
+    }
+
+    /// <summary>
+    /// The exception for the ending this generation was announced with, or <c>null</c> when it was
+    /// not announced as stopped.
+    /// </summary>
+    /// <remarks>
+    /// <para>
+    /// The one place that turns a <see cref="ConnectionStopReason"/> into the type a caller gets,
+    /// so that every way of asking - the wait, its outcome value, and the check a request makes -
+    /// answers from the same record and cannot drift apart. Every reason other than
+    /// <see cref="ConnectionStopReason.None"/> is mapped; a reason added without a case here is a
+    /// compile-time hole only in the sense that the switch returns null, which is why the mapping
+    /// is asserted by a test that enumerates the enum.
+    /// </para>
+    /// <para>
+    /// <see cref="ConnectionStopReason.UserDisconnected"/> and
+    /// <see cref="ConnectionStopReason.ConnectHandlerFailed"/> both go through
+    /// <see cref="DisconnectedBecauseLocked"/>, which is what the permanently-disconnected flag
+    /// answers with too, so a caller gets the same type whichever of the two records it is read
+    /// from. The give-up path announces before it calls <c>Disconnect()</c>, so in the moment
+    /// between them the cause is not yet recorded and this answers
+    /// <c>ClientDisconnectedException</c>; it is the right family and a terminal answer, which is
+    /// what the caller is owed - it used to be nothing at all.
+    /// </para>
+    /// <para>Must be called with <see cref="_transitionLock"/> held.</para>
+    /// </remarks>
+    private NotConnectedException? StoppedBecauseLocked()
+    {
+        if (_stoppedGeneration != _generation)
+        {
+            return null;
+        }
+
+        return _stoppedReason switch
+        {
+            ConnectionStopReason.UserDisconnected or ConnectionStopReason.ConnectHandlerFailed =>
+                DisconnectedBecauseLocked("Client has been disconnected. Call Connect() to reconnect."),
+
+            ConnectionStopReason.ReconnectExhausted => new ReconnectExhaustedException(
+                $"Connection failed permanently after {config.MaxReconnectAttempts} attempts. " +
+                "Reconnection has been stopped.",
+                attempts: config.MaxReconnectAttempts,
+                maxAttempts: config.MaxReconnectAttempts),
+
+            ConnectionStopReason.ClosedPermanently => new ConnectionClosedPermanentlyException(
+                "The node closed the connection with a code this client does not reconnect after. " +
+                "Call Connect() to try again, or connect to another server."),
+
+            _ => null,
+        };
+    }
 
     private volatile bool _isIntentionalDisconnect = false;
 
@@ -766,11 +1114,21 @@ public class Connection
     private Takeover TakeOverLocked(
         TransitionKind kind,
         bool retireSession,
-        out CancellationTokenSource? retiredCts)
+        out CancellationTokenSource? retiredCts,
+        ConnectHandlerFailure? handlerFailure = null)
     {
         long generation = ++_generation;
         _generationKind = kind;
         _permanentlyDisconnected = kind == TransitionKind.Disconnect;
+
+        // Written here, in the same statement group as the flag it qualifies, so the two cannot
+        // drift: the cause lives exactly as long as the disconnect it describes and is cleared by
+        // the same takeover that clears the flag. The path that gives up on a failing OnConnected
+        // handler ends by calling Disconnect() itself, and without this every point that reads
+        // _permanentlyDisconnected answered "the consumer disconnected the client" for a client
+        // that is down because its own handler is broken - the opposite reaction for a consumer
+        // deciding whether to fail over to another server.
+        _connectHandlerGaveUp = _permanentlyDisconnected ? handlerFailure : null;
 
         // The global intentional-disconnect flag follows the generation: set by a disconnect,
         // cleared by anything that connects. It used to be cleared only by OnceOpen and by
@@ -879,39 +1237,198 @@ public class Connection
     /// that; anything else that won is connecting, or connected, somewhere the caller did not ask
     /// for, and a cancellation says so without claiming the client is down.
     /// </summary>
+    /// <summary>
+    /// The private transition kind as a consumer sees it.
+    /// </summary>
+    /// <remarks>
+    /// <c>None</c> means no transition is in progress, which cannot be the winner of one; a client
+    /// that reports it here has been overtaken by something that has already finished, and
+    /// <see cref="ConnectionTransitionKind.Reconnect"/> is the honest answer - the client rebuilt
+    /// its own connection.
+    /// </remarks>
+    private ConnectionTransitionKind PublicKindLocked() =>
+        _generationKind switch
+        {
+            TransitionKind.Connect => ConnectionTransitionKind.Connect,
+            TransitionKind.ChangeServer => ConnectionTransitionKind.ChangeServer,
+            TransitionKind.Disconnect => ConnectionTransitionKind.Disconnect,
+            _ => ConnectionTransitionKind.Reconnect,
+        };
+
+    /// <summary>
+    /// The exception a request in flight gets when a transition takes the connection away from it.
+    /// </summary>
+    /// <remarks>
+    /// <para>
+    /// Every such sweep used to reject with a bare <see cref="OperationCanceledException"/> reading
+    /// "Connection was intentionally closed", which a caller could not tell from a cancellation of
+    /// its own. It is the failure consumers meet most often - their request dying while the
+    /// connection moved underneath it - and it said nothing about what moved it or where.
+    /// </para>
+    /// <para>
+    /// Still an <see cref="OperationCanceledException"/>: a caller that treated a swept request as
+    /// cancellation keeps working, and the task keeps the status it had. Sweeps caused by the
+    /// connection failing on its own - a network drop, a close being processed - deliberately keep
+    /// the plain cancellation; they are not a transition and have no destination to name, and the
+    /// choice of cancellation there is what keeps consuming applications from logging an ordinary
+    /// network drop as a critical error.
+    /// </para>
+    /// </remarks>
+    private static ConnectionSupersededException SweptBy(ConnectionTransitionKind kind, string? destination) =>
+        new ConnectionSupersededException(
+            kind switch
+            {
+                ConnectionTransitionKind.ChangeServer =>
+                    $"The request was dropped: the client switched to {destination}.",
+                ConnectionTransitionKind.Connect =>
+                    "The request was dropped: a Connect() rebuilt the connection.",
+                ConnectionTransitionKind.Disconnect =>
+                    "The request was dropped: the client was disconnected.",
+                _ =>
+                    "The request was dropped: the connection was rebuilt by the health check.",
+            },
+            kind,
+            destination);
+
     private Exception SupersededLocked() =>
         _generationKind switch
         {
-            TransitionKind.Disconnect => new NotConnectedException("Client has been disconnected. Call Connect() to reconnect."),
-            TransitionKind.ChangeServer => new OperationCanceledException($"Superseded by a later ChangeServer to {url}."),
-            TransitionKind.Connect => new OperationCanceledException("Superseded by a later Connect()."),
-            _ => new OperationCanceledException("Superseded by a reconnect the health check started."),
+            TransitionKind.Disconnect => DisconnectedBecauseLocked("Client has been disconnected. Call Connect() to reconnect."),
+            TransitionKind.ChangeServer => new ConnectionSupersededException(
+                $"Superseded by a later ChangeServer to {url}.",
+                ConnectionTransitionKind.ChangeServer,
+                supersededBy: url),
+            TransitionKind.Connect => new ConnectionSupersededException(
+                "Superseded by a later Connect().",
+                ConnectionTransitionKind.Connect,
+                supersededBy: url),
+            _ => new ConnectionSupersededException(
+                "Superseded by a reconnect the health check started.",
+                ConnectionTransitionKind.Reconnect,
+                supersededBy: url),
         };
 
     public XrpConnectionState CurrentConnectionState => _currentConnectionState;
 
     private string _previousNotifiedMessage = string.Empty;
 
+    private ConnectionStopReason _previouslyNotifiedStopReason = ConnectionStopReason.None;
+
+    /// <param name="announcingGeneration">
+    /// The transition this status speaks for. Required rather than optional, and that is the whole
+    /// of its design: an announcement is true only while the transition it belongs to still owns
+    /// the connection, and every time this was left to the call sites to remember, a call site
+    /// forgot. Five separate reviews found five such sites on this branch alone. Passing it is now
+    /// the only way to compile, so the next one cannot be forgotten - it can only be wrong, which
+    /// is a smaller and more visible mistake.
+    /// </param>
     private void SetConnectionState(
         XrpConnectionState newState,
         string message,
+        long announcingGeneration,
         ConnectionCloseSeverity severity = ConnectionCloseSeverity.Info,
-        ReconnectInfo? reconnect = null)
+        ReconnectInfo? reconnect = null,
+        ConnectionStopReason stopReason = ConnectionStopReason.None)
     {
+        bool stateChanged = false;
+        bool suppressed = false;
 
-        var stateChanged = _currentConnectionState != newState;
-        _currentConnectionState = newState;
+        // The two questions this guard asks and the publication it guards are one critical
+        // section, and that is the whole of the point. Who owns the connection, and whether this
+        // generation's reconnect sequence has already been declared over, are both written under
+        // this lock by other threads. Asked outside it, an answer is a snapshot with no shelf
+        // life: a caller reads "the sequence is still running", loses the processor, and publishes
+        // its status after the loop has ended the sequence and announced the ending - which is a
+        // non-terminal status standing as the last word about a client nothing is rebuilding.
+        //
+        // It replaces the ownership checks that used to sit at the call sites. Three of them
+        // existed, one was missing, and the missing one was invisible for as long as the
+        // deduplication happened to swallow what it let through.
+        //
+        // A terminal announcement is never suppressed by the seal - it is the seal - and callers
+        // that pass no generation speak for the client as a whole rather than for one transition
+        // of it, and are not guarded at all.
+        lock (_transitionLock)
+        {
+            // The seal stops a spent sequence reporting progress it is not making. A connection
+            // that actually came up is not progress-chatter but the fact that contradicts the
+            // seal, and suppressing it would leave the record standing over a client that is up -
+            // every caller told the sequence gave up while the socket carries traffic. So
+            // Connected passes the seal, and only the ownership check applies to it.
+            bool sealedOff = _reconnectExhaustedGeneration == announcingGeneration &&
+                             stopReason == ConnectionStopReason.None &&
+                             newState != XrpConnectionState.Connected;
+
+            if (_generation != announcingGeneration || sealedOff)
+            {
+                suppressed = true;
+            }
+            else
+            {
+                stateChanged = _currentConnectionState != newState;
+                _currentConnectionState = newState;
+
+                // Every ending a consumer is told about is recorded here, in the same critical
+                // section that publishes it, so that the wait cannot know less than the status
+                // stream does. Suppressed announcements are not recorded: an announcement nobody
+                // is shown did not happen.
+                if (stopReason != ConnectionStopReason.None)
+                {
+                    _stoppedGeneration = announcingGeneration;
+                    _stoppedReason = stopReason;
+                }
+                else if (newState == XrpConnectionState.Connected)
+                {
+                    // An ending is over when the connection is up again, and this is the
+                    // counterpart of recording it. Without it a generation announced as stopped
+                    // that connected anyway - a straggling attempt succeeding after its loop gave
+                    // up - would keep answering every caller with the ending, because the record
+                    // outlives the state it describes and nothing else clears it. Connected is the
+                    // one state that contradicts "stopped"; RestoringConnection does not, which is
+                    // why only this one clears.
+                    _stoppedGeneration = NoGeneration;
+                    _stoppedReason = ConnectionStopReason.None;
+                }
+            }
+        }
+
+        // Woken here, before everything else this method decides. Whether a status event is worth
+        // showing a consumer and whether the connection changed are different questions: the
+        // deduplication below drops a notification that repeats the last one, and a waiter parked
+        // across such a change - a disconnect reported on a client already reported as
+        // disconnected - would never hear about it. Waking also precedes the consumer callback,
+        // which is code this class does not control and already has to be guarded against: a slow
+        // handler must not hold up a caller waiting for the connection, and one that waits on such
+        // a caller must not be able to deadlock against it.
+        WakeConnectionWaiters();
+
+        // After the wake, deliberately. A suppressed announcement still means something happened
+        // to the connection, and the wait's own predicate reads the same fields under the same
+        // lock: it may have a terminal answer waiting for it even when this particular status is
+        // not worth showing anyone.
+        if (suppressed)
+        {
+            return;
+        }
 
         var hasReconnectInfo = reconnect != null;
         var messageChanged = _previousNotifiedMessage != message;
         var isRestoringConnection = newState == XrpConnectionState.RestoringConnection;
 
-        if (!stateChanged && !hasReconnectInfo && !(isRestoringConnection && messageChanged))
+        // The reason counts as a change in its own right. Two endings in a row are both
+        // Disconnected - an initial connection that never came up, then the consumer disconnecting
+        // - and without this the second is dropped as a repeat, leaving the consumer reading a
+        // reason that belongs to the ending before it. A field nobody can rely on being emitted is
+        // worse than no field.
+        var reasonChanged = _previouslyNotifiedStopReason != stopReason;
+
+        if (!stateChanged && !hasReconnectInfo && !reasonChanged && !(isRestoringConnection && messageChanged))
         {
             return;
         }
 
         _previousNotifiedMessage = message;
+        _previouslyNotifiedStopReason = stopReason;
 
         // Contained here, once, rather than at each call site. Every state notification in this class
         // funnels through this method, and several call sites are places where an escaping exception
@@ -928,6 +1445,7 @@ public class Connection
                     Severity = severity,
                     Reconnect = reconnect,
                     ConnectionState = newState,
+                    StopReason = stopReason,
                 });
         }
         catch (Exception notifyError)
@@ -1092,14 +1610,18 @@ public class Connection
         {
             // Notified after the takeover, not before it: a handler that answers this with
             // Disconnect() has to win, and it can only win against a transition that has begun.
-            SetConnectionState(XrpConnectionState.Connecting, message: $"ChangeServer: Switching to {server}...");
+            SetConnectionState(
+                XrpConnectionState.Connecting,
+                message: $"ChangeServer: Switching to {server}...",
+                announcingGeneration: generation);
             ThrowIfSuperseded(generation);
 
             // The takeover cleared ws before this sweep, on purpose: the sweep resumes consumer
             // continuations - inline on this thread when there is no synchronization context - and
             // a request issued from one of them must already see no usable connection (issue #177).
-            requestManager.RejectAllWithCancellation();
-            connectionManager.RejectAllAwaitingWithCancellation();
+            ConnectionSupersededException switched = SweptBy(ConnectionTransitionKind.ChangeServer, server);
+            requestManager.RejectAll(switched);
+            connectionManager.RejectAllAwaiting(switched);
             ThrowIfSuperseded(generation);
 
             // The message processor went with the session, and its reader is let go of after the
@@ -1147,11 +1669,24 @@ public class Connection
 
         // Connected - but a later ChangeServer that took over during the wait connected to its own
         // server, and this call's is not where the client is.
-        string connectedTo = GetUrl();
+        // Where the client ended up and what put it there are read together, under the lock that
+        // publishes both. Read apart, another takeover between the two gives an exception naming
+        // one transition's destination and another transition's kind - a description of a client
+        // state that never existed.
+        string connectedTo;
+        ConnectionTransitionKind winner;
+        lock (_transitionLock)
+        {
+            connectedTo = url;
+            winner = PublicKindLocked();
+        }
+
         if (!string.Equals(connectedTo, server, StringComparison.Ordinal))
         {
-            throw new OperationCanceledException(
-                $"ChangeServer to {server} was superseded by a later ChangeServer to {connectedTo}.");
+            throw new ConnectionSupersededException(
+                $"ChangeServer to {server} was superseded by a later ChangeServer to {connectedTo}.",
+                winner,
+                supersededBy: connectedTo);
         }
     }
 
@@ -1227,8 +1762,9 @@ public class Connection
         SetConnectionState(
             XrpConnectionState.RestoringConnection,
             message: $"{reason} Reconnecting immediately...",
-            ConnectionCloseSeverity.Warning,
-            reconnect: BuildReconnectInfo());
+            severity: ConnectionCloseSeverity.Warning,
+            reconnect: BuildReconnectInfo(),
+            announcingGeneration: generation);
 
         // Standing down before the session end is announced still owes that announcement: the
         // takeover retired the session, which silences its own close callback, and whoever took
@@ -1242,8 +1778,9 @@ public class Connection
 
         // ws is already null, so a request issued from a rejected continuation sees no usable
         // connection (issue #177). The rejection also lets the ping handler exit quickly.
-        requestManager.RejectAllWithCancellation();
-        connectionManager.RejectAllAwaitingWithCancellation();
+        ConnectionSupersededException rebuilding = SweptBy(ConnectionTransitionKind.Reconnect, url);
+        requestManager.RejectAll(rebuilding);
+        connectionManager.RejectAllAwaiting(rebuilding);
 
         if (!Owns(generation))
         {
@@ -1351,8 +1888,9 @@ public class Connection
             SetConnectionState(
                 XrpConnectionState.RestoringConnection,
                 message: $"Reconnection failed: {ex.Message}. Retrying...",
-                ConnectionCloseSeverity.Warning,
-                reconnect: BuildReconnectInfo());
+                severity: ConnectionCloseSeverity.Warning,
+                reconnect: BuildReconnectInfo(),
+                announcingGeneration: generation);
         }
     }
 
@@ -1360,13 +1898,11 @@ public class Connection
 
     public async Task WaitForConnectionAsync(TimeSpan? timeout = null, CancellationToken cancellationToken = default)
     {
-        if (IsConnected())
-        {
-            return;
-        }
-
-        CheckIfNotConnected();
-
+        // No fast path on IsConnected() here. The loop below answers the same question one lock
+        // later and answers it with the rest of the state in hand, which is the whole difference:
+        // a socket can be open while the client has already been announced as stopped, and a
+        // caller that reads only the socket is told the connection is up moments after it was told
+        // why it is over.
         var waitTimeout = timeout ?? config.ConnectionAcquisitionTimeout;
 
         if (waitTimeout != Timeout.InfiniteTimeSpan && waitTimeout <= TimeSpan.Zero)
@@ -1378,30 +1914,130 @@ public class Connection
         }
 
         var startTime = DateTime.UtcNow;
-        var checkInterval = TimeSpan.FromMilliseconds(100);
         var hasTimeout = waitTimeout != Timeout.InfiniteTimeSpan;
 
-        while (!IsConnected())
+        // "Nothing is in progress" is a statement about the moment of the call and nothing else,
+        // which is why it is asked once. Asked on every pass it would fire on a caller that is
+        // waiting perfectly correctly: a failed first attempt announces Disconnected and only then
+        // starts the reconnect loop, and in between there is no socket, no loop and no active
+        // state - exactly the reading this answers with "call Connect()".
+        bool firstPass = true;
+
+        while (true)
         {
-            // Re-checked on every iteration, not only on entry: the client can be disconnected while a
-            // caller is already waiting here (user Disconnect(), or the client giving up on a permanently
-            // failing OnConnected handler). Without this the caller would sit out the whole acquisition
-            // timeout and get a generic TimeoutException instead of the actual reason.
-            if (_permanentlyDisconnected)
+            // The signal and everything the decision rests on are read in one critical section,
+            // under the lock every transition publishes through. Two properties come from that,
+            // and the wait is wrong without either.
+            //
+            // Order: the signal is captured before the state is read. Captured after, it would be
+            // the replacement armed by a change that landed in between - so a waiter would park on
+            // a signal for a change that had already happened, and sit out its timeout with the
+            // answer in front of it.
+            //
+            // Consistency: these fields are written under this lock by transitions that change
+            // several of them at once. Read outside it they can be a mixture from two transitions,
+            // and - since this wait no longer polls - a decision made on such a mixture is not
+            // corrected a tick later but stands until the timeout.
+            Task ready;
+            bool connected;
+            NotConnectedException? terminal = null;
+            lock (_transitionLock)
             {
-                throw new NotConnectedException("Client has been disconnected. Call Connect() to reconnect.");
+                ready = _connectionReady.Task;
+                connected = IsConnected();
+
+                // These two are asked whether or not a socket happens to be open, and that is the
+                // opposite of the order this used to have. The give-up path rejects the requests
+                // in flight - which is what resumes the caller inside Connect() - one statement
+                // before it disconnects, so for that moment the socket is still installed and
+                // still open while the consumer has already been told the client gave up. A caller
+                // asking then was told it was connected: a failure reporting itself as success,
+                // and the two ways of asking contradicting each other about one event. The record
+                // read here is written by the announcement that precedes the rejection, so the
+                // ordering is guaranteed rather than raced.
+                //
+                // Re-checked on every pass, not only on entry: the client can be disconnected
+                // while a caller is already waiting here - a user Disconnect(), or the client
+                // giving up on a permanently failing OnConnected handler.
+                if (_permanentlyDisconnected)
+                {
+                    terminal = DisconnectedBecauseLocked(
+                        "Client has been disconnected. Call Connect() to reconnect.");
+                }
+                // Whatever this generation was announced as stopped with. Asked after the
+                // permanently-disconnected flag because that one is set by the takeover rather
+                // than by an announcement and is therefore true earlier, and before the reconnect
+                // budget below because that one answers on its own residue.
+                else if (StoppedBecauseLocked() is NotConnectedException announced)
+                {
+                    terminal = announced;
+                }
+
+                if (terminal == null && !connected)
+                {
+                    // The generation is asked first, and that ordering is what stops a waiter
+                    // depending on work that has not happened yet. The loop records the generation
+                    // as spent before it announces the fact, and releases its cancellation source
+                    // only after the announcement returns - and the announcement runs consumer
+                    // code. A status handler that blocks on a waiter would otherwise hold the loop
+                    // on that notification while the waiter waited for a release the loop could no
+                    // longer reach: the handler waits for the waiter, the waiter for the
+                    // bookkeeping, the bookkeeping for the handler. Reading what is already
+                    // published breaks the ring. The second condition stays for the same state
+                    // reached without a loop of this generation having run.
+                    if (_reconnectExhaustedGeneration == _generation ||
+                             (config.StopAfterMaxAttempts &&
+                              _reconnectAttempts >= config.MaxReconnectAttempts &&
+                              _reconnectCts == null))
+                    {
+                        // Attempts is reported as the budget, not as the raw counter: the loop
+                        // increments at the head of a pass and stops on the pass that exceeds the
+                        // budget, so the counter stands one past it here and a consumer would read
+                        // "6 of 5".
+                        terminal = new ReconnectExhaustedException(
+                            $"Connection failed permanently after {config.MaxReconnectAttempts} attempts. " +
+                            "Reconnection has been stopped.",
+                            attempts: config.MaxReconnectAttempts,
+                            maxAttempts: config.MaxReconnectAttempts);
+                    }
+                    // Last of the four, and that order is the whole of what it is for. After a
+                    // sequence ends there is no socket, no cancellation source and a Disconnected
+                    // state - which is also precisely what a client nobody has called Connect() on
+                    // looks like. Asked first, as the entry precondition it used to be, it
+                    // answered "call Connect()" to a caller whose client had just spent its
+                    // reconnect budget: the status stream said ReconnectExhausted, the wait said
+                    // NotConnecting, and the outcome this API exists to deliver was reachable only
+                    // by a caller who happened to be parked here already when the loop gave up.
+                    else if (firstPass &&
+                             ws == null &&
+                             _reconnectCts == null &&
+                             _currentConnectionState == XrpConnectionState.Disconnected)
+                    {
+                        terminal = new NotConnectingException("No connection attempt in progress. Call Connect() first.");
+                    }
+                }
             }
 
-            if (config.StopAfterMaxAttempts &&
-                _reconnectAttempts >= config.MaxReconnectAttempts &&
-                _reconnectCts == null)
+            firstPass = false;
+
+            if (terminal != null)
             {
-                throw new NotConnectedException(
-                    $"Connection failed permanently after {config.MaxReconnectAttempts} attempts. " +
-                    "Reconnection has been stopped.");
+                throw terminal;
             }
 
-            if (hasTimeout && DateTime.UtcNow - startTime > waitTimeout)
+            if (connected)
+            {
+                return;
+            }
+
+            // Inclusive. Both readings of the clock are quantised to the system tick - 15.625 ms
+            // on Windows - so elapsed time is always a whole number of ticks, and any timeout that
+            // is itself a whole number of them is hit exactly rather than passed: the default
+            // acquisition timeout of five minutes is 19200 of them. With a strict comparison the
+            // deadline check then declined to fire while the remaining time was already zero, and
+            // the guard below sent the loop round again with no await in it - a spin on the
+            // connection's own lock for the rest of the tick, once per expiring wait.
+            if (hasTimeout && DateTime.UtcNow - startTime >= waitTimeout)
             {
                 throw new System.TimeoutException(
                     $"Connection was not established within {waitTimeout.TotalSeconds:F1} seconds");
@@ -1412,14 +2048,92 @@ public class Connection
                 throw new OperationCanceledException(message: "Connection wait was cancelled", cancellationToken);
             }
 
+            TimeSpan remaining = hasTimeout
+                ? waitTimeout - (DateTime.UtcNow - startTime)
+                : Timeout.InfiniteTimeSpan;
+
+            // Unreachable now that the deadline check above is inclusive, and kept because
+            // "the remaining time is not positive" must never again become "go round again
+            // without awaiting anything".
+            if (hasTimeout && remaining <= TimeSpan.Zero)
+            {
+                throw new System.TimeoutException(
+                    $"Connection was not established within {waitTimeout.TotalSeconds:F1} seconds");
+            }
+
+            // Task.WaitAsync refuses any timeout above int.MaxValue milliseconds - about
+            // twenty-five days - and a caller may legitimately ask to wait longer than that; the
+            // validation above only refuses zero and negative. The polling loop this replaced had
+            // no such ceiling, so passing the remaining time straight through turned a long wait
+            // into an immediate ArgumentOutOfRangeException. The deadline is re-read at the head of
+            // every pass, so a long wait is simply served by several bounded ones.
+            TimeSpan waitSlice = hasTimeout && remaining > MaxSignalWait ? MaxSignalWait : remaining;
+
             try
             {
-                await Task.Delay(checkInterval, cancellationToken);
+                await ready.WaitAsync(waitSlice, cancellationToken);
+            }
+            catch (System.TimeoutException)
+            {
+                // The wait's own deadline, re-reported by the check at the head of the next pass
+                // with the message this method has always used.
             }
             catch (OperationCanceledException)
             {
                 throw new OperationCanceledException(message: "Connection wait was cancelled", cancellationToken);
             }
+        }
+    }
+
+    /// <inheritdoc cref="ConnectionWaitOutcome"/>
+    /// <summary>
+    /// Waits for the connection and reports how the wait ended.
+    /// </summary>
+    /// <remarks>
+    /// Each value maps to exactly one of the exceptions
+    /// <see cref="WaitForConnectionAsync"/> throws, so the two ways of asking cannot drift apart:
+    /// <see cref="ConnectionWaitOutcome.UserDisconnected"/> to
+    /// <see cref="ClientDisconnectedException"/>,
+    /// <see cref="ConnectionWaitOutcome.ConnectHandlerFailed"/> to
+    /// <see cref="ConnectHandlerFailedException"/>,
+    /// <see cref="ConnectionWaitOutcome.ReconnectExhausted"/> to
+    /// <see cref="ReconnectExhaustedException"/>,
+    /// <see cref="ConnectionWaitOutcome.NotConnecting"/> to
+    /// <see cref="NotConnectingException"/>, and
+    /// <see cref="ConnectionWaitOutcome.TimedOut"/> to <see cref="System.TimeoutException"/>.
+    /// </remarks>
+    public async Task<ConnectionWaitOutcome> WaitForConnectionOutcomeAsync(
+        TimeSpan? timeout = null,
+        CancellationToken cancellationToken = default)
+    {
+        try
+        {
+            await WaitForConnectionAsync(timeout, cancellationToken);
+            return ConnectionWaitOutcome.Connected;
+        }
+        catch (ConnectHandlerFailedException)
+        {
+            return ConnectionWaitOutcome.ConnectHandlerFailed;
+        }
+        catch (ClientDisconnectedException)
+        {
+            return ConnectionWaitOutcome.UserDisconnected;
+        }
+        catch (ReconnectExhaustedException)
+        {
+            return ConnectionWaitOutcome.ReconnectExhausted;
+        }
+        catch (ConnectionClosedPermanentlyException)
+        {
+            return ConnectionWaitOutcome.ClosedPermanently;
+        }
+        catch (NotConnectingException)
+        {
+            return ConnectionWaitOutcome.NotConnecting;
+        }
+        catch (System.TimeoutException)
+        {
+            return ConnectionWaitOutcome.TimedOut;
         }
     }
 
@@ -1444,9 +2158,34 @@ public class Connection
 
     public async Task Connect(CancellationToken cancellationToken)
     {
-        if (IsConnected())
+        // An open socket alone does not say the client is up, and this is the same question the
+        // wait asks, answered the same way so the two cannot disagree. The give-up path for a
+        // failing OnConnected handler announces the ending, resumes the caller it had waiting, and
+        // disconnects two statements later; a consumer reacting to that announcement with
+        // Connect() - the obvious reaction, and the one the message asks for - found the socket
+        // still open and was told it was already connected, about a connection being torn down as
+        // it read the answer. Worse than a wrong status: Connect() returned success and started
+        // nothing, so nothing was going to reconnect.
+        bool alreadyConnected;
+        long connectedGeneration;
+        lock (_transitionLock)
         {
-            SetConnectionState(XrpConnectionState.Connected, message: $"Already connected to {url}");
+            alreadyConnected = IsConnected() &&
+                               !_permanentlyDisconnected &&
+                               StoppedBecauseLocked() == null;
+            connectedGeneration = _generation;
+        }
+
+        if (alreadyConnected)
+        {
+            // The generation is captured with the answer, not read at the announcement. A takeover
+            // landing in between makes this publication somebody else's business: untagged, it
+            // would put Connected over the state of the transition that won and clear a record
+            // that is not this call's to clear.
+            SetConnectionState(
+                XrpConnectionState.Connected,
+                message: $"Already connected to {url}",
+                announcingGeneration: connectedGeneration);
             return;
         }
 
@@ -1466,7 +2205,7 @@ public class Connection
         // would have swept these, but a close that is still being processed when this takeover
         // lands finds the connection owned by someone else and leaves the sweep to that owner -
         // and that owner is this call.
-        requestManager.RejectAllWithCancellation();
+        requestManager.RejectAll(SweptBy(ConnectionTransitionKind.Connect, url));
 
         // The previous session's reader may still be inside a consumer handler; the new
         // connection's reader must not run alongside it. Completed at once on a client that had
@@ -1474,7 +2213,10 @@ public class Connection
         await takeover.ProcessorExit;
 
         Interlocked.Exchange(ref _connectHandlerFailures, value: 0);
-        SetConnectionState(XrpConnectionState.Connecting, message: $"Connecting to {url}...");
+        SetConnectionState(
+            XrpConnectionState.Connecting,
+            message: $"Connecting to {url}...",
+            announcingGeneration: takeover.Generation);
 
         // A session that had opened held the consumer's subscriptions, and retiring it above
         // silences the close callback that would otherwise have announced their loss - the same
@@ -1728,7 +2470,8 @@ public class Connection
     /// The takeover and the completion source the socket's close callback completes, when there
     /// was a socket to close.
     /// </returns>
-    private (Takeover Takeover, TaskCompletionSource<bool>? Tcs) TakeOverForDisconnect()
+    private (Takeover Takeover, TaskCompletionSource<bool>? Tcs) TakeOverForDisconnect(
+        ConnectHandlerFailure? handlerFailure = null)
     {
         // The socket is marked and the completion source installed in the same critical section
         // that takes the socket: its close callback completes the source, and a peer closing the
@@ -1739,7 +2482,7 @@ public class Connection
         CancellationTokenSource? retiredCts;
         lock (_transitionLock)
         {
-            takeover = TakeOverLocked(TransitionKind.Disconnect, retireSession: false, out retiredCts);
+            takeover = TakeOverLocked(TransitionKind.Disconnect, retireSession: false, out retiredCts, handlerFailure);
 
             WebSocketClient? socketToClose = takeover.Socket;
             if (socketToClose != null)
@@ -1768,17 +2511,28 @@ public class Connection
         return (takeover, tcs);
     }
 
-    public async Task<int> Disconnect()
+    public async Task<int> Disconnect() => await DisconnectAsync(handlerFailure: null);
+
+    private async Task<int> DisconnectAsync(ConnectHandlerFailure? handlerFailure)
     {
-        (Takeover takeover, _) = TakeOverForDisconnect();
+        // The disconnect this path performs is not always the consumer's. Giving up on a broken
+        // OnConnected handler ends here too, and hard-coding "the user disconnected" made the last
+        // thing the status stream said contradict the exception the same event produced - the one
+        // contradiction this whole change exists to remove.
+        ConnectionStopReason stopReason = handlerFailure is null
+            ? ConnectionStopReason.UserDisconnected
+            : ConnectionStopReason.ConnectHandlerFailed;
+
+        (Takeover takeover, _) = TakeOverForDisconnect(handlerFailure);
         long generation = takeover.Generation;
         WebSocketClient? socketToClose = takeover.Socket;
 
         // ws left the field in the takeover, before this sweep, so a request issued from a
         // rejected continuation finds no socket to go into (issue #177). The rejection also lets
         // the ping handler exit quickly.
-        requestManager.RejectAllWithCancellation();
-        connectionManager.RejectAllAwaitingWithCancellation();
+        ConnectionSupersededException takenDown = SweptBy(ConnectionTransitionKind.Disconnect, destination: null);
+        requestManager.RejectAll(takenDown);
+        connectionManager.RejectAllAwaiting(takenDown);
 
         await takeover.ProcessorExit;
         await WaitForPingToFinishAsync();
@@ -1789,7 +2543,11 @@ public class Connection
             // ChangeServer that took over during the awaits above is reporting its own state now.
             if (Owns(generation))
             {
-                SetConnectionState(XrpConnectionState.Disconnected, message: "Already disconnected.");
+                SetConnectionState(
+                    XrpConnectionState.Disconnected,
+                    message: "Already disconnected.",
+                    stopReason: stopReason,
+                    announcingGeneration: generation);
             }
 
             return 0;
@@ -1800,7 +2558,11 @@ public class Connection
 
         if (Owns(generation))
         {
-            SetConnectionState(XrpConnectionState.Disconnected, message: "Disconnected by user request.");
+            SetConnectionState(
+                XrpConnectionState.Disconnected,
+                message: "Disconnected by user request.",
+                stopReason: stopReason,
+                announcingGeneration: generation);
         }
 
         // Announced here as well as from the socket's close callback, which dedups. The callback
@@ -1828,8 +2590,9 @@ public class Connection
         WebSocketClient? socketToClose = takeover.Socket;
 
         // Same ordering as Disconnect(): the socket left ws before the sweep runs (issue #177).
-        requestManager.RejectAllWithCancellation();
-        connectionManager.RejectAllAwaitingWithCancellation();
+        ConnectionSupersededException closing = SweptBy(ConnectionTransitionKind.Disconnect, destination: null);
+        requestManager.RejectAll(closing);
+        connectionManager.RejectAllAwaiting(closing);
 
         await takeover.ProcessorExit;
         await WaitForPingToFinishAsync();
@@ -1853,7 +2616,11 @@ public class Connection
 
             if (Owns(generation))
             {
-                SetConnectionState(XrpConnectionState.Disconnected, message: "Already disconnected.");
+                SetConnectionState(
+                    XrpConnectionState.Disconnected,
+                    message: "Already disconnected.",
+                    stopReason: ConnectionStopReason.UserDisconnected,
+                    announcingGeneration: generation);
             }
 
             return;
@@ -1863,7 +2630,11 @@ public class Connection
 
         if (Owns(generation))
         {
-            SetConnectionState(XrpConnectionState.Disconnected, message: "Disconnected by user request.");
+            SetConnectionState(
+                XrpConnectionState.Disconnected,
+                message: "Disconnected by user request.",
+                stopReason: ConnectionStopReason.UserDisconnected,
+                announcingGeneration: generation);
         }
 
         // See Disconnect() for why this is announced here and not left to the close callback.
@@ -2285,18 +3056,30 @@ public class Connection
 
         CompleteDisconnectTcs();
 
+        // Read before the branch below, because that branch speaks about the connection too. A
+        // callback without a session (no caller in this class produces one; the parameter defaults
+        // exist for a null socket) is taken to be about the current transition.
+        long generation = failedSession?.Generation ?? CurrentGeneration();
+
         if (intentionalDisconnect)
         {
             connectionManager.RejectAllAwaitingWithCancellation();
-            SetConnectionState(XrpConnectionState.Disconnected, message: "Connection closed permanently.");
+
+            // Announced only while this callback still speaks for the connection. The attempt
+            // timer of a handshake outlives the Disconnect() that cancelled it, and this branch
+            // then reported "closed permanently" over the disconnect the consumer had already been
+            // told about - the last reason they saw being one that does not say who closed it.
+            SetConnectionState(
+                XrpConnectionState.Disconnected,
+                message: "Connection closed permanently.",
+                stopReason: ConnectionStopReason.ClosedPermanently,
+                announcingGeneration: generation);
+
             return;
         }
 
         // From here on everything is about the connection as a whole - the sweep, the state, the
-        // loop - and that belongs to whoever owns it. A callback without a session (no caller in
-        // this class produces one; the parameter defaults exist for a null socket) is taken to be
-        // about the current transition.
-        long generation = failedSession?.Generation ?? CurrentGeneration();
+        // loop - and that belongs to whoever owns it.
         if (!Owns(generation))
         {
             return;
@@ -2315,13 +3098,36 @@ public class Connection
             connectionManager.RejectAllAwaiting(new NotConnectedException(error.Message));
         }
 
+        // The tail of a sequence that is over. This generation's reconnect loop spent its budget,
+        // announced it and stopped; the attempt that failed last reports here afterwards, and
+        // everything below would then speak for a connection nobody is rebuilding - a
+        // RestoringConnection carrying a reconnect block, or a Disconnected whose reason says the
+        // notification is not an ending, either of them landing after the terminal one a consumer
+        // was meant to act on. The StartReconnectLoop at the end is refused for the same reason,
+        // so the announcement would describe work that is not going to happen.
+        bool sequenceIsOver;
+        lock (_transitionLock)
+        {
+            sequenceIsOver = _reconnectExhaustedGeneration == generation;
+        }
+
+        if (sequenceIsOver)
+        {
+            return;
+        }
+
+        // Read once, before anything is announced, and used both for what is announced and for
+        // what is done about it.
+        bool willReconnect = !wasOpen || isNetworkDrop;
+
         if (isNetworkDrop)
         {
             SetConnectionState(
                 XrpConnectionState.RestoringConnection,
                 message: "Network connection lost. Reconnecting...",
-                ConnectionCloseSeverity.Warning,
-                reconnect: BuildReconnectInfo());
+                severity: ConnectionCloseSeverity.Warning,
+                reconnect: BuildReconnectInfo(),
+                announcingGeneration: generation);
         }
         else if (failedSession?.IsOpened == true)
         {
@@ -2332,8 +3138,9 @@ public class Connection
             SetConnectionState(
                 XrpConnectionState.RestoringConnection,
                 $"Connection lost: {error.Message}. Reconnecting...",
-                ConnectionCloseSeverity.Warning,
-                reconnect: BuildReconnectInfo());
+                severity: ConnectionCloseSeverity.Warning,
+                reconnect: BuildReconnectInfo(),
+                announcingGeneration: generation);
         }
         else if (IsReconnectActive())
         {
@@ -2341,21 +3148,39 @@ public class Connection
             SetConnectionState(
                 XrpConnectionState.RestoringConnection,
                 $"Connection attempt failed: {error.Message}",
-                ConnectionCloseSeverity.Warning,
-                reconnect: BuildReconnectInfo());
+                severity: ConnectionCloseSeverity.Warning,
+                reconnect: BuildReconnectInfo(),
+                announcingGeneration: generation);
         }
         else
         {
-            // True initial connection failure - no reconnect in progress
+            // A connection that never came up, and one the client is about to dial again: this
+            // path is only reached for a socket that never opened as a session, and a socket that
+            // never opened is always retried - willReconnect below reads the same fact. So no
+            // reason is named here, and there is no reason to name: a reason means the client
+            // stopped, which is what ConnectionStopReason.None exists to distinguish, and naming
+            // one while the retry is about to start would hand a consumer grounds to fail over to
+            // another server while this one is still being dialled.
+            //
+            // A ConnectionStopReason.InitialConnectionFailed existed here and was removed before
+            // release rather than kept as a defensive value. It is unreachable by construction,
+            // and that was measured rather than argued: the branch was instrumented and the whole
+            // unit suite run twice - once on the reason, once on willReconnect itself - for zero
+            // hits in 1328 tests. A value no consumer can ever observe is worse than no value,
+            // because it invites a branch that never runs. Adding an enum member later is not a
+            // breaking change; removing one is, which is why this is the right order to be wrong
+            // in. The ending a consumer does get for a connection that never came up and stopped
+            // being retried is ReconnectExhausted, from the loop that stopped retrying it.
             SetConnectionState(
                 XrpConnectionState.Disconnected,
                 $"Initial connection failed: {error.Message}",
-                ConnectionCloseSeverity.Error);
+                severity: ConnectionCloseSeverity.Error,
+                announcingGeneration: generation);
         }
 
         // Start reconnect for initial connection failures and network drops. For a network drop
         // wasOpen is true, and the client still needs to reconnect.
-        if (!wasOpen || isNetworkDrop)
+        if (willReconnect)
         {
             if (OnDisconnect is not null)
             {
@@ -2504,7 +3329,7 @@ public class Connection
                 // server switch gets at once, where it used to get a TimeoutException with
                 // "Timeout" in it, and a consumer classifying failures by message text needs
                 // something to recognise.
-                throw new NotConnectedException(
+                throw new RequestRefusedException(
                     "The client is not connected to a server and the request was refused at once " +
                     "(RequestFailurePolicy.ImmediateFail). Call Connect() first, or use " +
                     "RequestFailurePolicy.WaitForConnection to have requests wait for the connection.");
@@ -2527,7 +3352,22 @@ public class Connection
     {
         if (_permanentlyDisconnected)
         {
-            throw new NotConnectedException("Client has been disconnected. Call Connect() to reconnect.");
+            throw DisconnectedBecause("Client has been disconnected. Call Connect() to reconnect.");
+        }
+
+        // The same record the wait reads, and read here for the same reason: a client that gave up
+        // and a client nobody has called Connect() on are indistinguishable by socket, loop and
+        // state, and the check below answers both with "call Connect() first". A consumer who has
+        // just been told on the status stream that this endpoint spent its reconnect budget, and
+        // who then issues a request, was told by the exception that they had never connected -
+        // which is the one distinction the exception family exists to draw.
+        lock (_transitionLock)
+        {
+            NotConnectedException? announced = StoppedBecauseLocked();
+            if (announced != null)
+            {
+                throw announced;
+            }
         }
 
         // Connecting or RestoringConnection say an attempt is under way even with ws null. So
@@ -2539,7 +3379,7 @@ public class Connection
         var noConnectionAttemptActive = ws == null && _reconnectCts == null && !isActiveState;
         if (noConnectionAttemptActive)
         {
-            throw new NotConnectedException("No connection attempt in progress. Call Connect() first.");
+            throw new NotConnectingException("No connection attempt in progress. Call Connect() first.");
         }
     }
 
@@ -2679,6 +3519,10 @@ public class Connection
         try
         {
             connectionManager.ResolveAllAwaiting();
+
+            // Before the OnConnected handler, which is consumer code and may take its time: a
+            // caller waiting for the connection is waiting for the socket, not for the handler.
+            WakeConnectionWaiters();
             if (OnConnected is not null)
             {
                 await OnConnected?.Invoke();
@@ -2695,7 +3539,10 @@ public class Connection
             }
 
             Interlocked.Exchange(ref _connectHandlerFailures, value: 0);
-            SetConnectionState(XrpConnectionState.Connected, message: $"Connected {url}");
+            SetConnectionState(
+                XrpConnectionState.Connected,
+                message: $"Connected {url}",
+                announcingGeneration: openedSession.Generation);
         }
         catch (Exception error)
         {
@@ -2771,11 +3618,39 @@ public class Connection
             // The detailed reason has to be notified BEFORE Disconnect(): Disconnect() moves the state to
             // Disconnected itself, and SetConnectionState only notifies on a state change, so a call after it
             // would be swallowed and the consumer would see "Disconnected by user request." instead.
+            // The generation goes with it, like every other announcement that speaks for one
+            // transition. The ownership check above is read-only and has no await after it, but a
+            // takeover on another thread can still land between the two - and this one announces a
+            // terminal reason, which the deduplication no longer swallows.
+            ConnectHandlerFailure gaveUp = new ConnectHandlerFailure(
+                $"Gave up connecting to {url}: the OnConnected handler failed {failures} time(s) in a row. " +
+                $"Call Connect() to retry.",
+                failures,
+                error);
+
+            // Recorded before the ending is announced, because the announcement is the first thing
+            // anyone can see it by. A status handler asking what happened - and the caller the
+            // rejection below resumes - reads the cause through this field, and until it was
+            // written here they were told the consumer had disconnected the client: the one thing
+            // that did not happen, and the confusion the whole exception family exists to end. The
+            // disconnect further down is handed the same value, so the two cannot drift; a
+            // takeover landing in between replaces or clears it, which is correct, because then
+            // this path no longer speaks for the connection.
+            lock (_transitionLock)
+            {
+                if (Owns(failedSession.Generation))
+                {
+                    _connectHandlerGaveUp = gaveUp;
+                }
+            }
+
             SetConnectionState(
                 XrpConnectionState.Disconnected,
                 message:
                 $"OnConnected handler failed {failures} time(s) in a row: {error.Message}. Giving up after {config.MaxReconnectAttempts} attempts. Call Connect() to retry.",
-                ConnectionCloseSeverity.Error);
+                severity: ConnectionCloseSeverity.Error,
+                stopReason: ConnectionStopReason.ConnectHandlerFailed,
+                announcingGeneration: failedSession.Generation);
 
             // The notification above ran consumer code. A handler that answered "gave up" with a
             // ChangeServer has already taken this socket out of ws and is opening another; the
@@ -2795,19 +3670,23 @@ public class Connection
             // SetNetworkId sends straight after, and the socket really does open for a moment
             // before a failing handler brings it down. A caller that got as far as the second
             // operation was told its own request had been cancelled, having cancelled nothing.
-            requestManager.RejectAll(new NotConnectedException(
-                $"Gave up connecting to {url}: the OnConnected handler failed {failures} time(s) in a row. " +
-                $"Call Connect() to retry."));
+            requestManager.RejectAll(new ConnectHandlerFailedException(gaveUp.Message, gaveUp.Failures, gaveUp.Error));
 
-            await Disconnect();
+            // The cause travels with the disconnect this path performs. Everything that reports the
+            // resulting state - a caller parked in WaitForConnectionAsync, an operation this
+            // disconnect supersedes, the next request - then says the handler failed instead of
+            // saying the consumer disconnected the client, which is the one thing that did not
+            // happen here.
+            await DisconnectAsync(gaveUp);
             return;
         }
 
         SetConnectionState(
             XrpConnectionState.RestoringConnection,
             message: $"OnConnected handler failed: {error.Message}. Reconnecting...",
-            ConnectionCloseSeverity.Warning,
-            reconnect: BuildReconnectInfo(failures));
+            severity: ConnectionCloseSeverity.Warning,
+            reconnect: BuildReconnectInfo(failures),
+            announcingGeneration: failedSession.Generation);
 
         // Always tear down the socket the handler actually ran for. WebSocketClient.Connect invokes its
         // OnConnect callback without awaiting it, so the connect lock can be released while this method is
@@ -2846,7 +3725,10 @@ public class Connection
             return;
         }
 
-        requestManager.RejectAllWithCancellation();
+        // The handler failed and the client will try again: for the request that died with the
+        // connection this is a rebuild, not "the handler is broken" - that answer belongs to the
+        // terminal branch above, which gives up.
+        requestManager.RejectAll(SweptBy(ConnectionTransitionKind.Reconnect, url));
         await AwaitMessageProcessorExitAsync(detachedProcessor.task, detachedProcessor.cts);
         await WaitForPingToFinishAsync();
 
@@ -3038,7 +3920,12 @@ public class Connection
         if (intentionalDisconnect)
         {
             var noReconnectMessage = $"Connection closed permanently. {userMessage}";
-            SetConnectionState(XrpConnectionState.Disconnected, noReconnectMessage, ConnectionCloseSeverity.Warning);
+            SetConnectionState(
+                XrpConnectionState.Disconnected,
+                noReconnectMessage,
+                severity: ConnectionCloseSeverity.Warning,
+                stopReason: ConnectionStopReason.ClosedPermanently,
+                announcingGeneration: closingGeneration);
             return;
         }
 
@@ -3054,8 +3941,9 @@ public class Connection
                 SetConnectionState(
                     XrpConnectionState.RestoringConnection,
                     userMessage,
-                    severity,
-                    reconnect: firstAttempt);
+                    severity: severity,
+                    reconnect: firstAttempt,
+                    announcingGeneration: closingGeneration);
             }
         }
         else
@@ -3069,7 +3957,12 @@ public class Connection
             }
 
             var noReconnectMessage = $"Connection closed permanently. {userMessage}";
-            SetConnectionState(XrpConnectionState.Disconnected, noReconnectMessage, ConnectionCloseSeverity.Warning);
+            SetConnectionState(
+                XrpConnectionState.Disconnected,
+                noReconnectMessage,
+                severity: ConnectionCloseSeverity.Warning,
+                stopReason: ConnectionStopReason.ClosedPermanently,
+                announcingGeneration: closingGeneration);
         }
     }
 
@@ -3095,6 +3988,14 @@ public class Connection
         lock (_transitionLock)
         {
             if (_generation != generation || _reconnectLoopGeneration == generation)
+            {
+                return false;
+            }
+
+            // This generation already spent its budget and said so. Anything still arriving for it
+            // - the close of its last failed attempt above all - is the tail of a sequence that is
+            // over, not the start of a new one.
+            if (_reconnectExhaustedGeneration == generation)
             {
                 return false;
             }
@@ -3199,10 +4100,30 @@ public class Connection
             {
                 if (config.StopAfterMaxAttempts)
                 {
+                    // Recorded before the notification, for the same reason the loop is started
+                    // before one: the notification runs consumer code, and the close of the
+                    // attempt that just failed can land while it does. Either would otherwise find
+                    // a connection that looks like it has no sequence running.
+                    lock (_transitionLock)
+                    {
+                        if (Owns(generation))
+                        {
+                            _reconnectExhaustedGeneration = generation;
+                        }
+                    }
+
+                    // The generation goes with it. Without it this one announcement was the only
+                    // one in the method that spoke for the sequence without saying whose it was:
+                    // a takeover landing between the check above and this line left the loop
+                    // correctly declining to record the exhaustion and then stamping a terminal
+                    // "gave up" over the Connecting the new transition had just reported.
                     SetConnectionState(
                         XrpConnectionState.Disconnected,
                         message: $"Reconnection stopped after {config.MaxReconnectAttempts} attempts.",
-                        ConnectionCloseSeverity.Error);
+                        severity: ConnectionCloseSeverity.Error,
+                        stopReason: ConnectionStopReason.ReconnectExhausted,
+                        announcingGeneration: generation);
+
                     break;
                 }
 
@@ -3214,8 +4135,9 @@ public class Connection
             SetConnectionState(
                 XrpConnectionState.RestoringConnection,
                 reconnectMessage,
-                type,
-                reconnect: BuildReconnectInfo(delay: delay));
+                severity: type,
+                reconnect: BuildReconnectInfo(delay: delay),
+                announcingGeneration: generation);
 
             if (!skipDelay)
             {
@@ -3336,11 +4258,16 @@ public class Connection
                 var errorMessage = isNetworkError
                     ? $"Reconnection attempt #{_reconnectAttempts}: network unavailable"
                     : $"Reconnection attempt #{_reconnectAttempts} failed: {ex.Message}";
+                // The ownership check above decides whether to carry on; this decides whether the
+                // status is still this loop's to report, and the two are not the same instant. A
+                // takeover landing between them - a user Disconnect above all - had its own state
+                // overwritten with a RestoringConnection from a loop that was already superseded.
                 SetConnectionState(
                     XrpConnectionState.RestoringConnection,
                     errorMessage,
-                    severity,
-                    reconnect: BuildReconnectInfo());
+                    severity: severity,
+                    reconnect: BuildReconnectInfo(),
+                    announcingGeneration: generation);
             }
         }
 
@@ -3377,6 +4304,13 @@ public class Connection
         }
 
         finished?.Dispose();
+
+        // The state a waiter reads to recognise a spent budget is this bookkeeping, not the
+        // notification that preceded it: the check is "the budget is gone AND no source is
+        // installed", and the source is only released here. A waiter woken by the notification
+        // alone re-reads a connection that still has one, finds nothing terminal, and parks again
+        // on a signal nothing else was going to complete.
+        WakeConnectionWaiters();
     }
 
     private volatile int _pingRunning = 0;
@@ -3751,6 +4685,11 @@ public class Connection
             1009 => (ConnectionCloseSeverity.Warning, "Message too large (1009)." + suffix),
             1010 => (ConnectionCloseSeverity.Error, "Mandatory WebSocket extension is missing (1010)." + suffix),
             1011 => (ConnectionCloseSeverity.Error, "Internal server error (1011)." + suffix),
+            // A close with no code at all reaches the default arm too, and interpolating a null
+            // int? there produced "Connection closed with code ." - a sentence with a hole in it,
+            // reported for the commonest close of all: a peer that went away without a frame.
+            null => (ConnectionCloseSeverity.Warning, "Connection closed without a code." + suffix),
+
             _ => (ConnectionCloseSeverity.Warning, $"Connection closed with code {code}." + suffix),
         };
     }
