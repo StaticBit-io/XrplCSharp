@@ -3,7 +3,6 @@ using System.Text.Json.Serialization;
 using System;
 using System.Collections.Generic;
 using System.Linq;
-using System.Threading.Tasks;
 
 using Xrpl.Client.Json.Converters;
 using Xrpl.Models.Enums;
@@ -134,11 +133,11 @@ public partial class Validation
         "LoanSet", "LoanDelete", "LoanManage", "LoanPay",
     };
 
-    public static async Task ValidateBatch(Dictionary<string, object> tx)
+    public static void ValidateBatch(Dictionary<string, object> tx)
     {
         if (tx == null)
             throw new ArgumentException("Batch: tx is null.");
-        await Common.ValidateBaseTransaction(tx);
+        Common.ValidateBaseTransaction(tx);
 
         if (!tx.TryGetValue("TransactionType", out var transactionTypeObj) ||
             transactionTypeObj is not string transactionType ||

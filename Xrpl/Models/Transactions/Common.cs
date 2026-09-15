@@ -5,7 +5,6 @@ using System.Linq;
 using System.Security.Cryptography;
 using System.Text.Json;
 using System.Text.Json.Serialization;
-using System.Threading.Tasks;
 
 using Xrpl.Client.Exceptions;
 using Xrpl.Client.Extensions;
@@ -227,9 +226,8 @@ namespace Xrpl.Models.Transactions
         /// This should be called any time a transaction will be verified.
         /// </summary>
         /// <param name="tx">An interface w/ common transaction fields.</param>
-        /// <returns></returns>
         /// <exception cref="ValidationException"> When the common param is malformed.</exception>
-        public static Task ValidateBaseTransaction(Dictionary<string, object> tx)
+        public static void ValidateBaseTransaction(Dictionary<string, object> tx)
         {
             if (!tx.TryGetValue("Account", out var Account) || Account is null)
             {
@@ -338,7 +336,7 @@ namespace Xrpl.Models.Transactions
             {
                 throw new ValidationException("BaseTransaction: invalid OperationLimit");
             }
-            return Task.CompletedTask;
+            return;
         }
     }
 

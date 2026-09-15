@@ -1,6 +1,5 @@
 using System.Collections.Generic;
 using System.Linq;
-using System.Threading.Tasks;
 
 using System.Text.Json.Serialization;
 
@@ -108,9 +107,9 @@ namespace Xrpl.Models.Transactions
         /// </summary>
         /// <param name="tx">A PermissionedDomainSet transaction.</param>
         /// <exception cref="ValidationException">When the PermissionedDomainSet is malformed.</exception>
-        public static async Task ValidatePermissionedDomainSet(Dictionary<string, object> tx)
+        public static void ValidatePermissionedDomainSet(Dictionary<string, object> tx)
         {
-            await Common.ValidateBaseTransaction(tx);
+            Common.ValidateBaseTransaction(tx);
 
             tx.TryGetValue("AcceptedCredentials", out var acceptedCredentials);
 

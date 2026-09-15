@@ -1,7 +1,6 @@
 using System;
 using System.Collections.Generic;
 using System.Text.Json.Serialization;
-using System.Threading.Tasks;
 
 using Xrpl.Client.Exceptions;
 using Xrpl.Client.Json.Converters;
@@ -145,9 +144,9 @@ namespace Xrpl.Models.Transactions
         /// </summary>
         /// <param name="tx">An OracleSet Transaction.</param>
         /// <exception cref="ValidationException">When the OracleSet is malformed.</exception>
-        public static async Task ValidateOracleSet(Dictionary<string, object> tx)
+        public static void ValidateOracleSet(Dictionary<string, object> tx)
         {
-            await Common.ValidateBaseTransaction(tx);
+            Common.ValidateBaseTransaction(tx);
 
             if (!tx.TryGetValue("OracleDocumentID", out var oracleDocumentID) || oracleDocumentID is null)
                 throw new ValidationException("OracleSet: missing field OracleDocumentID");

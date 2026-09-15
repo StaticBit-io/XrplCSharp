@@ -2,7 +2,6 @@
 // https://github.com/XRPLF/xrpl.js/blob/main/packages/xrpl/src/models/transactions/escrowCancel.ts
 
 using System.Collections.Generic;
-using System.Threading.Tasks;
 
 using Xrpl.Client.Exceptions;
 
@@ -55,9 +54,9 @@ namespace Xrpl.Models.Transactions
         /// </summary>
         /// <param name="tx"> A EscrowCancel Transaction.</param>
         /// <exception cref="ValidationException">When the EscrowCancel is malformed.</exception>
-        public static async Task ValidateEscrowCancel(Dictionary<string, object> tx)
+        public static void ValidateEscrowCancel(Dictionary<string, object> tx)
         {
-            await Common.ValidateBaseTransaction(tx);
+            Common.ValidateBaseTransaction(tx);
             if (!tx.TryGetValue("Owner", out var Owner) || Owner is null)
                 throw new ValidationException("EscrowCancel: missing Owner");
             if(Owner is not string {})

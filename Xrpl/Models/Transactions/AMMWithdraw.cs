@@ -1,6 +1,5 @@
 using System.Collections.Generic;
 using System.Text.Json.Serialization;
-using System.Threading.Tasks;
 
 using Xrpl.Client.Exceptions;
 using Xrpl.Client.Json.Converters;
@@ -189,9 +188,9 @@ namespace Xrpl.Models.Transactions
         /// </summary>
         /// <param name="tx">An AMMWithdraw Transaction.</param>
         /// <throws>When the AMMWithdraw is Malformed.</throws>
-        public static async Task ValidateAMMWithdraw(Dictionary<string, object> tx)
+        public static void ValidateAMMWithdraw(Dictionary<string, object> tx)
         {
-            await Common.ValidateBaseTransaction(tx);
+            Common.ValidateBaseTransaction(tx);
 
             tx.TryGetValue("Asset", out var Asset);
             tx.TryGetValue("Asset2", out var Asset2);

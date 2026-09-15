@@ -2,7 +2,6 @@
 
 using System;
 using System.Collections.Generic;
-using System.Threading.Tasks;
 
 using Xrpl.Client.Exceptions;
 using Xrpl.Client.Json.Converters;
@@ -361,9 +360,9 @@ namespace Xrpl.Models.Transactions
         /// </summary>
         /// <param name="tx"> A Payment Transaction.</param>
         /// <exception cref="ValidationException">When the Payment is malformed.</exception>
-        public static async Task ValidatePayment(Dictionary<string, object> tx)
+        public static void ValidatePayment(Dictionary<string, object> tx)
         {
-            await Common.ValidateBaseTransaction(tx);
+            Common.ValidateBaseTransaction(tx);
 
             if (!tx.TryGetValue("Amount", out var Amount) || Amount is null)
                 throw new ValidationException("PaymentTransaction: missing field Amount");
@@ -400,13 +399,13 @@ namespace Xrpl.Models.Transactions
                 CredentialsValidator.ValidateCredentialsList(credentialIds, "PaymentTransaction", "CredentialIDs", isStringID: true);
             }
 
-            await CheckPartialPayment(tx);
+            CheckPartialPayment(tx);
         }
 
-        public static Task CheckPartialPayment(Dictionary<string, object> tx)
+        public static void CheckPartialPayment(Dictionary<string, object> tx)
         {
             if (!tx.TryGetValue("DeliverMin", out var DeliverMin)) 
-                return Task.CompletedTask;
+                return;
 
             if (tx.TryGetValue("Flags", out var flags))
             {
@@ -424,7 +423,7 @@ namespace Xrpl.Models.Transactions
             if (!Common.IsAmount(DeliverMin))
                 throw new ValidationException("PaymentTransaction: invalid DeliverMin");
 
-            return Task.CompletedTask;
+            return;
         }
         static bool CheckFlag<T>(Dictionary<string, object> flag, string type) where T : Enum
         {

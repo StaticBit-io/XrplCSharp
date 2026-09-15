@@ -5,7 +5,6 @@
 using Microsoft.VisualStudio.TestTools.UnitTesting;
 
 using System.Collections.Generic;
-using System.Threading.Tasks;
 
 using Xrpl.Client.Exceptions;
 using Xrpl.Models.Transaction;
@@ -17,7 +16,7 @@ namespace XrplTests.Xrpl.Models
     public class TestUOfferCreate
     {
         [TestMethod]
-        public async Task TestVerify_Valid_OfferCreate1()
+        public void TestVerify_Valid_OfferCreate1()
         {
             var tx = new Dictionary<string, object>
             {
@@ -40,11 +39,11 @@ namespace XrplTests.Xrpl.Models
                 {"TxnSignature", "3045022100D874CDDD6BB24ED66E83B1D3574D3ECAC753A78F26DB7EBA89EAB8E7D72B95F802207C8CCD6CEA64E4AE2014E59EE9654E02CA8F03FE7FCE0539E958EAE182234D91"},
 
             };
-            await Validation.ValidateOfferCreate(tx);
-            await Validation.Validate(tx);
+            Validation.ValidateOfferCreate(tx);
+            Validation.Validate(tx);
         }
         [TestMethod]
-        public async Task TestVerify_Valid_OfferCreate2()
+        public void TestVerify_Valid_OfferCreate2()
         {
             var tx = new Dictionary<string, object>
             {
@@ -65,11 +64,11 @@ namespace XrplTests.Xrpl.Models
                 {"TxnSignature", "3045022100D874CDDD6BB24ED66E83B1D3574D3ECAC753A78F26DB7EBA89EAB8E7D72B95F802207C8CCD6CEA64E4AE2014E59EE9654E02CA8F03FE7FCE0539E958EAE182234D91"},
 
             };
-            await Validation.ValidateOfferCreate(tx);
-            await Validation.Validate(tx);
+            Validation.ValidateOfferCreate(tx);
+            Validation.Validate(tx);
         }
         [TestMethod]
-        public async Task TestVerify_Valid_OfferCreate3()
+        public void TestVerify_Valid_OfferCreate3()
         {
             var tx = new Dictionary<string, object>
             {
@@ -95,11 +94,11 @@ namespace XrplTests.Xrpl.Models
                 {"TxnSignature", "3045022100D874CDDD6BB24ED66E83B1D3574D3ECAC753A78F26DB7EBA89EAB8E7D72B95F802207C8CCD6CEA64E4AE2014E59EE9654E02CA8F03FE7FCE0539E958EAE182234D91"},
 
             };
-            await Validation.ValidateOfferCreate(tx);
-            await Validation.Validate(tx);
+            Validation.ValidateOfferCreate(tx);
+            Validation.Validate(tx);
         }
         [TestMethod]
-        public async Task TestVerify_InValid_Expiration()
+        public void TestVerify_InValid_Expiration()
         {
             var tx = new Dictionary<string, object>
             {
@@ -122,11 +121,11 @@ namespace XrplTests.Xrpl.Models
                 {"TxnSignature", "3045022100D874CDDD6BB24ED66E83B1D3574D3ECAC753A78F26DB7EBA89EAB8E7D72B95F802207C8CCD6CEA64E4AE2014E59EE9654E02CA8F03FE7FCE0539E958EAE182234D91"},
 
             };
-            await Helper.ThrowsExceptionAsync<ValidationException>(() => Validation.ValidateOfferCreate(tx), "OfferCreate: invalid Expiration");
-            await Helper.ThrowsExceptionAsync<ValidationException>(() => Validation.Validate(tx), "OfferCreate: invalid Expiration");
+            Helper.ThrowsException<ValidationException>(() => Validation.ValidateOfferCreate(tx), "OfferCreate: invalid Expiration");
+            Helper.ThrowsException<ValidationException>(() => Validation.Validate(tx), "OfferCreate: invalid Expiration");
         }
         [TestMethod]
-        public async Task TestVerify_InValid_OfferSequence()
+        public void TestVerify_InValid_OfferSequence()
         {
             var tx = new Dictionary<string, object>
             {
@@ -149,11 +148,11 @@ namespace XrplTests.Xrpl.Models
                 {"TxnSignature", "3045022100D874CDDD6BB24ED66E83B1D3574D3ECAC753A78F26DB7EBA89EAB8E7D72B95F802207C8CCD6CEA64E4AE2014E59EE9654E02CA8F03FE7FCE0539E958EAE182234D91"},
 
             };
-            await Helper.ThrowsExceptionAsync<ValidationException>(() => Validation.ValidateOfferCreate(tx), "OfferCreate: invalid OfferSequence");
-            await Helper.ThrowsExceptionAsync<ValidationException>(() => Validation.Validate(tx), "OfferCreate: invalid OfferSequence");
+            Helper.ThrowsException<ValidationException>(() => Validation.ValidateOfferCreate(tx), "OfferCreate: invalid OfferSequence");
+            Helper.ThrowsException<ValidationException>(() => Validation.Validate(tx), "OfferCreate: invalid OfferSequence");
         }
         [TestMethod]
-        public async Task TestVerify_InValid_TakerPays()
+        public void TestVerify_InValid_TakerPays()
         {
             var tx = new Dictionary<string, object>
             {
@@ -175,11 +174,11 @@ namespace XrplTests.Xrpl.Models
                 {"TransactionType", "OfferCreate"},
                 {"TxnSignature", "3045022100D874CDDD6BB24ED66E83B1D3574D3ECAC753A78F26DB7EBA89EAB8E7D72B95F802207C8CCD6CEA64E4AE2014E59EE9654E02CA8F03FE7FCE0539E958EAE182234D91"},
             };
-            await Helper.ThrowsExceptionAsync<ValidationException>(() => Validation.ValidateOfferCreate(tx), "OfferCreate: invalid TakerPays");
-            await Helper.ThrowsExceptionAsync<ValidationException>(() => Validation.Validate(tx), "OfferCreate: invalid TakerPays");
+            Helper.ThrowsException<ValidationException>(() => Validation.ValidateOfferCreate(tx), "OfferCreate: invalid TakerPays");
+            Helper.ThrowsException<ValidationException>(() => Validation.Validate(tx), "OfferCreate: invalid TakerPays");
         }
         [TestMethod]
-        public async Task TestVerify_InValid_TakerGets()
+        public void TestVerify_InValid_TakerGets()
         {
             var tx = new Dictionary<string, object>
             {
@@ -201,8 +200,8 @@ namespace XrplTests.Xrpl.Models
                 {"TransactionType", "OfferCreate"},
                 {"TxnSignature", "3045022100D874CDDD6BB24ED66E83B1D3574D3ECAC753A78F26DB7EBA89EAB8E7D72B95F802207C8CCD6CEA64E4AE2014E59EE9654E02CA8F03FE7FCE0539E958EAE182234D91"},
             };
-            await Helper.ThrowsExceptionAsync<ValidationException>(() => Validation.ValidateOfferCreate(tx), "OfferCreate: invalid TakerGets");
-            await Helper.ThrowsExceptionAsync<ValidationException>(() => Validation.Validate(tx), "OfferCreate: invalid TakerGets");
+            Helper.ThrowsException<ValidationException>(() => Validation.ValidateOfferCreate(tx), "OfferCreate: invalid TakerGets");
+            Helper.ThrowsException<ValidationException>(() => Validation.Validate(tx), "OfferCreate: invalid TakerGets");
         }
     }
 

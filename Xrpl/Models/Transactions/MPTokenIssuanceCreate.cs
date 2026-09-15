@@ -4,7 +4,6 @@ using System.Text.Json.Serialization;
 using System;
 using System.Collections.Generic;
 using System.Linq;
-using System.Threading.Tasks;
 
 using Xrpl.BinaryCodec.Types;
 using Xrpl.Client.Exceptions;
@@ -257,9 +256,9 @@ namespace Xrpl.Models.Transactions
         /// </summary>
         /// <param name="tx">An MPTokenIssuanceCreate Transaction.</param>
         /// <exception cref="ValidationException">When the MPTokenIssuanceCreate is Malformed.</exception>
-        public static async Task ValidateMPTokenIssuanceCreate(Dictionary<string, object> tx)
+        public static void ValidateMPTokenIssuanceCreate(Dictionary<string, object> tx)
         {
-            await Common.ValidateBaseTransaction(tx);
+            Common.ValidateBaseTransaction(tx);
 
             if (tx.TryGetValue("AssetScale", out var assetScale) && assetScale is not null)
             {

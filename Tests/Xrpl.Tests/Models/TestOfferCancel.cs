@@ -4,7 +4,6 @@
 
 using Microsoft.VisualStudio.TestTools.UnitTesting;
 using System.Collections.Generic;
-using System.Threading.Tasks;
 using Xrpl.Client.Exceptions;
 using Xrpl.Models.Transaction;
 using Xrpl.Models.Transactions;
@@ -34,28 +33,28 @@ namespace XrplTests.Xrpl.Models
         }
 
         [TestMethod]
-        public async Task TestVerifyValid()
+        public void TestVerifyValid()
         {
 
             //verifies valid OfferCancel
-            await Validation.ValidateOfferCancel(offer);
-            await Validation.Validate(offer);
+            Validation.ValidateOfferCancel(offer);
+            Validation.Validate(offer);
 
             // verifies valid OfferCancel with flags
             offer["Flags"] = 2147483648;
-            await Validation.ValidateOfferCancel(offer);
-            await Validation.Validate(offer);
+            Validation.ValidateOfferCancel(offer);
+            Validation.Validate(offer);
 
             // throws w/ OfferSequence must be a number
             offer["OfferSequence"] = "99";
-            await Helper.ThrowsExceptionAsync<ValidationException>(() => Validation.ValidateOfferCancel(offer), "OfferCancel: OfferSequence must be a number");
-            await Helper.ThrowsExceptionAsync<ValidationException>(() => Validation.Validate(offer), "OfferCancel: OfferSequence must be a number");
+            Helper.ThrowsException<ValidationException>(() => Validation.ValidateOfferCancel(offer), "OfferCancel: OfferSequence must be a number");
+            Helper.ThrowsException<ValidationException>(() => Validation.Validate(offer), "OfferCancel: OfferSequence must be a number");
             offer["OfferSequence"] = 60797528u;
 
             // throws w/ missing OfferSequence
             offer.Remove("OfferSequence");
-            await Helper.ThrowsExceptionAsync<ValidationException>(() => Validation.ValidateOfferCancel(offer), "OfferCancel: missing field OfferSequence");
-            await Helper.ThrowsExceptionAsync<ValidationException>(() => Validation.Validate(offer), "OfferCancel: missing field OfferSequence");
+            Helper.ThrowsException<ValidationException>(() => Validation.ValidateOfferCancel(offer), "OfferCancel: missing field OfferSequence");
+            Helper.ThrowsException<ValidationException>(() => Validation.Validate(offer), "OfferCancel: missing field OfferSequence");
             offer["OfferSequence"] = 60797528u;
 
         }

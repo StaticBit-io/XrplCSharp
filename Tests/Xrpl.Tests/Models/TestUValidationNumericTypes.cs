@@ -1,5 +1,4 @@
 using System.Collections.Generic;
-using System.Threading.Tasks;
 
 using Microsoft.VisualStudio.TestTools.UnitTesting;
 
@@ -32,7 +31,7 @@ namespace Xrpl.Tests.Models.Tests
         }
 
         [TestMethod]
-        public async Task TestUValidateBaseTransaction_FromToDictionary_Passes()
+        public void TestUValidateBaseTransaction_FromToDictionary_Passes()
         {
             Payment payment = new Payment
             {
@@ -49,11 +48,11 @@ namespace Xrpl.Tests.Models.Tests
             Dictionary<string, object> tx = payment.ToDictionary();
             Assert.IsInstanceOfType<int>(tx["Sequence"], "Precondition: the converter materializes small numbers as int.");
 
-            await TxCommon.ValidateBaseTransaction(tx);
+            TxCommon.ValidateBaseTransaction(tx);
         }
 
         [TestMethod]
-        public async Task TestUValidateBaseTransaction_NegativeAndOutOfRange_Throw()
+        public void TestUValidateBaseTransaction_NegativeAndOutOfRange_Throw()
         {
             Dictionary<string, object> tx = new()
             {
@@ -61,18 +60,18 @@ namespace Xrpl.Tests.Models.Tests
                 ["TransactionType"] = "Payment",
                 ["SourceTag"] = -1,
             };
-            await Assert.ThrowsExactlyAsync<ValidationException>(() => TxCommon.ValidateBaseTransaction(tx));
+            Assert.ThrowsExactly<ValidationException>(() => TxCommon.ValidateBaseTransaction(tx));
 
             tx.Remove("SourceTag");
             tx["Sequence"] = (long)uint.MaxValue + 1;
-            await Assert.ThrowsExactlyAsync<ValidationException>(() => TxCommon.ValidateBaseTransaction(tx));
+            Assert.ThrowsExactly<ValidationException>(() => TxCommon.ValidateBaseTransaction(tx));
 
             tx["Sequence"] = "5";
-            await Assert.ThrowsExactlyAsync<ValidationException>(() => TxCommon.ValidateBaseTransaction(tx));
+            Assert.ThrowsExactly<ValidationException>(() => TxCommon.ValidateBaseTransaction(tx));
         }
 
         [TestMethod]
-        public async Task TestUValidateAccountSet_SetFlagAsInt_NoInvalidCast()
+        public void TestUValidateAccountSet_SetFlagAsInt_NoInvalidCast()
         {
             AccountSet accountSet = new AccountSet
             {
@@ -82,11 +81,11 @@ namespace Xrpl.Tests.Models.Tests
                 Fee = new Currency { Value = "12" },
             };
             // Pre-fix this path threw InvalidCastException from the (uint)SetFlag unbox on a boxed int
-            await Validation.ValidateAccountSet(accountSet.ToDictionary());
+            Validation.ValidateAccountSet(accountSet.ToDictionary());
         }
 
         [TestMethod]
-        public async Task TestUValidateTicketCreate_CountAsInt_Passes()
+        public void TestUValidateTicketCreate_CountAsInt_Passes()
         {
             TicketCreate ticketCreate = new TicketCreate
             {
@@ -95,11 +94,11 @@ namespace Xrpl.Tests.Models.Tests
                 Sequence = 1,
                 Fee = new Currency { Value = "12" },
             };
-            await Validation.ValidateTicketCreate(ticketCreate.ToDictionary());
+            Validation.ValidateTicketCreate(ticketCreate.ToDictionary());
         }
 
         [TestMethod]
-        public async Task TestUValidateEscrowCreate_WithoutDestinationTag_Passes()
+        public void TestUValidateEscrowCreate_WithoutDestinationTag_Passes()
         {
             // Pre-fix the guard tested the required Destination instead of the optional
             // DestinationTag, so every escrow without a tag failed validation
@@ -111,14 +110,14 @@ namespace Xrpl.Tests.Models.Tests
                 ["Amount"] = "1000000",
                 ["FinishAfter"] = 800000000u,
             };
-            await Validation.ValidateEscrowCreate(tx);
+            Validation.ValidateEscrowCreate(tx);
 
             tx["DestinationTag"] = "not-a-number";
-            await Assert.ThrowsExactlyAsync<ValidationException>(() => Validation.ValidateEscrowCreate(tx));
+            Assert.ThrowsExactly<ValidationException>(() => Validation.ValidateEscrowCreate(tx));
         }
 
         [TestMethod]
-        public async Task TestUValidateAccountSet_TickSizeZero_Clears()
+        public void TestUValidateAccountSet_TickSizeZero_Clears()
         {
             Dictionary<string, object> tx = new()
             {
@@ -127,11 +126,11 @@ namespace Xrpl.Tests.Models.Tests
                 ["TickSize"] = 0u,
             };
             // 0 clears the tick size per rippled; must not be rejected as out of range
-            await Validation.ValidateAccountSet(tx);
+            Validation.ValidateAccountSet(tx);
         }
 
         [TestMethod]
-        public async Task TestUValidateSponsorshipTransfer_NonStringSponsor_TypeError()
+        public void TestUValidateSponsorshipTransfer_NonStringSponsor_TypeError()
         {
             Dictionary<string, object> tx = new()
             {
@@ -140,7 +139,7 @@ namespace Xrpl.Tests.Models.Tests
                 ["Flags"] = (uint)SponsorshipTransferFlags.tfSponsorshipCreate,
                 ["Sponsor"] = 123,
             };
-            ValidationException ex = await Assert.ThrowsExactlyAsync<ValidationException>(() => Validation.ValidateSponsorshipTransfer(tx));
+            ValidationException ex = Assert.ThrowsExactly<ValidationException>(() => Validation.ValidateSponsorshipTransfer(tx));
             StringAssert.Contains(ex.Message, "invalid Sponsor");
         }
 

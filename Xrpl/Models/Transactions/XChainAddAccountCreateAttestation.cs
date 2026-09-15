@@ -1,6 +1,5 @@
 using System.Collections.Generic;
 using System.Text.Json.Serialization;
-using System.Threading.Tasks;
 
 using Xrpl.Client.Exceptions;
 using Xrpl.Client.Json.Converters;
@@ -182,9 +181,9 @@ namespace Xrpl.Models.Transactions
 
     public partial class Validation
     {
-        public static async Task ValidateXChainAddAccountCreateAttestation(Dictionary<string, object> tx)
+        public static void ValidateXChainAddAccountCreateAttestation(Dictionary<string, object> tx)
         {
-            await Common.ValidateBaseTransaction(tx);
+            Common.ValidateBaseTransaction(tx);
 
             if (!tx.TryGetValue("XChainBridge", out var bridge) || bridge is null)
                 throw new ValidationException("XChainAddAccountCreateAttestation: missing field XChainBridge");

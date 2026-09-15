@@ -488,7 +488,7 @@ public class TestIPermissionedDomain
 
         try
         {
-            await Validation.ValidateOfferCreate(hybridOfferNoDoamin);
+            Validation.ValidateOfferCreate(hybridOfferNoDoamin);
             Assert.Fail("Should have thrown ValidationException for tfHybrid without DomainID");
         }
         catch (ValidationException ex)
@@ -512,7 +512,7 @@ public class TestIPermissionedDomain
 
         try
         {
-            await Validation.ValidateOfferCreate(invalidDomainIdOffer);
+            Validation.ValidateOfferCreate(invalidDomainIdOffer);
             Assert.Fail("Should have thrown ValidationException for invalid DomainID");
         }
         catch (ValidationException ex)
@@ -536,7 +536,7 @@ public class TestIPermissionedDomain
 
         try
         {
-            await Validation.ValidatePayment(invalidDomainIdPayment);
+            Validation.ValidatePayment(invalidDomainIdPayment);
             Assert.Fail("Should have thrown ValidationException for invalid DomainID");
         }
         catch (ValidationException ex)

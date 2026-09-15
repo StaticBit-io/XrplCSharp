@@ -4,7 +4,6 @@
 
 using Microsoft.VisualStudio.TestTools.UnitTesting;
 using System.Collections.Generic;
-using System.Threading.Tasks;
 using Xrpl.Client.Exceptions;
 using Xrpl.Models.Transaction;
 using Xrpl.Models.Transactions;
@@ -15,7 +14,7 @@ namespace XrplTests.Xrpl.Models
     public class TestUCheckCreate
     {
         [TestMethod]
-        public async Task TestVerify_Valid_CheckCreate()
+        public void TestVerify_Valid_CheckCreate()
         {
             var tx = new Dictionary<string, object>
             {
@@ -28,11 +27,11 @@ namespace XrplTests.Xrpl.Models
                 {"DestinationTag", 1u},
                 {"Fee", "12"},
             };
-            await Validation.ValidateCheckCreate(tx);
-            await Validation.Validate(tx);
+            Validation.ValidateCheckCreate(tx);
+            Validation.Validate(tx);
         }
         [TestMethod]
-        public async Task TestVerify_InValid_Destination()
+        public void TestVerify_InValid_Destination()
         {
             var tx = new Dictionary<string, object>
             {
@@ -45,11 +44,11 @@ namespace XrplTests.Xrpl.Models
                 {"DestinationTag", 1u},
                 {"Fee", "12"},
             };
-            await Helper.ThrowsExceptionAsync<ValidationException>(() => Validation.ValidateCheckCreate(tx), "CheckCreate: invalid Destination");
-            await Helper.ThrowsExceptionAsync<ValidationException>(() => Validation.Validate(tx), "CheckCreate: invalid Destination");
+            Helper.ThrowsException<ValidationException>(() => Validation.ValidateCheckCreate(tx), "CheckCreate: invalid Destination");
+            Helper.ThrowsException<ValidationException>(() => Validation.Validate(tx), "CheckCreate: invalid Destination");
         }
         [TestMethod]
-        public async Task TestVerify_InValid_SendMax()
+        public void TestVerify_InValid_SendMax()
         {
             var tx = new Dictionary<string, object>
             {
@@ -62,11 +61,11 @@ namespace XrplTests.Xrpl.Models
                 {"DestinationTag", 1u},
                 {"Fee", "12"},
             };
-            await Helper.ThrowsExceptionAsync<ValidationException>(() => Validation.ValidateCheckCreate(tx), "CheckCreate: invalid SendMax");
-            await Helper.ThrowsExceptionAsync<ValidationException>(() => Validation.Validate(tx), "CheckCreate: invalid SendMax");
+            Helper.ThrowsException<ValidationException>(() => Validation.ValidateCheckCreate(tx), "CheckCreate: invalid SendMax");
+            Helper.ThrowsException<ValidationException>(() => Validation.Validate(tx), "CheckCreate: invalid SendMax");
         }
         [TestMethod]
-        public async Task TestVerify_InValid_DestinationTag()
+        public void TestVerify_InValid_DestinationTag()
         {
             var tx = new Dictionary<string, object>
             {
@@ -79,11 +78,11 @@ namespace XrplTests.Xrpl.Models
                 {"DestinationTag", "1"},
                 {"Fee", "12"},
             };
-            await Helper.ThrowsExceptionAsync<ValidationException>(() => Validation.ValidateCheckCreate(tx), "CheckCreate: invalid DestinationTag");
-            await Helper.ThrowsExceptionAsync<ValidationException>(() => Validation.Validate(tx), "CheckCreate: invalid DestinationTag");
+            Helper.ThrowsException<ValidationException>(() => Validation.ValidateCheckCreate(tx), "CheckCreate: invalid DestinationTag");
+            Helper.ThrowsException<ValidationException>(() => Validation.Validate(tx), "CheckCreate: invalid DestinationTag");
         }
         [TestMethod]
-        public async Task TestVerify_InValid_Expiration()
+        public void TestVerify_InValid_Expiration()
         {
             var tx = new Dictionary<string, object>
             {
@@ -96,11 +95,11 @@ namespace XrplTests.Xrpl.Models
                 {"DestinationTag", 1u},
                 {"Fee", "12"},
             };
-            await Helper.ThrowsExceptionAsync<ValidationException>(() => Validation.ValidateCheckCreate(tx), "CheckCreate: invalid Expiration");
-            await Helper.ThrowsExceptionAsync<ValidationException>(() => Validation.Validate(tx), "CheckCreate: invalid Expiration");
+            Helper.ThrowsException<ValidationException>(() => Validation.ValidateCheckCreate(tx), "CheckCreate: invalid Expiration");
+            Helper.ThrowsException<ValidationException>(() => Validation.Validate(tx), "CheckCreate: invalid Expiration");
         }
         [TestMethod]
-        public async Task TestVerify_InValid_InvoiceID()
+        public void TestVerify_InValid_InvoiceID()
         {
             var tx = new Dictionary<string, object>
             {
@@ -113,8 +112,8 @@ namespace XrplTests.Xrpl.Models
                 {"DestinationTag", 1u},
                 {"Fee", "12"},
             };
-            await Helper.ThrowsExceptionAsync<ValidationException>(() => Validation.ValidateCheckCreate(tx), "CheckCreate: invalid InvoiceID");
-            await Helper.ThrowsExceptionAsync<ValidationException>(() => Validation.Validate(tx), "CheckCreate: invalid InvoiceID");
+            Helper.ThrowsException<ValidationException>(() => Validation.ValidateCheckCreate(tx), "CheckCreate: invalid InvoiceID");
+            Helper.ThrowsException<ValidationException>(() => Validation.Validate(tx), "CheckCreate: invalid InvoiceID");
         }
 
         [TestMethod]
@@ -143,7 +142,7 @@ namespace XrplTests.Xrpl.Models
         }
 
         [TestMethod]
-        public async Task TestUCheckCreate_RejectsInvoiceIDThatIsNotA256BitHexValue()
+        public void TestUCheckCreate_RejectsInvoiceIDThatIsNotA256BitHexValue()
         {
             // sfInvoiceID is Hash256. A string of the wrong length or with non-hex characters is
             // malformed and must fail validation rather than blow up later inside the codec —
@@ -168,14 +167,14 @@ namespace XrplTests.Xrpl.Models
                     { "Fee", "12" },
                 };
 
-                await Helper.ThrowsExceptionAsync<ValidationException>(
+                Helper.ThrowsException<ValidationException>(
                     () => Validation.ValidateCheckCreate(tx),
                     "CheckCreate: invalid InvoiceID");
             }
         }
 
         [TestMethod]
-        public async Task TestUCheckCreate_AcceptsA256BitHexInvoiceID()
+        public void TestUCheckCreate_AcceptsA256BitHexInvoiceID()
         {
             Dictionary<string, object> tx = new Dictionary<string, object>
             {
@@ -187,7 +186,7 @@ namespace XrplTests.Xrpl.Models
                 { "Fee", "12" },
             };
 
-            await Validation.ValidateCheckCreate(tx);
+            Validation.ValidateCheckCreate(tx);
         }
     }
 

@@ -1,7 +1,6 @@
 using System.Collections.Generic;
 using System.Text.Json;
 using System.Text.Json.Serialization;
-using System.Threading.Tasks;
 
 using Xrpl.Client.Exceptions;
 using Xrpl.Client.Json;
@@ -78,11 +77,10 @@ namespace Xrpl.Models.Transactions
         /// Verify the form and type of an ClawBack at runtime.
         /// </summary>
         /// <param name="tx">An ClawBack Transaction.</param>
-        /// <returns></returns>
         /// <exception cref="ValidationException">When the ClawBack is Malformed.</exception>
-        public static async Task ValidateClawBack(Dictionary<string, object> tx)
+        public static void ValidateClawBack(Dictionary<string, object> tx)
         {
-            await Common.ValidateBaseTransaction(tx);
+            Common.ValidateBaseTransaction(tx);
 
             if (!tx.TryGetValue("Amount", out var Amount) || Amount is null)
             {

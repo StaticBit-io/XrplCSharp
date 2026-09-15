@@ -1,5 +1,4 @@
 using System.Collections.Generic;
-using System.Threading.Tasks;
 
 using System.Text.Json.Serialization;
 
@@ -51,9 +50,9 @@ namespace Xrpl.Models.Transactions
         /// </summary>
         /// <param name="tx">An OracleDelete Transaction.</param>
         /// <exception cref="ValidationException">When the OracleDelete is malformed.</exception>
-        public static async Task ValidateOracleDelete(Dictionary<string, object> tx)
+        public static void ValidateOracleDelete(Dictionary<string, object> tx)
         {
-            await Common.ValidateBaseTransaction(tx);
+            Common.ValidateBaseTransaction(tx);
 
             if (!tx.TryGetValue("OracleDocumentID", out var oracleDocumentID) || oracleDocumentID is null)
                 throw new ValidationException("OracleDelete: missing field OracleDocumentID");

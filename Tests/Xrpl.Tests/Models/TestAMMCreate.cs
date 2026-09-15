@@ -3,7 +3,6 @@
 using Microsoft.VisualStudio.TestTools.UnitTesting;
 
 using System.Collections.Generic;
-using System.Threading.Tasks;
 
 using Xrpl.Client.Exceptions;
 using Xrpl.Models.Transactions;
@@ -35,23 +34,23 @@ namespace XrplTests.Xrpl.Models
         }
 
         [TestMethod]
-        public async Task TestVerifyValid()
+        public void TestVerifyValid()
         {
             //verifies valid AMMCreate
-            await Validation.Validate(ammCreate);
+            Validation.Validate(ammCreate);
 
             //throws w/ missing Amount
             ammCreate.Remove("Amount");
-            await Helper.ThrowsExceptionAsync<ValidationException>(() => Validation.Validate(ammCreate), "AMMCreate: missing field Amount");
+            Helper.ThrowsException<ValidationException>(() => Validation.Validate(ammCreate), "AMMCreate: missing field Amount");
             ammCreate["Amount"] = "1000";
             //throws w/ Amount must be an Amount
             ammCreate["Amount"] = 1000;
-            await Helper.ThrowsExceptionAsync<ValidationException>(() => Validation.Validate(ammCreate), "AMMCreate: Amount must be an Amount");
+            Helper.ThrowsException<ValidationException>(() => Validation.Validate(ammCreate), "AMMCreate: Amount must be an Amount");
             ammCreate["Amount"] = "1000";
 
             //throws w/ missing Amount2
             ammCreate.Remove("Amount2");
-            await Helper.ThrowsExceptionAsync<ValidationException>(() => Validation.Validate(ammCreate), "AMMCreate: missing field Amount2");
+            Helper.ThrowsException<ValidationException>(() => Validation.Validate(ammCreate), "AMMCreate: missing field Amount2");
             ammCreate["Amount2"] = new Dictionary<string, object>()
             {
                 {"currency","USD"},
@@ -60,7 +59,7 @@ namespace XrplTests.Xrpl.Models
             };
             //throws w/ Amount must be an Amount2
             ammCreate["Amount2"] = 1000;
-            await Helper.ThrowsExceptionAsync<ValidationException>(() => Validation.Validate(ammCreate), "AMMCreate: Amount2 must be an Amount");
+            Helper.ThrowsException<ValidationException>(() => Validation.Validate(ammCreate), "AMMCreate: Amount2 must be an Amount");
             ammCreate["Amount2"] = new Dictionary<string, object>()
             {
                 {"currency","USD"},
@@ -69,20 +68,20 @@ namespace XrplTests.Xrpl.Models
             };
             //throws w/ missing TradingFee
             ammCreate.Remove("TradingFee");
-            await Helper.ThrowsExceptionAsync<ValidationException>(() => Validation.Validate(ammCreate), "AMMCreate: missing field TradingFee");
+            Helper.ThrowsException<ValidationException>(() => Validation.Validate(ammCreate), "AMMCreate: missing field TradingFee");
             ammCreate["TradingFee"] = 12u;
             //throws w/ TradingFee must be a number
             ammCreate["TradingFee"] = "12";
-            await Helper.ThrowsExceptionAsync<ValidationException>(() => Validation.Validate(ammCreate), "AMMCreate: TradingFee must be a number");
+            Helper.ThrowsException<ValidationException>(() => Validation.Validate(ammCreate), "AMMCreate: TradingFee must be a number");
             ammCreate["TradingFee"] = 12u;
 
             //throws when TradingFee is greater than 1000
             ammCreate["TradingFee"] = 1001u;
-            await Helper.ThrowsExceptionAsync<ValidationException>(() => Validation.Validate(ammCreate), "AMMCreate: TradingFee must be between 0 and 1000");
+            Helper.ThrowsException<ValidationException>(() => Validation.Validate(ammCreate), "AMMCreate: TradingFee must be between 0 and 1000");
             ammCreate["TradingFee"] = 12u;
             //throws TradingFee must be a number
             ammCreate["TradingFee"] = -1;
-            await Helper.ThrowsExceptionAsync<ValidationException>(() => Validation.Validate(ammCreate), "AMMCreate: TradingFee must be a number");
+            Helper.ThrowsException<ValidationException>(() => Validation.Validate(ammCreate), "AMMCreate: TradingFee must be a number");
             ammCreate["TradingFee"] = 12u;
 
         }

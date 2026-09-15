@@ -20,7 +20,11 @@ public static class BatchUtils
     /// <summary>
     /// Turns a list of ordinary transactions - your own C# models - into the inner RawTransactions
     /// a Batch needs (Fee = "0", SigningPubKey = "", + tfInnerBatchTxn; no TxnSignature/Signers/LastLedgerSequence).
+    /// The assembled batch is validated before it is returned.
     /// </summary>
+    /// <exception cref="ArgumentNullException">When transactions is null.</exception>
+    /// <exception cref="ArgumentException">When the assembled Batch is malformed - fewer than 2 or more than 8 inner
+    /// transactions, an inner type a Batch forbids, or an inner that is not shaped the way a Batch requires.</exception>
     public static Batch Build(string account, IEnumerable<ITransactionRequest> transactions, BatchFlags? mode = null, List<BatchSigner>? batchSigners = null)
     {
         if (transactions == null) throw new ArgumentNullException(nameof(transactions));

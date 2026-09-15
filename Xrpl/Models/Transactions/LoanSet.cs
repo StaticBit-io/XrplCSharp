@@ -1,7 +1,6 @@
 using System;
 using System.Collections.Generic;
 using System.Text.Json.Serialization;
-using System.Threading.Tasks;
 
 using Xrpl.Client.Exceptions;
 using Xrpl.Models.Enums;
@@ -285,9 +284,9 @@ namespace Xrpl.Models.Transactions
 
     public partial class Validation
     {
-        public static async Task ValidateLoanSet(Dictionary<string, object> tx)
+        public static void ValidateLoanSet(Dictionary<string, object> tx)
         {
-            await Common.ValidateBaseTransaction(tx);
+            Common.ValidateBaseTransaction(tx);
 
             if (!tx.TryGetValue("LoanBrokerID", out var brokerId) || brokerId is not string)
                 throw new ValidationException("LoanSet: missing field LoanBrokerID");

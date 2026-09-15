@@ -2,7 +2,6 @@
 using System;
 using System.Collections.Generic;
 using System.Text.Json.Serialization;
-using System.Threading.Tasks;
 
 using Xrpl.Client.Exceptions;
 
@@ -100,9 +99,9 @@ namespace Xrpl.Models.Transactions
         /// </summary>
         /// <param name="tx">An MPTokenAuthorize Transaction.</param>
         /// <exception cref="ValidationException">When the MPTokenAuthorize is Malformed.</exception>
-        public static async Task ValidateMPTokenAuthorize(Dictionary<string, object> tx)
+        public static void ValidateMPTokenAuthorize(Dictionary<string, object> tx)
         {
-            await Common.ValidateBaseTransaction(tx);
+            Common.ValidateBaseTransaction(tx);
 
             if (!tx.TryGetValue("MPTokenIssuanceID", out var issuanceId) || issuanceId is null)
             {

@@ -1,7 +1,6 @@
 using Microsoft.VisualStudio.TestTools.UnitTesting;
 
 using System.Collections.Generic;
-using System.Threading.Tasks;
 
 using Xrpl.Client.Exceptions;
 using Xrpl.Models.Transactions;
@@ -31,33 +30,33 @@ namespace XrplTests.Xrpl.Models
         }
 
         [TestMethod]
-        public async Task TestVerifyValid()
+        public void TestVerifyValid()
         {
-            await Validation.Validate(clawback);
+            Validation.Validate(clawback);
         }
 
         [TestMethod]
-        public async Task TestThrowsMissingAmount()
+        public void TestThrowsMissingAmount()
         {
             var tx = new Dictionary<string, object>(clawback);
             tx.Remove("Amount");
-            await Helper.ThrowsExceptionAsync<ValidationException>(
+            Helper.ThrowsException<ValidationException>(
                 () => Validation.Validate(tx),
                 "ClawBack: missing field Amount");
         }
 
         [TestMethod]
-        public async Task TestThrowsInvalidAmountXRP()
+        public void TestThrowsInvalidAmountXRP()
         {
             var tx = new Dictionary<string, object>(clawback);
             tx["Amount"] = "1000000";
-            await Helper.ThrowsExceptionAsync<ValidationException>(
+            Helper.ThrowsException<ValidationException>(
                 () => Validation.Validate(tx),
                 "ClawBack: invalid Amount");
         }
 
         [TestMethod]
-        public async Task TestThrowsHolderSameAsAccount()
+        public void TestThrowsHolderSameAsAccount()
         {
             var tx = new Dictionary<string, object>(clawback);
             tx["Amount"] = new Dictionary<string, object>()
@@ -66,17 +65,17 @@ namespace XrplTests.Xrpl.Models
                 {"issuer","rp6abvbTbjoce8ZDJkT6snvxTZSYMBCC9S"},
                 {"value","100"},
             };
-            await Helper.ThrowsExceptionAsync<ValidationException>(
+            Helper.ThrowsException<ValidationException>(
                 () => Validation.Validate(tx),
                 "ClawBack: invalid holder Account");
         }
 
         [TestMethod]
-        public async Task TestValidWithHolderForMPT()
+        public void TestValidWithHolderForMPT()
         {
             var tx = new Dictionary<string, object>(clawback);
             tx["Holder"] = "rsA2LpzuawewSBQXkiju3YQTMzW13pAAdW";
-            await Validation.Validate(tx);
+            Validation.Validate(tx);
         }
     }
 }
