@@ -1,6 +1,5 @@
 #nullable enable
 using System.Collections.Generic;
-using System.Threading.Tasks;
 
 using System.Text.Json.Serialization;
 
@@ -57,9 +56,9 @@ namespace Xrpl.Models.Transactions
         /// </summary>
         /// <param name="tx">An MPTokenIssuanceDestroy Transaction.</param>
         /// <exception cref="ValidationException">When the MPTokenIssuanceDestroy is Malformed.</exception>
-        public static async Task ValidateMPTokenIssuanceDestroy(Dictionary<string, object> tx)
+        public static void ValidateMPTokenIssuanceDestroy(Dictionary<string, object> tx)
         {
-            await Common.ValidateBaseTransaction(tx);
+            Common.ValidateBaseTransaction(tx);
 
             if (!tx.TryGetValue("MPTokenIssuanceID", out var issuanceId) || issuanceId is null)
             {

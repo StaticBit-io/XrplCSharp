@@ -2,7 +2,6 @@ using System;
 using System.Collections.Generic;
 using System.Globalization;
 using System.Text.Json.Serialization;
-using System.Threading.Tasks;
 
 using Xrpl.Client.Exceptions;
 using Xrpl.Client.Json.Converters;
@@ -172,9 +171,9 @@ namespace Xrpl.Models.Transactions
 
     public partial class Validation
     {
-        public static async Task ValidateSponsorshipSet(Dictionary<string, object> tx)
+        public static void ValidateSponsorshipSet(Dictionary<string, object> tx)
         {
-            await Common.ValidateBaseTransaction(tx);
+            Common.ValidateBaseTransaction(tx);
 
             bool hasSponsee = tx.TryGetValue("Sponsee", out var sponsee) && sponsee is string;
             bool hasCounterpartySponsor = tx.TryGetValue("CounterpartySponsor", out var cps) && cps is string;

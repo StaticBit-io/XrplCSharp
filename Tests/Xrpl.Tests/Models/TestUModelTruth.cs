@@ -134,7 +134,7 @@ namespace Xrpl.Tests.Models
                 { "NFTokenBuyOffer", offer },
             };
 
-            ValidationException error = await Assert.ThrowsExactlyAsync<ValidationException>(
+            ValidationException error = Assert.ThrowsExactly<ValidationException>(
                 () => Validation.ValidateNFTokenAcceptOffer(tx));
 
             StringAssert.Contains(error.Message, "different offers");
@@ -157,7 +157,7 @@ namespace Xrpl.Tests.Models
                 { "NFTokenBuyOffer", "68CD1F6F906494EA08C9CB5CAFA64DFA90D4E834B7151899B73231DE5A0C3B77" },
             };
 
-            await Validation.ValidateNFTokenAcceptOffer(tx);
+            Validation.ValidateNFTokenAcceptOffer(tx);
         }
 
         /// <summary>

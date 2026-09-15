@@ -3,7 +3,6 @@ using System;
 using System.Collections.Generic;
 using System.Linq;
 using System.Text.Json.Serialization;
-using System.Threading.Tasks;
 
 using Xrpl.Client.Exceptions;
 using Xrpl.Models.Utils;
@@ -219,9 +218,9 @@ namespace Xrpl.Models.Transactions
         /// </summary>
         /// <param name="tx">An MPTokenIssuanceSet Transaction.</param>
         /// <exception cref="ValidationException">When the MPTokenIssuanceSet is Malformed.</exception>
-        public static async Task ValidateMPTokenIssuanceSet(Dictionary<string, object> tx)
+        public static void ValidateMPTokenIssuanceSet(Dictionary<string, object> tx)
         {
-            await Common.ValidateBaseTransaction(tx);
+            Common.ValidateBaseTransaction(tx);
 
             if (!tx.TryGetValue("MPTokenIssuanceID", out var issuanceId) || issuanceId is null)
             {

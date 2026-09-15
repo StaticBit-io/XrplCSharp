@@ -4,7 +4,6 @@
 
 using Microsoft.VisualStudio.TestTools.UnitTesting;
 using System.Collections.Generic;
-using System.Threading.Tasks;
 using Xrpl.Client.Exceptions;
 using Xrpl.Models.Transaction;
 using Xrpl.Models.Transactions;
@@ -28,40 +27,40 @@ namespace XrplTests.Xrpl.Models
         }
 
         [TestMethod]
-        public async Task TestVerifyValid()
+        public void TestVerifyValid()
         {
             //verifies valid TicketCreate
-            await Validation.ValidateTicketCreate(ticketCreate);
-            await Validation.Validate(ticketCreate);
+            Validation.ValidateTicketCreate(ticketCreate);
+            Validation.Validate(ticketCreate);
 
             // throws when TicketCount is missing
             ticketCreate.Remove("TicketCount");
-            await Helper.ThrowsExceptionAsync<ValidationException>(() => Validation.ValidateTicketCreate(ticketCreate), "TicketCreate: missing field TicketCount");
-            await Helper.ThrowsExceptionAsync<ValidationException>(() => Validation.Validate(ticketCreate), "TicketCreate: missing field TicketCount");
+            Helper.ThrowsException<ValidationException>(() => Validation.ValidateTicketCreate(ticketCreate), "TicketCreate: missing field TicketCount");
+            Helper.ThrowsException<ValidationException>(() => Validation.Validate(ticketCreate), "TicketCreate: missing field TicketCount");
             ticketCreate["TicketCount"] = 150u;
 
             // throws when TicketCount is not a number
             ticketCreate["TicketCount"] = "150";
-            await Helper.ThrowsExceptionAsync<ValidationException>(() => Validation.ValidateTicketCreate(ticketCreate), "TicketCreate: TicketCount must be a number");
-            await Helper.ThrowsExceptionAsync<ValidationException>(() => Validation.Validate(ticketCreate), "TicketCreate: TicketCount must be a number");
+            Helper.ThrowsException<ValidationException>(() => Validation.ValidateTicketCreate(ticketCreate), "TicketCreate: TicketCount must be a number");
+            Helper.ThrowsException<ValidationException>(() => Validation.Validate(ticketCreate), "TicketCreate: TicketCount must be a number");
             ticketCreate["TicketCount"] = 150u;
 
             // throws when TicketCount is not an uint
             ticketCreate["TicketCount"] = 12.5;
-            await Helper.ThrowsExceptionAsync<ValidationException>(() => Validation.ValidateTicketCreate(ticketCreate), "TicketCreate: TicketCount must be a number");
-            await Helper.ThrowsExceptionAsync<ValidationException>(() => Validation.Validate(ticketCreate), "TicketCreate: TicketCount must be a number");
+            Helper.ThrowsException<ValidationException>(() => Validation.ValidateTicketCreate(ticketCreate), "TicketCreate: TicketCount must be a number");
+            Helper.ThrowsException<ValidationException>(() => Validation.Validate(ticketCreate), "TicketCreate: TicketCount must be a number");
             ticketCreate["TicketCount"] = 150u;
 
             // throws when TicketCount is < 1
             ticketCreate["TicketCount"] = 0u;
-            await Helper.ThrowsExceptionAsync<ValidationException>(() => Validation.ValidateTicketCreate(ticketCreate), "TicketCreate: TicketCount must be an integer from 1 to 250");
-            await Helper.ThrowsExceptionAsync<ValidationException>(() => Validation.Validate(ticketCreate), "TicketCreate: TicketCount must be an integer from 1 to 250");
+            Helper.ThrowsException<ValidationException>(() => Validation.ValidateTicketCreate(ticketCreate), "TicketCreate: TicketCount must be an integer from 1 to 250");
+            Helper.ThrowsException<ValidationException>(() => Validation.Validate(ticketCreate), "TicketCreate: TicketCount must be an integer from 1 to 250");
             ticketCreate["TicketCount"] = 150u;
 
             // throws when TicketCount is > 250
             ticketCreate["TicketCount"] = 251u;
-            await Helper.ThrowsExceptionAsync<ValidationException>(() => Validation.ValidateTicketCreate(ticketCreate), "TicketCreate: TicketCount must be an integer from 1 to 250");
-            await Helper.ThrowsExceptionAsync<ValidationException>(() => Validation.Validate(ticketCreate), "TicketCreate: TicketCount must be an integer from 1 to 250");
+            Helper.ThrowsException<ValidationException>(() => Validation.ValidateTicketCreate(ticketCreate), "TicketCreate: TicketCount must be an integer from 1 to 250");
+            Helper.ThrowsException<ValidationException>(() => Validation.Validate(ticketCreate), "TicketCreate: TicketCount must be an integer from 1 to 250");
             ticketCreate["TicketCount"] = 150u;
         }
     }

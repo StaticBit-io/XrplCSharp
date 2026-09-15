@@ -1,7 +1,6 @@
 using System.Collections.Generic;
 using System.Text.RegularExpressions;
 using Xrpl.Client.Exceptions;
-using System.Threading.Tasks;
 
 using Xrpl.Models.Ledger;
 
@@ -60,9 +59,9 @@ namespace Xrpl.Models.Transactions
         /// </summary>
         /// <param name="tx"> A SignerListSet Transaction.</param>
         /// <exception cref="ValidationException">When the SignerListSet is malformed.</exception>
-        public static async Task ValidateSignerListSet(Dictionary<string, object> tx)
+        public static void ValidateSignerListSet(Dictionary<string, object> tx)
         {
-            await Common.ValidateBaseTransaction(tx);
+            Common.ValidateBaseTransaction(tx);
             if (!tx.TryGetValue("SignerQuorum", out var SignerQuorum) || SignerQuorum is null)
                 throw new ValidationException("SignerListSet: missing field SignerQuorum");
             if (!Common.IsUInt32(SignerQuorum))

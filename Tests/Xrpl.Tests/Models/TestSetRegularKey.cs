@@ -4,7 +4,6 @@
 
 using Microsoft.VisualStudio.TestTools.UnitTesting;
 using System.Collections.Generic;
-using System.Threading.Tasks;
 using Xrpl.Client.Exceptions;
 using Xrpl.Models.Transaction;
 using Xrpl.Models.Transactions;
@@ -30,23 +29,23 @@ namespace XrplTests.Xrpl.Models
         }
 
         [TestMethod]
-        public async Task TestVerifyValid()
+        public void TestVerifyValid()
         {
             //verifies valid SetRegularKey
-            await Validation.ValidateSetRegularKey(account);
-            await Validation.Validate(account);
+            Validation.ValidateSetRegularKey(account);
+            Validation.Validate(account);
 
             // verifies w/o SetRegularKey
             account.Remove("SetRegularKey");
-            await Validation.ValidateSetRegularKey(account);
-            await Validation.Validate(account);
+            Validation.ValidateSetRegularKey(account);
+            Validation.Validate(account);
             account["SetRegularKey"] = "rAR8rR8sUkBoCZFawhkWzY4Y5YoyuznwD";
 
 
             // throws w/ invalid RegularKey
             account["RegularKey"] = 12369846963;
-            await Helper.ThrowsExceptionAsync<ValidationException>(() => Validation.ValidateSetRegularKey(account), "SetRegularKey: RegularKey must be a string");
-            await Helper.ThrowsExceptionAsync<ValidationException>(() => Validation.Validate(account), "SetRegularKey: RegularKey must be a string");
+            Helper.ThrowsException<ValidationException>(() => Validation.ValidateSetRegularKey(account), "SetRegularKey: RegularKey must be a string");
+            Helper.ThrowsException<ValidationException>(() => Validation.Validate(account), "SetRegularKey: RegularKey must be a string");
             account["RegularKey"] = "rAR8rR8sUkBoCZFawhkWzY4Y5YoyuznwD";
         }
     }

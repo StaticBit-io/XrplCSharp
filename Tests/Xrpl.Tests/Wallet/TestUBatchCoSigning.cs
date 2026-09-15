@@ -1,7 +1,6 @@
 using System.Collections.Generic;
 using System.Text.Json;
 using System.Text.Json.Nodes;
-using System.Threading.Tasks;
 
 using Microsoft.VisualStudio.TestTools.UnitTesting;
 
@@ -139,17 +138,17 @@ namespace Xrpl.Tests.Wallet.Tests
         }
 
         [TestMethod]
-        public async Task TestUValidateBatch_SingleInner_Throws()
+        public void TestUValidateBatch_SingleInner_Throws()
         {
             // rippled Batch::preflight answers temARRAY_EMPTY to fewer than two inners
             Dictionary<string, object> batch = ToDict(OuterBatch(InnerPayment(Other.ClassicAddress)));
 
-            var ex = await Assert.ThrowsExactlyAsync<System.ArgumentException>(() => Validation.ValidateBatch(batch));
+            var ex = Assert.ThrowsExactly<System.ArgumentException>(() => Validation.ValidateBatch(batch));
             StringAssert.Contains(ex.Message, "at least 2");
         }
 
         [TestMethod]
-        public async Task TestUValidateBatch_OuterReserveSponsorship_Throws()
+        public void TestUValidateBatch_OuterReserveSponsorship_Throws()
         {
             Dictionary<string, object> batch = ToDict(OuterBatch(
                 InnerPayment(Other.ClassicAddress),
@@ -157,12 +156,12 @@ namespace Xrpl.Tests.Wallet.Tests
             batch["Sponsor"] = Sponsor.ClassicAddress;
             batch["SponsorFlags"] = 2u; // spfSponsorReserve — forbidden on outer
 
-            var ex = await Assert.ThrowsExactlyAsync<System.ArgumentException>(() => Validation.ValidateBatch(batch));
+            var ex = Assert.ThrowsExactly<System.ArgumentException>(() => Validation.ValidateBatch(batch));
             StringAssert.Contains(ex.Message, "spfSponsorReserve");
         }
 
         [TestMethod]
-        public async Task TestUValidateBatch_InnerFeeSponsorship_Throws()
+        public void TestUValidateBatch_InnerFeeSponsorship_Throws()
         {
             Dictionary<string, object> batch = ToDict(OuterBatch(
                 InnerPayment(Other.ClassicAddress, new JsonObject
@@ -172,12 +171,12 @@ namespace Xrpl.Tests.Wallet.Tests
                 }),
                 InnerPayment(Root.ClassicAddress, new JsonObject { ["Amount"] = "3000000" })));
 
-            var ex = await Assert.ThrowsExactlyAsync<System.ArgumentException>(() => Validation.ValidateBatch(batch));
+            var ex = Assert.ThrowsExactly<System.ArgumentException>(() => Validation.ValidateBatch(batch));
             StringAssert.Contains(ex.Message, "spfSponsorFee");
         }
 
         [TestMethod]
-        public async Task TestUValidateBatch_MarkerNotAnObject_Throws()
+        public void TestUValidateBatch_MarkerNotAnObject_Throws()
         {
             // a scalar marker can never serialize as an STObject — reject it
             // client-side instead of failing deep inside the binary codec
@@ -190,12 +189,12 @@ namespace Xrpl.Tests.Wallet.Tests
                 }),
                 InnerPayment(Root.ClassicAddress, new JsonObject { ["Amount"] = "3000000" })));
 
-            var ex = await Assert.ThrowsExactlyAsync<System.ArgumentException>(() => Validation.ValidateBatch(batch));
+            var ex = Assert.ThrowsExactly<System.ArgumentException>(() => Validation.ValidateBatch(batch));
             StringAssert.Contains(ex.Message, "must be an object");
         }
 
         [TestMethod]
-        public async Task TestUValidateBatch_LoanOrVaultInner_Throws()
+        public void TestUValidateBatch_LoanOrVaultInner_Throws()
         {
             // rippled Batch::preflight kDisabledTxTypes: every Loan/Vault tx
             // type is rejected as an inner (temINVALID_INNER_BATCH), so
@@ -210,12 +209,12 @@ namespace Xrpl.Tests.Wallet.Tests
                 loanInner,
                 InnerPayment(Other.ClassicAddress)));
 
-            var ex = await Assert.ThrowsExactlyAsync<System.ArgumentException>(() => Validation.ValidateBatch(batch));
+            var ex = Assert.ThrowsExactly<System.ArgumentException>(() => Validation.ValidateBatch(batch));
             StringAssert.Contains(ex.Message, "LoanSet");
         }
 
         [TestMethod]
-        public async Task TestUValidateBatch_MarkerWithSignatureMaterial_Throws()
+        public void TestUValidateBatch_MarkerWithSignatureMaterial_Throws()
         {
             Dictionary<string, object> batch = ToDict(OuterBatch(
                 InnerPayment(Other.ClassicAddress, new JsonObject
@@ -230,7 +229,7 @@ namespace Xrpl.Tests.Wallet.Tests
                 }),
                 InnerPayment(Root.ClassicAddress, new JsonObject { ["Amount"] = "3000000" })));
 
-            var ex = await Assert.ThrowsExactlyAsync<System.ArgumentException>(() => Validation.ValidateBatch(batch));
+            var ex = Assert.ThrowsExactly<System.ArgumentException>(() => Validation.ValidateBatch(batch));
             StringAssert.Contains(ex.Message, "SponsorSignature");
         }
     }

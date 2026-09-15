@@ -5,7 +5,6 @@
 using Microsoft.VisualStudio.TestTools.UnitTesting;
 
 using System.Collections.Generic;
-using System.Threading.Tasks;
 
 using Xrpl.Client.Exceptions;
 using Xrpl.Models.Transactions;
@@ -33,67 +32,67 @@ namespace XrplTests.Xrpl.Models
         }
 
         [TestMethod]
-        public async Task TestVerifyValid()
+        public void TestVerifyValid()
         {
             //verifies valid AccountSet
-            await Validation.ValidateAccountSet(accountSet);
-            await Validation.Validate(accountSet);
+            Validation.ValidateAccountSet(accountSet);
+            Validation.Validate(accountSet);
 
             //throws w/ invalid SetFlag (out of range; 12 is a valid asf value and int is a valid representation)
             accountSet["SetFlag"] = 9999;
-            await Helper.ThrowsExceptionAsync<ValidationException>(() => Validation.ValidateAccountSet(accountSet), "AccountSet: invalid SetFlag");
-            await Helper.ThrowsExceptionAsync<ValidationException>(() => Validation.Validate(accountSet), "AccountSet: invalid SetFlag");
+            Helper.ThrowsException<ValidationException>(() => Validation.ValidateAccountSet(accountSet), "AccountSet: invalid SetFlag");
+            Helper.ThrowsException<ValidationException>(() => Validation.Validate(accountSet), "AccountSet: invalid SetFlag");
 
             //throws w/ invalid SetFlag (incorrect type)
             accountSet["SetFlag"] = "abc";
-            await Helper.ThrowsExceptionAsync<ValidationException>(() => Validation.ValidateAccountSet(accountSet), "AccountSet: invalid SetFlag");
-            await Helper.ThrowsExceptionAsync<ValidationException>(() => Validation.Validate(accountSet), "AccountSet: invalid SetFlag");
+            Helper.ThrowsException<ValidationException>(() => Validation.ValidateAccountSet(accountSet), "AccountSet: invalid SetFlag");
+            Helper.ThrowsException<ValidationException>(() => Validation.Validate(accountSet), "AccountSet: invalid SetFlag");
 
             accountSet["SetFlag"] = 5u;
 
             //throws w/ invalid ClearFlag (out of range)
             accountSet["ClearFlag"] = 9999;
-            await Helper.ThrowsExceptionAsync<ValidationException>(() => Validation.ValidateAccountSet(accountSet), "AccountSet: invalid ClearFlag");
-            await Helper.ThrowsExceptionAsync<ValidationException>(() => Validation.Validate(accountSet), "AccountSet: invalid ClearFlag");
+            Helper.ThrowsException<ValidationException>(() => Validation.ValidateAccountSet(accountSet), "AccountSet: invalid ClearFlag");
+            Helper.ThrowsException<ValidationException>(() => Validation.Validate(accountSet), "AccountSet: invalid ClearFlag");
             accountSet.Remove("ClearFlag");
 
             //throws w/ invalid Domain
             accountSet["Domain"] = 6578616;
-            await Helper.ThrowsExceptionAsync<ValidationException>(() => Validation.ValidateAccountSet(accountSet), "AccountSet: invalid Domain");
-            await Helper.ThrowsExceptionAsync<ValidationException>(() => Validation.Validate(accountSet), "AccountSet: invalid Domain");
+            Helper.ThrowsException<ValidationException>(() => Validation.ValidateAccountSet(accountSet), "AccountSet: invalid Domain");
+            Helper.ThrowsException<ValidationException>(() => Validation.Validate(accountSet), "AccountSet: invalid Domain");
             accountSet["Domain"] = "6578616D706C652E636F6D";
 
             //throws w/ invalid EmailHash
             accountSet["EmailHash"] = 6578656789876543;
-            await Helper.ThrowsExceptionAsync<ValidationException>(() => Validation.ValidateAccountSet(accountSet), "AccountSet: invalid EmailHash");
-            await Helper.ThrowsExceptionAsync<ValidationException>(() => Validation.Validate(accountSet), "AccountSet: invalid EmailHash");
+            Helper.ThrowsException<ValidationException>(() => Validation.ValidateAccountSet(accountSet), "AccountSet: invalid EmailHash");
+            Helper.ThrowsException<ValidationException>(() => Validation.Validate(accountSet), "AccountSet: invalid EmailHash");
             accountSet.Remove("EmailHash");
 
             //throws w/ invalid MessageKey
             accountSet["MessageKey"] = 6578656789876543;
-            await Helper.ThrowsExceptionAsync<ValidationException>(() => Validation.ValidateAccountSet(accountSet), "AccountSet: invalid MessageKey");
-            await Helper.ThrowsExceptionAsync<ValidationException>(() => Validation.Validate(accountSet), "AccountSet: invalid MessageKey");
+            Helper.ThrowsException<ValidationException>(() => Validation.ValidateAccountSet(accountSet), "AccountSet: invalid MessageKey");
+            Helper.ThrowsException<ValidationException>(() => Validation.Validate(accountSet), "AccountSet: invalid MessageKey");
             accountSet["MessageKey"] = "03AB40A0490F9B7ED8DF29D246BF2D6269820A0EE7742ACDD457BEA7C7D0931EDB";
 
             //throws w/ invalid TransferRate
             accountSet["TransferRate"] = "1000000001";
-            await Helper.ThrowsExceptionAsync<ValidationException>(() => Validation.ValidateAccountSet(accountSet), "AccountSet: invalid TransferRate");
-            await Helper.ThrowsExceptionAsync<ValidationException>(() => Validation.Validate(accountSet), "AccountSet: invalid TransferRate");
+            Helper.ThrowsException<ValidationException>(() => Validation.ValidateAccountSet(accountSet), "AccountSet: invalid TransferRate");
+            Helper.ThrowsException<ValidationException>(() => Validation.Validate(accountSet), "AccountSet: invalid TransferRate");
             accountSet.Remove("TransferRate");
 
             //throws w/ invalid TickSize (non-numeric type; int/long are valid integral representations)
             accountSet["TickSize"] = "5";
-            await Helper.ThrowsExceptionAsync<ValidationException>(() => Validation.ValidateAccountSet(accountSet), "AccountSet: invalid TickSize");
-            await Helper.ThrowsExceptionAsync<ValidationException>(() => Validation.Validate(accountSet), "AccountSet: invalid TickSize");
+            Helper.ThrowsException<ValidationException>(() => Validation.ValidateAccountSet(accountSet), "AccountSet: invalid TickSize");
+            Helper.ThrowsException<ValidationException>(() => Validation.Validate(accountSet), "AccountSet: invalid TickSize");
             //throws w/ invalid TickSize
             accountSet["TickSize"] = 20u;
-            await Helper.ThrowsExceptionAsync<ValidationException>(() => Validation.ValidateAccountSet(accountSet), "AccountSet: out of TickSize");
-            await Helper.ThrowsExceptionAsync<ValidationException>(() => Validation.Validate(accountSet), "AccountSet: out of TickSize");
+            Helper.ThrowsException<ValidationException>(() => Validation.ValidateAccountSet(accountSet), "AccountSet: out of TickSize");
+            Helper.ThrowsException<ValidationException>(() => Validation.Validate(accountSet), "AccountSet: out of TickSize");
             accountSet.Remove("TickSize");
         }
 
         [TestMethod]
-        public async Task TestUAccountSet_ValidatesWalletFieldTypes()
+        public void TestUAccountSet_ValidatesWalletFieldTypes()
         {
             Dictionary<string, object> tx = new Dictionary<string, object>
             {
@@ -106,17 +105,17 @@ namespace XrplTests.Xrpl.Models
             // Same rule the SignerListSet validator already applies to WalletLocator in a SignerEntry.
             tx["WalletLocator"] = new string('A', 64);
             tx["WalletSize"] = 3u;
-            await Validation.ValidateAccountSet(tx);
+            Validation.ValidateAccountSet(tx);
 
             tx["WalletLocator"] = 12345;
-            await Helper.ThrowsExceptionAsync<ValidationException>(() => Validation.ValidateAccountSet(tx), "AccountSet: invalid WalletLocator");
+            Helper.ThrowsException<ValidationException>(() => Validation.ValidateAccountSet(tx), "AccountSet: invalid WalletLocator");
 
             tx["WalletLocator"] = "not a hash";
-            await Helper.ThrowsExceptionAsync<ValidationException>(() => Validation.ValidateAccountSet(tx), "AccountSet: invalid WalletLocator");
+            Helper.ThrowsException<ValidationException>(() => Validation.ValidateAccountSet(tx), "AccountSet: invalid WalletLocator");
 
             tx["WalletLocator"] = new string('A', 64);
             tx["WalletSize"] = "3";
-            await Helper.ThrowsExceptionAsync<ValidationException>(() => Validation.ValidateAccountSet(tx), "AccountSet: invalid WalletSize");
+            Helper.ThrowsException<ValidationException>(() => Validation.ValidateAccountSet(tx), "AccountSet: invalid WalletSize");
         }
     }
 }

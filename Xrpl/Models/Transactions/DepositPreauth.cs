@@ -3,7 +3,6 @@
 // https://github.com/XRPLF/xrpl.js/blob/main/packages/xrpl/src/models/transactions/depositPreauth.ts
 
 using System.Collections.Generic;
-using System.Threading.Tasks;
 
 using System.Text.Json.Serialization;
 
@@ -98,9 +97,9 @@ namespace Xrpl.Models.Transactions
         /// </summary>
         /// <param name="tx"> A DepositPreauth Transaction.</param>
         /// <exception cref="ValidationException">When the DepositPreauth is malformed.</exception>
-        public static async Task ValidateDepositPreauth(Dictionary<string, object> tx)
+        public static void ValidateDepositPreauth(Dictionary<string, object> tx)
         {
-            await Common.ValidateBaseTransaction(tx);
+            Common.ValidateBaseTransaction(tx);
 
             tx.TryGetValue("Authorize", out var Authorize);
             tx.TryGetValue("Unauthorize", out var Unauthorize);

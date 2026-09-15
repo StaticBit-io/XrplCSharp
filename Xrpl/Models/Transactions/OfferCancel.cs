@@ -3,7 +3,6 @@
 // https://github.com/XRPLF/xrpl.js/blob/main/packages/xrpl/src/models/transactions/offerCancel.ts
 
 using System.Collections.Generic;
-using System.Threading.Tasks;
 
 using Xrpl.Client.Exceptions;
 
@@ -49,9 +48,9 @@ namespace Xrpl.Models.Transactions
         /// </summary>
         /// <param name="tx"> A OfferCancel Transaction.</param>
         /// <exception cref="ValidationException">When the OfferCancel is malformed.</exception>
-        public static async Task ValidateOfferCancel(Dictionary<string, object> tx)
+        public static void ValidateOfferCancel(Dictionary<string, object> tx)
         {
-            await Common.ValidateBaseTransaction(tx);
+            Common.ValidateBaseTransaction(tx);
             if (!tx.TryGetValue("OfferSequence", out var OfferSequence) || OfferSequence is null)
                 throw new ValidationException("OfferCancel: missing field OfferSequence");
 

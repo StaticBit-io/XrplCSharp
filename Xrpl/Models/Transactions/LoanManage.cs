@@ -2,7 +2,6 @@ using System;
 using System.Collections.Generic;
 using System.Text.Json;
 using System.Text.Json.Serialization;
-using System.Threading.Tasks;
 
 using Xrpl.Client.Exceptions;
 using Xrpl.Models.Enums;
@@ -99,9 +98,9 @@ namespace Xrpl.Models.Transactions
             (uint)LoanManageFlags.tfLoanImpair |
             (uint)LoanManageFlags.tfLoanUnimpair;
 
-        public static async Task ValidateLoanManage(Dictionary<string, object> tx)
+        public static void ValidateLoanManage(Dictionary<string, object> tx)
         {
-            await Common.ValidateBaseTransaction(tx);
+            Common.ValidateBaseTransaction(tx);
 
             if (!tx.TryGetValue("LoanID", out var id) || id is not string loanId || string.IsNullOrWhiteSpace(loanId))
                 throw new ValidationException("LoanManage: missing field LoanID");

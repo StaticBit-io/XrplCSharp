@@ -4,7 +4,6 @@ using System;
 using System.Collections.Generic;
 using System.Text.Json;
 using System.Text.Json.Nodes;
-using System.Threading.Tasks;
 
 using Xrpl.BinaryCodec.Types;
 using Xrpl.Client.Exceptions;
@@ -30,7 +29,7 @@ namespace XrplTests.Xrpl.Models
         /// Tests that a valid OracleSet transaction passes validation.
         /// </summary>
         [TestMethod]
-        public async Task TestVerify_Valid_OracleSet()
+        public void TestVerify_Valid_OracleSet()
         {
             var tx = new Dictionary<string, object>
             {
@@ -58,15 +57,15 @@ namespace XrplTests.Xrpl.Models
                     }
                 }
             };
-            await Validation.ValidateOracleSet(tx);
-            await Validation.Validate(tx);
+            Validation.ValidateOracleSet(tx);
+            Validation.Validate(tx);
         }
 
         /// <summary>
         /// Tests that a valid OracleSet with multiple PriceData objects passes validation.
         /// </summary>
         [TestMethod]
-        public async Task TestVerify_Valid_OracleSet_MultiplePriceData()
+        public void TestVerify_Valid_OracleSet_MultiplePriceData()
         {
             var tx = new Dictionary<string, object>
             {
@@ -105,14 +104,14 @@ namespace XrplTests.Xrpl.Models
                     }
                 }
             };
-            await Validation.ValidateOracleSet(tx);
+            Validation.ValidateOracleSet(tx);
         }
 
         /// <summary>
         /// Tests that OracleSet without OracleDocumentID fails validation.
         /// </summary>
         [TestMethod]
-        public async Task TestVerify_Invalid_MissingOracleDocumentID()
+        public void TestVerify_Invalid_MissingOracleDocumentID()
         {
             var tx = new Dictionary<string, object>
             {
@@ -137,7 +136,7 @@ namespace XrplTests.Xrpl.Models
                     }
                 }
             };
-            await Helper.ThrowsExceptionAsync<ValidationException>(
+            Helper.ThrowsException<ValidationException>(
                 () => Validation.ValidateOracleSet(tx),
                 "OracleSet: missing field OracleDocumentID");
         }
@@ -146,7 +145,7 @@ namespace XrplTests.Xrpl.Models
         /// Tests that OracleSet without LastUpdateTime fails validation.
         /// </summary>
         [TestMethod]
-        public async Task TestVerify_Invalid_MissingLastUpdateTime()
+        public void TestVerify_Invalid_MissingLastUpdateTime()
         {
             var tx = new Dictionary<string, object>
             {
@@ -171,7 +170,7 @@ namespace XrplTests.Xrpl.Models
                     }
                 }
             };
-            await Helper.ThrowsExceptionAsync<ValidationException>(
+            Helper.ThrowsException<ValidationException>(
                 () => Validation.ValidateOracleSet(tx),
                 "OracleSet: missing field LastUpdateTime");
         }
@@ -180,7 +179,7 @@ namespace XrplTests.Xrpl.Models
         /// Tests that OracleSet without PriceDataSeries fails validation.
         /// </summary>
         [TestMethod]
-        public async Task TestVerify_Invalid_MissingPriceDataSeries()
+        public void TestVerify_Invalid_MissingPriceDataSeries()
         {
             var tx = new Dictionary<string, object>
             {
@@ -193,7 +192,7 @@ namespace XrplTests.Xrpl.Models
                 { "Provider", "chainlink" },
                 { "AssetClass", "currency" }
             };
-            await Helper.ThrowsExceptionAsync<ValidationException>(
+            Helper.ThrowsException<ValidationException>(
                 () => Validation.ValidateOracleSet(tx),
                 "OracleSet: missing field PriceDataSeries");
         }
@@ -202,7 +201,7 @@ namespace XrplTests.Xrpl.Models
         /// Tests that OracleSet with empty PriceDataSeries fails validation.
         /// </summary>
         [TestMethod]
-        public async Task TestVerify_Invalid_EmptyPriceDataSeries()
+        public void TestVerify_Invalid_EmptyPriceDataSeries()
         {
             var tx = new Dictionary<string, object>
             {
@@ -216,7 +215,7 @@ namespace XrplTests.Xrpl.Models
                 { "AssetClass", "currency" },
                 { "PriceDataSeries", new List<object>() }
             };
-            await Helper.ThrowsExceptionAsync<ValidationException>(
+            Helper.ThrowsException<ValidationException>(
                 () => Validation.ValidateOracleSet(tx),
                 "OracleSet: PriceDataSeries must not be empty");
         }
@@ -225,7 +224,7 @@ namespace XrplTests.Xrpl.Models
         /// Tests that OracleSet with more than 10 PriceData objects fails validation.
         /// </summary>
         [TestMethod]
-        public async Task TestVerify_Invalid_ExceedsMaxPriceDataSeries()
+        public void TestVerify_Invalid_ExceedsMaxPriceDataSeries()
         {
             var priceDataList = new List<object>();
             for (int i = 0; i < 11; i++)
@@ -253,7 +252,7 @@ namespace XrplTests.Xrpl.Models
                 { "AssetClass", "currency" },
                 { "PriceDataSeries", priceDataList }
             };
-            await Helper.ThrowsExceptionAsync<ValidationException>(
+            Helper.ThrowsException<ValidationException>(
                 () => Validation.ValidateOracleSet(tx),
                 "OracleSet: PriceDataSeries must have at most 10 PriceData objects");
         }
@@ -262,7 +261,7 @@ namespace XrplTests.Xrpl.Models
         /// Tests that OracleSet with Scale greater than 10 fails validation.
         /// </summary>
         [TestMethod]
-        public async Task TestVerify_Invalid_ScaleExceedsMax()
+        public void TestVerify_Invalid_ScaleExceedsMax()
         {
             var tx = new Dictionary<string, object>
             {
@@ -290,7 +289,7 @@ namespace XrplTests.Xrpl.Models
                     }
                 }
             };
-            await Helper.ThrowsExceptionAsync<ValidationException>(
+            Helper.ThrowsException<ValidationException>(
                 () => Validation.ValidateOracleSet(tx),
                 "OracleSet: Scale must be in range 0-10");
         }
@@ -299,7 +298,7 @@ namespace XrplTests.Xrpl.Models
         /// Tests that OracleSet with missing BaseAsset fails validation.
         /// </summary>
         [TestMethod]
-        public async Task TestVerify_Invalid_MissingBaseAsset()
+        public void TestVerify_Invalid_MissingBaseAsset()
         {
             var tx = new Dictionary<string, object>
             {
@@ -324,7 +323,7 @@ namespace XrplTests.Xrpl.Models
                     }
                 }
             };
-            await Helper.ThrowsExceptionAsync<ValidationException>(
+            Helper.ThrowsException<ValidationException>(
                 () => Validation.ValidateOracleSet(tx),
                 "OracleSet: PriceData must have a BaseAsset string");
         }
@@ -333,7 +332,7 @@ namespace XrplTests.Xrpl.Models
         /// Tests that OracleSet with missing QuoteAsset fails validation.
         /// </summary>
         [TestMethod]
-        public async Task TestVerify_Invalid_MissingQuoteAsset()
+        public void TestVerify_Invalid_MissingQuoteAsset()
         {
             var tx = new Dictionary<string, object>
             {
@@ -358,7 +357,7 @@ namespace XrplTests.Xrpl.Models
                     }
                 }
             };
-            await Helper.ThrowsExceptionAsync<ValidationException>(
+            Helper.ThrowsException<ValidationException>(
                 () => Validation.ValidateOracleSet(tx),
                 "OracleSet: PriceData must have a QuoteAsset string");
         }

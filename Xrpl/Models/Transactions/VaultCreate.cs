@@ -1,7 +1,6 @@
 using System;
 using System.Collections.Generic;
 using System.Text.Json.Serialization;
-using System.Threading.Tasks;
 
 using Xrpl.Client.Exceptions;
 using Xrpl.Client.Json.Converters;
@@ -160,9 +159,9 @@ namespace Xrpl.Models.Transactions
 
     public partial class Validation
     {
-        public static async Task ValidateVaultCreate(Dictionary<string, object> tx)
+        public static void ValidateVaultCreate(Dictionary<string, object> tx)
         {
-            await Common.ValidateBaseTransaction(tx);
+            Common.ValidateBaseTransaction(tx);
 
             if (!tx.TryGetValue("Asset", out var asset) || asset is null)
                 throw new ValidationException("VaultCreate: missing field Asset");

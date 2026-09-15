@@ -1,6 +1,5 @@
 using System;
 using System.Collections.Generic;
-using System.Threading.Tasks;
 
 using Xrpl.Client.Exceptions;
 using Xrpl.Models.Enums;
@@ -177,9 +176,9 @@ namespace Xrpl.Models.Transactions
         /// </summary>
         /// <param name="tx"> An NFTokenMint Transaction.</param>
         /// <exception cref="ValidationException">When the NFTokenMint is Malformed.</exception>
-        public static async Task ValidateNFTokenMint(Dictionary<string, object> tx)
+        public static void ValidateNFTokenMint(Dictionary<string, object> tx)
         {
-            await Common.ValidateBaseTransaction(tx);
+            Common.ValidateBaseTransaction(tx);
 
             if (tx.TryGetValue("Account", out var Account) && tx.TryGetValue("Issuer", out var Issuer) && Account == Issuer)
                 throw new ValidationException("NFTokenMint: Issuer must not be equal to Account");

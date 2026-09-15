@@ -1,5 +1,4 @@
 using System.Collections.Generic;
-using System.Threading.Tasks;
 
 using System.Text.Json.Serialization;
 
@@ -96,9 +95,9 @@ namespace Xrpl.Models.Transactions
         /// </summary>
         /// <param name="tx">A CredentialAccept transaction.</param>
         /// <exception cref="ValidationException">When the CredentialAccept is malformed.</exception>
-        public static async Task ValidateCredentialAccept(Dictionary<string, object> tx)
+        public static void ValidateCredentialAccept(Dictionary<string, object> tx)
         {
-            await Common.ValidateBaseTransaction(tx);
+            Common.ValidateBaseTransaction(tx);
 
             tx.TryGetValue("Issuer", out var issuer);
             if (issuer is not string issuerStr || string.IsNullOrEmpty(issuerStr))

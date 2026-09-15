@@ -1,7 +1,6 @@
 using Microsoft.VisualStudio.TestTools.UnitTesting;
 
 using System.Collections.Generic;
-using System.Threading.Tasks;
 
 using Xrpl.Client.Exceptions;
 using Xrpl.Models.Transactions;
@@ -20,7 +19,7 @@ namespace XrplTests.Xrpl.Models
         /// Tests that a valid OracleDelete transaction passes validation.
         /// </summary>
         [TestMethod]
-        public async Task TestVerify_Valid_OracleDelete()
+        public void TestVerify_Valid_OracleDelete()
         {
             var tx = new Dictionary<string, object>
             {
@@ -30,15 +29,15 @@ namespace XrplTests.Xrpl.Models
                 { "Sequence", 1u },
                 { "OracleDocumentID", 1u }
             };
-            await Validation.ValidateOracleDelete(tx);
-            await Validation.Validate(tx);
+            Validation.ValidateOracleDelete(tx);
+            Validation.Validate(tx);
         }
 
         /// <summary>
         /// Tests that OracleDelete without OracleDocumentID fails validation.
         /// </summary>
         [TestMethod]
-        public async Task TestVerify_Invalid_MissingOracleDocumentID()
+        public void TestVerify_Invalid_MissingOracleDocumentID()
         {
             var tx = new Dictionary<string, object>
             {
@@ -47,7 +46,7 @@ namespace XrplTests.Xrpl.Models
                 { "Fee", "12" },
                 { "Sequence", 1u }
             };
-            await Helper.ThrowsExceptionAsync<ValidationException>(
+            Helper.ThrowsException<ValidationException>(
                 () => Validation.ValidateOracleDelete(tx),
                 "OracleDelete: missing field OracleDocumentID");
         }
@@ -56,7 +55,7 @@ namespace XrplTests.Xrpl.Models
         /// Tests that OracleDelete with null OracleDocumentID fails validation.
         /// </summary>
         [TestMethod]
-        public async Task TestVerify_Invalid_NullOracleDocumentID()
+        public void TestVerify_Invalid_NullOracleDocumentID()
         {
             var tx = new Dictionary<string, object>
             {
@@ -66,7 +65,7 @@ namespace XrplTests.Xrpl.Models
                 { "Sequence", 1u },
                 { "OracleDocumentID", null }
             };
-            await Helper.ThrowsExceptionAsync<ValidationException>(
+            Helper.ThrowsException<ValidationException>(
                 () => Validation.ValidateOracleDelete(tx),
                 "OracleDelete: missing field OracleDocumentID");
         }
@@ -75,7 +74,7 @@ namespace XrplTests.Xrpl.Models
         /// Tests that OracleDelete with zero OracleDocumentID passes validation.
         /// </summary>
         [TestMethod]
-        public async Task TestVerify_Valid_ZeroOracleDocumentID()
+        public void TestVerify_Valid_ZeroOracleDocumentID()
         {
             var tx = new Dictionary<string, object>
             {
@@ -85,7 +84,7 @@ namespace XrplTests.Xrpl.Models
                 { "Sequence", 1u },
                 { "OracleDocumentID", 0u }
             };
-            await Validation.ValidateOracleDelete(tx);
+            Validation.ValidateOracleDelete(tx);
         }
     }
 }

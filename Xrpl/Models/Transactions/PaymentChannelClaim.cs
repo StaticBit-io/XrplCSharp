@@ -1,6 +1,5 @@
 using System;
 using System.Collections.Generic;
-using System.Threading.Tasks;
 
 using System.Text.Json.Serialization;
 
@@ -170,9 +169,9 @@ namespace Xrpl.Models.Transactions
         /// </summary>
         /// <param name="tx"> A PaymentChannelClaim Transaction.</param>
         /// <exception cref="ValidationException">When the PaymentChannelClaim is malformed.</exception>
-        public static async Task ValidatePaymentChannelClaim(Dictionary<string, object> tx)
+        public static void ValidatePaymentChannelClaim(Dictionary<string, object> tx)
         {
-            await Common.ValidateBaseTransaction(tx);
+            Common.ValidateBaseTransaction(tx);
 
 
             if (!tx.TryGetValue("Channel", out var Channel) || Channel is null)

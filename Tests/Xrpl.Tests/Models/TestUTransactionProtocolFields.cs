@@ -250,15 +250,15 @@ namespace Xrpl.Tests.Models.Tests
 
             tx["OperationLimit"] = 21337u;
             tx["Delegate"] = Destination;
-            await Xrpl.Models.Transactions.Common.ValidateBaseTransaction(tx);
+            Xrpl.Models.Transactions.Common.ValidateBaseTransaction(tx);
 
             tx["OperationLimit"] = "not a number";
-            await Assert.ThrowsExactlyAsync<Xrpl.Client.Exceptions.ValidationException>(
+            Assert.ThrowsExactly<Xrpl.Client.Exceptions.ValidationException>(
                 () => Xrpl.Models.Transactions.Common.ValidateBaseTransaction(tx));
 
             tx["OperationLimit"] = 21337u;
             tx["Delegate"] = 12345;
-            await Assert.ThrowsExactlyAsync<Xrpl.Client.Exceptions.ValidationException>(
+            Assert.ThrowsExactly<Xrpl.Client.Exceptions.ValidationException>(
                 () => Xrpl.Models.Transactions.Common.ValidateBaseTransaction(tx));
         }
 

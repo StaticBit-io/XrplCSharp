@@ -2,7 +2,6 @@
 // https://github.com/XRPLF/xrpl.js/blob/main/packages/xrpl/src/models/transactions/ticketCreate.ts
 
 using System.Collections.Generic;
-using System.Threading.Tasks;
 
 using Xrpl.Client.Exceptions;
 
@@ -48,9 +47,9 @@ namespace Xrpl.Models.Transactions
         /// </summary>
         /// <param name="tx"> A TicketCreate Transaction.</param>
         /// <exception cref="ValidationException">When the TicketCreate is malformed.</exception>
-        public static async Task ValidateTicketCreate(Dictionary<string, object> tx)
+        public static void ValidateTicketCreate(Dictionary<string, object> tx)
         {
-            await Common.ValidateBaseTransaction(tx);
+            Common.ValidateBaseTransaction(tx);
 
 
             if (!tx.TryGetValue("TicketCount", out var TicketCount) || TicketCount is null)

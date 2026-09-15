@@ -3,7 +3,6 @@
 // https://github.com/XRPLF/xrpl.js/blob/main/packages/xrpl/src/models/transactions/NFTokenCancelOffer.ts
 
 using System.Collections.Generic;
-using System.Threading.Tasks;
 
 using Xrpl.Client.Exceptions;
 
@@ -49,11 +48,10 @@ namespace Xrpl.Models.Transactions
         /// Verify the form and type of an NFTokenCancelOffer at runtime.
         /// </summary>
         /// <param name="tx">An NFTokenCancelOffer Transaction.</param>
-        /// <returns></returns>
         /// <exception cref="ValidationException">When the NFTokenCancelOffer is Malformed.</exception>
-        public static async Task ValidateNFTokenCancelOffer(Dictionary<string, object> tx)
+        public static void ValidateNFTokenCancelOffer(Dictionary<string, object> tx)
         {
-            await Common.ValidateBaseTransaction(tx);
+            Common.ValidateBaseTransaction(tx);
             if (!tx.TryGetValue("NFTokenOffers", out var NFTokenOffers) || NFTokenOffers is not List<object> { } offers)
                 throw new ValidationException("NFTokenCancelOffer: missing field NFTokenOffers");
 

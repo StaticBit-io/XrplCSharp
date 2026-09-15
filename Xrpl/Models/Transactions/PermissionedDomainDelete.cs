@@ -1,5 +1,4 @@
 using System.Collections.Generic;
-using System.Threading.Tasks;
 
 using System.Text.Json.Serialization;
 
@@ -57,9 +56,9 @@ namespace Xrpl.Models.Transactions
         /// </summary>
         /// <param name="tx">A PermissionedDomainDelete transaction.</param>
         /// <exception cref="ValidationException">When the PermissionedDomainDelete is malformed.</exception>
-        public static async Task ValidatePermissionedDomainDelete(Dictionary<string, object> tx)
+        public static void ValidatePermissionedDomainDelete(Dictionary<string, object> tx)
         {
-            await Common.ValidateBaseTransaction(tx);
+            Common.ValidateBaseTransaction(tx);
 
             if (!tx.TryGetValue(nameof(IPermissionedDomainDelete.DomainID), out var domainId) || domainId == null || (domainId is not string domainIdStr || string.IsNullOrEmpty(domainIdStr)))
             {

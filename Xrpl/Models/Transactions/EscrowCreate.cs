@@ -1,6 +1,5 @@
 using System;
 using System.Collections.Generic;
-using System.Threading.Tasks;
 
 using System.Text.Json.Serialization;
 
@@ -112,9 +111,9 @@ namespace Xrpl.Models.Transactions
         /// </summary>
         /// <param name="tx"> A EscrowCreate Transaction.</param>
         /// <exception cref="ValidationException">When the EscrowCreate is malformed.</exception>
-        public static async Task ValidateEscrowCreate(Dictionary<string, object> tx)
+        public static void ValidateEscrowCreate(Dictionary<string, object> tx)
         {
-            await Common.ValidateBaseTransaction(tx);
+            Common.ValidateBaseTransaction(tx);
             tx.TryGetValue("Amount", out var Amount);
 
             if (Amount is null)
