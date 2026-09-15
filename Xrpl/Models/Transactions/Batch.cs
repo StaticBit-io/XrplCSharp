@@ -133,6 +133,13 @@ public partial class Validation
         "LoanSet", "LoanDelete", "LoanManage", "LoanPay",
     };
 
+    /// <summary>
+    /// Verify the form and type of a Batch at runtime, following rippled's Batch::preflight:
+    /// between 2 and 8 inner transactions, no nested Batch, no type from kDisabledTxTypes,
+    /// and every inner carrying tfInnerBatchTxn with Fee "0" and an empty SigningPubKey.
+    /// </summary>
+    /// <param name="tx">A Batch Transaction.</param>
+    /// <exception cref="ArgumentException">When the Batch is malformed.</exception>
     public static void ValidateBatch(Dictionary<string, object> tx)
     {
         if (tx == null)
