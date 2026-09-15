@@ -1,7 +1,6 @@
 // https://github.com/XRPLF/xrpl.js/blob/main/packages/xrpl/src/models/transactions/accountDelete.ts
 
 using System.Collections.Generic;
-using System.Threading.Tasks;
 
 using System.Text.Json.Serialization;
 
@@ -79,9 +78,9 @@ namespace Xrpl.Models.Transactions
         /// </summary>
         /// <param name="tx"> A AccountDelete Transaction.</param>
         /// <exception cref="ValidationException">When the AccountDelete is malformed.</exception>
-        public static async Task ValidateAccountDelete(Dictionary<string, object> tx)
+        public static void ValidateAccountDelete(Dictionary<string, object> tx)
         {
-            await Common.ValidateBaseTransaction(tx);
+            Common.ValidateBaseTransaction(tx);
             if (!tx.TryGetValue("Destination", out var Destination) || Destination is null)
                 throw new ValidationException("AccountDelete: missing field Destination");
             if (Destination is not string { })

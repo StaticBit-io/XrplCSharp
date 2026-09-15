@@ -5,7 +5,6 @@
 using Microsoft.VisualStudio.TestTools.UnitTesting;
 
 using System.Collections.Generic;
-using System.Threading.Tasks;
 
 using Xrpl.Client.Exceptions;
 using Xrpl.Models.Transactions;
@@ -53,7 +52,7 @@ namespace XrplTests.Xrpl.Models
         }
 
         [TestMethod]
-        public async Task TestVerifyValid()
+        public void TestVerifyValid()
         {
             depositPreauth.Remove("Authorize");
             depositPreauth.Remove("Unauthorize");
@@ -61,43 +60,43 @@ namespace XrplTests.Xrpl.Models
             depositPreauth.Remove("UnauthorizeCredentials");
 
             depositPreauth["Authorize"] = "rsA2LpzuawewSBQXkiju3YQTMzW13pAAdW";
-            await Validation.ValidateDepositPreauth(depositPreauth);
-            await Validation.Validate(depositPreauth);
+            Validation.ValidateDepositPreauth(depositPreauth);
+            Validation.Validate(depositPreauth);
             depositPreauth.Remove("Authorize");
 
             depositPreauth["Unauthorize"] = "raKEEVSGnKSD9Zyvxu4z6Pqpm4ABH8FS6n";
-            await Validation.ValidateDepositPreauth(depositPreauth);
-            await Validation.Validate(depositPreauth);
+            Validation.ValidateDepositPreauth(depositPreauth);
+            Validation.Validate(depositPreauth);
             depositPreauth.Remove("Unauthorize");
 
             depositPreauth["Unauthorize"] = "raKEEVSGnKSD9Zyvxu4z6Pqpm4ABH8FS6n";
             depositPreauth["Authorize"] = "rsA2LpzuawewSBQXkiju3YQTMzW13pAAdW";
-            await Helper.ThrowsExceptionAsync<ValidationException>(() => Validation.ValidateDepositPreauth(depositPreauth), ExclusiveError);
-            await Helper.ThrowsExceptionAsync<ValidationException>(() => Validation.Validate(depositPreauth), ExclusiveError);
+            Helper.ThrowsException<ValidationException>(() => Validation.ValidateDepositPreauth(depositPreauth), ExclusiveError);
+            Helper.ThrowsException<ValidationException>(() => Validation.Validate(depositPreauth), ExclusiveError);
             depositPreauth.Remove("Authorize");
             depositPreauth.Remove("Unauthorize");
 
-            await Helper.ThrowsExceptionAsync<ValidationException>(() => Validation.ValidateDepositPreauth(depositPreauth), MissingError);
-            await Helper.ThrowsExceptionAsync<ValidationException>(() => Validation.Validate(depositPreauth), MissingError);
+            Helper.ThrowsException<ValidationException>(() => Validation.ValidateDepositPreauth(depositPreauth), MissingError);
+            Helper.ThrowsException<ValidationException>(() => Validation.Validate(depositPreauth), MissingError);
 
             depositPreauth["Authorize"] = 1234;
-            await Helper.ThrowsExceptionAsync<ValidationException>(() => Validation.ValidateDepositPreauth(depositPreauth), "DepositPreauth: Authorize must be a string");
-            await Helper.ThrowsExceptionAsync<ValidationException>(() => Validation.Validate(depositPreauth), "DepositPreauth: Authorize must be a string");
+            Helper.ThrowsException<ValidationException>(() => Validation.ValidateDepositPreauth(depositPreauth), "DepositPreauth: Authorize must be a string");
+            Helper.ThrowsException<ValidationException>(() => Validation.Validate(depositPreauth), "DepositPreauth: Authorize must be a string");
             depositPreauth.Remove("Authorize");
 
             depositPreauth["Unauthorize"] = 1234;
-            await Helper.ThrowsExceptionAsync<ValidationException>(() => Validation.ValidateDepositPreauth(depositPreauth), "DepositPreauth: Unauthorize must be a string");
-            await Helper.ThrowsExceptionAsync<ValidationException>(() => Validation.Validate(depositPreauth), "DepositPreauth: Unauthorize must be a string");
+            Helper.ThrowsException<ValidationException>(() => Validation.ValidateDepositPreauth(depositPreauth), "DepositPreauth: Unauthorize must be a string");
+            Helper.ThrowsException<ValidationException>(() => Validation.Validate(depositPreauth), "DepositPreauth: Unauthorize must be a string");
             depositPreauth.Remove("Unauthorize");
 
             depositPreauth["Unauthorize"] = depositPreauth["Account"];
-            await Helper.ThrowsExceptionAsync<ValidationException>(() => Validation.ValidateDepositPreauth(depositPreauth), "DepositPreauth: Account can't unauthorize its own address");
-            await Helper.ThrowsExceptionAsync<ValidationException>(() => Validation.Validate(depositPreauth), "DepositPreauth: Account can't unauthorize its own address");
+            Helper.ThrowsException<ValidationException>(() => Validation.ValidateDepositPreauth(depositPreauth), "DepositPreauth: Account can't unauthorize its own address");
+            Helper.ThrowsException<ValidationException>(() => Validation.Validate(depositPreauth), "DepositPreauth: Account can't unauthorize its own address");
             depositPreauth.Remove("Unauthorize");
         }
 
         [TestMethod]
-        public async Task TestVerifyValid_AuthorizeCredentials()
+        public void TestVerifyValid_AuthorizeCredentials()
         {
             Dictionary<string, object> tx = new Dictionary<string, object>
             {
@@ -105,12 +104,12 @@ namespace XrplTests.Xrpl.Models
                 { "Account", "rUn84CUYbNjRoTQ6mSW7BVJPSVJNLb1QLo" },
                 { "AuthorizeCredentials", CreateValidCredentials(3) }
             };
-            await Validation.ValidateDepositPreauth(tx);
-            await Validation.Validate(tx);
+            Validation.ValidateDepositPreauth(tx);
+            Validation.Validate(tx);
         }
 
         [TestMethod]
-        public async Task TestVerifyValid_UnauthorizeCredentials()
+        public void TestVerifyValid_UnauthorizeCredentials()
         {
             Dictionary<string, object> tx = new Dictionary<string, object>
             {
@@ -118,12 +117,12 @@ namespace XrplTests.Xrpl.Models
                 { "Account", "rUn84CUYbNjRoTQ6mSW7BVJPSVJNLb1QLo" },
                 { "UnauthorizeCredentials", CreateValidCredentials(8) }
             };
-            await Validation.ValidateDepositPreauth(tx);
-            await Validation.Validate(tx);
+            Validation.ValidateDepositPreauth(tx);
+            Validation.Validate(tx);
         }
 
         [TestMethod]
-        public async Task TestVerify_Invalid_TooManyCredentials()
+        public void TestVerify_Invalid_TooManyCredentials()
         {
             Dictionary<string, object> tx = new Dictionary<string, object>
             {
@@ -131,13 +130,13 @@ namespace XrplTests.Xrpl.Models
                 { "Account", "rUn84CUYbNjRoTQ6mSW7BVJPSVJNLb1QLo" },
                 { "AuthorizeCredentials", CreateValidCredentials(9) }
             };
-            await Helper.ThrowsExceptionAsync<ValidationException>(
+            Helper.ThrowsException<ValidationException>(
                 () => Validation.ValidateDepositPreauth(tx),
                 "DepositPreauth: AuthorizeCredentials cannot contain more than 8 elements");
         }
 
         [TestMethod]
-        public async Task TestVerify_Invalid_DuplicateAuthorizeCredentials()
+        public void TestVerify_Invalid_DuplicateAuthorizeCredentials()
         {
             List<Dictionary<string, object>> credentials = new List<Dictionary<string, object>>
             {
@@ -167,13 +166,13 @@ namespace XrplTests.Xrpl.Models
                 { "Account", "rUn84CUYbNjRoTQ6mSW7BVJPSVJNLb1QLo" },
                 { "AuthorizeCredentials", credentials }
             };
-            await Helper.ThrowsExceptionAsync<ValidationException>(
+            Helper.ThrowsException<ValidationException>(
                 () => Validation.ValidateDepositPreauth(tx),
                 "DepositPreauth: AuthorizeCredentials cannot contain duplicate credentials");
         }
 
         [TestMethod]
-        public async Task TestVerify_Invalid_BothAuthorizeAndAuthorizeCredentials()
+        public void TestVerify_Invalid_BothAuthorizeAndAuthorizeCredentials()
         {
             Dictionary<string, object> tx = new Dictionary<string, object>
             {
@@ -182,13 +181,13 @@ namespace XrplTests.Xrpl.Models
                 { "Authorize", "rsA2LpzuawewSBQXkiju3YQTMzW13pAAdW" },
                 { "AuthorizeCredentials", CreateValidCredentials(1) }
             };
-            await Helper.ThrowsExceptionAsync<ValidationException>(
+            Helper.ThrowsException<ValidationException>(
                 () => Validation.ValidateDepositPreauth(tx),
                 ExclusiveError);
         }
 
         [TestMethod]
-        public async Task TestVerify_Invalid_BothAuthorizeAndUnauthorizeCredentials()
+        public void TestVerify_Invalid_BothAuthorizeAndUnauthorizeCredentials()
         {
             Dictionary<string, object> tx = new Dictionary<string, object>
             {
@@ -197,13 +196,13 @@ namespace XrplTests.Xrpl.Models
                 { "AuthorizeCredentials", CreateValidCredentials(1) },
                 { "UnauthorizeCredentials", CreateValidCredentials(1) }
             };
-            await Helper.ThrowsExceptionAsync<ValidationException>(
+            Helper.ThrowsException<ValidationException>(
                 () => Validation.ValidateDepositPreauth(tx),
                 ExclusiveError);
         }
 
         [TestMethod]
-        public async Task TestVerify_Invalid_EmptyCredentialsList()
+        public void TestVerify_Invalid_EmptyCredentialsList()
         {
             Dictionary<string, object> tx = new Dictionary<string, object>
             {
@@ -211,7 +210,7 @@ namespace XrplTests.Xrpl.Models
                 { "Account", "rUn84CUYbNjRoTQ6mSW7BVJPSVJNLb1QLo" },
                 { "AuthorizeCredentials", new List<Dictionary<string, object>>() }
             };
-            await Helper.ThrowsExceptionAsync<ValidationException>(
+            Helper.ThrowsException<ValidationException>(
                 () => Validation.ValidateDepositPreauth(tx),
                 "DepositPreauth: AuthorizeCredentials cannot be empty");
         }

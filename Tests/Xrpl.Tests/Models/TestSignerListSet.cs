@@ -6,7 +6,6 @@ using Microsoft.VisualStudio.TestTools.UnitTesting;
 
 using System.Collections.Generic;
 using System.Linq;
-using System.Threading.Tasks;
 
 using Xrpl.Client.Exceptions;
 using Xrpl.Models.Transaction;
@@ -70,23 +69,23 @@ namespace XrplTests.Xrpl.Models
         }
 
         [TestMethod]
-        public async Task TestVerifyValid()
+        public void TestVerifyValid()
         {
             //verifies valid SignerListSet
-            await Validation.ValidateSignerListSet(signerListSetTx);
-            await Validation.Validate(signerListSetTx);
+            Validation.ValidateSignerListSet(signerListSetTx);
+            Validation.Validate(signerListSetTx);
 
 
             // throws w/ missing SignerQuorum
             signerListSetTx.Remove("SignerQuorum");
-            await Helper.ThrowsExceptionAsync<ValidationException>(() => Validation.ValidateSignerListSet(signerListSetTx), "SignerListSet: missing field SignerQuorum");
-            await Helper.ThrowsExceptionAsync<ValidationException>(() => Validation.Validate(signerListSetTx), "SignerListSet: missing field SignerQuorum");
+            Helper.ThrowsException<ValidationException>(() => Validation.ValidateSignerListSet(signerListSetTx), "SignerListSet: missing field SignerQuorum");
+            Helper.ThrowsException<ValidationException>(() => Validation.Validate(signerListSetTx), "SignerListSet: missing field SignerQuorum");
             signerListSetTx["SignerQuorum"] = 3u;
 
             // throws w/ missing SignerEntries
             signerListSetTx["SignerEntries"] = new List<object>();
-            await Helper.ThrowsExceptionAsync<ValidationException>(() => Validation.ValidateSignerListSet(signerListSetTx), "SignerListSet: need at least 1 member in SignerEntries");
-            await Helper.ThrowsExceptionAsync<ValidationException>(() => Validation.Validate(signerListSetTx), "SignerListSet: need at least 1 member in SignerEntries");
+            Helper.ThrowsException<ValidationException>(() => Validation.ValidateSignerListSet(signerListSetTx), "SignerListSet: need at least 1 member in SignerEntries");
+            Helper.ThrowsException<ValidationException>(() => Validation.Validate(signerListSetTx), "SignerListSet: need at least 1 member in SignerEntries");
             signerListSetTx["SignerEntries"] = new List<object>()
             {
                 new Dictionary<string, object>()
@@ -123,8 +122,8 @@ namespace XrplTests.Xrpl.Models
 
             // throws w/ missing SignerEntries
             signerListSetTx["SignerEntries"] = "khgfgyhujk";
-            await Helper.ThrowsExceptionAsync<ValidationException>(() => Validation.ValidateSignerListSet(signerListSetTx), "SignerListSet: invalid SignerEntries");
-            await Helper.ThrowsExceptionAsync<ValidationException>(() => Validation.Validate(signerListSetTx), "SignerListSet: invalid SignerEntries");
+            Helper.ThrowsException<ValidationException>(() => Validation.ValidateSignerListSet(signerListSetTx), "SignerListSet: invalid SignerEntries");
+            Helper.ThrowsException<ValidationException>(() => Validation.Validate(signerListSetTx), "SignerListSet: invalid SignerEntries");
             signerListSetTx["SignerEntries"] = new List<object>()
             {
                 new Dictionary<string, object>()
@@ -211,8 +210,8 @@ namespace XrplTests.Xrpl.Models
 
                     }));
             var error = "SignerListSet: maximum of 32 members allowed in SignerEntries";
-            await Helper.ThrowsExceptionAsync<ValidationException>(() => Validation.ValidateSignerListSet(signerListSetTx), error);
-            await Helper.ThrowsExceptionAsync<ValidationException>(() => Validation.Validate(signerListSetTx), error);
+            Helper.ThrowsException<ValidationException>(() => Validation.ValidateSignerListSet(signerListSetTx), error);
+            Helper.ThrowsException<ValidationException>(() => Validation.Validate(signerListSetTx), error);
             signerListSetTx["SignerEntries"] = new List<object>()
             {
                 new Dictionary<string, object>()
@@ -284,8 +283,8 @@ namespace XrplTests.Xrpl.Models
                     },
                 }
             };
-            await Validation.ValidateSignerListSet(signerListSetTx);
-            await Validation.Validate(signerListSetTx);
+            Validation.ValidateSignerListSet(signerListSetTx);
+            Validation.Validate(signerListSetTx);
             signerListSetTx["SignerEntries"] = new List<object>()
             {
                 new Dictionary<string, object>()
@@ -346,8 +345,8 @@ namespace XrplTests.Xrpl.Models
                     },
                 },
             };
-            await Helper.ThrowsExceptionAsync<ValidationException>(() => Validation.ValidateSignerListSet(signerListSetTx), "SignerListSet: WalletLocator in SignerEntry must be a 256-bit (32-byte) hexadecimal value");
-            await Helper.ThrowsExceptionAsync<ValidationException>(() => Validation.Validate(signerListSetTx), "SignerListSet: WalletLocator in SignerEntry must be a 256-bit (32-byte) hexadecimal value");
+            Helper.ThrowsException<ValidationException>(() => Validation.ValidateSignerListSet(signerListSetTx), "SignerListSet: WalletLocator in SignerEntry must be a 256-bit (32-byte) hexadecimal value");
+            Helper.ThrowsException<ValidationException>(() => Validation.Validate(signerListSetTx), "SignerListSet: WalletLocator in SignerEntry must be a 256-bit (32-byte) hexadecimal value");
             signerListSetTx["SignerEntries"] = new List<object>()
             {
                 new Dictionary<string, object>()

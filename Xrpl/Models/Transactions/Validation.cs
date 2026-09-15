@@ -1,5 +1,4 @@
 using System.Collections.Generic;
-using System.Threading.Tasks;
 
 using Xrpl.Client.Exceptions;
 using Xrpl.Models.Utils;
@@ -13,7 +12,7 @@ namespace Xrpl.Models.Transactions
         /// </summary>
         /// <param name="tx"> A TrustSet Transaction.</param>
         /// <exception cref="ValidationException">When the TrustSet is malformed.</exception>
-        public static async Task Validate(Dictionary<string, object> tx)
+        public static void Validate(Dictionary<string, object> tx)
         {
             tx.TryGetValue("TransactionType", out var type);
 
@@ -30,270 +29,270 @@ namespace Xrpl.Models.Transactions
             switch (type)
             {
                 case "AccountDelete":
-                    await ValidateAccountDelete(tx);
+                    ValidateAccountDelete(tx);
                     break;
 
                 case "AccountSet":
-                    await ValidateAccountSet(tx);
+                    ValidateAccountSet(tx);
                     break;
 
                 case "CheckCancel":
-                    await ValidateCheckCancel(tx);
+                    ValidateCheckCancel(tx);
                     break;
 
                 case "CheckCash":
-                    await ValidateCheckCash(tx);
+                    ValidateCheckCash(tx);
                     break;
 
                 case "CheckCreate":
-                    await ValidateCheckCreate(tx);
+                    ValidateCheckCreate(tx);
                     break;
 
                 case "DepositPreauth":
-                    await ValidateDepositPreauth(tx);
+                    ValidateDepositPreauth(tx);
                     break;
 
                 case "EscrowCancel":
-                    await ValidateEscrowCancel(tx);
+                    ValidateEscrowCancel(tx);
                     break;
 
                 case "EscrowCreate":
-                    await ValidateEscrowCreate(tx);
+                    ValidateEscrowCreate(tx);
                     break;
 
                 case "EscrowFinish":
-                    await ValidateEscrowFinish(tx);
+                    ValidateEscrowFinish(tx);
                     break;
 
                 case "NFTokenAcceptOffer":
-                    await ValidateNFTokenAcceptOffer(tx);
+                    ValidateNFTokenAcceptOffer(tx);
                     break;
 
                 case "NFTokenBurn":
-                    await ValidateNFTokenBurn(tx);
+                    ValidateNFTokenBurn(tx);
                     break;
 
                 case "NFTokenCancelOffer":
-                    await ValidateNFTokenCancelOffer(tx);
+                    ValidateNFTokenCancelOffer(tx);
                     break;
 
                 case "NFTokenCreateOffer":
-                    await ValidateNFTokenCreateOffer(tx);
+                    ValidateNFTokenCreateOffer(tx);
                     break;
 
                 case "NFTokenMint":
-                    await ValidateNFTokenMint(tx);
+                    ValidateNFTokenMint(tx);
                     break;
                 case "NFTokenModify":
-                    await ValidateNFTokenModify(tx);
+                    ValidateNFTokenModify(tx);
                     break;
 
                 case "OfferCancel":
-                    await ValidateOfferCancel(tx);
+                    ValidateOfferCancel(tx);
                     break;
 
                 case "OfferCreate":
-                    await ValidateOfferCreate(tx);
+                    ValidateOfferCreate(tx);
                     break;
 
                 case "Payment":
-                    await ValidatePayment(tx);
+                    ValidatePayment(tx);
                     break;
 
                 case "PaymentChannelClaim":
-                    await ValidatePaymentChannelClaim(tx);
+                    ValidatePaymentChannelClaim(tx);
                     break;
 
                 case "PaymentChannelCreate":
-                    await ValidatePaymentChannelCreate(tx);
+                    ValidatePaymentChannelCreate(tx);
                     break;
 
                 case "PaymentChannelFund":
-                    await ValidatePaymentChannelFund(tx);
+                    ValidatePaymentChannelFund(tx);
                     break;
 
                 case "SetRegularKey":
-                    await ValidateSetRegularKey(tx);
+                    ValidateSetRegularKey(tx);
                     break;
 
                 case "SignerListSet":
-                    await ValidateSignerListSet(tx);
+                    ValidateSignerListSet(tx);
                     break;
 
                 case "TicketCreate":
-                    await ValidateTicketCreate(tx);
+                    ValidateTicketCreate(tx);
                     break;
 
                 case "TrustSet":
-                    await ValidateTrustSet(tx);
+                    ValidateTrustSet(tx);
                     break;
                 case "AMMBid":
-                    await ValidateAMMBid(tx);
+                    ValidateAMMBid(tx);
                     break;
                 case "AMMDeposit":
-                    await ValidateAMMDeposit(tx);
+                    ValidateAMMDeposit(tx);
                     break;
                 case "AMMCreate":
-                    await ValidateAMMCreate(tx);
+                    ValidateAMMCreate(tx);
                     break;
                 case "AMMDelete":
-                    await ValidateAMMDelete(tx);
+                    ValidateAMMDelete(tx);
                     break;
                 case "AMMVote":
-                    await ValidateAMMVote(tx);
+                    ValidateAMMVote(tx);
                     break;
                 case "AMMWithdraw":
-                    await ValidateAMMWithdraw(tx);
+                    ValidateAMMWithdraw(tx);
                     break;
                 case "Batch":
-                    await ValidateBatch(tx);
+                    ValidateBatch(tx);
                     break;
                 case "MPTokenIssuanceCreate":
-                    await ValidateMPTokenIssuanceCreate(tx);
+                    ValidateMPTokenIssuanceCreate(tx);
                     break;
                 case "MPTokenIssuanceDestroy":
-                    await ValidateMPTokenIssuanceDestroy(tx);
+                    ValidateMPTokenIssuanceDestroy(tx);
                     break;
                 case "MPTokenIssuanceSet":
-                    await ValidateMPTokenIssuanceSet(tx);
+                    ValidateMPTokenIssuanceSet(tx);
                     break;
                 case "MPTokenAuthorize":
-                    await ValidateMPTokenAuthorize(tx);
+                    ValidateMPTokenAuthorize(tx);
                     break;
                 case "OracleSet":
-                    await ValidateOracleSet(tx);
+                    ValidateOracleSet(tx);
                     break;
                 case "OracleDelete":
-                    await ValidateOracleDelete(tx);
+                    ValidateOracleDelete(tx);
                     break;
                 case "Clawback":
-                    await ValidateClawBack(tx);
+                    ValidateClawBack(tx);
                     break;
                 case "AMMClawback":
-                    await ValidateAMMClawBack(tx);
+                    ValidateAMMClawBack(tx);
                     break;
                 case "DIDSet":
-                    await ValidateDIDSet(tx);
+                    ValidateDIDSet(tx);
                     break;
                 case "DIDDelete":
-                    await ValidateDIDDelete(tx);
+                    ValidateDIDDelete(tx);
                     break;
                 case "PermissionedDomainSet":
-                    await ValidatePermissionedDomainSet(tx);
+                    ValidatePermissionedDomainSet(tx);
                     break;
                 case "PermissionedDomainDelete":
-                    await ValidatePermissionedDomainDelete(tx);
+                    ValidatePermissionedDomainDelete(tx);
                     break;
                 case "CredentialCreate":
-                    await ValidateCredentialCreate(tx);
+                    ValidateCredentialCreate(tx);
                     break;
                 case "CredentialAccept":
-                    await ValidateCredentialAccept(tx);
+                    ValidateCredentialAccept(tx);
                     break;
                 case "CredentialDelete":
-                    await ValidateCredentialDelete(tx);
+                    ValidateCredentialDelete(tx);
                     break;
 
                 case "XChainCreateBridge":
-                    await ValidateXChainCreateBridge(tx);
+                    ValidateXChainCreateBridge(tx);
                     break;
                 case "XChainModifyBridge":
-                    await ValidateXChainModifyBridge(tx);
+                    ValidateXChainModifyBridge(tx);
                     break;
                 case "XChainCreateClaimID":
-                    await ValidateXChainCreateClaimID(tx);
+                    ValidateXChainCreateClaimID(tx);
                     break;
                 case "XChainCommit":
-                    await ValidateXChainCommit(tx);
+                    ValidateXChainCommit(tx);
                     break;
                 case "XChainClaim":
-                    await ValidateXChainClaim(tx);
+                    ValidateXChainClaim(tx);
                     break;
                 case "XChainAccountCreateCommit":
-                    await ValidateXChainAccountCreateCommit(tx);
+                    ValidateXChainAccountCreateCommit(tx);
                     break;
                 case "XChainAddClaimAttestation":
-                    await ValidateXChainAddClaimAttestation(tx);
+                    ValidateXChainAddClaimAttestation(tx);
                     break;
                 case "XChainAddAccountCreateAttestation":
-                    await ValidateXChainAddAccountCreateAttestation(tx);
+                    ValidateXChainAddAccountCreateAttestation(tx);
                     break;
 
                 case "VaultCreate":
-                    await ValidateVaultCreate(tx);
+                    ValidateVaultCreate(tx);
                     break;
                 case "VaultSet":
-                    await ValidateVaultSet(tx);
+                    ValidateVaultSet(tx);
                     break;
                 case "VaultDelete":
-                    await ValidateVaultDelete(tx);
+                    ValidateVaultDelete(tx);
                     break;
                 case "VaultDeposit":
-                    await ValidateVaultDeposit(tx);
+                    ValidateVaultDeposit(tx);
                     break;
                 case "VaultWithdraw":
-                    await ValidateVaultWithdraw(tx);
+                    ValidateVaultWithdraw(tx);
                     break;
                 case "VaultClawback":
-                    await ValidateVaultClawback(tx);
+                    ValidateVaultClawback(tx);
                     break;
 
                 case "LoanBrokerSet":
-                    await ValidateLoanBrokerSet(tx);
+                    ValidateLoanBrokerSet(tx);
                     break;
                 case "LoanBrokerDelete":
-                    await ValidateLoanBrokerDelete(tx);
+                    ValidateLoanBrokerDelete(tx);
                     break;
                 case "LoanBrokerCoverDeposit":
-                    await ValidateLoanBrokerCoverDeposit(tx);
+                    ValidateLoanBrokerCoverDeposit(tx);
                     break;
                 case "LoanBrokerCoverWithdraw":
-                    await ValidateLoanBrokerCoverWithdraw(tx);
+                    ValidateLoanBrokerCoverWithdraw(tx);
                     break;
                 case "LoanBrokerCoverClawback":
-                    await ValidateLoanBrokerCoverClawback(tx);
+                    ValidateLoanBrokerCoverClawback(tx);
                     break;
                 case "LoanSet":
-                    await ValidateLoanSet(tx);
+                    ValidateLoanSet(tx);
                     break;
                 case "LoanDelete":
-                    await ValidateLoanDelete(tx);
+                    ValidateLoanDelete(tx);
                     break;
                 case "LoanManage":
-                    await ValidateLoanManage(tx);
+                    ValidateLoanManage(tx);
                     break;
                 case "LoanPay":
-                    await ValidateLoanPay(tx);
+                    ValidateLoanPay(tx);
                     break;
 
                 case "DelegateSet":
-                    await ValidateDelegateSet(tx);
+                    ValidateDelegateSet(tx);
                     break;
                 case "LedgerStateFix":
-                    await ValidateLedgerStateFix(tx);
+                    ValidateLedgerStateFix(tx);
                     break;
 
                 case "SponsorshipSet":
-                    await ValidateSponsorshipSet(tx);
+                    ValidateSponsorshipSet(tx);
                     break;
                 case "SponsorshipTransfer":
-                    await ValidateSponsorshipTransfer(tx);
+                    ValidateSponsorshipTransfer(tx);
                     break;
 
                 case "ConfidentialMPTConvert":
-                    await ValidateConfidentialMPTConvert(tx);
+                    ValidateConfidentialMPTConvert(tx);
                     break;
                 case "ConfidentialMPTMergeInbox":
-                    await ValidateConfidentialMPTMergeInbox(tx);
+                    ValidateConfidentialMPTMergeInbox(tx);
                     break;
                 case "ConfidentialMPTConvertBack":
-                    await ValidateConfidentialMPTConvertBack(tx);
+                    ValidateConfidentialMPTConvertBack(tx);
                     break;
                 case "ConfidentialMPTSend":
-                    await ValidateConfidentialMPTSend(tx);
+                    ValidateConfidentialMPTSend(tx);
                     break;
                 case "ConfidentialMPTClawback":
-                    await ValidateConfidentialMPTClawback(tx);
+                    ValidateConfidentialMPTClawback(tx);
                     break;
 
                 default:

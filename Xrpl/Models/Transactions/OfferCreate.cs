@@ -2,7 +2,6 @@ using System.Text.Json.Serialization;
 
 using System;
 using System.Collections.Generic;
-using System.Threading.Tasks;
 
 using Xrpl.Client.Exceptions;
 using Xrpl.Client.Json.Converters;
@@ -162,9 +161,9 @@ namespace Xrpl.Models.Transactions
         /// </summary>
         /// <param name="tx"> A OfferCreate Transaction.</param>
         /// <exception cref="ValidationException">When the OfferCreate is malformed.</exception>
-        public static async Task ValidateOfferCreate(Dictionary<string, object> tx)
+        public static void ValidateOfferCreate(Dictionary<string, object> tx)
         {
-            await Common.ValidateBaseTransaction(tx);
+            Common.ValidateBaseTransaction(tx);
 
             if (!tx.TryGetValue("TakerGets", out var TakerGets) || TakerGets is null)
                 throw new ValidationException("OfferCreate: missing field TakerGets");

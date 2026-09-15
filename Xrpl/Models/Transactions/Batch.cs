@@ -3,7 +3,6 @@ using System.Text.Json.Serialization;
 using System;
 using System.Collections.Generic;
 using System.Linq;
-using System.Threading.Tasks;
 
 using Xrpl.Client.Json.Converters;
 using Xrpl.Models.Enums;
@@ -134,11 +133,18 @@ public partial class Validation
         "LoanSet", "LoanDelete", "LoanManage", "LoanPay",
     };
 
-    public static async Task ValidateBatch(Dictionary<string, object> tx)
+    /// <summary>
+    /// Verify the form and type of a Batch at runtime, following rippled's Batch::preflight:
+    /// between 2 and 8 inner transactions, no nested Batch, no type from kDisabledTxTypes,
+    /// and every inner carrying tfInnerBatchTxn with Fee "0" and an empty SigningPubKey.
+    /// </summary>
+    /// <param name="tx">A Batch Transaction.</param>
+    /// <exception cref="ArgumentException">When the Batch is malformed.</exception>
+    public static void ValidateBatch(Dictionary<string, object> tx)
     {
         if (tx == null)
             throw new ArgumentException("Batch: tx is null.");
-        await Common.ValidateBaseTransaction(tx);
+        Common.ValidateBaseTransaction(tx);
 
         if (!tx.TryGetValue("TransactionType", out var transactionTypeObj) ||
             transactionTypeObj is not string transactionType ||

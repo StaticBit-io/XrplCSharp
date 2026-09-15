@@ -2,7 +2,6 @@ using System.Text.Json.Serialization;
 
 using System;
 using System.Collections.Generic;
-using System.Threading.Tasks;
 
 using Xrpl.Client.Exceptions;
 using Xrpl.Client.Json.Converters;
@@ -152,9 +151,9 @@ namespace Xrpl.Models.Transactions
         /// </summary>
         /// <param name="tx"> A TrustSet Transaction.</param>
         /// <exception cref="ValidationException">When the TrustSet is malformed.</exception>
-        public static async Task ValidateTrustSet(Dictionary<string, object> tx)
+        public static void ValidateTrustSet(Dictionary<string, object> tx)
         {
-            await Common.ValidateBaseTransaction(tx);
+            Common.ValidateBaseTransaction(tx);
             if (!tx.TryGetValue("LimitAmount", out var LimitAmount) || LimitAmount is null)
                 throw new ValidationException("TrustSet: missing field LimitAmount");
             // TODO: Review this function

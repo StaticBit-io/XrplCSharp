@@ -1,6 +1,5 @@
 using System.Collections.Generic;
 using System.Text.Json.Serialization;
-using System.Threading.Tasks;
 
 using Xrpl.Client.Exceptions;
 using Xrpl.Models.Utils;
@@ -111,9 +110,9 @@ namespace Xrpl.Models.Transactions
         /// </summary>
         /// <param name="tx">A CredentialDelete transaction.</param>
         /// <exception cref="ValidationException">When the CredentialDelete is malformed.</exception>
-        public static async Task ValidateCredentialDelete(Dictionary<string, object> tx)
+        public static void ValidateCredentialDelete(Dictionary<string, object> tx)
         {
-            await Common.ValidateBaseTransaction(tx);
+            Common.ValidateBaseTransaction(tx);
 
             tx.TryGetValue("Subject", out var subject);
             tx.TryGetValue("Issuer", out var issuer);

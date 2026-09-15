@@ -3,7 +3,6 @@
 // https://github.com/XRPLF/xrpl.js/blob/main/packages/xrpl/src/models/transactions/setRegularKey.ts
 
 using System.Collections.Generic;
-using System.Threading.Tasks;
 
 using Xrpl.Client.Exceptions;
 
@@ -49,9 +48,9 @@ namespace Xrpl.Models.Transactions
         /// </summary>
         /// <param name="tx"> A SetRegularKey Transaction.</param>
         /// <exception cref="ValidationException">When the SetRegularKey is malformed.</exception>
-        public static async Task ValidateSetRegularKey(Dictionary<string, object> tx)
+        public static void ValidateSetRegularKey(Dictionary<string, object> tx)
         {
-            await Common.ValidateBaseTransaction(tx);
+            Common.ValidateBaseTransaction(tx);
 
             if (tx.TryGetValue("RegularKey", out var RegularKey) && RegularKey is not string)
                 throw new ValidationException("SetRegularKey: RegularKey must be a string");

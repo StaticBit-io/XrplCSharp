@@ -1,6 +1,5 @@
 using System.Collections.Generic;
 using System.Text.Json.Serialization;
-using System.Threading.Tasks;
 
 using Xrpl.Client.Exceptions;
 using Xrpl.Client.Json.Converters;
@@ -59,9 +58,9 @@ namespace Xrpl.Models.Transactions
 
     public partial class Validation
     {
-        public static async Task ValidateLoanBrokerCoverClawback(Dictionary<string, object> tx)
+        public static void ValidateLoanBrokerCoverClawback(Dictionary<string, object> tx)
         {
-            await Common.ValidateBaseTransaction(tx);
+            Common.ValidateBaseTransaction(tx);
 
             bool hasLoanBrokerId = tx.TryGetValue("LoanBrokerID", out var loanBrokerId) && loanBrokerId is string;
             bool hasAmount = tx.TryGetValue("Amount", out var amount) && amount is not null;

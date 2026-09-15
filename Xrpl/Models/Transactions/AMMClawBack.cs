@@ -1,5 +1,4 @@
 using System.Collections.Generic;
-using System.Threading.Tasks;
 
 using System.Text.Json.Serialization;
 
@@ -104,9 +103,9 @@ namespace Xrpl.Models.Transactions
         /// </summary>
         /// <param name="tx">An AMMClawBack Transaction.</param>
         /// <exception cref="ValidationException">When the AMMClawBack is malformed.</exception>
-        public static async Task ValidateAMMClawBack(Dictionary<string, object> tx)
+        public static void ValidateAMMClawBack(Dictionary<string, object> tx)
         {
-            await Common.ValidateBaseTransaction(tx);
+            Common.ValidateBaseTransaction(tx);
 
             if (!tx.TryGetValue("Holder", out var Holder) || Holder is null)
             {

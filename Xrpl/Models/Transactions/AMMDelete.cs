@@ -1,6 +1,5 @@
 using System.Collections.Generic;
 using System.Text.Json.Serialization;
-using System.Threading.Tasks;
 
 using Xrpl.Client.Exceptions;
 using Xrpl.Client.Json.Converters;
@@ -76,11 +75,10 @@ namespace Xrpl.Models.Transactions
         /// Verify the form and type of an AMMDelete at runtime.
         /// </summary>
         /// <param name="tx">An AMMDelete Transaction.</param>
-        /// <returns></returns>
         /// <exception cref="ValidationException"> When the AMMDelete is Malformed.</exception>
-        public static async Task ValidateAMMDelete(Dictionary<string, object> tx)
+        public static void ValidateAMMDelete(Dictionary<string, object> tx)
         {
-            await Common.ValidateBaseTransaction(tx);
+            Common.ValidateBaseTransaction(tx);
 
             if (!tx.TryGetValue("Asset", out var Asset) || Asset is null)
             {

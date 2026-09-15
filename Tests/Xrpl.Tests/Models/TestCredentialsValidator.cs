@@ -3,7 +3,6 @@
 using Microsoft.VisualStudio.TestTools.UnitTesting;
 
 using System.Collections.Generic;
-using System.Threading.Tasks;
 
 using Xrpl.Client.Exceptions;
 using Xrpl.Models.Transactions;
@@ -26,15 +25,15 @@ namespace XrplTests.Xrpl.Models
         }
 
         [TestMethod]
-        public async Task EmptyList_Throws()
+        public void EmptyList_Throws()
         {
-            await Helper.ThrowsExceptionAsync<ValidationException>(
-                () => Task.Run(() => CredentialsValidator.ValidateCredentialsList(new List<object>(), TxType, Field, isStringID: true)),
+            Helper.ThrowsException<ValidationException>(
+                () => CredentialsValidator.ValidateCredentialsList(new List<object>(), TxType, Field, isStringID: true),
                 $"{TxType}: {Field} cannot be empty");
         }
 
         [TestMethod]
-        public async Task TooManyItems_Throws()
+        public void TooManyItems_Throws()
         {
             List<object> ids = new List<object>();
             for (int i = 0; i < 9; i++)
@@ -42,35 +41,35 @@ namespace XrplTests.Xrpl.Models
                 ids.Add(ValidId1.Substring(0, 60) + i.ToString("X4"));
             }
 
-            await Helper.ThrowsExceptionAsync<ValidationException>(
-                () => Task.Run(() => CredentialsValidator.ValidateCredentialsList(ids, TxType, Field, isStringID: true)),
+            Helper.ThrowsException<ValidationException>(
+                () => CredentialsValidator.ValidateCredentialsList(ids, TxType, Field, isStringID: true),
                 $"{TxType}: {Field} cannot contain more than 8 elements");
         }
 
         [TestMethod]
-        public async Task NonHex_Throws()
+        public void NonHex_Throws()
         {
             List<object> ids = new List<object> { new string('Z', 64) };
-            await Helper.ThrowsExceptionAsync<ValidationException>(
-                () => Task.Run(() => CredentialsValidator.ValidateCredentialsList(ids, TxType, Field, isStringID: true)),
+            Helper.ThrowsException<ValidationException>(
+                () => CredentialsValidator.ValidateCredentialsList(ids, TxType, Field, isStringID: true),
                 $"{TxType}: {Field}[0] must be a 64-character hexadecimal object ID");
         }
 
         [TestMethod]
-        public async Task WrongLength_Throws()
+        public void WrongLength_Throws()
         {
             List<object> ids = new List<object> { "ABC123" };
-            await Helper.ThrowsExceptionAsync<ValidationException>(
-                () => Task.Run(() => CredentialsValidator.ValidateCredentialsList(ids, TxType, Field, isStringID: true)),
+            Helper.ThrowsException<ValidationException>(
+                () => CredentialsValidator.ValidateCredentialsList(ids, TxType, Field, isStringID: true),
                 $"{TxType}: {Field}[0] must be a 64-character hexadecimal object ID");
         }
 
         [TestMethod]
-        public async Task DuplicateIds_Throws()
+        public void DuplicateIds_Throws()
         {
             List<object> ids = new List<object> { ValidId1, ValidId1.ToLowerInvariant() };
-            await Helper.ThrowsExceptionAsync<ValidationException>(
-                () => Task.Run(() => CredentialsValidator.ValidateCredentialsList(ids, TxType, Field, isStringID: true)),
+            Helper.ThrowsException<ValidationException>(
+                () => CredentialsValidator.ValidateCredentialsList(ids, TxType, Field, isStringID: true),
                 $"{TxType}: {Field} cannot contain duplicate credential IDs");
         }
 
@@ -100,19 +99,19 @@ namespace XrplTests.Xrpl.Models
         }
 
         [TestMethod]
-        public async Task ObjectMissingCredential_Throws()
+        public void ObjectMissingCredential_Throws()
         {
             List<object> objs = new List<object>
             {
                 new Dictionary<string, object>()
             };
-            await Helper.ThrowsExceptionAsync<ValidationException>(
-                () => Task.Run(() => CredentialsValidator.ValidateCredentialsList(objs, TxType, "AuthorizeCredentials", isStringID: false)),
+            Helper.ThrowsException<ValidationException>(
+                () => CredentialsValidator.ValidateCredentialsList(objs, TxType, "AuthorizeCredentials", isStringID: false),
                 $"{TxType}: AuthorizeCredentials[0] must be an object with a Credential field");
         }
 
         [TestMethod]
-        public async Task ObjectMissingIssuer_Throws()
+        public void ObjectMissingIssuer_Throws()
         {
             List<object> objs = new List<object>
             {
@@ -125,13 +124,13 @@ namespace XrplTests.Xrpl.Models
                     }
                 }
             };
-            await Helper.ThrowsExceptionAsync<ValidationException>(
-                () => Task.Run(() => CredentialsValidator.ValidateCredentialsList(objs, TxType, "AuthorizeCredentials", isStringID: false)),
+            Helper.ThrowsException<ValidationException>(
+                () => CredentialsValidator.ValidateCredentialsList(objs, TxType, "AuthorizeCredentials", isStringID: false),
                 $"{TxType}: AuthorizeCredentials[0].Credential.Issuer is required and must be a string");
         }
 
         [TestMethod]
-        public async Task ObjectNonHexCredentialType_Throws()
+        public void ObjectNonHexCredentialType_Throws()
         {
             List<object> objs = new List<object>
             {
@@ -145,13 +144,13 @@ namespace XrplTests.Xrpl.Models
                     }
                 }
             };
-            await Helper.ThrowsExceptionAsync<ValidationException>(
-                () => Task.Run(() => CredentialsValidator.ValidateCredentialsList(objs, TxType, "AuthorizeCredentials", isStringID: false)),
+            Helper.ThrowsException<ValidationException>(
+                () => CredentialsValidator.ValidateCredentialsList(objs, TxType, "AuthorizeCredentials", isStringID: false),
                 $"{TxType}: AuthorizeCredentials[0].Credential.CredentialType must be a hexadecimal string");
         }
 
         [TestMethod]
-        public async Task ObjectDuplicateCredentials_Throws()
+        public void ObjectDuplicateCredentials_Throws()
         {
             Dictionary<string, object> cred = new Dictionary<string, object>
             {
@@ -163,8 +162,8 @@ namespace XrplTests.Xrpl.Models
                 }
             };
             List<object> objs = new List<object> { cred, cred };
-            await Helper.ThrowsExceptionAsync<ValidationException>(
-                () => Task.Run(() => CredentialsValidator.ValidateCredentialsList(objs, TxType, "AuthorizeCredentials", isStringID: false)),
+            Helper.ThrowsException<ValidationException>(
+                () => CredentialsValidator.ValidateCredentialsList(objs, TxType, "AuthorizeCredentials", isStringID: false),
                 $"{TxType}: AuthorizeCredentials cannot contain duplicate credentials");
         }
     }

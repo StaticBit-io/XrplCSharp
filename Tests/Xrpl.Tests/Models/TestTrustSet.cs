@@ -2,7 +2,6 @@
 
 using System;
 using System.Collections.Generic;
-using System.Threading.Tasks;
 
 using Microsoft.VisualStudio.TestTools.UnitTesting;
 
@@ -40,21 +39,21 @@ namespace XrplTests.Xrpl.Models
         }
 
         [TestMethod]
-        public async Task TestVerifyValid()
+        public void TestVerifyValid()
         {
             //verifies valid TrustSet
-            await Validation.ValidateTrustSet(trustSet);
-            await Validation.Validate(trustSet);
+            Validation.ValidateTrustSet(trustSet);
+            Validation.Validate(trustSet);
 
             //throws when LimitAmount is missing
             trustSet.Remove("LimitAmount");
-            await Helper.ThrowsExceptionAsync<ValidationException>(() => Validation.ValidateTrustSet(trustSet), "TrustSet: missing field LimitAmount");
-            await Helper.ThrowsExceptionAsync<ValidationException>(() => Validation.Validate(trustSet), "TrustSet: missing field LimitAmount");
+            Helper.ThrowsException<ValidationException>(() => Validation.ValidateTrustSet(trustSet), "TrustSet: missing field LimitAmount");
+            Helper.ThrowsException<ValidationException>(() => Validation.Validate(trustSet), "TrustSet: missing field LimitAmount");
 
             //throws when LimitAmount is invalid
             trustSet.Add("LimitAmount", 1234);
-            await Helper.ThrowsExceptionAsync<ValidationException>(() => Validation.ValidateTrustSet(trustSet), "TrustSet: invalid LimitAmount");
-            await Helper.ThrowsExceptionAsync<ValidationException>(() => Validation.Validate(trustSet), "TrustSet: invalid LimitAmount");
+            Helper.ThrowsException<ValidationException>(() => Validation.ValidateTrustSet(trustSet), "TrustSet: invalid LimitAmount");
+            Helper.ThrowsException<ValidationException>(() => Validation.Validate(trustSet), "TrustSet: invalid LimitAmount");
             trustSet["LimitAmount"] = new Dictionary<string, object>()
             {
                 { "currency", "XRP" },
@@ -63,13 +62,13 @@ namespace XrplTests.Xrpl.Models
             };
             //throws when QualityIn is not a number
             trustSet["QualityIn"] = "1234";
-            await Helper.ThrowsExceptionAsync<ValidationException>(() => Validation.ValidateTrustSet(trustSet), "TrustSet: QualityIn must be a number");
-            await Helper.ThrowsExceptionAsync<ValidationException>(() => Validation.Validate(trustSet), "TrustSet: QualityIn must be a number");
+            Helper.ThrowsException<ValidationException>(() => Validation.ValidateTrustSet(trustSet), "TrustSet: QualityIn must be a number");
+            Helper.ThrowsException<ValidationException>(() => Validation.Validate(trustSet), "TrustSet: QualityIn must be a number");
             trustSet["QualityIn"] = 1234u;
             //throws when QualityOut is not a number
             trustSet["QualityOut"] = "4321";
-            await Helper.ThrowsExceptionAsync<ValidationException>(() => Validation.ValidateTrustSet(trustSet), "TrustSet: QualityOut must be a number");
-            await Helper.ThrowsExceptionAsync<ValidationException>(() => Validation.Validate(trustSet), "TrustSet: QualityOut must be a number");
+            Helper.ThrowsException<ValidationException>(() => Validation.ValidateTrustSet(trustSet), "TrustSet: QualityOut must be a number");
+            Helper.ThrowsException<ValidationException>(() => Validation.Validate(trustSet), "TrustSet: QualityOut must be a number");
             trustSet["QualityOut"] = 4321u;
 
         }

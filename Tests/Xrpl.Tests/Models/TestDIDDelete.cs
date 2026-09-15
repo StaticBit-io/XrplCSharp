@@ -1,7 +1,6 @@
 using Microsoft.VisualStudio.TestTools.UnitTesting;
 
 using System.Collections.Generic;
-using System.Threading.Tasks;
 
 using Xrpl.Client.Exceptions;
 using Xrpl.Models.Transactions;
@@ -12,7 +11,7 @@ namespace XrplTests.Xrpl.Models
     public class TestUDIDDelete
     {
         [TestMethod]
-        public async Task TestVerify_Valid_DIDDelete()
+        public void TestVerify_Valid_DIDDelete()
         {
             var tx = new Dictionary<string, object>
             {
@@ -21,8 +20,8 @@ namespace XrplTests.Xrpl.Models
                 { "Fee", "12" },
                 { "Sequence", 1u }
             };
-            await Validation.ValidateDIDDelete(tx);
-            await Validation.Validate(tx);
+            Validation.ValidateDIDDelete(tx);
+            Validation.Validate(tx);
         }
     }
 }

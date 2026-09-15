@@ -2,7 +2,6 @@ using System.Text.Json.Serialization;
 
 using System;
 using System.Collections.Generic;
-using System.Threading.Tasks;
 
 using Xrpl.Client.Exceptions;
 using Xrpl.Client.Json.Converters;
@@ -157,9 +156,9 @@ namespace Xrpl.Models.Transactions
         /// </summary>
         /// <param name="tx">A CredentialCreate transaction.</param>
         /// <exception cref="ValidationException">When the CredentialCreate is malformed.</exception>
-        public static async Task ValidateCredentialCreate(Dictionary<string, object> tx)
+        public static void ValidateCredentialCreate(Dictionary<string, object> tx)
         {
-            await Common.ValidateBaseTransaction(tx);
+            Common.ValidateBaseTransaction(tx);
 
             tx.TryGetValue("Subject", out var subject);
             if (subject is not string subjectStr || string.IsNullOrEmpty(subjectStr))

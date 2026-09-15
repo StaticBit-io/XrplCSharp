@@ -1,7 +1,6 @@
 using System;
 using System.Collections.Generic;
 using System.Text.RegularExpressions;
-using System.Threading.Tasks;
 
 using System.Text.Json.Serialization;
 
@@ -90,9 +89,9 @@ namespace Xrpl.Models.Transactions
         /// </summary>
         /// <param name="tx"> A CheckCreate Transaction.</param>
         /// <exception cref="ValidationException">When the CheckCreate is malformed.</exception>
-        public static async Task ValidateCheckCreate(Dictionary<string, object> tx)
+        public static void ValidateCheckCreate(Dictionary<string, object> tx)
         {
-            await Common.ValidateBaseTransaction(tx);
+            Common.ValidateBaseTransaction(tx);
 
             if (!tx.TryGetValue("SendMax", out var SendMax) || SendMax is null)
                 throw new ValidationException("CheckCreate: missing field SendMax");
