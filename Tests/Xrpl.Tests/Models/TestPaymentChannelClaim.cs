@@ -5,7 +5,6 @@
 using Microsoft.VisualStudio.TestTools.UnitTesting;
 
 using System.Collections.Generic;
-using System.Threading.Tasks;
 
 using Xrpl.Client.Exceptions;
 using Xrpl.Models.Transaction;
@@ -34,20 +33,20 @@ namespace XrplTests.Xrpl.Models
         }
 
         [TestMethod]
-        public async Task TestVerifyValid()
+        public void TestVerifyValid()
         {
 
             //verifies valid PaymentChannelClaim
-            await Validation.ValidatePaymentChannelClaim(channel);
-            await Validation.Validate(channel);
+            Validation.ValidatePaymentChannelClaim(channel);
+            Validation.Validate(channel);
 
             // verifies valid PaymentChannelClaim w/o optional
             channel.Remove("Balance");
             channel.Remove("Amount");
             channel.Remove("Signature");
             channel.Remove("PublicKey");
-            await Validation.ValidatePaymentChannelClaim(channel);
-            await Validation.Validate(channel);
+            Validation.ValidatePaymentChannelClaim(channel);
+            Validation.Validate(channel);
             channel["Balance"] = "1000000";
             channel["Amount"] = "1000000";
             channel["Signature"] = "30440220718D264EF05CAED7C781FF6DE298DCAC68D002562C9BF3A07C1E721B420C0DAB02203A5A4779EF4D2CCC7BC3EF886676D803A9981B928D3B8ACA483B80ECA3CD7B9B";
@@ -56,44 +55,44 @@ namespace XrplTests.Xrpl.Models
 
             // throws w/ missing Channel
             channel.Remove("Channel");
-            await Helper.ThrowsExceptionAsync<ValidationException>(() => Validation.ValidatePaymentChannelClaim(channel), "PaymentChannelClaim: missing field Channel");
-            await Helper.ThrowsExceptionAsync<ValidationException>(() => Validation.Validate(channel), "PaymentChannelClaim: missing field Channel");
+            Helper.ThrowsException<ValidationException>(() => Validation.ValidatePaymentChannelClaim(channel), "PaymentChannelClaim: missing field Channel");
+            Helper.ThrowsException<ValidationException>(() => Validation.Validate(channel), "PaymentChannelClaim: missing field Channel");
             channel["Channel"] = "C1AE6DDDEEC05CF2978C0BAD6FE302948E9533691DC749DCDD3B9E5992CA6198";
 
             // throws w/ invalid Channel
             channel["Channel"] = 100;
-            await Helper.ThrowsExceptionAsync<ValidationException>(() => Validation.ValidatePaymentChannelClaim(channel), "PaymentChannelClaim: Channel must be a string");
-            await Helper.ThrowsExceptionAsync<ValidationException>(() => Validation.Validate(channel), "PaymentChannelClaim: Channel must be a string");
+            Helper.ThrowsException<ValidationException>(() => Validation.ValidatePaymentChannelClaim(channel), "PaymentChannelClaim: Channel must be a string");
+            Helper.ThrowsException<ValidationException>(() => Validation.Validate(channel), "PaymentChannelClaim: Channel must be a string");
             channel["Channel"] = "C1AE6DDDEEC05CF2978C0BAD6FE302948E9533691DC749DCDD3B9E5992CA6198";
 
             // throws w/ invalid Balance
             channel["Balance"] = 100;
-            await Helper.ThrowsExceptionAsync<ValidationException>(() => Validation.ValidatePaymentChannelClaim(channel), "PaymentChannelClaim: Balance must be a string");
-            await Helper.ThrowsExceptionAsync<ValidationException>(() => Validation.Validate(channel), "PaymentChannelClaim: Balance must be a string");
+            Helper.ThrowsException<ValidationException>(() => Validation.ValidatePaymentChannelClaim(channel), "PaymentChannelClaim: Balance must be a string");
+            Helper.ThrowsException<ValidationException>(() => Validation.Validate(channel), "PaymentChannelClaim: Balance must be a string");
             channel["Balance"] = "1000000";
 
             // throws w/ invalid Amount
             channel["Amount"] = 100;
-            await Helper.ThrowsExceptionAsync<ValidationException>(() => Validation.ValidatePaymentChannelClaim(channel), "PaymentChannelClaim: Amount must be a string");
-            await Helper.ThrowsExceptionAsync<ValidationException>(() => Validation.Validate(channel), "PaymentChannelClaim: Amount must be a string");
+            Helper.ThrowsException<ValidationException>(() => Validation.ValidatePaymentChannelClaim(channel), "PaymentChannelClaim: Amount must be a string");
+            Helper.ThrowsException<ValidationException>(() => Validation.Validate(channel), "PaymentChannelClaim: Amount must be a string");
             channel["Amount"] = "1000000";
 
             // throws w/ invalid Signature
             channel["Signature"] = 1000;
-            await Helper.ThrowsExceptionAsync<ValidationException>(() => Validation.ValidatePaymentChannelClaim(channel), "PaymentChannelClaim: Signature must be a string");
-            await Helper.ThrowsExceptionAsync<ValidationException>(() => Validation.Validate(channel), "PaymentChannelClaim: Signature must be a string");
+            Helper.ThrowsException<ValidationException>(() => Validation.ValidatePaymentChannelClaim(channel), "PaymentChannelClaim: Signature must be a string");
+            Helper.ThrowsException<ValidationException>(() => Validation.Validate(channel), "PaymentChannelClaim: Signature must be a string");
             channel["Signature"] = "30440220718D264EF05CAED7C781FF6DE298DCAC68D002562C9BF3A07C1E721B420C0DAB02203A5A4779EF4D2CCC7BC3EF886676D803A9981B928D3B8ACA483B80ECA3CD7B9B";
 
             // throws w/ invalid PublicKey
             channel["PublicKey"] = new List<string>() { "100000" };
-            await Helper.ThrowsExceptionAsync<ValidationException>(() => Validation.ValidatePaymentChannelClaim(channel), "PaymentChannelClaim: PublicKey must be a string");
-            await Helper.ThrowsExceptionAsync<ValidationException>(() => Validation.Validate(channel), "PaymentChannelClaim: PublicKey must be a string");
+            Helper.ThrowsException<ValidationException>(() => Validation.ValidatePaymentChannelClaim(channel), "PaymentChannelClaim: PublicKey must be a string");
+            Helper.ThrowsException<ValidationException>(() => Validation.Validate(channel), "PaymentChannelClaim: PublicKey must be a string");
             channel["PublicKey"] = "32D2471DB72B27E3310F355BB33E339BF26F8392D5A93D3BC0FC3B566612DA0F0A";
 
         }
 
         [TestMethod]
-        public async Task TestVerify_Valid_PaymentChannelClaim_WithCredentialIDs()
+        public void TestVerify_Valid_PaymentChannelClaim_WithCredentialIDs()
         {
             Dictionary<string, object> tx = new Dictionary<string, object>
             {
@@ -102,12 +101,12 @@ namespace XrplTests.Xrpl.Models
                 { "Channel", "C1AE6DDDEEC05CF2978C0BAD6FE302948E9533691DC749DCDD3B9E5992CA6198" },
                 { "CredentialIDs", new List<object> { "A1B2C3D4E5F6789012345678901234567890ABCDEF1234567890ABCDEF123456" } }
             };
-            await Validation.ValidatePaymentChannelClaim(tx);
-            await Validation.Validate(tx);
+            Validation.ValidatePaymentChannelClaim(tx);
+            Validation.Validate(tx);
         }
 
         [TestMethod]
-        public async Task TestVerify_Invalid_PaymentChannelClaim_DuplicateCredentialIDs()
+        public void TestVerify_Invalid_PaymentChannelClaim_DuplicateCredentialIDs()
         {
             string id = "A1B2C3D4E5F6789012345678901234567890ABCDEF1234567890ABCDEF123456";
             Dictionary<string, object> tx = new Dictionary<string, object>
@@ -117,7 +116,7 @@ namespace XrplTests.Xrpl.Models
                 { "Channel", "C1AE6DDDEEC05CF2978C0BAD6FE302948E9533691DC749DCDD3B9E5992CA6198" },
                 { "CredentialIDs", new List<object> { id, id } }
             };
-            await Helper.ThrowsExceptionAsync<ValidationException>(
+            Helper.ThrowsException<ValidationException>(
                 () => Validation.ValidatePaymentChannelClaim(tx),
                 "PaymentChannelClaim: CredentialIDs cannot contain duplicate credential IDs");
         }

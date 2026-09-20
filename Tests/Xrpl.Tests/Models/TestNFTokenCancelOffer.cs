@@ -3,7 +3,6 @@
 // https://github.com/XRPLF/xrpl.js/blob/main/packages/xrpl/test/models/NFTokenCancelOffer.ts
 
 using System.Collections.Generic;
-using System.Threading.Tasks;
 using Microsoft.VisualStudio.TestTools.UnitTesting;
 using Xrpl.Client.Exceptions;
 using Xrpl.Models.Transaction;
@@ -22,7 +21,7 @@ namespace XrplTests.Xrpl.Models
             "AED08CC1F50DD5F23A1948AF86153A3F3B7593E5EC77D65A02BB1B29E05AB6AF";
 
         [TestMethod]
-        public async Task TestVerify_Valid_NFTokenCancelOffer()
+        public void TestVerify_Valid_NFTokenCancelOffer()
         {
             var offer = new Dictionary<string, object>
             {
@@ -33,10 +32,10 @@ namespace XrplTests.Xrpl.Models
                 {"Sequence", 2470665u},
                 {"Flags", 2147483648u},
             };
-            await Validation.Validate(offer);
+            Validation.Validate(offer);
         }
         [TestMethod]
-        public async Task TestVerify_Invalid_missing_NFTokenOffers()
+        public void TestVerify_Invalid_missing_NFTokenOffers()
         {
             var offer = new Dictionary<string, object>
             {
@@ -46,10 +45,10 @@ namespace XrplTests.Xrpl.Models
                 {"Sequence", 2470665u},
                 {"Flags", 2147483648u},
             };
-            await Helper.ThrowsExceptionAsync<ValidationException>(() => Validation.Validate(offer), "NFTokenCancelOffer: missing field NFTokenOffers");
+            Helper.ThrowsException<ValidationException>(() => Validation.Validate(offer), "NFTokenCancelOffer: missing field NFTokenOffers");
         }
         [TestMethod]
-        public async Task TestVerify_Invalid_empty_NFTokenOffers()
+        public void TestVerify_Invalid_empty_NFTokenOffers()
         {
             var offer = new Dictionary<string, object>
             {
@@ -60,7 +59,7 @@ namespace XrplTests.Xrpl.Models
                 {"Sequence", 2470665u},
                 {"Flags", 2147483648u},
             };
-            await Helper.ThrowsExceptionAsync<ValidationException>(() => Validation.Validate(offer), "NFTokenCancelOffer: empty field NFTokenOffers");
+            Helper.ThrowsException<ValidationException>(() => Validation.Validate(offer), "NFTokenCancelOffer: empty field NFTokenOffers");
         }
     }
 

@@ -3,7 +3,6 @@ using System.Collections.Generic;
 using System.Linq;
 using System.Text.Json;
 using System.Text.Json.Serialization;
-using System.Threading.Tasks;
 
 using Xrpl.Client.Exceptions;
 using Xrpl.Models.Common;
@@ -68,9 +67,9 @@ namespace Xrpl.Models.Transactions
 
         private const int MaxPermissions = 10;
 
-        public static async Task ValidateDelegateSet(Dictionary<string, object> tx)
+        public static void ValidateDelegateSet(Dictionary<string, object> tx)
         {
-            await Common.ValidateBaseTransaction(tx);
+            Common.ValidateBaseTransaction(tx);
 
             if (!tx.TryGetValue("Authorize", out var auth) || auth is not string)
                 throw new ValidationException("DelegateSet: missing field Authorize");

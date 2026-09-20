@@ -3,7 +3,6 @@
 using Microsoft.VisualStudio.TestTools.UnitTesting;
 
 using System.Collections.Generic;
-using System.Threading.Tasks;
 
 using Xrpl.Client.Exceptions;
 using Xrpl.Models.Transactions;
@@ -37,12 +36,12 @@ namespace XrplTests.Xrpl.Models
         }
 
         [TestMethod]
-        public async Task TestVerifyValid()
+        public void TestVerifyValid()
         {
             //verifies valid AMMDeposit with LPTokenOut
             deposit["LPTokenOut"] = LPTokenOut;
             deposit["Flags"] = AMMDepositFlags.tfLPToken;
-            await Validation.Validate(deposit);
+            Validation.Validate(deposit);
             deposit.Remove("LPTokenOut");
             deposit["Flags"] = 0u;
 
@@ -50,7 +49,7 @@ namespace XrplTests.Xrpl.Models
             //verifies valid AMMDeposit with Amount
             deposit["Amount"] = "1000";
             deposit["Flags"] = AMMDepositFlags.tfSingleAsset;
-            await Validation.Validate(deposit);
+            Validation.Validate(deposit);
             deposit.Remove("Amount");
             deposit["Flags"] = 0u;
 
@@ -63,7 +62,7 @@ namespace XrplTests.Xrpl.Models
                 {"value","2.5"},
             };
             deposit["Flags"] = AMMDepositFlags.tfTwoAsset;
-            await Validation.Validate(deposit);
+            Validation.Validate(deposit);
             deposit.Remove("Amount");
             deposit.Remove("Amount2");
             deposit["Flags"] = 0u;
@@ -73,7 +72,7 @@ namespace XrplTests.Xrpl.Models
             deposit["Amount"] = "1000";
             deposit["LPTokenOut"] = LPTokenOut;
             deposit["Flags"] = AMMDepositFlags.tfOneAssetLPToken;
-            await Validation.Validate(deposit);
+            Validation.Validate(deposit);
             deposit.Remove("Amount");
             deposit.Remove("LPTokenOut");
             deposit["Flags"] = 0u;
@@ -82,31 +81,31 @@ namespace XrplTests.Xrpl.Models
             deposit["Amount"] = "1000";
             deposit["EPrice"] = "25";
             deposit["Flags"] = AMMDepositFlags.tfLimitLPToken;
-            await Validation.Validate(deposit);
+            Validation.Validate(deposit);
             deposit.Remove("Amount");
             deposit.Remove("EPrice");
             deposit["Flags"] = 0u;
 
             //throws w/ missing field Asset
             deposit.Remove("Asset");
-            await Helper.ThrowsExceptionAsync<ValidationException>(() => Validation.Validate(deposit), "AMMDeposit: missing field Asset");
+            Helper.ThrowsException<ValidationException>(() => Validation.Validate(deposit), "AMMDeposit: missing field Asset");
             deposit["Asset"] = new Dictionary<string, object>() { { "currency", "XRP" } };
             //throws w/ Asset must be an Issue
             deposit["Asset"] = 1234;
-            await Helper.ThrowsExceptionAsync<ValidationException>(() => Validation.Validate(deposit), "AMMDeposit: Asset must be an Issue");
+            Helper.ThrowsException<ValidationException>(() => Validation.Validate(deposit), "AMMDeposit: Asset must be an Issue");
             deposit["Asset"] = new Dictionary<string, object>() { { "currency", "XRP" } };
 
             //throws w/ missing field Asset
             deposit.Remove("Asset2");
-            await Helper.ThrowsExceptionAsync<ValidationException>(() => Validation.Validate(deposit), "AMMDeposit: missing field Asset2");
+            Helper.ThrowsException<ValidationException>(() => Validation.Validate(deposit), "AMMDeposit: missing field Asset2");
             deposit["Asset2"] = new Dictionary<string, object>() { { "currency", "XRP" } };
             //throws w/ Asset must be an Issue
             deposit["Asset2"] = 1234;
-            await Helper.ThrowsExceptionAsync<ValidationException>(() => Validation.Validate(deposit), "AMMDeposit: Asset2 must be an Issue");
+            Helper.ThrowsException<ValidationException>(() => Validation.Validate(deposit), "AMMDeposit: Asset2 must be an Issue");
             deposit["Asset2"] = new Dictionary<string, object>() { { "currency", "ETH" }, { "issuer", "rP9jPyP5kyvFRb6ZiRghAGw5u8SGAmU4bd" } };
 
             //throws w/ must set at least LPTokenOut or Amount
-            await Helper.ThrowsExceptionAsync<ValidationException>(() => Validation.Validate(deposit), "AMMDeposit: must set at least LPTokenOut or Amount");
+            Helper.ThrowsException<ValidationException>(() => Validation.Validate(deposit), "AMMDeposit: must set at least LPTokenOut or Amount");
 
             //throws w/ must set Amount with Amount2
             deposit["Amount2"] = new Dictionary<string, object>()
@@ -115,35 +114,35 @@ namespace XrplTests.Xrpl.Models
                 { "issuer", "rP9jPyP5kyvFRb6ZiRghAGw5u8SGAmU4bd" },
                 { "value", "2.5" },
             };
-            await Helper.ThrowsExceptionAsync<ValidationException>(() => Validation.Validate(deposit), "AMMDeposit: must set Amount with Amount2");
+            Helper.ThrowsException<ValidationException>(() => Validation.Validate(deposit), "AMMDeposit: must set Amount with Amount2");
             deposit.Remove("Amount2");
 
             //throws w/ must set Amount with EPrice
             deposit["EPrice"] = "25";
-            await Helper.ThrowsExceptionAsync<ValidationException>(() => Validation.Validate(deposit), "AMMDeposit: must set Amount with EPrice");
+            Helper.ThrowsException<ValidationException>(() => Validation.Validate(deposit), "AMMDeposit: must set Amount with EPrice");
             deposit.Remove("EPrice");
 
             //throws w/ LPTokenOut must be an IssuedCurrencyAmount
             deposit["LPTokenOut"] = 1234;
-            await Helper.ThrowsExceptionAsync<ValidationException>(() => Validation.Validate(deposit), "AMMDeposit: LPTokenOut must be an IssuedCurrencyAmount");
+            Helper.ThrowsException<ValidationException>(() => Validation.Validate(deposit), "AMMDeposit: LPTokenOut must be an IssuedCurrencyAmount");
             deposit.Remove("LPTokenOut");
 
             //throws w/ Amount must be an Amount
             deposit["Amount"] = 1234;
-            await Helper.ThrowsExceptionAsync<ValidationException>(() => Validation.Validate(deposit), "AMMDeposit: Amount must be an Amount");
+            Helper.ThrowsException<ValidationException>(() => Validation.Validate(deposit), "AMMDeposit: Amount must be an Amount");
             deposit.Remove("Amount");
 
             //throws w/ Amount2 must be an Amount
             deposit["Amount"] = "1000";
             deposit["Amount2"] = 1234;
-            await Helper.ThrowsExceptionAsync<ValidationException>(() => Validation.Validate(deposit), "AMMDeposit: Amount2 must be an Amount");
+            Helper.ThrowsException<ValidationException>(() => Validation.Validate(deposit), "AMMDeposit: Amount2 must be an Amount");
             deposit.Remove("Amount");
             deposit.Remove("Amount2");
 
             //throws w/ EPrice must be an Amount
             deposit["Amount"] = "1000";
             deposit["EPrice"] = 1234;
-            await Helper.ThrowsExceptionAsync<ValidationException>(() => Validation.Validate(deposit), "AMMDeposit: EPrice must be an Amount");
+            Helper.ThrowsException<ValidationException>(() => Validation.Validate(deposit), "AMMDeposit: EPrice must be an Amount");
             deposit.Remove("Amount");
             deposit.Remove("EPrice");
 

@@ -1,6 +1,5 @@
 #nullable enable
 using System.Collections.Generic;
-using System.Threading.Tasks;
 
 using System.Text.Json.Serialization;
 
@@ -81,11 +80,10 @@ namespace Xrpl.Models.Transactions
         /// Verify the form and type of an AMMCreate at runtime.
         /// </summary>
         /// <param name="tx">An AMMCreate Transaction.</param>
-        /// <returns></returns>
         /// <exception cref="ValidationException"> When the AMMCreate is Malformed.</exception>
-        public static async Task ValidateAMMCreate(Dictionary<string, object> tx)
+        public static void ValidateAMMCreate(Dictionary<string, object> tx)
         {
-            await Common.ValidateBaseTransaction(tx);
+            Common.ValidateBaseTransaction(tx);
 
             if (!tx.TryGetValue("Amount", out var Amount1) || Amount1 is null)
             {

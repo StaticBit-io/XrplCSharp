@@ -3,7 +3,6 @@
 using System;
 using System.Collections.Generic;
 using System.Linq;
-using System.Threading.Tasks;
 
 using Xrpl.Client.Exceptions;
 using Xrpl.Models.Enums;
@@ -262,9 +261,9 @@ namespace Xrpl.Models.Transactions
         /// </summary>
         /// <param name="tx"> A AccountSet Transaction.</param>
         /// <exception cref="ValidationException">When the AccountSet is malformed.</exception>
-        public static async Task ValidateAccountSet(Dictionary<string, object> tx)
+        public static void ValidateAccountSet(Dictionary<string, object> tx)
         {
-            await Common.ValidateBaseTransaction(tx);
+            Common.ValidateBaseTransaction(tx);
             ValidateAsfFlagField(tx, "ClearFlag");
             if (tx.TryGetValue("Domain", out var Domain) && Domain is not string { })
                 throw new ValidationException("AccountSet: invalid Domain");

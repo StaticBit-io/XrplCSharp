@@ -1,6 +1,5 @@
 using System.Collections.Generic;
 using System.Text.Json.Serialization;
-using System.Threading.Tasks;
 using static Xrpl.Models.Common.Common;
 using Xrpl.Client.Exceptions;
 using Currency = Xrpl.Models.Common.Currency;
@@ -195,11 +194,10 @@ namespace Xrpl.Models.Transactions
         /// Verify the form and type of an AMMDeposit at runtime.
         /// </summary>
         /// <param name="tx">An AMMDeposit Transaction.</param>
-        /// <returns></returns>
         /// <exception cref="ValidationException"> When the AMMDeposit is Malformed.</exception>
-        public static async Task ValidateAMMDeposit(Dictionary<string, object> tx)
+        public static void ValidateAMMDeposit(Dictionary<string, object> tx)
         {
-            await Common.ValidateBaseTransaction(tx);
+            Common.ValidateBaseTransaction(tx);
 
             if (!tx.TryGetValue("Asset", out var Asset1) || Asset1 is null)
             {

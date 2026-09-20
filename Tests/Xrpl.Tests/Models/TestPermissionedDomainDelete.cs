@@ -1,7 +1,6 @@
 using Microsoft.VisualStudio.TestTools.UnitTesting;
 
 using System.Collections.Generic;
-using System.Threading.Tasks;
 
 using Xrpl.Client.Exceptions;
 using Xrpl.Models.Transactions;
@@ -12,7 +11,7 @@ namespace XrplTests.Xrpl.Models
     public class TestUPermissionedDomainDelete
     {
         [TestMethod]
-        public async Task TestVerify_Valid_WithDomainID()
+        public void TestVerify_Valid_WithDomainID()
         {
             var tx = new Dictionary<string, object>
             {
@@ -22,12 +21,12 @@ namespace XrplTests.Xrpl.Models
                 { "Sequence", 392u },
                 { "DomainID", "77D6234D074E505024D39C04C3F262997B773719AB29ACFA83119E4210328776" }
             };
-            await Validation.ValidatePermissionedDomainDelete(tx);
-            await Validation.Validate(tx);
+            Validation.ValidatePermissionedDomainDelete(tx);
+            Validation.Validate(tx);
         }
 
         [TestMethod]
-        public async Task TestVerify_Invalid_MissingDomainID()
+        public void TestVerify_Invalid_MissingDomainID()
         {
             var tx = new Dictionary<string, object>
             {
@@ -36,13 +35,13 @@ namespace XrplTests.Xrpl.Models
                 { "Fee", "10" },
                 { "Sequence", 392u }
             };
-            await Helper.ThrowsExceptionAsync<ValidationException>(
+            Helper.ThrowsException<ValidationException>(
                 () => Validation.ValidatePermissionedDomainDelete(tx),
                 "PermissionedDomainDelete: DomainID is required");
         }
 
         [TestMethod]
-        public async Task TestVerify_Invalid_EmptyDomainID()
+        public void TestVerify_Invalid_EmptyDomainID()
         {
             var tx = new Dictionary<string, object>
             {
@@ -52,7 +51,7 @@ namespace XrplTests.Xrpl.Models
                 { "Sequence", 392u },
                 { "DomainID", "" }
             };
-            await Helper.ThrowsExceptionAsync<ValidationException>(
+            Helper.ThrowsException<ValidationException>(
                 () => Validation.ValidatePermissionedDomainDelete(tx),
                 "PermissionedDomainDelete: DomainID is required");
         }

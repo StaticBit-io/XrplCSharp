@@ -5,7 +5,6 @@
 using System.Collections.Generic;
 using Microsoft.VisualStudio.TestTools.UnitTesting;
 
-using System.Threading.Tasks;
 
 using Xrpl.Models.Utils;
 
@@ -24,7 +23,7 @@ namespace XrplTests.Xrpl.Models
         {
 
             [TestMethod]
-            public async Task TestVerifyValid_isFlagEnabled()
+            public void TestVerifyValid_isFlagEnabled()
             {
                 uint flags = 0x00000000;
                 uint flag1 = 0x00010000;
@@ -40,7 +39,7 @@ namespace XrplTests.Xrpl.Models
                 Assert.IsFalse(ModelUtils.IsFlagEnabled(flags, flag1));
             }
             [TestMethod]
-            public async Task TestVerifyValid_setTransactionFlagsToNumber()
+            public void TestVerifyValid_setTransactionFlagsToNumber()
             {
                 var offerCrete = new Dictionary<string, object>
                 {

@@ -2,7 +2,6 @@ using System;
 using System.Collections.Generic;
 using System.Linq;
 using System.Text;
-using System.Threading.Tasks;
 
 using Xrpl.Client.Exceptions;
 using Xrpl.Models.Utils;
@@ -72,9 +71,9 @@ public partial class Validation
     /// </summary>
     /// <param name="tx"> An NFTokenModify Transaction.</param>
     /// <exception cref="ValidationException">When the NFTokenModify is Malformed.</exception>
-    public static async Task ValidateNFTokenModify(Dictionary<string, object> tx)
+    public static void ValidateNFTokenModify(Dictionary<string, object> tx)
     {
-        await Common.ValidateBaseTransaction(tx);
+        Common.ValidateBaseTransaction(tx);
 
         if (tx.TryGetValue("URI", out var URI) && URI is string {} uri)
         {

@@ -1,6 +1,5 @@
 #nullable enable
 using System.Collections.Generic;
-using System.Threading.Tasks;
 
 using System.Text.Json.Serialization;
 
@@ -107,11 +106,10 @@ namespace Xrpl.Models.Transactions
         /// Verify the form and type of an AMMBid at runtime.
         /// </summary>
         /// <param name="tx">An AMMBid Transaction.</param>
-        /// <returns></returns>
         /// <exception cref="ValidationException">When the AMMBid is Malformed.</exception>
-        public static async Task ValidateAMMBid(Dictionary<string, object> tx)
+        public static void ValidateAMMBid(Dictionary<string, object> tx)
         {
-            await Common.ValidateBaseTransaction(tx);
+            Common.ValidateBaseTransaction(tx);
 
             if (!tx.TryGetValue("Asset", out var Asset1) || Asset1 is null)
             {

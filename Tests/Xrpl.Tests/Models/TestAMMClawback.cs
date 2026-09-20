@@ -1,7 +1,6 @@
 using Microsoft.VisualStudio.TestTools.UnitTesting;
 
 using System.Collections.Generic;
-using System.Threading.Tasks;
 
 using Xrpl.Client.Exceptions;
 using Xrpl.Models.Transactions;
@@ -28,63 +27,63 @@ namespace XrplTests.Xrpl.Models
         }
 
         [TestMethod]
-        public async Task TestVerifyValid()
+        public void TestVerifyValid()
         {
-            await Validation.Validate(ammClawback);
+            Validation.Validate(ammClawback);
         }
 
         [TestMethod]
-        public async Task TestThrowsMissingHolder()
+        public void TestThrowsMissingHolder()
         {
             var tx = new Dictionary<string, object>(ammClawback);
             tx.Remove("Holder");
-            await Helper.ThrowsExceptionAsync<ValidationException>(
+            Helper.ThrowsException<ValidationException>(
                 () => Validation.Validate(tx),
                 "AMMClawback: missing field Holder");
         }
 
         [TestMethod]
-        public async Task TestThrowsMissingAsset()
+        public void TestThrowsMissingAsset()
         {
             var tx = new Dictionary<string, object>(ammClawback);
             tx.Remove("Asset");
-            await Helper.ThrowsExceptionAsync<ValidationException>(
+            Helper.ThrowsException<ValidationException>(
                 () => Validation.Validate(tx),
                 "AMMClawback: missing field Asset");
         }
 
         [TestMethod]
-        public async Task TestThrowsAssetMustBeIssue()
+        public void TestThrowsAssetMustBeIssue()
         {
             var tx = new Dictionary<string, object>(ammClawback);
             tx["Asset"] = 1234;
-            await Helper.ThrowsExceptionAsync<ValidationException>(
+            Helper.ThrowsException<ValidationException>(
                 () => Validation.Validate(tx),
                 "AMMClawback: Asset must be an Issue");
         }
 
         [TestMethod]
-        public async Task TestThrowsMissingAsset2()
+        public void TestThrowsMissingAsset2()
         {
             var tx = new Dictionary<string, object>(ammClawback);
             tx.Remove("Asset2");
-            await Helper.ThrowsExceptionAsync<ValidationException>(
+            Helper.ThrowsException<ValidationException>(
                 () => Validation.Validate(tx),
                 "AMMClawback: missing field Asset2");
         }
 
         [TestMethod]
-        public async Task TestThrowsAsset2MustBeIssue()
+        public void TestThrowsAsset2MustBeIssue()
         {
             var tx = new Dictionary<string, object>(ammClawback);
             tx["Asset2"] = 1234;
-            await Helper.ThrowsExceptionAsync<ValidationException>(
+            Helper.ThrowsException<ValidationException>(
                 () => Validation.Validate(tx),
                 "AMMClawback: Asset2 must be an Issue");
         }
 
         [TestMethod]
-        public async Task TestValidWithOptionalAmount()
+        public void TestValidWithOptionalAmount()
         {
             var tx = new Dictionary<string, object>(ammClawback);
             tx["Amount"] = new Dictionary<string, object>()
@@ -93,15 +92,15 @@ namespace XrplTests.Xrpl.Models
                 {"issuer","rp6abvbTbjoce8ZDJkT6snvxTZSYMBCC9S"},
                 {"value","100"},
             };
-            await Validation.Validate(tx);
+            Validation.Validate(tx);
         }
 
         [TestMethod]
-        public async Task TestThrowsInvalidAmountXRP()
+        public void TestThrowsInvalidAmountXRP()
         {
             var tx = new Dictionary<string, object>(ammClawback);
             tx["Amount"] = "1000000";
-            await Helper.ThrowsExceptionAsync<ValidationException>(
+            Helper.ThrowsException<ValidationException>(
                 () => Validation.Validate(tx),
                 "AMMClawback: invalid Amount");
         }

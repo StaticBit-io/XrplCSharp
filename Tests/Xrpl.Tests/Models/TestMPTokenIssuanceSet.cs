@@ -1,7 +1,6 @@
 using Microsoft.VisualStudio.TestTools.UnitTesting;
 
 using System.Collections.Generic;
-using System.Threading.Tasks;
 
 using Xrpl.Client.Exceptions;
 using Xrpl.Models.Transactions;
@@ -26,67 +25,67 @@ namespace XrplTests.Xrpl.Models
         }
 
         [TestMethod]
-        public async Task TestVerifyValid()
+        public void TestVerifyValid()
         {
-            await Validation.Validate(mpTokenIssuanceSet);
+            Validation.Validate(mpTokenIssuanceSet);
         }
 
         [TestMethod]
-        public async Task TestVerifyWithHolder()
+        public void TestVerifyWithHolder()
         {
             mpTokenIssuanceSet["Holder"] = "rPyfep3gcLzkosKC9XiE77Y8DZWG6iWDT9";
-            await Validation.Validate(mpTokenIssuanceSet);
+            Validation.Validate(mpTokenIssuanceSet);
             mpTokenIssuanceSet.Remove("Holder");
         }
 
         [TestMethod]
-        public async Task TestThrowsWithMissingMPTokenIssuanceID()
+        public void TestThrowsWithMissingMPTokenIssuanceID()
         {
             mpTokenIssuanceSet.Remove("MPTokenIssuanceID");
-            await Helper.ThrowsExceptionAsync<ValidationException>(
+            Helper.ThrowsException<ValidationException>(
                 () => Validation.Validate(mpTokenIssuanceSet),
                 "MPTokenIssuanceSet: missing field MPTokenIssuanceID");
             mpTokenIssuanceSet["MPTokenIssuanceID"] = "00000001A407AF5856CCF3C42619DAA925813FC955C72983";
         }
 
         [TestMethod]
-        public async Task TestThrowsWithInvalidMPTokenIssuanceID()
+        public void TestThrowsWithInvalidMPTokenIssuanceID()
         {
             mpTokenIssuanceSet["MPTokenIssuanceID"] = 12345;
-            await Helper.ThrowsExceptionAsync<ValidationException>(
+            Helper.ThrowsException<ValidationException>(
                 () => Validation.Validate(mpTokenIssuanceSet),
                 "MPTokenIssuanceSet: MPTokenIssuanceID must be a string");
             mpTokenIssuanceSet["MPTokenIssuanceID"] = "00000001A407AF5856CCF3C42619DAA925813FC955C72983";
         }
 
         [TestMethod]
-        public async Task TestThrowsWithInvalidHolder()
+        public void TestThrowsWithInvalidHolder()
         {
             mpTokenIssuanceSet["Holder"] = 12345;
-            await Helper.ThrowsExceptionAsync<ValidationException>(
+            Helper.ThrowsException<ValidationException>(
                 () => Validation.Validate(mpTokenIssuanceSet),
                 "MPTokenIssuanceSet: Holder must be a string");
             mpTokenIssuanceSet.Remove("Holder");
         }
 
         [TestMethod]
-        public async Task TestThrowsWithBothLockAndUnlockFlags()
+        public void TestThrowsWithBothLockAndUnlockFlags()
         {
             mpTokenIssuanceSet["Flags"] = (uint)(MPTokenIssuanceSetFlags.tfMPTLock | MPTokenIssuanceSetFlags.tfMPTUnlock);
-            await Helper.ThrowsExceptionAsync<ValidationException>(
+            Helper.ThrowsException<ValidationException>(
                 () => Validation.Validate(mpTokenIssuanceSet),
                 "MPTokenIssuanceSet: cannot set both tfMPTLock and tfMPTUnlock flags");
             mpTokenIssuanceSet.Remove("Flags");
         }
 
         [TestMethod]
-        public async Task TestVerifyWithZeroDomainId()
+        public void TestVerifyWithZeroDomainId()
         {
             try
             {
                 // rippled MPTokenIssuanceSet: a zero DomainID clears the domain - legal
                 mpTokenIssuanceSet["DomainID"] = new string('0', 64);
-                await Validation.Validate(mpTokenIssuanceSet);
+                Validation.Validate(mpTokenIssuanceSet);
             }
             finally
             {
@@ -95,12 +94,12 @@ namespace XrplTests.Xrpl.Models
         }
 
         [TestMethod]
-        public async Task TestThrowsWithMalformedDomainId()
+        public void TestThrowsWithMalformedDomainId()
         {
             try
             {
                 mpTokenIssuanceSet["DomainID"] = "1234";
-                await Helper.ThrowsExceptionAsync<ValidationException>(
+                Helper.ThrowsException<ValidationException>(
                     () => Validation.Validate(mpTokenIssuanceSet),
                     "MPTokenIssuanceSet: DomainID must be a 64-character hexadecimal string");
             }

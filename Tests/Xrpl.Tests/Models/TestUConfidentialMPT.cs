@@ -1,6 +1,5 @@
 using System.Collections.Generic;
 using System.Text.Json.Nodes;
-using System.Threading.Tasks;
 
 using Microsoft.VisualStudio.TestTools.UnitTesting;
 
@@ -162,48 +161,48 @@ namespace Xrpl.Tests.Models.Tests
         };
 
         [TestMethod]
-        public async Task TestUValidateSponsorshipSet_ConflictingFlags_Throws()
+        public void TestUValidateSponsorshipSet_ConflictingFlags_Throws()
         {
             Dictionary<string, object> tx = BaseTx("SponsorshipSet");
             tx["Sponsee"] = Account2;
             tx["Flags"] = (uint)(SponsorshipSetFlags.tfSponsorshipSetRequireSignForFee | SponsorshipSetFlags.tfSponsorshipClearRequireSignForFee);
-            await Assert.ThrowsExactlyAsync<ValidationException>(() => Validation.ValidateSponsorshipSet(tx));
+            Assert.ThrowsExactly<ValidationException>(() => Validation.ValidateSponsorshipSet(tx));
         }
 
         [TestMethod]
-        public async Task TestUValidateSponsorshipTransfer_ModeRules()
+        public void TestUValidateSponsorshipTransfer_ModeRules()
         {
             // no mode flag
             Dictionary<string, object> tx = BaseTx("SponsorshipTransfer");
-            await Assert.ThrowsExactlyAsync<ValidationException>(() => Validation.ValidateSponsorshipTransfer(tx));
+            Assert.ThrowsExactly<ValidationException>(() => Validation.ValidateSponsorshipTransfer(tx));
 
             // create without Sponsor
             tx = BaseTx("SponsorshipTransfer");
             tx["Flags"] = (uint)SponsorshipTransferFlags.tfSponsorshipCreate;
-            await Assert.ThrowsExactlyAsync<ValidationException>(() => Validation.ValidateSponsorshipTransfer(tx));
+            Assert.ThrowsExactly<ValidationException>(() => Validation.ValidateSponsorshipTransfer(tx));
 
             // create with Sponsor — valid
             tx["Sponsor"] = Account2;
-            await Validation.ValidateSponsorshipTransfer(tx);
+            Validation.ValidateSponsorshipTransfer(tx);
 
             // create with Sponsee — invalid
             tx["Sponsee"] = Account2;
-            await Assert.ThrowsExactlyAsync<ValidationException>(() => Validation.ValidateSponsorshipTransfer(tx));
+            Assert.ThrowsExactly<ValidationException>(() => Validation.ValidateSponsorshipTransfer(tx));
 
             // end with Sponsor — invalid
             tx = BaseTx("SponsorshipTransfer");
             tx["Flags"] = (uint)SponsorshipTransferFlags.tfSponsorshipEnd;
             tx["Sponsor"] = Account2;
-            await Assert.ThrowsExactlyAsync<ValidationException>(() => Validation.ValidateSponsorshipTransfer(tx));
+            Assert.ThrowsExactly<ValidationException>(() => Validation.ValidateSponsorshipTransfer(tx));
 
             // end with neither field — valid (account-level self-sponsorship end)
             tx = BaseTx("SponsorshipTransfer");
             tx["Flags"] = (uint)SponsorshipTransferFlags.tfSponsorshipEnd;
-            await Validation.ValidateSponsorshipTransfer(tx);
+            Validation.ValidateSponsorshipTransfer(tx);
 
             // end with Sponsee == Account — invalid
             tx["Sponsee"] = Account1;
-            await Assert.ThrowsExactlyAsync<ValidationException>(() => Validation.ValidateSponsorshipTransfer(tx));
+            Assert.ThrowsExactly<ValidationException>(() => Validation.ValidateSponsorshipTransfer(tx));
         }
 
         #endregion

@@ -1,6 +1,5 @@
 using System.Collections.Generic;
 using System.Text.Json.Serialization;
-using System.Threading.Tasks;
 
 using Xrpl.Client.Exceptions;
 
@@ -82,9 +81,9 @@ namespace Xrpl.Models.Transactions
         /// </summary>
         /// <param name="tx">A DIDSet Transaction.</param>
         /// <exception cref="ValidationException">When the DIDSet is malformed.</exception>
-        public static async Task ValidateDIDSet(Dictionary<string, object> tx)
+        public static void ValidateDIDSet(Dictionary<string, object> tx)
         {
-            await Common.ValidateBaseTransaction(tx);
+            Common.ValidateBaseTransaction(tx);
 
             tx.TryGetValue("Data", out var data);
             tx.TryGetValue("DIDDocument", out var didDocument);

@@ -4,7 +4,6 @@ using System;
 using System.Collections.Generic;
 using System.Linq;
 using System.Text;
-using System.Threading.Tasks;
 
 using Xrpl.Client.Exceptions;
 
@@ -17,7 +16,7 @@ namespace XrplTests.Xrpl.Models
     public class TestUCheckCash
     {
         [TestMethod]
-        public async Task TestVerify_Valid_CheckCash()
+        public void TestVerify_Valid_CheckCash()
         {
             var tx = new Dictionary<string, object>
             {
@@ -27,11 +26,11 @@ namespace XrplTests.Xrpl.Models
                 {"CheckID", "838766BA2B995C00744175F69A1B11E32C3DBC40E64801A4056FCBD657F57334"},
                 {"Fee", "12"},
             };
-            await Validation.ValidateCheckCash(tx);
-            await Validation.Validate(tx);
+            Validation.ValidateCheckCash(tx);
+            Validation.Validate(tx);
         }
         [TestMethod]
-        public async Task TestVerify_InValid_CheckID()
+        public void TestVerify_InValid_CheckID()
         {
             var tx = new Dictionary<string, object>
             {
@@ -40,11 +39,11 @@ namespace XrplTests.Xrpl.Models
                 {"CheckID", 83876645678567890 },
                 {"Amount", "100000000"}
             };
-            await Helper.ThrowsExceptionAsync<ValidationException>(() => Validation.ValidateCheckCash(tx), "CheckCash: invalid CheckID");
-            await Helper.ThrowsExceptionAsync<ValidationException>(() => Validation.Validate(tx), "CheckCash: invalid CheckID");
+            Helper.ThrowsException<ValidationException>(() => Validation.ValidateCheckCash(tx), "CheckCash: invalid CheckID");
+            Helper.ThrowsException<ValidationException>(() => Validation.Validate(tx), "CheckCash: invalid CheckID");
         }
         [TestMethod]
-        public async Task TestVerify_InValid_Amount()
+        public void TestVerify_InValid_Amount()
         {
             var tx = new Dictionary<string, object>
             {
@@ -53,11 +52,11 @@ namespace XrplTests.Xrpl.Models
                 {"CheckID", "838766BA2B995C00744175F69A1B11E32C3DBC40E64801A4056FCBD657F57334"},
                 {"Amount", 100000000}
             };
-            await Helper.ThrowsExceptionAsync<ValidationException>(() => Validation.ValidateCheckCash(tx), "CheckCash: invalid Amount");
-            await Helper.ThrowsExceptionAsync<ValidationException>(() => Validation.Validate(tx), "CheckCash: invalid Amount");
+            Helper.ThrowsException<ValidationException>(() => Validation.ValidateCheckCash(tx), "CheckCash: invalid Amount");
+            Helper.ThrowsException<ValidationException>(() => Validation.Validate(tx), "CheckCash: invalid Amount");
         }
         [TestMethod]
-        public async Task TestVerify_InValid_having_both_Amount_and_DeliverMin()
+        public void TestVerify_InValid_having_both_Amount_and_DeliverMin()
         {
             var tx = new Dictionary<string, object>
             {
@@ -67,11 +66,11 @@ namespace XrplTests.Xrpl.Models
                 {"Amount", "100000000"},
                 {"DeliverMin", 852156963}
             };
-            await Helper.ThrowsExceptionAsync<ValidationException>(() => Validation.ValidateCheckCash(tx), "CheckCash: cannot have both Amount and DeliverMin");
-            await Helper.ThrowsExceptionAsync<ValidationException>(() => Validation.Validate(tx), "CheckCash: cannot have both Amount and DeliverMin");
+            Helper.ThrowsException<ValidationException>(() => Validation.ValidateCheckCash(tx), "CheckCash: cannot have both Amount and DeliverMin");
+            Helper.ThrowsException<ValidationException>(() => Validation.Validate(tx), "CheckCash: cannot have both Amount and DeliverMin");
         }
         [TestMethod]
-        public async Task TestVerify_InValid_DeliverMin()
+        public void TestVerify_InValid_DeliverMin()
         {
             var tx = new Dictionary<string, object>
             {
@@ -80,8 +79,8 @@ namespace XrplTests.Xrpl.Models
                 {"CheckID", "838766BA2B995C00744175F69A1B11E32C3DBC40E64801A4056FCBD657F57334"},
                 {"DeliverMin", 852156963}
             };
-            await Helper.ThrowsExceptionAsync<ValidationException>(() => Validation.ValidateCheckCash(tx), "CheckCash: invalid DeliverMin");
-            await Helper.ThrowsExceptionAsync<ValidationException>(() => Validation.Validate(tx), "CheckCash: invalid DeliverMin");
+            Helper.ThrowsException<ValidationException>(() => Validation.ValidateCheckCash(tx), "CheckCash: invalid DeliverMin");
+            Helper.ThrowsException<ValidationException>(() => Validation.Validate(tx), "CheckCash: invalid DeliverMin");
         }
     }
 

@@ -3,7 +3,6 @@
 //https://github.com/XRPLF/xrpl.js/blob/main/packages/xrpl/src/models/transactions/escrowFinish.ts
 
 using System.Collections.Generic;
-using System.Threading.Tasks;
 
 using System.Text.Json.Serialization;
 
@@ -103,9 +102,9 @@ namespace Xrpl.Models.Transactions
         /// </summary>
         /// <param name="tx"> A EscrowFinish Transaction.</param>
         /// <exception cref="ValidationException">When the EscrowFinish is malformed.</exception>
-        public static async Task ValidateEscrowFinish(Dictionary<string, object> tx)
+        public static void ValidateEscrowFinish(Dictionary<string, object> tx)
         {
-            await Common.ValidateBaseTransaction(tx);
+            Common.ValidateBaseTransaction(tx);
 
             if (!tx.TryGetValue("Owner", out var Owner) || Owner is null)
                 throw new ValidationException("EscrowFinish: missing field Owner");

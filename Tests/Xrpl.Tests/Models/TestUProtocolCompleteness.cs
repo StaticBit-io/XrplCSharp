@@ -2,7 +2,6 @@
 using System.Linq;
 using System.Text.Json;
 using System.Text.Json.Nodes;
-using System.Threading.Tasks;
 
 using Microsoft.VisualStudio.TestTools.UnitTesting;
 
@@ -38,7 +37,7 @@ namespace Xrpl.Tests.Models.Tests
         }
 
         [TestMethod]
-        public async Task TestUNFTokenModify_DispatchesToOwnValidator()
+        public void TestUNFTokenModify_DispatchesToOwnValidator()
         {
             // Pre-fix the dispatcher routed NFTokenModify to ValidateNFTokenMint,
             // which rejects a valid Modify (no NFTokenTaxon present)
@@ -48,7 +47,7 @@ namespace Xrpl.Tests.Models.Tests
                 ["Account"] = Account1,
                 ["NFTokenID"] = new string('A', 64),
             };
-            await Validation.Validate(tx);
+            Validation.Validate(tx);
         }
 
         [TestMethod]
@@ -197,7 +196,7 @@ namespace Xrpl.Tests.Models.Tests
         }
 
         [TestMethod]
-        public async Task TestUMPTokenIssuanceSet_PreflightRules()
+        public void TestUMPTokenIssuanceSet_PreflightRules()
         {
             // rippled MPTokenIssuanceSet::preflight rules pinned client-side
             Dictionary<string, object> tx = new()
@@ -210,31 +209,31 @@ namespace Xrpl.Tests.Models.Tests
             // A non-numeric Flags value must report as ValidationException like every other
             // malformed field here, not as a raw conversion exception callers do not catch.
             tx["Flags"] = "not-a-number";
-            await Assert.ThrowsExactlyAsync<Xrpl.Client.Exceptions.ValidationException>(() => Validation.ValidateMPTokenIssuanceSet(tx));
+            Assert.ThrowsExactly<Xrpl.Client.Exceptions.ValidationException>(() => Validation.ValidateMPTokenIssuanceSet(tx));
             tx.Remove("Flags");
 
             // ImmutableFlags: zero and out-of-mask values are temINVALID_FLAG
             tx["ImmutableFlags"] = 0u;
-            await Assert.ThrowsExactlyAsync<Xrpl.Client.Exceptions.ValidationException>(() => Validation.ValidateMPTokenIssuanceSet(tx));
+            Assert.ThrowsExactly<Xrpl.Client.Exceptions.ValidationException>(() => Validation.ValidateMPTokenIssuanceSet(tx));
             tx["ImmutableFlags"] = 0x1u; // outside tif* mask (0x2..0x80, 0x10000, 0x20000)
-            await Assert.ThrowsExactlyAsync<Xrpl.Client.Exceptions.ValidationException>(() => Validation.ValidateMPTokenIssuanceSet(tx));
+            Assert.ThrowsExactly<Xrpl.Client.Exceptions.ValidationException>(() => Validation.ValidateMPTokenIssuanceSet(tx));
 
             tx["ImmutableFlags"] = (uint)MPTokenIssuanceImmutableFlags.tifMPTCanHoldConfidentialBalance;
-            await Validation.ValidateMPTokenIssuanceSet(tx);
+            Validation.ValidateMPTokenIssuanceSet(tx);
 
             // Non-zero TransferFee combined with enabling confidential balances is temBAD_TRANSFER_FEE.
             // Since 3.3.0 the capability is enabled through a tf* flag, not through a separate field.
             tx.Remove("ImmutableFlags");
             tx["Flags"] = (uint)MPTokenIssuanceSetFlags.tfMPTSetCanHoldConfidentialBalance;
             tx["TransferFee"] = 10u;
-            await Assert.ThrowsExactlyAsync<Xrpl.Client.Exceptions.ValidationException>(() => Validation.ValidateMPTokenIssuanceSet(tx));
+            Assert.ThrowsExactly<Xrpl.Client.Exceptions.ValidationException>(() => Validation.ValidateMPTokenIssuanceSet(tx));
 
             tx["TransferFee"] = 0u;
-            await Validation.ValidateMPTokenIssuanceSet(tx);
+            Validation.ValidateMPTokenIssuanceSet(tx);
         }
 
         [TestMethod]
-        public async Task TestUMPTokenIssuanceCreate_ImmutableFlagsMask()
+        public void TestUMPTokenIssuanceCreate_ImmutableFlagsMask()
         {
             Dictionary<string, object> tx = new()
             {
@@ -243,15 +242,15 @@ namespace Xrpl.Tests.Models.Tests
             };
 
             tx["ImmutableFlags"] = 0u;
-            await Assert.ThrowsExactlyAsync<Xrpl.Client.Exceptions.ValidationException>(() => Validation.ValidateMPTokenIssuanceCreate(tx));
+            Assert.ThrowsExactly<Xrpl.Client.Exceptions.ValidationException>(() => Validation.ValidateMPTokenIssuanceCreate(tx));
             tx["ImmutableFlags"] = 0x100u; // outside tif* mask
-            await Assert.ThrowsExactlyAsync<Xrpl.Client.Exceptions.ValidationException>(() => Validation.ValidateMPTokenIssuanceCreate(tx));
+            Assert.ThrowsExactly<Xrpl.Client.Exceptions.ValidationException>(() => Validation.ValidateMPTokenIssuanceCreate(tx));
 
             tx["ImmutableFlags"] = (uint)(MPTokenIssuanceImmutableFlags.tifMPTMetadata | MPTokenIssuanceImmutableFlags.tifMPTTransferFee);
-            await Validation.ValidateMPTokenIssuanceCreate(tx);
+            Validation.ValidateMPTokenIssuanceCreate(tx);
 
             tx["DomainID"] = 12345;
-            await Assert.ThrowsExactlyAsync<Xrpl.Client.Exceptions.ValidationException>(() => Validation.ValidateMPTokenIssuanceCreate(tx));
+            Assert.ThrowsExactly<Xrpl.Client.Exceptions.ValidationException>(() => Validation.ValidateMPTokenIssuanceCreate(tx));
         }
 
         /// <summary>
@@ -417,7 +416,7 @@ namespace Xrpl.Tests.Models.Tests
         }
 
         [TestMethod]
-        public async Task TestUVaultCreate_ClosedEndedPreflightRules()
+        public void TestUVaultCreate_ClosedEndedPreflightRules()
         {
             // rippled VaultCreate::preflight rules for closed-ended vaults pinned client-side
             Dictionary<string, object> tx = new()
@@ -426,36 +425,36 @@ namespace Xrpl.Tests.Models.Tests
                 ["Account"] = Account1,
                 ["Asset"] = new Dictionary<string, object> { ["currency"] = "XRP" },
             };
-            await Validation.ValidateVaultCreate(tx);
+            Validation.ValidateVaultCreate(tx);
 
             // an unknown kind is temMALFORMED
             tx["VaultKind"] = 2u;
-            await Assert.ThrowsExactlyAsync<Xrpl.Client.Exceptions.ValidationException>(() => Validation.ValidateVaultCreate(tx));
+            Assert.ThrowsExactly<Xrpl.Client.Exceptions.ValidationException>(() => Validation.ValidateVaultCreate(tx));
 
             // the dates belong to closed-ended vaults only
             tx["VaultKind"] = (uint)Xrpl.Models.Ledger.VaultKind.OpenEnded;
             tx["SubscriptionDate"] = 800000000u;
-            await Assert.ThrowsExactlyAsync<Xrpl.Client.Exceptions.ValidationException>(() => Validation.ValidateVaultCreate(tx));
+            Assert.ThrowsExactly<Xrpl.Client.Exceptions.ValidationException>(() => Validation.ValidateVaultCreate(tx));
 
             tx.Remove("VaultKind");
-            await Assert.ThrowsExactlyAsync<Xrpl.Client.Exceptions.ValidationException>(() => Validation.ValidateVaultCreate(tx));
+            Assert.ThrowsExactly<Xrpl.Client.Exceptions.ValidationException>(() => Validation.ValidateVaultCreate(tx));
 
             // a closed-ended vault needs both dates
             tx["VaultKind"] = (uint)Xrpl.Models.Ledger.VaultKind.ClosedEnded;
-            await Assert.ThrowsExactlyAsync<Xrpl.Client.Exceptions.ValidationException>(() => Validation.ValidateVaultCreate(tx));
+            Assert.ThrowsExactly<Xrpl.Client.Exceptions.ValidationException>(() => Validation.ValidateVaultCreate(tx));
 
             // kMinInvestmentPeriod (180 s since rippled #8151) <= gap < kMaxInvestmentPeriod
             tx["RedemptionDate"] = 800000179u;
-            await Assert.ThrowsExactlyAsync<Xrpl.Client.Exceptions.ValidationException>(() => Validation.ValidateVaultCreate(tx));
+            Assert.ThrowsExactly<Xrpl.Client.Exceptions.ValidationException>(() => Validation.ValidateVaultCreate(tx));
 
             tx["RedemptionDate"] = 800000180u;
-            await Validation.ValidateVaultCreate(tx);
+            Validation.ValidateVaultCreate(tx);
 
             tx["RedemptionDate"] = 800000000u + 946708560u;
-            await Assert.ThrowsExactlyAsync<Xrpl.Client.Exceptions.ValidationException>(() => Validation.ValidateVaultCreate(tx));
+            Assert.ThrowsExactly<Xrpl.Client.Exceptions.ValidationException>(() => Validation.ValidateVaultCreate(tx));
 
             tx["RedemptionDate"] = 800000000u + 946708559u;
-            await Validation.ValidateVaultCreate(tx);
+            Validation.ValidateVaultCreate(tx);
         }
 
         [TestMethod]
@@ -568,7 +567,7 @@ namespace Xrpl.Tests.Models.Tests
         }
 
         [TestMethod]
-        public async Task TestUWithdraws_CredentialIDs_Validated()
+        public void TestUWithdraws_CredentialIDs_Validated()
         {
             Dictionary<string, object> tx = new()
             {
@@ -578,10 +577,10 @@ namespace Xrpl.Tests.Models.Tests
                 ["Amount"] = "1000000",
                 ["CredentialIDs"] = new List<object> { "not-a-hash" },
             };
-            await Assert.ThrowsExactlyAsync<Xrpl.Client.Exceptions.ValidationException>(() => Validation.ValidateVaultWithdraw(tx));
+            Assert.ThrowsExactly<Xrpl.Client.Exceptions.ValidationException>(() => Validation.ValidateVaultWithdraw(tx));
 
             tx["CredentialIDs"] = new List<object> { new string('A', 64) };
-            await Validation.ValidateVaultWithdraw(tx);
+            Validation.ValidateVaultWithdraw(tx);
 
             Dictionary<string, object> cover = new()
             {
@@ -591,10 +590,10 @@ namespace Xrpl.Tests.Models.Tests
                 ["Amount"] = "1000000",
                 ["CredentialIDs"] = new List<object> { "not-a-hash" },
             };
-            await Assert.ThrowsExactlyAsync<Xrpl.Client.Exceptions.ValidationException>(() => Validation.ValidateLoanBrokerCoverWithdraw(cover));
+            Assert.ThrowsExactly<Xrpl.Client.Exceptions.ValidationException>(() => Validation.ValidateLoanBrokerCoverWithdraw(cover));
 
             cover["CredentialIDs"] = new List<object> { new string('A', 64) };
-            await Validation.ValidateLoanBrokerCoverWithdraw(cover);
+            Validation.ValidateLoanBrokerCoverWithdraw(cover);
         }
     }
 }

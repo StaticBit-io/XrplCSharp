@@ -5,7 +5,6 @@
 using Microsoft.VisualStudio.TestTools.UnitTesting;
 
 using System.Collections.Generic;
-using System.Threading.Tasks;
 
 using Xrpl.Client.Exceptions;
 using Xrpl.Models.Transaction;
@@ -24,7 +23,7 @@ namespace XrplTests.Xrpl.Models
             "00090032B5F762798A53D543A014CAF8B297CFF8F2F937E844B17C9E00000003";
 
         [TestMethod]
-        public async Task TestVerify_Valid_NFTokenBurn()
+        public void TestVerify_Valid_NFTokenBurn()
         {
             var offer = new Dictionary<string, object>
             {
@@ -35,10 +34,10 @@ namespace XrplTests.Xrpl.Models
                 {"Sequence", 2470665u},
                 {"Flags", 2147483648u},
             };
-            await Validation.Validate(offer);
+            Validation.Validate(offer);
         }
         [TestMethod]
-        public async Task TestVerify_Invalid_missing_NFTokenID()
+        public void TestVerify_Invalid_missing_NFTokenID()
         {
             var offer = new Dictionary<string, object>
             {
@@ -48,7 +47,7 @@ namespace XrplTests.Xrpl.Models
                 {"Sequence", 2470665u},
                 {"Flags", 2147483648u},
             };
-            await Helper.ThrowsExceptionAsync<ValidationException>(() => Validation.Validate(offer), "NFTokenBurn: missing field NFTokenID");
+            Helper.ThrowsException<ValidationException>(() => Validation.Validate(offer), "NFTokenBurn: missing field NFTokenID");
         }
     }
 }

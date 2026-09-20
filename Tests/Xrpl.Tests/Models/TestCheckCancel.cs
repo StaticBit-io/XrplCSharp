@@ -5,7 +5,6 @@
 using Microsoft.VisualStudio.TestTools.UnitTesting;
 
 using System.Collections.Generic;
-using System.Threading.Tasks;
 
 using Xrpl.Client.Exceptions;
 using Xrpl.Models.Transaction;
@@ -17,7 +16,7 @@ namespace XrplTests.Xrpl.Models
     public class TestUCheckCancel
     {
         [TestMethod]
-        public async Task TestVerify_Valid_CheckCancel()
+        public void TestVerify_Valid_CheckCancel()
         {
             var tx = new Dictionary<string, object>
             {
@@ -25,11 +24,11 @@ namespace XrplTests.Xrpl.Models
                 {"Account", "rWYkbWkCeg8dP6rXALnjgZSjjLyih5NXm"},
                 {"CheckID", "49647F0D748DC3FE26BDACBC57F251AADEFFF391403EC9BF87C97F67E9977FB0"},
             };
-            await Validation.ValidateCheckCancel(tx);
-            await Validation.Validate(tx);
+            Validation.ValidateCheckCancel(tx);
+            Validation.Validate(tx);
         }
         [TestMethod]
-        public async Task TestVerify_InValid_CheckID()
+        public void TestVerify_InValid_CheckID()
         {
             var tx = new Dictionary<string, object>
             {
@@ -37,8 +36,8 @@ namespace XrplTests.Xrpl.Models
                 {"Account", "rWYkbWkCeg8dP6rXALnjgZSjjLyih5NXm" },
                 {"CheckID", 4964734566545678 }, //todo no check for CheckID size
             };
-            await Helper.ThrowsExceptionAsync<ValidationException>(() => Validation.ValidateCheckCancel(tx));
-            await Helper.ThrowsExceptionAsync<ValidationException>(() => Validation.Validate(tx));
+            Helper.ThrowsException<ValidationException>(() => Validation.ValidateCheckCancel(tx));
+            Helper.ThrowsException<ValidationException>(() => Validation.Validate(tx));
         }
     }
 

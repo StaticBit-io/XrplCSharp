@@ -1,5 +1,4 @@
 using System.Collections.Generic;
-using System.Threading.Tasks;
 
 using Xrpl.Client.Exceptions;
 
@@ -38,9 +37,9 @@ namespace Xrpl.Models.Transactions
         /// </summary>
         /// <param name="tx">A DIDDelete Transaction.</param>
         /// <exception cref="ValidationException">When the DIDDelete is malformed.</exception>
-        public static async Task ValidateDIDDelete(Dictionary<string, object> tx)
+        public static void ValidateDIDDelete(Dictionary<string, object> tx)
         {
-            await Common.ValidateBaseTransaction(tx);
+            Common.ValidateBaseTransaction(tx);
         }
     }
 }

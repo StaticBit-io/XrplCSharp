@@ -1,6 +1,5 @@
 using System.Collections.Generic;
 using System.Text.Json.Serialization;
-using System.Threading.Tasks;
 
 using Xrpl.Client.Exceptions;
 
@@ -285,43 +284,43 @@ namespace Xrpl.Models.Transactions
 
     public partial class Validation
     {
-        private static Task ValidateConfidentialCommon(Dictionary<string, object> tx, string txName)
+        private static void ValidateConfidentialCommon(Dictionary<string, object> tx, string txName)
         {
             if (!tx.TryGetValue("MPTokenIssuanceID", out var issuance) || issuance is not string)
                 throw new ValidationException($"{txName}: missing field MPTokenIssuanceID");
-            return Task.CompletedTask;
+            return;
         }
 
-        public static async Task ValidateConfidentialMPTConvert(Dictionary<string, object> tx)
+        public static void ValidateConfidentialMPTConvert(Dictionary<string, object> tx)
         {
-            await Common.ValidateBaseTransaction(tx);
-            await ValidateConfidentialCommon(tx, "ConfidentialMPTConvert");
+            Common.ValidateBaseTransaction(tx);
+            ValidateConfidentialCommon(tx, "ConfidentialMPTConvert");
         }
 
-        public static async Task ValidateConfidentialMPTMergeInbox(Dictionary<string, object> tx)
+        public static void ValidateConfidentialMPTMergeInbox(Dictionary<string, object> tx)
         {
-            await Common.ValidateBaseTransaction(tx);
-            await ValidateConfidentialCommon(tx, "ConfidentialMPTMergeInbox");
+            Common.ValidateBaseTransaction(tx);
+            ValidateConfidentialCommon(tx, "ConfidentialMPTMergeInbox");
         }
 
-        public static async Task ValidateConfidentialMPTConvertBack(Dictionary<string, object> tx)
+        public static void ValidateConfidentialMPTConvertBack(Dictionary<string, object> tx)
         {
-            await Common.ValidateBaseTransaction(tx);
-            await ValidateConfidentialCommon(tx, "ConfidentialMPTConvertBack");
+            Common.ValidateBaseTransaction(tx);
+            ValidateConfidentialCommon(tx, "ConfidentialMPTConvertBack");
         }
 
-        public static async Task ValidateConfidentialMPTSend(Dictionary<string, object> tx)
+        public static void ValidateConfidentialMPTSend(Dictionary<string, object> tx)
         {
-            await Common.ValidateBaseTransaction(tx);
-            await ValidateConfidentialCommon(tx, "ConfidentialMPTSend");
+            Common.ValidateBaseTransaction(tx);
+            ValidateConfidentialCommon(tx, "ConfidentialMPTSend");
             if (!tx.TryGetValue("Destination", out var dest) || dest is not string)
                 throw new ValidationException("ConfidentialMPTSend: missing field Destination");
         }
 
-        public static async Task ValidateConfidentialMPTClawback(Dictionary<string, object> tx)
+        public static void ValidateConfidentialMPTClawback(Dictionary<string, object> tx)
         {
-            await Common.ValidateBaseTransaction(tx);
-            await ValidateConfidentialCommon(tx, "ConfidentialMPTClawback");
+            Common.ValidateBaseTransaction(tx);
+            ValidateConfidentialCommon(tx, "ConfidentialMPTClawback");
             if (!tx.TryGetValue("Holder", out var holder) || holder is not string)
                 throw new ValidationException("ConfidentialMPTClawback: missing field Holder");
         }
