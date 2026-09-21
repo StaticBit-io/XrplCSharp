@@ -58,7 +58,7 @@ namespace XrplTests.Xrpl.ClientLib.Integration
 
         /// <summary>
         /// Local standalone rippled node - uses master account for funding.
-        /// Requires running: docker run -p 6006:6006 -it xrpllabsofficial/xrpld:1.12.0
+        /// Requires the stand from .ci-config/docker-compose.ci.yml (docker compose up -d --build).
         /// </summary>
         Standalone,
 

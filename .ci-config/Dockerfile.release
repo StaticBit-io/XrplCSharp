@@ -1,0 +1,35 @@
+FROM ubuntu:22.04
+
+RUN apt-get update \
+    && apt-get install -y --no-install-recommends curl ca-certificates \
+    && rm -rf /var/lib/apt/lists/*
+
+# The CI stand used to pull a prebuilt image from Docker Hub (xrpllabsofficial/xrpld). That
+# publisher is a third party and had not shipped 3.4.0 five days after the release, which is
+# how the stand stayed a release behind with nothing reporting it. Building from the XRP Ledger
+# Foundation packages instead removes the dependency: the stand tracks the release channel the
+# project itself publishes.
+#
+# Same key and host as Dockerfile.nightly; the channel is the only difference. Keep the two in
+# step - they are side by side on purpose.
+RUN install -m 0755 -d /etc/apt/keyrings \
+    && curl -fsSL https://packages.xrplf.org/xrplf.asc -o /etc/apt/keyrings/xrplf.asc
+
+# deb-stable carries production releases. Pinned so a stand raised today and one raised in a
+# month are the same binary, and so release-watch decides when to move rather than apt.
+ARG XRPLD_VERSION=3.4.0-1
+RUN echo "deb [signed-by=/etc/apt/keyrings/xrplf.asc] https://packages.xrplf.org/repository/deb-stable any main" > /etc/apt/sources.list.d/xrplf.list \
+    && apt-get update \
+    && apt-get install -y --no-install-recommends --allow-downgrades "xrpld=${XRPLD_VERSION}" \
+    && rm -rf /var/lib/apt/lists/*
+
+# The xrpld deb package may already create the service user; keep this idempotent
+RUN id -u xrpld >/dev/null 2>&1 || useradd --system --home-dir /var/lib/rippled --create-home --shell /usr/sbin/nologin xrpld; \
+    mkdir -p /var/lib/rippled/db \
+    && chown -R xrpld:xrpld /var/lib/rippled
+
+EXPOSE 5005 5006 6006 6007
+
+USER xrpld
+ENTRYPOINT ["/bin/sh", "-c", "exec \"$(command -v xrpld || command -v rippled)\" --conf /config/rippled.cfg \"$@\"", "--"]
+CMD ["-a", "--start"]

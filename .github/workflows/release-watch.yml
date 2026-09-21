@@ -1,7 +1,7 @@
 name: Release Watch
 
 # Weekly check: is the CI standalone stand on the latest stable rippled
-# release? When a newer stable release has a published docker image, the
+# release? When a newer stable release is published to the apt channel, the
 # workflow regenerates the stand config for it (.ci-config/generate-amendments.sh),
 # smoke-tests the new stand, and opens a bump PR.
 #
@@ -39,7 +39,11 @@ concurrency:
 
 env:
   UPSTREAM: XRPLF/rippled
-  IMAGE: xrpllabsofficial/xrpld
+  # The stand builds from the XRP Ledger Foundation packages rather than a third-party
+  # Docker Hub image: that publisher had not shipped 3.4.0 five days after the release,
+  # so the stand sat a release behind with only a workflow notice to show for it.
+  PACKAGES_URL: https://packages.xrplf.org/repository/deb-stable/dists/any/main/binary-amd64/Packages
+  DOCKERFILE: .ci-config/Dockerfile.release
   COMPOSE: .ci-config/docker-compose.ci.yml
   ISSUE_TITLE: 'Release watch: rippled stable'
   ISSUE_LABEL: release-watch
@@ -75,9 +79,9 @@ jobs:
           latest=$(gh api "repos/$UPSTREAM/releases/latest" --jq .tag_name)
           # Stable releases are plain X.Y.Z; anything else here is unexpected.
           echo "$latest" | grep -Eq '^[0-9]+\.[0-9]+\.[0-9]+$'
-          pinned=$(sed -n -E "s#.*image: *${IMAGE}:([0-9.]+).*#\1#p" "$COMPOSE")
+          pinned=$(sed -n -E 's/^ARG XRPLD_VERSION=([0-9.]+)-[0-9]+$/\1/p' "$DOCKERFILE")
           if [ -z "$pinned" ]; then
-            echo "::error::could not parse the pinned $IMAGE tag from $COMPOSE"
+            echo "::error::could not parse ARG XRPLD_VERSION from $DOCKERFILE"
             exit 1
           fi
           echo "latest=$latest" >> "$GITHUB_OUTPUT"
@@ -87,9 +91,13 @@ jobs:
             echo "bump=false" >> "$GITHUB_OUTPUT"
             exit 0
           fi
-          # Actionable only once the docker image for the release exists.
-          if ! curl -sf --max-time 15 "https://hub.docker.com/v2/repositories/$IMAGE/tags/$latest" > /dev/null; then
-            echo "::notice::rippled $latest is released but $IMAGE:$latest is not on Docker Hub yet; retrying next run."
+          # Actionable only once the release is in the apt channel. The deb carries a packaging
+          # revision the git tag does not (3.4.0 -> 3.4.0-1), so the channel is asked for it.
+          deb_version=$(curl -sf --max-time 30 "$PACKAGES_URL" \
+            | awk '/^Package: xrpld$/ { p = 1; next } /^Version: / { if (p) print $2; p = 0 }' \
+            | grep -E "^${latest}-[0-9]+$" | LC_ALL=C sort -V | tail -1) || true
+          if [ -z "$deb_version" ]; then
+            echo "::notice::rippled $latest is released but xrpld=$latest is not in deb-stable yet; retrying next run."
             echo "bump=false" >> "$GITHUB_OUTPUT"
             exit 0
           fi
@@ -99,6 +107,7 @@ jobs:
             echo "bump=false" >> "$GITHUB_OUTPUT"
             exit 0
           fi
+          echo "deb_version=$deb_version" >> "$GITHUB_OUTPUT"
           echo "bump=true" >> "$GITHUB_OUTPUT"
 
       - name: Regenerate stand config
@@ -108,7 +117,10 @@ jobs:
           set -euo pipefail
           ver="${{ steps.detect.outputs.latest }}"
           old_names=$(sed -n -E 's/^[0-9A-F]{64} (.+)$/\1/p' .ci-config/rippled.cfg | LC_ALL=C sort)
-          sed -i -E "s#(image: *${IMAGE}:)[0-9.]+#\1${ver}#" "$COMPOSE"
+          deb="${{ steps.detect.outputs.deb_version }}"
+          sed -i -E "s#^ARG XRPLD_VERSION=.+$#ARG XRPLD_VERSION=${deb}#" "$DOCKERFILE"
+          written=$(sed -n -E 's/^ARG XRPLD_VERSION=(.+)$/\1/p' "$DOCKERFILE")
+          [ "$written" = "$deb" ] || { echo "::error::rewriting the pin failed (file holds '$written')"; exit 1; }
           bash .ci-config/generate-amendments.sh "$ver"
           new_names=$(sed -n -E 's/^[0-9A-F]{64} (.+)$/\1/p' .ci-config/rippled.cfg | LC_ALL=C sort)
           {
@@ -127,7 +139,7 @@ jobs:
         continue-on-error: true
         run: |
           set -euo pipefail
-          docker compose -f "$COMPOSE" up -d
+          docker compose -f "$COMPOSE" up -d --build
           # AMM amendment id — same sentinel as the main CI readiness wait.
           SENTINEL="8CC0774A3BF66D1D22E76BBDA8E8A232E6B6313834301B3B23E8601196AE6455"
           ok=false
@@ -152,18 +164,19 @@ jobs:
           set -euo pipefail
           ver="${{ steps.detect.outputs.latest }}"
           pinned="${{ steps.detect.outputs.pinned }}"
+          deb_pub="${{ steps.detect.outputs.deb_version }}"
           branch="release-watch/$ver"
           git config user.name "${{ github.actor }}"
           git config user.email "${{ github.actor }}@users.noreply.github.com"
           git checkout -b "$branch"
-          git add "$COMPOSE" .ci-config/rippled.cfg
+          git add "$DOCKERFILE" .ci-config/rippled.cfg
           git commit -m "ci: bump standalone stand to rippled $ver"
           git push -u origin "$branch" --force
           body_file=$(mktemp)
           {
             printf '## Summary\n\n'
             printf 'Automated bump by the release-watch workflow: rippled stable %s -> %s.\n\n' "$pinned" "$ver"
-            printf -- '- `%s`: image tag bump\n' "$COMPOSE"
+            printf -- '- `%s`: pin bumped to the deb published for this release\n' "$DOCKERFILE"
             printf -- '- `.ci-config/rippled.cfg`: `[features]`/`[amendments]` regenerated from the `%s` features.macro via `generate-amendments.sh`\n\n' "$ver"
             printf '## Amendment changes\n\n'
             printf 'Added:\n```\n%s\n```\n\n' "${{ steps.regen.outputs.added }}"
@@ -206,8 +219,8 @@ jobs:
             echo "Notification for $ver already posted."
             exit 0
           fi
-          comment=$(printf '%s\nrippled stable **%s** is out (stand is pinned to %s), docker image `%s:%s` is published, but %s.\n\nManual path: bump the tag in `%s`, run `.ci-config/generate-amendments.sh %s`, verify the stand, open a PR.\nRelease notes: https://github.com/%s/releases/tag/%s\n' \
-            "$marker" "$ver" "$pinned" "$IMAGE" "$ver" "$reason" "$COMPOSE" "$ver" "$UPSTREAM" "$ver")
+          comment=$(printf '%s\nrippled stable **%s** is out (stand is pinned to %s) and `xrpld=%s` is in deb-stable, but %s.\n\nManual path: set `ARG XRPLD_VERSION=%s` in `%s`, run `.ci-config/generate-amendments.sh %s`, verify the stand, open a PR.\nRelease notes: https://github.com/%s/releases/tag/%s\n' \
+            "$marker" "$ver" "$pinned" "$deb_pub" "$reason" "$deb_pub" "$DOCKERFILE" "$ver" "$UPSTREAM" "$ver")
           gh issue comment "$number" --repo "$REPO" --body "$comment"
 
       - name: Notify on tracking issue (workflow failure)
