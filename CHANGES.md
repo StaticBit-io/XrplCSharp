@@ -1,6 +1,6 @@
 # Changes
 
-## 11.6.0.0 14/09/2026
+## 11.6.0.0 21/09/2026
 
 * **The protocol schema follows rippled develop at `e3c8996e`, the 3.4.0-rc1 build the nightly stand is pinned to** (#182 bumps the pin). `definitions.json` had been synced for 3.3.0 and was eight fields behind develop, which definitions-watch had reported as node-only for three weeks. The nightly-pin bump that would have listed them opened with an empty "definitions.json vs the new build" section: the step inherits `bash -e` from the runner, and the diff exits 1 whenever it finds drift, so errexit ended the step at the assignment - before the report was echoed or recorded - in the one case the step exists for. Fixed alongside.
   * **closed-ended vaults** (rippled #7921, LendingProtocolV1_1): `VaultCreate` and `LOVault` carry `VaultKind`, `SubscriptionDate` and `RedemptionDate`, and the `VaultKind` enum names the two kinds. `ValidateVaultCreate` pins rippled's preflight: the dates only on a closed-ended vault, both of them, with the redemption at least three minutes and less than thirty years after the subscription (rippled #8151 raised the floor from one minute; caught by running the closed-ended flow on the nightly stand). Deposits are accepted in the subscription phase only, withdrawals in every phase but investment
