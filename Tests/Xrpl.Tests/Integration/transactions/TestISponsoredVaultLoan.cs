@@ -12,6 +12,7 @@ using Xrpl.Client.Exceptions;
 using Xrpl.Client.Json;
 using Xrpl.Models;
 using Xrpl.Models.Common;
+using Xrpl.Models.Ledger;
 using Xrpl.Models.Methods;
 using Xrpl.Models.Transactions;
 using Xrpl.Sugar;
@@ -56,12 +57,15 @@ public class TestISponsoredVaultLoan : TestILoanBase
     }
 
     [TestInitialize]
-    public void CheckSponsorAmendment()
+    public async Task CheckSponsorAmendment()
     {
         if (!sponsorAmendmentActive)
         {
             Assert.Inconclusive("Sponsor amendment (XLS-68) is not enabled on the test node.");
         }
+
+        await AmendmentGuard.RequireRoleSignaturesAsync(client);
+        
     }
 
     [ClassCleanup]
@@ -108,6 +112,53 @@ public class TestISponsoredVaultLoan : TestILoanBase
         Assert.IsTrue(res.Meta?.TransactionResult is "tesSUCCESS",
             $"sponsored {tx.TransactionType} must validate with tesSUCCESS, got {res.Meta?.TransactionResult}");
         return res;
+    }
+
+    /// <summary>
+    /// Submits a loan transaction whose acceptance is gated on the payment being late, turning a
+    /// refusal into evidence instead of a bare result code.
+    /// </summary>
+    /// <remarks>
+    /// rippled's gate is <c>isPaymentLate</c>: <c>parentCloseTime() &gt; NextPaymentDueDate</c>,
+    /// strictly, evaluated on the ledger the transaction lands in - not on the validated ledger the
+    /// wait polls. A <c>tecTOO_SOON</c> here says those two disagreed, and which side moved cannot be
+    /// told after the fact, so both numbers are captured at the attempt and re-read after it.
+    /// <para>
+    /// Seen once against devnet and not reproduced on a rerun of the same test. A rerun passing is
+    /// not a diagnosis, so rather than widening the wait until the symptom stops - which would make
+    /// the test pass for a reason nobody can name - the next occurrence is made to carry its own
+    /// explanation.
+    /// </para>
+    /// </remarks>
+    private static async Task<TransactionSummary> SubmitLateGatedAsync<T>(
+        T tx, XrplWallet sponsee, XrplWallet sponsor, string loanId)
+        where T : TransactionRequest
+    {
+        DateTime closeBefore = await IntegrationTestConfig.ValidatedCloseTimeAsync(client);
+        DateTime? dueBefore = await ReadNextPaymentDueDateAsync(loanId);
+
+        try
+        {
+            return await SubmitSponsoredAsync(tx, sponsee, sponsor);
+        }
+        catch (Exception refusal)
+        {
+            DateTime closeAfter = await IntegrationTestConfig.ValidatedCloseTimeAsync(client);
+            DateTime? dueAfter = await ReadNextPaymentDueDateAsync(loanId);
+
+            throw new AssertFailedException(
+                $"{tx.TransactionType} was refused while the loan was expected to be late. " +
+                $"At the attempt: validated close {closeBefore:O}, NextPaymentDueDate {dueBefore:O}. " +
+                $"After it: validated close {closeAfter:O}, NextPaymentDueDate {dueAfter:O}. " +
+                "The gate is parentCloseTime > NextPaymentDueDate, strictly.",
+                refusal);
+        }
+    }
+
+    private static async Task<DateTime?> ReadNextPaymentDueDateAsync(string loanId)
+    {
+        LedgerEntryResponse entry = await client.LedgerEntry(new LedgerEntryRequest { Index = loanId }).Typed();
+        return (entry?.Node as LOLoan)?.NextPaymentDueDate;
     }
 
     /// <summary>
@@ -336,11 +387,10 @@ public class TestISponsoredVaultLoan : TestILoanBase
         }, issuer, "issue tokens to the broker");
 
         TransactionSummary vaultResult = await client.SubmitAndWait(
-            await client.Autofill(new VaultCreate
-            {
-                Account = broker.ClassicAddress,
-                Asset = new IssuedCurrency { Currency = CurrencyCode, Issuer = issuer.ClassicAddress },
-            }), broker, true);
+            await client.Autofill(await BuildBrokerVaultAsync(
+                client,
+                broker.ClassicAddress,
+                new IssuedCurrency { Currency = CurrencyCode, Issuer = issuer.ClassicAddress })), broker, true);
         ValidateResult(vaultResult);
         string vaultId = GetCreatedObjectId(vaultResult, LedgerEntryType.Vault);
         Assert.IsNotNull(vaultId, "the VaultCreate must report the new Vault");
@@ -449,20 +499,31 @@ public class TestISponsoredVaultLoan : TestILoanBase
         await OpenSponsorshipAsync(sponsor, borrower);
         await OpenSponsorshipAsync(sponsor, broker);
 
-        await SubmitSponsoredAsync(new LoanManage
+        // Since fixCleanup3_4_0 a loan may only be impaired once a payment is actually late
+        // ("Cannot impair a loan that is not late", LoanManage::preclaim), which the default
+        // schedule puts one payment interval after the loan starts.
+        LedgerEntryResponse loanEntry = await client.LedgerEntry(new LedgerEntryRequest { Index = loanId }).Typed();
+        DateTime paymentDue = (loanEntry?.Node as LOLoan)?.NextPaymentDueDate
+            ?? throw new RippleException("the Loan carries no NextPaymentDueDate");
+        await IntegrationTestConfig.WaitForCloseTimeAsync(client, paymentDue, nodeType);
+
+        await SubmitLateGatedAsync(new LoanManage
         {
             Account = broker.ClassicAddress,
             LoanID = loanId,
             Flags = LoanManageFlags.tfLoanImpair,
-        }, broker, sponsor);
+        }, broker, sponsor, loanId);
 
-        // The full principal: anything less is tecINSUFFICIENT_PAYMENT
-        await SubmitSponsoredAsync(new LoanPay
+        // The full principal: anything less is tecINSUFFICIENT_PAYMENT. The flag is not optional
+        // here: the wait above made the payment late on purpose, and rippled refuses an unflagged
+        // payment on an overdue loan with tecEXPIRED ("Use the tfLoanLatePayment transaction flag").
+        await SubmitLateGatedAsync(new LoanPay
         {
             Account = borrower.ClassicAddress,
             LoanID = loanId,
             Amount = new Currency { Value = "10000000", CurrencyCode = "XRP" },
-        }, borrower, sponsor);
+            Flags = LoanPayFlags.tfLoanLatePayment,
+        }, borrower, sponsor, loanId);
 
         await SubmitSponsoredAsync(new LoanDelete
         {

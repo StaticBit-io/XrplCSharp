@@ -121,6 +121,33 @@ namespace Xrpl.Models.Ledger
         public string? AuditorEncryptedBalance { get; init; }
 
         /// <summary>
+        /// ConfidentialMPTKeyRotation: the issuance's <c>IssuerKeyEpoch</c> under which
+        /// <see cref="IssuerEncryptedBalance"/> was produced. rippled copies the issuance epoch here
+        /// when it writes the mirror, and treats the mirror as current only while the two match - so a
+        /// key rotation on the issuance leaves this behind and marks the mirror stale.
+        /// </summary>
+        /// <remarks>
+        /// A generation counter, not a timestamp: rippled increments the issuance's epoch by one on
+        /// each rotation and refuses a rotation that would wrap it, because the two sides are compared
+        /// for equality and a wrap would let a stale mirror pass as current. Zero - which arrives as
+        /// an absent field - is the sentinel for "never rotated". Hence <c>uint</c> and no Ripple-time
+        /// converter, unlike the genuinely dated UInt32 fields elsewhere in the protocol.
+        /// </remarks>
+        [JsonPropertyName("IssuerKeyMirrorEpoch")]
+        public uint? IssuerKeyMirrorEpoch { get; init; }
+
+        /// <summary>
+        /// ConfidentialMPTKeyRotation: the issuance's <c>AuditorKeyEpoch</c> under which
+        /// <see cref="AuditorEncryptedBalance"/> was produced. Written only when that balance is
+        /// present, and compared the same way as <see cref="IssuerKeyMirrorEpoch"/>.
+        /// </summary>
+        /// <remarks>
+        /// A generation counter, not a timestamp - see <see cref="IssuerKeyMirrorEpoch"/>.
+        /// </remarks>
+        [JsonPropertyName("AuditorKeyMirrorEpoch")]
+        public uint? AuditorKeyMirrorEpoch { get; init; }
+
+        /// <summary>
         /// ConfidentialTransfer: the holder's ElGamal encryption public key (hex blob).
         /// </summary>
         [JsonPropertyName("HolderEncryptionKey")]
