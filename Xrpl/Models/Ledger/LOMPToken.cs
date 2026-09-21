@@ -121,6 +121,23 @@ namespace Xrpl.Models.Ledger
         public string? AuditorEncryptedBalance { get; init; }
 
         /// <summary>
+        /// ConfidentialMPTKeyRotation: the issuance's <c>IssuerKeyEpoch</c> under which
+        /// <see cref="IssuerEncryptedBalance"/> was produced. rippled copies the issuance epoch here
+        /// when it writes the mirror, and treats the mirror as current only while the two match - so a
+        /// key rotation on the issuance leaves this behind and marks the mirror stale.
+        /// </summary>
+        [JsonPropertyName("IssuerKeyMirrorEpoch")]
+        public uint? IssuerKeyMirrorEpoch { get; init; }
+
+        /// <summary>
+        /// ConfidentialMPTKeyRotation: the issuance's <c>AuditorKeyEpoch</c> under which
+        /// <see cref="AuditorEncryptedBalance"/> was produced. Written only when that balance is
+        /// present, and compared the same way as <see cref="IssuerKeyMirrorEpoch"/>.
+        /// </summary>
+        [JsonPropertyName("AuditorKeyMirrorEpoch")]
+        public uint? AuditorKeyMirrorEpoch { get; init; }
+
+        /// <summary>
         /// ConfidentialTransfer: the holder's ElGamal encryption public key (hex blob).
         /// </summary>
         [JsonPropertyName("HolderEncryptionKey")]

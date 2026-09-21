@@ -1,11 +1,11 @@
 https://github.com/XRPLF/rippled/blob/develop/include/xrpl/protocol/detail/ledger_entries.macro
-sha  e3c8996e44921fe3b4e02c65cb41948848bcc7c5
-date 2026-09-05T00:06:14Z
+sha  f6b51f0b8b925757376cb8d6e3b7e59da5788d4b
+date 2026-09-18T18:31:07Z
 
 ledger_entries.macro is vendored byte-identical to the ref above so that it can be
 re-verified with a plain diff:
 
-  curl -sSL https://raw.githubusercontent.com/XRPLF/rippled/e3c8996e44921fe3b4e02c65cb41948848bcc7c5/include/xrpl/protocol/detail/ledger_entries.macro \
+  curl -sSL https://raw.githubusercontent.com/XRPLF/rippled/f6b51f0b8b925757376cb8d6e3b7e59da5788d4b/include/xrpl/protocol/detail/ledger_entries.macro \
     | diff - Tests/Xrpl.Tests/Fixtures/ledger_entries.macro
 
 This is the only place the protocol states which fields belong to which ledger
@@ -16,9 +16,12 @@ Pinned to a develop commit rather than to a release tag — unlike LedgerFormats
 which is pinned to the 3.3.0 tag. The models track develop for fields: sfLEVersion
 (Vault) existed only on develop before 3.3.0, and the closed-ended vault fields
 (VaultKind, SubscriptionDate, RedemptionDate) and the confidential MPT key epochs
-(IssuerKeyEpoch, AuditorKeyEpoch) are in the same position now. The sha is the
-commit the nightly stand is pinned to (.ci-config/Dockerfile.nightly), so the
-fixture and the stand describe the same build.
+(IssuerKeyEpoch, AuditorKeyEpoch) are in the same position now. The sha runs ahead of the
+nightly stand (.ci-config/Dockerfile.nightly, 3.4.0-rc1 at e3c8996e): this file is
+read by a unit test, not by the stand, so it tracks what rippled declares rather
+than what the stand can execute. The Smart Escrow entries it carries (Escrow
+Bytecode/Data, FeeSettings gas settings) belong to an amendment no node supports
+yet; the models describe them, nothing exercises them.
 
 Do not hand-edit it. When protocol-watch reports a change to this file upstream,
 replace it wholesale, update the sha above, and let TestULedgerEntryFieldsConformance

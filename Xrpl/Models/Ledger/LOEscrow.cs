@@ -119,6 +119,22 @@ namespace Xrpl.Models.Ledger
         public uint? Flags { get; set; }
 
     
+        /// <summary>
+        /// SmartEscrow: compiled WebAssembly whose <c>escrow_finish</c> export decides whether this
+        /// escrow may be finished (hex blob). Present only on an escrow created with one, and an
+        /// escrow that carries it must also carry <see cref="CancelAfter"/>, so buggy code cannot
+        /// strand the funds.
+        /// </summary>
+        [JsonPropertyName("Bytecode")]
+        public string? Bytecode { get; set; }
+
+        /// <summary>
+        /// SmartEscrow: state the <see cref="Bytecode"/> may read and write (hex blob). The only
+        /// ledger state that code is allowed to modify.
+        /// </summary>
+        [JsonPropertyName("Data")]
+        public string? Data { get; set; }
+
         /// <summary>Sequence (or ticket) of the EscrowCreate transaction that created this escrow.</summary>
         [JsonPropertyName("Sequence")]
         public uint? Sequence { get; set; }
