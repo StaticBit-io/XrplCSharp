@@ -9,10 +9,16 @@ name: Nightly Pin Watch
 # 3.3.0 renaming sfMutableFlags to sfImmutableFlags and moving SponsorshipSet
 # onto delta fields reached the CI bump PR unnoticed.
 #
-# The pin cannot simply be dropped: the nightly apt channel switched its build
-# timestamp from 14 to 12 digits mid-2026, so Debian version ordering ranks old
-# builds above new ones and an unpinned install gets a stale binary. Hence a
-# workflow that moves the pin deliberately instead.
+# The pin cannot simply be dropped: the amendment lists in rippled.batchv11.cfg
+# have to be generated from the exact commit the pinned binary was built from,
+# because the binary rejects feature names it does not know. Hence a workflow
+# that moves the pin and the config together instead.
+#
+# The channel is deb-develop at packages.xrplf.org: packaging moved to the XRP
+# Ledger Foundation in August 2026. Watch what this monitor cannot see - the old
+# repos.ripple.com kept answering with a valid index after it stopped receiving
+# builds, so this workflow reported the pin healthy against a frozen snapshot.
+# A reachable index is not a live one.
 #
 # Bumping is deliberately NOT done every week: nightly publishes several builds
 # a day and a weekly PR would be noise. MAX_PIN_AGE_DAYS is the staleness the

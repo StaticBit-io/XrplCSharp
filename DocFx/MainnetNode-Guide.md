@@ -32,34 +32,56 @@ Disk usage is driven entirely by history retention: mainnet produces a ledger ev
 
 ## Installation (Ubuntu / Debian)
 
-Packages are published to the official apt repository (channel `stable`):
+Packages are published to the XRP Ledger Foundation apt repository (channel `stable`).
+
+> The server binary was renamed from `rippled` to `xrpld`, and packaging moved from
+> `repos.ripple.com` to `packages.xrplf.org` in August 2026. The old repository still answers
+> but stopped at 3.3.0, so a node installed from it silently stays a release behind. A host
+> set up the old way needs the source list replaced, not just an `apt upgrade`.
+> `/usr/local/bin/rippled` remains as a symlink to the new binary.
 
 ```bash
+# prerequisites: curl fetches the key, gnupg shows it, ca-certificates makes the TLS work
+sudo apt update && sudo apt install -y ca-certificates curl gnupg
+
 # repository key
-sudo install -m 0755 -d /usr/share/keyrings
-curl -fsSL https://repos.ripple.com/repos/api/gpg/key/public | \
-    sudo gpg --dearmor -o /usr/share/keyrings/ripple-key.gpg
+sudo install -m 0755 -d /etc/apt/keyrings
+sudo curl -fsS https://packages.xrplf.org/xrplf.asc -o /etc/apt/keyrings/xrplf.asc
 
-# repository — codename is taken from your OS release automatically
-echo "deb [signed-by=/usr/share/keyrings/ripple-key.gpg] https://repos.ripple.com/repos/rippled-deb $(lsb_release -cs) stable" | \
-    sudo tee /etc/apt/sources.list.d/ripple.list
+# check it before trusting it: a key added unverified defeats the point of signing
+gpg --show-keys /etc/apt/keyrings/xrplf.asc
+```
 
-sudo apt update && sudo apt install -y rippled
+The fingerprint must read:
+
+```text
+pub   rsa4096 2026-08-18 [SC]
+      B655 4167 4122 1F78 0FBC  FBC9 AA84 D41A 11D2 9FA9
+```
+
+Do not continue if it differs.
+
+```bash
+# repository — one suite, "any main", for every distribution
+echo "deb [signed-by=/etc/apt/keyrings/xrplf.asc] https://packages.xrplf.org/repository/deb-stable any main" | \
+    sudo tee /etc/apt/sources.list.d/xrplf.list
+
+sudo apt update && sudo apt -y install xrpld
 ```
 
 The package installs:
 
 | Path | Purpose |
 |------|---------|
-| `/opt/ripple/bin/rippled` | binary |
-| `/etc/opt/ripple/rippled.cfg` | main config |
-| `/etc/opt/ripple/validators.txt` | UNL (trusted validator list) source |
-| `/lib/systemd/system/rippled.service` | systemd unit |
-| `/var/lib/rippled/` | databases (point this at the NVMe volume) |
+| `/usr/bin/xrpld` | binary |
+| `/etc/xrpld/xrpld.cfg` | main config |
+| `/etc/xrpld/validators.txt` | UNL (trusted validator list) source |
+| `/usr/lib/systemd/system/xrpld.service` | systemd unit |
+| `/var/lib/xrpld/` | databases (point this at the NVMe volume) |
 
 ## Configuration
 
-Edit `/etc/opt/ripple/rippled.cfg`. A production-sane skeleton for an application node:
+Edit `/etc/xrpld/xrpld.cfg`. A production-sane skeleton for an application node:
 
 ```ini
 [server]
@@ -101,18 +123,18 @@ huge                     # medium for 32 GB RAM, huge for 64 GB+
 
 [node_db]
 type = NuDB              # NuDB for production nodes (append-only, SSD-friendly)
-path = /var/lib/rippled/db/nudb
+path = /var/lib/xrpld/db/nudb
 online_delete = 512000   # keep ~512k ledgers (~3-4 weeks); minimum 256
 advisory_delete = 0
 
 [database_path]
-/var/lib/rippled/db
+/var/lib/xrpld/db
 
 [ledger_history]
 256                      # how many ledgers to backfill on start; <= online_delete
 
 [debug_logfile]
-/var/log/rippled/debug.log
+/var/log/xrpld/debug.log
 
 [sntp_servers]
 time.windows.com
@@ -138,11 +160,11 @@ Key points:
 ## Running under systemd
 
 ```bash
-sudo systemctl enable --now rippled
-sudo systemctl status rippled
+sudo systemctl enable --now xrpld
+sudo systemctl status xrpld
 
 # logs
-journalctl -u rippled -f
+journalctl -u xrpld -f
 ```
 
 First start on mainnet: the node fetches the latest validated ledger and backfills `ledger_history`. Expect **10–30 minutes** to reach `"server_state": "full"` (longer on modest hardware).
@@ -150,7 +172,7 @@ First start on mainnet: the node fetches the latest validated ledger and backfil
 ### Health check
 
 ```bash
-/opt/ripple/bin/rippled server_info | jq '.result.info | {build_version, server_state, complete_ledgers, peers, load_factor, amendment_blocked}'
+/usr/bin/xrpld server_info | jq '.result.info | {build_version, server_state, complete_ledgers, peers, load_factor, amendment_blocked}'
 ```
 
 | Field | Healthy value |
@@ -174,14 +196,14 @@ Upgrade procedure (apt):
 
 ```bash
 sudo apt update
-sudo apt install --only-upgrade rippled
-sudo systemctl restart rippled
-watch -n 5 "/opt/ripple/bin/rippled server_info | jq -r '.result.info.server_state'"
+sudo apt install --only-upgrade xrpld
+sudo systemctl restart xrpld
+watch -n 5 "/usr/bin/xrpld server_info | jq -r '.result.info.server_state'"
 ```
 
-Downtime is minutes: after a restart the node re-syncs to the current ledger quickly (it does not replay history). Config files are not overwritten by upgrades; compare with the shipped example after major versions (`/etc/opt/ripple/rippled.cfg.dpkg-dist` if present).
+Downtime is minutes: after a restart the node re-syncs to the current ledger quickly (it does not replay history). Config files are not overwritten by upgrades; compare with the shipped example after major versions (`/etc/xrpld/xrpld.cfg.dpkg-dist` if present).
 
-To pin against surprise major upgrades, use `apt-mark hold rippled` and upgrade deliberately.
+To pin against surprise major upgrades, use `apt-mark hold xrpld` and upgrade deliberately.
 
 ## Connecting XrplCSharp
 
@@ -214,4 +236,4 @@ Recommendations for production use with this SDK:
 | Disk keeps growing | `online_delete` not set | Set `online_delete` in `[node_db]` and restart |
 | `noCurrent` / `noNetwork` errors via API | Node not synced yet or lost quorum view | Wait for `full`; check peers and clock |
 | High `load_factor` on your requests | Public port under-provisioned or abusive clients | Rate-limit at nginx; scale `node_size`/hardware |
-| Crash loop after config edit | Syntax error or unknown section for this version | `journalctl -u rippled -n 50`; validate against the shipped example config |
+| Crash loop after config edit | Syntax error or unknown section for this version | `journalctl -u xrpld -n 50`; validate against the shipped example config |

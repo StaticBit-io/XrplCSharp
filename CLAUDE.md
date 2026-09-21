@@ -61,11 +61,12 @@ XrplCSharp/
 ├── docs/                            # Generated HTML documentation
 │
 ├── .ci-config/
-│   ├── docker-compose.ci.yml       # Docker Compose: rippled standalone + ledger-acceptor (release image)
+│   ├── docker-compose.ci.yml       # Docker Compose: xrpld standalone + ledger-acceptor (built from Dockerfile.release)
 │   ├── rippled.cfg                 # rippled configuration for CI ([features]/[amendments] are generated)
 │   ├── generate-amendments.sh      # Regenerates rippled.cfg [features]/[amendments] from a rippled tag's features.macro
 │   ├── docker-compose.batchv11.yml # Nightly-develop stand for unreleased amendments (BatchV1_1, ...)
-│   ├── Dockerfile.nightly          # xrpld nightly image from repos.ripple.com (version pinned)
+│   ├── Dockerfile.release          # xrpld stable image from packages.xrplf.org (version pinned)
+│   ├── Dockerfile.nightly          # xrpld develop image from packages.xrplf.org (version pinned)
 │   ├── rippled.batchv11.cfg        # Config with [amendments] genesis up-votes for the nightly stand
 │   └── validators.txt              # Validator config for CI
 │
@@ -159,9 +160,11 @@ The Docker setup exposes:
 
 The `ledger-acceptor` container calls `ledger_accept` every 4 seconds to advance the standalone ledger.
 
+Both stands build their own image from the XRP Ledger Foundation apt repository rather than pulling a prebuilt one. The CI stand used `xrpllabsofficial/xrpld` from Docker Hub until September 2026, when that third-party publisher had still not shipped 3.4.0 five days after the release and the stand sat a release behind with only a workflow notice to show for it. Building from `deb-stable` removes the dependency; `Dockerfile.release` and `Dockerfile.nightly` differ only in the channel and are kept side by side on purpose.
+
 ### Integration Tests for Unreleased Amendments (nightly stand)
 
-Some amendments (e.g. `BatchV1_1`, `PermissionDelegationV1_1`) exist only on the rippled `develop` branch and are absent from the release image used by CI. A second stand runs the nightly `xrpld` build with those amendments enabled at genesis:
+Some amendments exist only on the rippled `develop` branch and are absent from the release build used by CI. A second stand runs the nightly `xrpld` build with those amendments enabled at genesis:
 
 ```bash
 # Uses the same ports as the CI stand — stop it first
@@ -177,7 +180,7 @@ The node under test is selected through the environment, not in code: `XRPL_TEST
 Amendment-dependent test classes use `Tests/Xrpl.Tests/Integration/AmendmentGuard.cs`: `ClassInitialize` checks the Amendments ledger object and marks tests inconclusive (skipped, exit 0) when the amendment is not active — so these tests are safe on the CI stand and run for real on the nightly stand. To gate a new test class, add the amendment id constant to `AmendmentGuard` and call `Assert.Inconclusive` from `TestInitialize` when inactive.
 
 Nightly stand specifics (see comments in `Dockerfile.nightly` / `rippled.batchv11.cfg`):
-- rippled was renamed to **xrpld** on `develop`; the nightly apt channel publishes the `xrpld` package. The version must be **pinned**: the build-timestamp format shrank from 14 to 12 digits in mid-2026, so Debian version ordering ranks older builds above newer ones. To bump, run `.ci-config/bump-nightly-pin.sh` (`--check` reports without changing anything): it picks the newest `xrpld` build from the `jammy nightly` Packages index at repos.ripple.com, rewrites `ARG XRPLD_VERSION` and regenerates the nightly amendment lists from the develop commit encoded in that version string. The ref must match the pinned build — a newer ref can emit feature names unknown to the binary, which rejects them at startup — which is why the script derives it from the version rather than taking it as an argument. `nightly-pin-watch.yml` runs the same script weekly and opens a PR once the pin is older than its allowance.
+- rippled was renamed to **xrpld** on `develop`, and packaging moved from `repos.ripple.com` to the XRP Ledger Foundation at **`packages.xrplf.org`** in August 2026 (`docs/install.md` in rippled names it as the only source). The old host still answers, which is the trap: its nightly channel stopped on 2026-09-15 and never received 3.4.0, and its `stable` channel stopped at 3.3.0, so a pin left there tracks a frozen snapshot while every check reports it current. The channel is `deb-develop` and its suite is `any main`, not a distribution codename. The version must still be **pinned**, now for reproducibility rather than ordering: build numbers are monotonic in the new scheme (`3.5.0~b0-1187.20260921git0229c29`), so the old 14-to-12-digit timestamp trap died with the old host. To bump, run `.ci-config/bump-nightly-pin.sh` (`--check` reports without changing anything): it picks the newest `xrpld` build from the `deb-develop` Packages index, rewrites `ARG XRPLD_VERSION` and regenerates the nightly amendment lists from the develop commit encoded in that version string. Entries published without the `.<date>git<sha>` suffix carry no commit and are skipped. The ref must match the pinned build — a newer ref can emit feature names unknown to the binary, which rejects them at startup — which is why the script derives it from the version rather than taking it as an argument. `nightly-pin-watch.yml` runs the same script weekly and opens a PR once the pin is older than its allowance.
 - On xrpld (3.2.x and `develop`) the two amendment config sections do different jobs. `[amendments]` (`<hash> <name>`, hash = sha512half of the name) registers genesis up-votes at `--start` — amendments become enabled **on-ledger** (Amendments object, `feature` RPC), which is what `AmendmentGuard`-gated tests check; only Supported::Yes amendments — unsupported ones (e.g. MPTokensV2 on 3.2.0) are skipped at genesis. `[features]` does NOT vote (startup logs say "will be down voted by default") but it DOES feed Rules presets: listed amendments are treated as active during **transaction processing** even when not enabled on-ledger — this is the only way to exercise Supported::No code paths (MPTokensV2 MPT-AMM tests run via this mechanism) and the reason `[features]` may be a superset of `[amendments]`. Without `[amendments]`, introspection reports everything disabled and guard-gated tests skip, even though preset-covered transactors work. Both sections are regenerated by `.ci-config/generate-amendments.sh <tag>` — do not edit the lists by hand.
 
 ### Generate Documentation
@@ -199,7 +202,7 @@ Output goes to `docs/` directory. Published to GitHub Pages.
 | `nuget.release.yml` | Push to `release` | Build Release → Pack → Publish to GitHub Packages + NuGet.org |
 | `docs.yml` | Push to `release` | DocFx → GitHub Pages |
 | `protocol-watch.yml` | Weekly cron (Mon 06:00 UTC); manual | Diffs rippled develop `*.macro` protocol files vs the baseline in the `protocol-watch` tracking issue; comments there on changes |
-| `release-watch.yml` | Weekly cron (Mon 06:30 UTC); manual | Checks the CI stand against the latest stable rippled release; when a newer release has a Docker image, regenerates the stand config (`generate-amendments.sh`), smoke-tests it and opens a bump PR (via GitHub App `RELEASE_WATCH_APP_ID`/`RELEASE_WATCH_APP_PRIVATE_KEY` or `RELEASE_WATCH_PAT`; falls back to a `release-watch` issue comment) |
+| `release-watch.yml` | Weekly cron (Mon 06:30 UTC); manual | Checks the CI stand against the latest stable rippled release; when the release reaches the `deb-stable` channel at packages.xrplf.org, rewrites `ARG XRPLD_VERSION` in `Dockerfile.release`, regenerates the stand config (`generate-amendments.sh`), smoke-tests it and opens a bump PR (via GitHub App `RELEASE_WATCH_APP_ID`/`RELEASE_WATCH_APP_PRIVATE_KEY` or `RELEASE_WATCH_PAT`; falls back to a `release-watch` issue comment) |
 | `definitions-watch.yml` | Weekly cron (Mon 07:00 UTC); manual | Raises the nightly stand and diffs `definitions.json` against its `server_definitions`; red when the node has fields the SDK lacks. Its horizon is the nightly pin, so a stale pin makes it report on the past |
 | `devnet-coverage.yml` | Manual only | Runs the coverage-oriented integration classes (`TestIBatchInnerTypes`, `TestISponsoredTypes`, `TestIAMMMpt`, XChain, Sponsorship, Batch) against devnet or testnet with faucet funding; feeds the XRPL Foundation amendment dashboard. Never part of CI |
 | `nightly-pin-watch.yml` | Weekly cron (Mon 05:00 UTC); manual | Checks the nightly `xrpld` pin against the nightly apt channel; once it is older than `MAX_PIN_AGE_DAYS` (21), runs `bump-nightly-pin.sh`, starts the stand on the new pin, and opens a bump PR (same credential ladder as release-watch; falls back to a `nightly-pin-watch` issue comment) |
