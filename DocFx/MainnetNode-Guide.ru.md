@@ -32,34 +32,39 @@
 
 ## Установка (Ubuntu / Debian)
 
-Пакеты публикуются в официальном apt-репозитории (канал `stable`):
+Пакеты публикуются в apt-репозитории XRP Ledger Foundation (канал `stable`).
+
+> Исполняемый файл переименован из `rippled` в `xrpld`, а публикация пакетов в августе 2026
+> переехала с `repos.ripple.com` на `packages.xrplf.org`. Старый репозиторий продолжает
+> отвечать, но остановился на 3.3.0, поэтому узел, установленный оттуда, незаметно отстаёт
+> на релиз. Хосту, настроенному по-старому, необходимо заменить список источников, одного
+> `apt upgrade` недостаточно. `/usr/local/bin/rippled` остаётся symlink-ом на новый бинарник.
 
 ```bash
 # ключ репозитория
-sudo install -m 0755 -d /usr/share/keyrings
-curl -fsSL https://repos.ripple.com/repos/api/gpg/key/public | \
-    sudo gpg --dearmor -o /usr/share/keyrings/ripple-key.gpg
+sudo install -m 0755 -d /etc/apt/keyrings
+sudo curl -fsS https://packages.xrplf.org/xrplf.asc -o /etc/apt/keyrings/xrplf.asc
 
-# репозиторий — codename подставляется из вашего релиза ОС автоматически
-echo "deb [signed-by=/usr/share/keyrings/ripple-key.gpg] https://repos.ripple.com/repos/rippled-deb $(lsb_release -cs) stable" | \
-    sudo tee /etc/apt/sources.list.d/ripple.list
+# репозиторий — одна суита, "any main", для всех дистрибутивов
+echo "deb [signed-by=/etc/apt/keyrings/xrplf.asc] https://packages.xrplf.org/repository/deb-stable any main" | \
+    sudo tee /etc/apt/sources.list.d/xrplf.list
 
-sudo apt update && sudo apt install -y rippled
+sudo apt update && sudo apt -y install xrpld
 ```
 
 Пакет устанавливает:
 
 | Путь | Назначение |
 |------|-----------|
-| `/opt/ripple/bin/rippled` | бинарник |
-| `/etc/opt/ripple/rippled.cfg` | основной конфиг |
-| `/etc/opt/ripple/validators.txt` | источник UNL (списка доверенных валидаторов) |
-| `/lib/systemd/system/rippled.service` | systemd-юнит |
-| `/var/lib/rippled/` | базы данных (сюда монтируйте NVMe-том) |
+| `/usr/bin/xrpld` | бинарник |
+| `/etc/xrpld/xrpld.cfg` | основной конфиг |
+| `/etc/xrpld/validators.txt` | источник UNL (списка доверенных валидаторов) |
+| `/usr/lib/systemd/system/xrpld.service` | systemd-юнит |
+| `/var/lib/xrpld/` | базы данных (сюда монтируйте NVMe-том) |
 
 ## Конфигурация
 
-Правится `/etc/opt/ripple/rippled.cfg`. Продакшен-скелет для ноды под приложение:
+Правится `/etc/xrpld/xrpld.cfg`. Продакшен-скелет для ноды под приложение:
 
 ```ini
 [server]
@@ -101,18 +106,18 @@ huge                     # medium при 32 ГБ RAM, huge при 64 ГБ+
 
 [node_db]
 type = NuDB              # NuDB для продакшен-нод (append-only, дружелюбен к SSD)
-path = /var/lib/rippled/db/nudb
+path = /var/lib/xrpld/db/nudb
 online_delete = 512000   # хранить ~512k леджеров (~3-4 недели); минимум 256
 advisory_delete = 0
 
 [database_path]
-/var/lib/rippled/db
+/var/lib/xrpld/db
 
 [ledger_history]
 256                      # сколько леджеров догружать при старте; <= online_delete
 
 [debug_logfile]
-/var/log/rippled/debug.log
+/var/log/xrpld/debug.log
 
 [sntp_servers]
 time.windows.com
@@ -138,11 +143,11 @@ validators.txt
 ## Работа под systemd
 
 ```bash
-sudo systemctl enable --now rippled
-sudo systemctl status rippled
+sudo systemctl enable --now xrpld
+sudo systemctl status xrpld
 
 # логи
-journalctl -u rippled -f
+journalctl -u xrpld -f
 ```
 
 Первый старт на mainnet: нода получает последний validated-леджер и догружает `ledger_history`. До `"server_state": "full"` — обычно **10–30 минут** (на скромном железе дольше).
@@ -150,7 +155,7 @@ journalctl -u rippled -f
 ### Проверка здоровья
 
 ```bash
-/opt/ripple/bin/rippled server_info | jq '.result.info | {build_version, server_state, complete_ledgers, peers, load_factor, amendment_blocked}'
+/usr/bin/xrpld server_info | jq '.result.info | {build_version, server_state, complete_ledgers, peers, load_factor, amendment_blocked}'
 ```
 
 | Поле | Здоровое значение |
@@ -174,14 +179,14 @@ XRPL развивается через **амендменты**. Через дв
 
 ```bash
 sudo apt update
-sudo apt install --only-upgrade rippled
-sudo systemctl restart rippled
-watch -n 5 "/opt/ripple/bin/rippled server_info | jq -r '.result.info.server_state'"
+sudo apt install --only-upgrade xrpld
+sudo systemctl restart xrpld
+watch -n 5 "/usr/bin/xrpld server_info | jq -r '.result.info.server_state'"
 ```
 
-Даунтайм — минуты: после рестарта нода быстро ресинкается к текущему леджеру (историю не переигрывает). Конфиги апгрейд не перезаписывает; после мажорных версий сверьтесь с поставляемым примером (`/etc/opt/ripple/rippled.cfg.dpkg-dist`, если есть).
+Даунтайм — минуты: после рестарта нода быстро ресинкается к текущему леджеру (историю не переигрывает). Конфиги апгрейд не перезаписывает; после мажорных версий сверьтесь с поставляемым примером (`/etc/xrpld/xrpld.cfg.dpkg-dist`, если есть).
 
-Чтобы застраховаться от неожиданных мажорных апгрейдов — `apt-mark hold rippled` и обновление вручную.
+Чтобы застраховаться от неожиданных мажорных апгрейдов — `apt-mark hold xrpld` и обновление вручную.
 
 ## Подключение XrplCSharp
 
@@ -214,4 +219,4 @@ Console.WriteLine(info.Info.CompleteLedgers);
 | Диск растёт бесконечно | Не задан `online_delete` | Задать `online_delete` в `[node_db]` и перезапустить |
 | `noCurrent` / `noNetwork` из API | Нода ещё не синхронизировалась или потеряла кворум | Дождаться `full`; проверить пиров и часы |
 | Высокий `load_factor` на ваших запросах | Публичный порт перегружен или клиенты злоупотребляют | Rate-limit на nginx; масштабировать `node_size`/железо |
-| Crash-loop после правки конфига | Синтаксическая ошибка или неизвестная секция для этой версии | `journalctl -u rippled -n 50`; сверить с поставляемым примером конфига |
+| Crash-loop после правки конфига | Синтаксическая ошибка или неизвестная секция для этой версии | `journalctl -u xrpld -n 50`; сверить с поставляемым примером конфига |
