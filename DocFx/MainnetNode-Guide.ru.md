@@ -41,10 +41,27 @@
 > `apt upgrade` недостаточно. `/usr/local/bin/rippled` остаётся symlink-ом на новый бинарник.
 
 ```bash
+# зависимости: curl забирает ключ, gnupg показывает его, ca-certificates обеспечивает TLS
+sudo apt update && sudo apt install -y ca-certificates curl gnupg
+
 # ключ репозитория
 sudo install -m 0755 -d /etc/apt/keyrings
 sudo curl -fsS https://packages.xrplf.org/xrplf.asc -o /etc/apt/keyrings/xrplf.asc
 
+# проверьте ключ прежде, чем довериться ему: добавленный без проверки ключ обесценивает подпись
+gpg --show-keys /etc/apt/keyrings/xrplf.asc
+```
+
+Отпечаток обязан совпасть:
+
+```text
+pub   rsa4096 2026-08-18 [SC]
+      B655 4167 4122 1F78 0FBC  FBC9 AA84 D41A 11D2 9FA9
+```
+
+Если он отличается — продолжать нельзя.
+
+```bash
 # репозиторий — одна суита, "any main", для всех дистрибутивов
 echo "deb [signed-by=/etc/apt/keyrings/xrplf.asc] https://packages.xrplf.org/repository/deb-stable any main" | \
     sudo tee /etc/apt/sources.list.d/xrplf.list

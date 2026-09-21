@@ -41,10 +41,27 @@ Packages are published to the XRP Ledger Foundation apt repository (channel `sta
 > `/usr/local/bin/rippled` remains as a symlink to the new binary.
 
 ```bash
+# prerequisites: curl fetches the key, gnupg shows it, ca-certificates makes the TLS work
+sudo apt update && sudo apt install -y ca-certificates curl gnupg
+
 # repository key
 sudo install -m 0755 -d /etc/apt/keyrings
 sudo curl -fsS https://packages.xrplf.org/xrplf.asc -o /etc/apt/keyrings/xrplf.asc
 
+# check it before trusting it: a key added unverified defeats the point of signing
+gpg --show-keys /etc/apt/keyrings/xrplf.asc
+```
+
+The fingerprint must read:
+
+```text
+pub   rsa4096 2026-08-18 [SC]
+      B655 4167 4122 1F78 0FBC  FBC9 AA84 D41A 11D2 9FA9
+```
+
+Do not continue if it differs.
+
+```bash
 # repository — one suite, "any main", for every distribution
 echo "deb [signed-by=/etc/apt/keyrings/xrplf.asc] https://packages.xrplf.org/repository/deb-stable any main" | \
     sudo tee /etc/apt/sources.list.d/xrplf.list

@@ -79,35 +79,49 @@ jobs:
           latest=$(gh api "repos/$UPSTREAM/releases/latest" --jq .tag_name)
           # Stable releases are plain X.Y.Z; anything else here is unexpected.
           echo "$latest" | grep -Eq '^[0-9]+\.[0-9]+\.[0-9]+$'
-          pinned=$(sed -n -E 's/^ARG XRPLD_VERSION=([0-9.]+)-[0-9]+$/\1/p' "$DOCKERFILE")
-          if [ -z "$pinned" ]; then
-            echo "::error::could not parse ARG XRPLD_VERSION from $DOCKERFILE"
+          # Two forms of the pin: the upstream version to compare against the release tag, and
+          # the full deb version, because the channel can republish the same release as -2 and
+          # that is a real change this workflow should not step over.
+          pinned_full=$(sed -n -E 's/^ARG XRPLD_VERSION=(.+)$/\1/p' "$DOCKERFILE")
+          pinned=${pinned_full%-*}
+          if [ -z "$pinned_full" ] || [ "$pinned_full" = "$pinned" ]; then
+            echo "::error::could not parse ARG XRPLD_VERSION from $DOCKERFILE (got '$pinned_full')"
             exit 1
           fi
           echo "latest=$latest" >> "$GITHUB_OUTPUT"
           echo "pinned=$pinned" >> "$GITHUB_OUTPUT"
-          if [ "$latest" = "$pinned" ]; then
-            echo "Stand is on the latest stable release ($pinned)."
-            echo "bump=false" >> "$GITHUB_OUTPUT"
-            exit 0
-          fi
-          # Actionable only once the release is in the apt channel. The deb carries a packaging
-          # revision the git tag does not (3.4.0 -> 3.4.0-1), so the channel is asked for it.
+
+          # Ask the channel what it actually publishes for the latest release BEFORE deciding
+          # there is no drift. Comparing only X.Y.Z would step over a repackaging - the channel
+          # can republish the same release as -2 - and that is a real change to the binary the
+          # stand runs.
           deb_version=$(curl -sf --max-time 30 "$PACKAGES_URL" \
             | awk '/^Package: xrpld$/ { p = 1; next } /^Version: / { if (p) print $2; p = 0 }' \
             | grep -E "^${latest}-[0-9]+$" | LC_ALL=C sort -V | tail -1) || true
+          echo "deb_version=$deb_version" >> "$GITHUB_OUTPUT"
+
           if [ -z "$deb_version" ]; then
-            echo "::notice::rippled $latest is released but xrpld=$latest is not in deb-stable yet; retrying next run."
+            if [ "$latest" = "$pinned" ]; then
+              echo "Stand is on the latest stable release ($pinned_full); the channel lists no package for $latest."
+            else
+              echo "::notice::rippled $latest is released but xrpld=$latest is not in deb-stable yet; retrying next run."
+            fi
             echo "bump=false" >> "$GITHUB_OUTPUT"
             exit 0
           fi
+
+          if [ "$deb_version" = "$pinned_full" ]; then
+            echo "Stand is on the newest package for the latest stable release ($pinned_full)."
+            echo "bump=false" >> "$GITHUB_OUTPUT"
+            exit 0
+          fi
+
           # Idempotency: a bump PR for this version is already open.
           if [ -n "$(gh pr list --repo "$GITHUB_REPOSITORY" --head "release-watch/$latest" --state open --json number --jq '.[0].number // empty')" ]; then
             echo "Bump PR for $latest is already open."
             echo "bump=false" >> "$GITHUB_OUTPUT"
             exit 0
           fi
-          echo "deb_version=$deb_version" >> "$GITHUB_OUTPUT"
           echo "bump=true" >> "$GITHUB_OUTPUT"
 
       - name: Regenerate stand config
@@ -164,7 +178,6 @@ jobs:
           set -euo pipefail
           ver="${{ steps.detect.outputs.latest }}"
           pinned="${{ steps.detect.outputs.pinned }}"
-          deb_pub="${{ steps.detect.outputs.deb_version }}"
           branch="release-watch/$ver"
           git config user.name "${{ github.actor }}"
           git config user.email "${{ github.actor }}@users.noreply.github.com"
@@ -199,6 +212,7 @@ jobs:
           set -euo pipefail
           ver="${{ steps.detect.outputs.latest }}"
           pinned="${{ steps.detect.outputs.pinned }}"
+          deb_pub="${{ steps.detect.outputs.deb_version }}"
           if [ "${{ steps.smoke.outcome }}" != "success" ]; then
             reason="the smoke test of the regenerated stand FAILED on the runner — the config generation or the new image needs a human look (see the run log)"
           else
