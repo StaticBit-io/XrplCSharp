@@ -26,7 +26,7 @@
 
 set -euo pipefail
 
-PACKAGES_URL="https://repos.ripple.com/repos/rippled-deb/dists/jammy/nightly/binary-amd64/Packages"
+PACKAGES_URL="https://packages.xrplf.org/repository/deb-develop/dists/any/main/binary-amd64/Packages"
 DIR="$(cd "$(dirname "$0")" && pwd)"
 DOCKERFILE="$DIR/Dockerfile.nightly"
 CFG="$DIR/rippled.batchv11.cfg"
@@ -54,37 +54,43 @@ packages=$(curl -sf --max-time 60 "$PACKAGES_URL") || {
   exit 1
 }
 
-# Version strings look like 3.4.0~b0+202608111815.26cc683e-1: upstream version,
-# a build timestamp and the develop commit it was built from. The timestamp
-# format shrank from 14 digits (YYYYMMDDHHMMSS) to 12 (YYYYMMDDHHMM) mid-2026,
-# which is why plain version sorting ranks old builds above new ones and why the
-# pin exists at all. Truncating both to YYYYMMDDHHMM makes them comparable.
+# Version strings look like 3.5.0~b0-1187.20260921git0229c29: upstream version, a build
+# number, the build date and the short develop commit it was built from. Two things follow.
+#
+# The build number is monotonic, so it sorts the channel correctly on its own - unlike the
+# old repos.ripple.com scheme, where the timestamp shrank from 14 digits to 12 mid-2026 and
+# plain version ordering put stale builds on top. That trap is gone with the host.
+#
+# Not every entry carries the suffix: 3.4.0~b0-1073 and -1074 are published as bare
+# "<upstream>-<build>" with no commit in them. There is no ref to generate a config from, so
+# they are skipped rather than guessed at.
 newest=$(printf '%s\n' "$packages" \
   | awk '/^Package: xrpld$/ { p = 1; next } /^Version: / { if (p) print $2; p = 0 }' \
   | while IFS= read -r v; do
-      ts=$(printf '%s' "$v" | sed -n -E 's/.*\+([0-9]{12,14})\..*/\1/p')
-      [ -n "$ts" ] && printf '%s %s\n' "${ts:0:12}" "$v"
+      build=$(printf '%s' "$v" | sed -n -E 's/^.*-([0-9]+)\.[0-9]{8}git[0-9a-f]+$/\1/p')
+      [ -n "$build" ] && printf '%s %s\n' "$build" "$v"
     done \
   | LC_ALL=C sort -k1,1n | tail -1)
 
 if [ -z "$newest" ]; then
-  echo "error: no parseable xrpld versions in the nightly Packages index" >&2
+  echo "error: no parseable xrpld versions in the deb-develop Packages index" >&2
   exit 1
 fi
 
 new_version=${newest#* }
-new_ts=${newest%% *}
-new_ref=$(printf '%s' "$new_version" | sed -n -E 's/.*\+[0-9]{12,14}\.([0-9a-f]+).*/\1/p')
+new_build=${newest%% *}
+new_ref=$(printf '%s' "$new_version" | sed -n -E 's/^.*-[0-9]+\.[0-9]{8}git([0-9a-f]+)$/\1/p')
 if [ -z "$new_ref" ]; then
   echo "error: could not extract the develop commit from '$new_version'" >&2
   exit 1
 fi
 
-old_ts=$(printf '%s' "$old_version" | sed -n -E 's/.*\+([0-9]{12,14})\..*/\1/p')
-old_ts=${old_ts:0:12}
+# The build date is the pin's age. It carries no time of day, so the age is whole days from
+# midnight UTC - which is all the allowance in nightly-pin-watch.yml is measured in anyway.
+old_date=$(printf '%s' "$old_version" | sed -n -E 's/^.*-[0-9]+\.([0-9]{8})git[0-9a-f]+$/\1/p')
 age_days=""
-if [ -n "$old_ts" ]; then
-  old_epoch=$(date -u -d "${old_ts:0:8} ${old_ts:8:2}:${old_ts:10:2}" +%s 2>/dev/null || echo "")
+if [ -n "$old_date" ]; then
+  old_epoch=$(date -u -d "$old_date" +%s 2>/dev/null || echo "")
   if [ -n "$old_epoch" ]; then
     age_days=$(( ( $(date -u +%s) - old_epoch ) / 86400 ))
   fi
@@ -94,7 +100,7 @@ bumped=false
 if [ "$old_version" = "$new_version" ]; then
   echo "Nightly pin is already the newest build ($old_version)."
 elif [ "$check_only" = true ]; then
-  echo "Nightly pin $old_version is behind $new_version (build ${new_ts}); run without --check to bump."
+  echo "Nightly pin $old_version is behind $new_version (build ${new_build}); run without --check to bump."
 else
   # Match the whole value so a partially-rewritten pin cannot survive.
   sed -i -E "s#^ARG XRPLD_VERSION=.+\$#ARG XRPLD_VERSION=${new_version}#" "$DOCKERFILE"
