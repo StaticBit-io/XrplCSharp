@@ -51,6 +51,27 @@ namespace Xrpl.Models.Ledger
         public string PreviousTxnID { get; set; }
 
         /// <summary>
+        /// SmartEscrow: the most gas one escrow execution may consume, set by fee voting rather than
+        /// by amendment so the network can raise it as the engine improves. Voting it to zero
+        /// disables Smart Escrows without touching the amendment.
+        /// </summary>
+        [JsonPropertyName("GasLimit")]
+        public uint? GasLimit { get; set; }
+
+        /// <summary>
+        /// SmartEscrow: the largest <c>Bytecode</c> an escrow may carry, in bytes. Voted the same way
+        /// as <see cref="GasLimit"/>, and zero disables Smart Escrows the same way.
+        /// </summary>
+        [JsonPropertyName("BytecodeSizeLimit")]
+        public uint? BytecodeSizeLimit { get; set; }
+
+        /// <summary>
+        /// SmartEscrow: the price of one gas unit, in millionths of a drop.
+        /// </summary>
+        [JsonPropertyName("GasPrice")]
+        public uint? GasPrice { get; set; }
+
+        /// <summary>
         /// The index of the ledger that contains the transaction that most recently modified this object.
         /// </summary>
         [JsonPropertyName("PreviousTxnLgrSeq")]
