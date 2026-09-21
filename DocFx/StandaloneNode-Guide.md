@@ -118,8 +118,8 @@ See `.ci-config/rippled.batchv11.cfg` for a complete example. Note that the `fea
 
 ### Nightly image specifics
 
-- On `develop`, rippled was renamed to **`xrpld`**; the nightly apt channel at `repos.ripple.com` publishes the `xrpld` package.
-- **Pin the version** (`ARG XRPLD_VERSION` in `.ci-config/Dockerfile.nightly`): the build-timestamp format shrank from 14 to 12 digits in mid-2026, so Debian version ordering ranks older builds above newer ones and an unpinned `apt install xrpld` fetches a stale build.
+- On `develop`, rippled was renamed to **`xrpld`**, and packaging moved to the XRP Ledger Foundation at `packages.xrplf.org` in August 2026. The channel is `deb-develop` and its suite is `any main`, not a distribution codename. The old `repos.ripple.com` still answers but stopped receiving builds on 2026-09-15, so a stand pointed there tracks a frozen snapshot while looking healthy.
+- **Pin the version** (`ARG XRPLD_VERSION` in `.ci-config/Dockerfile.nightly`). Build numbers in the new scheme (`3.5.0~b0-1187.20260921git0229c29`) are monotonic, so the pin is no longer about ordering - it is about reproducibility, and about letting `generate-amendments.sh` read the exact commit the binary was built from, because the binary rejects feature names it does not know.
 
 ## Advancing the ledger
 
