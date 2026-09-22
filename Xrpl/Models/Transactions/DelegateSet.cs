@@ -1,4 +1,4 @@
-using System;
+﻿using System;
 using System.Collections.Generic;
 using System.Linq;
 using System.Text.Json;
@@ -57,22 +57,21 @@ namespace Xrpl.Models.Transactions
 
     public partial class Validation
     {
-        /// <summary>
-        /// Transaction types that cannot be delegated (per xrpl.js).
-        /// </summary>
-        private static readonly HashSet<string> NonDelegableTransactions = new(StringComparer.OrdinalIgnoreCase)
-        {
-            "AccountSet", "SetRegularKey", "SignerListSet", "DelegateSet"
-        };
-
         private const int MaxPermissions = 10;
 
         public static void ValidateDelegateSet(Dictionary<string, object> tx)
         {
             Common.ValidateBaseTransaction(tx);
 
-            if (!tx.TryGetValue("Authorize", out var auth) || auth is not string)
+            if (!tx.TryGetValue("Authorize", out var auth) || auth is not string authorize)
                 throw new ValidationException("DelegateSet: missing field Authorize");
+
+            // rippled's preflight rejects an account delegating to itself with temMALFORMED.
+            if (tx.TryGetValue("Account", out object account)
+                && string.Equals(account as string, authorize, StringComparison.Ordinal))
+            {
+                throw new ValidationException("DelegateSet: Authorize and Account must be different");
+            }
 
             if (!tx.TryGetValue("Permissions", out var perms) || perms is null)
                 throw new ValidationException("DelegateSet: missing field Permissions");
@@ -83,9 +82,9 @@ namespace Xrpl.Models.Transactions
                 if (je.ValueKind != JsonValueKind.Array)
                     throw new ValidationException("DelegateSet: Permissions must be an array");
 
+                // An empty array is how a delegation is revoked: rippled's doApply deletes the
+                // Delegate ledger object when Permissions carries no entries.
                 int count = je.GetArrayLength();
-                if (count == 0)
-                    throw new ValidationException("DelegateSet: Permissions must not be empty");
                 if (count > MaxPermissions)
                     throw new ValidationException($"DelegateSet: Permissions must have at most {MaxPermissions} entries");
 
@@ -105,17 +104,12 @@ namespace Xrpl.Models.Transactions
                     if (string.IsNullOrWhiteSpace(permValueStr))
                         throw new ValidationException("DelegateSet: PermissionValue must not be empty");
 
-                    if (NonDelegableTransactions.Contains(permValueStr))
-                        throw new ValidationException($"DelegateSet: transaction type '{permValueStr}' cannot be delegated");
-
                     if (!seen.Add(permValueStr))
                         throw new ValidationException($"DelegateSet: duplicate PermissionValue '{permValueStr}'");
                 }
             }
             else if (perms is IList<object> list)
             {
-                if (list.Count == 0)
-                    throw new ValidationException("DelegateSet: Permissions must not be empty");
                 if (list.Count > MaxPermissions)
                     throw new ValidationException($"DelegateSet: Permissions must have at most {MaxPermissions} entries");
 
@@ -135,9 +129,6 @@ namespace Xrpl.Models.Transactions
                     string permValueStr = permVal?.ToString();
                     if (string.IsNullOrWhiteSpace(permValueStr))
                         throw new ValidationException("DelegateSet: PermissionValue must not be empty");
-
-                    if (NonDelegableTransactions.Contains(permValueStr))
-                        throw new ValidationException($"DelegateSet: transaction type '{permValueStr}' cannot be delegated");
 
                     if (!seen.Add(permValueStr))
                         throw new ValidationException($"DelegateSet: duplicate PermissionValue '{permValueStr}'");
