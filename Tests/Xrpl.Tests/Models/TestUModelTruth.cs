@@ -172,25 +172,15 @@ namespace Xrpl.Tests.Models
         /// is only worth giving while it holds for the types it is given about.
         /// </para>
         /// <para>
-        /// Five pairs do not hold it, and they are listed rather than hidden: the
-        /// <c>ConfidentialMPT</c> set carries no interface at all - neither half declares one - so
-        /// for those there is nothing to match on. The list is the point of the test as much as the
-        /// invariant is: a sixth such type added tomorrow fails here rather than being discovered
-        /// by a consumer whose pattern match silently found nothing.
+        /// It holds for every pair, with nothing listed as an exception: the <c>ConfidentialMPT</c>
+        /// set was the last one that declared no interface, and issue #191 gave it one per type.
+        /// A type added tomorrow whose two halves share none fails here rather than being
+        /// discovered by a consumer whose pattern match silently found nothing.
         /// </para>
         /// </remarks>
         [TestMethod]
         public void TestURequestAndResponseHalvesShareAnInterface()
         {
-            HashSet<string> knownWithoutAnInterface = new HashSet<string>(StringComparer.Ordinal)
-            {
-                "ConfidentialMPTConvert",
-                "ConfidentialMPTConvertBack",
-                "ConfidentialMPTMergeInbox",
-                "ConfidentialMPTSend",
-                "ConfidentialMPTClawback",
-            };
-
             Assembly assembly = typeof(TransactionRequest).Assembly;
             List<string> missing = new List<string>();
             int pairs = 0;
@@ -202,7 +192,7 @@ namespace Xrpl.Tests.Models
             {
                 string requestName = response.Name.Substring(0, response.Name.Length - "Response".Length);
                 Type request = assembly.GetType($"{response.Namespace}.{requestName}");
-                if (request is null || knownWithoutAnInterface.Contains(requestName))
+                if (request is null)
                 {
                     continue;
                 }
