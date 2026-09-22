@@ -86,7 +86,33 @@ namespace XrplTests.Xrpl.Models
         {
             Helper.ThrowsException<ValidationException>(
                 () => Validation.Validate(Transaction(1u, 1u)),
-                "DelegateSet: duplicate PermissionValue '1'");
+                "DelegateSet: duplicate PermissionValue 'Payment'");
+        }
+
+        [TestMethod]
+        public void TestDuplicateAcrossNameAndNumber()
+        {
+            // rippled deduplicates on the numeric sfPermissionValue, so "Payment" and 1 are the
+            // same entry twice. Comparing the spellings as written would let the pair through.
+            Helper.ThrowsException<ValidationException>(
+                () => Validation.Validate(Transaction("Payment", 1u)),
+                "DelegateSet: duplicate PermissionValue 'Payment'");
+        }
+
+        [TestMethod]
+        public void TestDuplicateAcrossGranularNameAndNumber()
+        {
+            Helper.ThrowsException<ValidationException>(
+                () => Validation.Validate(Transaction(65540u, "AccountDomainSet")),
+                "DelegateSet: duplicate PermissionValue 'AccountDomainSet'");
+        }
+
+        [TestMethod]
+        public void TestUnnameableValuesStayDistinct()
+        {
+            // Two values this version cannot name are still two entries: collapsing them to one
+            // sentinel would invent a duplicate the node does not see.
+            Validation.Validate(Transaction(70000u, 70001u));
         }
 
         [TestMethod]

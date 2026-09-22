@@ -36,6 +36,18 @@ namespace Xrpl.Tests.Models.Tests
             @"\{\s*sf(?<field>\w+)\s*,\s*Soe(?<requirement>Required|Optional|Default)\b",
             RegexOptions.Compiled);
 
+        /// <summary>
+        /// Every TRANSACTION invocation, matched on nothing but its opening. The parsers above
+        /// require the whole header, so comparing the two counts is what catches a single block
+        /// they stopped matching - a shortfall too small for the minimum-count guard to see, and
+        /// one that would drop a transaction type while leaving the conformance tests green.
+        /// Anchored at the line start so the macro's own #define, #undef and the example in its
+        /// header comment are not counted.
+        /// </summary>
+        private static readonly Regex TransactionInvocation = new Regex(
+            @"^TRANSACTION\(",
+            RegexOptions.Multiline | RegexOptions.Compiled);
+
         /// <summary>Catches a requirement keyword the mapping below does not know yet.</summary>
         private static readonly Regex AnyFieldEntry = new Regex(
             @"\{\s*sf(?<field>\w+)\s*,\s*Soe(?<requirement>\w+)",
@@ -97,12 +109,7 @@ namespace Xrpl.Tests.Models.Tests
                     nonDelegable.Add(name);
             }
 
-            if (total < MinimumExpectedTransactions)
-            {
-                throw new InvalidOperationException(
-                    $"Parsed only {total} transaction blocks from transactions.macro " +
-                    $"(expected at least {MinimumExpectedTransactions}) — the macro layout changed");
-            }
+            EnsureEveryBlockParsed(macro, total);
 
             // Every type delegable, or none of them, means the settings tuple stopped matching
             // rather than that the protocol changed that drastically.
@@ -114,6 +121,28 @@ namespace Xrpl.Tests.Models.Tests
             }
 
             return nonDelegable;
+        }
+
+        /// <summary>
+        /// Fails unless the parse covered every TRANSACTION invocation in the fixture.
+        /// </summary>
+        private static void EnsureEveryBlockParsed(string macro, int parsed)
+        {
+            if (parsed < MinimumExpectedTransactions)
+            {
+                throw new InvalidOperationException(
+                    $"Parsed only {parsed} transaction blocks from transactions.macro " +
+                    $"(expected at least {MinimumExpectedTransactions}) — the macro layout changed " +
+                    "and the parser silently stopped matching");
+            }
+
+            int declared = TransactionInvocation.Matches(macro).Count;
+            if (parsed != declared)
+            {
+                throw new InvalidOperationException(
+                    $"transactions.macro declares {declared} transactions but only {parsed} parsed — " +
+                    "a TRANSACTION header the parser does not match would drop that type silently");
+            }
         }
 
         private static string ReadFixture()
@@ -169,13 +198,7 @@ namespace Xrpl.Tests.Models.Tests
                 formats[name] = fields;
             }
 
-            if (formats.Count < MinimumExpectedTransactions)
-            {
-                throw new InvalidOperationException(
-                    $"Parsed only {formats.Count} transaction formats from transactions.macro " +
-                    $"(expected at least {MinimumExpectedTransactions}) — the macro layout changed " +
-                    "and the parser silently stopped matching");
-            }
+            EnsureEveryBlockParsed(macro, formats.Count);
 
             return formats;
         }

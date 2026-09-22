@@ -109,24 +109,39 @@ namespace Xrpl.Models.Transactions
         private const int MaxPermissions = 10;
 
         /// <summary>
-        /// Rejects a permission naming a transaction type that cannot be delegated. The value
-        /// arrives as a name from a node and as a number from the typed model, so it is resolved
-        /// to a name first; a granular permission resolves to its own name and is never in the
-        /// list, which is correct - rippled allows one even when the underlying type is not
-        /// delegable. A value this version cannot name is left to the node.
+        /// Resolves a permission to the name rippled uses for it, and rejects it if that names a
+        /// transaction type which cannot be delegated.
         /// </summary>
-        private static void ValidateDelegable(string permissionValue)
+        /// <remarks>
+        /// The value arrives as a name from a node and as a number from the typed model, so both
+        /// the deny list and duplicate detection have to work on one spelling: rippled compares the
+        /// numeric <c>sfPermissionValue</c>, which makes <c>Payment</c> and <c>1</c> the same
+        /// entry. The name is the canonical form here rather than the number, because two values
+        /// this version cannot name must stay distinct - collapsing them onto one sentinel would
+        /// invent a duplicate the node does not see.
+        /// <para>
+        /// A granular permission resolves to its own name and is never in the list, which is
+        /// correct: rippled allows one even when the underlying type is not delegable.
+        /// </para>
+        /// </remarks>
+        /// <returns>The canonical spelling to compare entries by.</returns>
+        private static string CanonicalPermission(string permissionValue)
         {
             string name = permissionValue;
 
-            if (uint.TryParse(permissionValue, NumberStyles.None, CultureInfo.InvariantCulture, out uint numeric)
-                && !PermissionValueConverter.TryGetPermissionName(numeric, out name))
+            if (uint.TryParse(permissionValue, NumberStyles.None, CultureInfo.InvariantCulture, out uint numeric))
             {
-                return;
+                // Left as written when it cannot be named, so two unnameable values stay distinct.
+                if (!PermissionValueConverter.TryGetPermissionName(numeric, out string resolved))
+                    return permissionValue;
+
+                name = resolved;
             }
 
             if (NonDelegableTransactions.Contains(name))
                 throw new ValidationException($"DelegateSet: transaction type '{name}' cannot be delegated");
+
+            return name;
         }
 
         public static void ValidateDelegateSet(Dictionary<string, object> tx)
@@ -174,10 +189,10 @@ namespace Xrpl.Models.Transactions
                     if (string.IsNullOrWhiteSpace(permValueStr))
                         throw new ValidationException("DelegateSet: PermissionValue must not be empty");
 
-                    ValidateDelegable(permValueStr);
+                    string canonical = CanonicalPermission(permValueStr);
 
-                    if (!seen.Add(permValueStr))
-                        throw new ValidationException($"DelegateSet: duplicate PermissionValue '{permValueStr}'");
+                    if (!seen.Add(canonical))
+                        throw new ValidationException($"DelegateSet: duplicate PermissionValue '{canonical}'");
                 }
             }
             else if (perms is IList<object> list)
@@ -202,10 +217,10 @@ namespace Xrpl.Models.Transactions
                     if (string.IsNullOrWhiteSpace(permValueStr))
                         throw new ValidationException("DelegateSet: PermissionValue must not be empty");
 
-                    ValidateDelegable(permValueStr);
+                    string canonical = CanonicalPermission(permValueStr);
 
-                    if (!seen.Add(permValueStr))
-                        throw new ValidationException($"DelegateSet: duplicate PermissionValue '{permValueStr}'");
+                    if (!seen.Add(canonical))
+                        throw new ValidationException($"DelegateSet: duplicate PermissionValue '{canonical}'");
                 }
             }
             else
