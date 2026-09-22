@@ -1,4 +1,4 @@
-using System;
+﻿using System;
 using System.Collections.Generic;
 using System.IO;
 using System.Linq;
@@ -59,9 +59,64 @@ namespace Xrpl.Tests.Models.Tests
             Path.Combine(AppContext.BaseDirectory, "Fixtures", "transactions.macro");
 
         /// <summary>
-        /// Transaction name -> field name -> requirement, exactly as rippled declares it.
+        /// The transaction types rippled refuses to delegate, exactly as the macro declares them.
         /// </summary>
-        internal static Dictionary<string, Dictionary<string, TxFormat.Requirement>> Parse()
+        /// <remarks>
+        /// <c>TxSettings.delegable</c> defaults to <c>Delegation::NotDelegable</c>, so a type is
+        /// delegable only where its settings tuple says so explicitly. The flag is static: an
+        /// amendment can withhold delegability from a delegable type, never grant it to a
+        /// forbidden one, so this set is correct for every network - unlike the delegable set,
+        /// which <c>Permission::isDelegable</c> answers against the active amendments.
+        /// </remarks>
+        internal static HashSet<string> NonDelegableTransactions()
+        {
+            string macro = ReadFixture();
+
+            HashSet<string> nonDelegable = new(StringComparer.Ordinal);
+            int total = 0;
+
+            foreach (Match block in TransactionBlock.Matches(macro))
+            {
+                string name = block.Groups["name"].Value;
+                string body = block.Groups["body"].Value;
+                total++;
+
+                // The settings tuple is the first parenthesised group of the body; the fields
+                // tuple follows it. Without the separator the layout has changed and any answer
+                // here would be a guess.
+                int settingsEnd = body.IndexOf("}),", StringComparison.Ordinal);
+                if (settingsEnd < 0)
+                {
+                    throw new InvalidOperationException(
+                        $"{name}: could not find the end of the settings tuple in transactions.macro — " +
+                        "the macro format changed, update the parser before trusting this test");
+                }
+
+                string settings = body.Substring(0, settingsEnd);
+                if (!settings.Contains("Delegation::Delegable", StringComparison.Ordinal))
+                    nonDelegable.Add(name);
+            }
+
+            if (total < MinimumExpectedTransactions)
+            {
+                throw new InvalidOperationException(
+                    $"Parsed only {total} transaction blocks from transactions.macro " +
+                    $"(expected at least {MinimumExpectedTransactions}) — the macro layout changed");
+            }
+
+            // Every type delegable, or none of them, means the settings tuple stopped matching
+            // rather than that the protocol changed that drastically.
+            if (nonDelegable.Count == 0 || nonDelegable.Count == total)
+            {
+                throw new InvalidOperationException(
+                    $"Parsed {nonDelegable.Count} non-delegable types out of {total} — the delegable " +
+                    "flag stopped being read, so this test would pass on nothing");
+            }
+
+            return nonDelegable;
+        }
+
+        private static string ReadFixture()
         {
             if (!File.Exists(FixturePath))
                 throw new InvalidOperationException($"Vendored transactions.macro not found at {FixturePath}");
@@ -69,6 +124,16 @@ namespace Xrpl.Tests.Models.Tests
             string macro = File.ReadAllText(FixturePath);
             if (string.IsNullOrWhiteSpace(macro))
                 throw new InvalidOperationException("Vendored transactions.macro is empty");
+
+            return macro;
+        }
+
+        /// <summary>
+        /// Transaction name -> field name -> requirement, exactly as rippled declares it.
+        /// </summary>
+        internal static Dictionary<string, Dictionary<string, TxFormat.Requirement>> Parse()
+        {
+            string macro = ReadFixture();
 
             Dictionary<string, Dictionary<string, TxFormat.Requirement>> formats = new();
 

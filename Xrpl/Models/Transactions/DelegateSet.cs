@@ -1,10 +1,12 @@
 ﻿using System;
 using System.Collections.Generic;
+using System.Globalization;
 using System.Linq;
 using System.Text.Json;
 using System.Text.Json.Serialization;
 
 using Xrpl.Client.Exceptions;
+using Xrpl.Client.Json.Converters;
 using Xrpl.Models.Common;
 
 namespace Xrpl.Models.Transactions
@@ -57,7 +59,72 @@ namespace Xrpl.Models.Transactions
 
     public partial class Validation
     {
+        /// <summary>
+        /// Transaction types rippled refuses to delegate, per <c>transactions.macro</c>:
+        /// <c>TxSettings.delegable</c> defaults to <c>Delegation::NotDelegable</c>, and a type is
+        /// delegable only where the macro says so explicitly.
+        /// </summary>
+        /// <remarks>
+        /// Checking this locally is sound because the flag is static. An amendment can withhold
+        /// delegability from a delegable type - <c>Permission::isDelegable</c> takes the network's
+        /// Rules - but it can never grant it to a forbidden one, so a type listed here is refused
+        /// on every network. The converse set, the delegable types, could not be checked this way.
+        /// <para>
+        /// Held against the vendored macro by <c>TestUDelegateSet.TestDenyListMatchesRippledMacro</c>.
+        /// </para>
+        /// </remarks>
+        internal static readonly HashSet<string> NonDelegableTransactions = new(StringComparer.Ordinal)
+        {
+            "AccountDelete",
+            "AccountSet",
+            "Batch",
+            "ConfidentialMPTConvert",
+            "DelegateSet",
+            "EnableAmendment",
+            "LoanBrokerCoverClawback",
+            "LoanBrokerCoverDeposit",
+            "LoanBrokerCoverWithdraw",
+            "LoanBrokerDelete",
+            "LoanBrokerSet",
+            "LoanDelete",
+            "LoanManage",
+            "LoanPay",
+            "LoanSet",
+            "SetFee",
+            "SetRegularKey",
+            "SignerListSet",
+            "SponsorshipTransfer",
+            "UNLModify",
+            "VaultClawback",
+            "VaultCreate",
+            "VaultDelete",
+            "VaultDeposit",
+            "VaultSet",
+            "VaultWithdraw",
+        };
+
         private const int MaxPermissions = 10;
+
+        /// <summary>
+        /// Rejects a permission naming a transaction type that cannot be delegated. The value
+        /// arrives as a name from a node and as a number from the typed model, so it is resolved
+        /// to a name first; a granular permission resolves to its own name and is never in the
+        /// list, which is correct - rippled allows one even when the underlying type is not
+        /// delegable. A value this version cannot name is left to the node.
+        /// </summary>
+        private static void ValidateDelegable(string permissionValue)
+        {
+            string name = permissionValue;
+
+            if (uint.TryParse(permissionValue, NumberStyles.None, CultureInfo.InvariantCulture, out uint numeric)
+                && !PermissionValueConverter.TryGetPermissionName(numeric, out name))
+            {
+                return;
+            }
+
+            if (NonDelegableTransactions.Contains(name))
+                throw new ValidationException($"DelegateSet: transaction type '{name}' cannot be delegated");
+        }
 
         public static void ValidateDelegateSet(Dictionary<string, object> tx)
         {
@@ -104,6 +171,8 @@ namespace Xrpl.Models.Transactions
                     if (string.IsNullOrWhiteSpace(permValueStr))
                         throw new ValidationException("DelegateSet: PermissionValue must not be empty");
 
+                    ValidateDelegable(permValueStr);
+
                     if (!seen.Add(permValueStr))
                         throw new ValidationException($"DelegateSet: duplicate PermissionValue '{permValueStr}'");
                 }
@@ -129,6 +198,8 @@ namespace Xrpl.Models.Transactions
                     string permValueStr = permVal?.ToString();
                     if (string.IsNullOrWhiteSpace(permValueStr))
                         throw new ValidationException("DelegateSet: PermissionValue must not be empty");
+
+                    ValidateDelegable(permValueStr);
 
                     if (!seen.Add(permValueStr))
                         throw new ValidationException($"DelegateSet: duplicate PermissionValue '{permValueStr}'");

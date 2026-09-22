@@ -1,12 +1,14 @@
-// Mirrors rippled DelegateSet::preflight in
+﻿// Mirrors rippled DelegateSet::preflight in
 // src/libxrpl/tx/transactors/delegate/DelegateSet.cpp
 
 using Microsoft.VisualStudio.TestTools.UnitTesting;
 
 using System.Collections.Generic;
+using System.Linq;
 
 using Xrpl.Client.Exceptions;
 using Xrpl.Models.Transactions;
+using Xrpl.Tests.Models.Tests;
 
 namespace XrplTests.Xrpl.Models
 {
@@ -100,14 +102,45 @@ namespace XrplTests.Xrpl.Models
         }
 
         [TestMethod]
-        public void TestDelegabilityIsNotCheckedLocally()
+        public void TestNonDelegableTypeByName()
         {
-            // AccountSet is not delegable, and neither is its permission value 4. rippled decides
-            // that against the amendments active on the network it is asked about
-            // (Permission::isDelegable takes Rules), so no static answer here is right for every
-            // network. The node rejects it in preflight with temMALFORMED, which claims no fee.
-            Validation.Validate(Transaction("AccountSet"));
-            Validation.Validate(Transaction(4u));
+            Helper.ThrowsException<ValidationException>(
+                () => Validation.Validate(Transaction("VaultCreate")),
+                "DelegateSet: transaction type 'VaultCreate' cannot be delegated");
+        }
+
+        [TestMethod]
+        public void TestNonDelegableTypeByNumericValue()
+        {
+            // AccountSet is transaction type 3, so its permission value is 4. The value is the
+            // form the typed model produces, and the check has to see through it.
+            Helper.ThrowsException<ValidationException>(
+                () => Validation.Validate(Transaction(4u)),
+                "DelegateSet: transaction type 'AccountSet' cannot be delegated");
+        }
+
+        [TestMethod]
+        public void TestGranularPermissionOnNonDelegableTypeIsAllowed()
+        {
+            // AccountDomainSet (65540) authorizes part of AccountSet, which is not delegable as a
+            // whole. rippled allows the granular permission anyway, so the deny list must not
+            // reach it - which it does not, because 65540 resolves to its own name.
+            Validation.Validate(Transaction(65540u));
+            Validation.Validate(Transaction("AccountDomainSet"));
+        }
+
+        [TestMethod]
+        public void TestDenyListMatchesRippledMacro()
+        {
+            // The list is hand-held, so this is what keeps it from drifting: it is compared with
+            // the vendored transactions.macro, the same fixture TestUTxFormatConformance reads.
+            // Re-pinning the fixture without extending the list turns this red by name.
+            HashSet<string> fromMacro = RippledTransactionFormats.NonDelegableTransactions();
+
+            CollectionAssert.AreEquivalent(
+                fromMacro.OrderBy(name => name).ToList(),
+                Validation.NonDelegableTransactions.OrderBy(name => name).ToList(),
+                "the DelegateSet deny list no longer matches rippled's NotDelegable types");
         }
     }
 }
