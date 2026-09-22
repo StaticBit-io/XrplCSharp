@@ -192,4 +192,70 @@ public class TestUTransactionResponseConverter
         Assert.AreEqual("12", result.Fee);
         Assert.AreEqual(1u, result.Sequence);
     }
+
+    // A field this version cannot read makes the converter fall back to the bare object built from
+    // the discriminator. No *Response class assigns TransactionType in a constructor, so the field
+    // used to stay at the enum default - AccountSet, a real and common type rather than a sentinel -
+    // and the caller got a transaction claiming to be something it is not.
+    private const string UnreadableSequence = @"{
+        ""TransactionType"": ""Payment"",
+        ""Account"": ""rTest"",
+        ""Destination"": ""rDest"",
+        ""Amount"": ""1000000"",
+        ""Fee"": ""12"",
+        ""Sequence"": ""not-a-number""
+    }";
+
+    [TestMethod]
+    public void Read_FailedDeserialization_KeepsTheTypeFromTheDiscriminator()
+    {
+        ITransactionResponse result = JsonSerializer.Deserialize<ITransactionResponse>(UnreadableSequence, Options);
+
+        Assert.IsInstanceOfType(result, typeof(PaymentResponse));
+        Assert.AreEqual(TransactionType.Payment, result.TransactionType);
+        Assert.AreNotEqual(TransactionType.AccountSet, result.TransactionType);
+    }
+
+    [TestMethod]
+    public void Read_FailedDeserializationOfAnUnknownType_IsUnknown()
+    {
+        string json = @"{
+            ""TransactionType"": ""FutureTransaction"",
+            ""Account"": ""rTest"",
+            ""Fee"": ""12"",
+            ""Sequence"": ""not-a-number""
+        }";
+
+        ITransactionResponse result = JsonSerializer.Deserialize<ITransactionResponse>(json, Options);
+
+        Assert.AreEqual(TransactionType.Unknown, result.TransactionType);
+    }
+
+    [TestMethod]
+    public void Read_FailedDeserializationWithANumericDiscriminator_IsUnknown()
+    {
+        // Enum.TryParse accepts the decimal form of a member's value, so a discriminator that is
+        // not a name at all must not be resolved to whatever member happens to hold that number.
+        string json = @"{
+            ""TransactionType"": ""5"",
+            ""Account"": ""rTest"",
+            ""Fee"": ""12"",
+            ""Sequence"": ""not-a-number""
+        }";
+
+        ITransactionResponse result = JsonSerializer.Deserialize<ITransactionResponse>(json, Options);
+
+        Assert.AreEqual(TransactionType.Unknown, result.TransactionType);
+    }
+
+    [TestMethod]
+    public void Read_FailedDeserialization_StillDropsTheUnreadableField()
+    {
+        // The fallback object carries nothing the failed pass would have assigned: the point is
+        // that the type is honest, not that the data survives.
+        ITransactionResponse result = JsonSerializer.Deserialize<ITransactionResponse>(UnreadableSequence, Options);
+
+        Assert.IsNull(result.Account);
+        Assert.AreEqual(TransactionType.Payment, result.TransactionType);
+    }
 }

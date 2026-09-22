@@ -1,4 +1,21 @@
-# Changes
+﻿# Changes
+
+## 11.7.0.0 22/09/2026
+
+* **A Delegate permission name this version cannot map no longer costs the caller the object that carries it** (#195). `PermissionValueConverter` threw a `JsonException` on an unrecognized `PermissionValue` name, and rippled returns that field as a name and gains new ones with every amendment, so a node ahead of the release took the whole containing object with it: through `TransactionResponseConverter` the exception was swallowed and the transaction came back empty with `TransactionType` left at the enum default `AccountSet`, and through `LOConverter` it escaped and failed the entire `account_objects` page.
+  * **Breaking:** the converter is now `JsonConverter<PermissionEntry>` rather than `JsonConverter<uint>` and is applied to `PermissionEntry` itself, not to its `PermissionValue` property - a converter bound to the number could not reach a second property. Code that named `PermissionValueConverter` in its own `JsonSerializerOptions` has to drop it; `PermissionEntry` carries the attribute
+  * `PermissionEntry.PermissionValueName` carries the name: the token the node sent, or the name resolved from the number when the node sent one. `PermissionValue` is `PermissionValueConverter.UnknownPermissionValue` (0, which rippled treats as no permission at all) when the name does not map
+  * `PermissionValueConverter.TryGetPermissionValue` and `TryGetPermissionName` expose both directions of the mapping
+  * writing is unchanged for a permission that maps - the number is what `Xrpl.BinaryCodec` reads - and an unmapped name is written back as the name, which rippled accepts in `tx_json` and the codec refuses to sign
+  * `TestUPermissionValueConverter` covers the mapping in both directions, the two paths that used to lose the object, and the signing blob
+
+* **`TransactionType.HookSet` is removed** (`Xrpl.BinaryCodec` 11.7.0.0). It was written by hand in the 2022 refactor, outlived the move to generated enums as an `[Obsolete]` leftover, and belongs to no protocol definition: rippled defines no transaction type 22, and neither the bundled `definitions.json` nor the one in xrpl.js has ever carried it. Its ordinal made delegate permission value 23 reachable from the name, a value no ledger can produce.
+  * **Breaking:** the field is gone from `Xrpl.BinaryCodec`, so `TransactionType.Values` no longer contains it. A `DelegateSet` naming `HookSet` now fails closed - the name maps to nothing, `PermissionValue` stays 0 and the codec refuses to sign it
+
+* **A transaction whose deserialization fails keeps the type its discriminator named** (#196). `TransactionResponseConverter.Read` catches `JsonException` and returns the bare object built from the discriminator, which it then dropped: no `*Response` class assigns `TransactionType` in a constructor, so the field stayed at the enum default `AccountSet` - a real and common type, not a sentinel - and a `Payment` or a `DelegateSet` that failed to parse presented itself as an empty `AccountSet` with no error of any kind. Only `TransactionResponseUnknown` stamped the field.
+  * the catch branch now resolves the discriminator through `ParseTransactionType`, falling back to `TransactionType.Unknown`. The round trip back to a name is compared, because `Enum.TryParse` also accepts the decimal form of a member's value and would otherwise turn a discriminator like `"5"` into whichever member holds that number
+  * `TestUTransactionResponseConverter` gains the failed-parse cases: the named type, an unknown type, and the numeric discriminator
+  * the fallback object still carries none of the data the failed pass would have assigned - the type is honest, the fields are not recovered
 
 ## 11.6.1.0 22/09/2026
 

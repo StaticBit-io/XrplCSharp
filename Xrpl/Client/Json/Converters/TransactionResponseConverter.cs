@@ -178,8 +178,30 @@ namespace Xrpl.Client.Json.Converters
             }
             catch (JsonException)
             {
+                // The failed pass never got to assign TransactionType, and no *Response class sets
+                // it in a constructor, so without this the object would carry the enum default -
+                // AccountSet, a real and common type - and report itself as a transaction it is not.
+                transaction.TransactionType = ParseTransactionType(transactionType);
                 return transaction;
             }
+        }
+
+        /// <summary>
+        /// Resolves the TransactionType discriminator to its enum member, or
+        /// <see cref="TransactionType.Unknown"/> when it names no member.
+        /// </summary>
+        private static TransactionType ParseTransactionType(string transactionType)
+        {
+            // Enum.TryParse also accepts the decimal form of a member's value, which would turn a
+            // discriminator that is not a name at all into whichever member holds that number.
+            // Comparing the round trip back to a name rejects those.
+            if (Enum.TryParse(transactionType, out TransactionType parsed)
+                && string.Equals(parsed.ToString(), transactionType, StringComparison.Ordinal))
+            {
+                return parsed;
+            }
+
+            return TransactionType.Unknown;
         }
 
         /// <inheritdoc />

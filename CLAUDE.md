@@ -214,10 +214,10 @@ Integration tests do **not** run on PRs into `dev` — `dev` uses a GitHub merge
 1. Ensure all tests pass on `dev`
 2. Bump `<PackageVersion>` **only in the packages that actually changed** — not in all four. The base packages (`Xrpl.AddressCodec`, `Xrpl.BinaryCodec`, `Xrpl.Keypairs`) are consumed via `ProjectReference`, so a `Xrpl` package built at a newer version keeps depending on the already published base packages at their existing version. Leaving an untouched package behind is correct, not an oversight. Check with `git diff --stat origin/release...origin/dev -- Base/` before deciding
 3. Choose the bump from the nature of the change: patch for a bugfix with no contract change, minor otherwise
-4. Update `CHANGES.md`
+4. Add the entry to `CHANGES.md`. Head it `## <version> <date>` with the full four-component version and the date as `dd/mm/yyyy` (`## 11.6.1.0 22/09/2026`) — step 6 matches on that heading and fails without it. **The entry records what changed, and that is all it is for**: name the types, members, files and tests that moved. Leave out what the old shape cost a consumer, compatibility essays, and lines stating what did *not* change, such as a package that kept its version. A breaking change is the exception worth spelling out — say what breaks and what the migration is
 5. Merge `dev` → `release`
-6. NuGet publish triggers automatically on push to `release`
-7. Create GitHub release with tag
+6. The push to `release` runs `nuget.release.yml`, which does the rest by itself: pack, push to GitHub Packages and to NuGet.org (Trusted Publishing over OIDC), then **create the tag and the GitHub release**. The tag is `<PackageVersion>` from `Xrpl/Xrpl.csproj` under NuGet's normalisation — `11.6.1.0` is tagged `v11.6.1`, a non-zero fourth component is kept — and the body is the `## <version> <date>` section of `CHANGES.md`, which is why step 4 has to stamp the heading with the full four-component version or the workflow fails there
+7. Verify, do not create. `gh release view v<version>` and the [nuget.org flat container](https://api.nuget.org/v3-flatcontainer/xrpl/index.json) — indexing lags the push by a few minutes. Tagging by hand is unnecessary, and a release step that has already run is skipped rather than repeated, so a re-run of the workflow finishes cleanly
 
 ### NuGet Packages Published
 
