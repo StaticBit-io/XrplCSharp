@@ -1,5 +1,4 @@
-﻿using System;
-using Xrpl.BinaryCodec.Enums;
+﻿using Xrpl.BinaryCodec.Enums;
 
 namespace Xrpl.BinaryCodec.Types
 {
@@ -13,9 +12,5 @@ namespace Xrpl.BinaryCodec.Types
         {
             return Values.AddEnum(new TransactionType(name, ordinal));
         }
-
-        /// <summary>This transaction type installs a hook. Not in the current protocol definitions.</summary>
-        [Obsolete("HookSet is not in the current protocol definitions.")]
-        public static readonly TransactionType HookSet = Add(nameof(HookSet), 22);
     }
 }

@@ -1,4 +1,4 @@
-using System.Collections.Generic;
+﻿using System.Collections.Generic;
 using System.Text.Json;
 
 using Microsoft.VisualStudio.TestTools.UnitTesting;
@@ -91,9 +91,9 @@ public class TestUPermissionValueConverter
     [TestMethod]
     public void TestReadRetiredTransactionTypeNameIsNotAPermission()
     {
-        // HookSet is declared on TransactionType for compatibility only. rippled has no
-        // transaction type 22, so the permission value 23 it would map to does not exist on the
-        // ledger, and mapping the name would invent a permission the node rejects.
+        // HookSet was carried on TransactionType with ordinal 22 until it was removed: rippled
+        // defines no transaction type 22, so the permission value 23 it mapped to exists on no
+        // ledger. This pins that it stays unmappable if anyone reintroduces the name.
         PermissionEntry entry = ReadEntry(@"""HookSet""");
 
         Assert.AreEqual(0u, entry.PermissionValue);

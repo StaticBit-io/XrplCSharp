@@ -50,15 +50,6 @@ public sealed class PermissionValueConverter : JsonConverter<PermissionEntry>
         ["MPTokenIssuanceUnlock"] = 65548,
     };
 
-    // Declared on TransactionType for compatibility, but absent from the current protocol:
-    // rippled defines no transaction type 22, so the permission value 23 this name would map to
-    // does not exist on the ledger. Mapping it in either direction would invent a permission a
-    // node rejects, so the name is treated as one this version does not know.
-    private static readonly HashSet<string> NonProtocolTransactionTypes = new(StringComparer.Ordinal)
-    {
-        "HookSet",
-    };
-
     private static readonly Lazy<Dictionary<uint, string>> PermissionNames = new(BuildPermissionNames);
 
     private static Dictionary<uint, string> BuildPermissionNames()
@@ -71,7 +62,7 @@ public sealed class PermissionValueConverter : JsonConverter<PermissionEntry>
         foreach (TransactionType transactionType in TransactionType.Values)
         {
             // Invalid is defined with ordinal -1 and has no permission value.
-            if (transactionType.Ordinal < 0 || NonProtocolTransactionTypes.Contains(transactionType.Name))
+            if (transactionType.Ordinal < 0)
                 continue;
 
             names[(uint)transactionType.Ordinal + 1] = transactionType.Name;
@@ -93,7 +84,7 @@ public sealed class PermissionValueConverter : JsonConverter<PermissionEntry>
             if (GranularPermissions.TryGetValue(name, out value))
                 return true;
 
-            if (TransactionType.Values.Has(name) && !NonProtocolTransactionTypes.Contains(name))
+            if (TransactionType.Values.Has(name))
             {
                 value = (uint)TransactionType.Values[name].Ordinal + 1;
                 return true;
