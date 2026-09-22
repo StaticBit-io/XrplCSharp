@@ -9,6 +9,11 @@
   * writing is unchanged for a permission that maps - the number is what `Xrpl.BinaryCodec` reads - and an unmapped name is written back as the name, which rippled accepts in `tx_json` and the codec refuses to sign
   * `TestUPermissionValueConverter` covers the mapping in both directions, the two paths that used to lose the object, and the signing blob
 
+* **A transaction whose deserialization fails keeps the type its discriminator named** (#196). `TransactionResponseConverter.Read` catches `JsonException` and returns the bare object built from the discriminator, which it then dropped: no `*Response` class assigns `TransactionType` in a constructor, so the field stayed at the enum default `AccountSet` - a real and common type, not a sentinel - and a `Payment` or a `DelegateSet` that failed to parse presented itself as an empty `AccountSet` with no error of any kind. Only `TransactionResponseUnknown` stamped the field.
+  * the catch branch now resolves the discriminator through `ParseTransactionType`, falling back to `TransactionType.Unknown`. The round trip back to a name is compared, because `Enum.TryParse` also accepts the decimal form of a member's value and would otherwise turn a discriminator like `"5"` into whichever member holds that number
+  * `TestUTransactionResponseConverter` gains the failed-parse cases: the named type, an unknown type, and the numeric discriminator
+  * the fallback object still carries none of the data the failed pass would have assigned - the type is honest, the fields are not recovered
+
 ## 11.6.1.0 22/09/2026
 
 * **Per-type interfaces for the five `ConfidentialMPT` transactions** (#191). `IConfidentialMPTConvert`, `IConfidentialMPTConvertBack`, `IConfidentialMPTSend`, `IConfidentialMPTClawback` and `IConfidentialMPTMergeInbox` carry the fields of their type, and the request and the response class of each pair implement one - the pattern every other transaction type follows. Until now the 32 fields of the set were declared twice, once on each half, with no contract between them, so `summary.Transaction is IConfidentialMPTSend` could not be written.
