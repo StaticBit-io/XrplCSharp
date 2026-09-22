@@ -89,6 +89,27 @@ public class TestUPermissionValueConverter
     }
 
     [TestMethod]
+    public void TestReadRetiredTransactionTypeNameIsNotAPermission()
+    {
+        // HookSet is declared on TransactionType for compatibility only. rippled has no
+        // transaction type 22, so the permission value 23 it would map to does not exist on the
+        // ledger, and mapping the name would invent a permission the node rejects.
+        PermissionEntry entry = ReadEntry(@"""HookSet""");
+
+        Assert.AreEqual(0u, entry.PermissionValue);
+        Assert.AreEqual("HookSet", entry.PermissionValueName);
+    }
+
+    [TestMethod]
+    public void TestReadRetiredTransactionTypeValueHasNoName()
+    {
+        PermissionEntry entry = ReadEntry("23");
+
+        Assert.AreEqual(23u, entry.PermissionValue);
+        Assert.IsNull(entry.PermissionValueName);
+    }
+
+    [TestMethod]
     public void TestWriteKnownValueAsNumber()
     {
         // The binary codec reads PermissionValue as a UInt32: writing the number is what keeps
