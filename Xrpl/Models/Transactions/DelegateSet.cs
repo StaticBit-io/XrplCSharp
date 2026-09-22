@@ -70,37 +70,40 @@ namespace Xrpl.Models.Transactions
         /// Rules - but it can never grant it to a forbidden one, so a type listed here is refused
         /// on every network. The converse set, the delegable types, could not be checked this way.
         /// <para>
-        /// Held against the vendored macro by <c>TestUDelegateSet.TestDenyListMatchesRippledMacro</c>.
+        /// Held against the vendored macro by <c>TestUDelegateSet.TestDenyListMatchesRippledMacro</c>,
+        /// which catches a typo or a type the protocol added later. The names go through
+        /// <c>nameof</c> so the compiler catches the case that test cannot: a type renamed or
+        /// removed from <see cref="TransactionType"/> leaves a string here that matches nothing.
         /// </para>
         /// </remarks>
         internal static readonly HashSet<string> NonDelegableTransactions = new(StringComparer.Ordinal)
         {
-            "AccountDelete",
-            "AccountSet",
-            "Batch",
-            "ConfidentialMPTConvert",
-            "DelegateSet",
-            "EnableAmendment",
-            "LoanBrokerCoverClawback",
-            "LoanBrokerCoverDeposit",
-            "LoanBrokerCoverWithdraw",
-            "LoanBrokerDelete",
-            "LoanBrokerSet",
-            "LoanDelete",
-            "LoanManage",
-            "LoanPay",
-            "LoanSet",
-            "SetFee",
-            "SetRegularKey",
-            "SignerListSet",
-            "SponsorshipTransfer",
-            "UNLModify",
-            "VaultClawback",
-            "VaultCreate",
-            "VaultDelete",
-            "VaultDeposit",
-            "VaultSet",
-            "VaultWithdraw",
+            nameof(TransactionType.AccountDelete),
+            nameof(TransactionType.AccountSet),
+            nameof(TransactionType.Batch),
+            nameof(TransactionType.ConfidentialMPTConvert),
+            nameof(TransactionType.DelegateSet),
+            nameof(TransactionType.EnableAmendment),
+            nameof(TransactionType.LoanBrokerCoverClawback),
+            nameof(TransactionType.LoanBrokerCoverDeposit),
+            nameof(TransactionType.LoanBrokerCoverWithdraw),
+            nameof(TransactionType.LoanBrokerDelete),
+            nameof(TransactionType.LoanBrokerSet),
+            nameof(TransactionType.LoanDelete),
+            nameof(TransactionType.LoanManage),
+            nameof(TransactionType.LoanPay),
+            nameof(TransactionType.LoanSet),
+            nameof(TransactionType.SetFee),
+            nameof(TransactionType.SetRegularKey),
+            nameof(TransactionType.SignerListSet),
+            nameof(TransactionType.SponsorshipTransfer),
+            nameof(TransactionType.UNLModify),
+            nameof(TransactionType.VaultClawback),
+            nameof(TransactionType.VaultCreate),
+            nameof(TransactionType.VaultDelete),
+            nameof(TransactionType.VaultDeposit),
+            nameof(TransactionType.VaultSet),
+            nameof(TransactionType.VaultWithdraw),
         };
 
         private const int MaxPermissions = 10;
