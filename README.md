@@ -208,8 +208,8 @@ foreach (TransactionSummary summary in history.Transactions)
 ```
 
 Request and response types come in pairs that share an `I` interface — use those to read what the
-ledger sent, and the request types only to send. The five `ConfidentialMPT` transactions are the
-exception: neither half declares an interface, so for those there is nothing to match on yet.
+ledger sent, and the request types only to send. Every pair has one, with no exceptions, and a
+unit test holds the SDK to that.
 
 
 ## Contributing
