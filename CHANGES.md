@@ -1,5 +1,12 @@
 # Changes
 
+## 11.6.1.0 22/09/2026
+
+* **Per-type interfaces for the five `ConfidentialMPT` transactions** (#191). `IConfidentialMPTConvert`, `IConfidentialMPTConvertBack`, `IConfidentialMPTSend`, `IConfidentialMPTClawback` and `IConfidentialMPTMergeInbox` carry the fields of their type, and the request and the response class of each pair implement one - the pattern every other transaction type follows. Until now the 32 fields of the set were declared twice, once on each half, with no contract between them, so `summary.Transaction is IConfidentialMPTSend` could not be written.
+  * `IConfidentialMPTSend` implements `IDestination` as well, as `IPayment` and `IEscrowCreate` do
+  * `TestURequestAndResponseHalvesShareAnInterface` no longer excludes these five, so every request/response pair in the assembly shares an interface
+  * the README and the remarks on `TransactionSummary.Transaction` drop the exception they documented
+
 ## 11.6.0.0 21/09/2026
 
 * **The protocol schema follows rippled develop at `e3c8996e`, the 3.4.0-rc1 build the nightly stand is pinned to** (#182 bumps the pin). `definitions.json` had been synced for 3.3.0 and was eight fields behind develop, which definitions-watch had reported as node-only for three weeks. The nightly-pin bump that would have listed them opened with an empty "definitions.json vs the new build" section: the step inherits `bash -e` from the runner, and the diff exits 1 whenever it finds drift, so errexit ended the step at the assignment - before the report was echoed or recorded - in the one case the step exists for. Fixed alongside.

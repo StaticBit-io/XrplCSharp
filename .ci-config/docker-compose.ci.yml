@@ -1,6 +1,9 @@
 services:
   xrpld:
-    image: xrpllabsofficial/xrpld:3.3.0
+    build:
+      context: .
+      dockerfile: Dockerfile.release
+    image: rippled-release:local
     container_name: rippled-service
     command: ["-a", "--start"]
     ports:
