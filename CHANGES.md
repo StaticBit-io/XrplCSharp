@@ -1,5 +1,14 @@
 # Changes
 
+## 11.7.0.0 22/09/2026
+
+* **A Delegate permission name this version cannot map no longer costs the caller the object that carries it** (#195). `PermissionValueConverter` threw a `JsonException` on an unrecognized `PermissionValue` name, and rippled returns that field as a name and gains new ones with every amendment, so a node ahead of the release took the whole containing object with it: through `TransactionResponseConverter` the exception was swallowed and the transaction came back empty with `TransactionType` left at the enum default `AccountSet`, and through `LOConverter` it escaped and failed the entire `account_objects` page.
+  * **Breaking:** the converter is now `JsonConverter<PermissionEntry>` rather than `JsonConverter<uint>` and is applied to `PermissionEntry` itself, not to its `PermissionValue` property - a converter bound to the number could not reach a second property. Code that named `PermissionValueConverter` in its own `JsonSerializerOptions` has to drop it; `PermissionEntry` carries the attribute
+  * `PermissionEntry.PermissionValueName` carries the name: the token the node sent, or the name resolved from the number when the node sent one. `PermissionValue` is `PermissionValueConverter.UnknownPermissionValue` (0, which rippled treats as no permission at all) when the name does not map
+  * `PermissionValueConverter.TryGetPermissionValue` and `TryGetPermissionName` expose both directions of the mapping
+  * writing is unchanged for a permission that maps - the number is what `Xrpl.BinaryCodec` reads - and an unmapped name is written back as the name, which rippled accepts in `tx_json` and the codec refuses to sign
+  * `TestUPermissionValueConverter` covers the mapping in both directions, the two paths that used to lose the object, and the signing blob
+
 ## 11.6.1.0 22/09/2026
 
 * **Per-type interfaces for the five `ConfidentialMPT` transactions** (#191). `IConfidentialMPTConvert`, `IConfidentialMPTConvertBack`, `IConfidentialMPTSend`, `IConfidentialMPTClawback` and `IConfidentialMPTMergeInbox` carry the fields of their type, and the request and the response class of each pair implement one - the pattern every other transaction type follows. Until now the 32 fields of the set were declared twice, once on each half, with no contract between them, so `summary.Transaction is IConfidentialMPTSend` could not be written.
