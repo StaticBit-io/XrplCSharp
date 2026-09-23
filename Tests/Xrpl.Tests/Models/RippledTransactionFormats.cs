@@ -41,11 +41,12 @@ namespace Xrpl.Tests.Models.Tests
         /// require the whole header, so comparing the two counts is what catches a single block
         /// they stopped matching - a shortfall too small for the minimum-count guard to see, and
         /// one that would drop a transaction type while leaving the conformance tests green.
-        /// Anchored at the line start so the macro's own #define, #undef and the example in its
-        /// header comment are not counted.
+        /// Anchored at the line start, with indentation allowed, so the macro's own #define,
+        /// #undef and the example in its header comment are not counted while an indented
+        /// invocation still is - the block regex above has no anchor and would count one.
         /// </summary>
         private static readonly Regex TransactionInvocation = new Regex(
-            @"^TRANSACTION\(",
+            @"^[ \t]*TRANSACTION\(",
             RegexOptions.Multiline | RegexOptions.Compiled);
 
         /// <summary>Catches a requirement keyword the mapping below does not know yet.</summary>

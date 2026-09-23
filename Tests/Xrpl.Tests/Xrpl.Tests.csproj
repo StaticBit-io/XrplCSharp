@@ -1,4 +1,4 @@
-<Project Sdk="Microsoft.NET.Sdk">
+﻿<Project Sdk="Microsoft.NET.Sdk">
 
         <PropertyGroup>
                 <!-- <TargetFramework>netstandard2.0</TargetFramework> -->
@@ -43,6 +43,9 @@
                         <CopyToOutputDirectory>PreserveNewest</CopyToOutputDirectory>
                 </None>
                 <None Update="Fixtures\ledger_entries.macro">
+                        <CopyToOutputDirectory>PreserveNewest</CopyToOutputDirectory>
+                </None>
+                <None Update="Fixtures\permissions.macro">
                         <CopyToOutputDirectory>PreserveNewest</CopyToOutputDirectory>
                 </None>
                 <!-- Live mainnet response corpus used by TestUResponseFidelity; see Fixtures\Responses\README.md. -->
