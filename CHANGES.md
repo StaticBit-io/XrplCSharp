@@ -1,5 +1,18 @@
 ﻿# Changes
 
+## 11.7.1.0 22/09/2026
+
+* **`DelegateSet` validation matches rippled's preflight, and stops refusing a transaction the ledger accepts** (#199). The local checks existed to catch what the node would reject; three of them did not correspond to anything the node does.
+  * **An empty `Permissions` array is accepted.** It is how a delegation is revoked - rippled's `doApply` deletes the `Delegate` ledger object when the array carries no entries - and `ValidateDelegateSet` threw on it, so the only way to withdraw a grant was unreachable through this SDK
+  * **`Authorize` must differ from `Account`**, which rippled's preflight rejects with `temMALFORMED` and this validator did not check at all
+  * **Duplicate detection compares the resolved name, not the spelling as written.** rippled deduplicates on the numeric `sfPermissionValue`, so `Payment` and `1` are the same entry twice and used to pass. The name is the canonical form rather than the number, because two values this version cannot name have to stay distinct - collapsing them onto one sentinel would invent a duplicate the node does not see
+  * **The non-delegable list covers all 26 types rippled refuses to delegate**, not four, and it now sees through the numeric form. It never fired on the typed path: `PermissionEntry.PermissionValue` is a `uint` and the check compared the serialized text against names, so `PermissionValue = 4` (`AccountSet`) passed. The value is resolved to a name through `PermissionValueConverter.TryGetPermissionName` first. Of the 22 names added, 17 are Loan, Vault, Sponsorship and ConfidentialMPT types the protocol gained after the original four were written
+    * checking this locally is sound because `TxSettings.delegable` is static: an amendment can withhold delegability from a delegable type - `Permission::isDelegable` takes the network's `Rules` - but never grant it to a forbidden one, so a listed type is refused on every network. The converse set, the 56 delegable types, could not be checked this way
+    * a granular permission resolves to its own name and is therefore never matched, which is correct: rippled allows `AccountDomainSet` even though `AccountSet` itself is not delegable
+    * `TestUDelegateSet.TestDenyListMatchesRippledMacro` compares the list with the vendored `transactions.macro` - the fixture `TestUTxFormatConformance` already reads - so re-pinning the fixture without extending the list turns the suite red by name
+  * the structural checks that do mirror preflight stay: at most 10 entries, no duplicate `PermissionValue`, `Permissions` present and an array of well-formed entries
+  * `TestUDelegateSet` covers all of it; there were no unit tests for this validator before
+
 ## 11.7.0.0 22/09/2026
 
 * **A Delegate permission name this version cannot map no longer costs the caller the object that carries it** (#195). `PermissionValueConverter` threw a `JsonException` on an unrecognized `PermissionValue` name, and rippled returns that field as a name and gains new ones with every amendment, so a node ahead of the release took the whole containing object with it: through `TransactionResponseConverter` the exception was swallowed and the transaction came back empty with `TransactionType` left at the enum default `AccountSet`, and through `LOConverter` it escaped and failed the entire `account_objects` page.
