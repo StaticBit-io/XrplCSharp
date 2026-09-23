@@ -1,7 +1,5 @@
 ﻿using System;
-using System.Globalization;
 using System.Linq;
-using System.Numerics;
 using System.Text.RegularExpressions;
 
 using Xrpl.AddressCodec;
@@ -107,26 +105,60 @@ namespace Xrpl.Utils.Hashes
             return (LedgerSpace.SignerList.LedgerSpaceHex() + address.AddressToHex() + "00000000").Sha512Half();
         }
 
-        public static string HashOfferId(string address, int sequence)
+        /// <summary>
+        /// Compute the ledger object index of an <c>Offer</c> entry.
+        /// Mirrors rippled's <c>keylet::offer(account, sequence)</c>:
+        /// <c>sha512Half(uint16(LedgerNameSpace::OFFER) || account(20) || uint32(sequence))</c>.
+        /// </summary>
+        /// <param name="address">Classic address of the account that placed the offer.</param>
+        /// <param name="sequence">Sequence (or ticket sequence) of the <c>OfferCreate</c> that placed it.</param>
+        /// <returns>The 64-character hexadecimal object ID of the offer.</returns>
+        public static string HashOfferId(string address, uint sequence)
         {
-
-            string hexPrefix = LedgerSpace.Offer.LedgerSpaceHex().PadLeft(2, '0');
-            string hexSequence = sequence.ToString("X").PadLeft(8, '0');
-            string prefix = "00" + hexPrefix;
-            return (prefix + address.AddressToHex() + hexSequence).Sha512Half();
+            return (LedgerSpace.Offer.LedgerSpaceHex() + address.AddressToHex() + sequence.ToString("X8")).Sha512Half();
         }
 
+        /// <inheritdoc cref="HashOfferId(string, uint)"/>
+        /// <remarks>A sequence above <see cref="int.MaxValue"/> is taken as its two's-complement bit pattern.</remarks>
+        public static string HashOfferId(string address, int sequence)
+        {
+            return HashOfferId(address, unchecked((uint)sequence));
+        }
+
+        /// <summary>
+        /// Compute the ledger object index of a <c>RippleState</c> (trust line) entry.
+        /// Mirrors rippled's <c>keylet::line(a, b, currency)</c>:
+        /// <c>sha512Half(uint16(LedgerNameSpace::TRUST_LINE) || low(20) || high(20) || currency(20))</c>,
+        /// where low/high order the two AccountIDs as unsigned byte strings.
+        /// </summary>
+        /// <param name="address1">Classic address of one side of the trust line.</param>
+        /// <param name="address2">Classic address of the other side; the order of the two does not matter.</param>
+        /// <param name="currency">A 3-character ISO code, a 40-character hex code, or a longer name encoded the way <see cref="CurrencyToHex"/> does.</param>
+        /// <returns>The 64-character hexadecimal object ID of the trust line.</returns>
         public static string HashTrustline(string address1, string address2, string currency)
         {
             string address1Hex = address1.AddressToHex();
             string address2Hex = address2.AddressToHex();
 
-            bool swap = (BigInteger.Parse(address1Hex, NumberStyles.HexNumber)>(BigInteger.Parse(address2Hex, NumberStyles.HexNumber)));
+            // Equal-length uppercase hex compares ordinally in the same order as the unsigned bytes it encodes.
+            bool swap = string.CompareOrdinal(address1Hex, address2Hex) > 0;
             string lowAddressHex = swap ? address2Hex : address1Hex;
             string highAddressHex = swap ? address1Hex : address2Hex;
 
             string prefix = LedgerSpace.RippleState.LedgerSpaceHex();
-            return (prefix + lowAddressHex + highAddressHex + currency.CurrencyToHex()).Sha512Half();
+            return (prefix + lowAddressHex + highAddressHex + CurrencyCodeHex(currency)).Sha512Half();
+        }
+
+        /// <summary>
+        /// The 20-byte currency code as hex. Unlike <see cref="CurrencyToHex"/>, which leaves an ISO code
+        /// as-is for JSON, this places the ISO code at bytes 12-14 the way the ledger stores it.
+        /// </summary>
+        private static string CurrencyCodeHex(string currency)
+        {
+            string code = currency.Trim();
+            return code.Length == 3
+                ? Xrpl.BinaryCodec.Types.Currency.EncodeCurrency(code).ToHex()
+                : code.CurrencyToHex();
         }
 
         public static string HashEscrow(string address, int sequence)
