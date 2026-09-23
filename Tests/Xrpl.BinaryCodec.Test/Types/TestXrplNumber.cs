@@ -63,9 +63,18 @@ public class TestXrplNumber
     [DataRow(".5", "0.5")]
     [DataRow(" 42 ", "42")]
     [DataRow("1E+3", "1000")]
+    [DataRow("0e100001", "0")]
     public void Parse_ThenToString(string input, string expected)
     {
         Assert.AreEqual(expected, XrplNumber.Parse(input).ToString());
+    }
+
+    [TestMethod]
+    public void Parse_JudgesRangeByValueNotByWrittenExponent()
+    {
+        // The written exponent is far outside the range; the value is 1.
+        string text = "0." + new string('0', 199_999) + "1e200000";
+        Assert.AreEqual("1", XrplNumber.Parse(text).ToString());
     }
 
     [DataTestMethod]

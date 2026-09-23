@@ -44,7 +44,9 @@ namespace Xrpl.BinaryCodec.Numbers
         private const int MantissaLog = 18;
         private const int ZeroExponent = int.MinValue;
         private const int MaxDecimalScale = 28;
-        private const long MaxParsedExponent = 100_000;
+        // Bounds the written exponent so the arithmetic below cannot overflow; whether the value fits
+        // is decided after the fraction digits are accounted for.
+        private const long MaxParsedExponent = 1_000_000_000;
 
         private static readonly BigInteger MinInternalMantissaBig = MinInternalMantissa;
         private static readonly BigInteger MaxInternalMantissaBig = MaxInternalMantissa;
