@@ -1,8 +1,8 @@
 ﻿# Changes
 
-## 11.9.0.0 23/09/2026
+## 11.8.0.1 23/09/2026
 
-* **Breaking:** `Amount` is removed from `IVaultCreate`, `VaultCreate` and `VaultCreateResponse` (#208). `VaultCreate` has no such field in rippled's `transactions.macro`, and a node refuses any transaction that carries it with `invalidTransaction` ("Field 'Amount' found in disallowed location"). A vault is created empty. Migration: drop the assignment and fund the vault with a `VaultDeposit` after the create.
+* **`VaultCreate` no longer declares an `Amount` field** (#208). The property is removed from `IVaultCreate`, `VaultCreate` and `VaultCreateResponse`. `VaultCreate` has no such field in rippled's `transactions.macro`, and a node refuses any transaction that carries it with `invalidTransaction` ("Field 'Amount' found in disallowed location"), so it could not be used. A vault is created empty and funded with `VaultDeposit`.
   * `TestUTransactionModelFieldsConformance` checks every wire property a transaction request or response model declares against the fields the vendored `transactions.macro` gives its type. `VaultCreate.Amount` was the only violation
 * **Lending rates are documented in their actual unit, 1/10th of a basis point, where 100000 = 100%** (#209)
   * `LoanSet`: `InterestRate`, `LateInterestRate`, `CloseInterestRate`, `OverpaymentInterestRate` and `OverpaymentFee` said 1/100th of a basis point. `LoanBrokerSet`: `CoverRateMinimum` and `CoverRateLiquidation` said the same
