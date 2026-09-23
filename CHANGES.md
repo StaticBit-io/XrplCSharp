@@ -1,6 +1,6 @@
 ﻿# Changes
 
-## 11.7.3.0 23/09/2026
+## 11.8.0.0 23/09/2026
 
 * **A Delegate permission reads as its name everywhere, the way rippled reports it** (#197). `Xrpl.BinaryCodec` now understands the PermissionValue field in both of the forms rippled accepts, so a transaction taken from a node, encoded and decoded again comes back as it arrived instead of turning into a number partway through.
   * `DelegatablePermissions` maps a permission between name and value in one place, covering both kinds: granular permissions and transaction types, whose permission value is the type code plus one. It is the counterpart of xrpl.js's `delegatablePermissions` lookup
