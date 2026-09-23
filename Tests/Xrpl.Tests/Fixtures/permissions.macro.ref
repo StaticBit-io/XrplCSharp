@@ -1,0 +1,24 @@
+https://github.com/XRPLF/rippled/blob/develop/include/xrpl/protocol/detail/permissions.macro
+sha  e3c8996e44921fe3b4e02c65cb41948848bcc7c5
+date 2026-09-05T00:06:14Z
+
+permissions.macro is vendored byte-identical to the ref above so that it can be
+re-verified with a plain diff:
+
+  curl -sSL https://raw.githubusercontent.com/XRPLF/rippled/e3c8996e44921fe3b4e02c65cb41948848bcc7c5/include/xrpl/protocol/detail/permissions.macro \
+    | diff - Tests/Xrpl.Tests/Fixtures/permissions.macro
+
+Pinned to the same develop commit as transactions.macro, and for the same reason:
+that is the commit the nightly stand is pinned to (.ci-config/Dockerfile.nightly),
+so the fixtures and the stand describe one build. The two files are read together
+anyway - a granular permission names the transaction type it applies to, and
+TestUGranularPermissionConformance checks those names against transactions.macro.
+
+This file is the only source for the granular permissions. definitions.json does
+not carry them and never will: it holds fields, ledger entry types, transaction
+types and results, which is why GenerateEnums cannot produce GranularPermission
+the way it produces the others.
+
+Do not hand-edit it. When protocol-watch reports a change to this file upstream,
+replace it wholesale, update the sha above, and let
+TestUGranularPermissionConformance show which enum members have to follow.

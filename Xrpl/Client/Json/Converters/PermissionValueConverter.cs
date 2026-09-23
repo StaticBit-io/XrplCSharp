@@ -33,22 +33,21 @@ public sealed class PermissionValueConverter : JsonConverter<PermissionEntry>
 
     private const string PermissionValuePropertyName = "PermissionValue";
 
-    // Granular permission values per rippled include/xrpl/protocol/detail/permissions.macro
-    private static readonly Dictionary<string, uint> GranularPermissions = new(StringComparer.Ordinal)
+    // Built from the enum rather than restated here: one table, and a caller can name a
+    // permission as GranularPermission.TrustlineAuthorize instead of 65537.
+    private static readonly Dictionary<string, uint> GranularPermissions = BuildGranularPermissions();
+
+    private static Dictionary<string, uint> BuildGranularPermissions()
     {
-        ["TrustlineAuthorize"] = 65537,
-        ["TrustlineFreeze"] = 65538,
-        ["TrustlineUnfreeze"] = 65539,
-        ["AccountDomainSet"] = 65540,
-        ["AccountEmailHashSet"] = 65541,
-        ["AccountMessageKeySet"] = 65542,
-        ["AccountTransferRateSet"] = 65543,
-        ["AccountTickSizeSet"] = 65544,
-        ["PaymentMint"] = 65545,
-        ["PaymentBurn"] = 65546,
-        ["MPTokenIssuanceLock"] = 65547,
-        ["MPTokenIssuanceUnlock"] = 65548,
-    };
+        Dictionary<string, uint> permissions = new(StringComparer.Ordinal);
+
+        // Spelled in full rather than imported: Xrpl.Models also holds a TransactionType enum,
+        // which would collide with the codec's TransactionType class used below.
+        foreach (Models.GranularPermission permission in Enum.GetValues<Models.GranularPermission>())
+            permissions[permission.ToString()] = (uint)permission;
+
+        return permissions;
+    }
 
     private static readonly Lazy<Dictionary<uint, string>> PermissionNames = new(BuildPermissionNames);
 
