@@ -1,4 +1,4 @@
-using System;
+﻿using System;
 using System.Collections.Generic;
 using System.IO;
 using System.Text.RegularExpressions;
@@ -21,12 +21,17 @@ namespace Xrpl.Tests.Models.Tests
         /// GRANULAR_PERMISSION(name, txType, value, allowedFlags, allowedFields)
         /// </summary>
         private static readonly Regex Entry = new Regex(
-            @"^GRANULAR_PERMISSION\(\s*(?<name>\w+)\s*,\s*(?<txType>tt\w+)\s*,\s*(?<value>\d+)\s*,",
+            @"^[ \t]*GRANULAR_PERMISSION\(\s*(?<name>\w+)\s*,\s*(?<txType>tt\w+)\s*,\s*(?<value>\d+)\s*,",
             RegexOptions.Multiline | RegexOptions.Compiled);
 
-        /// <summary>Every invocation, matched on its opening alone, to catch one the parser above missed.</summary>
+        /// <summary>
+        /// Every invocation, matched on its opening alone, to catch one the parser above missed.
+        /// Both patterns tolerate leading indentation, and they have to do so together: an
+        /// indented entry that only one of them saw would make the counts disagree, but one that
+        /// neither saw would leave them agreeing on an incomplete table.
+        /// </summary>
         private static readonly Regex Invocation = new Regex(
-            @"^GRANULAR_PERMISSION\(",
+            @"^[ \t]*GRANULAR_PERMISSION\(",
             RegexOptions.Multiline | RegexOptions.Compiled);
 
         /// <summary>
