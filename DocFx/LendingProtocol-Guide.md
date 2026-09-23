@@ -122,13 +122,17 @@ await client.SubmitAndWait(depositTx, walletBroker, true);
 
 ### 3. Create the Loan Broker
 
-Create a broker that references the funded vault:
+Create a broker that references the funded vault. The three rates are optional; leave them out for a broker with none:
 
 ```csharp
 LoanBrokerSet brokerTx = new LoanBrokerSet
 {
     Account = walletBroker.ClassicAddress,
     VaultID = vaultId,
+    // Optional rates, fixed at creation. All are in 1/10th of a basis point: 100000 = 100%
+    CoverRateMinimum = 15000,        // 15% of outstanding debt must be covered by first-loss capital
+    CoverRateLiquidation = 12000,    // 12% of the minimum cover is moved to the vault on a default
+    ManagementFeeRate = 100,         // 0.1% management fee
 };
 brokerTx = await client.Autofill(brokerTx);
 TransactionSummary brokerResult = await client.SubmitAndWait(brokerTx, walletBroker, true);
@@ -136,26 +140,11 @@ TransactionSummary brokerResult = await client.SubmitAndWait(brokerTx, walletBro
 string brokerId = GetCreatedObjectId(brokerResult, LedgerEntryType.LoanBroker);
 ```
 
-### 4. Set Broker Rates (Optional)
-
-The broker's rates are fixed when it is created, so they go on the `LoanBrokerSet` from step 3. A `LoanBrokerSet` that modifies an existing broker carries `LoanBrokerID` and must not include them: rippled rejects it with `temINVALID`.
-
-All lending rates are in 1/10th of a basis point: `100000` is 100%, `1000` is 1%.
-
-```csharp
-LoanBrokerSet brokerTx = new LoanBrokerSet
-{
-    Account = walletBroker.ClassicAddress,
-    VaultID = vaultId,
-    CoverRateMinimum = 15000,        // 15% of outstanding debt must be covered by first-loss capital
-    CoverRateLiquidation = 12000,    // 12% of the minimum cover is moved to the vault on a default
-    ManagementFeeRate = 100,         // 0.1% management fee
-};
-```
+The rates can only be set here. A `LoanBrokerSet` that modifies an existing broker carries `LoanBrokerID` and must not include them: rippled rejects it with `temINVALID`.
 
 `CoverRateMinimum` and `CoverRateLiquidation` range from 0 to 100000 and must be both zero or both non-zero. `ManagementFeeRate` ranges from 0 to 10000 (10%).
 
-### 5. Deposit Cover
+### 4. Deposit Cover
 
 Deposit cover into the broker to enable loan issuance:
 

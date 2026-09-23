@@ -122,13 +122,17 @@ await client.SubmitAndWait(depositTx, walletBroker, true);
 
 ### 3. Создание кредитного брокера
 
-Создание брокера, ссылающегося на пополненное хранилище:
+Создание брокера, ссылающегося на пополненное хранилище. Три ставки необязательны; брокер без ставок создаётся без этих полей:
 
 ```csharp
 LoanBrokerSet brokerTx = new LoanBrokerSet
 {
     Account = walletBroker.ClassicAddress,
     VaultID = vaultId,
+    // Optional rates, fixed at creation. All are in 1/10th of a basis point: 100000 = 100%
+    CoverRateMinimum = 15000,        // 15% of outstanding debt must be covered by first-loss capital
+    CoverRateLiquidation = 12000,    // 12% of the minimum cover is moved to the vault on a default
+    ManagementFeeRate = 100,         // 0.1% management fee
 };
 brokerTx = await client.Autofill(brokerTx);
 TransactionSummary brokerResult = await client.SubmitAndWait(brokerTx, walletBroker, true);
@@ -136,26 +140,11 @@ TransactionSummary brokerResult = await client.SubmitAndWait(brokerTx, walletBro
 string brokerId = GetCreatedObjectId(brokerResult, LedgerEntryType.LoanBroker);
 ```
 
-### 4. Ставки брокера (опционально)
-
-Ставки брокера фиксируются при создании, поэтому задаются в `LoanBrokerSet` из шага 3. `LoanBrokerSet`, изменяющий существующего брокера, несёт `LoanBrokerID` и не может включать эти поля: rippled отклоняет такую транзакцию с `temINVALID`.
-
-Все ставки кредитования задаются в десятых долях базисного пункта: `100000` — это 100%, `1000` — 1%.
-
-```csharp
-LoanBrokerSet brokerTx = new LoanBrokerSet
-{
-    Account = walletBroker.ClassicAddress,
-    VaultID = vaultId,
-    CoverRateMinimum = 15000,        // 15% of outstanding debt must be covered by first-loss capital
-    CoverRateLiquidation = 12000,    // 12% of the minimum cover is moved to the vault on a default
-    ManagementFeeRate = 100,         // 0.1% management fee
-};
-```
+Задать ставки можно только здесь. `LoanBrokerSet`, изменяющий существующего брокера, несёт `LoanBrokerID` и не может включать эти поля: rippled отклоняет такую транзакцию с `temINVALID`.
 
 `CoverRateMinimum` и `CoverRateLiquidation` принимают значения от 0 до 100000 и должны быть либо оба нулевыми, либо оба ненулевыми. `ManagementFeeRate` принимает значения от 0 до 10000 (10%).
 
-### 5. Внесение покрытия
+### 4. Внесение покрытия
 
 Депозит покрытия для возможности выдачи кредитов:
 
