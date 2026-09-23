@@ -2,6 +2,7 @@ using System;
 using System.Collections.Generic;
 using System.Text.Json.Serialization;
 
+using Xrpl.BinaryCodec.Numbers;
 using Xrpl.Client.Exceptions;
 using Xrpl.Models.Enums;
 
@@ -51,10 +52,10 @@ namespace Xrpl.Models.Transactions
         string Counterparty { get; set; }
 
         /// <summary>
-        /// The principal amount requested for the loan (Number type, string representation).
+        /// The principal amount requested for the loan (Number type).
         /// Required.
         /// </summary>
-        string PrincipalRequested { get; set; }
+        XrplNumber? PrincipalRequested { get; set; }
 
         /// <summary>
         /// The annualized interest rate for the loan, in 1/10th of a basis point: 100000 = 100%, 5000 = 5%. Valid range: 0–100000.
@@ -82,24 +83,24 @@ namespace Xrpl.Models.Transactions
         uint? OverpaymentFee { get; set; }
 
         /// <summary>
-        /// The origination fee for the loan (Number type, string representation).
+        /// The origination fee for the loan (Number type).
         /// </summary>
-        string LoanOriginationFee { get; set; }
+        XrplNumber? LoanOriginationFee { get; set; }
 
         /// <summary>
-        /// The service fee for the loan (Number type, string representation).
+        /// The service fee for the loan (Number type).
         /// </summary>
-        string LoanServiceFee { get; set; }
+        XrplNumber? LoanServiceFee { get; set; }
 
         /// <summary>
-        /// The fee charged for late payments (Number type, string representation).
+        /// The fee charged for late payments (Number type).
         /// </summary>
-        string LatePaymentFee { get; set; }
+        XrplNumber? LatePaymentFee { get; set; }
 
         /// <summary>
-        /// The fee charged for early loan closure (Number type, string representation).
+        /// The fee charged for early loan closure (Number type).
         /// </summary>
-        string ClosePaymentFee { get; set; }
+        XrplNumber? ClosePaymentFee { get; set; }
 
         /// <summary>
         /// The total number of payments for the loan. Default: 1.
@@ -147,7 +148,7 @@ namespace Xrpl.Models.Transactions
 
         /// <inheritdoc />
         [JsonPropertyName("PrincipalRequested")]
-        public string PrincipalRequested { get; set; }
+        public XrplNumber? PrincipalRequested { get; set; }
 
         /// <inheritdoc />
         [JsonPropertyName("InterestRate")]
@@ -171,19 +172,19 @@ namespace Xrpl.Models.Transactions
 
         /// <inheritdoc />
         [JsonPropertyName("LoanOriginationFee")]
-        public string LoanOriginationFee { get; set; }
+        public XrplNumber? LoanOriginationFee { get; set; }
 
         /// <inheritdoc />
         [JsonPropertyName("LoanServiceFee")]
-        public string LoanServiceFee { get; set; }
+        public XrplNumber? LoanServiceFee { get; set; }
 
         /// <inheritdoc />
         [JsonPropertyName("LatePaymentFee")]
-        public string LatePaymentFee { get; set; }
+        public XrplNumber? LatePaymentFee { get; set; }
 
         /// <inheritdoc />
         [JsonPropertyName("ClosePaymentFee")]
-        public string ClosePaymentFee { get; set; }
+        public XrplNumber? ClosePaymentFee { get; set; }
 
         /// <inheritdoc />
         [JsonPropertyName("PaymentTotal")]
@@ -222,7 +223,7 @@ namespace Xrpl.Models.Transactions
 
         /// <inheritdoc />
         [JsonPropertyName("PrincipalRequested")]
-        public string PrincipalRequested { get; set; }
+        public XrplNumber? PrincipalRequested { get; set; }
 
         /// <inheritdoc />
         [JsonPropertyName("InterestRate")]
@@ -246,19 +247,19 @@ namespace Xrpl.Models.Transactions
 
         /// <inheritdoc />
         [JsonPropertyName("LoanOriginationFee")]
-        public string LoanOriginationFee { get; set; }
+        public XrplNumber? LoanOriginationFee { get; set; }
 
         /// <inheritdoc />
         [JsonPropertyName("LoanServiceFee")]
-        public string LoanServiceFee { get; set; }
+        public XrplNumber? LoanServiceFee { get; set; }
 
         /// <inheritdoc />
         [JsonPropertyName("LatePaymentFee")]
-        public string LatePaymentFee { get; set; }
+        public XrplNumber? LatePaymentFee { get; set; }
 
         /// <inheritdoc />
         [JsonPropertyName("ClosePaymentFee")]
-        public string ClosePaymentFee { get; set; }
+        public XrplNumber? ClosePaymentFee { get; set; }
 
         /// <inheritdoc />
         [JsonPropertyName("PaymentTotal")]

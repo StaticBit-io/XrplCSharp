@@ -407,10 +407,12 @@ namespace Xrpl.Sugar
             if (loan.PaymentRemaining is null or <= LOAN_PAYMENTS_PER_FEE_INCREMENT)
                 return BigInteger.One;
 
-            if (!TryParseNumber(loan.PeriodicPayment, out decimal periodicPayment) || periodicPayment <= 0)
+            if (loan.PeriodicPayment is not { } periodic || !periodic.TryToDecimal(out decimal periodicPayment) || periodicPayment <= 0)
                 return BigInteger.One;
 
-            TryParseNumber(loan.LoanServiceFee, out decimal serviceFee);
+            decimal serviceFee = 0m;
+            if (loan.LoanServiceFee is { } fee)
+                fee.TryToDecimal(out serviceFee);
             decimal regularPayment = RoundPeriodicPayment(periodicPayment, integralAsset, loan.LoanScale ?? 0) + serviceFee;
             if (regularPayment <= 0)
                 return BigInteger.One;
@@ -532,7 +534,7 @@ namespace Xrpl.Sugar
         }
 
         /// <summary>
-        /// Parses a rippled Number field, which is serialized as a decimal string.
+        /// Parses an amount value of the transaction, written as a decimal string.
         /// </summary>
         private static bool TryParseNumber(object value, out decimal result)
         {

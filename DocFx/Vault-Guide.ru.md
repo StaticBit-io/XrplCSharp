@@ -139,7 +139,7 @@ VaultCreate vaultTx = new VaultCreate
 {
     Account = wallet.ClassicAddress,
     Asset = new IssuedCurrency { Currency = "XRP" },
-    AssetsMaximum = "1000000000",           // макс. 1000 XRP (в drops)
+    AssetsMaximum = 1000000000,             // макс. 1000 XRP (в drops)
     MPTokenMetadata = "48656C6C6F",         // hex-метаданные для долей
     Data = "7B226E223A225465737420566175"
          + "6C74222C2277223A226578616D70"
@@ -208,7 +208,7 @@ VaultSet setTx = new VaultSet
 {
     Account = wallet.ClassicAddress,
     VaultID = vaultId,
-    AssetsMaximum = "2000000000",   // увеличить лимит до 2000 XRP
+    AssetsMaximum = 2000000000,     // увеличить лимит до 2000 XRP
     Data = "7B226E223A2255706461746564227D",  // новые метаданные
 };
 setTx = await client.Autofill(setTx);

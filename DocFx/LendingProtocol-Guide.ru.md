@@ -195,7 +195,7 @@ LoanSet loanTx = new LoanSet
     Account = walletBroker.ClassicAddress,
     LoanBrokerID = brokerId,
     Counterparty = walletBorrower.ClassicAddress,
-    PrincipalRequested = "10000000",  // Тип Number (не drops)
+    PrincipalRequested = 10000000,  // Тип Number (не drops)
 };
 
 // Требуется специальная совместная подпись — см. раздел CounterpartySignature
@@ -466,7 +466,11 @@ foreach (var obj in response.AccountObjectList)
 
 ### В моделях транзакций
 
-Поля типа Number представлены как `string` в C#-моделях (например, `PrincipalRequested = "10000000"`). Бинарный кодек автоматически выполняет нормализацию и сериализацию.
+Поля типа Number представлены в C#-моделях типом `XrplNumber?` (пространство имён `Xrpl.BinaryCodec.Numbers`). `int` преобразуется неявно (`PrincipalRequested = 10000000`); остальные значения получаются через `XrplNumber.Parse("1.5")` или явное приведение из `long` или `decimal`. Бинарный кодек автоматически выполняет нормализацию и сериализацию.
+
+Значение, которое леджер не может хранить точно (больше 19 значащих цифр), отклоняется с `FormatException` (при приведении типа - с `OverflowException`), а не округляется: так же его отклоняет rippled в JSON. Такое значение необходимо округлить самостоятельно до присваивания.
+
+Поля, прочитанные из леджера, приходят в том виде, в каком их пишет rippled, например `"1e13"` для 10^13. Сравнивать их рекомендуется по значению (`==`, `<`), а не как текст; для арифметики на `decimal` используется `TryToDecimal`.
 
 ---
 

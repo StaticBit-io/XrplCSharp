@@ -1,5 +1,7 @@
 using System.Text.Json.Serialization;
 
+using Xrpl.BinaryCodec.Numbers;
+
 using static Xrpl.Models.Common.Common;
 
 namespace Xrpl.Models.Ledger;
@@ -47,22 +49,22 @@ public class LOLoanBroker : BaseLedgerEntry
     public uint? OwnerCount { get; init; }
 
     /// <summary>
-    /// Total asset amount the protocol owes the vault, including interest (Number type, string representation).
+    /// Total asset amount the protocol owes the vault, including interest (Number type).
     /// </summary>
     [JsonPropertyName("DebtTotal")]
-    public string DebtTotal { get; init; }
+    public XrplNumber? DebtTotal { get; init; }
 
     /// <summary>
-    /// Protocol debt ceiling; 0 indicates unlimited (Number type, string representation).
+    /// Protocol debt ceiling; 0 indicates unlimited (Number type).
     /// </summary>
     [JsonPropertyName("DebtMaximum")]
-    public string DebtMaximum { get; init; }
+    public XrplNumber? DebtMaximum { get; init; }
 
     /// <summary>
-    /// Total amount of first-loss capital deposited (Number type, string representation).
+    /// Total amount of first-loss capital deposited (Number type).
     /// </summary>
     [JsonPropertyName("CoverAvailable")]
-    public string CoverAvailable { get; init; }
+    public XrplNumber? CoverAvailable { get; init; }
 
     /// <summary>
     /// The share of the broker's outstanding debt that first-loss capital must cover, in 1/10th of a basis point: 100000 = 100% (0–100000).

@@ -4,6 +4,7 @@ using System.Text;
 using System.Text.Json;
 using System.Text.Json.Serialization;
 
+using Xrpl.BinaryCodec.Numbers;
 using Xrpl.Client.Json.Converters;
 using Xrpl.Models.Common;
 
@@ -163,28 +164,28 @@ public class LOVault : BaseLedgerEntry
     public IssuedCurrency Asset { get; init; }
 
     /// <summary>
-    /// The total value of the vault (STNumber type, serialized as string in JSON).
+    /// The total value of the vault (Number type).
     /// </summary>
     [JsonPropertyName("AssetsTotal")]
-    public string AssetsTotal { get; init; }
+    public XrplNumber? AssetsTotal { get; init; }
 
     /// <summary>
-    /// The asset amount that is available in the vault (STNumber type, serialized as string in JSON).
+    /// The asset amount that is available in the vault (Number type).
     /// </summary>
     [JsonPropertyName("AssetsAvailable")]
-    public string AssetsAvailable { get; init; }
+    public XrplNumber? AssetsAvailable { get; init; }
 
     /// <summary>
-    /// The maximum amount of assets the vault can hold, or 0 for no limit (STNumber type).
+    /// The maximum amount of assets the vault can hold, or 0 for no limit (Number type).
     /// </summary>
     [JsonPropertyName("AssetsMaximum")]
-    public string AssetsMaximum { get; init; }
+    public XrplNumber? AssetsMaximum { get; init; }
 
     /// <summary>
-    /// The potential loss amount that is not yet realized, expressed as the vault's asset (STNumber type).
+    /// The potential loss amount that is not yet realized, expressed as the vault's asset (Number type).
     /// </summary>
     [JsonPropertyName("LossUnrealized")]
-    public string LossUnrealized { get; init; }
+    public XrplNumber? LossUnrealized { get; init; }
 
     /// <summary>
     /// The identifier of the share MPTokenIssuance object.

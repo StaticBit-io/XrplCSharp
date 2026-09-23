@@ -4,6 +4,7 @@ using System.Text.Json.Nodes;
 using Microsoft.VisualStudio.TestTools.UnitTesting;
 
 using Xrpl.BinaryCodec.Binary;
+using Xrpl.BinaryCodec.Numbers;
 using Xrpl.BinaryCodec.Types;
 
 namespace XrplTests.BinaryCodecLib.Types;
@@ -131,10 +132,49 @@ public class TestNumberType
     public void TestToJson_PrincipalRequested()
     {
         // Matches rippled's JSON output: "PrincipalRequested": "1e13"
-        // Our ToJson should return "10000000000000" (the decimal representation)
         NumberType value = NumberType.FromString("10000000000000");
         JsonNode json = value.ToJson();
-        Assert.AreEqual("10000000000000", json.GetValue<string>());
+        Assert.AreEqual("1e13", json.GetValue<string>());
+    }
+
+    [TestMethod]
+    public void TestFromString_RejectsValueTheLedgerCannotHoldExactly()
+    {
+        // rippled refuses this in JSON ("number cannot be represented"); rounding it here would sign
+        // a different value than the one written.
+        Assert.ThrowsExactly<FormatException>(() => NumberType.FromString("9223372036854775895"));
+    }
+
+    [TestMethod]
+    public void TestFromParser_ExponentAboveRangeFromLargeMantissa_RoundTrips()
+    {
+        // 9223372036854775810e32768 is a rippled value whose mantissa is above int64, so its wire
+        // exponent is 32769.
+        NumberType original = NumberType.FromString("9223372036854775810e32768");
+        Assert.AreEqual(922_337_203_685_477_581L, original.Mantissa);
+        Assert.AreEqual(32769, original.Exponent);
+
+        BytesList sink = new BytesList();
+        original.ToBytes(sink);
+        NumberType decoded = NumberType.FromParser(new BufferParser(BitConverter.ToString(sink.ToBytes()).Replace("-", "")));
+        Assert.AreEqual("9223372036854775810e32768", decoded.ToString());
+    }
+
+    [TestMethod]
+    public void TestFromParser_NonCanonicalPairKeepsBytesAndValue()
+    {
+        // 5 x 10^0 is not normalized; the codec keeps the bytes it read and reports the value.
+        NumberType decoded = NumberType.FromParser(new BufferParser("0000000000000005" + "00000000"));
+        Assert.AreEqual(5L, decoded.Mantissa);
+        Assert.AreEqual(0, decoded.Exponent);
+        Assert.AreEqual(XrplNumber.Parse("5"), decoded.Value);
+        Assert.AreEqual("5", decoded.ToJson().GetValue<string>());
+    }
+
+    [TestMethod]
+    public void TestFromParser_Int64MinValueMantissa_Throws()
+    {
+        Assert.ThrowsExactly<FormatException>(() => NumberType.FromParser(new BufferParser("8000000000000000" + "00000000")));
     }
 
     [TestMethod]
