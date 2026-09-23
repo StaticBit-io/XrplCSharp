@@ -1,4 +1,4 @@
-using System;
+﻿using System;
 using System.Collections.Generic;
 using System.IO;
 using System.Linq;
@@ -36,6 +36,18 @@ namespace Xrpl.Tests.Models.Tests
             @"\{\s*sf(?<field>\w+)\s*,\s*Soe(?<requirement>Required|Optional|Default)\b",
             RegexOptions.Compiled);
 
+        /// <summary>
+        /// Every TRANSACTION invocation, matched on nothing but its opening. The parsers above
+        /// require the whole header, so comparing the two counts is what catches a single block
+        /// they stopped matching - a shortfall too small for the minimum-count guard to see, and
+        /// one that would drop a transaction type while leaving the conformance tests green.
+        /// Anchored at the line start so the macro's own #define, #undef and the example in its
+        /// header comment are not counted.
+        /// </summary>
+        private static readonly Regex TransactionInvocation = new Regex(
+            @"^TRANSACTION\(",
+            RegexOptions.Multiline | RegexOptions.Compiled);
+
         /// <summary>Catches a requirement keyword the mapping below does not know yet.</summary>
         private static readonly Regex AnyFieldEntry = new Regex(
             @"\{\s*sf(?<field>\w+)\s*,\s*Soe(?<requirement>\w+)",
@@ -59,9 +71,81 @@ namespace Xrpl.Tests.Models.Tests
             Path.Combine(AppContext.BaseDirectory, "Fixtures", "transactions.macro");
 
         /// <summary>
-        /// Transaction name -> field name -> requirement, exactly as rippled declares it.
+        /// The transaction types rippled refuses to delegate, exactly as the macro declares them.
         /// </summary>
-        internal static Dictionary<string, Dictionary<string, TxFormat.Requirement>> Parse()
+        /// <remarks>
+        /// <c>TxSettings.delegable</c> defaults to <c>Delegation::NotDelegable</c>, so a type is
+        /// delegable only where its settings tuple says so explicitly. The flag is static: an
+        /// amendment can withhold delegability from a delegable type, never grant it to a
+        /// forbidden one, so this set is correct for every network - unlike the delegable set,
+        /// which <c>Permission::isDelegable</c> answers against the active amendments.
+        /// </remarks>
+        internal static HashSet<string> NonDelegableTransactions()
+        {
+            string macro = ReadFixture();
+
+            HashSet<string> nonDelegable = new(StringComparer.Ordinal);
+            int total = 0;
+
+            foreach (Match block in TransactionBlock.Matches(macro))
+            {
+                string name = block.Groups["name"].Value;
+                string body = block.Groups["body"].Value;
+                total++;
+
+                // The settings tuple is the first parenthesised group of the body; the fields
+                // tuple follows it. Without the separator the layout has changed and any answer
+                // here would be a guess.
+                int settingsEnd = body.IndexOf("}),", StringComparison.Ordinal);
+                if (settingsEnd < 0)
+                {
+                    throw new InvalidOperationException(
+                        $"{name}: could not find the end of the settings tuple in transactions.macro — " +
+                        "the macro format changed, update the parser before trusting this test");
+                }
+
+                string settings = body.Substring(0, settingsEnd);
+                if (!settings.Contains("Delegation::Delegable", StringComparison.Ordinal))
+                    nonDelegable.Add(name);
+            }
+
+            EnsureEveryBlockParsed(macro, total);
+
+            // Every type delegable, or none of them, means the settings tuple stopped matching
+            // rather than that the protocol changed that drastically.
+            if (nonDelegable.Count == 0 || nonDelegable.Count == total)
+            {
+                throw new InvalidOperationException(
+                    $"Parsed {nonDelegable.Count} non-delegable types out of {total} — the delegable " +
+                    "flag stopped being read, so this test would pass on nothing");
+            }
+
+            return nonDelegable;
+        }
+
+        /// <summary>
+        /// Fails unless the parse covered every TRANSACTION invocation in the fixture.
+        /// </summary>
+        private static void EnsureEveryBlockParsed(string macro, int parsed)
+        {
+            if (parsed < MinimumExpectedTransactions)
+            {
+                throw new InvalidOperationException(
+                    $"Parsed only {parsed} transaction blocks from transactions.macro " +
+                    $"(expected at least {MinimumExpectedTransactions}) — the macro layout changed " +
+                    "and the parser silently stopped matching");
+            }
+
+            int declared = TransactionInvocation.Matches(macro).Count;
+            if (parsed != declared)
+            {
+                throw new InvalidOperationException(
+                    $"transactions.macro declares {declared} transactions but only {parsed} parsed — " +
+                    "a TRANSACTION header the parser does not match would drop that type silently");
+            }
+        }
+
+        private static string ReadFixture()
         {
             if (!File.Exists(FixturePath))
                 throw new InvalidOperationException($"Vendored transactions.macro not found at {FixturePath}");
@@ -69,6 +153,16 @@ namespace Xrpl.Tests.Models.Tests
             string macro = File.ReadAllText(FixturePath);
             if (string.IsNullOrWhiteSpace(macro))
                 throw new InvalidOperationException("Vendored transactions.macro is empty");
+
+            return macro;
+        }
+
+        /// <summary>
+        /// Transaction name -> field name -> requirement, exactly as rippled declares it.
+        /// </summary>
+        internal static Dictionary<string, Dictionary<string, TxFormat.Requirement>> Parse()
+        {
+            string macro = ReadFixture();
 
             Dictionary<string, Dictionary<string, TxFormat.Requirement>> formats = new();
 
@@ -104,13 +198,7 @@ namespace Xrpl.Tests.Models.Tests
                 formats[name] = fields;
             }
 
-            if (formats.Count < MinimumExpectedTransactions)
-            {
-                throw new InvalidOperationException(
-                    $"Parsed only {formats.Count} transaction formats from transactions.macro " +
-                    $"(expected at least {MinimumExpectedTransactions}) — the macro layout changed " +
-                    "and the parser silently stopped matching");
-            }
+            EnsureEveryBlockParsed(macro, formats.Count);
 
             return formats;
         }
