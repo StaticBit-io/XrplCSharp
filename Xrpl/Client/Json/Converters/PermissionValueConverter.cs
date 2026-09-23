@@ -4,7 +4,7 @@ using System.Globalization;
 using System.Text.Json;
 using System.Text.Json.Serialization;
 
-using Xrpl.BinaryCodec.Types;
+using Xrpl.BinaryCodec.Enums;
 using Xrpl.Models.Common;
 
 namespace Xrpl.Client.Json.Converters;
@@ -29,46 +29,9 @@ public sealed class PermissionValueConverter : JsonConverter<PermissionEntry>
     /// The value stored for a name this version cannot map. rippled treats 0 as no permission
     /// at all, so it can never collide with a real one.
     /// </summary>
-    public const uint UnknownPermissionValue = 0;
+    public const uint UnknownPermissionValue = DelegatablePermissions.UnknownPermissionValue;
 
     private const string PermissionValuePropertyName = "PermissionValue";
-
-    // Built from the enum rather than restated here: one table, and a caller can name a
-    // permission as GranularPermission.TrustlineAuthorize instead of 65537.
-    private static readonly Dictionary<string, uint> GranularPermissions = BuildGranularPermissions();
-
-    private static Dictionary<string, uint> BuildGranularPermissions()
-    {
-        Dictionary<string, uint> permissions = new(StringComparer.Ordinal);
-
-        // Spelled in full rather than imported: Xrpl.Models also holds a TransactionType enum,
-        // which would collide with the codec's TransactionType class used below.
-        foreach (Models.GranularPermission permission in Enum.GetValues<Models.GranularPermission>())
-            permissions[permission.ToString()] = (uint)permission;
-
-        return permissions;
-    }
-
-    private static readonly Lazy<Dictionary<uint, string>> PermissionNames = new(BuildPermissionNames);
-
-    private static Dictionary<uint, string> BuildPermissionNames()
-    {
-        Dictionary<uint, string> names = new Dictionary<uint, string>();
-
-        foreach (KeyValuePair<string, uint> granular in GranularPermissions)
-            names[granular.Value] = granular.Key;
-
-        foreach (TransactionType transactionType in TransactionType.Values)
-        {
-            // Invalid is defined with ordinal -1 and has no permission value.
-            if (transactionType.Ordinal < 0)
-                continue;
-
-            names[(uint)transactionType.Ordinal + 1] = transactionType.Name;
-        }
-
-        return names;
-    }
 
     /// <summary>
     /// Maps a permission name to its numeric value.
@@ -76,23 +39,8 @@ public sealed class PermissionValueConverter : JsonConverter<PermissionEntry>
     /// <param name="name">A granular permission name or a transaction type name.</param>
     /// <param name="value">The numeric value, when the name is known to this version.</param>
     /// <returns>True when the name was mapped.</returns>
-    public static bool TryGetPermissionValue(string name, out uint value)
-    {
-        if (name is not null)
-        {
-            if (GranularPermissions.TryGetValue(name, out value))
-                return true;
-
-            if (TransactionType.Values.Has(name))
-            {
-                value = (uint)TransactionType.Values[name].Ordinal + 1;
-                return true;
-            }
-        }
-
-        value = UnknownPermissionValue;
-        return false;
-    }
+    public static bool TryGetPermissionValue(string name, out uint value) =>
+        DelegatablePermissions.TryGetValue(name, out value);
 
     /// <summary>
     /// Maps a numeric permission value back to the name rippled uses for it.
@@ -100,16 +48,8 @@ public sealed class PermissionValueConverter : JsonConverter<PermissionEntry>
     /// <param name="value">The numeric permission value.</param>
     /// <param name="name">The permission name, when the value is known to this version.</param>
     /// <returns>True when the value was mapped.</returns>
-    public static bool TryGetPermissionName(uint value, out string name)
-    {
-        if (value == UnknownPermissionValue)
-        {
-            name = null;
-            return false;
-        }
-
-        return PermissionNames.Value.TryGetValue(value, out name);
-    }
+    public static bool TryGetPermissionName(uint value, out string name) =>
+        DelegatablePermissions.TryGetName(value, out name);
 
     /// <inheritdoc />
     public override PermissionEntry Read(ref Utf8JsonReader reader, Type typeToConvert, JsonSerializerOptions options)
@@ -192,12 +132,15 @@ public sealed class PermissionValueConverter : JsonConverter<PermissionEntry>
         writer.WriteStartObject();
         writer.WritePropertyName(PermissionValuePropertyName);
 
-        // The number is what the binary codec reads, so it stays the default form. A name this
-        // version could not map has no number to write, and rippled accepts the name itself.
-        if (value.PermissionValue != UnknownPermissionValue || string.IsNullOrEmpty(value.PermissionValueName))
-            writer.WriteNumberValue(value.PermissionValue);
-        else
+        // The name, matching what a node reports and what rippled's own getJson emits, so a
+        // transaction read from a node and written back out reads the same. The codec accepts
+        // either form and encodes both to the same bytes, so signing is unaffected.
+        if (TryGetPermissionName(value.PermissionValue, out string name))
+            writer.WriteStringValue(name);
+        else if (value.PermissionValue == UnknownPermissionValue && !string.IsNullOrEmpty(value.PermissionValueName))
             writer.WriteStringValue(value.PermissionValueName);
+        else
+            writer.WriteNumberValue(value.PermissionValue);
 
         writer.WriteEndObject();
     }

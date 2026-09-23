@@ -1,4 +1,4 @@
-namespace Xrpl.Models
+﻿namespace Xrpl.BinaryCodec.Enums
 {
     /// <summary>
     /// A granular permission: the right to perform part of a transaction type rather than all of
@@ -17,6 +17,11 @@ namespace Xrpl.Models
     /// Unlike the other protocol enumerations, this one is not generated - <c>definitions.json</c>
     /// does not carry granular permissions. It is held against the vendored macro by
     /// <c>TestUGranularPermissionConformance</c>.
+    /// </para>
+    /// <para>
+    /// It lives in the codec rather than in the models because the codec is what has to name a
+    /// permission when it decodes one, and the dependency runs one way: <c>Xrpl</c> sees
+    /// <c>Xrpl.BinaryCodec</c>, never the reverse.
     /// </para>
     /// </remarks>
     public enum GranularPermission : uint
