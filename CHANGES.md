@@ -1,5 +1,12 @@
 ﻿# Changes
 
+## 11.7.2.0 23/09/2026
+
+* **`GranularPermission` gives the twelve granular permissions a type** (#203). They existed in exactly one place - a private `Dictionary<string, uint>` inside `PermissionValueConverter` - so granting one meant writing the magic number `65537` or the bare string `"TrustlineAuthorize"`, neither checked by the compiler, and the set could not be enumerated at all. `PermissionValue = (uint)GranularPermission.TrustlineAuthorize` now type-checks.
+  * the converter builds its lookup from the enum instead of restating the table, so the two cannot drift apart
+  * they were missed because `definitions.json` does not carry granular permissions and never will - it holds fields, ledger entry types, transaction types and results - so they fell outside the `GenerateEnums` pipeline that produced every other protocol enumeration. Their only source is `permissions.macro`
+  * that macro is now vendored into `Tests/Xrpl.Tests/Fixtures/`, sha-pinned in its `.ref` to the same develop commit as `transactions.macro`, and `TestUGranularPermissionConformance` compares the enum against it by name and by value. It also checks that every permission names a transaction type `transactions.macro` declares, and that each value stays above `ushort.MaxValue`, which is what keeps a granular value from colliding with a transaction-type permission
+
 ## 11.7.1.0 22/09/2026
 
 * **`DelegateSet` validation matches rippled's preflight, and stops refusing a transaction the ledger accepts** (#199). The local checks existed to catch what the node would reject; three of them did not correspond to anything the node does.
