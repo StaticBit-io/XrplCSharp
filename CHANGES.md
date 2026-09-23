@@ -9,6 +9,7 @@
   * `LOLoanBroker.ManagementFeeRate` gave its range as 0-100000; it is 0-10000, up to 10%. `LOLoanBroker.CoverRateLiquidation` now states its unit
   * every rate comment on `LoanSet`, `LoanBrokerSet`, `LOLoan` and `LOLoanBroker` carries a worked example (`100000 = 100%, 5000 = 5%`)
   * `LendingProtocol-Guide` (both languages): the broker example labelled `15000` as 150%, `12000` as 120% and `100` as 1%. They are 15%, 12% and 0.1%. The step that presented the rates as an update to an existing broker now sets them on the creating `LoanBrokerSet`, since rippled refuses them on a modification with `temINVALID`. The LoanBroker field table listed `Asset`, `Asset2`, `AssetsAvailable` and `AssetsTotal`, which the object does not have, and now matches `ledger_entries.macro`
+  * `LendingProtocol-Guide` (both languages) now creates a closed-ended vault in its walkthrough, which `LoanBrokerSet` requires under `LendingProtocolV1_1` (`tecNO_PERMISSION` on an open-ended one). It states which phase admits the vault deposit (subscription) and the loan (investment), and lists `tecTOO_SOON`, `tecEXPIRED` and the new `tecNO_PERMISSION` causes under Common Errors
   * `TestILoan.TestLoanSet_InterestRateIsInTenthBasisPoints` creates a loan at `InterestRate = 50000` and checks that the node charges 50% a year on it
 
 ## 11.8.0.0 23/09/2026

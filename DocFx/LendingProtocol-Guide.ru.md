@@ -43,6 +43,16 @@
 
 Хранилище содержит активы, доступные для кредитования. Создаётся через `VaultCreate`, хранит XRP или IOU-токены. Перед созданием кредитного брокера необходимо создать и пополнить хранилище.
 
+С поправкой `LendingProtocolV1_1` кредитного брокера можно привязать только к **закрытому** (closed-ended) хранилищу; `LoanBrokerSet` на открытом завершается с `tecNO_PERMISSION`. Закрытое хранилище проходит три фазы, зафиксированные при создании, и депозиты, вывод и выдача кредитов привязаны к фазам:
+
+| Фаза | Длится | Допускается |
+|------|--------|-------------|
+| Subscription | до `SubscriptionDate` | `VaultDeposit`, `VaultWithdraw` |
+| Investment | от `SubscriptionDate` до `RedemptionDate` | `LoanSet`; `VaultDeposit` завершается с `tecEXPIRED`, `VaultWithdraw` — с `tecTOO_SOON` |
+| Redemption | с `RedemptionDate` | `VaultWithdraw`; `LoanSet` завершается с `tecEXPIRED` |
+
+Создание брокера и внесение покрытия к фазе не привязаны. Ограничения на даты описаны в разделе «Вид vault (LendingProtocolV1_1)» [руководства по Vault](Vault-Guide.ru.md). В сети без этой поправки хранилище создаётся без `VaultKind`, `SubscriptionDate` и `RedemptionDate`: нода, не знающая поправку, эти поля отклоняет.
+
 ### Кредитный брокер (LoanBroker)
 
 **LoanBroker** — объект реестра, представляющий кредитную организацию. Ссылается на хранилище и определяет параметры кредитования: ставки покрытия, комиссии за управление и лимиты долга. Создаётся через `LoanBrokerSet`.
@@ -85,18 +95,28 @@
 
 ### 1. Создание хранилища
 
-Брокер создаёт хранилище для хранения активов кредитования:
+Брокер создаёт закрытое хранилище для хранения активов кредитования:
 
 ```csharp
 using Xrpl.Models.Transactions;
 using Xrpl.Models.Common;
+using Xrpl.Models.Ledger;   // VaultKind, LedgerIndexType
+using Xrpl.Models.Methods;
 using Xrpl.Sugar;
 using static Xrpl.Models.Common.Common;
+
+// Phase dates are compared with the ledger's close time, not the machine clock
+LOLedger ledger = await client.Ledger(
+    new LedgerRequest { LedgerIndex = new LedgerIndex(LedgerIndexType.Validated) }).Typed();
+DateTime now = ((LedgerEntity)ledger.LedgerEntity).CloseTime.Value;
 
 VaultCreate vaultTx = new VaultCreate
 {
     Account = walletBroker.ClassicAddress,
     Asset = new IssuedCurrency { Currency = "XRP" },
+    VaultKind = (uint)VaultKind.ClosedEnded,
+    SubscriptionDate = now.AddHours(1),   // the deposit in step 2 must happen before this
+    RedemptionDate = now.AddDays(90),     // every loan must be repaid 60 s before this
 };
 vaultTx = await client.Autofill(vaultTx);
 TransactionSummary vaultResult = await client.SubmitAndWait(vaultTx, walletBroker, true);
@@ -107,7 +127,7 @@ string vaultId = GetCreatedObjectId(vaultResult, LedgerEntryType.Vault);
 
 ### 2. Пополнение хранилища
 
-Внесение активов в хранилище для кредитования:
+Внесение активов в хранилище для кредитования. Депозит принимается только в фазе subscription, до `SubscriptionDate`:
 
 ```csharp
 VaultDeposit depositTx = new VaultDeposit
@@ -166,6 +186,8 @@ await client.SubmitAndWait(coverTx, walletBroker, true);
 ### 1. Создание кредита (LoanSet)
 
 `LoanSet` требует совместной подписи брокера и заёмщика. Подробности в разделе [CounterpartySignature](#counterpartysignature-совместная-подпись-loanset).
+
+Кредит можно выдать только в фазе investment: после `SubscriptionDate` (до неё — `tecTOO_SOON`) и до `RedemptionDate` (после неё — `tecEXPIRED`). Последний платёж по кредиту должен приходиться не позже чем за 60 секунд до `RedemptionDate`, иначе `LoanSet` завершается с `tecNO_PERMISSION`.
 
 ```csharp
 LoanSet loanTx = new LoanSet
@@ -455,7 +477,9 @@ foreach (var obj in response.AccountObjectList)
 | `tecINSUFFICIENT_FUNDS` | В хранилище брокера недостаточно средств | Внесите больше активов через `VaultDeposit` |
 | `tecHAS_OBLIGATIONS` | Нельзя удалить кредит с непогашенным остатком | Полностью погасите кредит через `LoanPay` |
 | `tecNO_ENTRY` | LoanBrokerID или LoanID не найден | Проверьте корректность ID |
-| `tecNO_PERMISSION` | Действие не разрешено (например, переплата без флага) | Проверьте права аккаунта |
+| `tecNO_PERMISSION` | Действие не разрешено: брокер на открытом хранилище, кредит, заканчивающийся менее чем за 60 с до `RedemptionDate`, переплата без флага | Используйте закрытое хранилище; сократите срок кредита; проверьте права аккаунта |
+| `tecTOO_SOON` | `LoanSet` в фазе subscription, `VaultWithdraw` в фазе investment | Дождитесь `SubscriptionDate` (для вывода — `RedemptionDate`) |
+| `tecEXPIRED` | `VaultDeposit` после `SubscriptionDate`, `LoanSet` после `RedemptionDate` | Вносите депозит в фазе subscription, выдавайте кредиты в фазе investment |
 | `tecINSUFFICIENT_PAYMENT` | Сумма платежа слишком мала | Увеличьте сумму платежа |
 | `temBAD_SIGNER` | Отсутствует или некорректна CounterpartySignature | Убедитесь, что заёмщик совместно подписал LoanSet |
 | `telINSUF_FEE_P` | Комиссия слишком низкая после добавления CounterpartySignature | Повторно вызовите Autofill или увеличьте комиссию перед отправкой |
@@ -465,7 +489,7 @@ foreach (var obj in response.AccountObjectList)
 
 ## Лучшие практики
 
-1. **Пополните хранилище перед выдачей кредитов** — создайте хранилище, внесите активы (`VaultDeposit`), создайте брокера (`LoanBrokerSet`), внесите покрытие (`LoanBrokerCoverDeposit`), затем создавайте кредиты.
+1. **Пополните хранилище перед выдачей кредитов** — создайте хранилище, внесите активы (`VaultDeposit`), создайте брокера (`LoanBrokerSet`), внесите покрытие (`LoanBrokerCoverDeposit`), затем создавайте кредиты. Депозит в хранилище относится к фазе subscription, выдача кредитов — к фазе investment.
 
 2. **Autofill учитывает LoanSet fee** — `Autofill` автоматически рассчитывает корректную комиссию, включая overhead `CounterpartySignature`. Ручная корректировка комиссии не требуется.
 
