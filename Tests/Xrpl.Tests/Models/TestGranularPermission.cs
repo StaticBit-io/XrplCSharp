@@ -8,7 +8,7 @@ using System.Collections.Generic;
 using System.Linq;
 
 using Xrpl.Client.Json.Converters;
-using Xrpl.Models;
+using Xrpl.BinaryCodec.Enums;
 using Xrpl.Tests.Models.Tests;
 
 namespace XrplTests.Xrpl.Models
