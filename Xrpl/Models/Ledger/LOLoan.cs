@@ -61,31 +61,31 @@ public class LOLoan : BaseLedgerEntry
     public uint? LoanSequence { get; init; }
 
     /// <summary>
-    /// The interest rate for the loan, in 1/10th basis points (0-100000).
+    /// The annualized interest rate for the loan, in 1/10th of a basis point: 100000 = 100% (0–100000).
     /// </summary>
     [JsonPropertyName("InterestRate")]
     public uint? InterestRate { get; init; }
 
     /// <summary>
-    /// The premium added for late payments, in 1/10th basis points (0-100000).
+    /// The premium added to the interest rate for late payments, in 1/10th of a basis point: 100000 = 100% (0–100000).
     /// </summary>
     [JsonPropertyName("LateInterestRate")]
     public uint? LateInterestRate { get; init; }
 
     /// <summary>
-    /// The early repayment interest rate, in 1/10th basis points (0-100000).
+    /// The rate charged for repaying the loan early, in 1/10th of a basis point: 100000 = 100% (0–100000).
     /// </summary>
     [JsonPropertyName("CloseInterestRate")]
     public uint? CloseInterestRate { get; init; }
 
     /// <summary>
-    /// The overpayment interest rate, in 1/10th basis points (0-100000).
+    /// The interest rate charged on overpayments, in 1/10th of a basis point: 100000 = 100% (0–100000).
     /// </summary>
     [JsonPropertyName("OverpaymentInterestRate")]
     public uint? OverpaymentInterestRate { get; init; }
 
     /// <summary>
-    /// The fee charged for overpayments, in 1/10th basis points (0-100000).
+    /// The fee rate charged on overpayments, in 1/10th of a basis point: 100000 = 100% (0–100000).
     /// </summary>
     [JsonPropertyName("OverpaymentFee")]
     public uint? OverpaymentFee { get; init; }

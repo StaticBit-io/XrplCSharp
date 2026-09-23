@@ -57,32 +57,27 @@ namespace Xrpl.Models.Transactions
         string PrincipalRequested { get; set; }
 
         /// <summary>
-        /// The interest rate for the loan (1/100th of a basis point).
-        /// Valid range: 0–100000.
+        /// The annualized interest rate for the loan, in 1/10th of a basis point: 100000 = 100%, 5000 = 5%. Valid range: 0–100000.
         /// </summary>
         uint? InterestRate { get; set; }
 
         /// <summary>
-        /// The interest rate applied for late payments (1/100th of a basis point).
-        /// Valid range: 0–100000.
+        /// The premium added to the interest rate for late payments, in 1/10th of a basis point: 100000 = 100%, 5000 = 5%. Valid range: 0–100000.
         /// </summary>
         uint? LateInterestRate { get; set; }
 
         /// <summary>
-        /// The interest rate applied when closing the loan early (1/100th of a basis point).
-        /// Valid range: 0–100000.
+        /// The rate charged for repaying the loan early, in 1/10th of a basis point: 100000 = 100%, 5000 = 5%. Valid range: 0–100000.
         /// </summary>
         uint? CloseInterestRate { get; set; }
 
         /// <summary>
-        /// The interest rate applied on overpayments (1/100th of a basis point).
-        /// Valid range: 0–100000.
+        /// The interest rate charged on overpayments, in 1/10th of a basis point: 100000 = 100%, 5000 = 5%. Valid range: 0–100000.
         /// </summary>
         uint? OverpaymentInterestRate { get; set; }
 
         /// <summary>
-        /// The fee charged for overpayments (1/100th of a basis point).
-        /// Valid range: 0–100000.
+        /// The fee rate charged on overpayments, in 1/10th of a basis point: 100000 = 100%, 5000 = 5%. Valid range: 0–100000.
         /// </summary>
         uint? OverpaymentFee { get; set; }
 

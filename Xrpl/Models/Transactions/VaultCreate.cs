@@ -42,11 +42,6 @@ namespace Xrpl.Models.Transactions
         IssuedCurrency Asset { get; set; }
 
         /// <summary>
-        /// The initial deposit amount.
-        /// </summary>
-        Currency Amount { get; set; }
-
-        /// <summary>
         /// The maximum asset amount that can be held in the vault.
         /// STNumber type (12 bytes: int64 mantissa + int32 exponent), serialized as string in JSON.
         /// </summary>
@@ -113,10 +108,6 @@ namespace Xrpl.Models.Transactions
         public IssuedCurrency Asset { get; set; }
 
         /// <inheritdoc />
-        [JsonPropertyName("Amount")]
-        public Currency Amount { get; set; }
-
-        /// <inheritdoc />
         [JsonPropertyName("AssetsMaximum")]
         public string AssetsMaximum { get; set; }
 
@@ -162,10 +153,6 @@ namespace Xrpl.Models.Transactions
         [JsonPropertyName("Asset")]
         [JsonConverter(typeof(IssuedCurrencyConverter))]
         public IssuedCurrency Asset { get; set; }
-
-        /// <inheritdoc />
-        [JsonPropertyName("Amount")]
-        public Currency Amount { get; set; }
 
         /// <inheritdoc />
         [JsonPropertyName("AssetsMaximum")]
