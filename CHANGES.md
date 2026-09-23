@@ -1,5 +1,14 @@
 ﻿# Changes
 
+## 11.7.3.0 23/09/2026
+
+* **A Delegate permission reads as its name everywhere, the way rippled reports it** (#197). `Xrpl.BinaryCodec` now understands the PermissionValue field in both of the forms rippled accepts, so a transaction taken from a node, encoded and decoded again comes back as it arrived instead of turning into a number partway through.
+  * `DelegatablePermissions` maps a permission between name and value in one place, covering both kinds: granular permissions and transaction types, whose permission value is the type code plus one. It is the counterpart of xrpl.js's `delegatablePermissions` lookup
+  * `StObject` reads a name, a number or a number written as a string for that field, and emits the name when it resolves one - matching rippled's `STUInt32::getJson`. Other UInt32 fields are untouched; the mapping is bound to PermissionValue alone
+  * `PermissionValueConverter` writes the name as well, and no longer keeps its own copy of the tables. **Signing is unchanged**: the codec encodes either form to the same bytes, which `TestKnownPermissionsStillEncodeForSigning` pins against a fixed blob
+  * a value with no name in this version is still written and reported as the number, and a name this version cannot map is still refused by the codec rather than signed as something else
+* **Breaking:** `GranularPermission` moved from `Xrpl.Models` to `Xrpl.BinaryCodec.Enums`. It has to live in the codec, because the codec is what names a permission when it decodes one and the dependency runs one way: `Xrpl` sees `Xrpl.BinaryCodec`, never the reverse. Keeping it above would have meant a second copy of the table in the codec. The type shipped for the first time in 11.7.2.0, hours before this release; a consumer that already named it updates the `using`.
+
 ## 11.7.2.0 23/09/2026
 
 * **`GranularPermission` gives the twelve granular permissions a type** (#203). They existed in exactly one place - a private `Dictionary<string, uint>` inside `PermissionValueConverter` - so granting one meant writing the magic number `65537` or the bare string `"TrustlineAuthorize"`, neither checked by the compiler, and the set could not be enumerated at all. `PermissionValue = (uint)GranularPermission.TrustlineAuthorize` now type-checks.

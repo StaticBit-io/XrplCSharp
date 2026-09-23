@@ -87,6 +87,13 @@ namespace Xrpl.BinaryCodec.Types
                 field.FromJson = LedgerEntryType.Values.FromJson;
                 field.FromParser = LedgerEntryType.Values.FromParser;
             }
+            else if (field.Name == PermissionValueFieldName)
+            {
+                // rippled's parser takes either form for this field, and a node's own responses
+                // carry the name, so a document coming back from one has to encode unchanged.
+                field.FromJson = DelegatablePermissionFromJson;
+                field.FromParser = Uint32.FromParser;
+            }
             else if (field.Type == FieldType.Uint64)
             {
                 // Uint64 JSON form depends on the field: kSmdBaseTen fields use decimal
@@ -256,6 +263,31 @@ namespace Xrpl.BinaryCodec.Types
             return ToJsonObject();
         }
         /// <summary>
+        /// The one UInt32 field whose JSON form is a name: see <see cref="DelegatablePermissions"/>.
+        /// </summary>
+        private const string PermissionValueFieldName = "PermissionValue";
+
+        /// <summary>
+        /// Reads a PermissionValue given as a name, a number, or a number written as a string.
+        /// </summary>
+        private static ISerializedType DelegatablePermissionFromJson(JsonNode token)
+        {
+            if (token.GetValueKind() == JsonValueKind.String)
+            {
+                string name = token.GetValue<string>();
+                if (!DelegatablePermissions.TryParse(name, out uint value))
+                {
+                    throw new InvalidJsonException(
+                        $"Can't decode `{PermissionValueFieldName}` from `{name}`");
+                }
+
+                return new Uint32(value);
+            }
+
+            return Uint32.FromJson(token);
+        }
+
+        /// <summary>
         /// UInt64 fields flagged kSmdBaseTen in rippled sfields.macro — their JSON
         /// representation is a base-ten decimal string, unlike the default hex.
         /// </summary>
@@ -279,6 +311,14 @@ namespace Xrpl.BinaryCodec.Types
                 if (pair.Value is Uint64 u64 && BaseTenUint64Fields.Contains((string)pair.Key))
                 {
                     json[(string)pair.Key] = JsonValue.Create(u64.Value.ToString(System.Globalization.CultureInfo.InvariantCulture));
+                }
+                else if ((string)pair.Key == PermissionValueFieldName
+                         && pair.Value is Uint32 permission
+                         && DelegatablePermissions.TryGetName(permission.Value, out string permissionName))
+                {
+                    // Matches rippled's STUInt32::getJson, which reports the name whenever it
+                    // resolves one and the number otherwise.
+                    json[(string)pair.Key] = JsonValue.Create(permissionName);
                 }
                 else
                 {

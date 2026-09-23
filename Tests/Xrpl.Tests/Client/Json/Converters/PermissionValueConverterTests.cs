@@ -110,10 +110,10 @@ public class TestUPermissionValueConverter
     }
 
     [TestMethod]
-    public void TestWriteKnownValueAsNumber()
+    public void TestWriteKnownValueAsName()
     {
-        // The binary codec reads PermissionValue as a UInt32: writing the number is what keeps
-        // local signing working, and must not change because a name is now carried alongside it.
+        // What a node reports, and what rippled's own getJson emits. The codec takes either form
+        // and encodes both to the same bytes, which TestKnownPermissionsStillEncodeForSigning pins.
         PermissionWrapper wrapper = new PermissionWrapper
         {
             Permission = new PermissionEntry { PermissionValue = 65537, PermissionValueName = "TrustlineAuthorize" },
@@ -121,7 +121,21 @@ public class TestUPermissionValueConverter
 
         string json = JsonSerializer.Serialize(wrapper, Options);
 
-        Assert.AreEqual(@"{""Permission"":{""PermissionValue"":65537}}", json);
+        Assert.AreEqual(@"{""Permission"":{""PermissionValue"":""TrustlineAuthorize""}}", json);
+    }
+
+    [TestMethod]
+    public void TestWriteValueWithoutAName()
+    {
+        // A number from an amendment this version predates has no name to write.
+        PermissionWrapper wrapper = new PermissionWrapper
+        {
+            Permission = new PermissionEntry { PermissionValue = 70000 },
+        };
+
+        string json = JsonSerializer.Serialize(wrapper, Options);
+
+        Assert.AreEqual(@"{""Permission"":{""PermissionValue"":70000}}", json);
     }
 
     [TestMethod]
