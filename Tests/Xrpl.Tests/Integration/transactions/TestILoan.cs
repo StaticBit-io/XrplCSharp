@@ -1,3 +1,5 @@
+using System;
+using System.Globalization;
 using System.Threading.Tasks;
 
 using Microsoft.VisualStudio.TestTools.UnitTesting;
@@ -63,9 +65,9 @@ public class TestILoan : TestILoanBase
         {
             Account = wallet.ClassicAddress,
             VaultID = vaultId,
-            CoverRateMinimum = 15000,
-            CoverRateLiquidation = 12000,
-            ManagementFeeRate = 100,
+            CoverRateMinimum = 15000,       // 15%: rates are in 1/10th of a basis point
+            CoverRateLiquidation = 12000,   // 12%
+            ManagementFeeRate = 100,        // 0.1%
         };
         tx = await client.Autofill(tx);
 
@@ -354,6 +356,56 @@ public class TestILoan : TestILoanBase
         Assert.IsNotNull(loan.LoanBrokerNode, "LoanBrokerNode should be set");
         Assert.IsNotNull(loan.PreviousTxnID, "PreviousTxnID should be set");
         Assert.IsNotNull(loan.PreviousTxnLgrSeq, "PreviousTxnLgrSeq should be set");
+    }
+
+    /// <summary>
+    /// Pins the unit of the lending rate fields to what the node charges: 1/10th of a basis
+    /// point, 100000 = 100%. The model documentation once said 1/100th, which reads a 50% rate
+    /// as 5%; the interest on the created loan tells the two readings apart by a factor of ten.
+    /// </summary>
+    [TestMethod]
+    public async Task TestLoanSet_InterestRateIsInTenthBasisPoints()
+    {
+        XrplWallet walletBroker = XrplWallet.Generate();
+        XrplWallet walletBorrower = XrplWallet.Generate();
+        await IntegrationTestConfig.TryFundWalletsAsync(client, nodeType, walletBroker, walletBorrower);
+
+        string brokerId = await CreateBroker(client, walletBroker);
+
+        const decimal principal = 90_000_000m;
+        const uint interestRate = 50_000;
+        // One payment, short enough to fall inside the closed-ended vault's investment window
+        const uint paymentInterval = 480;
+        const decimal secondsInYear = 365m * 24 * 60 * 60;
+
+        LoanSet loanTx = new LoanSet
+        {
+            Account = walletBroker.ClassicAddress,
+            LoanBrokerID = brokerId,
+            Counterparty = walletBorrower.ClassicAddress,
+            PrincipalRequested = principal.ToString(CultureInfo.InvariantCulture),
+            InterestRate = interestRate,
+            PaymentTotal = 1,
+            PaymentInterval = paymentInterval,
+        };
+        TransactionSummary loanResult = await SubmitLoanSetWithCounterpartySig(client, loanTx, walletBroker, walletBorrower);
+        ValidateResult(loanResult);
+
+        string loanId = GetCreatedObjectId(loanResult, LedgerEntryType.Loan);
+        LedgerEntryResponse entry = await client.LedgerEntry(new LedgerEntryRequest { Index = loanId }).Typed();
+        LOLoan loan = (LOLoan)entry.Node;
+
+        decimal interest = decimal.Parse(loan.TotalValueOutstanding, CultureInfo.InvariantCulture)
+            - decimal.Parse(loan.PrincipalOutstanding, CultureInfo.InvariantCulture);
+
+        // rippled loanPeriodicRate: tenthBipsOfValue(paymentInterval, rate) / kSecondsInYear
+        decimal expected = principal * interestRate / 100_000m * paymentInterval / secondsInYear;
+
+        Assert.AreEqual(interestRate, loan.InterestRate);
+        Assert.IsLessThanOrEqualTo(
+            1m,
+            Math.Abs(interest - expected),
+            $"interest {interest} should be {expected:F2} (50000 = 50% a year), not {expected / 10m:F2} (50000 = 5%)");
     }
 
     // ==================== MPT-backed Loan Tests ====================

@@ -136,22 +136,24 @@ TransactionSummary brokerResult = await client.SubmitAndWait(brokerTx, walletBro
 string brokerId = GetCreatedObjectId(brokerResult, LedgerEntryType.LoanBroker);
 ```
 
-### 4. Configure Broker Parameters (Optional)
+### 4. Set Broker Rates (Optional)
 
-Update the broker with lending parameters:
+The broker's rates are fixed when it is created, so they go on the `LoanBrokerSet` from step 3. A `LoanBrokerSet` that modifies an existing broker carries `LoanBrokerID` and must not include them: rippled rejects it with `temINVALID`.
+
+All lending rates are in 1/10th of a basis point: `100000` is 100%, `1000` is 1%.
 
 ```csharp
-LoanBrokerSet updateTx = new LoanBrokerSet
+LoanBrokerSet brokerTx = new LoanBrokerSet
 {
     Account = walletBroker.ClassicAddress,
     VaultID = vaultId,
-    CoverRateMinimum = 15000,        // 150% minimum cover rate
-    CoverRateLiquidation = 12000,    // 120% liquidation threshold
-    ManagementFeeRate = 100,         // 1% management fee (basis points / 100)
+    CoverRateMinimum = 15000,        // 15% of outstanding debt must be covered by first-loss capital
+    CoverRateLiquidation = 12000,    // 12% of the minimum cover is moved to the vault on a default
+    ManagementFeeRate = 100,         // 0.1% management fee
 };
-updateTx = await client.Autofill(updateTx);
-await client.SubmitAndWait(updateTx, walletBroker, true);
 ```
+
+`CoverRateMinimum` and `CoverRateLiquidation` range from 0 to 100000 and must be both zero or both non-zero. `ManagementFeeRate` ranges from 0 to 10000 (10%).
 
 ### 5. Deposit Cover
 
@@ -380,17 +382,17 @@ The lending protocol creates the following ledger objects:
 
 | Field | Type | Description |
 |-------|------|-------------|
-| `Account` | AccountID | Broker account |
-| `Asset` | Issue | Primary lending asset |
-| `Asset2` | Issue | Secondary asset (collateral) |
-| `CoverAvailable` | Number | Available cover amount |
-| `AssetsAvailable` | Number | Available assets for lending |
-| `AssetsTotal` | Number | Total assets in vault |
+| `Owner` | AccountID | Broker owner, the account that submitted the creating `LoanBrokerSet` |
+| `Account` | AccountID | Broker pseudo-account |
+| `VaultID` | Hash256 | Vault the broker lends from |
+| `LoanSequence` | UInt32 | Sequence number assigned to the next loan |
+| `OwnerCount` | UInt32 | Number of loans the broker owns |
+| `CoverAvailable` | Number | Available first-loss capital |
 | `DebtTotal` | Number | Total outstanding debt |
 | `DebtMaximum` | Number | Maximum allowed debt |
-| `CoverRateMinimum` | UInt32 | Minimum cover rate (e.g. 15000 = 150%) |
-| `CoverRateLiquidation` | UInt32 | Liquidation threshold |
-| `ManagementFeeRate` | UInt16 | Fee rate (0-10000 basis points) |
+| `CoverRateMinimum` | UInt32 | Share of debt the cover must reach, 1/10th of a basis point (15000 = 15%) |
+| `CoverRateLiquidation` | UInt32 | Share of the minimum cover moved to the vault on a default, 1/10th of a basis point |
+| `ManagementFeeRate` | UInt16 | Management fee, 1/10th of a basis point (0-10000, up to 10%) |
 
 ### Loan Fields
 
@@ -402,7 +404,7 @@ The lending protocol creates the following ledger objects:
 | `PrincipalOutstanding` | Number | Remaining principal |
 | `TotalValueOutstanding` | Number | Total amount owed |
 | `PeriodicPayment` | Number | Amount due per interval |
-| `InterestRate` | UInt32 | Annual interest rate |
+| `InterestRate` | UInt32 | Annualized interest rate, 1/10th of a basis point (5000 = 5%) |
 | `PaymentInterval` | UInt32 | Seconds between payments |
 | `GracePeriod` | UInt32 | Seconds before late fees apply |
 | `PaymentRemaining` | UInt32 | Remaining payments |

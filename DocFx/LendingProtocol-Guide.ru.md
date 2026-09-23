@@ -136,22 +136,24 @@ TransactionSummary brokerResult = await client.SubmitAndWait(brokerTx, walletBro
 string brokerId = GetCreatedObjectId(brokerResult, LedgerEntryType.LoanBroker);
 ```
 
-### 4. Настройка параметров брокера (опционально)
+### 4. Ставки брокера (опционально)
 
-Обновление параметров кредитования:
+Ставки брокера фиксируются при создании, поэтому задаются в `LoanBrokerSet` из шага 3. `LoanBrokerSet`, изменяющий существующего брокера, несёт `LoanBrokerID` и не может включать эти поля: rippled отклоняет такую транзакцию с `temINVALID`.
+
+Все ставки кредитования задаются в десятых долях базисного пункта: `100000` — это 100%, `1000` — 1%.
 
 ```csharp
-LoanBrokerSet updateTx = new LoanBrokerSet
+LoanBrokerSet brokerTx = new LoanBrokerSet
 {
     Account = walletBroker.ClassicAddress,
     VaultID = vaultId,
-    CoverRateMinimum = 15000,        // 150% минимальная ставка покрытия
-    CoverRateLiquidation = 12000,    // 120% порог ликвидации
-    ManagementFeeRate = 100,         // 1% комиссия за управление (базисные пункты / 100)
+    CoverRateMinimum = 15000,        // 15% of outstanding debt must be covered by first-loss capital
+    CoverRateLiquidation = 12000,    // 12% of the minimum cover is moved to the vault on a default
+    ManagementFeeRate = 100,         // 0.1% management fee
 };
-updateTx = await client.Autofill(updateTx);
-await client.SubmitAndWait(updateTx, walletBroker, true);
 ```
+
+`CoverRateMinimum` и `CoverRateLiquidation` принимают значения от 0 до 100000 и должны быть либо оба нулевыми, либо оба ненулевыми. `ManagementFeeRate` принимает значения от 0 до 10000 (10%).
 
 ### 5. Внесение покрытия
 
@@ -380,17 +382,17 @@ await client.SubmitRequest(composed.TxBlob);
 
 | Поле | Тип | Описание |
 |------|-----|----------|
-| `Account` | AccountID | Аккаунт брокера |
-| `Asset` | Issue | Основной актив кредитования |
-| `Asset2` | Issue | Вторичный актив (залог) |
-| `CoverAvailable` | Number | Доступное покрытие |
-| `AssetsAvailable` | Number | Доступные активы для кредитования |
-| `AssetsTotal` | Number | Общее количество активов в хранилище |
+| `Owner` | AccountID | Владелец брокера — аккаунт, отправивший создающий `LoanBrokerSet` |
+| `Account` | AccountID | Псевдоаккаунт брокера |
+| `VaultID` | Hash256 | Хранилище, из которого брокер выдаёт кредиты |
+| `LoanSequence` | UInt32 | Порядковый номер, который получит следующий кредит |
+| `OwnerCount` | UInt32 | Количество кредитов брокера |
+| `CoverAvailable` | Number | Доступный капитал первого убытка |
 | `DebtTotal` | Number | Общий непогашенный долг |
 | `DebtMaximum` | Number | Максимально допустимый долг |
-| `CoverRateMinimum` | UInt32 | Минимальная ставка покрытия (15000 = 150%) |
-| `CoverRateLiquidation` | UInt32 | Порог ликвидации |
-| `ManagementFeeRate` | UInt16 | Ставка комиссии (0-10000 базисных пунктов) |
+| `CoverRateMinimum` | UInt32 | Доля долга, которую должно покрывать покрытие, в десятых долях базисного пункта (15000 = 15%) |
+| `CoverRateLiquidation` | UInt32 | Доля минимального покрытия, переводимая в хранилище при дефолте, в десятых долях базисного пункта |
+| `ManagementFeeRate` | UInt16 | Комиссия за управление в десятых долях базисного пункта (0-10000, до 10%) |
 
 ### Поля Loan
 
@@ -402,7 +404,7 @@ await client.SubmitRequest(composed.TxBlob);
 | `PrincipalOutstanding` | Number | Остаток основной суммы |
 | `TotalValueOutstanding` | Number | Общая задолженность |
 | `PeriodicPayment` | Number | Сумма платежа за интервал |
-| `InterestRate` | UInt32 | Годовая процентная ставка |
+| `InterestRate` | UInt32 | Годовая процентная ставка в десятых долях базисного пункта (5000 = 5%) |
 | `PaymentInterval` | UInt32 | Интервал между платежами (секунды) |
 | `GracePeriod` | UInt32 | Отсрочка до начисления пеней (секунды) |
 | `PaymentRemaining` | UInt32 | Оставшиеся платежи |

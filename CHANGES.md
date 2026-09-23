@@ -1,5 +1,16 @@
 ﻿# Changes
 
+## 11.9.0.0 23/09/2026
+
+* **Breaking:** `Amount` is removed from `IVaultCreate`, `VaultCreate` and `VaultCreateResponse` (#208). `VaultCreate` has no such field in rippled's `transactions.macro`, and a node refuses any transaction that carries it with `invalidTransaction` ("Field 'Amount' found in disallowed location"). A vault is created empty. Migration: drop the assignment and fund the vault with a `VaultDeposit` after the create.
+  * `TestUTransactionModelFieldsConformance` checks every wire property a transaction request or response model declares against the fields the vendored `transactions.macro` gives its type. `VaultCreate.Amount` was the only violation
+* **Lending rates are documented in their actual unit, 1/10th of a basis point, where 100000 = 100%** (#209)
+  * `LoanSet`: `InterestRate`, `LateInterestRate`, `CloseInterestRate`, `OverpaymentInterestRate` and `OverpaymentFee` said 1/100th of a basis point. `LoanBrokerSet`: `CoverRateMinimum` and `CoverRateLiquidation` said the same
+  * `LOLoanBroker.ManagementFeeRate` gave its range as 0-100000; it is 0-10000, up to 10%. `LOLoanBroker.CoverRateLiquidation` now states its unit
+  * every rate comment on `LoanSet`, `LoanBrokerSet`, `LOLoan` and `LOLoanBroker` carries a worked example (`100000 = 100%, 5000 = 5%`)
+  * `LendingProtocol-Guide` (both languages): the broker example labelled `15000` as 150%, `12000` as 120% and `100` as 1%. They are 15%, 12% and 0.1%. The step that presented the rates as an update to an existing broker now sets them on the creating `LoanBrokerSet`, since rippled refuses them on a modification with `temINVALID`. The LoanBroker field table listed `Asset`, `Asset2`, `AssetsAvailable` and `AssetsTotal`, which the object does not have, and now matches `ledger_entries.macro`
+  * `TestILoan.TestLoanSet_InterestRateIsInTenthBasisPoints` creates a loan at `InterestRate = 50000` and checks that the node charges 50% a year on it
+
 ## 11.8.0.0 23/09/2026
 
 * **A Delegate permission reads as its name everywhere, the way rippled reports it** (#197). `Xrpl.BinaryCodec` now understands the PermissionValue field in both of the forms rippled accepts, so a transaction taken from a node, encoded and decoded again comes back as it arrived instead of turning into a number partway through.
