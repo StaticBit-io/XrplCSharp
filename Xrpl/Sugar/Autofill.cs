@@ -407,13 +407,17 @@ namespace Xrpl.Sugar
             if (loan.PaymentRemaining is null or <= LOAN_PAYMENTS_PER_FEE_INCREMENT)
                 return BigInteger.One;
 
-            if (loan.PeriodicPayment is not { } periodic || !periodic.TryToDecimal(out decimal periodicPayment) || periodicPayment <= 0)
+            if (loan.PeriodicPayment is not { } periodic
+                || LoanPayments.RoundUpToAsset(periodic, integralAsset, loan.LoanScale ?? 0) is not { } roundedPayment
+                || roundedPayment <= 0)
                 return BigInteger.One;
 
             decimal serviceFee = 0m;
             if (loan.LoanServiceFee is { } fee)
                 fee.TryToDecimal(out serviceFee);
-            decimal regularPayment = LoanPayments.RoundUpToAsset(periodicPayment, integralAsset, loan.LoanScale ?? 0) + serviceFee;
+            if (serviceFee > decimal.MaxValue - roundedPayment)
+                return BigInteger.One;
+            decimal regularPayment = roundedPayment + serviceFee;
             if (regularPayment <= 0)
                 return BigInteger.One;
 

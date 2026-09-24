@@ -82,6 +82,36 @@ public class TestUBalanceChangesMpt
         Assert.IsFalse(changes.ContainsKey(VaultPseudoAccount));
     }
 
+    [TestMethod]
+    public void TestUTransferBetweenHolders_RecipientWithoutPreviousAmountIsResolved()
+    {
+        // A holder-to-holder transfer leaves OutstandingAmount alone, so no issuance node appears;
+        // the recipient's MPToken existed empty and lists no previous amount.
+        const string recipient = "rUFxPcR7uA1QAd8XXLJhgQwM8qLHyReYJX";
+        string json = $@"{{
+            ""TransactionIndex"": 0,
+            ""TransactionResult"": ""tesSUCCESS"",
+            ""AffectedNodes"": [
+                {{ ""ModifiedNode"": {{
+                    ""LedgerEntryType"": ""MPToken"",
+                    ""LedgerIndex"": ""0000000000000000000000000000000000000000000000000000000000000001"",
+                    ""PreviousFields"": {{ ""MPTAmount"": ""20"" }},
+                    ""FinalFields"": {{ ""Account"": ""{Depositor}"", ""Flags"": 0, ""MPTAmount"": ""10"", ""MPTokenIssuanceID"": ""{ShareId}"", ""OwnerNode"": ""0"" }}
+                }} }},
+                {{ ""ModifiedNode"": {{
+                    ""LedgerEntryType"": ""MPToken"",
+                    ""LedgerIndex"": ""0000000000000000000000000000000000000000000000000000000000000002"",
+                    ""FinalFields"": {{ ""Account"": ""{recipient}"", ""Flags"": 0, ""MPTAmount"": ""10"", ""MPTokenIssuanceID"": ""{ShareId}"", ""OwnerNode"": ""0"" }}
+                }} }}
+            ]
+        }}";
+
+        Dictionary<string, List<Currency>> changes = BalanceChanges.GetBalanceChanges(JsonSerializer.Deserialize<Meta>(json, XrplJsonOptions.Default));
+
+        Assert.AreEqual("-10", Single(changes, Depositor, c => c.MPTokenIssuanceID == ShareId).Value);
+        Assert.AreEqual("10", Single(changes, recipient, c => c.MPTokenIssuanceID == ShareId).Value);
+    }
+
     private static string AmbiguousMeta(string outstandingBefore, string outstandingAfter)
     {
         string previous = outstandingBefore == null

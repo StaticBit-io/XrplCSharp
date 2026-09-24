@@ -168,8 +168,9 @@ public static class BalanceChanges
     /// lists in <c>PreviousFields</c> only the fields the node had before. A modified <c>MPToken</c>
     /// that ends with an amount but lists no previous one therefore either went from zero to that
     /// amount or did not change it. <c>OutstandingAmount</c> is a required field and is always
-    /// listed when it changes, and the holders' changes of one issuance add up to its change, so
-    /// a single such holder is resolved from that sum. More than one is left unchanged.
+    /// listed when it changes - and when the issuance node is absent, it did not change - and the
+    /// holders' changes of one issuance add up to its change, so a single such holder is resolved
+    /// from that sum. More than one is left unchanged.
     /// </remarks>
     private static List<BalanceChange> GetMptQuantities(List<(NodeInfo Node, bool Deleted)> nodes)
     {
@@ -205,9 +206,13 @@ public static class BalanceChanges
         foreach (IGrouping<string, MptHolderChange> issuance in holders.GroupBy(h => h.IssuanceId, StringComparer.Ordinal))
         {
             List<MptHolderChange> unknown = issuance.Where(h => h.Delta == null).ToList();
-            if (unknown.Count == 1 && issuances.TryGetValue(issuance.Key, out (string Issuer, decimal Delta) outstanding))
+            if (unknown.Count == 1)
             {
-                decimal rest = outstanding.Delta - issuance.Where(h => h.Delta != null).Sum(h => h.Delta.Value);
+                // No issuance node means OutstandingAmount did not change: a transfer between holders.
+                decimal outstandingDelta = issuances.TryGetValue(issuance.Key, out (string Issuer, decimal Delta) outstanding)
+                    ? outstanding.Delta
+                    : 0;
+                decimal rest = outstandingDelta - issuance.Where(h => h.Delta != null).Sum(h => h.Delta.Value);
                 if (rest == 0 || rest == unknown[0].FinalAmount)
                     unknown[0].Delta = rest;
             }

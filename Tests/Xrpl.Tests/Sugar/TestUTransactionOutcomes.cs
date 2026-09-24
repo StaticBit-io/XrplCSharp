@@ -144,6 +144,89 @@ public class TestUTransactionOutcomes
     }
 
     [TestMethod]
+    public void TestUVaultDeposit_ByTheIssuerOfTheAsset_CountsItsOwnCurrency()
+    {
+        // An issuer depositing its own USD: its side of the trust line names the vault as the
+        // counterparty, not itself.
+        const string issuer = "rUFxPcR7uA1QAd8XXLJhgQwM8qLHyReYJX";
+        const string vault = "rNLaas7dZix3WviwSq41WDQYxCtvnqyFGQ";
+        const string shares = "000000019235C8EA92D9BC14E403C767CFDDC1A7C56AFDDD";
+        string json = $@"{{
+            ""TransactionIndex"": 0,
+            ""TransactionResult"": ""tesSUCCESS"",
+            ""AffectedNodes"": [
+                {{ ""ModifiedNode"": {{
+                    ""LedgerEntryType"": ""Vault"",
+                    ""LedgerIndex"": ""{VaultId}"",
+                    ""FinalFields"": {{ ""Account"": ""{vault}"", ""Asset"": {{ ""currency"": ""USD"", ""issuer"": ""{issuer}"" }}, ""AssetsAvailable"": ""100"", ""AssetsTotal"": ""100"", ""Flags"": 0, ""Owner"": ""{issuer}"", ""OwnerNode"": ""0"", ""Sequence"": 5, ""ShareMPTID"": ""{shares}"", ""WithdrawalPolicy"": 1 }}
+                }} }},
+                {{ ""ModifiedNode"": {{
+                    ""LedgerEntryType"": ""RippleState"",
+                    ""LedgerIndex"": ""0000000000000000000000000000000000000000000000000000000000000003"",
+                    ""PreviousFields"": {{ ""Balance"": {{ ""currency"": ""USD"", ""issuer"": ""rrrrrrrrrrrrrrrrrrrrBZbvji"", ""value"": ""0"" }} }},
+                    ""FinalFields"": {{
+                        ""Balance"": {{ ""currency"": ""USD"", ""issuer"": ""rrrrrrrrrrrrrrrrrrrrBZbvji"", ""value"": ""100"" }},
+                        ""Flags"": 0,
+                        ""LowLimit"": {{ ""currency"": ""USD"", ""issuer"": ""{vault}"", ""value"": ""0"" }},
+                        ""HighLimit"": {{ ""currency"": ""USD"", ""issuer"": ""{issuer}"", ""value"": ""0"" }}
+                    }}
+                }} }},
+                {{ ""CreatedNode"": {{
+                    ""LedgerEntryType"": ""MPToken"",
+                    ""LedgerIndex"": ""0000000000000000000000000000000000000000000000000000000000000004"",
+                    ""NewFields"": {{ ""Account"": ""{issuer}"", ""MPTAmount"": ""100"", ""MPTokenIssuanceID"": ""{shares}"" }}
+                }} }},
+                {{ ""ModifiedNode"": {{
+                    ""LedgerEntryType"": ""MPTokenIssuance"",
+                    ""LedgerIndex"": ""0000000000000000000000000000000000000000000000000000000000000005"",
+                    ""PreviousFields"": {{ ""OutstandingAmount"": ""0"" }},
+                    ""FinalFields"": {{ ""Flags"": 56, ""Issuer"": ""{vault}"", ""OutstandingAmount"": ""100"", ""OwnerNode"": ""0"", ""Sequence"": 1 }}
+                }} }}
+            ]
+        }}";
+        Meta meta = System.Text.Json.JsonSerializer.Deserialize<Meta>(json, global::Xrpl.Client.Json.XrplJsonOptions.Default);
+        VaultDeposit deposit = new VaultDeposit { Account = issuer, VaultID = VaultId, Fee = new Currency { Value = "12" } };
+
+        VaultOutcome outcome = VaultOutcome.FromMetadata(deposit, meta);
+
+        Assert.AreEqual(-100m, outcome.AccountAssetChange);
+        Assert.AreEqual(100m, outcome.AccountShareChange);
+        Assert.AreEqual(100m, outcome.VaultAssetChange);
+    }
+
+    [TestMethod]
+    public void TestURegularPaymentCap_RoundsUpExactlyBeforeConvertingToDecimal()
+    {
+        IssuedCurrency usd = new IssuedCurrency { Currency = "USD", Issuer = Depositor };
+
+        // 1.000000000000001e-20 has digits past decimal's 28 places; converting first would round
+        // it down to 1e-20 and the cap would fall below the payment.
+        LOLoan justAbove = new LOLoan { PeriodicPayment = XrplNumber.Parse("1.000000000000001e-20"), LoanScale = -20, PaymentRemaining = 2 };
+        Assert.AreEqual(0.00000000000000000002m, LoanPayments.RegularPaymentCap(justAbove, usd));
+
+        // Below decimal's smallest step the cap rounds up to it rather than to zero.
+        LOLoan tiny = new LOLoan { PeriodicPayment = XrplNumber.Parse("1e-29"), LoanScale = -30, PaymentRemaining = 2 };
+        Assert.AreEqual(0.0000000000000000000000000001m, LoanPayments.RegularPaymentCap(tiny, usd));
+
+        // A fine scale does not overflow a payment that needs no rounding.
+        LOLoan fine = new LOLoan { PeriodicPayment = 10, LoanScale = -28, PaymentRemaining = 2 };
+        Assert.AreEqual(10m, LoanPayments.RegularPaymentCap(fine, usd));
+    }
+
+    [TestMethod]
+    public void TestURegularPaymentCap_BeyondDecimal_IsNull()
+    {
+        LOLoan loan = new LOLoan
+        {
+            TotalValueOutstanding = XrplNumber.Parse("7e28"),
+            LoanServiceFee = XrplNumber.Parse("1e28"),
+            PaymentRemaining = 1,
+        };
+
+        Assert.IsNull(LoanPayments.RegularPaymentCap(loan, new IssuedCurrency { Currency = "USD", Issuer = Depositor }));
+    }
+
+    [TestMethod]
     public void TestUIsPaymentLate_BoundaryFollowsTheAmendment()
     {
         DateTime due = new DateTime(2026, 9, 24, 12, 0, 0, DateTimeKind.Utc);

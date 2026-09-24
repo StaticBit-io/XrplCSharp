@@ -283,7 +283,12 @@ namespace Xrpl.Sugar
             if (asset == null || account == null || !changes.TryGetValue(account, out List<Currency> accountChanges))
                 return 0;
 
-            return accountChanges.Where(change => Matches(change, asset)).Sum(change => change.ValueAsNumber);
+            // An issuer's own currency shows up with the holder as the counterparty, one entry per
+            // trust line, so for the issuer every line in that currency counts.
+            bool isIssuer = asset.Issuer != null && string.Equals(account, asset.Issuer, StringComparison.Ordinal);
+            return accountChanges
+                .Where(change => isIssuer ? MatchesCurrency(change, asset) : Matches(change, asset))
+                .Sum(change => change.ValueAsNumber);
         }
 
         /// <summary>
@@ -313,9 +318,13 @@ namespace Xrpl.Sugar
             if (asset.IsXrp())
                 return change.CurrencyCode == "XRP";
 
-            return string.Equals(change.CurrencyCode, asset.Currency, StringComparison.Ordinal)
+            return MatchesCurrency(change, asset)
                 && string.Equals(change.Issuer, asset.Issuer, StringComparison.Ordinal);
         }
+
+        private static bool MatchesCurrency(Currency change, IssuedCurrency asset) =>
+            change.MPTokenIssuanceID == null
+            && string.Equals(change.CurrencyCode, asset.Currency, StringComparison.Ordinal);
 
         private static decimal ToDecimal(XrplNumber number)
         {

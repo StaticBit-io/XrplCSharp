@@ -1,4 +1,5 @@
 using System;
+using System.Numerics;
 
 using Xrpl.BinaryCodec.Numbers;
 using Xrpl.Models.Ledger;
@@ -46,21 +47,15 @@ namespace Xrpl.Sugar
             if (asset == null)
                 throw new ArgumentNullException(nameof(asset));
 
-            decimal serviceFee = 0m;
-            if (loan.LoanServiceFee is { } fee && !fee.TryToDecimal(out serviceFee))
-                return null;
-
+            XrplNumber serviceFee = loan.LoanServiceFee ?? XrplNumber.Zero;
             if (loan.PaymentRemaining == 1)
-            {
-                return loan.TotalValueOutstanding is { } total && total.TryToDecimal(out decimal remaining)
-                    ? remaining + serviceFee
-                    : null;
-            }
+                return loan.TotalValueOutstanding is { } total ? TryAdd(total, serviceFee) : null;
 
-            if (loan.PeriodicPayment is not { } periodic || !periodic.TryToDecimal(out decimal periodicPayment))
+            if (loan.PeriodicPayment is not { } periodic
+                || RoundUpToAsset(periodic, IsIntegral(asset), loan.LoanScale ?? 0) is not { } payment)
                 return null;
 
-            return RoundUpToAsset(periodicPayment, IsIntegral(asset), loan.LoanScale ?? 0) + serviceFee;
+            return TryAdd(payment, serviceFee);
         }
 
         /// <summary>
@@ -105,28 +100,49 @@ namespace Xrpl.Sugar
 
         /// <summary>
         /// Rounds up to a whole unit for XRP and MPT, and to a multiple of 10^<paramref name="scale"/>
-        /// for an issued currency, as rippled rounds a periodic payment.
+        /// for an issued currency, as rippled rounds a periodic payment. The rounding is exact - done
+        /// on the value itself, before it becomes a <see cref="decimal"/> - so nothing the conversion
+        /// drops can make the result smaller than the value.
         /// </summary>
-        internal static decimal RoundUpToAsset(decimal value, bool integralAsset, int scale)
+        /// <returns>null when the rounded value is beyond <see cref="decimal"/>.</returns>
+        internal static decimal? RoundUpToAsset(XrplNumber value, bool integralAsset, int scale)
         {
-            if (integralAsset)
-                return Math.Ceiling(value);
-
-            // Outside this range the step cannot be represented as a decimal; leave the value alone.
-            if (scale is < -28 or > 28)
-                return value;
-
-            decimal step = scale >= 0 ? Pow10(scale) : 1m / Pow10(-scale);
-            return Math.Ceiling(value / step) * step;
+            // A step below 10^-28 is not a decimal; rounding up to 10^-28 instead stays an upper bound.
+            int step = integralAsset ? 0 : Math.Max(scale, -28);
+            return CeilingToPowerOfTen(value, step).TryToDecimal(out decimal rounded) ? rounded : null;
         }
 
-        private static decimal Pow10(int exponent)
+        /// <summary>The smallest multiple of 10^<paramref name="exponent"/> not below a positive value.</summary>
+        internal static XrplNumber CeilingToPowerOfTen(XrplNumber value, int exponent)
         {
-            decimal result = 1m;
-            for (int i = 0; i < exponent; i++)
-                result *= 10m;
+            if (value.Sign <= 0 || value.Exponent >= exponent)
+                return value;
 
-            return result;
+            // A mantissa has at most 19 digits: dropping more than 19 leaves nothing but the carry.
+            int dropped = (int)Math.Min((long)exponent - value.Exponent, 20);
+            BigInteger quotient = BigInteger.DivRem(value.Mantissa, BigInteger.Pow(10, dropped), out BigInteger remainder);
+            if (!remainder.IsZero)
+                quotient += 1;
+
+            return new XrplNumber((long)quotient, exponent);
+        }
+
+        private static decimal? TryAdd(XrplNumber left, XrplNumber right) =>
+            left.TryToDecimal(out decimal a) ? TryAdd(a, right) : null;
+
+        private static decimal? TryAdd(decimal left, XrplNumber right)
+        {
+            if (!right.TryToDecimal(out decimal b))
+                return null;
+
+            try
+            {
+                return left + b;
+            }
+            catch (OverflowException)
+            {
+                return null;
+            }
         }
 
         private static bool HasPassed(DateTime now, DateTime boundary, bool inclusive) =>
