@@ -1,0 +1,127 @@
+{
+  "applied": false,
+  "engine_result": "tesSUCCESS",
+  "engine_result_code": 0,
+  "engine_result_message": "The simulated transaction would have been applied.",
+  "ledger_index": 84,
+  "meta": {
+    "AffectedNodes": [
+      {
+        "ModifiedNode": {
+          "FinalFields": {
+            "Account": "rNLaas7dZix3WviwSq41WDQYxCtvnqyFGQ",
+            "Balance": "10000000",
+            "Flags": 26214400,
+            "OwnerCount": 1,
+            "Sequence": 0,
+            "VaultID": "714E461EA96F7883CCF774A1D88A0B1793398968A79277A1973CA49B78B3EE3A"
+          },
+          "LedgerEntryType": "AccountRoot",
+          "LedgerIndex": "5FE4E771672403E4C36B35F3D27E70EE2DA67087CF8B3CCDC19AD0BA63DD426E",
+          "PreviousFields": {
+            "Balance": "0"
+          },
+          "PreviousTxnID": "118DCD8056EE6D09F917C91E2AC210FD4FDDE4164BEA6D44D01C1E5A8707B906",
+          "PreviousTxnLgrSeq": 83
+        }
+      },
+      {
+        "ModifiedNode": {
+          "FinalFields": {
+            "Account": "rNLaas7dZix3WviwSq41WDQYxCtvnqyFGQ",
+            "Asset": {
+              "currency": "XRP"
+            },
+            "AssetsAvailable": "10000000",
+            "AssetsTotal": "10000000",
+            "Flags": 0,
+            "LEVersion": 1,
+            "Owner": "rM5aC3ZApFENp53re6N2UmRCjU1AFzrY3d",
+            "OwnerNode": "0",
+            "Sequence": 81,
+            "ShareMPTID": "000000019235C8EA92D9BC14E403C767CFDDC1A7C56AFDDD",
+            "WithdrawalPolicy": 1
+          },
+          "LedgerEntryType": "Vault",
+          "LedgerIndex": "714E461EA96F7883CCF774A1D88A0B1793398968A79277A1973CA49B78B3EE3A",
+          "PreviousFields": {},
+          "PreviousTxnID": "118DCD8056EE6D09F917C91E2AC210FD4FDDE4164BEA6D44D01C1E5A8707B906",
+          "PreviousTxnLgrSeq": 83
+        }
+      },
+      {
+        "CreatedNode": {
+          "LedgerEntryType": "DirectoryNode",
+          "LedgerIndex": "7D0B6B3749C98422D96FBE94BC5986B20BA891660592A353838472E6427FE294",
+          "NewFields": {
+            "Owner": "rQsTnntg36bd8epF47qzhgAyQzjDLDd6Dc",
+            "RootIndex": "7D0B6B3749C98422D96FBE94BC5986B20BA891660592A353838472E6427FE294"
+          }
+        }
+      },
+      {
+        "CreatedNode": {
+          "LedgerEntryType": "MPToken",
+          "LedgerIndex": "D13E5FF848D92B90B1A8F37057171F19C6FB1609DC97C46074615A20F754E5E9",
+          "NewFields": {
+            "Account": "rQsTnntg36bd8epF47qzhgAyQzjDLDd6Dc",
+            "MPTAmount": "10000000",
+            "MPTokenIssuanceID": "000000019235C8EA92D9BC14E403C767CFDDC1A7C56AFDDD"
+          }
+        }
+      },
+      {
+        "ModifiedNode": {
+          "FinalFields": {
+            "Account": "rQsTnntg36bd8epF47qzhgAyQzjDLDd6Dc",
+            "Balance": "389999988",
+            "Flags": 0,
+            "OwnerCount": 1,
+            "Sequence": 83
+          },
+          "LedgerEntryType": "AccountRoot",
+          "LedgerIndex": "D5DE7F9324B274BEDF4CB0550804564570F2A2B2548CB57A9F0EF241A7365594",
+          "PreviousFields": {
+            "Balance": "400000000",
+            "OwnerCount": 0,
+            "Sequence": 82
+          },
+          "PreviousTxnID": "99AB4E5AD8E50B2C3F1738F93A4E7063AFCB91829356A670A67861397DAEE644",
+          "PreviousTxnLgrSeq": 82
+        }
+      },
+      {
+        "ModifiedNode": {
+          "FinalFields": {
+            "Flags": 56,
+            "Issuer": "rNLaas7dZix3WviwSq41WDQYxCtvnqyFGQ",
+            "OutstandingAmount": "10000000",
+            "OwnerNode": "0",
+            "Sequence": 1
+          },
+          "LedgerEntryType": "MPTokenIssuance",
+          "LedgerIndex": "F8D51C81C2D448A3D55BAC4E70EAF0D1E73197B6AA7C52B74FC3A9F7477E0B6A",
+          "PreviousFields": {
+            "OutstandingAmount": "0"
+          },
+          "PreviousTxnID": "118DCD8056EE6D09F917C91E2AC210FD4FDDE4164BEA6D44D01C1E5A8707B906",
+          "PreviousTxnLgrSeq": 83
+        }
+      }
+    ],
+    "TransactionIndex": 0,
+    "TransactionResult": "tesSUCCESS"
+  },
+  "tx_json": {
+    "Account": "rQsTnntg36bd8epF47qzhgAyQzjDLDd6Dc",
+    "Amount": "10000000",
+    "Fee": "12",
+    "LastLedgerSequence": 104,
+    "Sequence": 82,
+    "SigningPubKey": "",
+    "TransactionType": "VaultDeposit",
+    "TxnSignature": "",
+    "VaultID": "714E461EA96F7883CCF774A1D88A0B1793398968A79277A1973CA49B78B3EE3A",
+    "hash": "BBA52EB7316BDF88C9D94E626A164544EA60E1CC259D40818A8CD2D159B04266"
+  }
+}

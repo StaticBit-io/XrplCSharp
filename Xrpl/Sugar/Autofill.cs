@@ -407,13 +407,17 @@ namespace Xrpl.Sugar
             if (loan.PaymentRemaining is null or <= LOAN_PAYMENTS_PER_FEE_INCREMENT)
                 return BigInteger.One;
 
-            if (loan.PeriodicPayment is not { } periodic || !periodic.TryToDecimal(out decimal periodicPayment) || periodicPayment <= 0)
+            if (loan.PeriodicPayment is not { } periodic
+                || LoanPayments.RoundUpToAsset(periodic, integralAsset, loan.LoanScale ?? 0) is not { } roundedPayment
+                || roundedPayment <= 0)
                 return BigInteger.One;
 
             decimal serviceFee = 0m;
             if (loan.LoanServiceFee is { } fee)
                 fee.TryToDecimal(out serviceFee);
-            decimal regularPayment = RoundPeriodicPayment(periodicPayment, integralAsset, loan.LoanScale ?? 0) + serviceFee;
+            if (serviceFee > decimal.MaxValue - roundedPayment)
+                return BigInteger.One;
+            decimal regularPayment = roundedPayment + serviceFee;
             if (regularPayment <= 0)
                 return BigInteger.One;
 
@@ -459,36 +463,6 @@ namespace Xrpl.Sugar
                 // a cancellation asked for by the caller is not.
                 return null;
             }
-        }
-
-        /// <summary>
-        /// rippled roundPeriodicPayment: integral assets (XRP, MPT) round up to whole units,
-        /// IOUs round up to a multiple of 10^scale.
-        /// </summary>
-        private static decimal RoundPeriodicPayment(decimal periodicPayment, bool integralAsset, int scale)
-        {
-            if (integralAsset)
-                return Math.Ceiling(periodicPayment);
-
-            // Outside this range the step cannot be represented as a decimal; leave the value alone.
-            if (scale is < -28 or > 28)
-                return periodicPayment;
-
-            decimal step = scale >= 0
-                ? Pow10(scale)
-                : 1m / Pow10(-scale);
-
-            return Math.Ceiling(periodicPayment / step) * step;
-        }
-
-        private static decimal Pow10(int exponent)
-        {
-            decimal result = 1m;
-            for (int i = 0; i < exponent; i++)
-            {
-                result *= 10m;
-            }
-            return result;
         }
 
         /// <summary>
