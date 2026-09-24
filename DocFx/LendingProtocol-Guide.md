@@ -195,7 +195,7 @@ LoanSet loanTx = new LoanSet
     Account = walletBroker.ClassicAddress,
     LoanBrokerID = brokerId,
     Counterparty = walletBorrower.ClassicAddress,
-    PrincipalRequested = "10000000",  // Number type (not drops)
+    PrincipalRequested = 10000000,  // Number type (not drops)
 };
 
 // Requires special co-signing — see CounterpartySignature section below
@@ -466,7 +466,11 @@ The value `10000000000000` (10^13) is normalized to:
 
 ### In Transaction Models
 
-Number fields are represented as `string` in C# models (e.g., `PrincipalRequested = "10000000"`). The binary codec handles normalization and serialization automatically.
+Number fields are `XrplNumber?` in C# models (namespace `Xrpl.BinaryCodec.Numbers`). An `int` converts implicitly (`PrincipalRequested = 10000000`); other values come from `XrplNumber.Parse("1.5")` or an explicit cast from `long` or `decimal`. The binary codec handles normalization and serialization automatically.
+
+A value the ledger cannot hold exactly - more than 19 significant digits - is refused with a `FormatException` (or `OverflowException` for a cast) instead of being rounded, the way rippled refuses it in JSON. Round such a value yourself before assigning it.
+
+Fields read from the ledger arrive in the form rippled writes them, for example `"1e13"` for 10^13. Compare them by value (`==`, `<`) rather than as text, and use `TryToDecimal` when you need `decimal` arithmetic.
 
 ---
 

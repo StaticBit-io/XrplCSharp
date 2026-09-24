@@ -1,7 +1,9 @@
 using System.Collections.Generic;
 using System.Text.Json.Serialization;
 
+using Xrpl.BinaryCodec.Numbers;
 using Xrpl.Client.Exceptions;
+using Xrpl.Client.Json.Converters;
 
 using static Xrpl.Models.Common.Common;
 
@@ -48,9 +50,9 @@ namespace Xrpl.Models.Transactions
         /// <summary>
         /// The maximum amount the protocol can owe the Vault.
         /// Default 0 means no limit. Must not be negative.
-        /// (Number type, string representation.)
+        /// (Number type.)
         /// </summary>
-        string DebtMaximum { get; set; }
+        XrplNumber? DebtMaximum { get; set; }
 
         /// <summary>
         /// Arbitrary hex-encoded metadata, limited to 256 bytes.
@@ -88,7 +90,7 @@ namespace Xrpl.Models.Transactions
 
         /// <inheritdoc />
         [JsonPropertyName("DebtMaximum")]
-        public string DebtMaximum { get; set; }
+        public XrplNumber? DebtMaximum { get; set; }
 
         /// <inheritdoc />
         [JsonPropertyName("Data")]
@@ -120,7 +122,8 @@ namespace Xrpl.Models.Transactions
 
         /// <inheritdoc />
         [JsonPropertyName("DebtMaximum")]
-        public string DebtMaximum { get; set; }
+        [JsonConverter(typeof(LenientXrplNumberConverter))]
+        public XrplNumber? DebtMaximum { get; set; }
 
         /// <inheritdoc />
         [JsonPropertyName("Data")]

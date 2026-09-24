@@ -4,6 +4,7 @@ using System.Threading.Tasks;
 
 using Microsoft.VisualStudio.TestTools.UnitTesting;
 
+using Xrpl.BinaryCodec.Numbers;
 using Xrpl.Client;
 using Xrpl.Client.Exceptions;
 using Xrpl.Models;
@@ -109,7 +110,7 @@ public class TestILoan : TestILoanBase
             Account = walletBroker.ClassicAddress,
             LoanBrokerID = brokerId,
             Counterparty = walletBorrower.ClassicAddress,
-            PrincipalRequested = "10000000",
+            PrincipalRequested = 10000000,
         };
 
         TransactionSummary result = await SubmitLoanSetWithCounterpartySig(client, loanTx, walletBroker, walletBorrower);
@@ -130,7 +131,7 @@ public class TestILoan : TestILoanBase
             Account = walletBroker.ClassicAddress,
             LoanBrokerID = brokerId,
             Counterparty = walletBorrower.ClassicAddress,
-            PrincipalRequested = "10000000",
+            PrincipalRequested = 10000000,
         };
         TransactionSummary loanResult = await SubmitLoanSetWithCounterpartySig(client, loanTx, walletBroker, walletBorrower);
         ValidateResult(loanResult);
@@ -193,7 +194,7 @@ public class TestILoan : TestILoanBase
             Account = walletBroker.ClassicAddress,
             LoanBrokerID = brokerId,
             Counterparty = walletBorrower.ClassicAddress,
-            PrincipalRequested = "10000000",
+            PrincipalRequested = 10000000,
         };
         TransactionSummary loanResult = await SubmitLoanSetWithCounterpartySig(client, loanTx, walletBroker, walletBorrower);
         ValidateResult(loanResult);
@@ -227,7 +228,7 @@ public class TestILoan : TestILoanBase
             Account = walletBroker.ClassicAddress,
             LoanBrokerID = brokerId,
             Counterparty = walletBorrower.ClassicAddress,
-            PrincipalRequested = "10000000",
+            PrincipalRequested = 10000000,
         };
 
         TransactionSummary result = await SubmitLoanSetV2(client, loanTx, walletBroker, walletBorrower);
@@ -252,7 +253,7 @@ public class TestILoan : TestILoanBase
             Account = walletBroker.ClassicAddress,
             LoanBrokerID = brokerId,
             Counterparty = walletBorrower.ClassicAddress,
-            PrincipalRequested = "10000000",
+            PrincipalRequested = 10000000,
         };
 
         TransactionSummary result = await SubmitLoanSetV3(client, loanTx, walletBroker, walletBorrower);
@@ -289,11 +290,11 @@ public class TestILoan : TestILoanBase
 
         // Number fields (DebtTotal, CoverAvailable, DebtMaximum) may be omitted
         // from JSON when value is 0 (default) — rippled does not serialize default Number values.
-        // We verify they are either null (omitted) or a valid string.
-        if (broker.DebtTotal != null)
-            Assert.IsTrue(broker.DebtTotal.Length > 0, "DebtTotal should be non-empty if present");
-        if (broker.CoverAvailable != null)
-            Assert.IsTrue(broker.CoverAvailable.Length > 0, "CoverAvailable should be non-empty if present");
+        // We verify they are either null (omitted) or a non-negative value.
+        if (broker.DebtTotal is { } debtTotal)
+            Assert.IsFalse(debtTotal.IsNegative, "DebtTotal should not be negative");
+        if (broker.CoverAvailable is { } coverAvailable)
+            Assert.IsFalse(coverAvailable.IsNegative, "CoverAvailable should not be negative");
 
         // Verify infrastructure fields
         Assert.IsNotNull(broker.OwnerNode, "OwnerNode should be set");
@@ -316,7 +317,7 @@ public class TestILoan : TestILoanBase
             Account = walletBroker.ClassicAddress,
             LoanBrokerID = brokerId,
             Counterparty = walletBorrower.ClassicAddress,
-            PrincipalRequested = "10000000",
+            PrincipalRequested = 10000000,
         };
         TransactionSummary loanResult = await SubmitLoanSetWithCounterpartySig(client, loanTx, walletBroker, walletBorrower);
         ValidateResult(loanResult);
@@ -341,8 +342,8 @@ public class TestILoan : TestILoanBase
         // PrincipalRequested is a field of the LoanSet TRANSACTION, not of the Loan object:
         // rippled records the amount as PrincipalOutstanding, so the object never carries it
         // (confirmed against a live node — the created object holds PrincipalOutstanding only).
-        if (loan.PrincipalOutstanding != null)
-            Assert.IsTrue(loan.PrincipalOutstanding.Length > 0, "PrincipalOutstanding should be non-empty if present");
+        if (loan.PrincipalOutstanding is { } principalOutstanding)
+            Assert.IsFalse(principalOutstanding.IsNegative, "PrincipalOutstanding should not be negative");
 
         // Verify DateTime fields converted via RippleDateTimeConverter
         Assert.IsNotNull(loan.StartDate, "StartDate should be deserialized as DateTime");
@@ -383,7 +384,7 @@ public class TestILoan : TestILoanBase
             Account = walletBroker.ClassicAddress,
             LoanBrokerID = brokerId,
             Counterparty = walletBorrower.ClassicAddress,
-            PrincipalRequested = principal.ToString(CultureInfo.InvariantCulture),
+            PrincipalRequested = (XrplNumber)principal,
             InterestRate = interestRate,
             PaymentTotal = 1,
             PaymentInterval = paymentInterval,
@@ -395,8 +396,7 @@ public class TestILoan : TestILoanBase
         LedgerEntryResponse entry = await client.LedgerEntry(new LedgerEntryRequest { Index = loanId }).Typed();
         LOLoan loan = (LOLoan)entry.Node;
 
-        decimal interest = decimal.Parse(loan.TotalValueOutstanding, CultureInfo.InvariantCulture)
-            - decimal.Parse(loan.PrincipalOutstanding, CultureInfo.InvariantCulture);
+        decimal interest = (decimal)loan.TotalValueOutstanding.Value - (decimal)loan.PrincipalOutstanding.Value;
 
         // rippled loanPeriodicRate: tenthBipsOfValue(paymentInterval, rate) / kSecondsInYear
         decimal expected = principal * interestRate / 100_000m * paymentInterval / secondsInYear;
@@ -449,7 +449,7 @@ public class TestILoan : TestILoanBase
             Account = walletIssuer.ClassicAddress,
             LoanBrokerID = brokerId,
             Counterparty = walletBorrower.ClassicAddress,
-            PrincipalRequested = "50",
+            PrincipalRequested = 50,
         };
 
         TransactionSummary result = await SubmitLoanSetWithCounterpartySig(client, loanTx, walletIssuer, walletBorrower);
@@ -486,7 +486,7 @@ public class TestILoan : TestILoanBase
             Account = walletIssuer.ClassicAddress,
             LoanBrokerID = brokerId,
             Counterparty = walletBorrower.ClassicAddress,
-            PrincipalRequested = "50",
+            PrincipalRequested = 50,
         };
         TransactionSummary loanResult = await SubmitLoanSetWithCounterpartySig(client, loanTx, walletIssuer, walletBorrower);
         ValidateResult(loanResult);
@@ -526,7 +526,7 @@ public class TestILoan : TestILoanBase
             Account = walletBroker.ClassicAddress,
             LoanBrokerID = brokerId,
             Counterparty = walletBorrower.ClassicAddress,
-            PrincipalRequested = "10000000",
+            PrincipalRequested = 10000000,
         };
         TransactionSummary loanResult = await SubmitLoanSetWithCounterpartySig(client, loanTx, walletBroker, walletBorrower);
         ValidateResult(loanResult);

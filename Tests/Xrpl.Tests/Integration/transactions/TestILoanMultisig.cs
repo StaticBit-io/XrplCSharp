@@ -5,6 +5,7 @@ using System.Threading.Tasks;
 
 using Microsoft.VisualStudio.TestTools.UnitTesting;
 
+using Xrpl.BinaryCodec.Numbers;
 using Xrpl.BinaryCodec;
 using Xrpl.Client;
 using Xrpl.Client.Json;
@@ -76,7 +77,7 @@ public class TestILoanMultisig : TestILoanBase
             Account = broker.ClassicAddress,
             LoanBrokerID = brokerId,
             Counterparty = borrower.ClassicAddress,
-            PrincipalRequested = "10000000",
+            PrincipalRequested = 10000000,
         };
         // rippled LoanSet::calculateBaseFee charges one base fee per counterparty signer
         Dictionary<string, object> autofilled = await client.Autofill(loanTx.ToDictionary(), signersCount: 2);

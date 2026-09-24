@@ -31,10 +31,9 @@ public class TestLoanSetEncode
         JsonNode decodedNode = XrplBinaryCodec.Decode(encoded);
         Assert.IsNotNull(decodedNode, "Decoded node should not be null");
         Assert.AreEqual("LoanSet", decodedNode["TransactionType"]?.ToString());
-        Assert.AreEqual("10000000000000", decodedNode["PrincipalRequested"]?.ToString());
-
+        // The codec writes a Number back the way rippled does: 10000000000000 reads as 1e13.
         string principalDecoded = decodedNode["PrincipalRequested"]?.ToString();
-        Assert.AreEqual("10000000000000", principalDecoded, "PrincipalRequested round-trip mismatch");
+        Assert.AreEqual("1e13", principalDecoded, "PrincipalRequested round-trip mismatch");
 
         string forSigning = XrplBinaryCodec.EncodeForSigning(node);
         Assert.IsFalse(string.IsNullOrWhiteSpace(forSigning), "Signing payload should not be empty");

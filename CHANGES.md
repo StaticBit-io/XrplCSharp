@@ -1,5 +1,29 @@
 ﻿# Changes
 
+## 11.9.0.0 23/09/2026
+
+* **`XrplNumber` is the value type of the XRPL `Number` fields** (#214, part of #211). It lives in `Xrpl.BinaryCodec.Numbers` and holds a value the way rippled's `Number` class does on the large mantissa scale: a sign, a mantissa in [10^18, 10^19 - 1] and an exponent in [-32768, 32768].
+  * `Parse` / `TryParse` read decimal and scientific text; `ToString()` writes what rippled's `to_string(Number)` writes, `1e13` for 10^13; `Mantissa` / `Exponent` give the wire pair of `Number::mantissa()` / `Number::exponent()`
+  * equality and ordering by value; implicit conversion from `int`, explicit from `long` and `decimal`, explicit to `decimal` and `TryToDecimal`, which rounds to nearest (ties to even) past 28 fractional digits and fails on overflow
+  * `XrplNumberJsonConverter` is applied to the type itself: reads a JSON string or number, writes the string
+  * `TestXrplNumber` carries the `to_string` vectors of rippled's `NumberTest.to_string` and the text vectors of xrpl.js `st-number.test.ts`; `TestUNumberFields` checks model JSON and the encoded bytes
+* **A `Number` value the ledger cannot hold exactly is refused instead of rounded.** `NumberType.FromString` rounded `9223372036854775895` to `9223372036854775900` and signed that; it now throws `FormatException`, as rippled's `numberFromJson` refuses the value with "number cannot be represented". The limit is 19 significant digits, and 18 above 9223372036854775807
+* **`NumberType` is built on `XrplNumber`.** `NumberType.Value` returns it and `NumberType(XrplNumber)` creates the canonical wire pair. `ToJson()` and `ToString()` now write rippled's text, so the codec decodes `PrincipalRequested` 10000000000000 as `"1e13"`, not `"10000000000000"`. `FromParser` accepts the wire exponent 32769 that rippled produces for a mantissa above int64 (`9223372036854775810e32768`), and refuses a mantissa of `long.MinValue`
+* **Breaking:** the Number fields of the vault and lending models are `XrplNumber?` instead of `string`:
+  * `LOVault`: `AssetsTotal`, `AssetsAvailable`, `AssetsMaximum`, `LossUnrealized`
+  * `LOLoanBroker`: `DebtTotal`, `DebtMaximum`, `CoverAvailable`
+  * `LOLoan`: `PrincipalOutstanding`, `TotalValueOutstanding`, `PeriodicPayment`, `ManagementFeeOutstanding`, `LoanOriginationFee`, `LoanServiceFee`, `LatePaymentFee`, `ClosePaymentFee`
+  * `ILoanSet` / `LoanSet` / `LoanSetResponse`: `PrincipalRequested`, `LoanOriginationFee`, `LoanServiceFee`, `LatePaymentFee`, `ClosePaymentFee`
+  * `ILoanBrokerSet` / `LoanBrokerSet` / `LoanBrokerSetResponse`: `DebtMaximum`
+  * `IVaultCreate` / `VaultCreate` / `VaultCreateResponse` and `IVaultSet` / `VaultSet` / `VaultSetResponse`: `AssetsMaximum`
+
+  Migration: add `using Xrpl.BinaryCodec.Numbers;`. Assign an `int` directly (`PrincipalRequested = 10000000`), anything else through `XrplNumber.Parse("...")` or a cast from `long` or `decimal`. Read values with `ToString()`, which is rippled's text, compare them with `==` and `<`, and convert with `TryToDecimal` or `(decimal)`. Code that parsed the string with `decimal.Parse` must handle the scientific form or switch to `TryToDecimal`
+* **An unreadable Number costs one field, not the object.** `LenientXrplNumberConverter` is applied to the Number fields of `LOVault`, `LOLoanBroker`, `LOLoan` and the four `*Response` models above: a value this version refuses reads as `null` and the rest of the entry, an `account_objects` page or a transaction still deserializes. Request models (`LoanSet`, `LoanBrokerSet`, `VaultCreate`, `VaultSet`) stay strict and throw `JsonException`
+* `XrplNumber.Parse` works in time linear in the length of the text: it accumulates at most 19 significant digits and carries leading and trailing zeros as an exponent (`Parse_StaysLinearOnMegabyteInput`). The written exponent may reach ±10^9; whether the value fits is decided after the fraction digits are counted, so `"0e100001"` is zero
+* `new NumberType(0, exponent)` with an exponent other than `int.MinValue` or 0 throws `ArgumentOutOfRangeException`; `FromParser` already refused those bytes and reports them as `FormatException`
+* `Autofill` reads `LOLoan.PeriodicPayment` and `LoanServiceFee` through `TryToDecimal` when it estimates the `LoanPay` fee
+* `LendingProtocol-Guide` and `Vault-Guide` (both languages) assign Number fields as numbers, and the lending guide describes `XrplNumber`
+
 ## 11.8.1.0 23/09/2026
 
 * **`VaultCreate` no longer declares an `Amount` field** (#208). The property is removed from `IVaultCreate`, `VaultCreate` and `VaultCreateResponse`. `VaultCreate` has no such field in rippled's `transactions.macro`, and a node refuses any transaction that carries it with `invalidTransaction` ("Field 'Amount' found in disallowed location"), so it could not be used. A vault is created empty and funded with `VaultDeposit`.

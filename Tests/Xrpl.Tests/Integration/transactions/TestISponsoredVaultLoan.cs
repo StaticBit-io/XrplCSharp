@@ -6,6 +6,7 @@ using System.Threading.Tasks;
 
 using Microsoft.VisualStudio.TestTools.UnitTesting;
 
+using Xrpl.BinaryCodec.Numbers;
 using Xrpl.BinaryCodec;
 using Xrpl.Client;
 using Xrpl.Client.Exceptions;
@@ -443,7 +444,7 @@ public class TestISponsoredVaultLoan : TestILoanBase
             Account = broker.ClassicAddress,
             LoanBrokerID = brokerId,
             Counterparty = borrower.ClassicAddress,
-            PrincipalRequested = "10000000",
+            PrincipalRequested = 10000000,
             Sponsor = sponsor.ClassicAddress,
             SponsorFlags = SponsorCoverage.spfSponsorFee,
         };
@@ -488,7 +489,7 @@ public class TestISponsoredVaultLoan : TestILoanBase
             Account = broker.ClassicAddress,
             LoanBrokerID = brokerId,
             Counterparty = borrower.ClassicAddress,
-            PrincipalRequested = "10000000",
+            PrincipalRequested = 10000000,
         };
         TransactionSummary loanResult = await SubmitLoanSetWithCounterpartySig(client, loanTx, broker, borrower);
         ValidateResult(loanResult);

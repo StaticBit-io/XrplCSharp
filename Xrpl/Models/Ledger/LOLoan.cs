@@ -1,6 +1,7 @@
 using System;
 using System.Text.Json.Serialization;
 
+using Xrpl.BinaryCodec.Numbers;
 using Xrpl.Client.Json.Converters;
 using Xrpl.Models.Common;
 
@@ -91,52 +92,60 @@ public class LOLoan : BaseLedgerEntry
     public uint? OverpaymentFee { get; init; }
 
     /// <summary>
-    /// The remaining principal owed (Number type, string representation).
+    /// The remaining principal owed (Number type).
     /// </summary>
     [JsonPropertyName("PrincipalOutstanding")]
-    public string PrincipalOutstanding { get; init; }
+    [JsonConverter(typeof(LenientXrplNumberConverter))]
+    public XrplNumber? PrincipalOutstanding { get; init; }
 
     /// <summary>
-    /// The total amount owed including fees (Number type, string representation).
+    /// The total amount owed including fees (Number type).
     /// </summary>
     [JsonPropertyName("TotalValueOutstanding")]
-    public string TotalValueOutstanding { get; init; }
+    [JsonConverter(typeof(LenientXrplNumberConverter))]
+    public XrplNumber? TotalValueOutstanding { get; init; }
 
     /// <summary>
-    /// The amount due per payment interval (Number type, string representation).
+    /// The amount due per payment interval (Number type).
     /// </summary>
     [JsonPropertyName("PeriodicPayment")]
-    public string PeriodicPayment { get; init; }
+    [JsonConverter(typeof(LenientXrplNumberConverter))]
+    public XrplNumber? PeriodicPayment { get; init; }
 
     /// <summary>
-    /// The remaining management fee to broker (Number type, string representation).
+    /// The remaining management fee to broker (Number type).
     /// </summary>
     [JsonPropertyName("ManagementFeeOutstanding")]
-    public string ManagementFeeOutstanding { get; init; }
+    [JsonConverter(typeof(LenientXrplNumberConverter))]
+    public XrplNumber? ManagementFeeOutstanding { get; init; }
 
     /// <summary>
-    /// The fee paid to broker at loan creation (Number type, string representation).
+    /// The fee paid to broker at loan creation (Number type).
     /// </summary>
     [JsonPropertyName("LoanOriginationFee")]
-    public string LoanOriginationFee { get; init; }
+    [JsonConverter(typeof(LenientXrplNumberConverter))]
+    public XrplNumber? LoanOriginationFee { get; init; }
 
     /// <summary>
-    /// The fee paid to broker with each payment (Number type, string representation).
+    /// The fee paid to broker with each payment (Number type).
     /// </summary>
     [JsonPropertyName("LoanServiceFee")]
-    public string LoanServiceFee { get; init; }
+    [JsonConverter(typeof(LenientXrplNumberConverter))]
+    public XrplNumber? LoanServiceFee { get; init; }
 
     /// <summary>
-    /// The fee for late payments (Number type, string representation).
+    /// The fee for late payments (Number type).
     /// </summary>
     [JsonPropertyName("LatePaymentFee")]
-    public string LatePaymentFee { get; init; }
+    [JsonConverter(typeof(LenientXrplNumberConverter))]
+    public XrplNumber? LatePaymentFee { get; init; }
 
     /// <summary>
-    /// The fee for early full repayment (Number type, string representation).
+    /// The fee for early full repayment (Number type).
     /// </summary>
     [JsonPropertyName("ClosePaymentFee")]
-    public string ClosePaymentFee { get; init; }
+    [JsonConverter(typeof(LenientXrplNumberConverter))]
+    public XrplNumber? ClosePaymentFee { get; init; }
 
     /// <summary>
     /// The timestamp of when the loan started, in seconds since the Ripple Epoch.
