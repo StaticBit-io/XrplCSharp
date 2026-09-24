@@ -20,7 +20,10 @@ namespace Xrpl.BinaryCodec.Types
     {
         private const int ZeroExponent = int.MinValue; // -2147483648
 
+        /// <summary>Mantissa of the wire pair: signed, 0 for zero.</summary>
         public readonly long Mantissa;
+
+        /// <summary>Exponent of the wire pair: <see cref="int.MinValue"/> (or 0) for zero.</summary>
         public readonly int Exponent;
 
         /// <summary>
@@ -55,12 +58,15 @@ namespace Xrpl.BinaryCodec.Types
         /// <summary>The value the wire pair holds.</summary>
         public XrplNumber Value { get; }
 
+        /// <summary>Writes the wire pair: 8-byte mantissa, then 4-byte exponent, both big-endian.</summary>
         public void ToBytes(IBytesSink sink)
         {
             sink.Put(Bits.GetBytes(Mantissa));
             sink.Put(Bits.GetBytes(Exponent));
         }
 
+        /// <summary>Reads the 12-byte wire pair and keeps it as read.</summary>
+        /// <exception cref="FormatException">The bytes are not a value rippled can hold.</exception>
         public static NumberType FromParser(BinaryParser parser, int? hint = null)
         {
             byte[] mantissaBytes = parser.Read(8);
@@ -88,8 +94,13 @@ namespace Xrpl.BinaryCodec.Types
         /// </summary>
         public JsonNode ToJson() => JsonValue.Create(Value.ToString());
 
+        /// <inheritdoc cref="XrplNumber.ToString()"/>
         public override string ToString() => Value.ToString();
 
+        /// <summary>Reads a JSON string or number into the canonical wire pair.</summary>
+        /// <exception cref="FormatException">
+        /// The token is neither a string nor a number, is not a number, or the ledger cannot hold it exactly.
+        /// </exception>
         public static NumberType FromJson(JsonNode token)
         {
             JsonValueKind kind = token.GetValueKind();
