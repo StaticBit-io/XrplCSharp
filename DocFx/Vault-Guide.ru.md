@@ -167,6 +167,20 @@ depositTx = await client.Autofill(depositTx);
 await client.SubmitAndWait(depositTx, depositor, true);
 ```
 
+Чтобы заранее узнать, сколько долей выпустит депозит, его можно отправить на превью. `PreviewVaultDeposit` и `PreviewVaultWithdraw` прогоняют транзакцию через `simulate`:
+
+```csharp
+TransactionPreview<VaultOutcome> preview = await client.PreviewVaultDeposit(depositTx);
+if (preview.WouldSucceed)
+{
+    decimal shares = preview.Outcome.AccountShareChange;   // сколько долей выпустит депозит
+    decimal assets = preview.Outcome.AccountAssetChange;   // отрицательное: сколько спишет депозит
+    await client.SubmitAndWait(preview.Transaction, depositor, false);
+}
+```
+
+`VaultOutcome.FromMetadata` читает те же значения из уже проведённой транзакции. `BalanceChanges.GetBalanceChanges` возвращает балансы MPT, включая доли vault, вместе с XRP и trust line.
+
 ### 4. Вывод активов
 
 Любой держатель долей может обменять их на активы:

@@ -23,6 +23,21 @@
 * `new NumberType(0, exponent)` with an exponent other than `int.MinValue` or 0 throws `ArgumentOutOfRangeException`; `FromParser` already refused those bytes and reports them as `FormatException`
 * `Autofill` reads `LOLoan.PeriodicPayment` and `LoanServiceFee` through `TryToDecimal` when it estimates the `LoanPay` fee
 * `LendingProtocol-Guide` and `Vault-Guide` (both languages) assign Number fields as numbers, and the lending guide describes `XrplNumber`
+* **Previews through `simulate`** (#215, part of #211). `PreviewSugar` adds `PreviewLoanPay`, `PreviewVaultDeposit`, `PreviewVaultWithdraw`, `PreviewAMMDeposit`, `PreviewAMMWithdraw` and `PreviewBalanceChanges` to `IXrplClient`. Each autofills the transaction, runs it through `simulate` and returns a `TransactionPreview<TOutcome>`: `EngineResult`, `WouldSucceed`, the simulated `Metadata`, the autofilled `Transaction`, and an `Outcome` read from the metadata.
+  * `LoanPaymentOutcome` gives `PaymentsMade`, `PrincipalPaid`, `PaidToVault`, `InterestToVault`, `PaidToBroker`, `TotalPaid` and `LoanAfter` of a `LoanPay`. The split follows the money: the vault receives principal and interest, and the broker receives the rest
+  * `VaultOutcome` gives `AccountAssetChange`, `AccountShareChange`, `VaultAssetChange` and `VaultAfter` of a vault deposit or withdrawal
+  * `AmmOutcome` gives `AssetChange`, `Asset2Change`, `LpTokenChange` and `AmmAfter` of an AMM deposit or withdrawal
+  * each outcome also has a `FromMetadata`, which reads the same figures from a validated transaction
+  * for an account that issues the asset, the change sums every trust line in that currency
+  * `VaultOutcome.FromMetadata` reads the vault named by the transaction's `VaultID` and refuses a transaction other than `VaultDeposit`, `VaultWithdraw` or `VaultClawback`
+  * `TestIPreviewLoanVault` and `TestIPreviewAmm` preview a transaction, submit the previewed transaction unchanged, and compare the two outcomes field by field: an XRP `LoanPay`, an MPT `LoanPay`, a vault deposit and withdrawal, and a single-sided AMM deposit and withdrawal
+* **`LoanPayments`** reads a `Loan` entry without asking the node:
+  * `RegularPaymentCap`: `PeriodicPayment` rounded up to the asset, plus `LoanServiceFee`; on the final payment, `TotalValueOutstanding` plus `LoanServiceFee`. Each part is rounded up on the `XrplNumber` before it becomes a `decimal`, with a step finer than 10^-28 rounded up to 10^-28; a cap beyond `decimal` returns null
+  * `IsPaymentLate` and `IsPastGracePeriod`, with an inclusive or exclusive boundary, comparing in UTC: a local time is converted, and an unspecified one is taken as UTC
+  * `Autofill` rounds the periodic payment through the same helper when it estimates the `LoanPay` fee
+* **`BalanceChanges.GetBalanceChanges` reports MPT balances.** It reports a holder's change in `MPTAmount` and, like a trust line issuer, the issuer's side as the opposite of the change in `OutstandingAmount`, as a `Currency` with `MPTokenIssuanceID`. A holder whose modified `MPToken` lists no previous `MPTAmount` is resolved against the change in the issuance's `OutstandingAmount`, taken as zero when the issuance node is absent. `TestUBalanceChangesMpt` covers a vault deposit and withdrawal recorded from a node, and both outcomes of the ambiguous case
+* `Tests/Xrpl.Tests/Fixtures/Simulate` holds the recorded `simulate` responses, and its README says where each one comes from
+* `LendingProtocol-Guide` and `Vault-Guide` (both languages) show the payment cap and the previews
 * `RawJson` and `XrplResponse<T>.Raw` document the cost of a large response (#213): why the frame is allocated per message and cannot be pooled, and that a large `result` read with `Utf8JsonReader` over `RawJson.Span` avoids the second message-sized copy a `JsonElement` result makes
 
 ## 11.8.1.0 23/09/2026

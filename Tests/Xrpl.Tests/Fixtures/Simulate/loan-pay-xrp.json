@@ -1,0 +1,169 @@
+{
+  "applied": false,
+  "engine_result": "tesSUCCESS",
+  "engine_result_code": 0,
+  "engine_result_message": "The simulated transaction would have been applied.",
+  "ledger_index": 30,
+  "meta": {
+    "AffectedNodes": [
+      {
+        "ModifiedNode": {
+          "FinalFields": {
+            "Borrower": "rUFxPcR7uA1QAd8XXLJhgQwM8qLHyReYJX",
+            "Flags": 0,
+            "GracePeriod": 60,
+            "InterestRate": 10000,
+            "LatePaymentFee": "500",
+            "LoanBrokerID": "6DCC559DFA241364AB4AA495FD3D9CDFDA79BCB9A9BCEFEA80D2F11AE75D0540",
+            "LoanBrokerNode": "0",
+            "LoanSequence": 1,
+            "LoanServiceFee": "100",
+            "NextPaymentDueDate": 843529602,
+            "OwnerNode": "0",
+            "PaymentInterval": 120,
+            "PaymentRemaining": 2,
+            "PeriodicPayment": "3333335.870117867363",
+            "PreviousPaymentDueDate": 843529482,
+            "PrincipalOutstanding": "6666668",
+            "StartDate": 843529362,
+            "TotalValueOutstanding": "6666672"
+          },
+          "LedgerEntryType": "Loan",
+          "LedgerIndex": "104CD80EE6AB4E015296466F2CECB010247125A6401F5A7D1E2F858BF8FFECCA",
+          "PreviousFields": {
+            "NextPaymentDueDate": 843529482,
+            "PaymentRemaining": 3,
+            "PrincipalOutstanding": "10000000",
+            "TotalValueOutstanding": "10000008"
+          },
+          "PreviousTxnID": "A81A5DE08F7ED456B5E0522868F5E06D314A983C480FE6CFBD6AD503B56E867D",
+          "PreviousTxnLgrSeq": 29
+        }
+      },
+      {
+        "ModifiedNode": {
+          "FinalFields": {
+            "Account": "rUFxPcR7uA1QAd8XXLJhgQwM8qLHyReYJX",
+            "Balance": "406666552",
+            "Flags": 0,
+            "OwnerCount": 1,
+            "Sequence": 10
+          },
+          "LedgerEntryType": "AccountRoot",
+          "LedgerIndex": "1E7B7D6BF2B137710624DC8212E6B719E59C1DE6D2FC3D95837A4D04F34DCFC0",
+          "PreviousFields": {
+            "Balance": "410000000",
+            "Sequence": 9
+          },
+          "PreviousTxnID": "A81A5DE08F7ED456B5E0522868F5E06D314A983C480FE6CFBD6AD503B56E867D",
+          "PreviousTxnLgrSeq": 29
+        }
+      },
+      {
+        "ModifiedNode": {
+          "FinalFields": {
+            "Account": "rKEcwnHr4mNSZP86s4DRjFyMMxiphd8cCd",
+            "CoverAvailable": "50000000",
+            "DebtTotal": "6666668",
+            "Flags": 0,
+            "LoanSequence": 2,
+            "Owner": "rQUHxveLvYsuWbgVKCaTwp4aFdiENMRknt",
+            "OwnerCount": 1,
+            "OwnerNode": "0",
+            "Sequence": 10,
+            "VaultID": "EBC51C99F64E4AF5C991EEC69958E369AE02DD03FC16153C51AAFEAA751851EA",
+            "VaultNode": "0"
+          },
+          "LedgerEntryType": "LoanBroker",
+          "LedgerIndex": "6DCC559DFA241364AB4AA495FD3D9CDFDA79BCB9A9BCEFEA80D2F11AE75D0540",
+          "PreviousFields": {
+            "DebtTotal": "10000000"
+          },
+          "PreviousTxnID": "A81A5DE08F7ED456B5E0522868F5E06D314A983C480FE6CFBD6AD503B56E867D",
+          "PreviousTxnLgrSeq": 29
+        }
+      },
+      {
+        "ModifiedNode": {
+          "FinalFields": {
+            "Account": "r4cmKY4d6V2ERikLPVnesJ2XWMytQNroBj",
+            "Balance": "93333336",
+            "Flags": 26214400,
+            "OwnerCount": 1,
+            "Sequence": 0,
+            "VaultID": "EBC51C99F64E4AF5C991EEC69958E369AE02DD03FC16153C51AAFEAA751851EA"
+          },
+          "LedgerEntryType": "AccountRoot",
+          "LedgerIndex": "A2180C54CB2861C87D43B070CEB1721D1D2DB2BE1E65279D601EB0053D26B8B2",
+          "PreviousFields": {
+            "Balance": "90000000"
+          },
+          "PreviousTxnID": "A81A5DE08F7ED456B5E0522868F5E06D314A983C480FE6CFBD6AD503B56E867D",
+          "PreviousTxnLgrSeq": 29
+        }
+      },
+      {
+        "ModifiedNode": {
+          "FinalFields": {
+            "Account": "rQUHxveLvYsuWbgVKCaTwp4aFdiENMRknt",
+            "Balance": "250000028",
+            "Flags": 0,
+            "OwnerCount": 5,
+            "Sequence": 13
+          },
+          "LedgerEntryType": "AccountRoot",
+          "LedgerIndex": "C4E26DB98BBBE268F134530B6BD148DF233C3D5F9BBDB580B02EE91FFD8952CF",
+          "PreviousFields": {
+            "Balance": "249999928"
+          },
+          "PreviousTxnID": "A81A5DE08F7ED456B5E0522868F5E06D314A983C480FE6CFBD6AD503B56E867D",
+          "PreviousTxnLgrSeq": 29
+        }
+      },
+      {
+        "ModifiedNode": {
+          "FinalFields": {
+            "Account": "r4cmKY4d6V2ERikLPVnesJ2XWMytQNroBj",
+            "Asset": {
+              "currency": "XRP"
+            },
+            "AssetsAvailable": "93333336",
+            "AssetsTotal": "100000004",
+            "Flags": 0,
+            "LEVersion": 1,
+            "Owner": "rQUHxveLvYsuWbgVKCaTwp4aFdiENMRknt",
+            "OwnerNode": "0",
+            "RedemptionDate": 843530251,
+            "Sequence": 8,
+            "ShareMPTID": "00000001ED1E3242091F1384959D9EADC4535CAF6065D542",
+            "SubscriptionDate": 843529351,
+            "VaultKind": 1,
+            "WithdrawalPolicy": 1
+          },
+          "LedgerEntryType": "Vault",
+          "LedgerIndex": "EBC51C99F64E4AF5C991EEC69958E369AE02DD03FC16153C51AAFEAA751851EA",
+          "PreviousFields": {
+            "AssetsAvailable": "90000000",
+            "AssetsTotal": "100000000"
+          },
+          "PreviousTxnID": "A81A5DE08F7ED456B5E0522868F5E06D314A983C480FE6CFBD6AD503B56E867D",
+          "PreviousTxnLgrSeq": 29
+        }
+      }
+    ],
+    "TransactionIndex": 0,
+    "TransactionResult": "tesSUCCESS"
+  },
+  "tx_json": {
+    "Account": "rUFxPcR7uA1QAd8XXLJhgQwM8qLHyReYJX",
+    "Amount": "3333436",
+    "Fee": "12",
+    "LastLedgerSequence": 50,
+    "LoanID": "104CD80EE6AB4E015296466F2CECB010247125A6401F5A7D1E2F858BF8FFECCA",
+    "Sequence": 9,
+    "SigningPubKey": "",
+    "TransactionType": "LoanPay",
+    "TxnSignature": "",
+    "hash": "314CD3C12F3AB2397303219655876E546F29EAAD43273D044E30D1C417828038"
+  }
+}
