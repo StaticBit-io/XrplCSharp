@@ -109,8 +109,6 @@ namespace Xrpl.BinaryCodec.Numbers
 
         internal NumberCore Negate() => Mantissa == 0 ? Zero : new NumberCore(!Negative, Mantissa, Exponent);
 
-        internal NumberCore Abs() => Negative ? Negate() : this;
-
         // ---- normalization ------------------------------------------------------------------
 
         /// <summary>rippled's <c>doNormalize</c>.</summary>
@@ -421,72 +419,6 @@ namespace Xrpl.BinaryCodec.Numbers
             return r;
         }
 
-        /// <summary><c>root(Number f, unsigned d)</c>: f^(1/d) by Newton-Raphson.</summary>
-        internal static NumberCore Root(NumberCore f, uint d, NumberContext context)
-        {
-            NumberCore one = One(context);
-
-            if (f.Equals(one) || d == 1)
-                return f;
-            if (d == 0)
-            {
-                if (f.Equals(one.Negate()))
-                    return one;
-                if (Less(f.Abs(), one))
-                    return Zero;
-                throw new OverflowException("Number::root infinity");
-            }
-
-            if (Less(f, Zero) && d % 2 == 0)
-                throw new OverflowException("Number::root nan");
-            if (f.IsZero)
-                return f;
-
-            int e = f.Exponent + context.Log + 1;
-            int di = (int)d;
-            int k = (e >= 0 ? e : e - (di - 1)) / di;
-            int k2 = e - (k * di);
-            int ex = k2 == 0 ? 0 : di - k2;
-            e += ex;
-            f = f.ShiftExponent(-e);
-
-            bool neg = false;
-            if (Less(f, Zero))
-            {
-                neg = true;
-                f = f.Negate();
-            }
-
-            int bigD = ((((((6 * di) + 11) * di) + 6) * di) + 1);
-            int a0 = 3 * di * ((((2 * di) - 3) * di) + 1);
-            int a1 = 24 * di * ((2 * di) - 1);
-            int a2 = -30 * (di - 1) * di;
-            NumberCore r = Divide(
-                Add(Multiply(Add(Multiply(FromWire(a2, 0, context), f, context), FromWire(a1, 0, context), context), f, context), FromWire(a0, 0, context), context),
-                FromWire(bigD, 0, context),
-                context);
-            if (neg)
-            {
-                f = f.Negate();
-                r = r.Negate();
-            }
-
-            NumberCore rm1 = Zero;
-            NumberCore rm2;
-            NumberCore dMinusOne = FromWire(d - 1, 0, context);
-            NumberCore dNumber = FromWire(d, 0, context);
-            HashSet<NumberCore> seen = new HashSet<NumberCore>();
-            do
-            {
-                rm2 = rm1;
-                rm1 = r;
-                r = Divide(Add(Multiply(dMinusOne, r, context), Divide(f, Power(r, d - 1, context), context), context), dNumber, context);
-            }
-            while (!r.Equals(rm1) && !r.Equals(rm2) && !IsCycling(seen, rm1, r, "Number::root"));
-
-            return r.ShiftExponent(e / di);
-        }
-
         /// <summary><c>root2(Number f)</c>: the square root.</summary>
         internal static NumberCore Root2(NumberCore f, NumberContext context)
         {
@@ -519,68 +451,27 @@ namespace Xrpl.BinaryCodec.Numbers
                 rm1 = r;
                 r = Divide(Add(r, Divide(f, r, context), context), two, context);
             }
-            while (!r.Equals(rm1) && !r.Equals(rm2) && !IsCycling(seen, rm1, r, "Number::root2"));
+            while (!r.Equals(rm1) && !r.Equals(rm2) && !IsCycling(seen, rm1, r));
 
             return r.ShiftExponent(e / 2);
         }
 
         /// <summary>
-        /// rippled stops a Newton-Raphson loop when the next value repeats the last one or the one
-        /// before it. For <c>root(f, d)</c> with d of 3 or more the iteration can instead settle into
-        /// a longer cycle, on every scale and in every rounding mode (a few inputs in a thousand),
-        /// and rippled never leaves it; no production code path calls that function. A value seen
-        /// before the previous two means such a cycle: it is reported instead of looping forever,
-        /// and every input rippled returns from gives the same result.
+        /// rippled stops the Newton-Raphson loop of <c>root2</c> when the next value repeats the last
+        /// one or the one before it, and loops forever on a longer cycle. None was found in 3.2 million
+        /// inputs across every scale and rounding mode, but the same loop in rippled's
+        /// <c>root(f, d)</c> does cycle, so a value seen before the previous two is reported instead
+        /// of hanging; every input rippled returns from gives the same result.
         /// </summary>
         /// <returns>Always <see langword="false"/>, so the loop condition keeps iterating.</returns>
         /// <exception cref="ArithmeticException">The iteration is in a cycle longer than two.</exception>
-        private static bool IsCycling(HashSet<NumberCore> seen, NumberCore previous, NumberCore next, string operation)
+        private static bool IsCycling(HashSet<NumberCore> seen, NumberCore previous, NumberCore next)
         {
             seen.Add(previous);
             if (seen.Contains(next))
-                throw new ArithmeticException(operation + " does not converge");
+                throw new ArithmeticException("Number::root2 does not converge");
 
             return false;
-        }
-
-        /// <summary><c>power(Number const&amp; f, unsigned n, unsigned d)</c>: f^(n/d).</summary>
-        internal static NumberCore Power(NumberCore f, uint n, uint d, NumberContext context)
-        {
-            NumberCore one = One(context);
-
-            if (f.Equals(one))
-                return f;
-            uint g = Gcd(n, d);
-            if (g == 0)
-                throw new OverflowException("Number::power nan");
-            if (d == 0)
-            {
-                if (f.Equals(one.Negate()))
-                    return one;
-                if (Less(f.Abs(), one))
-                    return Zero;
-                throw new OverflowException("Number::power infinity");
-            }
-
-            if (n == 0)
-                return one;
-            n /= g;
-            d /= g;
-            if (n % 2 == 1 && d % 2 == 0 && Less(f, Zero))
-                throw new OverflowException("Number::power nan");
-            return Root(Power(f, n, context), d, context);
-        }
-
-        private static uint Gcd(uint a, uint b)
-        {
-            while (b != 0)
-            {
-                uint t = a % b;
-                a = b;
-                b = t;
-            }
-
-            return a;
         }
 
         /// <summary>

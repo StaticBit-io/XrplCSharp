@@ -1,8 +1,8 @@
 # Golden vectors for `XrplNumber` arithmetic
 
-`vectors.txt.gz` holds 19,150 results computed by rippled's own `Number.cpp`. `TestUNumberVectors` replays every line through the C# port and requires the same result, bit for bit.
+`vectors.txt.gz` holds 15,935 results computed by rippled's own `Number.cpp`. `TestUNumberVectors` replays every line through the C# port and requires the same result, bit for bit.
 
-The vectors cover each of the four mantissa scales (`Small`, `LargeLegacy`, `Large320`, `Large330`) under each of the four rounding modes, with 100 random cases per combination. The operations are construction from a wire pair and from an internal mantissa, `+`, `-`, `*`, `/`, conversion to `int64`, `truncate`, `power(f, n)`, `root2`, `root(f, d)` and `power(f, n, d)`.
+The vectors cover each of the four mantissa scales (`Small`, `LargeLegacy`, `Large320`, `Large330`) under each of the four rounding modes, with 100 random cases per combination. The operations are construction from a wire pair and from an internal mantissa, `+`, `-`, `*`, `/`, conversion to `int64`, `truncate`, `power(f, n)` and `root2`: the functions rippled's transaction processing calls. `root(f, d)` and `power(f, n, d)` are left out, as they are in the port: only rippled's own tests call them.
 
 ## Source
 
@@ -17,8 +17,8 @@ The vectors cover each of the four mantissa scales (`Small`, `LargeLegacy`, `Lar
 ```
 
 - A number is `<mantissa>e<exponent>` in the wire form of `Number::mantissa()` and `Number::exponent()`, or `Z` for zero.
-- An integer operand (a power, a root) or an `int` result is a plain decimal number.
-- `!overflow` means `std::overflow_error` was thrown, which `Number.cpp` uses for every arithmetic failure: a result out of range, a division by zero, and an infinite or not-a-number root or power. The port throws `OverflowException`, or `DivideByZeroException` for a division by zero, and the test reads both as `!overflow`. `!error` means any other exception; the current vectors contain none.
+- An integer operand (a power) or an `int` result is a plain decimal number.
+- `!overflow` means `std::overflow_error` was thrown, which `Number.cpp` uses for every arithmetic failure: a result out of range, a division by zero, and the square root of a negative value. The port throws `OverflowException`, or `DivideByZeroException` for a division by zero, and the test reads both as `!overflow`. `!error` means any other exception; the current vectors contain none.
 
 ## Regenerate
 

@@ -64,13 +64,11 @@ public class TestUXrplNumberArithmetic
     }
 
     [TestMethod]
-    public void TestPowerAndRoots()
+    public void TestPowerAndSquareRoot()
     {
         NumberContext context = NumberContext.Default;
         Assert.AreEqual("1.79585632602212915", XrplNumber.Power(N("1.05"), 12, context).ToString());
         Assert.AreEqual("1.414213562373095049", XrplNumber.Root2(N("2"), context).ToString());
-        Assert.AreEqual("4", XrplNumber.Power(N("8"), 2, 3, context).ToString());
-        Assert.AreEqual("2", XrplNumber.Root(N("8"), 3, context).ToString());
     }
 
     [TestMethod]
@@ -100,18 +98,6 @@ public class TestUXrplNumberArithmetic
         Assert.ThrowsExactly<OverflowException>(() => XrplNumber.Multiply(N("1e32000"), N("1e32000"), context));
         Assert.ThrowsExactly<ArgumentNullException>(() => XrplNumber.Add(N("1"), N("2"), null));
         Assert.ThrowsExactly<ArgumentNullException>(() => N("1").ToInt64(null));
-    }
-
-    [TestMethod]
-    public void TestRoot_ThatRippledNeverReturnsFrom_Throws()
-    {
-        // rippled's Newton-Raphson loop for this input cycles with a period longer than two and
-        // never ends (checked against Number.cpp with a timeout); the port reports it instead.
-        NumberContext context = NumberContext.Create(NumberMantissaScale.Large320);
-        XrplNumber x = XrplNumber.Parse("0.09223372036854775578");
-
-        ArithmeticException error = Assert.ThrowsExactly<ArithmeticException>(() => XrplNumber.Root(x, 4, context));
-        StringAssert.Contains(error.Message, "does not converge");
     }
 
     [TestMethod]

@@ -26,7 +26,7 @@ namespace Xrpl.BinaryCodec.Numbers
     /// </para>
     /// <para>
     /// Arithmetic - <see cref="Add"/>, <see cref="Multiply"/>, <see cref="Divide"/>,
-    /// <see cref="Power(XrplNumber, uint, NumberContext)"/>, <see cref="Root"/> and the rest - rounds
+    /// <see cref="Power"/>, <see cref="Root2"/> and the rest - rounds
     /// the way rippled's <c>Number</c> does, bit for bit, under the <see cref="NumberContext"/> it is
     /// given: the mantissa scale the node's amendments select and the rounding mode. The operators
     /// use <see cref="NumberContext.Default"/>. On <see cref="NumberMantissaScale.Small"/> a result
@@ -282,26 +282,11 @@ namespace Xrpl.BinaryCodec.Numbers
         public static XrplNumber Power(XrplNumber x, uint n, NumberContext context) =>
             Apply(context, c => NumberCore.Power(x.ToCore(c), n, c));
 
-        /// <summary>x^(n/d), as rippled's <c>power(f, n, d)</c>.</summary>
-        /// <exception cref="OverflowException">
-        /// The result is beyond the exponent range, infinite, or not a number (an even root of a negative value).
-        /// </exception>
-        /// <exception cref="ArithmeticException">
-        /// The root does not converge: rippled's Newton-Raphson loop cycles forever on this input.
-        /// </exception>
-        public static XrplNumber Power(XrplNumber x, uint n, uint d, NumberContext context) =>
-            Apply(context, c => NumberCore.Power(x.ToCore(c), n, d, c));
-
-        /// <summary>The <paramref name="d"/>-th root of x by Newton-Raphson, as rippled's <c>root</c>.</summary>
-        /// <exception cref="OverflowException">The root is infinite or not a number.</exception>
-        /// <exception cref="ArithmeticException">
-        /// The root does not converge: rippled's Newton-Raphson loop cycles forever on this input.
-        /// </exception>
-        public static XrplNumber Root(XrplNumber x, uint d, NumberContext context) =>
-            Apply(context, c => NumberCore.Root(x.ToCore(c), d, c));
-
         /// <summary>The square root of x, as rippled's <c>root2</c>.</summary>
         /// <exception cref="OverflowException"><paramref name="x"/> is negative.</exception>
+        /// <exception cref="ArithmeticException">
+        /// The root does not converge: rippled's Newton-Raphson loop would cycle forever on this input.
+        /// </exception>
         public static XrplNumber Root2(XrplNumber x, NumberContext context) =>
             Apply(context, c => NumberCore.Root2(x.ToCore(c), c));
 

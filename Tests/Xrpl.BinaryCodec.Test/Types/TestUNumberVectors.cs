@@ -28,7 +28,7 @@ public class TestUNumberVectors
     public void TestVectorsAreComplete()
     {
         IReadOnlyList<string> lines = Vectors.Value;
-        Assert.HasCount(19150, lines);
+        Assert.HasCount(15935, lines);
 
         string[] scales = lines.Select(line => line.Split(' ')[0]).Distinct().OrderBy(s => s, StringComparer.Ordinal).ToArray();
         CollectionAssert.AreEqual(new[] { "Large320", "Large330", "LargeLegacy", "Small" }, scales);
@@ -45,8 +45,6 @@ public class TestUNumberVectors
     [DataRow("trunc")]
     [DataRow("pow")]
     [DataRow("root2")]
-    [DataRow("root")]
-    [DataRow("powf")]
     public void TestOperationMatchesRippled(string operation)
     {
         List<string> failures = new List<string>();
@@ -87,12 +85,6 @@ public class TestUNumberVectors
                 "trunc" => Format(ParseWire(parts[3], context).Truncate(context)),
                 "pow" => Format(NumberCore.Power(ParseWire(parts[3], context), uint.Parse(parts[4], CultureInfo.InvariantCulture), context)),
                 "root2" => Format(NumberCore.Root2(ParseWire(parts[3], context), context)),
-                "root" => Format(NumberCore.Root(ParseWire(parts[3], context), uint.Parse(parts[4], CultureInfo.InvariantCulture), context)),
-                "powf" => Format(NumberCore.Power(
-                    ParseWire(parts[3], context),
-                    uint.Parse(parts[4], CultureInfo.InvariantCulture),
-                    uint.Parse(parts[5], CultureInfo.InvariantCulture),
-                    context)),
                 _ => throw new InvalidDataException($"Unknown operation '{parts[2]}'."),
             };
         }

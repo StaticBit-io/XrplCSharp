@@ -4,7 +4,7 @@
 //   <scale> <mode> <op> <operands...> = <result>
 // An operand or result is "<mantissa>e<exponent>" in the external (wire) form of
 // Number::mantissa()/exponent(), "Z" for zero, or "!<what>" for an exception.
-// Integer operands (powers, roots, int64 results) are plain decimal numbers.
+// Integer operands (powers) and int64 results are plain decimal numbers.
 
 #include <xrpl/basics/Number.h>
 
@@ -117,7 +117,7 @@ static Number randomNumber()
     }
 }
 
-// Moderate magnitudes for power and root, so the results stay in range.
+// Moderate magnitudes for power and root2, so the results stay in range.
 static Number randomModerate(bool nonNegative)
 {
     for (;;)
@@ -212,14 +212,6 @@ int main(int argc, char** argv)
 
                 Number const q = randomModerate(true);
                 line("root2 " + fmt(q) + " = " + guarded([&] { return fmt(root2(q)); }));
-                unsigned const d = 1 + static_cast<unsigned>(rng() % 5);
-                Number const rootBase = (d % 2 == 1 && rng() % 2 == 0) ? -q : q;
-                line("root " + fmt(rootBase) + " " + std::to_string(d) + " = " +
-                     guarded([&] { return fmt(root(rootBase, d)); }));
-                unsigned const pn = static_cast<unsigned>(rng() % 7);
-                unsigned const pd = 1 + static_cast<unsigned>(rng() % 4);
-                line("powf " + fmt(q) + " " + std::to_string(pn) + " " + std::to_string(pd) + " = " +
-                     guarded([&] { return fmt(power(q, pn, pd)); }));
             }
         }
     }
