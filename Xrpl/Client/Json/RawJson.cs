@@ -22,10 +22,10 @@ namespace Xrpl.Client.Json
     /// large-object-heap allocation. It cannot come from a pool: the SDK itself reads a frame after
     /// the receive loop has moved on (stream events are parsed from a queue), and a caller may hold
     /// this window indefinitely, so a recycled buffer would hand either of them the bytes of a later
-    /// message. What a caller can avoid is a second copy of the same size. Requesting the result as
+    /// message. What a caller can avoid is the copy made on top of it. Requesting the result as
     /// <see cref="JsonElement"/> — or calling <see cref="ToJsonElement"/> — copies the value out of
-    /// the frame together with the document's metadata: one to two times the message size again,
-    /// depending on its shape (measured at 1.1x for a binary <c>ledger_data</c> page). For
+    /// the frame together with the document's metadata: measured at another 1.1x the message size
+    /// for a binary <c>ledger_data</c> page and 1.7x for a JSON one. For
     /// a response of that size, read <see cref="Span"/> with a <see cref="Utf8JsonReader"/>, which
     /// allocates nothing beyond the frame:
     /// <code>
@@ -34,8 +34,8 @@ namespace Xrpl.Client.Json
     /// </code>
     /// where <c>LedgerDataPage</c> is a type declaring only the members the projection needs — a
     /// class with no members at all is skipped over and allocates next to nothing (measured at
-    /// 1.04x the message size per page in total, against 2.12x for a <see cref="JsonElement"/>
-    /// result).
+    /// 1.04x the message size per page in total against 2.12x for a <see cref="JsonElement"/>
+    /// result on a binary page, and 1.03x against 2.68x on a JSON one).
     /// </para>
     /// </remarks>
     [DebuggerDisplay("RawJson, {Length} bytes")]
