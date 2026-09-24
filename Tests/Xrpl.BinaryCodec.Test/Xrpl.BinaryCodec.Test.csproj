@@ -26,6 +26,9 @@
 		</Compile>
 	</ItemGroup>
 	<ItemGroup>
+		<EmbeddedResource Include="Fixtures\Number\vectors.txt.gz" LogicalName="XrplTests.Fixtures.Number.vectors.txt.gz" />
+	</ItemGroup>
+	<ItemGroup>
 		<ProjectReference Include="..\..\Base\Xrpl.BinaryCodec\Xrpl.BinaryCodec.csproj" />
 	</ItemGroup>
 </Project>
