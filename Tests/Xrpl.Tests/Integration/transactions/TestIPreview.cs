@@ -1,4 +1,7 @@
 using System;
+using System.Collections.Generic;
+using System.Globalization;
+using System.Linq;
 using System.Threading.Tasks;
 
 using Microsoft.VisualStudio.TestTools.UnitTesting;
@@ -77,6 +80,158 @@ public class TestIPreviewLoanVault : TestILoanBase
         Assert.AreEqual(expected.BorrowerReceives, actual.BorrowerReceives);
         Assert.AreEqual(expected.TotalToRepay, actual.TotalToRepay);
         Assert.AreEqual(9_999_000m, actual.BorrowerReceives);
+    }
+
+    [TestMethod]
+    public async Task TestLoanSchedule_MatchesEveryPaymentTheNodeTakes()
+    {
+        // A broker taking a 10% management fee, a loan at 100% a year so every period carries
+        // interest worth splitting. The schedule is projected once, from the loan as created, and
+        // every payment the node then takes is compared with its row.
+        XrplWallet walletBroker = XrplWallet.Generate();
+        XrplWallet walletBorrower = XrplWallet.Generate();
+        await IntegrationTestConfig.TryFundWalletsAsync(client, nodeType, walletBroker, walletBorrower);
+        const ushort managementFeeRate = 10_000;
+        string brokerId = await CreateBrokerWithManagementFee(walletBroker, managementFeeRate);
+
+        LoanSet loanTx = new LoanSet
+        {
+            Account = walletBroker.ClassicAddress,
+            LoanBrokerID = brokerId,
+            Counterparty = walletBorrower.ClassicAddress,
+            PrincipalRequested = 50_000_000,
+            InterestRate = 100_000,
+            PaymentTotal = 6,
+            PaymentInterval = 120,
+            GracePeriod = 60,
+            LoanServiceFee = 10,
+        };
+        TransactionSummary created = await SubmitLoanSetWithCounterpartySig(client, loanTx, walletBroker, walletBorrower);
+        ValidateResult(created);
+        LoanSetOutcome loanSet = LoanSetOutcome.FromMetadata(loanTx, created.Meta);
+
+        LoanScheduleOptions options = await LoanScheduleOptions.FromNodeAsync(client);
+        IReadOnlyList<LoanScheduleRow> schedule = LoanSchedule.Project(loanSet.Loan, loanSet.Asset, managementFeeRate, options);
+        Assert.HasCount(6, schedule);
+
+        await PayThroughAndCompare(schedule, loanSet, walletBorrower, cap => new Currency { Value = cap, CurrencyCode = "XRP" });
+
+        Assert.IsTrue(schedule.Sum(r => r.ManagementFee) > 0, "the fee split was exercised");
+    }
+
+    [TestMethod]
+    public async Task TestLoanSchedule_Mpt_MatchesEveryPaymentTheNodeTakes()
+    {
+        XrplWallet walletIssuer = XrplWallet.Generate();
+        XrplWallet walletHolder = XrplWallet.Generate();
+        XrplWallet walletBorrower = XrplWallet.Generate();
+        await IntegrationTestConfig.TryFundWalletsAsync(client, nodeType, walletIssuer, walletHolder, walletBorrower);
+        (string brokerId, string mptIssuanceId) = await CreateMptBroker(client, walletIssuer, walletHolder);
+
+        MPTokenAuthorize authorize = await client.Autofill(new MPTokenAuthorize
+        {
+            Account = walletBorrower.ClassicAddress,
+            MPTokenIssuanceID = mptIssuanceId,
+        });
+        ValidateResult(await client.SubmitAndWait(authorize, walletBorrower, true));
+
+        LoanSet loanTx = new LoanSet
+        {
+            Account = walletIssuer.ClassicAddress,
+            LoanBrokerID = brokerId,
+            Counterparty = walletBorrower.ClassicAddress,
+            PrincipalRequested = 97,
+            InterestRate = 100_000,
+            PaymentTotal = 5,
+            PaymentInterval = 120,
+            GracePeriod = 60,
+            LoanServiceFee = 1,
+        };
+        TransactionSummary created = await SubmitLoanSetWithCounterpartySig(client, loanTx, walletIssuer, walletBorrower);
+        ValidateResult(created);
+        LoanSetOutcome loanSet = LoanSetOutcome.FromMetadata(loanTx, created.Meta);
+
+        // The borrower needs more than it borrowed to pay interest and fees.
+        Payment topUp = await client.Autofill(new Payment
+        {
+            Account = walletIssuer.ClassicAddress,
+            Destination = walletBorrower.ClassicAddress,
+            Amount = new Currency { Value = "20", MPTokenIssuanceID = mptIssuanceId },
+        });
+        ValidateResult(await client.SubmitAndWait(topUp, walletIssuer, true));
+
+        IReadOnlyList<LoanScheduleRow> schedule = LoanSchedule.Project(
+            loanSet.Loan, loanSet.Asset, managementFeeRate: 0, await LoanScheduleOptions.FromNodeAsync(client));
+
+        await PayThroughAndCompare(schedule, loanSet, walletBorrower, cap => new Currency { Value = cap, MPTokenIssuanceID = mptIssuanceId });
+    }
+
+    /// <summary>Pays every projected row with the regular-payment cap and compares what the node took.</summary>
+    private static async Task PayThroughAndCompare(
+        IReadOnlyList<LoanScheduleRow> schedule,
+        LoanSetOutcome loanSet,
+        XrplWallet borrower,
+        Func<string, Currency> amount)
+    {
+        foreach (LoanScheduleRow row in schedule)
+        {
+            LOLoan loan = (LOLoan)(await client.LedgerEntry(new LedgerEntryRequest { Index = loanSet.LoanId }).Typed()).Node;
+            decimal cap = LoanPayments.RegularPaymentCap(loan, loanSet.Asset).Value;
+
+            LoanPay pay = await client.Autofill(new LoanPay
+            {
+                Account = borrower.ClassicAddress,
+                LoanID = loanSet.LoanId,
+                Amount = amount(cap.ToString(CultureInfo.InvariantCulture)),
+            });
+            TransactionSummary paid = await client.SubmitAndWait(pay, borrower, false);
+            ValidateResult(paid);
+            LoanPaymentOutcome actual = LoanPaymentOutcome.FromMetadata(pay, paid.Meta);
+
+            string at = "payment " + row.Number;
+            Assert.AreEqual(1u, actual.PaymentsMade, at);
+            Assert.AreEqual(row.Principal, actual.PrincipalPaid, at);
+            Assert.AreEqual(row.Interest, actual.InterestToVault, at);
+            Assert.AreEqual(row.ManagementFee + row.ServiceFee, actual.PaidToBroker, at);
+            Assert.AreEqual(row.Total, actual.TotalPaid, at);
+            Assert.AreEqual(row.IsFinal, actual.IsPaidOff, at);
+        }
+    }
+
+    /// <summary>CreateBroker, with a management fee on the LoanBrokerSet.</summary>
+    private static async Task<string> CreateBrokerWithManagementFee(XrplWallet wallet, ushort managementFeeRate)
+    {
+        await IntegrationTestConfig.EnsureBalanceAsync(client, wallet, 200m);
+        string vaultId = await CreateVaultForBroker(client, wallet);
+
+        VaultDeposit deposit = await client.Autofill(new VaultDeposit
+        {
+            Account = wallet.ClassicAddress,
+            VaultID = vaultId,
+            Amount = new Currency { Value = "100000000", CurrencyCode = "XRP" },
+        });
+        ValidateResult(await client.SubmitAndWait(deposit, wallet, true));
+
+        LoanBrokerSet brokerTx = await client.Autofill(new LoanBrokerSet
+        {
+            Account = wallet.ClassicAddress,
+            VaultID = vaultId,
+            ManagementFeeRate = managementFeeRate,
+        });
+        TransactionSummary brokerResult = await client.SubmitAndWait(brokerTx, wallet, true);
+        ValidateResult(brokerResult);
+        string brokerId = GetCreatedObjectId(brokerResult, LedgerEntryType.LoanBroker);
+
+        LoanBrokerCoverDeposit cover = await client.Autofill(new LoanBrokerCoverDeposit
+        {
+            Account = wallet.ClassicAddress,
+            LoanBrokerID = brokerId,
+            Amount = new Currency { Value = "50000000", CurrencyCode = "XRP" },
+        });
+        ValidateResult(await client.SubmitAndWait(cover, wallet, true));
+
+        await EnterInvestmentPhaseAsync(client, vaultId);
+        return brokerId;
     }
 
     [TestMethod]
