@@ -38,6 +38,7 @@
 * **`BalanceChanges.GetBalanceChanges` reports MPT balances.** It reports a holder's change in `MPTAmount` and, like a trust line issuer, the issuer's side as the opposite of the change in `OutstandingAmount`, as a `Currency` with `MPTokenIssuanceID`. A holder whose modified `MPToken` lists no previous `MPTAmount` is resolved against the change in the issuance's `OutstandingAmount`, taken as zero when the issuance node is absent. `TestUBalanceChangesMpt` covers a vault deposit and withdrawal recorded from a node, and both outcomes of the ambiguous case
 * `Tests/Xrpl.Tests/Fixtures/Simulate` holds the recorded `simulate` responses, and its README says where each one comes from
 * `LendingProtocol-Guide` and `Vault-Guide` (both languages) show the payment cap and the previews
+* `RawJson` and `XrplResponse<T>.Raw` document the cost of a large response (#213): why the frame is allocated per message and cannot be pooled, and that a large `result` read with `Utf8JsonReader` over `RawJson.Span` avoids the second message-sized copy a `JsonElement` result makes
 
 ## 11.8.1.0 23/09/2026
 
