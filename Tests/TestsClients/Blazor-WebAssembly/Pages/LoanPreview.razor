@@ -15,8 +15,15 @@
 
 <p style="color: #666;">
     Server: <strong>@Client.Url()</strong> (@(Client.IsConnected() ? "connected" : "not connected")).
-    Switch it on the <a href="/">Connection</a> tab. Nothing here is signed or submitted: the terms come
-    from <code>simulate</code>, the schedule from <code>LoanSchedule.Project</code>.
+    Switch it on the <a href="/">Connection</a> tab.
+    @if (_mode == Mode.FullFlow)
+    {
+        <span>Full flow signs and submits real transactions with test wallets it creates.</span>
+    }
+    else
+    {
+        <span>Nothing here is signed or submitted: the terms come from <code>simulate</code>, the schedule from <code>LoanSchedule.Project</code>.</span>
+    }
 </p>
 
 <div style="display: flex; gap: 8px; margin: 16px 0;">
