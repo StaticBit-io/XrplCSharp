@@ -76,7 +76,7 @@ namespace Xrpl.Sugar
 
             return new LoanScheduleOptions
             {
-                FixCleanup3_2_0 = features.GetByName("fixCleanup3_2_0") is { } feature && feature.Value.Enabled,
+                FixCleanup3_2_0 = features.GetByName("fixCleanup3_2_0")?.Value?.Enabled == true,
             };
         }
     }

@@ -77,10 +77,14 @@ public class ServerFeatures
         if (string.IsNullOrWhiteSpace(name))
             return null;
 
-        return Features
-            .FirstOrDefault(kv =>
-                kv.Value.Name != null &&
-                string.Equals(kv.Value.Name, name, StringComparison.OrdinalIgnoreCase));
+        // FirstOrDefault would give an empty pair, not null, for a name the node does not list.
+        foreach (KeyValuePair<string, FeatureInfo> feature in Features)
+        {
+            if (feature.Value?.Name != null && string.Equals(feature.Value.Name, name, StringComparison.OrdinalIgnoreCase))
+                return feature;
+        }
+
+        return null;
     }
     /// <summary>
     /// Returns features whose name contains the given substring (case-insensitive).

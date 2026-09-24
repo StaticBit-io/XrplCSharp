@@ -203,6 +203,8 @@
     private int _windowDays = 7;
     private LOVault? _vault;
     private string? _brokerId;
+    // The rate the created LoanBroker holds; the input field may have changed since.
+    private ushort _managementFeeRate;
 
     private string _principal = "100";
     private string _interestPercent = "12";
@@ -291,7 +293,7 @@
             ResetLoan();
 
             ServerFeatures features = await Client.ServerFeatures("LendingProtocolV1_1").Typed();
-            bool closedEnded = features.GetByName("LendingProtocolV1_1") is { } feature && feature.Value.Enabled;
+            bool closedEnded = features.GetByName("LendingProtocolV1_1")?.Value?.Enabled == true;
 
             VaultCreate vaultCreate = new VaultCreate { Account = broker.ClassicAddress, Asset = XrpAsset };
             DateTime? subscription = null;
@@ -338,6 +340,8 @@
             }
 
             _vault = (LOVault)(await Client.LedgerEntry(new LedgerEntryRequest { Index = vaultId }).Typed()).Node;
+            LOLoanBroker created = (LOLoanBroker)(await Client.LedgerEntry(new LedgerEntryRequest { Index = brokerId }).Typed()).Node;
+            _managementFeeRate = created.ManagementFeeRate ?? 0;
             _brokerId = brokerId;
         });
     }
@@ -439,8 +443,7 @@
             options = new LoanScheduleOptions();
         }
 
-        ushort managementFeeRate = (ushort)Math.Round(ParseDecimal(_managementFeePercent) * 1000m);
-        return LoanSchedule.Project(loan, XrpAsset, managementFeeRate, options);
+        return LoanSchedule.Project(loan, XrpAsset, _managementFeeRate, options);
     }
 
     private async Task<TransactionSummary> SubmitAsync(string step, ITransactionRequest transaction, XrplWallet wallet, bool autofill = true)
