@@ -232,7 +232,7 @@ foreach (LoanScheduleRow row in schedule)
 }
 ```
 
-Each row is what the node charges for an on-time regular payment; late payments add late interest and `LatePaymentFee`. The Blazor test client in `Tests/TestsClients/Blazor-WebAssembly` has a **Loan preview** tab that shows both for a broker on any node.
+The projection computes in the node's own arithmetic, `XrplNumber` rounded as rippled's `Number` rounds, so each row is what the node charges for an on-time regular payment, to the last unit of the asset; late payments add late interest and `LatePaymentFee`. The Blazor test client in `Tests/TestsClients/Blazor-WebAssembly` has a **Loan preview** tab that shows both for a broker on any node.
 
 ### 2. Make a Loan Payment
 

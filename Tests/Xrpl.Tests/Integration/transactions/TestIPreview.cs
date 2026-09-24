@@ -6,6 +6,7 @@ using System.Threading.Tasks;
 
 using Microsoft.VisualStudio.TestTools.UnitTesting;
 
+using Xrpl.BinaryCodec.Numbers;
 using Xrpl.Client;
 using Xrpl.Models;
 using Xrpl.Models.Common;
@@ -164,6 +165,124 @@ public class TestIPreviewLoanVault : TestILoanBase
             loanSet.Loan, loanSet.Asset, managementFeeRate: 0, await LoanScheduleOptions.FromNodeAsync(client));
 
         await PayThroughAndCompare(schedule, loanSet, walletBorrower, cap => new Currency { Value = cap, MPTokenIssuanceID = mptIssuanceId });
+    }
+
+    [TestMethod]
+    [DataRow("1234.567", 7u, 100_000u, (ushort)10_000, "0.01")]
+    [DataRow("100", 3u, 55_555u, (ushort)2_500, "0")]
+    [DataRow("987654.321", 12u, 12_345u, (ushort)1_234, "0.5")]
+    public async Task TestLoanSchedule_Iou_MatchesEveryPaymentTheNodeTakes(
+        string principal,
+        uint payments,
+        uint interestRate,
+        ushort managementFeeRate,
+        string serviceFee)
+    {
+        // An issued currency is rounded to 16 significant digits and then to the loan's scale, the
+        // path XRP and MPT never take.
+        XrplWallet walletIssuer = XrplWallet.Generate();
+        XrplWallet walletHolder = XrplWallet.Generate();
+        XrplWallet walletBorrower = XrplWallet.Generate();
+        await IntegrationTestConfig.TryFundWalletsAsync(client, nodeType, walletIssuer, walletHolder, walletBorrower);
+        IssuedCurrency usd = new IssuedCurrency { Currency = "USD", Issuer = walletIssuer.ClassicAddress };
+        string brokerId = await CreateIouBroker(walletIssuer, walletHolder, walletBorrower, usd, managementFeeRate);
+
+        LoanSet loanTx = new LoanSet
+        {
+            Account = walletIssuer.ClassicAddress,
+            LoanBrokerID = brokerId,
+            Counterparty = walletBorrower.ClassicAddress,
+            PrincipalRequested = XrplNumber.Parse(principal),
+            InterestRate = interestRate,
+            PaymentTotal = payments,
+            PaymentInterval = 60,
+            GracePeriod = 60,
+            LoanServiceFee = XrplNumber.Parse(serviceFee),
+        };
+        TransactionSummary created = await SubmitLoanSetWithCounterpartySig(client, loanTx, walletIssuer, walletBorrower);
+        ValidateResult(created);
+        LoanSetOutcome loanSet = LoanSetOutcome.FromMetadata(loanTx, created.Meta);
+
+        IReadOnlyList<LoanScheduleRow> schedule = LoanSchedule.Project(
+            loanSet.Loan, loanSet.Asset, managementFeeRate, await LoanScheduleOptions.FromNodeAsync(client));
+        Assert.HasCount((int)payments, schedule);
+
+        await PayThroughAndCompare(
+            schedule,
+            loanSet,
+            walletBorrower,
+            cap => new Currency { Value = cap, CurrencyCode = usd.Currency, Issuer = usd.Issuer });
+    }
+
+    /// <summary>
+    /// An issuer's USD vault, funded by a holder, under a broker with a management fee; the
+    /// borrower holds a trust line and enough USD to pay interest and fees.
+    /// </summary>
+    private static async Task<string> CreateIouBroker(
+        XrplWallet issuer,
+        XrplWallet holder,
+        XrplWallet borrower,
+        IssuedCurrency usd,
+        ushort managementFeeRate)
+    {
+        AccountSet rippling = await client.Autofill(new AccountSet
+        {
+            Account = issuer.ClassicAddress,
+            SetFlag = AccountSetAsfFlags.asfDefaultRipple,
+        });
+        ValidateResult(await client.SubmitAndWait(rippling, issuer, true));
+
+        foreach (XrplWallet wallet in new[] { holder, borrower })
+        {
+            TrustSet trust = await client.Autofill(new TrustSet
+            {
+                Account = wallet.ClassicAddress,
+                LimitAmount = new Currency { CurrencyCode = usd.Currency, Issuer = usd.Issuer, Value = "100000000" },
+            });
+            ValidateResult(await client.SubmitAndWait(trust, wallet, true));
+
+            Payment funding = await client.Autofill(new Payment
+            {
+                Account = issuer.ClassicAddress,
+                Destination = wallet.ClassicAddress,
+                Amount = new Currency { CurrencyCode = usd.Currency, Issuer = usd.Issuer, Value = "5000000" },
+            });
+            ValidateResult(await client.SubmitAndWait(funding, issuer, true));
+        }
+
+        VaultCreate vaultTx = await client.Autofill(await BuildBrokerVaultAsync(client, issuer.ClassicAddress, usd));
+        TransactionSummary vaultResult = await client.SubmitAndWait(vaultTx, issuer, true);
+        ValidateResult(vaultResult);
+        string vaultId = GetCreatedObjectId(vaultResult, LedgerEntryType.Vault);
+
+        VaultDeposit deposit = await client.Autofill(new VaultDeposit
+        {
+            Account = holder.ClassicAddress,
+            VaultID = vaultId,
+            Amount = new Currency { CurrencyCode = usd.Currency, Issuer = usd.Issuer, Value = "2000000" },
+        });
+        ValidateResult(await client.SubmitAndWait(deposit, holder, true));
+
+        LoanBrokerSet brokerTx = await client.Autofill(new LoanBrokerSet
+        {
+            Account = issuer.ClassicAddress,
+            VaultID = vaultId,
+            ManagementFeeRate = managementFeeRate,
+        });
+        TransactionSummary brokerResult = await client.SubmitAndWait(brokerTx, issuer, true);
+        ValidateResult(brokerResult);
+        string brokerId = GetCreatedObjectId(brokerResult, LedgerEntryType.LoanBroker);
+
+        LoanBrokerCoverDeposit cover = await client.Autofill(new LoanBrokerCoverDeposit
+        {
+            Account = issuer.ClassicAddress,
+            LoanBrokerID = brokerId,
+            Amount = new Currency { CurrencyCode = usd.Currency, Issuer = usd.Issuer, Value = "500000" },
+        });
+        ValidateResult(await client.SubmitAndWait(cover, issuer, true));
+
+        await EnterInvestmentPhaseAsync(client, vaultId);
+        return brokerId;
     }
 
     /// <summary>Pays every projected row with the regular-payment cap and compares what the node took.</summary>
