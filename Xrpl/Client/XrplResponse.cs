@@ -54,6 +54,12 @@ namespace Xrpl.Client
         /// The <c>result</c> member exactly as the node sent it. Empty when the response carried
         /// none.
         /// </summary>
+        /// <remarks>
+        /// For a large response — a <c>ledger_data</c> crawl — reading this with a
+        /// <see cref="System.Text.Json.Utf8JsonReader"/> over <see cref="RawJson.Span"/> avoids the
+        /// second message-sized copy that a <see cref="System.Text.Json.JsonElement"/> result makes;
+        /// see <see cref="RawJson"/>.
+        /// </remarks>
         public RawJson Raw { get; }
 
         /// <summary>The API version the node answered on, when it reported one.</summary>

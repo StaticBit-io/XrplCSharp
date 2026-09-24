@@ -23,6 +23,7 @@
 * `new NumberType(0, exponent)` with an exponent other than `int.MinValue` or 0 throws `ArgumentOutOfRangeException`; `FromParser` already refused those bytes and reports them as `FormatException`
 * `Autofill` reads `LOLoan.PeriodicPayment` and `LoanServiceFee` through `TryToDecimal` when it estimates the `LoanPay` fee
 * `LendingProtocol-Guide` and `Vault-Guide` (both languages) assign Number fields as numbers, and the lending guide describes `XrplNumber`
+* `RawJson` and `XrplResponse<T>.Raw` document the cost of a large response (#213): why the frame is allocated per message and cannot be pooled, and that a large `result` read with `Utf8JsonReader` over `RawJson.Span` avoids the second message-sized copy a `JsonElement` result makes
 
 ## 11.8.1.0 23/09/2026
 
