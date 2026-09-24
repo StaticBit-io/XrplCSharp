@@ -20,9 +20,17 @@ namespace Xrpl.BinaryCodec.Numbers
     /// 64-bit wire form reported by <see cref="Mantissa"/> and <see cref="Exponent"/>.
     /// </para>
     /// <para>
-    /// Every value of this type is exact. Parsing and conversions refuse input that the ledger cannot
-    /// hold without rounding it, the way rippled refuses such a value in JSON with
-    /// "number cannot be represented", instead of signing a value other than the one written.
+    /// Parsing and conversions are exact: they refuse input that the ledger cannot hold without
+    /// rounding it, the way rippled refuses such a value in JSON with "number cannot be represented",
+    /// instead of signing a value other than the one written.
+    /// </para>
+    /// <para>
+    /// Arithmetic - <see cref="Add"/>, <see cref="Multiply"/>, <see cref="Divide"/>,
+    /// <see cref="Power"/>, <see cref="Root2"/> and the rest - rounds
+    /// the way rippled's <c>Number</c> does, bit for bit, under the <see cref="NumberContext"/> it is
+    /// given: the mantissa scale the node's amendments select and the rounding mode. The operators
+    /// use <see cref="NumberContext.Default"/>. On <see cref="NumberMantissaScale.Small"/> a result
+    /// below about 10^-32750, which rippled can hold with its 16-digit mantissa, reads as zero here.
     /// </para>
     /// <para>
     /// <see cref="ToString()"/> produces the text rippled produces for the field, switching to
@@ -245,6 +253,100 @@ namespace Xrpl.BinaryCodec.Numbers
         /// <summary>Converts from <see cref="long"/>.</summary>
         /// <exception cref="OverflowException">The value is <see cref="long.MinValue"/>.</exception>
         public static explicit operator XrplNumber(long value) => new XrplNumber(value, 0);
+
+        // ---- arithmetic, as rippled's Number computes it ------------------------------------
+
+        /// <summary>x + y, rounded under <paramref name="context"/>.</summary>
+        /// <exception cref="OverflowException">The result is beyond the exponent range.</exception>
+        public static XrplNumber Add(XrplNumber x, XrplNumber y, NumberContext context) =>
+            Apply(context, c => NumberCore.Add(x.ToCore(c), y.ToCore(c), c));
+
+        /// <summary>x - y, rounded under <paramref name="context"/>.</summary>
+        /// <exception cref="OverflowException">The result is beyond the exponent range.</exception>
+        public static XrplNumber Subtract(XrplNumber x, XrplNumber y, NumberContext context) =>
+            Apply(context, c => NumberCore.Subtract(x.ToCore(c), y.ToCore(c), c));
+
+        /// <summary>x * y, rounded under <paramref name="context"/>.</summary>
+        /// <exception cref="OverflowException">The result is beyond the exponent range.</exception>
+        public static XrplNumber Multiply(XrplNumber x, XrplNumber y, NumberContext context) =>
+            Apply(context, c => NumberCore.Multiply(x.ToCore(c), y.ToCore(c), c));
+
+        /// <summary>x / y, rounded under <paramref name="context"/>.</summary>
+        /// <exception cref="DivideByZeroException"><paramref name="y"/> is zero.</exception>
+        /// <exception cref="OverflowException">The result is beyond the exponent range.</exception>
+        public static XrplNumber Divide(XrplNumber x, XrplNumber y, NumberContext context) =>
+            Apply(context, c => NumberCore.Divide(x.ToCore(c), y.ToCore(c), c));
+
+        /// <summary>x^n by repeated squaring, rounded at each step as rippled's <c>power</c>.</summary>
+        /// <exception cref="OverflowException">The result is beyond the exponent range.</exception>
+        public static XrplNumber Power(XrplNumber x, uint n, NumberContext context) =>
+            Apply(context, c => NumberCore.Power(x.ToCore(c), n, c));
+
+        /// <summary>The square root of x, as rippled's <c>root2</c>.</summary>
+        /// <exception cref="OverflowException"><paramref name="x"/> is negative.</exception>
+        /// <exception cref="ArithmeticException">
+        /// The root does not converge: rippled's Newton-Raphson loop would cycle forever on this input.
+        /// </exception>
+        public static XrplNumber Root2(XrplNumber x, NumberContext context) =>
+            Apply(context, c => NumberCore.Root2(x.ToCore(c), c));
+
+        /// <summary>The value with its fraction dropped, as rippled's <c>truncate</c>.</summary>
+        public XrplNumber Truncate(NumberContext context)
+        {
+            XrplNumber self = this;
+            return Apply(context, c => self.ToCore(c).Truncate(c));
+        }
+
+        /// <summary>
+        /// The value as an integer, rounded in the context's mode, as rippled's conversion to
+        /// <c>std::int64_t</c>.
+        /// </summary>
+        /// <exception cref="OverflowException">The value is beyond <see cref="long"/>.</exception>
+        public long ToInt64(NumberContext context)
+        {
+            if (context == null)
+                throw new ArgumentNullException(nameof(context));
+
+            return ToCore(context).ToInt64(context);
+        }
+
+        /// <summary>The absolute value.</summary>
+        public static XrplNumber Abs(XrplNumber x) => x.IsNegative ? -x : x;
+
+        /// <summary>Negation, which is always exact.</summary>
+        public static XrplNumber operator -(XrplNumber x) =>
+            x._mantissa == 0 ? Zero : new XrplNumber(!x._negative, x._mantissa, x._exponent);
+
+        /// <summary>x + y under <see cref="NumberContext.Default"/>.</summary>
+        public static XrplNumber operator +(XrplNumber x, XrplNumber y) => Add(x, y, NumberContext.Default);
+
+        /// <summary>x - y under <see cref="NumberContext.Default"/>.</summary>
+        public static XrplNumber operator -(XrplNumber x, XrplNumber y) => Subtract(x, y, NumberContext.Default);
+
+        /// <summary>x * y under <see cref="NumberContext.Default"/>.</summary>
+        public static XrplNumber operator *(XrplNumber x, XrplNumber y) => Multiply(x, y, NumberContext.Default);
+
+        /// <summary>x / y under <see cref="NumberContext.Default"/>.</summary>
+        public static XrplNumber operator /(XrplNumber x, XrplNumber y) => Divide(x, y, NumberContext.Default);
+
+        /// <summary>
+        /// The value as rippled's <c>Number</c> holds it in <paramref name="context"/>'s range: what
+        /// <c>Number(mantissa, exponent)</c> builds from the wire form.
+        /// </summary>
+        internal NumberCore ToCore(NumberContext context) =>
+            _mantissa == 0 ? NumberCore.Zero : NumberCore.FromWire(Mantissa, Exponent, context);
+
+        /// <summary>The value of a rippled <c>Number</c>, from its wire form.</summary>
+        internal static XrplNumber FromCore(NumberCore core) =>
+            core.IsZero ? Zero : new XrplNumber(core.ExternalMantissa, core.ExternalExponent);
+
+        private static XrplNumber Apply(NumberContext context, Func<NumberContext, NumberCore> operation)
+        {
+            if (context == null)
+                throw new ArgumentNullException(nameof(context));
+
+            return FromCore(operation(context));
+        }
 
         /// <summary>
         /// The value as rippled writes it in JSON (<c>to_string(Number)</c>).

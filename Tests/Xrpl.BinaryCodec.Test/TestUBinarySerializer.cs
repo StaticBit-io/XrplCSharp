@@ -7,7 +7,7 @@ using Xrpl.BinaryCodec.Types;
 namespace Xrpl.BinaryCodec.Tests
 {
     [TestClass]
-    public class TestBinarySerializer
+    public class TestUBinarySerializer
     {
         [TestMethod]
         public void TestWriteLengthEncoded_Short()

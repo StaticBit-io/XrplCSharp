@@ -9,7 +9,7 @@ using Xrpl.BinaryCodec.Types;
 namespace XrplTests.BinaryCodecLib.Types;
 
 [TestClass]
-public class TestInt64Type
+public class TestUInt64Type
 {
     [TestMethod]
     public void TestFromJson_Number()

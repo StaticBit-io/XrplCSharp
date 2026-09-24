@@ -6,7 +6,7 @@
   * `Parse` / `TryParse` read decimal and scientific text; `ToString()` writes what rippled's `to_string(Number)` writes, `1e13` for 10^13; `Mantissa` / `Exponent` give the wire pair of `Number::mantissa()` / `Number::exponent()`
   * equality and ordering by value; implicit conversion from `int`, explicit from `long` and `decimal`, explicit to `decimal` and `TryToDecimal`, which rounds to nearest (ties to even) past 28 fractional digits and fails on overflow
   * `XrplNumberJsonConverter` is applied to the type itself: reads a JSON string or number, writes the string
-  * `TestXrplNumber` carries the `to_string` vectors of rippled's `NumberTest.to_string` and the text vectors of xrpl.js `st-number.test.ts`; `TestUNumberFields` checks model JSON and the encoded bytes
+  * `TestUXrplNumber` carries the `to_string` vectors of rippled's `NumberTest.to_string` and the text vectors of xrpl.js `st-number.test.ts`; `TestUNumberFields` checks model JSON and the encoded bytes
 * **A `Number` value the ledger cannot hold exactly is refused instead of rounded.** `NumberType.FromString` rounded `9223372036854775895` to `9223372036854775900` and signed that; it now throws `FormatException`, as rippled's `numberFromJson` refuses the value with "number cannot be represented". The limit is 19 significant digits, and 18 above 9223372036854775807
 * **`NumberType` is built on `XrplNumber`.** `NumberType.Value` returns it and `NumberType(XrplNumber)` creates the canonical wire pair. `ToJson()` and `ToString()` now write rippled's text, so the codec decodes `PrincipalRequested` 10000000000000 as `"1e13"`, not `"10000000000000"`. `FromParser` accepts the wire exponent 32769 that rippled produces for a mantissa above int64 (`9223372036854775810e32768`), and refuses a mantissa of `long.MinValue`
 * **Breaking:** the Number fields of the vault and lending models are `XrplNumber?` instead of `string`:
@@ -47,6 +47,13 @@
 * `Tests/Xrpl.Tests/Fixtures/Simulate` holds the recorded `simulate` responses, and its README says where each one comes from
 * `LendingProtocol-Guide` and `Vault-Guide` (both languages) show the payment cap and the previews
 * `RawJson` and `XrplResponse<T>.Raw` document the cost of a large response (#213): why the frame is allocated per message and cannot be pooled, and that a large `result` read with `Utf8JsonReader` over `RawJson.Span` avoids the second message-sized copy a `JsonElement` result makes
+* **`XrplNumber` arithmetic, bit-exact with rippled's `Number`** (#218, part of #211). `Add`, `Subtract`, `Multiply`, `Divide`, `Power`, `Root2`, `Truncate`, `ToInt64` and `Abs` round as rippled's `Number.cpp` does under a `NumberContext`; `+`, `-`, `*`, `/` and unary `-` use `NumberContext.Default`
+  * `NumberContext` names the mantissa scale (`NumberMantissaScale`: `Small`, `LargeLegacy`, `Large320`, `Large330`) and the rounding mode (`NumberRounding`: `ToNearest`, `TowardsZero`, `Downward`, `Upward`); `Default` is `Large330` rounding to nearest, `ForAmendments` maps SingleAssetVault / LendingProtocol, `fixCleanup3_2_0` and `fixCleanup3_3_0` to the scale, `WithRounding` changes the mode
+  * the engine is `NumberCore` (internal), a statement-for-statement port of the parts of `Number.cpp` that rippled's transaction processing calls, with 128-bit intermediates
+  * `Root2` throws `ArithmeticException` on an input where rippled's Newton-Raphson loop would cycle with a period longer than two and never return
+  * `TestUNumberVectors` replays 15,935 results printed by rippled's `Number.cpp` at 00606bec1 across all scales, rounding modes and operations; `Tests/Xrpl.BinaryCodec.Test/Fixtures/Number` holds the vectors, the generator and how to rebuild them. `TestUXrplNumberArithmetic` covers the public API
+  * `Xrpl.BinaryCodec` exposes its internals to `Xrpl.BinaryCodec.Test`
+* Twelve `Xrpl.BinaryCodec.Test` classes take the `TestU` prefix that CI's unit-test filter matches (#218): `TestUBinarySerializer`, `TestUEnumParity`, `TestUFieldDispatch`, `TestUAmount`, `TestUInt32Type`, `TestUInt64Type`, `TestUIouValueTrailingDot`, `TestUIssueMpt`, `TestULoanSetEncode`, `TestUNumberType`, `TestUXChainBridgeType` and `TestUXrplNumber`
 
 ## 11.8.1.0 23/09/2026
 

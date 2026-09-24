@@ -7,7 +7,7 @@ using Xrpl.BinaryCodec;
 namespace XrplTests.BinaryCodecLib.Types;
 
 [TestClass]
-public class TestLoanSetEncode
+public class TestULoanSetEncode
 {
     [TestMethod]
     public void TestEncodeDecode_LoanSet()
