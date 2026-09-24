@@ -135,6 +135,7 @@ namespace Xrpl.Utils.Hashes
         /// <param name="address2">Classic address of the other side; the order of the two does not matter.</param>
         /// <param name="currency">A 3-character ISO code, a 40-character hex code, or a longer name encoded the way <see cref="CurrencyToHex"/> does.</param>
         /// <returns>The 64-character hexadecimal object ID of the trust line.</returns>
+        /// <exception cref="ArgumentException">Thrown when <paramref name="currency"/> is XRP, which has no trust lines.</exception>
         public static string HashTrustline(string address1, string address2, string currency)
         {
             string address1Hex = address1.AddressToHex();
@@ -156,9 +157,17 @@ namespace Xrpl.Utils.Hashes
         private static string CurrencyCodeHex(string currency)
         {
             string code = currency.Trim();
-            return code.Length == 3
+            string hex = code.Length == 3
                 ? Xrpl.BinaryCodec.Types.Currency.EncodeCurrency(code).ToHex()
                 : code.CurrencyToHex();
+
+            // rippled maps "XRP" to the all-zero currency, and TrustSet refuses both forms.
+            if (string.Equals(code, "XRP", StringComparison.Ordinal) || hex.All(c => c == '0'))
+            {
+                throw new ArgumentException("XRP has no trust lines", nameof(currency));
+            }
+
+            return hex;
         }
 
         public static string HashEscrow(string address, int sequence)

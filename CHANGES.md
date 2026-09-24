@@ -11,10 +11,11 @@
   * `LendingProtocol-Guide` (both languages): the broker example labelled `15000` as 150%, `12000` as 120% and `100` as 1%. They are 15%, 12% and 0.1%. The step that presented the rates as an update to an existing broker now sets them on the creating `LoanBrokerSet`, since rippled refuses them on a modification with `temINVALID`. The LoanBroker field table listed `Asset`, `Asset2`, `AssetsAvailable` and `AssetsTotal`, which the object does not have, and now matches `ledger_entries.macro`
   * `LendingProtocol-Guide` (both languages) now creates a closed-ended vault in its walkthrough, which `LoanBrokerSet` requires under `LendingProtocolV1_1` (`tecNO_PERMISSION` on an open-ended one). It states which phase admits the vault deposit (subscription) and the loan (investment), and lists `tecTOO_SOON`, `tecEXPIRED` and the new `tecNO_PERMISSION` causes under Common Errors
   * `TestILoan.TestLoanSet_InterestRateIsInTenthBasisPoints` creates a loan at `InterestRate = 50000` and checks that the node charges 50% a year on it
-* **`Hashes.HashOfferId` returns the index the node assigns to an `Offer`.** It hashed the namespace as three bytes (`00 00 6F`) instead of rippled's `uint16` (`00 6F`), so every index it produced was well-formed and wrong. A `HashOfferId(string, uint)` overload takes the sequence in its ledger type; the `int` overload delegates to it
+* **`Hashes.HashOfferId` returns the index the node assigns to an `Offer`**: the namespace is hashed as rippled's `uint16` (`00 6F`), not three bytes. `HashOfferId(string, uint)` added; the `int` overload delegates to it
 * **`Hashes.HashTrustline` returns the index the node assigns to a `RippleState`**
-  * a 3-character currency code threw `IOException` ("invalid characters encountered in Hex data"): it went into the hash as the bare ISO text. It is now encoded as the 20-byte code with the ISO letters at bytes 12-14. `CurrencyToHex` is unchanged
-  * the low/high account order came from `BigInteger.Parse` over the hex AccountIDs, which reads a leading digit of 8 or above as a negative number. A pair where exactly one AccountID has its high bit set was hashed in the wrong order. The IDs are now compared as unsigned bytes, as rippled does
+  * a 3-character currency code is encoded as the 20-byte code with the ISO letters at bytes 12-14
+  * the two AccountIDs are ordered as unsigned bytes, as rippled does, instead of through `BigInteger.Parse`
+  * `XRP`, as the ISO code or the all-zero hex code, throws `ArgumentException`
 * `TestUHashes` covers every ledger-object helper - `HashAccountRoot` (re-enabled), `HashOfferId`, `HashTrustline` with ISO and hex codes, `HashSignerListId`, `HashEscrow` - with the xrpl.js vectors and two node-assigned offer indices. `TestILedgerObjectIds` creates an account, offer, trust line, escrow and signer list on the stand and checks each helper against the index `account_info` / `account_objects` report
 
 ## 11.8.0.0 23/09/2026

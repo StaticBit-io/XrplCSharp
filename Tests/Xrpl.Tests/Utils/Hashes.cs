@@ -64,6 +64,15 @@ namespace XrplTests.Xrpl.Utils
         }
 
         [TestMethod]
+        [DataRow("XRP")]
+        [DataRow("0000000000000000000000000000000000000000")]
+        public void TestRippleStateEntryHashRejectsXrp(string currency)
+        {
+            Assert.ThrowsExactly<System.ArgumentException>(
+                () => Hashes.HashTrustline("rHb9CJAWyB4rj91VRWn96DkukG4bwdtyTh", "rB5TihdPbKgMrkFqrqUC3yLdE8hhv4BdeY", currency));
+        }
+
+        [TestMethod]
         [DataRow("r32UufnaCGL82HubijgJGDmdE5hac7ZvLw", 137u, "03F0AED09DEEE74CEF85CD57A0429D6113507CF759C597BABB4ADB752F734CE3")]
         [DataRow("rLewiS7bCme2EVyU2w3fSbPVbivAJ6FJtd", 1670u, "44B2B312F38C16464F76568BE33F71BC7206042AE73C2E5201A3B78598C59F01")]
         [DataRow("rGw5dXZ7f4bmCCPawx2BQc2EYZDsgGzR27", 1695u, "1537132147D764F879F23F5DAB4094A7BCCE7D548906C0CC9A62131308F2B455")]
