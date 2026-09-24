@@ -31,6 +31,8 @@
   * for an account that issues the asset, the change sums every trust line in that currency
   * `VaultOutcome.FromMetadata` reads the vault named by the transaction's `VaultID` and refuses a transaction other than `VaultDeposit`, `VaultWithdraw` or `VaultClawback`
   * `TestIPreviewLoanVault` and `TestIPreviewAmm` preview a transaction, submit the previewed transaction unchanged, and compare the two outcomes field by field: an XRP `LoanPay`, an MPT `LoanPay`, a vault deposit and withdrawal, and a single-sided AMM deposit and withdrawal
+* **`PreviewLoanSet` shows a loan's terms before the borrower signs** (part of #211). It simulates the `LoanSet` with an empty `CounterpartySignature`, which `simulate` accepts unverified, and returns a `LoanSetOutcome`: `LoanId`, the created `Loan`, `BorrowerReceives`, `PaidFromVault`, `InterestTotal`, `ServiceFeesTotal` and `TotalToRepay`. `LoanSetOutcome.FromMetadata` reads the same from a validated `LoanSet`
+  * `TestIPreviewLoanVault.TestPreviewLoanSet_MatchesTheLoanTheSignedTransactionCreates` previews a loan unsigned, creates it with the borrower's signature, and compares the two loans field by field
 * **`LoanPayments`** reads a `Loan` entry without asking the node:
   * `RegularPaymentCap`: `PeriodicPayment` rounded up to the asset, plus `LoanServiceFee`; on the final payment, `TotalValueOutstanding` plus `LoanServiceFee`. Each part is rounded up on the `XrplNumber` before it becomes a `decimal`, with a step finer than 10^-28 rounded up to 10^-28; a cap beyond `decimal` returns null
   * `IsPaymentLate` and `IsPastGracePeriod`, with an inclusive or exclusive boundary, comparing in UTC: a local time is converted, and an unspecified one is taken as UTC

@@ -3,6 +3,7 @@ using System.Collections.Generic;
 using System.Threading;
 using System.Threading.Tasks;
 
+using Xrpl.BinaryCodec;
 using Xrpl.Client;
 using Xrpl.Models.Common;
 using Xrpl.Models.Methods;
@@ -63,6 +64,28 @@ namespace Xrpl.Sugar
             CancellationToken cancellationToken = default) =>
             Preview(client, transaction, (filled, metadata) => LoanPaymentOutcome.FromMetadata((ILoanPay)filled, metadata), cancellationToken);
 
+        /// <summary>
+        /// Previews a <c>LoanSet</c> before the borrower signs it: the exact terms the node would give
+        /// the loan, and what the borrower would receive.
+        /// </summary>
+        /// <remarks>
+        /// A <c>LoanSet</c> must carry a <c>CounterpartySignature</c>, which the borrower has not
+        /// provided yet. <c>simulate</c> does not check a signature whose signing key is empty, so
+        /// the preview sends the transaction with an empty <c>CounterpartySignature</c> as a
+        /// binary blob. The returned <see cref="TransactionPreview{TOutcome}.Transaction"/> carries no
+        /// signature of either party; sign it the usual way.
+        /// </remarks>
+        public static Task<TransactionPreview<LoanSetOutcome>> PreviewLoanSet(
+            this IXrplClient client,
+            LoanSet transaction,
+            CancellationToken cancellationToken = default) =>
+            Preview(
+                client,
+                transaction,
+                (filled, metadata) => LoanSetOutcome.FromMetadata(filled, metadata),
+                cancellationToken,
+                filled => new SimulateRequest { TxBlob = UnsignedLoanSetBlob(filled) });
+
         /// <summary>Previews a <c>VaultDeposit</c>: the shares it would mint.</summary>
         public static Task<TransactionPreview<VaultOutcome>> PreviewVaultDeposit(
             this IXrplClient client,
@@ -91,11 +114,21 @@ namespace Xrpl.Sugar
             CancellationToken cancellationToken = default) =>
             Preview(client, transaction, (filled, metadata) => AmmOutcome.FromMetadata((IAMMWithdraw)filled, metadata), cancellationToken);
 
+        private static string UnsignedLoanSetBlob(LoanSet transaction)
+        {
+            Dictionary<string, object> json = transaction.ToDictionary();
+            json["SigningPubKey"] = string.Empty;
+            json["CounterpartySignature"] = new Dictionary<string, object> { ["SigningPubKey"] = string.Empty };
+            json.Remove("TxnSignature");
+            return XrplBinaryCodec.Encode(json);
+        }
+
         private static async Task<TransactionPreview<TOutcome>> Preview<TTransaction, TOutcome>(
             IXrplClient client,
             TTransaction transaction,
             Func<TTransaction, ITransactionMetadata, TOutcome> read,
-            CancellationToken cancellationToken)
+            CancellationToken cancellationToken,
+            Func<TTransaction, SimulateRequest> buildRequest = null)
             where TTransaction : ITransactionRequest
             where TOutcome : class
         {
@@ -105,8 +138,9 @@ namespace Xrpl.Sugar
                 throw new ArgumentNullException(nameof(transaction));
 
             TTransaction filled = await client.Autofill(transaction, cancellationToken: cancellationToken).ConfigureAwait(false);
+            SimulateRequest request = buildRequest?.Invoke(filled) ?? new SimulateRequest { Transaction = filled };
             SimulateResponse response = await client
-                .Simulate(new SimulateRequest { Transaction = filled }, cancellationToken)
+                .Simulate(request, cancellationToken)
                 .Typed()
                 .ConfigureAwait(false);
 

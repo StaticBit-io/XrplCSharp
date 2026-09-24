@@ -38,6 +38,48 @@ public class TestIPreviewLoanVault : TestILoanBase
     public static void ClassCleanup() => client?.Dispose();
 
     [TestMethod]
+    public async Task TestPreviewLoanSet_MatchesTheLoanTheSignedTransactionCreates()
+    {
+        XrplWallet walletBroker = XrplWallet.Generate();
+        XrplWallet walletBorrower = XrplWallet.Generate();
+        await IntegrationTestConfig.TryFundWalletsAsync(client, nodeType, walletBroker, walletBorrower);
+        string brokerId = await CreateBroker(client, walletBroker);
+
+        LoanSet Terms() => new LoanSet
+        {
+            Account = walletBroker.ClassicAddress,
+            LoanBrokerID = brokerId,
+            Counterparty = walletBorrower.ClassicAddress,
+            PrincipalRequested = 10_000_000,
+            InterestRate = 25_000,
+            PaymentTotal = 4,
+            PaymentInterval = 120,
+            GracePeriod = 60,
+            LoanServiceFee = 100,
+            LoanOriginationFee = 1_000,
+        };
+
+        // No signature from either party: the borrower has not seen the terms yet.
+        TransactionPreview<LoanSetOutcome> preview = await client.PreviewLoanSet(Terms());
+        Assert.IsTrue(preview.WouldSucceed, preview.EngineResult);
+        LoanSetOutcome expected = preview.Outcome;
+
+        TransactionSummary created = await SubmitLoanSetWithCounterpartySig(client, Terms(), walletBroker, walletBorrower);
+        ValidateResult(created);
+        LoanSetOutcome actual = LoanSetOutcome.FromMetadata(Terms(), created.Meta);
+
+        Assert.AreEqual(expected.LoanId, actual.LoanId, "the loan ID follows the broker's LoanSequence");
+        Assert.AreEqual(expected.Loan.PeriodicPayment, actual.Loan.PeriodicPayment);
+        Assert.AreEqual(expected.Loan.TotalValueOutstanding, actual.Loan.TotalValueOutstanding);
+        Assert.AreEqual(expected.Loan.PrincipalOutstanding, actual.Loan.PrincipalOutstanding);
+        Assert.AreEqual(expected.Loan.ManagementFeeOutstanding, actual.Loan.ManagementFeeOutstanding);
+        Assert.AreEqual(expected.Loan.PaymentRemaining, actual.Loan.PaymentRemaining);
+        Assert.AreEqual(expected.BorrowerReceives, actual.BorrowerReceives);
+        Assert.AreEqual(expected.TotalToRepay, actual.TotalToRepay);
+        Assert.AreEqual(9_999_000m, actual.BorrowerReceives);
+    }
+
+    [TestMethod]
     public async Task TestPreviewLoanPay_MatchesTheSubmittedPayment()
     {
         XrplWallet walletBroker = XrplWallet.Generate();

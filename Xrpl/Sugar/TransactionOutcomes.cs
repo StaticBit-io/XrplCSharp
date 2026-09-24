@@ -97,6 +97,81 @@ namespace Xrpl.Sugar
     }
 
     /// <summary>
+    /// The loan a <c>LoanSet</c> created, read from its metadata - of a validated transaction, or of a
+    /// <c>simulate</c> run (<see cref="PreviewSugar.PreviewLoanSet"/>).
+    /// </summary>
+    /// <remarks>
+    /// Amounts are in the loan asset's own unit (drops for XRP), as the <c>Loan</c> fields are.
+    /// The totals cover the regular schedule; late, full and overpayments change them.
+    /// </remarks>
+    public sealed class LoanSetOutcome
+    {
+        /// <summary>The new loan's ledger index.</summary>
+        public string LoanId { get; init; }
+
+        /// <summary>The loan asset.</summary>
+        public IssuedCurrency Asset { get; init; }
+
+        /// <summary>The <c>Loan</c> as created: <c>PeriodicPayment</c>, <c>TotalValueOutstanding</c> and the rest.</summary>
+        public LOLoan Loan { get; init; }
+
+        /// <summary>What reached the borrower: the principal less <c>LoanOriginationFee</c>, the transaction fee excluded.</summary>
+        public decimal BorrowerReceives { get; init; }
+
+        /// <summary>What left the vault: the principal.</summary>
+        public decimal PaidFromVault { get; init; }
+
+        /// <summary>Interest over the schedule, management fee included: <c>TotalValueOutstanding</c> less <c>PrincipalOutstanding</c>.</summary>
+        public decimal InterestTotal { get; init; }
+
+        /// <summary><c>LoanServiceFee</c> times the number of payments.</summary>
+        public decimal ServiceFeesTotal { get; init; }
+
+        /// <summary>What the borrower repays over the regular schedule: <c>TotalValueOutstanding</c> plus <see cref="ServiceFeesTotal"/>.</summary>
+        public decimal TotalToRepay { get; init; }
+
+        /// <summary>
+        /// Reads the loan <paramref name="transaction"/> created from its metadata.
+        /// </summary>
+        /// <exception cref="ArgumentException">The metadata creates no loan, or modifies no vault.</exception>
+        public static LoanSetOutcome FromMetadata(ILoanSet transaction, ITransactionMetadata metadata)
+        {
+            if (transaction == null)
+                throw new ArgumentNullException(nameof(transaction));
+            if (metadata == null)
+                throw new ArgumentNullException(nameof(metadata));
+
+            CreatedNode loanNode = MetadataReader.Created(metadata, LedgerEntryType.Loan)
+                ?? throw new ArgumentException("The metadata creates no loan.", nameof(metadata));
+            LOLoan loan = loanNode.NewFields as LOLoan
+                ?? throw new ArgumentException("The Loan node carries no fields.", nameof(metadata));
+            LOVault vault = MetadataReader.Final<LOVault>(metadata, LedgerEntryType.Vault)
+                ?? throw new ArgumentException("The metadata does not modify the loan's vault.", nameof(metadata));
+
+            Dictionary<string, List<Currency>> changes = BalanceChanges.GetBalanceChanges(metadata);
+            decimal borrowerReceives = string.Equals(loan.Borrower, transaction.Account, StringComparison.Ordinal)
+                ? MetadataReader.AssetChangeWithoutFee(changes, transaction, vault.Asset)
+                : MetadataReader.AssetChange(changes, loan.Borrower, vault.Asset);
+
+            decimal totalValue = MetadataReader.ToDecimal(loan.TotalValueOutstanding ?? XrplNumber.Zero);
+            decimal principal = MetadataReader.ToDecimal(loan.PrincipalOutstanding ?? XrplNumber.Zero);
+            decimal serviceFees = MetadataReader.ToDecimal(loan.LoanServiceFee ?? XrplNumber.Zero) * (loan.PaymentRemaining ?? 0);
+
+            return new LoanSetOutcome
+            {
+                LoanId = loanNode.LedgerIndex,
+                Asset = vault.Asset,
+                Loan = loan,
+                BorrowerReceives = borrowerReceives,
+                PaidFromVault = -MetadataReader.AssetChange(changes, vault.Account, vault.Asset),
+                InterestTotal = totalValue - principal,
+                ServiceFeesTotal = serviceFees,
+                TotalToRepay = totalValue + serviceFees,
+            };
+        }
+    }
+
+    /// <summary>
     /// What a <c>VaultDeposit</c>, <c>VaultWithdraw</c> or <c>VaultClawback</c> did to the vault
     /// and to the account that sent it, read from the metadata.
     /// </summary>
@@ -271,6 +346,11 @@ namespace Xrpl.Sugar
                 .Select(node => node.CreatedNode)
                 .FirstOrDefault(node => node != null && node.LedgerEntryType == type)?.NewFields as T;
 
+        public static CreatedNode Created(ITransactionMetadata metadata, LedgerEntryType type) =>
+            metadata.AffectedNodes?
+                .Select(node => node.CreatedNode)
+                .FirstOrDefault(node => node != null && node.LedgerEntryType == type);
+
         public static T Deleted<T>(ITransactionMetadata metadata, LedgerEntryType type) where T : BaseLedgerEntry =>
             metadata.AffectedNodes?
                 .Select(node => node.DeletedNode)
@@ -338,7 +418,7 @@ namespace Xrpl.Sugar
             change.MPTokenIssuanceID == null
             && string.Equals(change.CurrencyCode, asset.Currency, StringComparison.Ordinal);
 
-        private static decimal ToDecimal(XrplNumber number)
+        public static decimal ToDecimal(XrplNumber number)
         {
             if (!number.TryToDecimal(out decimal value))
                 throw new OverflowException($"{number} is outside the range of System.Decimal.");
