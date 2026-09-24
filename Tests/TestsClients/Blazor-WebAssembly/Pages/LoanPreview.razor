@@ -22,6 +22,7 @@
 <div style="display: flex; gap: 8px; margin: 16px 0;">
     <button @onclick="() => SetMode(Mode.NewLoan)" style="@TabStyle(Mode.NewLoan)">New loan</button>
     <button @onclick="() => SetMode(Mode.ExistingLoan)" style="@TabStyle(Mode.ExistingLoan)">Existing loan</button>
+    <button @onclick="() => SetMode(Mode.FullFlow)" style="@TabStyle(Mode.FullFlow)">Full flow</button>
 </div>
 
 @if (_mode == Mode.NewLoan)
@@ -86,6 +87,10 @@
             Preview the loan
         </button>
     </section>
+}
+else if (_mode == Mode.FullFlow)
+{
+    <LoanFlow />
 }
 else
 {
@@ -195,7 +200,7 @@ else
     private const string Cell = "border: 1px solid #ccc; padding: 4px 8px;";
     private const string Number = "border: 1px solid #ccc; padding: 4px 8px; text-align: right; font-family: monospace;";
 
-    private enum Mode { NewLoan, ExistingLoan }
+    private enum Mode { NewLoan, ExistingLoan, FullFlow }
 
     [Inject]
     private IXrplClient Client { get; set; } = default!;
@@ -242,32 +247,14 @@ else
         _gracePeriod = Math.Min(_gracePeriod, seconds);
     }
 
-    /// <summary>
-    /// The limits rippled's LoanSet::preflight puts on the terms, which it answers with temINVALID.
-    /// </summary>
-    private string? TermsProblem()
-    {
-        decimal principal = ParseDecimal(_principal);
-        decimal rate = ParseDecimal(_interestPercent);
-        decimal originationFee = ParseDecimal(_originationFee);
-
-        if (principal <= 0)
-            return "The principal must be above zero.";
-        if (rate < 0 || rate > 100)
-            return "The interest rate must be between 0% and 100% a year.";
-        if (_paymentTotal == 0)
-            return "A loan needs at least one payment.";
-        if (_paymentInterval < 60)
-            return "The payment interval must be at least 60 seconds.";
-        if (_gracePeriod < 60 || _gracePeriod > _paymentInterval)
-            return $"The grace period must be between 60 seconds and the payment interval ({_paymentInterval} s); it is {_gracePeriod} s.";
-        if (originationFee < 0 || originationFee > principal)
-            return "The origination fee must be between zero and the principal.";
-        if (ParseDecimal(_serviceFee) < 0)
-            return "The service fee cannot be negative.";
-
-        return null;
-    }
+    private string? TermsProblem() => LoanTermsRules.Problem(
+        ParseDecimal(_principal),
+        ParseDecimal(_interestPercent),
+        _paymentTotal,
+        _paymentInterval,
+        _gracePeriod,
+        ParseDecimal(_originationFee),
+        ParseDecimal(_serviceFee));
 
     private void SetMode(Mode mode)
     {

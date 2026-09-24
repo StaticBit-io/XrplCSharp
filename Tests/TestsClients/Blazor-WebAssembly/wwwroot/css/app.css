@@ -1,3 +1,13 @@
+/* The pages set their own light colours inline; keep the page light under a dark system theme. */
+:root {
+    color-scheme: light;
+}
+
+body {
+    background: #ffffff;
+    color: #212529;
+}
+
 h1:focus {
     outline: none;
 }

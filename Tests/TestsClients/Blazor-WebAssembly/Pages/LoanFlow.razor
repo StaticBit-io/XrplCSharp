@@ -1,0 +1,526 @@
+@using System.Globalization
+@using System.Text.Json.Nodes
+@using Xrpl.BinaryCodec.Numbers
+@using Xrpl.Client
+@using Xrpl.Models
+@using Xrpl.Models.Common
+@using Xrpl.Models.Ledger
+@using Xrpl.Models.Methods
+@using Xrpl.Models.Transactions
+@using Xrpl.Sugar
+@using Xrpl.Wallet
+@using static Xrpl.Models.Common.Common
+
+@* The whole lending cycle on a test network: wallets, vault and broker, the loan's terms, the
+   co-signed LoanSet, then every payment next to the row the schedule projected for it. *@
+
+@if (IsMainnet)
+{
+    <p style="background: #f8d7da; border: 1px solid #b32121; border-radius: 5px; padding: 10px;">
+        The full flow creates and funds accounts and submits transactions. It is disabled on mainnet;
+        connect to a local standalone node, testnet or devnet on the Connection tab.
+    </p>
+    return;
+}
+
+<ol style="max-width: 1000px; padding-left: 20px;">
+    <li style="margin-bottom: 18px;">
+        <strong>Wallets</strong> - a broker and a borrower, generated in the browser and funded
+        @(UsesGenesis ? "from the standalone node's genesis account" : "from the network's faucet").
+        <div style="margin-top: 6px;">
+            <button @onclick="CreateWalletsAsync" disabled="@_busy">Create and fund</button>
+        </div>
+        @if (_brokerWallet != null && _borrowerWallet != null)
+        {
+            <table style="margin-top: 6px; border-collapse: collapse;">
+                <tr><td style="@Cell">Broker</td><td style="@Cell"><code>@_brokerWallet.ClassicAddress</code></td><td style="@Cell"><code title="test wallet only">@_brokerWallet.Seed</code></td></tr>
+                <tr><td style="@Cell">Borrower</td><td style="@Cell"><code>@_borrowerWallet.ClassicAddress</code></td><td style="@Cell"><code title="test wallet only">@_borrowerWallet.Seed</code></td></tr>
+            </table>
+        }
+    </li>
+
+    <li style="margin-bottom: 18px;">
+        <strong>Vault and broker</strong> - an XRP vault, a deposit into it, a LoanBroker and its first-loss cover.
+        <div style="display: grid; grid-template-columns: 240px 160px; gap: 6px 12px; margin-top: 6px;">
+            <label>Vault deposit (XRP)</label><input @bind="_vaultDeposit" />
+            <label>Broker cover (XRP)</label><input @bind="_coverDeposit" />
+            <label>Management fee, % of interest</label><input @bind="_managementFeePercent" />
+            <label>Investment window, days</label><input type="number" min="1" @bind="_windowDays" />
+        </div>
+        <button @onclick="CreateBrokerAsync" disabled="@(_busy || _brokerWallet == null)" style="margin-top: 6px;">Create vault and broker</button>
+        @if (_brokerId != null)
+        {
+            <div style="margin-top: 6px;">
+                LoanBrokerID <code>@_brokerId</code>
+                @if (_vault?.RedemptionDate is DateTime redemption)
+                {
+                    <span>, closed-ended vault: loans until @redemption.ToString("u").</span>
+                }
+                else
+                {
+                    <span>, open-ended vault.</span>
+                }
+            </div>
+        }
+    </li>
+
+    <li style="margin-bottom: 18px;">
+        <strong>Terms</strong> - previewed through <code>simulate</code> before anyone signs.
+        <div style="display: grid; grid-template-columns: 240px 160px; gap: 6px 12px; margin-top: 6px;">
+            <label>Principal (XRP)</label><input @bind="_principal" />
+            <label>Interest rate, % a year</label><input @bind="_interestPercent" />
+            <label>Number of payments</label><input type="number" min="1" @bind="_paymentTotal" />
+            <label>Payment interval, seconds</label><input type="number" min="60" @bind="_paymentInterval" />
+            <label>Grace period, seconds</label><input type="number" min="60" @bind="_gracePeriod" />
+            <label>Service fee per payment (XRP)</label><input @bind="_serviceFee" />
+            <label>Origination fee (XRP)</label><input @bind="_originationFee" />
+        </div>
+        <button @onclick="PreviewAsync" disabled="@(_busy || _brokerId == null)" style="margin-top: 6px;">Preview</button>
+        @if (_preview != null)
+        {
+            <div style="margin-top: 6px;">
+                The borrower receives <strong>@Xrp(_preview.BorrowerReceives)</strong> XRP and repays
+                <strong>@Xrp(_preview.TotalToRepay)</strong> XRP over @_preview.Loan.PaymentRemaining payments
+                (interest @Xrp(_preview.InterestTotal), service fees @Xrp(_preview.ServiceFeesTotal)).
+            </div>
+        }
+    </li>
+
+    <li style="margin-bottom: 18px;">
+        <strong>Loan</strong> - the broker and the borrower co-sign the LoanSet, and it is submitted.
+        <div style="margin-top: 6px;">
+            <button @onclick="CreateLoanAsync" disabled="@(_busy || _preview == null || _loanId != null)">Sign and create the loan</button>
+        </div>
+        @if (_loanId != null)
+        {
+            <div style="margin-top: 6px;">LoanID <code>@_loanId</code></div>
+        }
+    </li>
+
+    <li>
+        <strong>Payments</strong> - each paid with <code>LoanPayments.RegularPaymentCap</code>; the node takes what the schedule charges.
+        <div style="margin-top: 6px; display: flex; gap: 8px;">
+            <button @onclick="PayNextAsync" disabled="@(_busy || !CanPay)">Pay the next payment</button>
+            <button @onclick="PayAllAsync" disabled="@(_busy || !CanPay)">Pay all remaining</button>
+        </div>
+    </li>
+</ol>
+
+@if (_busy)
+{
+    <p>@(_status ?? "Working...")</p>
+}
+
+@if (_error != null)
+{
+    <p style="color: #b32121; font-weight: bold;">@_error</p>
+}
+
+@if (_plan != null)
+{
+    <h2>Schedule and payments</h2>
+    <p style="color: #666;">Projected when the loan was @(_loanId == null ? "previewed" : "created"); the paid columns are what the node took, read from each LoanPay's metadata.</p>
+    <table style="border-collapse: collapse;">
+        <thead>
+            <tr style="background: #e9ecef;">
+                <th style="@Cell" rowspan="2">#</th>
+                <th style="@Cell" rowspan="2">Due</th>
+                <th style="@Cell" colspan="4">Projected (XRP)</th>
+                <th style="@Cell" colspan="4">Paid (XRP)</th>
+                <th style="@Cell" rowspan="2"></th>
+            </tr>
+            <tr style="background: #e9ecef;">
+                <th style="@Cell">Principal</th><th style="@Cell">Interest</th><th style="@Cell">Broker</th><th style="@Cell">Total</th>
+                <th style="@Cell">Principal</th><th style="@Cell">Interest</th><th style="@Cell">Broker</th><th style="@Cell">Total</th>
+            </tr>
+        </thead>
+        <tbody>
+            @for (int i = 0; i < _plan.Count; i++)
+            {
+                LoanScheduleRow row = _plan[i];
+                LoanPaymentOutcome? paid = i < _paid.Count ? _paid[i] : null;
+                <tr>
+                    <td style="@Cell">@row.Number</td>
+                    <td style="@Cell">@row.DueDate?.ToString("u")</td>
+                    <td style="@Number">@Xrp(row.Principal)</td>
+                    <td style="@Number">@Xrp(row.Interest)</td>
+                    <td style="@Number">@Xrp(row.ManagementFee + row.ServiceFee)</td>
+                    <td style="@Number">@Xrp(row.Total)</td>
+                    @if (paid != null)
+                    {
+                        <td style="@Number">@Xrp(paid.PrincipalPaid)</td>
+                        <td style="@Number">@Xrp(paid.InterestToVault)</td>
+                        <td style="@Number">@Xrp(paid.PaidToBroker)</td>
+                        <td style="@Number">@Xrp(paid.TotalPaid)</td>
+                        <td style="@Cell">@(Matches(row, paid) ? "match" : "differs")</td>
+                    }
+                    else
+                    {
+                        <td style="@Cell" colspan="5"></td>
+                    }
+                </tr>
+            }
+        </tbody>
+    </table>
+}
+
+@if (_log.Count > 0)
+{
+    <h2>Transactions</h2>
+    <table style="border-collapse: collapse;">
+        @foreach ((string step, string result, string? hash) in _log)
+        {
+            <tr>
+                <td style="@Cell">@step</td>
+                <td style="@Cell; color: @(result == "tesSUCCESS" ? "#28a745" : "#b32121");">@result</td>
+                <td style="@Cell"><code>@hash</code></td>
+            </tr>
+        }
+    </table>
+}
+
+@code {
+    private const string Cell = "border: 1px solid #ccc; padding: 4px 8px;";
+    private const string Number = "border: 1px solid #ccc; padding: 4px 8px; text-align: right; font-family: monospace;";
+
+    // The genesis account every standalone rippled starts with.
+    private const string GenesisSeed = "snoPBrXtMeMyMHUVTgbuqAfg1SUTb";
+
+    [Inject]
+    private IXrplClient Client { get; set; } = default!;
+
+    private bool _busy;
+    private string? _status;
+    private string? _error;
+    private readonly List<(string Step, string Result, string? Hash)> _log = new();
+
+    private XrplWallet? _brokerWallet;
+    private XrplWallet? _borrowerWallet;
+
+    private string _vaultDeposit = "500";
+    private string _coverDeposit = "100";
+    private string _managementFeePercent = "5";
+    private int _windowDays = 7;
+    private LOVault? _vault;
+    private string? _brokerId;
+
+    private string _principal = "100";
+    private string _interestPercent = "12";
+    private uint _paymentTotal = 6;
+    private uint _paymentInterval = 3600;
+    private uint _gracePeriod = 600;
+    private string _serviceFee = "0.1";
+    private string _originationFee = "1";
+
+    private LoanSetOutcome? _preview;
+    private string? _loanId;
+    private IReadOnlyList<LoanScheduleRow>? _plan;
+    private readonly List<LoanPaymentOutcome> _paid = new();
+
+    private IssuedCurrency XrpAsset => new IssuedCurrency { Currency = "XRP" };
+
+    private bool IsMainnet
+    {
+        get
+        {
+            string url = Client.Url() ?? string.Empty;
+            return url.Contains("s1.ripple.com", StringComparison.OrdinalIgnoreCase)
+                || url.Contains("s2.ripple.com", StringComparison.OrdinalIgnoreCase)
+                || url.Contains("xrplcluster.com", StringComparison.OrdinalIgnoreCase);
+        }
+    }
+
+    private bool UsesGenesis
+    {
+        get
+        {
+            string url = Client.Url() ?? string.Empty;
+            return url.Contains("localhost", StringComparison.OrdinalIgnoreCase) || url.Contains("127.0.0.1", StringComparison.Ordinal);
+        }
+    }
+
+    private bool CanPay => _loanId != null && _plan != null && _paid.Count < _plan.Count;
+
+    private async Task CreateWalletsAsync()
+    {
+        await RunAsync(async () =>
+        {
+            _brokerWallet = XrplWallet.Generate();
+            _borrowerWallet = XrplWallet.Generate();
+            _brokerId = null;
+            _vault = null;
+            ResetLoan();
+
+            decimal brokerXrp = ParseDecimal(_vaultDeposit) + ParseDecimal(_coverDeposit) + 100m;
+            await FundAsync(_brokerWallet, brokerXrp, "Fund broker");
+            await FundAsync(_borrowerWallet, 200m, "Fund borrower");
+        });
+    }
+
+    private async Task FundAsync(XrplWallet wallet, decimal xrp, string step)
+    {
+        _status = step + "...";
+        StateHasChanged();
+
+        if (UsesGenesis)
+        {
+            XrplWallet genesis = XrplWallet.FromSeed(GenesisSeed);
+            Payment payment = new Payment
+            {
+                Account = genesis.ClassicAddress,
+                Destination = wallet.ClassicAddress,
+                Amount = new Currency { ValueAsXrp = xrp },
+            };
+            await SubmitAsync(step, payment, genesis);
+            return;
+        }
+
+        string url = Client.Url() ?? string.Empty;
+        string faucet = url.Contains("devnet", StringComparison.OrdinalIgnoreCase)
+            ? WalletSugar.FaucetNetwork.Devnet
+            : WalletSugar.FaucetNetwork.Testnet;
+        await Client.FundWallet(wallet, faucet);
+        _log.Add((step, "faucet", null));
+    }
+
+    private async Task CreateBrokerAsync()
+    {
+        await RunAsync(async () =>
+        {
+            XrplWallet broker = _brokerWallet!;
+            ResetLoan();
+
+            ServerFeatures features = await Client.ServerFeatures("LendingProtocolV1_1").Typed();
+            bool closedEnded = features.GetByName("LendingProtocolV1_1") is { } feature && feature.Value.Enabled;
+
+            VaultCreate vaultCreate = new VaultCreate { Account = broker.ClassicAddress, Asset = XrpAsset };
+            DateTime? subscription = null;
+            if (closedEnded)
+            {
+                // Deposits happen before SubscriptionDate and loans after it: leave room for the deposit.
+                subscription = (await ValidatedCloseTimeAsync()).AddSeconds(40);
+                vaultCreate.VaultKind = (uint)VaultKind.ClosedEnded;
+                vaultCreate.SubscriptionDate = subscription;
+                vaultCreate.RedemptionDate = subscription.Value.AddDays(_windowDays);
+            }
+
+            TransactionSummary vaultResult = await SubmitAsync("VaultCreate", vaultCreate, broker);
+            string vaultId = CreatedId(vaultResult, LedgerEntryType.Vault);
+
+            await SubmitAsync("VaultDeposit", new VaultDeposit
+            {
+                Account = broker.ClassicAddress,
+                VaultID = vaultId,
+                Amount = new Currency { ValueAsXrp = ParseDecimal(_vaultDeposit) },
+            }, broker);
+
+            TransactionSummary brokerResult = await SubmitAsync("LoanBrokerSet", new LoanBrokerSet
+            {
+                Account = broker.ClassicAddress,
+                VaultID = vaultId,
+                ManagementFeeRate = (ushort)Math.Round(ParseDecimal(_managementFeePercent) * 1000m),
+            }, broker);
+            string brokerId = CreatedId(brokerResult, LedgerEntryType.LoanBroker);
+
+            await SubmitAsync("LoanBrokerCoverDeposit", new LoanBrokerCoverDeposit
+            {
+                Account = broker.ClassicAddress,
+                LoanBrokerID = brokerId,
+                Amount = new Currency { ValueAsXrp = ParseDecimal(_coverDeposit) },
+            }, broker);
+
+            if (subscription is DateTime start)
+            {
+                _status = "Waiting for the vault's investment phase...";
+                StateHasChanged();
+                for (int i = 0; i < 60 && await ValidatedCloseTimeAsync() <= start; i++)
+                    await Task.Delay(2000);
+            }
+
+            _vault = (LOVault)(await Client.LedgerEntry(new LedgerEntryRequest { Index = vaultId }).Typed()).Node;
+            _brokerId = brokerId;
+        });
+    }
+
+    private LoanSet Terms() => new LoanSet
+    {
+        Account = _brokerWallet!.ClassicAddress,
+        LoanBrokerID = _brokerId,
+        Counterparty = _borrowerWallet!.ClassicAddress,
+        PrincipalRequested = ToDrops(_principal),
+        InterestRate = (uint)Math.Round(ParseDecimal(_interestPercent) * 1000m),
+        PaymentTotal = _paymentTotal,
+        PaymentInterval = _paymentInterval,
+        GracePeriod = _gracePeriod,
+        LoanServiceFee = OptionalDrops(_serviceFee),
+        LoanOriginationFee = OptionalDrops(_originationFee),
+    };
+
+    private async Task PreviewAsync()
+    {
+        await RunAsync(async () =>
+        {
+            ResetLoan();
+            if (TermsProblem() is { } problem)
+                throw new InvalidOperationException(problem);
+
+            TransactionPreview<LoanSetOutcome> preview = await Client.PreviewLoanSet(Terms());
+            _log.Add(("LoanSet preview (simulate)", preview.EngineResult, null));
+            if (preview.Outcome == null)
+                throw new InvalidOperationException($"The node would refuse the loan: {preview.EngineResult} {preview.EngineResultMessage}");
+
+            _preview = preview.Outcome;
+            _plan = await ProjectAsync(_preview.Loan);
+        });
+    }
+
+    private async Task CreateLoanAsync()
+    {
+        await RunAsync(async () =>
+        {
+            LoanSet loanSet = await Client.Autofill(Terms());
+            JsonObject prepared = LoanSigningHelper.PrepareForSigning(loanSet, _brokerWallet!);
+            SignatureResult signed = LoanSigningHelper.SignLoanSet(prepared, _brokerWallet!, _borrowerWallet!);
+
+            _status = "Submitting the co-signed LoanSet...";
+            StateHasChanged();
+            TransactionSummary created = await Client.SubmitRequestAndWait(signed.TxBlob, false);
+            _log.Add(("LoanSet (broker + borrower)", created.Meta?.TransactionResult ?? "?", created.Hash));
+            if (created.Meta?.TransactionResult != "tesSUCCESS")
+                throw new InvalidOperationException("LoanSet failed: " + created.Meta?.TransactionResult);
+
+            LoanSetOutcome outcome = LoanSetOutcome.FromMetadata(loanSet, created.Meta);
+            _loanId = outcome.LoanId;
+            _preview = outcome;
+            _plan = await ProjectAsync(outcome.Loan);
+        });
+    }
+
+    private async Task PayNextAsync() => await RunAsync(PayOneAsync);
+
+    private async Task PayAllAsync()
+    {
+        await RunAsync(async () =>
+        {
+            while (CanPay)
+                await PayOneAsync();
+        });
+    }
+
+    private async Task PayOneAsync()
+    {
+        _status = $"Paying payment {_paid.Count + 1}...";
+        StateHasChanged();
+
+        LOLoan loan = (LOLoan)(await Client.LedgerEntry(new LedgerEntryRequest { Index = _loanId }).Typed()).Node;
+        decimal cap = LoanPayments.RegularPaymentCap(loan, XrpAsset)
+            ?? throw new InvalidOperationException("The loan carries no payment to cap.");
+
+        LoanPay pay = new LoanPay
+        {
+            Account = _borrowerWallet!.ClassicAddress,
+            LoanID = _loanId,
+            Amount = new Currency { Value = cap.ToString(CultureInfo.InvariantCulture), CurrencyCode = "XRP" },
+        };
+        pay = await Client.Autofill(pay);
+        TransactionSummary paid = await SubmitAsync($"LoanPay {_paid.Count + 1}", pay, _borrowerWallet!, autofill: false);
+        _paid.Add(LoanPaymentOutcome.FromMetadata(pay, paid.Meta));
+    }
+
+    private async Task<IReadOnlyList<LoanScheduleRow>> ProjectAsync(LOLoan loan)
+    {
+        LoanScheduleOptions options;
+        try
+        {
+            options = await LoanScheduleOptions.FromNodeAsync(Client);
+        }
+        catch (Exception)
+        {
+            options = new LoanScheduleOptions();
+        }
+
+        ushort managementFeeRate = (ushort)Math.Round(ParseDecimal(_managementFeePercent) * 1000m);
+        return LoanSchedule.Project(loan, XrpAsset, managementFeeRate, options);
+    }
+
+    private async Task<TransactionSummary> SubmitAsync(string step, ITransactionRequest transaction, XrplWallet wallet, bool autofill = true)
+    {
+        _status = step + "...";
+        StateHasChanged();
+
+        TransactionSummary result = await Client.SubmitAndWait(transaction, wallet, autofill);
+        string engineResult = result.Meta?.TransactionResult ?? "?";
+        _log.Add((step, engineResult, result.Hash));
+        if (engineResult != "tesSUCCESS")
+            throw new InvalidOperationException($"{step} failed: {engineResult}");
+
+        return result;
+    }
+
+    private static string CreatedId(TransactionSummary result, LedgerEntryType type) =>
+        result.Meta?.AffectedNodes?
+            .Select(node => node.CreatedNode)
+            .FirstOrDefault(node => node != null && node.LedgerEntryType == type)?.LedgerIndex
+        ?? throw new InvalidOperationException($"The transaction created no {type}.");
+
+    private async Task<DateTime> ValidatedCloseTimeAsync()
+    {
+        LOLedger ledger = await Client.Ledger(new LedgerRequest { LedgerIndex = new LedgerIndex(LedgerIndexType.Validated) }).Typed();
+        return ((LedgerEntity)ledger.LedgerEntity).CloseTime ?? DateTime.UtcNow;
+    }
+
+    private void ResetLoan()
+    {
+        _preview = null;
+        _loanId = null;
+        _plan = null;
+        _paid.Clear();
+    }
+
+    private async Task RunAsync(Func<Task> action)
+    {
+        _busy = true;
+        _error = null;
+        try
+        {
+            await action();
+        }
+        catch (Exception exception)
+        {
+            _error = exception.Message;
+        }
+        finally
+        {
+            _busy = false;
+            _status = null;
+        }
+    }
+
+    private string? TermsProblem() => LoanTermsRules.Problem(
+        ParseDecimal(_principal),
+        ParseDecimal(_interestPercent),
+        _paymentTotal,
+        _paymentInterval,
+        _gracePeriod,
+        ParseDecimal(_originationFee),
+        ParseDecimal(_serviceFee));
+
+    private static bool Matches(LoanScheduleRow row, LoanPaymentOutcome paid) =>
+        row.Principal == paid.PrincipalPaid
+        && row.Interest == paid.InterestToVault
+        && row.ManagementFee + row.ServiceFee == paid.PaidToBroker
+        && row.Total == paid.TotalPaid;
+
+    private static decimal ParseDecimal(string text) =>
+        decimal.Parse(text.Trim(), NumberStyles.Float, CultureInfo.InvariantCulture);
+
+    private static XrplNumber ToDrops(string xrp) => (XrplNumber)decimal.Round(ParseDecimal(xrp) * 1_000_000m, 0);
+
+    private static XrplNumber? OptionalDrops(string xrp)
+    {
+        XrplNumber drops = ToDrops(xrp);
+        return drops.IsZero ? null : drops;
+    }
+
+    private static string Xrp(decimal drops) => (drops / 1_000_000m).ToString("0.000000", CultureInfo.InvariantCulture);
+}
