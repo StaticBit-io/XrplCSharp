@@ -67,13 +67,13 @@
             <label>Payment interval</label>
             <div style="display: flex; gap: 8px; align-items: center;">
                 <input type="number" min="60" @bind="_paymentInterval" style="width: 140px;" /> seconds
-                <button @onclick="() => _paymentInterval = 3600">hour</button>
-                <button @onclick="() => _paymentInterval = 86400">day</button>
-                <button @onclick="() => _paymentInterval = 2592000">30 days</button>
+                <button @onclick="() => SetInterval(3600)">hour</button>
+                <button @onclick="() => SetInterval(86400)">day</button>
+                <button @onclick="() => SetInterval(2592000)">30 days</button>
             </div>
 
             <label>Grace period, seconds</label>
-            <input type="number" min="60" @bind="_gracePeriod" />
+            <input type="number" min="60" @bind="_gracePeriod" title="From 60 s up to the payment interval" />
 
             <label>Service fee per payment (@UnitName)</label>
             <input @bind="_serviceFee" />
@@ -236,6 +236,39 @@ else
             await Client.Connect();
     }
 
+    private void SetInterval(uint seconds)
+    {
+        _paymentInterval = seconds;
+        _gracePeriod = Math.Min(_gracePeriod, seconds);
+    }
+
+    /// <summary>
+    /// The limits rippled's LoanSet::preflight puts on the terms, which it answers with temINVALID.
+    /// </summary>
+    private string? TermsProblem()
+    {
+        decimal principal = ParseDecimal(_principal);
+        decimal rate = ParseDecimal(_interestPercent);
+        decimal originationFee = ParseDecimal(_originationFee);
+
+        if (principal <= 0)
+            return "The principal must be above zero.";
+        if (rate < 0 || rate > 100)
+            return "The interest rate must be between 0% and 100% a year.";
+        if (_paymentTotal == 0)
+            return "A loan needs at least one payment.";
+        if (_paymentInterval < 60)
+            return "The payment interval must be at least 60 seconds.";
+        if (_gracePeriod < 60 || _gracePeriod > _paymentInterval)
+            return $"The grace period must be between 60 seconds and the payment interval ({_paymentInterval} s); it is {_gracePeriod} s.";
+        if (originationFee < 0 || originationFee > principal)
+            return "The origination fee must be between zero and the principal.";
+        if (ParseDecimal(_serviceFee) < 0)
+            return "The service fee cannot be negative.";
+
+        return null;
+    }
+
     private void SetMode(Mode mode)
     {
         _mode = mode;
@@ -275,6 +308,12 @@ else
         {
             if (_broker == null || _asset == null)
                 throw new InvalidOperationException("Load the broker first.");
+
+            if (TermsProblem() is { } problem)
+            {
+                _hint = problem;
+                return;
+            }
 
             LoanSet loanSet = new LoanSet
             {
@@ -362,6 +401,10 @@ else
                     ? $"The last payment would fall due around {lastPayment:u}, past the vault's redemption date {end:u} less 60 s. "
                       + $"At {_paymentInterval} s per payment about {fits} payments fit; shorten the interval or make fewer payments."
                     : "The node refused the loan. Besides the vault's redemption date, rippled refuses a LoanSet that the broker's cover or debt limit cannot carry.";
+            case "temINVALID":
+                return TermsProblem()
+                    ?? "The node found the terms malformed. LoanSet requires a principal above zero, an interest rate of at most 100%, "
+                       + "a payment interval of at least 60 s, a grace period from 60 s up to the interval, and an origination fee no larger than the principal.";
             case "tecTOO_SOON" when subscription is DateTime start:
                 return $"The vault is still in its subscription phase: loans can be made from {start:u}.";
             case "tecEXPIRED" when redemption is DateTime end:
