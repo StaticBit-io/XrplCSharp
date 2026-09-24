@@ -4,6 +4,7 @@ using System.Text.Json.Serialization;
 
 using Xrpl.BinaryCodec.Numbers;
 using Xrpl.Client.Exceptions;
+using Xrpl.Client.Json.Converters;
 using Xrpl.Models.Enums;
 
 using static Xrpl.Models.Common.Common;
@@ -223,6 +224,7 @@ namespace Xrpl.Models.Transactions
 
         /// <inheritdoc />
         [JsonPropertyName("PrincipalRequested")]
+        [JsonConverter(typeof(LenientXrplNumberConverter))]
         public XrplNumber? PrincipalRequested { get; set; }
 
         /// <inheritdoc />
@@ -247,18 +249,22 @@ namespace Xrpl.Models.Transactions
 
         /// <inheritdoc />
         [JsonPropertyName("LoanOriginationFee")]
+        [JsonConverter(typeof(LenientXrplNumberConverter))]
         public XrplNumber? LoanOriginationFee { get; set; }
 
         /// <inheritdoc />
         [JsonPropertyName("LoanServiceFee")]
+        [JsonConverter(typeof(LenientXrplNumberConverter))]
         public XrplNumber? LoanServiceFee { get; set; }
 
         /// <inheritdoc />
         [JsonPropertyName("LatePaymentFee")]
+        [JsonConverter(typeof(LenientXrplNumberConverter))]
         public XrplNumber? LatePaymentFee { get; set; }
 
         /// <inheritdoc />
         [JsonPropertyName("ClosePaymentFee")]
+        [JsonConverter(typeof(LenientXrplNumberConverter))]
         public XrplNumber? ClosePaymentFee { get; set; }
 
         /// <inheritdoc />

@@ -18,6 +18,9 @@
   * `IVaultCreate` / `VaultCreate` / `VaultCreateResponse` and `IVaultSet` / `VaultSet` / `VaultSetResponse`: `AssetsMaximum`
 
   Migration: add `using Xrpl.BinaryCodec.Numbers;`. Assign an `int` directly (`PrincipalRequested = 10000000`), anything else through `XrplNumber.Parse("...")` or a cast from `long` or `decimal`. Read values with `ToString()`, which is rippled's text, compare them with `==` and `<`, and convert with `TryToDecimal` or `(decimal)`. Code that parsed the string with `decimal.Parse` must handle the scientific form or switch to `TryToDecimal`
+* **An unreadable Number costs one field, not the object.** `LenientXrplNumberConverter` is applied to the Number fields of `LOVault`, `LOLoanBroker`, `LOLoan` and the four `*Response` models above: a value this version refuses reads as `null` and the rest of the entry, an `account_objects` page or a transaction still deserializes. Request models (`LoanSet`, `LoanBrokerSet`, `VaultCreate`, `VaultSet`) stay strict and throw `JsonException`
+* `XrplNumber.Parse` works in time linear in the length of the text: it accumulates at most 19 significant digits and carries leading and trailing zeros as an exponent (`Parse_StaysLinearOnMegabyteInput`). The written exponent may reach ±10^9; whether the value fits is decided after the fraction digits are counted, so `"0e100001"` is zero
+* `new NumberType(0, exponent)` with an exponent other than `int.MinValue` or 0 throws `ArgumentOutOfRangeException`; `FromParser` already refused those bytes and reports them as `FormatException`
 * `Autofill` reads `LOLoan.PeriodicPayment` and `LoanServiceFee` through `TryToDecimal` when it estimates the `LoanPay` fee
 * `LendingProtocol-Guide` and `Vault-Guide` (both languages) assign Number fields as numbers, and the lending guide describes `XrplNumber`
 

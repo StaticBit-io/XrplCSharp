@@ -102,4 +102,52 @@ public class TestUNumberFields
         Assert.AreEqual((XrplNumber)long.MaxValue, vault.AssetsMaximum);
         Assert.IsTrue(vault.LossUnrealized.Value.IsZero);
     }
+
+    [TestMethod]
+    public void TestULOLoan_UnreadableNumber_CostsTheFieldNotTheObject()
+    {
+        // A node ahead of this version may write a Number wider than it holds.
+        const string json = @"{
+            ""LedgerEntryType"": ""Loan"",
+            ""Borrower"": ""rnUy2SHTrB9DubsPmkJZUXTf5FcNDGrYEA"",
+            ""PrincipalOutstanding"": ""12345678901234567890123"",
+            ""PeriodicPayment"": { ""unexpected"": ""shape"" },
+            ""LoanServiceFee"": true,
+            ""TotalValueOutstanding"": ""250"",
+            ""index"": ""0000000000000000000000000000000000000000000000000000000000000002""
+        }";
+
+        LOLoan loan = JsonSerializer.Deserialize<LOLoan>(json, XrplJsonOptions.Default);
+
+        Assert.IsNull(loan.PrincipalOutstanding);
+        Assert.IsNull(loan.PeriodicPayment);
+        Assert.IsNull(loan.LoanServiceFee);
+        Assert.AreEqual(XrplNumber.Parse("250"), loan.TotalValueOutstanding);
+        Assert.AreEqual("rnUy2SHTrB9DubsPmkJZUXTf5FcNDGrYEA", loan.Borrower);
+    }
+
+    [TestMethod]
+    public void TestULoanSetResponse_UnreadableNumber_CostsTheFieldNotTheObject()
+    {
+        const string json = @"{
+            ""TransactionType"": ""LoanSet"",
+            ""Account"": ""rHb9CJAWyB4rj91VRWn96DkukG4bwdtyTh"",
+            ""PrincipalRequested"": ""12345678901234567890123"",
+            ""LoanServiceFee"": ""1e13""
+        }";
+
+        LoanSetResponse response = JsonSerializer.Deserialize<LoanSetResponse>(json, XrplJsonOptions.Default);
+
+        Assert.IsNull(response.PrincipalRequested);
+        Assert.AreEqual(XrplNumber.Parse("10000000000000"), response.LoanServiceFee);
+        Assert.AreEqual("rHb9CJAWyB4rj91VRWn96DkukG4bwdtyTh", response.Account);
+    }
+
+    [TestMethod]
+    public void TestULoanSet_Request_RefusesUnreadableNumber()
+    {
+        // A request model stays strict: what the caller builds is what gets signed.
+        const string json = @"{ ""TransactionType"": ""LoanSet"", ""PrincipalRequested"": ""12345678901234567890123"" }";
+        Assert.ThrowsExactly<JsonException>(() => JsonSerializer.Deserialize<LoanSet>(json, XrplJsonOptions.Default));
+    }
 }

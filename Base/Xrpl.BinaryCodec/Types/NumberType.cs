@@ -26,9 +26,17 @@ namespace Xrpl.BinaryCodec.Types
         /// <summary>
         /// Creates the wire pair as given.
         /// </summary>
+        /// <exception cref="ArgumentOutOfRangeException">
+        /// The mantissa is zero and the exponent is neither <see cref="int.MinValue"/> nor 0, the two zero encodings.
+        /// </exception>
         /// <exception cref="OverflowException">The pair is not a value rippled can hold; see <see cref="XrplNumber(long, int)"/>.</exception>
         public NumberType(long mantissa, int exponent)
         {
+            if (mantissa == 0 && exponent != ZeroExponent && exponent != 0)
+                throw new ArgumentOutOfRangeException(
+                    nameof(exponent),
+                    $"NumberType: zero mantissa requires exponent {ZeroExponent} or 0, got {exponent}");
+
             Value = new XrplNumber(mantissa, exponent);
             Mantissa = mantissa;
             Exponent = exponent;
@@ -60,14 +68,13 @@ namespace Xrpl.BinaryCodec.Types
             long mantissa = Bits.ToInt64(mantissaBytes, 0);
             int exponent = Bits.ToInt32(exponentBytes, 0);
 
-            // Validate zero-representation invariant
-            if (mantissa == 0 && exponent != ZeroExponent && exponent != 0)
-                throw new FormatException(
-                    $"NumberType: zero mantissa requires exponent {ZeroExponent} or 0, got {exponent}");
-
             try
             {
                 return new NumberType(mantissa, exponent);
+            }
+            catch (ArgumentOutOfRangeException exception)
+            {
+                throw new FormatException(exception.Message, exception);
             }
             catch (OverflowException exception)
             {

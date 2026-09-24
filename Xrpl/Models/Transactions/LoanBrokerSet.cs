@@ -3,6 +3,7 @@ using System.Text.Json.Serialization;
 
 using Xrpl.BinaryCodec.Numbers;
 using Xrpl.Client.Exceptions;
+using Xrpl.Client.Json.Converters;
 
 using static Xrpl.Models.Common.Common;
 
@@ -121,6 +122,7 @@ namespace Xrpl.Models.Transactions
 
         /// <inheritdoc />
         [JsonPropertyName("DebtMaximum")]
+        [JsonConverter(typeof(LenientXrplNumberConverter))]
         public XrplNumber? DebtMaximum { get; set; }
 
         /// <inheritdoc />

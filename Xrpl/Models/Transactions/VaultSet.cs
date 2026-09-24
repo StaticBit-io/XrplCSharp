@@ -3,6 +3,7 @@ using System.Text.Json.Serialization;
 
 using Xrpl.BinaryCodec.Numbers;
 using Xrpl.Client.Exceptions;
+using Xrpl.Client.Json.Converters;
 
 // https://xrpl.org/docs/references/protocol/transactions/types/vaultset
 
@@ -74,6 +75,7 @@ namespace Xrpl.Models.Transactions
 
         /// <inheritdoc />
         [JsonPropertyName("AssetsMaximum")]
+        [JsonConverter(typeof(LenientXrplNumberConverter))]
         public XrplNumber? AssetsMaximum { get; set; }
 
         /// <inheritdoc />

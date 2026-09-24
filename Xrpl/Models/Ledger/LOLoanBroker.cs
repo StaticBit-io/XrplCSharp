@@ -1,6 +1,7 @@
 using System.Text.Json.Serialization;
 
 using Xrpl.BinaryCodec.Numbers;
+using Xrpl.Client.Json.Converters;
 
 using static Xrpl.Models.Common.Common;
 
@@ -52,18 +53,21 @@ public class LOLoanBroker : BaseLedgerEntry
     /// Total asset amount the protocol owes the vault, including interest (Number type).
     /// </summary>
     [JsonPropertyName("DebtTotal")]
+    [JsonConverter(typeof(LenientXrplNumberConverter))]
     public XrplNumber? DebtTotal { get; init; }
 
     /// <summary>
     /// Protocol debt ceiling; 0 indicates unlimited (Number type).
     /// </summary>
     [JsonPropertyName("DebtMaximum")]
+    [JsonConverter(typeof(LenientXrplNumberConverter))]
     public XrplNumber? DebtMaximum { get; init; }
 
     /// <summary>
     /// Total amount of first-loss capital deposited (Number type).
     /// </summary>
     [JsonPropertyName("CoverAvailable")]
+    [JsonConverter(typeof(LenientXrplNumberConverter))]
     public XrplNumber? CoverAvailable { get; init; }
 
     /// <summary>

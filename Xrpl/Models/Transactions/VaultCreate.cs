@@ -157,6 +157,7 @@ namespace Xrpl.Models.Transactions
 
         /// <inheritdoc />
         [JsonPropertyName("AssetsMaximum")]
+        [JsonConverter(typeof(LenientXrplNumberConverter))]
         public XrplNumber? AssetsMaximum { get; set; }
 
         /// <inheritdoc />

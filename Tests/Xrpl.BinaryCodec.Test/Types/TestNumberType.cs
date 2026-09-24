@@ -172,6 +172,21 @@ public class TestNumberType
     }
 
     [TestMethod]
+    public void TestConstructor_ZeroWithStrayExponent_Throws()
+    {
+        // The codec's own FromParser refuses these bytes, so the constructor refuses to produce them.
+        Assert.ThrowsExactly<ArgumentOutOfRangeException>(() => new NumberType(0, 123));
+        Assert.AreEqual(0L, new NumberType(0, 0).Mantissa);
+        Assert.IsTrue(new NumberType(0, int.MinValue).Value.IsZero);
+    }
+
+    [TestMethod]
+    public void TestFromParser_ZeroWithStrayExponent_Throws()
+    {
+        Assert.ThrowsExactly<FormatException>(() => NumberType.FromParser(new BufferParser("0000000000000000" + "0000007B")));
+    }
+
+    [TestMethod]
     public void TestFromParser_Int64MinValueMantissa_Throws()
     {
         Assert.ThrowsExactly<FormatException>(() => NumberType.FromParser(new BufferParser("8000000000000000" + "00000000")));

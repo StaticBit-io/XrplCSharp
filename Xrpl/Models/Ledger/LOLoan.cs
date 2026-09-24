@@ -95,48 +95,56 @@ public class LOLoan : BaseLedgerEntry
     /// The remaining principal owed (Number type).
     /// </summary>
     [JsonPropertyName("PrincipalOutstanding")]
+    [JsonConverter(typeof(LenientXrplNumberConverter))]
     public XrplNumber? PrincipalOutstanding { get; init; }
 
     /// <summary>
     /// The total amount owed including fees (Number type).
     /// </summary>
     [JsonPropertyName("TotalValueOutstanding")]
+    [JsonConverter(typeof(LenientXrplNumberConverter))]
     public XrplNumber? TotalValueOutstanding { get; init; }
 
     /// <summary>
     /// The amount due per payment interval (Number type).
     /// </summary>
     [JsonPropertyName("PeriodicPayment")]
+    [JsonConverter(typeof(LenientXrplNumberConverter))]
     public XrplNumber? PeriodicPayment { get; init; }
 
     /// <summary>
     /// The remaining management fee to broker (Number type).
     /// </summary>
     [JsonPropertyName("ManagementFeeOutstanding")]
+    [JsonConverter(typeof(LenientXrplNumberConverter))]
     public XrplNumber? ManagementFeeOutstanding { get; init; }
 
     /// <summary>
     /// The fee paid to broker at loan creation (Number type).
     /// </summary>
     [JsonPropertyName("LoanOriginationFee")]
+    [JsonConverter(typeof(LenientXrplNumberConverter))]
     public XrplNumber? LoanOriginationFee { get; init; }
 
     /// <summary>
     /// The fee paid to broker with each payment (Number type).
     /// </summary>
     [JsonPropertyName("LoanServiceFee")]
+    [JsonConverter(typeof(LenientXrplNumberConverter))]
     public XrplNumber? LoanServiceFee { get; init; }
 
     /// <summary>
     /// The fee for late payments (Number type).
     /// </summary>
     [JsonPropertyName("LatePaymentFee")]
+    [JsonConverter(typeof(LenientXrplNumberConverter))]
     public XrplNumber? LatePaymentFee { get; init; }
 
     /// <summary>
     /// The fee for early full repayment (Number type).
     /// </summary>
     [JsonPropertyName("ClosePaymentFee")]
+    [JsonConverter(typeof(LenientXrplNumberConverter))]
     public XrplNumber? ClosePaymentFee { get; init; }
 
     /// <summary>

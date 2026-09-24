@@ -167,24 +167,28 @@ public class LOVault : BaseLedgerEntry
     /// The total value of the vault (Number type).
     /// </summary>
     [JsonPropertyName("AssetsTotal")]
+    [JsonConverter(typeof(LenientXrplNumberConverter))]
     public XrplNumber? AssetsTotal { get; init; }
 
     /// <summary>
     /// The asset amount that is available in the vault (Number type).
     /// </summary>
     [JsonPropertyName("AssetsAvailable")]
+    [JsonConverter(typeof(LenientXrplNumberConverter))]
     public XrplNumber? AssetsAvailable { get; init; }
 
     /// <summary>
     /// The maximum amount of assets the vault can hold, or 0 for no limit (Number type).
     /// </summary>
     [JsonPropertyName("AssetsMaximum")]
+    [JsonConverter(typeof(LenientXrplNumberConverter))]
     public XrplNumber? AssetsMaximum { get; init; }
 
     /// <summary>
     /// The potential loss amount that is not yet realized, expressed as the vault's asset (Number type).
     /// </summary>
     [JsonPropertyName("LossUnrealized")]
+    [JsonConverter(typeof(LenientXrplNumberConverter))]
     public XrplNumber? LossUnrealized { get; init; }
 
     /// <summary>

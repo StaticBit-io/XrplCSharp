@@ -77,6 +77,21 @@ public class TestXrplNumber
         Assert.AreEqual("1", XrplNumber.Parse(text).ToString());
     }
 
+    [TestMethod]
+    [Timeout(5000)]
+    public void Parse_StaysLinearOnMegabyteInput()
+    {
+        string manyDigits = new string('7', 1_000_000);
+        Assert.ThrowsExactly<FormatException>(() => XrplNumber.Parse(manyDigits));
+
+        string manyZeros = "0." + new string('0', 1_000_000) + "5e1000005";
+        Assert.AreEqual("50000", XrplNumber.Parse(manyZeros).ToString());
+
+        string trailingZeros = "12" + new string('0', 1_000_000);
+        Assert.ThrowsExactly<FormatException>(() => XrplNumber.Parse(trailingZeros));
+        Assert.AreEqual("12e30", XrplNumber.Parse("12" + new string('0', 30)).ToString());
+    }
+
     [DataTestMethod]
     [DataRow("9223372036854775895")]
     [DataRow("9323372036854775804")]

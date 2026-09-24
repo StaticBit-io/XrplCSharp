@@ -44,6 +44,7 @@ namespace Xrpl.BinaryCodec.Numbers
         private const int MantissaLog = 18;
         private const int ZeroExponent = int.MinValue;
         private const int MaxDecimalScale = 28;
+        private const int MaxSignificantDigits = 19;
         // Bounds the written exponent so the arithmetic below cannot overflow; whether the value fits
         // is decided after the fraction digits are accounted for.
         private const long MaxParsedExponent = 1_000_000_000;
@@ -458,7 +459,12 @@ namespace Xrpl.BinaryCodec.Numbers
                 position++;
             }
 
-            BigInteger digits = BigInteger.Zero;
+            // Only the significant digits are accumulated: leading zeros are skipped and trailing zeros
+            // are held back as an exponent, so the work stays linear in the length of the text. More
+            // than MaxSignificantDigits of them can never be held exactly.
+            ulong significand = 0;
+            int significantDigits = 0;
+            long pendingZeros = 0;
             long fractionDigits = 0;
             bool hasDot = false;
             bool hasDigits = false;
@@ -477,10 +483,26 @@ namespace Xrpl.BinaryCodec.Numbers
                 }
                 else if (c >= '0' && c <= '9')
                 {
-                    digits = digits * Ten + (c - '0');
+                    hasDigits = true;
                     if (hasDot)
                         fractionDigits++;
-                    hasDigits = true;
+
+                    if (c == '0')
+                    {
+                        if (significantDigits > 0)
+                            pendingZeros++;
+                        continue;
+                    }
+
+                    significantDigits = (int)Math.Min(significantDigits + pendingZeros + 1, int.MaxValue);
+                    if (significantDigits <= MaxSignificantDigits)
+                    {
+                        for (long i = 0; i < pendingZeros; i++)
+                            significand *= 10;
+                        significand = significand * 10 + (ulong)(c - '0');
+                    }
+
+                    pendingZeros = 0;
                 }
                 else
                 {
@@ -534,7 +556,15 @@ namespace Xrpl.BinaryCodec.Numbers
                 return false;
             }
 
-            switch (TryNormalize(negative, digits, scientificExponent - fractionDigits, out value))
+            if (significantDigits > MaxSignificantDigits)
+            {
+                error = $"XrplNumber: '{trimmed}' cannot be represented exactly; the ledger holds at most "
+                    + "19 significant digits, and 18 above 9223372036854775807.";
+                return false;
+            }
+
+            long exponent = scientificExponent - fractionDigits + pendingZeros;
+            switch (TryNormalize(negative, new BigInteger(significand), exponent, out value))
             {
                 case Outcome.Exact:
                     error = null;
