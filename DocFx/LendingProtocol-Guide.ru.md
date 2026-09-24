@@ -228,7 +228,10 @@ TransactionSummary result = await client.SubmitAndWait(payTx, walletBorrower, tr
 
 ```csharp
 LOLoan loan = (LOLoan)(await client.LedgerEntry(new LedgerEntryRequest { Index = loanId }).Typed()).Node;
-decimal cap = LoanPayments.RegularPaymentCap(loan, new IssuedCurrency { Currency = "XRP" }).Value;
+// null, если в объекте нет данных о платеже или значение не помещается в decimal: тогда сумму
+// нужно выбрать самостоятельно, а превью ниже покажет, сколько возьмёт нода.
+if (LoanPayments.RegularPaymentCap(loan, new IssuedCurrency { Currency = "XRP" }) is not decimal cap)
+    return;
 
 LoanPay payTx = new LoanPay
 {

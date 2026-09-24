@@ -135,7 +135,10 @@ namespace Xrpl.Sugar
         /// <summary>
         /// Reads the outcome of <paramref name="transaction"/> from its metadata.
         /// </summary>
-        /// <exception cref="ArgumentException">The metadata does not modify a vault.</exception>
+        /// <exception cref="ArgumentException">
+        /// The transaction is not a vault deposit, withdrawal or clawback, or the metadata does not
+        /// modify its vault.
+        /// </exception>
         public static VaultOutcome FromMetadata(ITransactionCommon transaction, ITransactionMetadata metadata)
         {
             if (transaction == null)
@@ -143,8 +146,17 @@ namespace Xrpl.Sugar
             if (metadata == null)
                 throw new ArgumentNullException(nameof(metadata));
 
-            ModifiedNode vaultNode = MetadataReader.Modified(metadata, LedgerEntryType.Vault, null)
-                ?? throw new ArgumentException("The metadata does not modify a vault.", nameof(metadata));
+            string vaultId = transaction switch
+            {
+                IVaultDeposit deposit => deposit.VaultID,
+                IVaultWithdraw withdraw => withdraw.VaultID,
+                IVaultClawback clawback => clawback.VaultID,
+                _ => throw new ArgumentException(
+                    $"{transaction.GetType().Name} is not a VaultDeposit, VaultWithdraw or VaultClawback.", nameof(transaction)),
+            };
+
+            ModifiedNode vaultNode = MetadataReader.Modified(metadata, LedgerEntryType.Vault, vaultId)
+                ?? throw new ArgumentException($"The metadata does not modify vault {vaultId}.", nameof(metadata));
             LOVault vault = vaultNode.FinalFields as LOVault
                 ?? throw new ArgumentException("The Vault node carries no final fields.", nameof(metadata));
 

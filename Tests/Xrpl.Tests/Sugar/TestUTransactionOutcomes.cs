@@ -214,6 +214,44 @@ public class TestUTransactionOutcomes
     }
 
     [TestMethod]
+    public void TestURegularPaymentCap_FinalPaymentAndFeeRoundUpBeforeConverting()
+    {
+        IssuedCurrency usd = new IssuedCurrency { Currency = "USD", Issuer = Depositor };
+
+        // Converting 1e-29 to decimal first would give zero, which cannot settle anything.
+        LOLoan final = new LOLoan { TotalValueOutstanding = XrplNumber.Parse("1e-29"), LoanScale = -30, PaymentRemaining = 1 };
+        Assert.AreEqual(0.0000000000000000000000000001m, LoanPayments.RegularPaymentCap(final, usd));
+
+        LOLoan withTinyFee = new LOLoan { PeriodicPayment = 5, LoanServiceFee = XrplNumber.Parse("1e-29"), LoanScale = -30, PaymentRemaining = 2 };
+        Assert.AreEqual(5.0000000000000000000000000001m, LoanPayments.RegularPaymentCap(withTinyFee, usd));
+    }
+
+    [TestMethod]
+    public void TestUVaultOutcome_OtherVaultOrOtherTransaction_Throws()
+    {
+        SimulateResponse simulated = TestUBalanceChangesMpt.LoadSimulate("vault-deposit-xrp.json");
+
+        VaultDeposit otherVault = new VaultDeposit { Account = Depositor, VaultID = new string('0', 64) };
+        Assert.ThrowsExactly<ArgumentException>(() => VaultOutcome.FromMetadata(otherVault, simulated.Meta));
+
+        Assert.ThrowsExactly<ArgumentException>(() => VaultOutcome.FromMetadata(LoanPayment(), simulated.Meta));
+    }
+
+    [TestMethod]
+    public void TestUIsPaymentLate_ComparesInUtc()
+    {
+        DateTime due = new DateTime(2026, 9, 24, 12, 0, 0, DateTimeKind.Utc);
+        LOLoan loan = new LOLoan { NextPaymentDueDate = due };
+
+        // The same instants, written as local time.
+        Assert.IsFalse(LoanPayments.IsPaymentLate(loan, due.AddSeconds(-1).ToLocalTime(), dueTimeIsLate: false));
+        Assert.IsTrue(LoanPayments.IsPaymentLate(loan, due.AddSeconds(1).ToLocalTime(), dueTimeIsLate: false));
+
+        // An unspecified time is read as UTC.
+        Assert.IsTrue(LoanPayments.IsPaymentLate(loan, DateTime.SpecifyKind(due.AddSeconds(1), DateTimeKind.Unspecified), dueTimeIsLate: false));
+    }
+
+    [TestMethod]
     public void TestURegularPaymentCap_BeyondDecimal_IsNull()
     {
         LOLoan loan = new LOLoan

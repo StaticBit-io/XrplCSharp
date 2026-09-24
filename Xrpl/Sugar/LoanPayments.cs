@@ -47,15 +47,26 @@ namespace Xrpl.Sugar
             if (asset == null)
                 throw new ArgumentNullException(nameof(asset));
 
-            XrplNumber serviceFee = loan.LoanServiceFee ?? XrplNumber.Zero;
-            if (loan.PaymentRemaining == 1)
-                return loan.TotalValueOutstanding is { } total ? TryAdd(total, serviceFee) : null;
+            bool integral = IsIntegral(asset);
+            int scale = loan.LoanScale ?? 0;
 
-            if (loan.PeriodicPayment is not { } periodic
-                || RoundUpToAsset(periodic, IsIntegral(asset), loan.LoanScale ?? 0) is not { } payment)
+            // Every part is rounded up before it becomes a decimal, the fee and the final remainder
+            // included, so no conversion can leave the sum below what the node charges.
+            if (RoundUpToAsset(loan.LoanServiceFee ?? XrplNumber.Zero, integral, scale) is not { } serviceFee)
                 return null;
 
-            return TryAdd(payment, serviceFee);
+            XrplNumber? payment = loan.PaymentRemaining == 1 ? loan.TotalValueOutstanding : loan.PeriodicPayment;
+            if (payment is not { } value || RoundUpToAsset(value, integral, scale) is not { } rounded)
+                return null;
+
+            try
+            {
+                return rounded + serviceFee;
+            }
+            catch (OverflowException)
+            {
+                return null;
+            }
         }
 
         /// <summary>
@@ -63,7 +74,10 @@ namespace Xrpl.Sugar
         /// counts as late.
         /// </summary>
         /// <param name="loan">The loan entry.</param>
-        /// <param name="parentCloseTime">The close time of the ledger before the one the payment lands in.</param>
+        /// <param name="parentCloseTime">
+        /// The close time of the ledger before the one the payment lands in. A local time is converted
+        /// to UTC; an unspecified one is taken as UTC.
+        /// </param>
         /// <param name="dueTimeIsLate">
         /// Whether a payment exactly at <c>NextPaymentDueDate</c> is late. rippled counted it late
         /// until <c>fixCleanup3_4_0</c>, and on time since.
@@ -81,7 +95,10 @@ namespace Xrpl.Sugar
         /// the grace period after <c>NextPaymentDueDate</c> has run out.
         /// </summary>
         /// <param name="loan">The loan entry.</param>
-        /// <param name="parentCloseTime">The close time of the ledger before the one the transaction lands in.</param>
+        /// <param name="parentCloseTime">
+        /// The close time of the ledger before the one the transaction lands in. A local time is
+        /// converted to UTC; an unspecified one is taken as UTC.
+        /// </param>
         /// <param name="boundaryIsPast">
         /// Whether the exact end of the grace period already counts. rippled counted it until
         /// <c>fixCleanup3_4_0</c>, and not since.
@@ -127,25 +144,22 @@ namespace Xrpl.Sugar
             return new XrplNumber((long)quotient, exponent);
         }
 
-        private static decimal? TryAdd(XrplNumber left, XrplNumber right) =>
-            left.TryToDecimal(out decimal a) ? TryAdd(a, right) : null;
-
-        private static decimal? TryAdd(decimal left, XrplNumber right)
+        /// <summary>
+        /// Compares in UTC. Ledger times are UTC; a local time is converted, and an unspecified one
+        /// is taken as UTC.
+        /// </summary>
+        private static bool HasPassed(DateTime now, DateTime boundary, bool inclusive)
         {
-            if (!right.TryToDecimal(out decimal b))
-                return null;
-
-            try
-            {
-                return left + b;
-            }
-            catch (OverflowException)
-            {
-                return null;
-            }
+            DateTime nowUtc = ToUtc(now);
+            DateTime boundaryUtc = ToUtc(boundary);
+            return inclusive ? nowUtc >= boundaryUtc : nowUtc > boundaryUtc;
         }
 
-        private static bool HasPassed(DateTime now, DateTime boundary, bool inclusive) =>
-            inclusive ? now >= boundary : now > boundary;
+        private static DateTime ToUtc(DateTime time) => time.Kind switch
+        {
+            DateTimeKind.Local => time.ToUniversalTime(),
+            DateTimeKind.Unspecified => DateTime.SpecifyKind(time, DateTimeKind.Utc),
+            _ => time,
+        };
     }
 }

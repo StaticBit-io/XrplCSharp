@@ -228,7 +228,10 @@ To see exactly what a payment will do before submitting it, preview it. `Preview
 
 ```csharp
 LOLoan loan = (LOLoan)(await client.LedgerEntry(new LedgerEntryRequest { Index = loanId }).Typed()).Node;
-decimal cap = LoanPayments.RegularPaymentCap(loan, new IssuedCurrency { Currency = "XRP" }).Value;
+// null when the entry carries no payment figures, or one beyond decimal: then choose the amount
+// yourself and let the preview below show what the node would take.
+if (LoanPayments.RegularPaymentCap(loan, new IssuedCurrency { Currency = "XRP" }) is not decimal cap)
+    return;
 
 LoanPay payTx = new LoanPay
 {
