@@ -214,6 +214,167 @@ public class TestIPreviewLoanVault : TestILoanBase
             cap => new Currency { Value = cap, CurrencyCode = usd.Currency, Issuer = usd.Issuer });
     }
 
+    [TestMethod]
+    public async Task TestLatePaymentDue_MatchesWhatTheNodeCharges()
+    {
+        XrplWallet walletBroker = XrplWallet.Generate();
+        XrplWallet walletBorrower = XrplWallet.Generate();
+        await IntegrationTestConfig.TryFundWalletsAsync(client, nodeType, walletBroker, walletBorrower);
+        const ushort managementFeeRate = 10_000;
+        string brokerId = await CreateBrokerWithManagementFee(walletBroker, managementFeeRate);
+
+        LoanSet loanTx = new LoanSet
+        {
+            Account = walletBroker.ClassicAddress,
+            LoanBrokerID = brokerId,
+            Counterparty = walletBorrower.ClassicAddress,
+            PrincipalRequested = 30_000_000,
+            InterestRate = 80_000,
+            LateInterestRate = 90_000,
+            LatePaymentFee = 777,
+            PaymentTotal = 3,
+            PaymentInterval = 60,
+            GracePeriod = 60,
+            LoanServiceFee = 10,
+        };
+        TransactionSummary created = await SubmitLoanSetWithCounterpartySig(client, loanTx, walletBroker, walletBorrower);
+        ValidateResult(created);
+        LoanSetOutcome loanSet = LoanSetOutcome.FromMetadata(loanTx, created.Meta);
+
+        LOLoan loan = await ReadLoan(loanSet.LoanId);
+        await IntegrationTestConfig.WaitForCloseTimeAsync(client, loan.NextPaymentDueDate.Value.AddSeconds(5), nodeType);
+
+        TimedPayment paid = await PayWithFlag(loanSet, walletBorrower, LoanPayFlags.tfLoanLatePayment, "40000000", amount => new Currency { Value = amount, CurrencyCode = "XRP" });
+        LoanPaymentDue expected = LoanPayments.LatePaymentDue(
+            loan, loanSet.Asset, managementFeeRate, paid.ParentCloseTime, await LoanScheduleOptions.FromNodeAsync(client));
+
+        Assert.IsNotNull(expected, "the payment landed after the due date");
+        AssertSame(expected, paid.Outcome);
+        Assert.IsTrue(expected.PaidToBroker > 777m, "the late fee and the late interest's management fee reach the broker");
+    }
+
+    [TestMethod]
+    public async Task TestFullPaymentDue_MatchesWhatTheNodeCharges()
+    {
+        XrplWallet walletBroker = XrplWallet.Generate();
+        XrplWallet walletBorrower = XrplWallet.Generate();
+        await IntegrationTestConfig.TryFundWalletsAsync(client, nodeType, walletBroker, walletBorrower);
+        const ushort managementFeeRate = 7_500;
+        string brokerId = await CreateBrokerWithManagementFee(walletBroker, managementFeeRate);
+
+        LoanSet loanTx = new LoanSet
+        {
+            Account = walletBroker.ClassicAddress,
+            LoanBrokerID = brokerId,
+            Counterparty = walletBorrower.ClassicAddress,
+            PrincipalRequested = 40_000_000,
+            InterestRate = 60_000,
+            CloseInterestRate = 20_000,
+            ClosePaymentFee = 333,
+            PaymentTotal = 6,
+            PaymentInterval = 120,
+            GracePeriod = 60,
+            LoanServiceFee = 10,
+        };
+        TransactionSummary created = await SubmitLoanSetWithCounterpartySig(client, loanTx, walletBroker, walletBorrower);
+        ValidateResult(created);
+        LoanSetOutcome loanSet = LoanSetOutcome.FromMetadata(loanTx, created.Meta);
+
+        // One regular payment first, so the accrued interest runs from a previous due date.
+        await PayWithFlag(loanSet, walletBorrower, null, LoanPayments.RegularPaymentCap(await ReadLoan(loanSet.LoanId), loanSet.Asset).Value.ToString(CultureInfo.InvariantCulture), amount => new Currency { Value = amount, CurrencyCode = "XRP" });
+
+        LOLoan loan = await ReadLoan(loanSet.LoanId);
+        TimedPayment paid = await PayWithFlag(loanSet, walletBorrower, LoanPayFlags.tfLoanFullPayment, "60000000", amount => new Currency { Value = amount, CurrencyCode = "XRP" });
+        LoanPaymentDue expected = LoanPayments.FullPaymentDue(
+            loan, loanSet.Asset, managementFeeRate, paid.ParentCloseTime, await LoanScheduleOptions.FromNodeAsync(client));
+
+        Assert.IsNotNull(expected);
+        AssertSame(expected, paid.Outcome);
+        Assert.IsTrue(paid.Outcome.IsPaidOff);
+    }
+
+    [TestMethod]
+    public async Task TestFullPaymentDue_Iou_MatchesWhatTheNodeCharges()
+    {
+        XrplWallet walletIssuer = XrplWallet.Generate();
+        XrplWallet walletHolder = XrplWallet.Generate();
+        XrplWallet walletBorrower = XrplWallet.Generate();
+        await IntegrationTestConfig.TryFundWalletsAsync(client, nodeType, walletIssuer, walletHolder, walletBorrower);
+        IssuedCurrency usd = new IssuedCurrency { Currency = "USD", Issuer = walletIssuer.ClassicAddress };
+        const ushort managementFeeRate = 1_234;
+        string brokerId = await CreateIouBroker(walletIssuer, walletHolder, walletBorrower, usd, managementFeeRate);
+        Func<string, Currency> amount = value => new Currency { Value = value, CurrencyCode = usd.Currency, Issuer = usd.Issuer };
+
+        LoanSet loanTx = new LoanSet
+        {
+            Account = walletIssuer.ClassicAddress,
+            LoanBrokerID = brokerId,
+            Counterparty = walletBorrower.ClassicAddress,
+            PrincipalRequested = XrplNumber.Parse("4321.987"),
+            InterestRate = 45_678,
+            CloseInterestRate = 12_345,
+            ClosePaymentFee = XrplNumber.Parse("1.25"),
+            PaymentTotal = 8,
+            PaymentInterval = 60,
+            GracePeriod = 60,
+            LoanServiceFee = XrplNumber.Parse("0.05"),
+        };
+        TransactionSummary created = await SubmitLoanSetWithCounterpartySig(client, loanTx, walletIssuer, walletBorrower);
+        ValidateResult(created);
+        LoanSetOutcome loanSet = LoanSetOutcome.FromMetadata(loanTx, created.Meta);
+
+        await PayWithFlag(loanSet, walletBorrower, null, LoanPayments.RegularPaymentCap(await ReadLoan(loanSet.LoanId), usd).Value.ToString(CultureInfo.InvariantCulture), amount);
+
+        LOLoan loan = await ReadLoan(loanSet.LoanId);
+        TimedPayment paid = await PayWithFlag(loanSet, walletBorrower, LoanPayFlags.tfLoanFullPayment, "10000", amount);
+        LoanPaymentDue expected = LoanPayments.FullPaymentDue(
+            loan, loanSet.Asset, managementFeeRate, paid.ParentCloseTime, await LoanScheduleOptions.FromNodeAsync(client));
+
+        Assert.IsNotNull(expected);
+        AssertSame(expected, paid.Outcome);
+    }
+
+    private static async Task<LOLoan> ReadLoan(string loanId) =>
+        (LOLoan)(await client.LedgerEntry(new LedgerEntryRequest { Index = loanId }).Typed()).Node;
+
+    /// <summary>
+    /// Submits a LoanPay and returns what it did with the close time of its ledger's parent, the
+    /// time rippled computes accrued and late interest at.
+    /// </summary>
+    private static async Task<TimedPayment> PayWithFlag(
+        LoanSetOutcome loanSet,
+        XrplWallet borrower,
+        LoanPayFlags? flag,
+        string value,
+        Func<string, Currency> amount)
+    {
+        LoanPay pay = await client.Autofill(new LoanPay
+        {
+            Account = borrower.ClassicAddress,
+            LoanID = loanSet.LoanId,
+            Amount = amount(value),
+            Flags = flag,
+        });
+        TransactionSummary result = await client.SubmitAndWait(pay, borrower, false);
+        ValidateResult(result);
+
+        LOLedger ledger = await client.Ledger(new LedgerRequest { LedgerHash = result.LedgerHash }).Typed();
+        uint parentCloseTime = ((LedgerEntity)ledger.LedgerEntity).ParentCloseTime;
+        return new TimedPayment(
+            LoanPaymentOutcome.FromMetadata(pay, result.Meta),
+            new DateTime(2000, 1, 1, 0, 0, 0, DateTimeKind.Utc).AddSeconds(parentCloseTime));
+    }
+
+    private static void AssertSame(LoanPaymentDue expected, LoanPaymentOutcome actual)
+    {
+        Assert.AreEqual(expected.Principal, actual.PrincipalPaid, "principal");
+        Assert.AreEqual(expected.InterestToVault, actual.InterestToVault, "interest to the vault");
+        Assert.AreEqual(expected.PaidToBroker, actual.PaidToBroker, "paid to the broker");
+        Assert.AreEqual(expected.Total, actual.TotalPaid, "total");
+    }
+
+    private sealed record TimedPayment(LoanPaymentOutcome Outcome, DateTime ParentCloseTime);
+
     /// <summary>
     /// An issuer's USD vault, funded by a holder, under a broker with a management fee; the
     /// borrower holds a trust line and enough USD to pay interest and fees.
