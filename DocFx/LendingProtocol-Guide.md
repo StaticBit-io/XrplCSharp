@@ -220,6 +220,35 @@ payTx = await client.Autofill(payTx);
 TransactionSummary result = await client.SubmitAndWait(payTx, walletBorrower, true);
 ```
 
+#### How much to pay
+
+`LoanPayments.RegularPaymentCap` reads the `Loan` entry and returns an amount that always settles the next regular payment, in the asset's own unit (drops for XRP). On the final payment it is exact: `TotalValueOutstanding` plus `LoanServiceFee`. Before that it is `PeriodicPayment` rounded up to the asset, plus `LoanServiceFee`. The node charges what the amortization schedule calls for, which can be one rounding unit less, and it takes only what it charges, not the whole `Amount`.
+
+To see exactly what a payment will do before submitting it, preview it. `PreviewLoanPay` autofills the transaction, runs it through `simulate` and reads the split from the metadata:
+
+```csharp
+LOLoan loan = (LOLoan)(await client.LedgerEntry(new LedgerEntryRequest { Index = loanId }).Typed()).Node;
+decimal cap = LoanPayments.RegularPaymentCap(loan, new IssuedCurrency { Currency = "XRP" }).Value;
+
+LoanPay payTx = new LoanPay
+{
+    Account = walletBorrower.ClassicAddress,
+    LoanID = loanId,
+    Amount = new Currency { Value = cap.ToString(CultureInfo.InvariantCulture), CurrencyCode = "XRP" },
+};
+
+TransactionPreview<LoanPaymentOutcome> preview = await client.PreviewLoanPay(payTx);
+if (preview.WouldSucceed)
+{
+    LoanPaymentOutcome outcome = preview.Outcome;
+    // outcome.PrincipalPaid, outcome.InterestToVault, outcome.PaidToBroker, outcome.TotalPaid,
+    // outcome.PaymentsMade, outcome.LoanAfter
+    await client.SubmitAndWait(preview.Transaction, walletBorrower, false);
+}
+```
+
+`LoanPaymentOutcome.FromMetadata` reads the same split from a validated transaction's metadata. The split follows the money: the vault receives principal and interest, and the broker receives the rest (management, service, late and close fees). `LoanPayments.IsPaymentLate` and `LoanPayments.IsPastGracePeriod` tell whether a payment would be late and whether the broker may default the loan. A late payment adds late interest and `LatePaymentFee` above the cap, so preview it.
+
 ### 3. Delete a Fully Repaid Loan
 
 After the loan is fully repaid, the broker can delete it:

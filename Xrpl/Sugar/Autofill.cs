@@ -413,7 +413,7 @@ namespace Xrpl.Sugar
             decimal serviceFee = 0m;
             if (loan.LoanServiceFee is { } fee)
                 fee.TryToDecimal(out serviceFee);
-            decimal regularPayment = RoundPeriodicPayment(periodicPayment, integralAsset, loan.LoanScale ?? 0) + serviceFee;
+            decimal regularPayment = LoanPayments.RoundUpToAsset(periodicPayment, integralAsset, loan.LoanScale ?? 0) + serviceFee;
             if (regularPayment <= 0)
                 return BigInteger.One;
 
@@ -459,36 +459,6 @@ namespace Xrpl.Sugar
                 // a cancellation asked for by the caller is not.
                 return null;
             }
-        }
-
-        /// <summary>
-        /// rippled roundPeriodicPayment: integral assets (XRP, MPT) round up to whole units,
-        /// IOUs round up to a multiple of 10^scale.
-        /// </summary>
-        private static decimal RoundPeriodicPayment(decimal periodicPayment, bool integralAsset, int scale)
-        {
-            if (integralAsset)
-                return Math.Ceiling(periodicPayment);
-
-            // Outside this range the step cannot be represented as a decimal; leave the value alone.
-            if (scale is < -28 or > 28)
-                return periodicPayment;
-
-            decimal step = scale >= 0
-                ? Pow10(scale)
-                : 1m / Pow10(-scale);
-
-            return Math.Ceiling(periodicPayment / step) * step;
-        }
-
-        private static decimal Pow10(int exponent)
-        {
-            decimal result = 1m;
-            for (int i = 0; i < exponent; i++)
-            {
-                result *= 10m;
-            }
-            return result;
         }
 
         /// <summary>

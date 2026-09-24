@@ -1,5 +1,21 @@
 ﻿# Changes
 
+## 11.10.0.0 24/09/2026
+
+* **Previews through `simulate`** (part of #211). `PreviewSugar` adds `PreviewLoanPay`, `PreviewVaultDeposit`, `PreviewVaultWithdraw`, `PreviewAMMDeposit`, `PreviewAMMWithdraw` and `PreviewBalanceChanges` to `IXrplClient`. Each autofills the transaction, runs it through `simulate` and returns a `TransactionPreview<TOutcome>`: `EngineResult`, `WouldSucceed`, the simulated `Metadata`, the autofilled `Transaction`, and an `Outcome` read from the metadata.
+  * `LoanPaymentOutcome` gives `PaymentsMade`, `PrincipalPaid`, `PaidToVault`, `InterestToVault`, `PaidToBroker`, `TotalPaid` and `LoanAfter` of a `LoanPay`. The split follows the money: the vault receives principal and interest, and the broker receives the rest
+  * `VaultOutcome` gives `AccountAssetChange`, `AccountShareChange`, `VaultAssetChange` and `VaultAfter` of a vault deposit or withdrawal
+  * `AmmOutcome` gives `AssetChange`, `Asset2Change`, `LpTokenChange` and `AmmAfter` of an AMM deposit or withdrawal
+  * each outcome also has a `FromMetadata`, which reads the same figures from a validated transaction
+  * `TestIPreviewLoanVault` and `TestIPreviewAmm` preview a transaction, submit the previewed transaction unchanged, and compare the two outcomes field by field: an XRP `LoanPay`, an MPT `LoanPay`, a vault deposit and withdrawal, and a single-sided AMM deposit and withdrawal
+* **`LoanPayments`** reads a `Loan` entry without asking the node:
+  * `RegularPaymentCap`: an amount that always settles the next regular payment. It is `PeriodicPayment` rounded up to the asset plus `LoanServiceFee`, and on the final payment it is exactly `TotalValueOutstanding` plus `LoanServiceFee`. rippled charges the step to the rounded schedule, which can be a rounding unit less, and takes only that
+  * `IsPaymentLate` and `IsPastGracePeriod`, with the boundary either inclusive or exclusive, since `fixCleanup3_4_0` changed it
+  * `Autofill` rounds the periodic payment through the same helper when it estimates the `LoanPay` fee
+* **`BalanceChanges.GetBalanceChanges` reports MPT balances.** It reports a holder's change in `MPTAmount` and, like a trust line issuer, the issuer's side as the opposite of the change in `OutstandingAmount`, as a `Currency` with `MPTokenIssuanceID`. `MPTAmount` is a default field, so a modified `MPToken` that shows no previous amount went either from zero or not at all. That case is resolved against the change in the issuance's `OutstandingAmount`, which is a required field and is always listed. `TestUBalanceChangesMpt` covers a vault deposit and withdrawal recorded from a node, and both outcomes of the ambiguous case
+* `Tests/Xrpl.Tests/Fixtures/Simulate` holds the recorded `simulate` responses, and its README says where each one comes from
+* `LendingProtocol-Guide` and `Vault-Guide` (both languages) show the payment cap and the previews
+
 ## 11.9.0.0 23/09/2026
 
 * **`XrplNumber` is the value type of the XRPL `Number` fields** (#214, part of #211). It lives in `Xrpl.BinaryCodec.Numbers` and holds a value the way rippled's `Number` class does on the large mantissa scale: a sign, a mantissa in [10^18, 10^19 - 1] and an exponent in [-32768, 32768].

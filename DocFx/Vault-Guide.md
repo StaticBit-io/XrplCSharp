@@ -167,6 +167,20 @@ depositTx = await client.Autofill(depositTx);
 await client.SubmitAndWait(depositTx, depositor, true);
 ```
 
+To see how many shares a deposit would mint before submitting it, preview it. `PreviewVaultDeposit` and `PreviewVaultWithdraw` run the transaction through `simulate`:
+
+```csharp
+TransactionPreview<VaultOutcome> preview = await client.PreviewVaultDeposit(depositTx);
+if (preview.WouldSucceed)
+{
+    decimal shares = preview.Outcome.AccountShareChange;   // shares the deposit would mint
+    decimal assets = preview.Outcome.AccountAssetChange;   // negative: what the deposit would take
+    await client.SubmitAndWait(preview.Transaction, depositor, false);
+}
+```
+
+`VaultOutcome.FromMetadata` reads the same figures from a validated transaction. `BalanceChanges.GetBalanceChanges` reports MPT balances, vault shares included, alongside XRP and trust lines.
+
 ### 4. Withdraw Assets
 
 Any share holder can redeem shares for assets. Two approaches:

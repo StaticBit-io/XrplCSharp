@@ -220,6 +220,35 @@ payTx = await client.Autofill(payTx);
 TransactionSummary result = await client.SubmitAndWait(payTx, walletBorrower, true);
 ```
 
+#### Сколько платить
+
+`LoanPayments.RegularPaymentCap` читает объект `Loan` и возвращает сумму, которой всегда хватает на ближайший регулярный платёж, в единицах актива (для XRP это drops). Для последнего платежа сумма точная: `TotalValueOutstanding` плюс `LoanServiceFee`. Для остальных платежей это `PeriodicPayment`, округлённый вверх по активу, плюс `LoanServiceFee`. Нода списывает столько, сколько требует график амортизации, а это может быть на одну единицу округления меньше. Весь `Amount` при этом не списывается, только нужная сумма.
+
+Чтобы заранее узнать, что именно сделает платёж, его можно отправить на превью. `PreviewLoanPay` выполняет autofill, прогоняет транзакцию через `simulate` и читает разбивку платежа из метаданных:
+
+```csharp
+LOLoan loan = (LOLoan)(await client.LedgerEntry(new LedgerEntryRequest { Index = loanId }).Typed()).Node;
+decimal cap = LoanPayments.RegularPaymentCap(loan, new IssuedCurrency { Currency = "XRP" }).Value;
+
+LoanPay payTx = new LoanPay
+{
+    Account = walletBorrower.ClassicAddress,
+    LoanID = loanId,
+    Amount = new Currency { Value = cap.ToString(CultureInfo.InvariantCulture), CurrencyCode = "XRP" },
+};
+
+TransactionPreview<LoanPaymentOutcome> preview = await client.PreviewLoanPay(payTx);
+if (preview.WouldSucceed)
+{
+    LoanPaymentOutcome outcome = preview.Outcome;
+    // outcome.PrincipalPaid, outcome.InterestToVault, outcome.PaidToBroker, outcome.TotalPaid,
+    // outcome.PaymentsMade, outcome.LoanAfter
+    await client.SubmitAndWait(preview.Transaction, walletBorrower, false);
+}
+```
+
+`LoanPaymentOutcome.FromMetadata` читает ту же разбивку из метаданных уже проведённой транзакции. Разбивка строится по движению средств: vault получает основной долг и проценты, брокер получает всё остальное (комиссию за управление, сервисный сбор, штраф за просрочку и сбор за досрочное погашение). `LoanPayments.IsPaymentLate` показывает, будет ли платёж просроченным, а `LoanPayments.IsPastGracePeriod` показывает, может ли брокер объявить дефолт. Просроченный платёж включает проценты за просрочку и `LatePaymentFee` сверх этой суммы, поэтому его рекомендуется предварительно проверить через превью.
+
 ### 3. Удаление полностью погашенного кредита
 
 После полного погашения брокер может удалить кредит:
