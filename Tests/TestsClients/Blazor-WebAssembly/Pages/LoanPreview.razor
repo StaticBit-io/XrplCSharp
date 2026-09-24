@@ -42,6 +42,14 @@
                 <span>@AssetName(_asset)</span>
                 <label>Management fee</label>
                 <span>@((_broker.ManagementFeeRate ?? 0) / 1000m)% of interest</span>
+                @if (_vault?.RedemptionDate is DateTime redemption)
+                {
+                    <label>Investment phase</label>
+                    <span>
+                        @(_vault.SubscriptionDate?.ToString("u")) to @redemption.ToString("u").
+                        Loans are made in this phase, and the last payment must fall at least 60 s before its end.
+                    </span>
+                }
             }
 
             <label>Borrower (Counterparty)</label>
@@ -105,6 +113,11 @@ else
         <code>simulate</code>: <strong style="color: @(_engineResult == "tesSUCCESS" ? "#28a745" : "#b32121");">@_engineResult</strong>
         @_engineMessage
     </p>
+}
+
+@if (_hint != null)
+{
+    <p style="background: #fff3cd; border: 1px solid #ffc107; border-radius: 5px; padding: 10px; max-width: 900px;">@_hint</p>
 }
 
 @if (_loan != null)
@@ -192,9 +205,11 @@ else
     private string? _error;
     private string? _engineResult;
     private string? _engineMessage;
+    private string? _hint;
 
     private string _brokerId = string.Empty;
     private LOLoanBroker? _broker;
+    private LOVault? _vault;
     private IssuedCurrency? _asset;
     private string _borrower = string.Empty;
     private string _principal = "100";
@@ -236,6 +251,7 @@ else
         _error = null;
         _engineResult = null;
         _engineMessage = null;
+        _hint = null;
         _loan = null;
         _loanSet = null;
         _schedule = null;
@@ -246,8 +262,10 @@ else
         await RunAsync(async () =>
         {
             _broker = null;
+            _vault = null;
             _asset = null;
-            (_broker, _asset) = await LoadBrokerAndAssetAsync(_brokerId.Trim());
+            (_broker, _vault) = await LoadBrokerAndVaultAsync(_brokerId.Trim());
+            _asset = _vault.Asset;
         });
     }
 
@@ -281,6 +299,7 @@ else
             TransactionPreview<LoanSetOutcome> preview = await Client.PreviewLoanSet(loanSet);
             _engineResult = preview.EngineResult;
             _engineMessage = preview.EngineResultMessage;
+            _hint = ExplainRefusal(preview.EngineResult);
             if (preview.Outcome == null)
                 return;
 
@@ -295,10 +314,10 @@ else
         await RunAsync(async () =>
         {
             LOLoan loan = (LOLoan)(await Client.LedgerEntry(new LedgerEntryRequest { Index = _loanId.Trim() }).Typed()).Node;
-            (LOLoanBroker broker, IssuedCurrency asset) = await LoadBrokerAndAssetAsync(loan.LoanBrokerID);
-            _asset = asset;
+            (LOLoanBroker broker, LOVault vault) = await LoadBrokerAndVaultAsync(loan.LoanBrokerID);
+            _asset = vault.Asset;
             _loan = loan;
-            await ProjectAsync(loan, asset, broker.ManagementFeeRate ?? 0);
+            await ProjectAsync(loan, vault.Asset, broker.ManagementFeeRate ?? 0);
         });
     }
 
@@ -317,11 +336,39 @@ else
         _schedule = LoanSchedule.Project(loan, asset, managementFeeRate, _options);
     }
 
-    private async Task<(LOLoanBroker Broker, IssuedCurrency Asset)> LoadBrokerAndAssetAsync(string brokerId)
+    private async Task<(LOLoanBroker Broker, LOVault Vault)> LoadBrokerAndVaultAsync(string brokerId)
     {
         LOLoanBroker broker = (LOLoanBroker)(await Client.LedgerEntry(new LedgerEntryRequest { Index = brokerId }).Typed()).Node;
         LOVault vault = (LOVault)(await Client.LedgerEntry(new LedgerEntryRequest { Index = broker.VaultID }).Typed()).Node;
-        return (broker, vault.Asset);
+        return (broker, vault);
+    }
+
+    /// <summary>
+    /// What a LoanSet refusal usually means, with the numbers from this form. The causes are the
+    /// ones rippled's LoanSet checks against a closed-ended vault's phases.
+    /// </summary>
+    private string? ExplainRefusal(string? engineResult)
+    {
+        DateTime? subscription = _vault?.SubscriptionDate;
+        DateTime? redemption = _vault?.RedemptionDate;
+        DateTime lastPayment = DateTime.UtcNow.AddSeconds((double)_paymentInterval * _paymentTotal);
+
+        switch (engineResult)
+        {
+            case "tecNO_PERMISSION" when redemption is DateTime end:
+                long room = (long)(end - DateTime.UtcNow).TotalSeconds - 60;
+                long fits = _paymentInterval == 0 ? 0 : Math.Max(0, room / _paymentInterval);
+                return lastPayment > end.AddSeconds(-60)
+                    ? $"The last payment would fall due around {lastPayment:u}, past the vault's redemption date {end:u} less 60 s. "
+                      + $"At {_paymentInterval} s per payment about {fits} payments fit; shorten the interval or make fewer payments."
+                    : "The node refused the loan. Besides the vault's redemption date, rippled refuses a LoanSet that the broker's cover or debt limit cannot carry.";
+            case "tecTOO_SOON" when subscription is DateTime start:
+                return $"The vault is still in its subscription phase: loans can be made from {start:u}.";
+            case "tecEXPIRED" when redemption is DateTime end:
+                return $"The vault's investment phase ended at {end:u}; it takes no new loans.";
+            default:
+                return null;
+        }
     }
 
     private async Task RunAsync(Func<Task> action)
