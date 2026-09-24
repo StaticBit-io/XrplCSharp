@@ -2,7 +2,7 @@
 
 ## 11.9.0.0 23/09/2026
 
-* **`XrplNumber` is the value type of the XRPL `Number` fields** (#211). It lives in `Xrpl.BinaryCodec.Numbers` and holds a value the way rippled's `Number` class does on the large mantissa scale: a sign, a mantissa in [10^18, 10^19 - 1] and an exponent in [-32768, 32768].
+* **`XrplNumber` is the value type of the XRPL `Number` fields** (#214, part of #211). It lives in `Xrpl.BinaryCodec.Numbers` and holds a value the way rippled's `Number` class does on the large mantissa scale: a sign, a mantissa in [10^18, 10^19 - 1] and an exponent in [-32768, 32768].
   * `Parse` / `TryParse` read decimal and scientific text; `ToString()` writes what rippled's `to_string(Number)` writes, `1e13` for 10^13; `Mantissa` / `Exponent` give the wire pair of `Number::mantissa()` / `Number::exponent()`
   * equality and ordering by value; implicit conversion from `int`, explicit from `long` and `decimal`, explicit to `decimal` and `TryToDecimal`, which rounds to nearest (ties to even) past 28 fractional digits and fails on overflow
   * `XrplNumberJsonConverter` is applied to the type itself: reads a JSON string or number, writes the string
