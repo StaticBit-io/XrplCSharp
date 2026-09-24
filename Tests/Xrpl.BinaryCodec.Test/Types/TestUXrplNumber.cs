@@ -14,7 +14,7 @@ namespace XrplTests.BinaryCodecLib.Types;
 /// <c>Number::mantissa()</c> / <c>Number::exponent()</c>.
 /// </summary>
 [TestClass]
-public class TestXrplNumber
+public class TestUXrplNumber
 {
     [DataTestMethod]
     [DataRow(-2L, 0, "-2")]

@@ -9,7 +9,7 @@ using Xrpl.BinaryCodec.Types;
 namespace XrplTests.BinaryCodecLib
 {
     [TestClass]
-    public class TestFieldDispatch
+    public class TestUFieldDispatch
     {
 
         [TestMethod]

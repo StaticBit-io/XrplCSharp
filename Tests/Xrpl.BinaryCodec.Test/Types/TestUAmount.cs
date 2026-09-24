@@ -10,7 +10,7 @@ using Xrpl.BinaryCodec.Types;
 namespace XrplTests.BinaryCodecLib.Types
 {
     [TestClass]
-    public class TestAmount
+    public class TestUAmount
     {
         [TestMethod]
         public void TestXrpFromJsonString()

@@ -10,7 +10,7 @@ using Xrpl.BinaryCodec.Types;
 namespace XrplTests.BinaryCodecLib.Types;
 
 [TestClass]
-public class TestNumberType
+public class TestUNumberType
 {
     [TestMethod]
     public void TestFromJson_NumericValue()

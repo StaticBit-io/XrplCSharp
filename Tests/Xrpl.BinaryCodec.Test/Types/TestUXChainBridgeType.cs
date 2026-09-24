@@ -10,7 +10,7 @@ using Xrpl.BinaryCodec.Types;
 namespace XrplTests.BinaryCodecLib.Types;
 
 [TestClass]
-public class TestXChainBridgeType
+public class TestUXChainBridgeType
 {
     private const string LockingDoorAddress = "r9LqNeG6qHxjeUocjvVki2XR35weJ9mZgQ";
     private const string IssuingDoorAddress = "rHb9CJAWyB4rj91VRWn96DkukG4bwdtyTh";
