@@ -205,6 +205,35 @@ TransactionSummary result = await SubmitLoanSetWithCounterpartySig(
 string loanId = GetCreatedObjectId(result, LedgerEntryType.Loan);
 ```
 
+#### Terms and schedule before the borrower signs
+
+`PreviewLoanSet` runs the `LoanSet` through `simulate` before either party signs. The borrower's signature is not needed: the preview sends an empty `CounterpartySignature`, which `simulate` accepts without verifying. The result carries the exact terms the node would give the loan:
+
+```csharp
+TransactionPreview<LoanSetOutcome> preview = await client.PreviewLoanSet(loanTx);
+if (preview.WouldSucceed)
+{
+    LoanSetOutcome terms = preview.Outcome;
+    // terms.Loan.PeriodicPayment, terms.Loan.TotalValueOutstanding, terms.BorrowerReceives,
+    // terms.InterestTotal, terms.ServiceFeesTotal, terms.TotalToRepay
+}
+```
+
+`LoanSchedule.Project` turns those terms, or a `Loan` read from the ledger, into the full schedule of regular payments. It repeats rippled's `computePaymentComponents` for each period. The management fee rate comes from the `LoanBroker`, and `LoanScheduleOptions.FromNodeAsync` reads the amendments that change the rounding:
+
+```csharp
+LoanScheduleOptions options = await LoanScheduleOptions.FromNodeAsync(client);
+IReadOnlyList<LoanScheduleRow> schedule = LoanSchedule.Project(
+    terms.Loan, terms.Asset, broker.ManagementFeeRate ?? 0, options);
+
+foreach (LoanScheduleRow row in schedule)
+{
+    // row.DueDate, row.Principal, row.Interest, row.ManagementFee, row.ServiceFee, row.Total
+}
+```
+
+Each row is what the node charges for an on-time regular payment; late payments add late interest and `LatePaymentFee`. The Blazor test client in `Tests/TestsClients/Blazor-WebAssembly` has a **Loan preview** tab that shows both for a broker on any node.
+
 ### 2. Make a Loan Payment
 
 The borrower makes payments on the loan:

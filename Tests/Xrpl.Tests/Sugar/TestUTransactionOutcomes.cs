@@ -64,6 +64,40 @@ public class TestUTransactionOutcomes
     }
 
     [TestMethod]
+    public void TestULoanSet_ReadsTheTermsBeforeTheBorrowerSigns()
+    {
+        // Simulated with an empty CounterpartySignature; the node applied it as it would the signed one.
+        SimulateResponse simulated = TestUBalanceChangesMpt.LoadSimulate("loan-set-xrp.json");
+        LoanSet loanSet = new LoanSet
+        {
+            Account = "r3RBNRimGa4M4kUBM1boCrhRmkwQg96m6f",
+            Counterparty = "r9GxKYQKL6b7XuSy2xFzdnWdQr4BKhxswP",
+            LoanBrokerID = "B38F16BD0F293DFADE3C7A27F9044827993F0E0524E05D6C36D89E08EDD84027",
+            Fee = new Currency { Value = "24" },
+        };
+
+        LoanSetOutcome outcome = LoanSetOutcome.FromMetadata(loanSet, simulated.Meta);
+
+        Assert.AreEqual("AB0139E07A3E029D30AFAB3FB6BF818395F5B557915EAA84A72977CC97740A82", outcome.LoanId);
+        Assert.IsTrue(outcome.Asset.IsXrp());
+        Assert.AreEqual(XrplNumber.Parse("3333335.870117867363"), outcome.Loan.PeriodicPayment);
+        Assert.AreEqual(3u, outcome.Loan.PaymentRemaining);
+        Assert.AreEqual(9_999_000m, outcome.BorrowerReceives, "principal less the 1000-drop origination fee");
+        Assert.AreEqual(10_000_000m, outcome.PaidFromVault);
+        Assert.AreEqual(8m, outcome.InterestTotal);
+        Assert.AreEqual(300m, outcome.ServiceFeesTotal);
+        Assert.AreEqual(10_000_308m, outcome.TotalToRepay);
+    }
+
+    [TestMethod]
+    public void TestULoanSet_MetadataWithoutALoan_Throws()
+    {
+        SimulateResponse simulated = TestUBalanceChangesMpt.LoadSimulate("vault-deposit-xrp.json");
+
+        Assert.ThrowsExactly<ArgumentException>(() => LoanSetOutcome.FromMetadata(new LoanSet { Account = Depositor }, simulated.Meta));
+    }
+
+    [TestMethod]
     public void TestUVaultDeposit_MintsShares()
     {
         SimulateResponse simulated = TestUBalanceChangesMpt.LoadSimulate("vault-deposit-xrp.json");
