@@ -205,6 +205,35 @@ TransactionSummary result = await SubmitLoanSetWithCounterpartySig(
 string loanId = GetCreatedObjectId(result, LedgerEntryType.Loan);
 ```
 
+#### Условия и график до подписи заёмщика
+
+`PreviewLoanSet` прогоняет `LoanSet` через `simulate` до того, как стороны подпишут транзакцию. Подпись заёмщика не нужна: превью отправляет пустой `CounterpartySignature`, который `simulate` принимает без проверки. Результат содержит точные условия, с которыми нода создала бы займ:
+
+```csharp
+TransactionPreview<LoanSetOutcome> preview = await client.PreviewLoanSet(loanTx);
+if (preview.WouldSucceed)
+{
+    LoanSetOutcome terms = preview.Outcome;
+    // terms.Loan.PeriodicPayment, terms.Loan.TotalValueOutstanding, terms.BorrowerReceives,
+    // terms.InterestTotal, terms.ServiceFeesTotal, terms.TotalToRepay
+}
+```
+
+`LoanSchedule.Project` строит по этим условиям или по `Loan`, прочитанному из леджера, полный график регулярных платежей, повторяя для каждого периода `computePaymentComponents` из rippled. Ставка комиссии за управление берётся из `LoanBroker`, а `LoanScheduleOptions.FromNodeAsync` читает амендменты, которые влияют на округление:
+
+```csharp
+LoanScheduleOptions options = await LoanScheduleOptions.FromNodeAsync(client);
+IReadOnlyList<LoanScheduleRow> schedule = LoanSchedule.Project(
+    terms.Loan, terms.Asset, broker.ManagementFeeRate ?? 0, options);
+
+foreach (LoanScheduleRow row in schedule)
+{
+    // row.DueDate, row.Principal, row.Interest, row.ManagementFee, row.ServiceFee, row.Total
+}
+```
+
+Каждая строка — это сумма, которую нода спишет за регулярный платёж, внесённый вовремя; к просроченному платежу добавляются проценты за просрочку и `LatePaymentFee`. В тестовом Blazor-клиенте `Tests/TestsClients/Blazor-WebAssembly` есть вкладка **Loan preview**, которая показывает условия и график для брокера на любой ноде.
+
 ### 2. Внесение платежа по кредиту
 
 Заёмщик вносит платежи по кредиту:

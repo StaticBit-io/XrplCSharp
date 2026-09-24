@@ -1,0 +1,368 @@
+@page "/loan-preview"
+@using System.Globalization
+@using Xrpl.BinaryCodec.Numbers
+@using Xrpl.Client
+@using Xrpl.Models.Common
+@using Xrpl.Models.Ledger
+@using Xrpl.Models.Methods
+@using Xrpl.Models.Transactions
+@using Xrpl.Sugar
+@using static Xrpl.Models.Common.Common
+
+<PageTitle>Loan preview</PageTitle>
+
+<h1>Loan preview</h1>
+
+<p style="color: #666;">
+    Server: <strong>@Client.Url()</strong> (@(Client.IsConnected() ? "connected" : "not connected")).
+    Switch it on the <a href="/">Connection</a> tab. Nothing here is signed or submitted: the terms come
+    from <code>simulate</code>, the schedule from <code>LoanSchedule.Project</code>.
+</p>
+
+<div style="display: flex; gap: 8px; margin: 16px 0;">
+    <button @onclick="() => SetMode(Mode.NewLoan)" style="@TabStyle(Mode.NewLoan)">New loan</button>
+    <button @onclick="() => SetMode(Mode.ExistingLoan)" style="@TabStyle(Mode.ExistingLoan)">Existing loan</button>
+</div>
+
+@if (_mode == Mode.NewLoan)
+{
+    <section style="background: #f5f5f5; padding: 15px; border-radius: 5px;">
+        <div style="display: grid; grid-template-columns: 220px 1fr; gap: 8px 12px; align-items: center; max-width: 900px;">
+            <label>LoanBrokerID</label>
+            <div style="display: flex; gap: 8px;">
+                <input @bind="_brokerId" style="flex: 1; font-family: monospace;" placeholder="64 hex characters" />
+                <button @onclick="LoadBrokerAsync" disabled="@_busy">Load broker</button>
+            </div>
+
+            @if (_broker != null)
+            {
+                <label>Broker owner (submits)</label>
+                <code>@_broker.Owner</code>
+                <label>Vault asset</label>
+                <span>@AssetName(_asset)</span>
+                <label>Management fee</label>
+                <span>@((_broker.ManagementFeeRate ?? 0) / 1000m)% of interest</span>
+            }
+
+            <label>Borrower (Counterparty)</label>
+            <input @bind="_borrower" style="font-family: monospace;" placeholder="r..." />
+
+            <label>Principal (@UnitName)</label>
+            <input @bind="_principal" />
+
+            <label>Interest rate, % a year</label>
+            <input @bind="_interestPercent" />
+
+            <label>Number of payments</label>
+            <input type="number" min="1" @bind="_paymentTotal" />
+
+            <label>Payment interval</label>
+            <div style="display: flex; gap: 8px; align-items: center;">
+                <input type="number" min="60" @bind="_paymentInterval" style="width: 140px;" /> seconds
+                <button @onclick="() => _paymentInterval = 3600">hour</button>
+                <button @onclick="() => _paymentInterval = 86400">day</button>
+                <button @onclick="() => _paymentInterval = 2592000">30 days</button>
+            </div>
+
+            <label>Grace period, seconds</label>
+            <input type="number" min="60" @bind="_gracePeriod" />
+
+            <label>Service fee per payment (@UnitName)</label>
+            <input @bind="_serviceFee" />
+
+            <label>Origination fee (@UnitName)</label>
+            <input @bind="_originationFee" />
+        </div>
+
+        <button @onclick="PreviewNewLoanAsync" disabled="@(_busy || _broker == null)" style="margin-top: 12px; padding: 8px 16px;">
+            Preview the loan
+        </button>
+    </section>
+}
+else
+{
+    <section style="background: #f5f5f5; padding: 15px; border-radius: 5px;">
+        <div style="display: flex; gap: 8px; max-width: 900px;">
+            <input @bind="_loanId" style="flex: 1; font-family: monospace;" placeholder="LoanID, 64 hex characters" />
+            <button @onclick="LoadExistingLoanAsync" disabled="@_busy">Show the remaining schedule</button>
+        </div>
+    </section>
+}
+
+@if (_busy)
+{
+    <p>Asking the node...</p>
+}
+
+@if (_error != null)
+{
+    <p style="color: #b32121; font-weight: bold;">@_error</p>
+}
+
+@if (_engineResult != null)
+{
+    <p>
+        <code>simulate</code>: <strong style="color: @(_engineResult == "tesSUCCESS" ? "#28a745" : "#b32121");">@_engineResult</strong>
+        @_engineMessage
+    </p>
+}
+
+@if (_loan != null)
+{
+    <h2>Terms</h2>
+    <table style="border-collapse: collapse;">
+        <tbody>
+            @if (_loanSet != null)
+            {
+                <tr><td style="@Cell">Borrower receives</td><td style="@Number">@Amount(_loanSet.BorrowerReceives)</td></tr>
+            }
+            <tr><td style="@Cell">Principal outstanding</td><td style="@Number">@Amount(_loan.PrincipalOutstanding)</td></tr>
+            <tr><td style="@Cell">Periodic payment (exact, before rounding)</td><td style="@Number">@Amount(_loan.PeriodicPayment)</td></tr>
+            <tr><td style="@Cell">Total value outstanding</td><td style="@Number">@Amount(_loan.TotalValueOutstanding)</td></tr>
+            <tr><td style="@Cell">Payments remaining</td><td style="@Number">@_loan.PaymentRemaining</td></tr>
+            <tr><td style="@Cell">Next payment due</td><td style="@Number">@_loan.NextPaymentDueDate?.ToString("u")</td></tr>
+            @if (_loanSet != null)
+            {
+                <tr><td style="@Cell">Interest over the schedule</td><td style="@Number">@Amount(_loanSet.InterestTotal)</td></tr>
+                <tr><td style="@Cell">Service fees over the schedule</td><td style="@Number">@Amount(_loanSet.ServiceFeesTotal)</td></tr>
+                <tr><td style="@Cell"><strong>Total to repay</strong></td><td style="@Number"><strong>@Amount(_loanSet.TotalToRepay)</strong></td></tr>
+            }
+        </tbody>
+    </table>
+}
+
+@if (_schedule != null)
+{
+    <h2>Schedule</h2>
+    <p style="color: #666;">
+        Projected with <code>fixCleanup3_2_0</code> @(_options?.FixCleanup3_2_0 == true ? "enabled" : "disabled"), as the node reports it.
+        Each payment is what the node charges for a regular, on-time payment; a late payment adds late interest and the late fee.
+    </p>
+    <table style="border-collapse: collapse; min-width: 900px;">
+        <thead>
+            <tr style="background: #e9ecef;">
+                <th style="@Cell">#</th>
+                <th style="@Cell">Due</th>
+                <th style="@Cell">Principal</th>
+                <th style="@Cell">Interest</th>
+                <th style="@Cell">Mgmt fee</th>
+                <th style="@Cell">Service fee</th>
+                <th style="@Cell">Payment</th>
+                <th style="@Cell">Principal after</th>
+            </tr>
+        </thead>
+        <tbody>
+            @foreach (LoanScheduleRow row in _schedule)
+            {
+                <tr style="@(row.IsFinal ? "font-weight: bold;" : string.Empty)">
+                    <td style="@Cell">@row.Number</td>
+                    <td style="@Cell">@row.DueDate?.ToString("u")</td>
+                    <td style="@Number">@Amount(row.Principal)</td>
+                    <td style="@Number">@Amount(row.Interest)</td>
+                    <td style="@Number">@Amount(row.ManagementFee)</td>
+                    <td style="@Number">@Amount(row.ServiceFee)</td>
+                    <td style="@Number">@Amount(row.Total)</td>
+                    <td style="@Number">@Amount(row.PrincipalOutstandingAfter)</td>
+                </tr>
+            }
+            <tr style="background: #e9ecef; font-weight: bold;">
+                <td style="@Cell" colspan="2">Total</td>
+                <td style="@Number">@Amount(_schedule.Sum(r => r.Principal))</td>
+                <td style="@Number">@Amount(_schedule.Sum(r => r.Interest))</td>
+                <td style="@Number">@Amount(_schedule.Sum(r => r.ManagementFee))</td>
+                <td style="@Number">@Amount(_schedule.Sum(r => r.ServiceFee))</td>
+                <td style="@Number">@Amount(_schedule.Sum(r => r.Total))</td>
+                <td style="@Cell"></td>
+            </tr>
+        </tbody>
+    </table>
+}
+
+@code {
+    private const string Cell = "border: 1px solid #ccc; padding: 4px 8px;";
+    private const string Number = "border: 1px solid #ccc; padding: 4px 8px; text-align: right; font-family: monospace;";
+
+    private enum Mode { NewLoan, ExistingLoan }
+
+    [Inject]
+    private IXrplClient Client { get; set; } = default!;
+
+    private Mode _mode = Mode.NewLoan;
+    private bool _busy;
+    private string? _error;
+    private string? _engineResult;
+    private string? _engineMessage;
+
+    private string _brokerId = string.Empty;
+    private LOLoanBroker? _broker;
+    private IssuedCurrency? _asset;
+    private string _borrower = string.Empty;
+    private string _principal = "100";
+    private string _interestPercent = "12";
+    private uint _paymentTotal = 12;
+    private uint _paymentInterval = 2592000;
+    private uint _gracePeriod = 86400;
+    private string _serviceFee = "0";
+    private string _originationFee = "0";
+
+    private string _loanId = string.Empty;
+
+    private LOLoan? _loan;
+    private LoanSetOutcome? _loanSet;
+    private LoanScheduleOptions? _options;
+    private IReadOnlyList<LoanScheduleRow>? _schedule;
+
+    private bool IsXrp => _asset?.IsXrp() == true;
+    private string UnitName => _asset == null ? "asset units" : IsXrp ? "XRP" : AssetName(_asset);
+
+    protected override async Task OnInitializedAsync()
+    {
+        if (!Client.IsConnected())
+            await Client.Connect();
+    }
+
+    private void SetMode(Mode mode)
+    {
+        _mode = mode;
+        ClearResult();
+    }
+
+    private string TabStyle(Mode mode) =>
+        "padding: 8px 16px; border-radius: 4px; border: 1px solid #0d6efd; "
+        + (_mode == mode ? "background: #0d6efd; color: white;" : "background: white; color: #0d6efd;");
+
+    private void ClearResult()
+    {
+        _error = null;
+        _engineResult = null;
+        _engineMessage = null;
+        _loan = null;
+        _loanSet = null;
+        _schedule = null;
+    }
+
+    private async Task LoadBrokerAsync()
+    {
+        await RunAsync(async () =>
+        {
+            _broker = null;
+            _asset = null;
+            (_broker, _asset) = await LoadBrokerAndAssetAsync(_brokerId.Trim());
+        });
+    }
+
+    private async Task PreviewNewLoanAsync()
+    {
+        await RunAsync(async () =>
+        {
+            if (_broker == null || _asset == null)
+                throw new InvalidOperationException("Load the broker first.");
+
+            LoanSet loanSet = new LoanSet
+            {
+                Account = _broker.Owner,
+                LoanBrokerID = _brokerId.Trim(),
+                Counterparty = _borrower.Trim(),
+                PrincipalRequested = ToLedgerAmount(_principal),
+                InterestRate = (uint)Math.Round(ParseDecimal(_interestPercent) * 1000m),
+                PaymentTotal = _paymentTotal,
+                PaymentInterval = _paymentInterval,
+                GracePeriod = _gracePeriod,
+            };
+
+            XrplNumber serviceFee = ToLedgerAmount(_serviceFee);
+            if (!serviceFee.IsZero)
+                loanSet.LoanServiceFee = serviceFee;
+
+            XrplNumber originationFee = ToLedgerAmount(_originationFee);
+            if (!originationFee.IsZero)
+                loanSet.LoanOriginationFee = originationFee;
+
+            TransactionPreview<LoanSetOutcome> preview = await Client.PreviewLoanSet(loanSet);
+            _engineResult = preview.EngineResult;
+            _engineMessage = preview.EngineResultMessage;
+            if (preview.Outcome == null)
+                return;
+
+            _loanSet = preview.Outcome;
+            _loan = preview.Outcome.Loan;
+            await ProjectAsync(_loan, _asset, _broker.ManagementFeeRate ?? 0);
+        });
+    }
+
+    private async Task LoadExistingLoanAsync()
+    {
+        await RunAsync(async () =>
+        {
+            LOLoan loan = (LOLoan)(await Client.LedgerEntry(new LedgerEntryRequest { Index = _loanId.Trim() }).Typed()).Node;
+            (LOLoanBroker broker, IssuedCurrency asset) = await LoadBrokerAndAssetAsync(loan.LoanBrokerID);
+            _asset = asset;
+            _loan = loan;
+            await ProjectAsync(loan, asset, broker.ManagementFeeRate ?? 0);
+        });
+    }
+
+    private async Task ProjectAsync(LOLoan loan, IssuedCurrency asset, ushort managementFeeRate)
+    {
+        try
+        {
+            _options = await LoanScheduleOptions.FromNodeAsync(Client);
+        }
+        catch (Exception)
+        {
+            // feature can be restricted on a public node; project with the current rules
+            _options = new LoanScheduleOptions();
+        }
+
+        _schedule = LoanSchedule.Project(loan, asset, managementFeeRate, _options);
+    }
+
+    private async Task<(LOLoanBroker Broker, IssuedCurrency Asset)> LoadBrokerAndAssetAsync(string brokerId)
+    {
+        LOLoanBroker broker = (LOLoanBroker)(await Client.LedgerEntry(new LedgerEntryRequest { Index = brokerId }).Typed()).Node;
+        LOVault vault = (LOVault)(await Client.LedgerEntry(new LedgerEntryRequest { Index = broker.VaultID }).Typed()).Node;
+        return (broker, vault.Asset);
+    }
+
+    private async Task RunAsync(Func<Task> action)
+    {
+        _busy = true;
+        ClearResult();
+        try
+        {
+            await action();
+        }
+        catch (Exception exception)
+        {
+            _error = exception.Message;
+        }
+        finally
+        {
+            _busy = false;
+        }
+    }
+
+    /// <summary>XRP is entered in XRP and sent in drops; other assets in their own unit.</summary>
+    private XrplNumber ToLedgerAmount(string text)
+    {
+        decimal value = ParseDecimal(text);
+        return (XrplNumber)(IsXrp ? decimal.Round(value * 1_000_000m, 0) : value);
+    }
+
+    private static decimal ParseDecimal(string text) =>
+        decimal.Parse(text.Trim(), NumberStyles.Float, CultureInfo.InvariantCulture);
+
+    private string Amount(decimal value) =>
+        IsXrp
+            ? (value / 1_000_000m).ToString("0.000000", CultureInfo.InvariantCulture)
+            : value.ToString(CultureInfo.InvariantCulture);
+
+    private string Amount(XrplNumber? value) =>
+        value is { } number && number.TryToDecimal(out decimal d) ? Amount(d) : value?.ToString() ?? "0";
+
+    private static string AssetName(IssuedCurrency? asset) =>
+        asset == null ? string.Empty
+        : asset.IsXrp() ? "XRP"
+        : asset.MptIssuanceId != null ? $"MPT {asset.MptIssuanceId}"
+        : $"{asset.CurrencyName} ({asset.Issuer})";
+}
