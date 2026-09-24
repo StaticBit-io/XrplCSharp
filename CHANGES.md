@@ -47,6 +47,12 @@
 * `Tests/Xrpl.Tests/Fixtures/Simulate` holds the recorded `simulate` responses, and its README says where each one comes from
 * `LendingProtocol-Guide` and `Vault-Guide` (both languages) show the payment cap and the previews
 * `RawJson` and `XrplResponse<T>.Raw` document the cost of a large response (#213): why the frame is allocated per message and cannot be pooled, and that a large `result` read with `Utf8JsonReader` over `RawJson.Span` avoids the second message-sized copy a `JsonElement` result makes
+* **`XrplNumber` arithmetic, bit-exact with rippled's `Number`** (part of #211). `Add`, `Subtract`, `Multiply`, `Divide`, `Power(x, n)`, `Power(x, n, d)`, `Root`, `Root2`, `Truncate`, `ToInt64` and `Abs` round as rippled's `Number.cpp` does under a `NumberContext`; `+`, `-`, `*`, `/` and unary `-` use `NumberContext.Default`
+  * `NumberContext` names the mantissa scale (`NumberMantissaScale`: `Small`, `LargeLegacy`, `Large320`, `Large330`) and the rounding mode (`NumberRounding`: `ToNearest`, `TowardsZero`, `Downward`, `Upward`); `Default` is `Large330` rounding to nearest, `ForAmendments` maps SingleAssetVault / LendingProtocol, `fixCleanup3_2_0` and `fixCleanup3_3_0` to the scale, `WithRounding` changes the mode
+  * the engine is `NumberCore` (internal), a statement-for-statement port of `Number.cpp` with 128-bit intermediates
+  * `Root` and `Power(x, n, d)` throw `ArithmeticException` on an input where rippled's Newton-Raphson loop cycles with a period longer than two and never returns (`TestRoot_ThatRippledNeverReturnsFrom_Throws`)
+  * `TestUNumberVectors` replays 19,150 results printed by rippled's `Number.cpp` at 00606bec1 across all scales, rounding modes and operations; `Tests/Xrpl.BinaryCodec.Test/Fixtures/Number` holds the vectors, the generator and how to rebuild them. `TestUXrplNumberArithmetic` covers the public API
+  * `Xrpl.BinaryCodec` exposes its internals to `Xrpl.BinaryCodec.Test`
 
 ## 11.8.1.0 23/09/2026
 

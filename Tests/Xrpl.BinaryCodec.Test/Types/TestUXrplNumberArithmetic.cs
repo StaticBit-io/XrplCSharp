@@ -9,10 +9,10 @@ namespace XrplTests.BinaryCodecLib.Types;
 /// <summary>
 /// The public arithmetic on <see cref="XrplNumber"/>. Every expected value was printed by rippled's
 /// <c>Number.cpp</c> (commit 00606bec1, the same as <c>Fixtures/Number</c>) under the same scale and
-/// rounding mode; <see cref="TestNumberVectors"/> covers the engine itself.
+/// rounding mode; <see cref="TestUNumberVectors"/> covers the engine itself.
 /// </summary>
 [TestClass]
-public class TestXrplNumberArithmetic
+public class TestUXrplNumberArithmetic
 {
     private static XrplNumber N(string text) => XrplNumber.Parse(text);
 

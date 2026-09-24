@@ -18,7 +18,7 @@ namespace XrplTests.BinaryCodecLib.Types;
 /// the C# port and requires every result to match, including which operations throw.
 /// </summary>
 [TestClass]
-public class TestNumberVectors
+public class TestUNumberVectors
 {
     private const string ResourceName = "XrplTests.Fixtures.Number.vectors.txt.gz";
 

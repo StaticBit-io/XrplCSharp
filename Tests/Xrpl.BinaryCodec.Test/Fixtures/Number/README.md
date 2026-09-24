@@ -1,6 +1,6 @@
 # Golden vectors for `XrplNumber` arithmetic
 
-`vectors.txt.gz` holds 19,150 results computed by rippled's own `Number.cpp`. `TestNumberVectors` replays every line through the C# port and requires the same result, bit for bit.
+`vectors.txt.gz` holds 19,150 results computed by rippled's own `Number.cpp`. `TestUNumberVectors` replays every line through the C# port and requires the same result, bit for bit.
 
 The vectors cover each of the four mantissa scales (`Small`, `LargeLegacy`, `Large320`, `Large330`) under each of the four rounding modes, with 100 random cases per combination. The operations are construction from a wire pair and from an internal mantissa, `+`, `-`, `*`, `/`, conversion to `int64`, `truncate`, `power(f, n)`, `root2`, `root(f, d)` and `power(f, n, d)`.
 
