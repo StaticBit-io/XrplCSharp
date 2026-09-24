@@ -96,11 +96,12 @@ public class TestUNumberVectors
                 _ => throw new InvalidDataException($"Unknown operation '{parts[2]}'."),
             };
         }
-        catch (OverflowException)
+        catch (Exception ex) when (ex is OverflowException or DivideByZeroException)
         {
+            // rippled throws std::overflow_error for a division by zero too.
             return "!overflow";
         }
-        catch (Exception ex) when (ex is DivideByZeroException or ArgumentException or InvalidOperationException)
+        catch (Exception ex) when (ex is ArgumentException or InvalidOperationException)
         {
             return "!error";
         }

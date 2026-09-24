@@ -53,7 +53,7 @@
   * `Root` and `Power(x, n, d)` throw `ArithmeticException` on an input where rippled's Newton-Raphson loop cycles with a period longer than two and never returns (`TestRoot_ThatRippledNeverReturnsFrom_Throws`)
   * `TestUNumberVectors` replays 19,150 results printed by rippled's `Number.cpp` at 00606bec1 across all scales, rounding modes and operations; `Tests/Xrpl.BinaryCodec.Test/Fixtures/Number` holds the vectors, the generator and how to rebuild them. `TestUXrplNumberArithmetic` covers the public API
   * `Xrpl.BinaryCodec` exposes its internals to `Xrpl.BinaryCodec.Test`
-* CI runs every `Xrpl.BinaryCodec.Test` class (#218): twelve classes lacked the `TestU` prefix that the unit-test filter matches, so 200 of its 289 tests never ran there. They are renamed `TestUBinarySerializer`, `TestUEnumParity`, `TestUFieldDispatch`, `TestUAmount`, `TestUInt32Type`, `TestUInt64Type`, `TestUIouValueTrailingDot`, `TestUIssueMpt`, `TestULoanSetEncode`, `TestUNumberType`, `TestUXChainBridgeType` and `TestUXrplNumber`
+* Twelve `Xrpl.BinaryCodec.Test` classes take the `TestU` prefix that CI's unit-test filter matches (#218): `TestUBinarySerializer`, `TestUEnumParity`, `TestUFieldDispatch`, `TestUAmount`, `TestUInt32Type`, `TestUInt64Type`, `TestUIouValueTrailingDot`, `TestUIssueMpt`, `TestULoanSetEncode`, `TestUNumberType`, `TestUXChainBridgeType` and `TestUXrplNumber`
 
 ## 11.8.1.0 23/09/2026
 

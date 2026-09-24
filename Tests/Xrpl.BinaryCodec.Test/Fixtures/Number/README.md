@@ -18,7 +18,7 @@ The vectors cover each of the four mantissa scales (`Small`, `LargeLegacy`, `Lar
 
 - A number is `<mantissa>e<exponent>` in the wire form of `Number::mantissa()` and `Number::exponent()`, or `Z` for zero.
 - An integer operand (a power, a root) or an `int` result is a plain decimal number.
-- `!overflow` means `std::overflow_error` was thrown. `!error` means any other exception was thrown, for example a division by zero or an even root of a negative value.
+- `!overflow` means `std::overflow_error` was thrown, which `Number.cpp` uses for every arithmetic failure: a result out of range, a division by zero, and an infinite or not-a-number root or power. The port throws `OverflowException`, or `DivideByZeroException` for a division by zero, and the test reads both as `!overflow`. `!error` means any other exception; the current vectors contain none.
 
 ## Regenerate
 
