@@ -279,7 +279,18 @@ if (preview.WouldSucceed)
 }
 ```
 
-`LoanPaymentOutcome.FromMetadata` reads the same split from a validated transaction's metadata. The split follows the money: the vault receives principal and interest, and the broker receives the rest (management, service, late and close fees). `LoanPayments.IsPaymentLate` and `LoanPayments.IsPastGracePeriod` tell whether a payment would be late and whether the broker may default the loan. A late payment adds late interest and `LatePaymentFee` above the cap, so preview it.
+`LoanPaymentOutcome.FromMetadata` reads the same split from a validated transaction's metadata. The split follows the money: the vault receives principal and interest, and the broker receives the rest (management, service, late and close fees). `LoanPayments.IsPaymentLate` and `LoanPayments.IsPastGracePeriod` tell whether a payment would be late and whether the broker may default the loan. A late payment adds late interest and `LatePaymentFee` above the cap.
+
+`LoanPayments.LatePaymentDue` and `LoanPayments.FullPaymentDue` compute what a late payment (`tfLoanLatePayment`) and closing the loan early (`tfLoanFullPayment`) cost, the way the node computes them: the regular payment with the late fee and late interest, or the outstanding balance with accrued interest, the prepayment penalty and `ClosePaymentFee`. Both need the close time of the ledger before the one the payment lands in, because interest runs to that time; the validated ledger's close time is the usual estimate, and a payment that lands a ledger later accrues a few more seconds. Both return null when the node would refuse that kind of payment at that time.
+
+```csharp
+LoanScheduleOptions rules = await LoanScheduleOptions.FromNodeAsync(client);
+DateTime at = /* close time of the latest validated ledger */;
+
+LoanPaymentDue late = LoanPayments.LatePaymentDue(loan, asset, broker.ManagementFeeRate ?? 0, at, rules);
+LoanPaymentDue full = LoanPayments.FullPaymentDue(loan, asset, broker.ManagementFeeRate ?? 0, at, rules);
+// late.Total, full.Total: the amount due; .Principal, .InterestToVault, .PaidToBroker: the split
+```
 
 ### 3. Delete a Fully Repaid Loan
 
