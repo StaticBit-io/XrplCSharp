@@ -98,6 +98,180 @@ namespace Xrpl.Sugar
         }
 
         /// <summary>
+        /// <c>computeLoanProperties</c>: the periodic payment, total value, management fee and scale
+        /// of a loan of <paramref name="principal"/>, and the principal its first payment repays.
+        /// </summary>
+        internal static LoanProperties ComputeLoanProperties(
+            XrplNumber principal,
+            XrplNumber periodicRate,
+            uint paymentTotal,
+            ushort managementFeeRate,
+            bool integral,
+            int minimumScale,
+            LedgerRules rules)
+        {
+            NumberContext c = rules.Context;
+            XrplNumber periodicPayment = PeriodicPayment(principal, periodicRate, paymentTotal, rules.FixCleanup3_2_0, c);
+
+            // The total value is rounded up when there is interest, to nearest when there is none,
+            // and its exponent as an amount of the asset sets the loan's scale.
+            NumberContext valueRounding = c.WithRounding(periodicRate.IsZero ? NumberRounding.ToNearest : NumberRounding.Upward);
+            XrplNumber amount = AssetRounding.ToAmount(
+                XrplNumber.Multiply(periodicPayment, (XrplNumber)(long)paymentTotal, valueRounding),
+                integral,
+                valueRounding);
+            int loanScale = Math.Max(minimumScale, AssetRounding.AmountExponent(amount, integral));
+            XrplNumber value = AssetRounding.Round(amount, integral, loanScale, valueRounding);
+
+            XrplNumber roundedPrincipal = AssetRounding.Round(principal, integral, loanScale, c);
+            XrplNumber interest = XrplNumber.Subtract(value, roundedPrincipal, c);
+            XrplNumber fee = AssetRounding.Round(TenthBipsOf(interest, managementFeeRate, c), integral, loanScale, c.WithRounding(NumberRounding.Downward));
+
+            LoanTerms terms = LoanTerms.Create(c, rules.FixCleanup3_2_0, integral, loanScale, periodicPayment, periodicRate, managementFeeRate);
+            XrplNumber firstPaymentPrincipal = XrplNumber.Subtract(
+                PrincipalFromPeriodicPayment(terms, paymentTotal),
+                PrincipalFromPeriodicPayment(terms, paymentTotal - 1),
+                c);
+
+            return new LoanProperties(periodicPayment, value, fee, loanScale, firstPaymentPrincipal, terms.RoundedPeriodicPayment);
+        }
+
+        /// <summary>
+        /// <c>checkLoanGuards</c>: whether a loan of total value <paramref name="value"/> can be
+        /// amortized at its scale; the reason when not.
+        /// </summary>
+        internal static string LoanGuards(XrplNumber principal, bool expectInterest, uint paymentTotal, XrplNumber value, LoanProperties properties, NumberContext c)
+        {
+            XrplNumber interest = XrplNumber.Subtract(value, principal, c);
+            if (expectInterest && interest <= XrplNumber.Zero)
+                return "The loan carries an interest rate but no interest at its scale.";
+            if (!expectInterest && interest > XrplNumber.Zero)
+                return "The loan carries no interest rate but interest at its scale.";
+            if (properties.FirstPaymentPrincipal <= XrplNumber.Zero)
+                return "The first payment repays no principal.";
+            if (properties.RoundedPeriodicPayment.IsZero)
+                return "The periodic payment rounds to zero.";
+
+            NumberContext upward = c.WithRounding(NumberRounding.Upward);
+            long payments = XrplNumber.Divide(value, properties.RoundedPeriodicPayment, upward).ToInt64(upward);
+            if (payments != paymentTotal)
+            {
+                return $"The rounded periodic payment {properties.RoundedPeriodicPayment} settles the total value "
+                    + $"{value} in {payments} payments, not {paymentTotal}.";
+            }
+
+            return null;
+        }
+
+        /// <summary><c>computeTheoreticalLoanState</c> for <paramref name="payments"/> payments left.</summary>
+        internal static TheoreticalState Theoretical(LoanTerms terms, uint payments) => TheoreticalState.After(terms, payments);
+
+        /// <summary>
+        /// <c>computeOverpaymentComponents</c>, <c>tryOverpayment</c> and <c>doOverpayment</c>: what an
+        /// overpayment of <paramref name="overpayment"/> (rounded to the loan's scale) takes, and the
+        /// loan re-amortized over the payments left with the lower principal.
+        /// </summary>
+        /// <returns>null when rippled skips the overpayment and leaves the loan as it is.</returns>
+        internal static Overpayment? Overpay(
+            LoanState state,
+            uint paymentsRemaining,
+            LoanTerms terms,
+            XrplNumber overpayment,
+            uint overpaymentInterestRate,
+            uint overpaymentFeeRate,
+            LedgerRules rules)
+        {
+            NumberContext c = terms.Context;
+
+            // Equations (20) to (22) of XLS-66: the fee and the penalty interest come off the top,
+            // the rest repays principal.
+            XrplNumber fee = AssetRounding.Round(TenthBipsOf(overpayment, overpaymentFeeRate, c), terms.Integral, terms.Scale, c);
+            (XrplNumber interest, XrplNumber managementFee) = RoundAndSplitInterest(
+                TenthBipsOf(overpayment, overpaymentInterestRate, c),
+                terms,
+                NumberRounding.ToNearest);
+            XrplNumber principalPaid = XrplNumber.Subtract(
+                XrplNumber.Subtract(XrplNumber.Subtract(overpayment, interest, c), managementFee, c),
+                fee,
+                c);
+            if (principalPaid <= XrplNumber.Zero)
+                return null;
+
+            // The rounding errors the loan has accumulated carry over to the re-amortized loan.
+            TheoreticalState theoretical = TheoreticalState.After(terms, paymentsRemaining);
+            Deltas errors = new Deltas(
+                XrplNumber.Subtract(state.Principal, theoretical.Principal, c),
+                XrplNumber.Subtract(state.Interest, theoretical.Interest, c),
+                XrplNumber.Subtract(state.ManagementFee, theoretical.ManagementFee, c));
+
+            XrplNumber newPrincipal = Max(XrplNumber.Subtract(theoretical.Principal, principalPaid, c), XrplNumber.Zero);
+            LoanProperties properties = ComputeLoanProperties(
+                newPrincipal,
+                terms.PeriodicRate,
+                paymentsRemaining,
+                terms.ManagementFeeRate,
+                terms.Integral,
+                terms.Scale,
+                rules);
+
+            LoanTerms newTerms = LoanTerms.Create(
+                c,
+                terms.FixCleanup3_2_0,
+                terms.Integral,
+                terms.Scale,
+                properties.PeriodicPayment,
+                terms.PeriodicRate,
+                terms.ManagementFeeRate);
+            TheoreticalState target = TheoreticalState.After(newTerms, paymentsRemaining);
+            XrplNumber targetValue = XrplNumber.Add(target.Value, errors.Total(c), c);
+            XrplNumber targetPrincipal = XrplNumber.Add(target.Principal, errors.Principal, c);
+            XrplNumber targetFee = XrplNumber.Add(target.ManagementFee, errors.ManagementFee, c);
+            XrplNumber targetInterest = XrplNumber.Add(target.Interest, errors.Interest, c);
+
+            if (terms.FixCleanup3_2_0)
+            {
+                // The new principal is known exactly; the fee follows from the exact gross interest.
+                targetPrincipal = XrplNumber.Subtract(state.Principal, principalPaid, c);
+                targetFee = TenthBipsOf(XrplNumber.Subtract(targetValue, targetPrincipal, c), terms.ManagementFeeRate, c);
+                targetInterest = XrplNumber.Subtract(XrplNumber.Subtract(targetValue, targetPrincipal, c), targetFee, c);
+            }
+
+            NumberContext upward = c.WithRounding(NumberRounding.Upward);
+            XrplNumber principalOutstanding = Clamp(
+                AssetRounding.Round(targetPrincipal, terms.Integral, terms.Scale, upward),
+                state.Principal);
+            XrplNumber valueOutstanding = Clamp(
+                AssetRounding.Round(
+                    XrplNumber.Add(principalOutstanding, XrplNumber.Add(targetInterest, targetFee, c), c),
+                    terms.Integral,
+                    terms.Scale,
+                    upward),
+                state.Value);
+            XrplNumber feeOutstanding = Clamp(
+                AssetRounding.Round(targetFee, terms.Integral, terms.Scale, c),
+                state.ManagementFee);
+            LoanState after = new LoanState(valueOutstanding, principalOutstanding, feeOutstanding, c);
+
+            XrplNumber interestOutstanding = XrplNumber.Add(after.Interest, after.ManagementFee, c);
+            if (LoanGuards(principalOutstanding, !interestOutstanding.IsZero, paymentsRemaining, after.Value, properties, c) != null)
+                return null;
+
+            if (properties.PeriodicPayment <= XrplNumber.Zero || after.Value <= XrplNumber.Zero || after.ManagementFee < XrplNumber.Zero)
+                return null;
+
+            // The overpayment must not raise the interest the loan still owes, and must lower its principal.
+            if (XrplNumber.Subtract(state.Interest, after.Interest, c) < XrplNumber.Zero || state.Principal <= after.Principal)
+                return null;
+
+            return new Overpayment(
+                XrplNumber.Subtract(state.Principal, after.Principal, c),
+                interest,
+                XrplNumber.Add(fee, managementFee, c),
+                after,
+                properties.PeriodicPayment);
+        }
+
+        /// <summary>
         /// <c>loanLatePaymentInterest</c>, equation (16) of XLS-66: the principal times the late
         /// rate prorated over the seconds past the due date; zero when the payment is not late.
         /// </summary>
@@ -224,14 +398,17 @@ namespace Xrpl.Sugar
             value < XrplNumber.Zero ? XrplNumber.Zero : high < value ? high : value;
 
         /// <summary><c>computeTheoreticalLoanState</c>, equations (30) to (33) of XLS-66.</summary>
-        private readonly struct TheoreticalState
+        internal readonly struct TheoreticalState
         {
-            private TheoreticalState(XrplNumber principal, XrplNumber interest, XrplNumber managementFee)
+            private TheoreticalState(XrplNumber value, XrplNumber principal, XrplNumber interest, XrplNumber managementFee)
             {
+                Value = value;
                 Principal = principal;
                 Interest = interest;
                 ManagementFee = managementFee;
             }
+
+            public XrplNumber Value { get; }
 
             public XrplNumber Principal { get; }
 
@@ -246,7 +423,7 @@ namespace Xrpl.Sugar
                 XrplNumber principal = PrincipalFromPeriodicPayment(terms, paymentsAfter);
                 XrplNumber grossInterest = XrplNumber.Subtract(value, principal, c);
                 XrplNumber fee = TenthBipsOf(grossInterest, terms.ManagementFeeRate, c);
-                return new TheoreticalState(principal, XrplNumber.Subtract(grossInterest, fee, c), fee);
+                return new TheoreticalState(value, principal, XrplNumber.Subtract(grossInterest, fee, c), fee);
             }
         }
 
@@ -289,6 +466,64 @@ namespace Xrpl.Sugar
                 return XrplNumber.Subtract(component, part, c);
             }
         }
+    }
+
+    /// <summary>What an overpayment pays and the re-amortized loan it leaves.</summary>
+    internal readonly struct Overpayment
+    {
+        public Overpayment(XrplNumber principal, XrplNumber interest, XrplNumber fee, LoanState after, XrplNumber periodicPayment)
+        {
+            Principal = principal;
+            Interest = interest;
+            Fee = fee;
+            After = after;
+            PeriodicPayment = periodicPayment;
+        }
+
+        /// <summary>The drop in principal outstanding.</summary>
+        public XrplNumber Principal { get; }
+
+        /// <summary>The overpayment's penalty interest, to the vault.</summary>
+        public XrplNumber Interest { get; }
+
+        /// <summary>The overpayment fee and the penalty interest's management fee, to the broker.</summary>
+        public XrplNumber Fee { get; }
+
+        public LoanState After { get; }
+
+        public XrplNumber PeriodicPayment { get; }
+    }
+
+    /// <summary><c>LoanProperties</c>: what <c>computeLoanProperties</c> derives for a loan.</summary>
+    internal sealed class LoanProperties
+    {
+        public LoanProperties(
+            XrplNumber periodicPayment,
+            XrplNumber value,
+            XrplNumber managementFee,
+            int loanScale,
+            XrplNumber firstPaymentPrincipal,
+            XrplNumber roundedPeriodicPayment)
+        {
+            PeriodicPayment = periodicPayment;
+            Value = value;
+            ManagementFee = managementFee;
+            LoanScale = loanScale;
+            FirstPaymentPrincipal = firstPaymentPrincipal;
+            RoundedPeriodicPayment = roundedPeriodicPayment;
+        }
+
+        public XrplNumber PeriodicPayment { get; }
+
+        public XrplNumber Value { get; }
+
+        public XrplNumber ManagementFee { get; }
+
+        public int LoanScale { get; }
+
+        public XrplNumber FirstPaymentPrincipal { get; }
+
+        public XrplNumber RoundedPeriodicPayment { get; }
     }
 
     /// <summary>What stays fixed for a loan's payments: its arithmetic, asset, scale and rates.</summary>

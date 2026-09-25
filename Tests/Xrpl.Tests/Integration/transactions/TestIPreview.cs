@@ -335,6 +335,117 @@ public class TestIPreviewLoanVault : TestILoanBase
     }
 
     [TestMethod]
+    public async Task TestPaymentForAmount_MatchesWhatTheNodeTakes()
+    {
+        // Several regular payments in one LoanPay, then regular payments with an overpayment on
+        // top, and the amounts the node refuses.
+        XrplWallet walletBroker = XrplWallet.Generate();
+        XrplWallet walletBorrower = XrplWallet.Generate();
+        await IntegrationTestConfig.TryFundWalletsAsync(client, nodeType, walletBroker, walletBorrower);
+        const ushort managementFeeRate = 10_000;
+        string brokerId = await CreateBrokerWithManagementFee(walletBroker, managementFeeRate);
+        Func<string, Currency> xrp = value => new Currency { Value = value, CurrencyCode = "XRP" };
+
+        LoanSet Terms(LoanSetFlags? flags) => new LoanSet
+        {
+            Account = walletBroker.ClassicAddress,
+            LoanBrokerID = brokerId,
+            Counterparty = walletBorrower.ClassicAddress,
+            PrincipalRequested = 30_000_000,
+            InterestRate = 80_000,
+            OverpaymentFee = 5_000,
+            OverpaymentInterestRate = 20_000,
+            PaymentTotal = 10,
+            PaymentInterval = 60,
+            GracePeriod = 60,
+            LoanServiceFee = 10,
+            Flags = flags,
+        };
+        LoanSet loanTx = Terms(LoanSetFlags.tfLoanOverpayment);
+        TransactionSummary created = await SubmitLoanSetWithCounterpartySig(client, loanTx, walletBroker, walletBorrower);
+        ValidateResult(created);
+        LoanSetOutcome loanSet = LoanSetOutcome.FromMetadata(loanTx, created.Meta);
+        LedgerRules rules = await LedgerRules.FromNodeAsync(client);
+
+        LOLoan loan = await ReadLoan(loanSet.LoanId);
+        decimal cap = LoanPayments.RegularPaymentCap(loan, loanSet.Asset).Value;
+
+        string threeAndAHalf = (cap * 3.5m).ToString("0", CultureInfo.InvariantCulture);
+        TimedPayment paid = await PayWithFlag(loanSet, walletBorrower, null, threeAndAHalf, xrp);
+        LoanAmountPayment expected = LoanPayments.PaymentForAmount(
+            loan, loanSet.Asset, managementFeeRate, XrplNumber.Parse(threeAndAHalf), paid.ParentCloseTime, options: rules);
+        AssertSame(expected, paid.Outcome);
+        Assert.AreEqual(3u, expected.PaymentsMade);
+        Assert.IsFalse(expected.IsOverpaid, "without tfLoanOverpayment the rest stays with the payer");
+
+        loan = await ReadLoan(loanSet.LoanId);
+        string twoAndAHalf = (cap * 2.5m).ToString("0", CultureInfo.InvariantCulture);
+        paid = await PayWithFlag(loanSet, walletBorrower, LoanPayFlags.tfLoanOverpayment, twoAndAHalf, xrp);
+        expected = LoanPayments.PaymentForAmount(
+            loan, loanSet.Asset, managementFeeRate, XrplNumber.Parse(twoAndAHalf), paid.ParentCloseTime, overpayment: true, options: rules);
+        AssertSame(expected, paid.Outcome);
+        Assert.AreEqual(2u, expected.PaymentsMade);
+        Assert.IsTrue(expected.IsOverpaid);
+        Assert.AreNotEqual(loan.PeriodicPayment, expected.LoanAfter.PeriodicPayment, "the overpayment re-amortizes the loan");
+
+        // Refusals: an amount short of one payment, and an overpayment the loan does not allow.
+        loan = await ReadLoan(loanSet.LoanId);
+        await AssertRefused(loanSet.LoanId, loan, loanSet.Asset, managementFeeRate, walletBorrower, "1", null, rules);
+
+        LoanSet plainTx = Terms(null);
+        TransactionSummary plainCreated = await SubmitLoanSetWithCounterpartySig(client, plainTx, walletBroker, walletBorrower);
+        ValidateResult(plainCreated);
+        string plainId = LoanSetOutcome.FromMetadata(plainTx, plainCreated.Meta).LoanId;
+        await AssertRefused(plainId, await ReadLoan(plainId), loanSet.Asset, managementFeeRate, walletBorrower, threeAndAHalf, LoanPayFlags.tfLoanOverpayment, rules);
+    }
+
+    [TestMethod]
+    public async Task TestPaymentForAmount_Iou_Overpayment_MatchesWhatTheNodeTakes()
+    {
+        // An issued currency: 16 significant digits, rounded to the loan's scale at every step.
+        XrplWallet walletIssuer = XrplWallet.Generate();
+        XrplWallet walletHolder = XrplWallet.Generate();
+        XrplWallet walletBorrower = XrplWallet.Generate();
+        await IntegrationTestConfig.TryFundWalletsAsync(client, nodeType, walletIssuer, walletHolder, walletBorrower);
+        IssuedCurrency usd = new IssuedCurrency { Currency = "USD", Issuer = walletIssuer.ClassicAddress };
+        const ushort managementFeeRate = 1_234;
+        string brokerId = await CreateIouBroker(walletIssuer, walletHolder, walletBorrower, usd, managementFeeRate);
+        Func<string, Currency> amount = value => new Currency { Value = value, CurrencyCode = usd.Currency, Issuer = usd.Issuer };
+
+        LoanSet loanTx = new LoanSet
+        {
+            Account = walletIssuer.ClassicAddress,
+            LoanBrokerID = brokerId,
+            Counterparty = walletBorrower.ClassicAddress,
+            PrincipalRequested = XrplNumber.Parse("4321.987"),
+            InterestRate = 45_678,
+            OverpaymentFee = 1_000,
+            OverpaymentInterestRate = 3_000,
+            PaymentTotal = 8,
+            PaymentInterval = 60,
+            GracePeriod = 60,
+            LoanServiceFee = XrplNumber.Parse("0.05"),
+            Flags = LoanSetFlags.tfLoanOverpayment,
+        };
+        TransactionSummary created = await SubmitLoanSetWithCounterpartySig(client, loanTx, walletIssuer, walletBorrower);
+        ValidateResult(created);
+        LoanSetOutcome loanSet = LoanSetOutcome.FromMetadata(loanTx, created.Meta);
+        LedgerRules rules = await LedgerRules.FromNodeAsync(client);
+
+        LOLoan loan = await ReadLoan(loanSet.LoanId);
+        decimal cap = LoanPayments.RegularPaymentCap(loan, usd).Value;
+        string value = decimal.Round(cap * 2.5m, 10).ToString(CultureInfo.InvariantCulture);
+
+        TimedPayment paid = await PayWithFlag(loanSet, walletBorrower, LoanPayFlags.tfLoanOverpayment, value, amount);
+        LoanAmountPayment expected = LoanPayments.PaymentForAmount(
+            loan, usd, managementFeeRate, XrplNumber.Parse(value), paid.ParentCloseTime, overpayment: true, options: rules);
+
+        AssertSame(expected, paid.Outcome);
+        Assert.AreEqual(2u, expected.PaymentsMade);
+        Assert.IsTrue(expected.IsOverpaid);
+    }
+
+    [TestMethod]
     public async Task TestLoanOrigination_MatchesWhatTheNodeWouldCreate()
     {
         // Offline terms against the node's own LoanSet, previewed through simulate, for XRP and
@@ -452,6 +563,46 @@ public class TestIPreviewLoanVault : TestILoanBase
         Assert.AreEqual(expected.InterestToVault, actual.InterestToVault, "interest to the vault");
         Assert.AreEqual(expected.PaidToBroker, actual.PaidToBroker, "paid to the broker");
         Assert.AreEqual(expected.Total, actual.TotalPaid, "total");
+    }
+
+    private static void AssertSame(LoanAmountPayment expected, LoanPaymentOutcome actual)
+    {
+        Assert.IsTrue(expected.IsAccepted, expected.RefusalReason);
+        AssertSame(expected.Due, actual);
+        Assert.AreEqual(expected.PaymentsMade, actual.PaymentsMade, "payments made");
+
+        LOLoan after = actual.LoanAfter;
+        Assert.AreEqual(after.PrincipalOutstanding ?? XrplNumber.Zero, expected.LoanAfter.PrincipalOutstanding ?? XrplNumber.Zero, "principal outstanding");
+        Assert.AreEqual(after.TotalValueOutstanding ?? XrplNumber.Zero, expected.LoanAfter.TotalValueOutstanding ?? XrplNumber.Zero, "total value outstanding");
+        Assert.AreEqual(after.ManagementFeeOutstanding ?? XrplNumber.Zero, expected.LoanAfter.ManagementFeeOutstanding ?? XrplNumber.Zero, "management fee outstanding");
+        Assert.AreEqual(after.PeriodicPayment, expected.LoanAfter.PeriodicPayment, "periodic payment");
+        Assert.AreEqual(after.PaymentRemaining ?? 0u, expected.LoanAfter.PaymentRemaining ?? 0u, "payments remaining");
+        Assert.AreEqual(after.NextPaymentDueDate, expected.LoanAfter.NextPaymentDueDate, "next due date");
+    }
+
+    /// <summary>The node's answer to a LoanPay, previewed, against the refusal computed offline.</summary>
+    private static async Task AssertRefused(
+        string loanId,
+        LOLoan loan,
+        IssuedCurrency asset,
+        ushort managementFeeRate,
+        XrplWallet borrower,
+        string drops,
+        LoanPayFlags? flag,
+        LedgerRules rules)
+    {
+        TransactionPreview<LoanPaymentOutcome> preview = await client.PreviewLoanPay(new LoanPay
+        {
+            Account = borrower.ClassicAddress,
+            LoanID = loanId,
+            Amount = new Currency { Value = drops, CurrencyCode = "XRP" },
+            Flags = flag,
+        });
+        LoanAmountPayment computed = LoanPayments.PaymentForAmount(
+            loan, asset, managementFeeRate, XrplNumber.Parse(drops), DateTime.UtcNow, flag == LoanPayFlags.tfLoanOverpayment, rules);
+
+        Assert.IsFalse(preview.WouldSucceed, $"{drops}: the node takes it");
+        Assert.AreEqual(preview.EngineResult, computed.Refusal, computed.RefusalReason);
     }
 
     private sealed record TimedPayment(LoanPaymentOutcome Outcome, DateTime ParentCloseTime);
