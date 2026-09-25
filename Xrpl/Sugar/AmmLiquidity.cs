@@ -144,11 +144,11 @@ namespace Xrpl.Sugar
     /// quote is what the node moves. Read the pool with <c>amm_info</c> immediately before quoting.
     /// </para>
     /// <para>
-    /// Covered are the deposit modes <c>tfLPToken</c>, <c>tfTwoAsset</c>, <c>tfSingleAsset</c> and
-    /// <c>tfOneAssetLPToken</c>, and the withdrawal modes <c>tfLPToken</c>, <c>tfWithdrawAll</c>,
-    /// <c>tfTwoAsset</c>, <c>tfSingleAsset</c>, <c>tfOneAssetLPToken</c> and
-    /// <c>tfOneAssetWithdrawAll</c>. Not covered: the effective-price modes (<c>tfLimitLPToken</c>),
-    /// depositing into an empty pool, the transaction's own validation (such as an amount above
+    /// Covered are every deposit mode - <c>tfLPToken</c>, <c>tfTwoAsset</c>, <c>tfSingleAsset</c>,
+    /// <c>tfOneAssetLPToken</c>, <c>tfLimitLPToken</c> and <c>tfTwoAssetIfEmpty</c> - and every
+    /// withdrawal mode - <c>tfLPToken</c>, <c>tfWithdrawAll</c>, <c>tfTwoAsset</c>,
+    /// <c>tfSingleAsset</c>, <c>tfOneAssetLPToken</c>, <c>tfOneAssetWithdrawAll</c> and
+    /// <c>tfLimitLPToken</c>. Not covered: the transaction's own validation (such as an amount above
     /// the pool's balance, <c>tecAMM_BALANCE</c> in preclaim), and the checks on the account
     /// itself - its funds, reserve, authorization and freezes - which
     /// <see cref="PreviewSugar.PreviewAMMDeposit"/> and <see cref="PreviewSugar.PreviewAMMWithdraw"/> cover.
@@ -264,6 +264,166 @@ namespace Xrpl.Sugar
                 return Refused("tecAMM_FAILED", "The LP tokens cost more of the asset than the most allowed.");
 
             return Deposit(p, deposit, null, tokens, null, null, null);
+        }
+
+        /// <summary>
+        /// A single-asset deposit limited by an effective price (<c>tfLimitLPToken</c>): the
+        /// deposit is at most <paramref name="amount"/> - all of it when its price per LP token
+        /// stays within <paramref name="effectivePrice"/> - and otherwise the amount at which the
+        /// price per LP token reaches the limit.
+        /// </summary>
+        /// <param name="pool">The pool.</param>
+        /// <param name="asset">Which of the pool's assets to deposit.</param>
+        /// <param name="amount">The transaction's <c>Amount</c>; zero deposits up to the price limit alone.</param>
+        /// <param name="effectivePrice">The transaction's <c>EPrice</c>: the most of the asset to pay per LP token.</param>
+        /// <param name="rules">The amendments in force; the current rules when null.</param>
+        public static AmmQuote DepositWithEffectivePrice(AmmPool pool, IssuedCurrency asset, XrplNumber amount, XrplNumber effectivePrice, LedgerRules rules = null)
+        {
+            if (amount < XrplNumber.Zero || effectivePrice <= XrplNumber.Zero)
+                return Refused("temBAD_AMOUNT", "The amount is negative or the effective price is not positive.");
+
+            Pool p = Pool.Of(pool, asset, rules);
+            NumberContext c = p.Context;
+            XrplNumber a = AmountMath.ToAmount(amount, p.Kind1, c);
+            XrplNumber price = effectivePrice;
+
+            if (!a.IsZero)
+            {
+                XrplNumber tokens = AmmFormulas.AdjustTokens(p.LpTokens, AmmFormulas.LpTokensOut(p.Balance1, a, p.LpTokens, p.Fee, c), isDeposit: true, c);
+                if (tokens <= XrplNumber.Zero)
+                    return Refused("tecAMM_INVALID_TOKENS", "The deposit is worth less than the smallest LP token amount.");
+
+                (XrplNumber adjustedTokens, XrplNumber deposit) = AmmFormulas.AdjustAssetIn(p.Balance1, p.Kind1, a, p.LpTokens, tokens, p.Fee, c);
+                if (adjustedTokens.IsZero)
+                    return Refused("tecAMM_INVALID_TOKENS", "The deposit is worth less than the smallest LP token amount.");
+
+                if (XrplNumber.Divide(deposit, adjustedTokens, c) <= price)
+                    return Deposit(p, deposit, null, adjustedTokens, null, null, null);
+            }
+
+            // The deposit whose price per LP token equals the limit.
+            XrplNumber f1 = AmmFormulas.FeeMult(p.Fee, c);
+            XrplNumber f2 = XrplNumber.Divide(AmmFormulas.FeeMultHalf(p.Fee, c), f1, c);
+            XrplNumber cc = XrplNumber.Divide(XrplNumber.Multiply(f1, p.Balance1, c), XrplNumber.Multiply(price, p.LpTokens, c), c);
+            XrplNumber d = XrplNumber.Subtract(XrplNumber.Add(f1, XrplNumber.Multiply(cc, f2, c), c), cc, c);
+            XrplNumber a1 = XrplNumber.Multiply(cc, cc, c);
+            XrplNumber b1 = XrplNumber.Subtract(
+                XrplNumber.Add(XrplNumber.Multiply(XrplNumber.Multiply(XrplNumber.Multiply(cc, cc, c), f2, c), f2, c), XrplNumber.Multiply(2, cc, c), c),
+                XrplNumber.Multiply(d, d, c),
+                c);
+            XrplNumber c1 = XrplNumber.Subtract(
+                XrplNumber.Add(XrplNumber.Multiply(XrplNumber.Multiply(XrplNumber.Multiply(2, cc, c), f2, c), f2, c), 1, c),
+                XrplNumber.Multiply(XrplNumber.Multiply(2, d, c), f2, c),
+                c);
+            XrplNumber product = XrplNumber.Multiply(f1, AmmFormulas.SolveQuadratic(a1, b1, c1, c), c);
+            XrplNumber amountDeposit = AmountMath.Multiply(p.Balance1, p.Kind1, product, c, NumberRounding.Upward);
+            if (amountDeposit <= XrplNumber.Zero)
+                return Refused("tecAMM_FAILED", "No deposit reaches the effective price.");
+
+            // getRoundedLPTokens for a deposit: the tokens computed and converted rounding down.
+            NumberContext down = c.WithRounding(NumberRounding.Downward);
+            XrplNumber priced = AmountMath.ToAmount(XrplNumber.Divide(amountDeposit, price, down), AmountKind.Iou, down);
+            XrplNumber limitTokens = AmmFormulas.AdjustTokens(p.LpTokens, priced, isDeposit: true, c);
+            (XrplNumber tokensAdj, XrplNumber depositAdj) = AmmFormulas.AdjustAssetIn(p.Balance1, p.Kind1, amountDeposit, p.LpTokens, limitTokens, p.Fee, c);
+            if (tokensAdj.IsZero)
+                return Refused("tecAMM_INVALID_TOKENS", "The deposit is worth less than the smallest LP token amount.");
+
+            return Deposit(p, depositAdj, null, tokensAdj, null, null, null);
+        }
+
+        /// <summary>
+        /// Deposits both assets into a pool with no LP tokens outstanding (<c>tfTwoAssetIfEmpty</c>):
+        /// the LP tokens are <c>sqrt(amount * amount2)</c> rounded down, as <c>AMMCreate</c> issues them.
+        /// </summary>
+        /// <param name="pool">The empty pool.</param>
+        /// <param name="amount">The pool's first asset to deposit.</param>
+        /// <param name="amount2">The pool's second asset to deposit.</param>
+        /// <param name="rules">The amendments in force; the current rules when null.</param>
+        public static AmmQuote DepositIntoEmptyPool(AmmPool pool, XrplNumber amount, XrplNumber amount2, LedgerRules rules = null)
+        {
+            Pool p = Pool.Of(pool, null, rules);
+            if (!p.LpTokens.IsZero)
+                return Refused("tecAMM_NOT_EMPTY", "The pool has LP tokens outstanding; tfTwoAssetIfEmpty needs an empty pool.");
+
+            NumberContext c = p.Context;
+            XrplNumber a1 = AmountMath.ToAmount(amount, p.Kind1, c);
+            XrplNumber a2 = AmountMath.ToAmount(amount2, p.Kind2, c);
+            return p.EmptyDeposit(a1, a2, AmmFormulas.InitialTokens(a1, a2, c));
+        }
+
+        /// <summary>
+        /// The LP tokens <c>AMMCreate</c> issues for a new pool of <paramref name="amount"/> and
+        /// <paramref name="amount2"/>: <c>sqrt(amount * amount2)</c>, rounded down.
+        /// </summary>
+        /// <param name="amount">The first asset, in its own unit (drops for XRP).</param>
+        /// <param name="amount2">The second asset, in its own unit (drops for XRP).</param>
+        /// <param name="rules">The amendments in force; the current rules when null.</param>
+        public static decimal InitialLpTokens(XrplNumber amount, XrplNumber amount2, LedgerRules rules = null)
+        {
+            rules ??= new LedgerRules();
+            return LoanSchedule.ToDecimal(AmmFormulas.InitialTokens(amount, amount2, rules.Context));
+        }
+
+        /// <summary>
+        /// A single-asset withdrawal limited by an effective price (<c>tfLimitLPToken</c>): the LP
+        /// tokens whose redemption pays the asset at exactly <paramref name="effectivePrice"/> LP
+        /// tokens per unit, as long as that pays at least <paramref name="amount"/>.
+        /// </summary>
+        /// <param name="pool">The pool.</param>
+        /// <param name="asset">Which of the pool's assets to withdraw.</param>
+        /// <param name="amount">The transaction's <c>Amount</c>: the least of the asset to accept; zero accepts any amount.</param>
+        /// <param name="effectivePrice">
+        /// The transaction's <c>EPrice</c>, which a withdrawal states in LP tokens: the LP tokens
+        /// redeemed per unit of the asset. The asset paid is the LP tokens divided by it.
+        /// </param>
+        /// <param name="holderLpTokens">The LP tokens the account holds.</param>
+        /// <param name="isOnlyLiquidityProvider">Whether the account is the pool's only liquidity provider.</param>
+        /// <param name="rules">The amendments in force; the current rules when null.</param>
+        public static AmmQuote WithdrawWithEffectivePrice(
+            AmmPool pool,
+            IssuedCurrency asset,
+            XrplNumber amount,
+            XrplNumber effectivePrice,
+            XrplNumber holderLpTokens,
+            bool isOnlyLiquidityProvider = false,
+            LedgerRules rules = null)
+        {
+            if (amount < XrplNumber.Zero || effectivePrice <= XrplNumber.Zero)
+                return Refused("temBAD_AMOUNT", "The amount is negative or the effective price is not positive.");
+
+            Pool p = Pool.Of(pool, asset, rules);
+            if (p.AlignWithOnlyProvider(holderLpTokens, isOnlyLiquidityProvider) is { } invalid)
+                return invalid;
+
+            NumberContext c = p.Context;
+            XrplNumber price = effectivePrice;
+            XrplNumber ae = XrplNumber.Multiply(p.Balance1, price, c);
+            XrplNumber f = AmmFormulas.Fee(p.Fee, c);
+            XrplNumber denominator = XrplNumber.Subtract(XrplNumber.Multiply(p.LpTokens, f, c), ae, c);
+            if (p.Rules.FixCleanup3_3_0 && denominator.IsZero)
+                return Refused("tecAMM_FAILED", "The effective price makes the equation degenerate.");
+
+            // getRoundedLPTokens for a withdrawal: the fraction at the current rounding, the tokens rounded up.
+            XrplNumber fraction = XrplNumber.Divide(
+                XrplNumber.Add(p.LpTokens, XrplNumber.Multiply(ae, XrplNumber.Subtract(f, 2, c), c), c),
+                denominator,
+                c);
+            XrplNumber tokens = AmmFormulas.AdjustTokens(
+                p.LpTokens,
+                AmountMath.Multiply(p.LpTokens, AmountKind.Iou, fraction, c, NumberRounding.Upward),
+                isDeposit: false,
+                c);
+            if (tokens <= XrplNumber.Zero)
+                return Refused("tecAMM_INVALID_TOKENS", "The effective price redeems no LP tokens.");
+
+            // getRoundedAsset for a withdrawal: the amount computed and converted rounding down.
+            NumberContext down = c.WithRounding(NumberRounding.Downward);
+            XrplNumber withdrawal = AmountMath.ToAmount(XrplNumber.Divide(tokens, price, down), p.Kind1, down);
+            XrplNumber least = AmountMath.ToAmount(amount, p.Kind1, c);
+            if (!least.IsZero && withdrawal < least)
+                return Refused("tecAMM_FAILED", "The effective price pays less of the asset than the least accepted.");
+
+            return Withdraw(p, withdrawal, null, tokens, holderLpTokens);
         }
 
         /// <summary>A proportional withdrawal for <paramref name="lpTokens"/> LP tokens (<c>tfLPToken</c>).</summary>
@@ -592,6 +752,20 @@ namespace Xrpl.Sugar
 
                 LpTokens = holderLpTokens;
                 return null;
+            }
+
+            /// <summary>
+            /// <c>equalDepositInEmptyState</c>: <c>deposit</c> against a pool with no LP tokens, whose
+            /// balances are the amounts deposited.
+            /// </summary>
+            public AmmQuote EmptyDeposit(XrplNumber amount1, XrplNumber amount2, XrplNumber tokens)
+            {
+                if (tokens <= XrplNumber.Zero)
+                    return Refused("tecAMM_INVALID_TOKENS", "The deposit issues no LP tokens.");
+                if (amount1 <= XrplNumber.Zero || amount2 <= XrplNumber.Zero)
+                    return Refused("temBAD_AMOUNT", "The deposit comes out as zero of an asset.");
+
+                return Quote(amount1, amount2, tokens, AmountMath.Add(Balance1, amount1, Kind1, Context), AmountMath.Add(Balance2, amount2, Kind2, Context), tokens);
             }
 
             /// <summary>A quote in the pool's own asset order.</summary>

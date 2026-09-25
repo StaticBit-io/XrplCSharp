@@ -310,7 +310,7 @@ namespace Xrpl.Sugar
         }
 
         /// <summary><c>solveQuadraticEq</c>: the larger root, <c>(-b + sqrt(b^2 - 4ac)) / 2a</c>.</summary>
-        private static XrplNumber SolveQuadratic(XrplNumber a, XrplNumber b, XrplNumber c, NumberContext ctx)
+        internal static XrplNumber SolveQuadratic(XrplNumber a, XrplNumber b, XrplNumber c, NumberContext ctx)
         {
             XrplNumber discriminant = XrplNumber.Subtract(
                 XrplNumber.Multiply(b, b, ctx),
