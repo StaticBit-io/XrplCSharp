@@ -279,6 +279,9 @@ namespace Xrpl.Sugar
         /// <param name="rules">The amendments in force; the current rules when null.</param>
         public static AmmQuote DepositWithEffectivePrice(AmmPool pool, IssuedCurrency asset, XrplNumber amount, XrplNumber effectivePrice, LedgerRules rules = null)
         {
+            if (amount < XrplNumber.Zero || effectivePrice <= XrplNumber.Zero)
+                return Refused("temBAD_AMOUNT", "The amount is negative or the effective price is not positive.");
+
             Pool p = Pool.Of(pool, asset, rules);
             NumberContext c = p.Context;
             XrplNumber a = AmountMath.ToAmount(amount, p.Kind1, c);
@@ -385,6 +388,9 @@ namespace Xrpl.Sugar
             bool isOnlyLiquidityProvider = false,
             LedgerRules rules = null)
         {
+            if (amount < XrplNumber.Zero || effectivePrice <= XrplNumber.Zero)
+                return Refused("temBAD_AMOUNT", "The amount is negative or the effective price is not positive.");
+
             Pool p = Pool.Of(pool, asset, rules);
             if (p.AlignWithOnlyProvider(holderLpTokens, isOnlyLiquidityProvider) is { } invalid)
                 return invalid;
