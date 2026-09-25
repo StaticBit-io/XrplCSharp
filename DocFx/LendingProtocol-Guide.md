@@ -219,6 +219,20 @@ if (preview.WouldSucceed)
 }
 ```
 
+`LoanOrigination.Compute` gives the same terms without a node, from the transaction and the vault and broker entries. It computes what `LoanSet` would store - `PeriodicPayment`, `TotalValueOutstanding`, `ManagementFeeOutstanding`, `LoanScale` - and repeats the checks that depend on the amounts: the vault's available assets, a value the asset cannot hold or that is finer than the loan's scale, and the amortization guards. The preview remains the complete check: limits, cover, reserves and authorization are not repeated offline.
+
+```csharp
+LoanOriginationTerms offline = LoanOrigination.Compute(loanTx, vault, broker, startDate: null, options);
+if (offline.IsAccepted)
+{
+    // offline.Loan: the Loan entry LoanSet would create
+}
+else
+{
+    // offline.Refusal: "tecPRECISION_LOSS" or "tecINSUFFICIENT_FUNDS"; offline.RefusalReason says why
+}
+```
+
 `LoanSchedule.Project` turns those terms, or a `Loan` read from the ledger, into the full schedule of regular payments. It repeats rippled's `computePaymentComponents` for each period. The management fee rate comes from the `LoanBroker`, and `LoanScheduleOptions.FromNodeAsync` reads the amendments that change the rounding:
 
 ```csharp

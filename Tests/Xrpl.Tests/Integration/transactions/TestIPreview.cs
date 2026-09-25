@@ -334,6 +334,87 @@ public class TestIPreviewLoanVault : TestILoanBase
         AssertSame(expected, paid.Outcome);
     }
 
+    [TestMethod]
+    public async Task TestLoanOrigination_MatchesWhatTheNodeWouldCreate()
+    {
+        // Offline terms against the node's own LoanSet, previewed through simulate, for XRP and
+        // USD loans across rates, sizes and a zero rate, and for terms the node refuses.
+        XrplWallet walletXrpBroker = XrplWallet.Generate();
+        XrplWallet walletIssuer = XrplWallet.Generate();
+        XrplWallet walletHolder = XrplWallet.Generate();
+        XrplWallet walletBorrower = XrplWallet.Generate();
+        await IntegrationTestConfig.TryFundWalletsAsync(client, nodeType, walletXrpBroker, walletIssuer, walletHolder, walletBorrower);
+        string xrpBrokerId = await CreateBrokerWithManagementFee(walletXrpBroker, 10_000);
+        IssuedCurrency usd = new IssuedCurrency { Currency = "USD", Issuer = walletIssuer.ClassicAddress };
+        string usdBrokerId = await CreateIouBroker(walletIssuer, walletHolder, walletBorrower, usd, 1_234);
+        LoanScheduleOptions options = await LoanScheduleOptions.FromNodeAsync(client);
+
+        const string precisionLoss = "tecPRECISION_LOSS";
+        (string Broker, XrplWallet Owner, string Principal, uint Rate, uint Payments, string ServiceFee, string Refusal)[] cases =
+        {
+            (xrpBrokerId, walletXrpBroker, "50000000", 100_000, 6, "10", null),
+            (xrpBrokerId, walletXrpBroker, "1234567", 17_500, 12, "0", null),
+            (xrpBrokerId, walletXrpBroker, "9000000", 0, 4, "3", null),
+            // One drop a period settles the total value in 8 payments, not 12.
+            (xrpBrokerId, walletXrpBroker, "7", 1_000, 12, "0", precisionLoss),
+            // Half a drop is not an XRP amount.
+            (xrpBrokerId, walletXrpBroker, "1000000.5", 50_000, 3, "0", precisionLoss),
+            (usdBrokerId, walletIssuer, "1234.567", 100_000, 7, "0.01", null),
+            (usdBrokerId, walletIssuer, "987654.321", 12_345, 12, "0.5", null),
+            (usdBrokerId, walletIssuer, "500", 0, 4, "0", null),
+            (usdBrokerId, walletIssuer, "100", 55_555, 3, "0.000001", null),
+            // 19 significant digits are more than an IOU amount holds.
+            (usdBrokerId, walletIssuer, "0.1234567890123456789", 10_000, 3, "0", precisionLoss),
+            // A service fee finer than the scale the loan's total value sets.
+            (usdBrokerId, walletIssuer, "1000000", 10_000, 3, "0.0000000001", precisionLoss),
+        };
+
+        foreach ((string brokerId, XrplWallet owner, string principal, uint rate, uint payments, string serviceFee, string refusal) in cases)
+        {
+            string at = $"{principal} at {rate} over {payments}";
+            LOLoanBroker broker = (LOLoanBroker)(await client.LedgerEntry(new LedgerEntryRequest { Index = brokerId }).Typed()).Node;
+            LOVault vault = (LOVault)(await client.LedgerEntry(new LedgerEntryRequest { Index = broker.VaultID }).Typed()).Node;
+
+            LoanSet Terms() => new LoanSet
+            {
+                Account = owner.ClassicAddress,
+                LoanBrokerID = brokerId,
+                Counterparty = walletBorrower.ClassicAddress,
+                PrincipalRequested = XrplNumber.Parse(principal),
+                InterestRate = rate,
+                PaymentTotal = payments,
+                PaymentInterval = 60,
+                GracePeriod = 60,
+                LoanServiceFee = XrplNumber.Parse(serviceFee),
+            };
+
+            LoanOriginationTerms computed = LoanOrigination.Compute(Terms(), vault, broker, options: options);
+            TransactionPreview<LoanSetOutcome> preview = await client.PreviewLoanSet(Terms());
+
+            Assert.AreEqual(refusal ?? "tesSUCCESS", preview.EngineResult, $"{at}: the node's answer");
+            if (!preview.WouldSucceed)
+            {
+                Assert.AreEqual(preview.EngineResult, computed.Refusal, $"{at}: {computed.RefusalReason}");
+                continue;
+            }
+
+            Assert.IsTrue(computed.IsAccepted, $"{at}: {computed.RefusalReason}");
+            LOLoan expected = preview.Outcome.Loan;
+            LOLoan actual = computed.Loan;
+            Assert.AreEqual(expected.PeriodicPayment, actual.PeriodicPayment, at);
+            Assert.AreEqual(expected.TotalValueOutstanding, actual.TotalValueOutstanding, at);
+            Assert.AreEqual(expected.PrincipalOutstanding, actual.PrincipalOutstanding, at);
+            Assert.AreEqual(expected.ManagementFeeOutstanding ?? XrplNumber.Zero, actual.ManagementFeeOutstanding, at);
+            Assert.AreEqual(expected.LoanScale ?? 0, actual.LoanScale, at);
+            Assert.AreEqual(expected.PaymentRemaining, actual.PaymentRemaining, at);
+
+            // The offline loan projects the same schedule as the node's.
+            IReadOnlyList<LoanScheduleRow> fromNode = LoanSchedule.Project(expected, vault.Asset, broker.ManagementFeeRate ?? 0, options);
+            IReadOnlyList<LoanScheduleRow> offline = LoanSchedule.Project(actual, vault.Asset, broker.ManagementFeeRate ?? 0, options);
+            CollectionAssert.AreEqual(fromNode.Select(r => r.Total).ToArray(), offline.Select(r => r.Total).ToArray(), at);
+        }
+    }
+
     private static async Task<LOLoan> ReadLoan(string loanId) =>
         (LOLoan)(await client.LedgerEntry(new LedgerEntryRequest { Index = loanId }).Typed()).Node;
 
