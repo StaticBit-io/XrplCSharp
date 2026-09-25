@@ -137,14 +137,14 @@ namespace Xrpl.Sugar
             IssuedCurrency asset,
             ushort managementFeeRate,
             DateTime parentCloseTime,
-            LoanScheduleOptions options = null)
+            LedgerRules options = null)
         {
             if (loan == null)
                 throw new ArgumentNullException(nameof(loan));
             if (asset == null)
                 throw new ArgumentNullException(nameof(asset));
 
-            options ??= new LoanScheduleOptions();
+            options ??= new LedgerRules();
             uint remaining = loan.PaymentRemaining ?? 0;
             if (remaining == 0
                 || loan.NextPaymentDueDate is not { } nextDue
@@ -197,14 +197,14 @@ namespace Xrpl.Sugar
             IssuedCurrency asset,
             ushort managementFeeRate,
             DateTime parentCloseTime,
-            LoanScheduleOptions options = null)
+            LedgerRules options = null)
         {
             if (loan == null)
                 throw new ArgumentNullException(nameof(loan));
             if (asset == null)
                 throw new ArgumentNullException(nameof(asset));
 
-            options ??= new LoanScheduleOptions();
+            options ??= new LedgerRules();
             uint remaining = loan.PaymentRemaining ?? 0;
             if (remaining <= 1 || IsPaymentLate(loan, parentCloseTime, dueTimeIsLate: !options.FixCleanup3_4_0))
                 return null;

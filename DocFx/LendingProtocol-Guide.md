@@ -233,10 +233,10 @@ else
 }
 ```
 
-`LoanSchedule.Project` turns those terms, or a `Loan` read from the ledger, into the full schedule of regular payments. It repeats rippled's `computePaymentComponents` for each period. The management fee rate comes from the `LoanBroker`, and `LoanScheduleOptions.FromNodeAsync` reads the amendments that change the rounding:
+`LoanSchedule.Project` turns those terms, or a `Loan` read from the ledger, into the full schedule of regular payments. It repeats rippled's `computePaymentComponents` for each period. The management fee rate comes from the `LoanBroker`, and `LedgerRules.FromNodeAsync` reads the amendments that change the rounding:
 
 ```csharp
-LoanScheduleOptions options = await LoanScheduleOptions.FromNodeAsync(client);
+LedgerRules options = await LedgerRules.FromNodeAsync(client);
 IReadOnlyList<LoanScheduleRow> schedule = LoanSchedule.Project(
     terms.Loan, terms.Asset, broker.ManagementFeeRate ?? 0, options);
 
@@ -298,7 +298,7 @@ if (preview.WouldSucceed)
 `LoanPayments.LatePaymentDue` and `LoanPayments.FullPaymentDue` compute what a late payment (`tfLoanLatePayment`) and closing the loan early (`tfLoanFullPayment`) cost, the way the node computes them: the regular payment with the late fee and late interest, or the outstanding balance with accrued interest, the prepayment penalty and `ClosePaymentFee`. Both need the close time of the ledger before the one the payment lands in, because interest runs to that time; the validated ledger's close time is the usual estimate, and a payment that lands a ledger later accrues a few more seconds. Both return null when the node would refuse that kind of payment at that time.
 
 ```csharp
-LoanScheduleOptions rules = await LoanScheduleOptions.FromNodeAsync(client);
+LedgerRules rules = await LedgerRules.FromNodeAsync(client);
 DateTime at = /* close time of the latest validated ledger */;
 
 LoanPaymentDue late = LoanPayments.LatePaymentDue(loan, asset, broker.ManagementFeeRate ?? 0, at, rules);

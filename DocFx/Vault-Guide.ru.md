@@ -179,6 +179,18 @@ if (preview.WouldSucceed)
 }
 ```
 
+`VaultShares` рассчитывает те же значения офлайн по объекту `Vault` и числу выпущенных долей — `OutstandingAmount` объекта `MPTokenIssuance`, на который указывает `ShareMPTID` vault, — так же, как `VaultDeposit` и `VaultWithdraw` в rippled, включая округление по шкале vault:
+
+```csharp
+LedgerRules rules = await LedgerRules.FromNodeAsync(client);
+VaultQuote deposit = VaultShares.Deposit(vault, sharesOutstanding, XrplNumber.Parse("1234.5678"), depositorBalance, rules);
+VaultQuote withdraw = VaultShares.WithdrawAssets(vault, sharesOutstanding, holderShares, XrplNumber.Parse("100"), rules);
+VaultQuote redeem = VaultShares.RedeemShares(vault, sharesOutstanding, holderShares, 1_000_000, rules);
+// .Shares, .Assets; либо .Refusal ("tecPRECISION_LOSS", "tecINSUFFICIENT_FUNDS", "tecLIMIT_EXCEEDED") и .RefusalReason
+```
+
+Расчёт повторяет проверки, которые зависят от сумм; авторизацию, заморозки, фазу vault и собственные средства аккаунта проверяет превью.
+
 `VaultOutcome.FromMetadata` читает те же значения из уже проведённой транзакции. `BalanceChanges.GetBalanceChanges` возвращает балансы MPT, включая доли vault, вместе с XRP и trust line.
 
 ### 4. Вывод активов

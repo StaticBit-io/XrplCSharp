@@ -233,10 +233,10 @@ else
 }
 ```
 
-`LoanSchedule.Project` строит по этим условиям или по `Loan`, прочитанному из леджера, полный график регулярных платежей, повторяя для каждого периода `computePaymentComponents` из rippled. Ставка комиссии за управление берётся из `LoanBroker`, а `LoanScheduleOptions.FromNodeAsync` читает амендменты, которые влияют на округление:
+`LoanSchedule.Project` строит по этим условиям или по `Loan`, прочитанному из леджера, полный график регулярных платежей, повторяя для каждого периода `computePaymentComponents` из rippled. Ставка комиссии за управление берётся из `LoanBroker`, а `LedgerRules.FromNodeAsync` читает амендменты, которые влияют на округление:
 
 ```csharp
-LoanScheduleOptions options = await LoanScheduleOptions.FromNodeAsync(client);
+LedgerRules options = await LedgerRules.FromNodeAsync(client);
 IReadOnlyList<LoanScheduleRow> schedule = LoanSchedule.Project(
     terms.Loan, terms.Asset, broker.ManagementFeeRate ?? 0, options);
 
@@ -298,7 +298,7 @@ if (preview.WouldSucceed)
 `LoanPayments.LatePaymentDue` и `LoanPayments.FullPaymentDue` рассчитывают стоимость просроченного платежа (`tfLoanLatePayment`) и досрочного погашения (`tfLoanFullPayment`) так же, как это делает нода: регулярный платёж со штрафом и процентами за просрочку либо остаток долга с начисленными процентами, штрафом за досрочное погашение и `ClosePaymentFee`. Обоим методам необходимо время закрытия леджера, предшествующего тому, в который попадёт платёж, потому что проценты начисляются по это время. Обычно берут время закрытия последнего валидированного леджера; если платёж попадёт в леджер на один позже, проценты успеют начислиться ещё за несколько секунд. Оба метода возвращают null, если нода отклонит такой платёж в это время.
 
 ```csharp
-LoanScheduleOptions rules = await LoanScheduleOptions.FromNodeAsync(client);
+LedgerRules rules = await LedgerRules.FromNodeAsync(client);
 DateTime at = /* время закрытия последнего валидированного леджера */;
 
 LoanPaymentDue late = LoanPayments.LatePaymentDue(loan, asset, broker.ManagementFeeRate ?? 0, at, rules);

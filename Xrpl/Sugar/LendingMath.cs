@@ -342,7 +342,7 @@ namespace Xrpl.Sugar
             new LoanTerms(context, fixCleanup3_2_0, integral, scale, periodicPayment, periodicRate, managementFeeRate);
 
         /// <summary>The terms of a <c>Loan</c> entry; the entry must carry <c>PeriodicPayment</c>.</summary>
-        public static LoanTerms Of(LOLoan loan, IssuedCurrency asset, ushort managementFeeRate, LoanScheduleOptions options)
+        public static LoanTerms Of(LOLoan loan, IssuedCurrency asset, ushort managementFeeRate, LedgerRules options)
         {
             if (loan.PeriodicPayment is not { } periodicPayment)
                 throw new ArgumentException("The loan carries no PeriodicPayment.", nameof(loan));

@@ -77,7 +77,7 @@ namespace Xrpl.Sugar
             LOVault vault,
             LOLoanBroker broker,
             DateTime? startDate = null,
-            LoanScheduleOptions options = null)
+            LedgerRules options = null)
         {
             if (loanSet == null)
                 throw new ArgumentNullException(nameof(loanSet));
@@ -90,7 +90,7 @@ namespace Xrpl.Sugar
             if (vault.Asset is not IssuedCurrency asset)
                 throw new ArgumentException("The vault carries no Asset.", nameof(vault));
 
-            options ??= new LoanScheduleOptions();
+            options ??= new LedgerRules();
             NumberContext c = options.Context;
             bool integral = LoanPayments.IsIntegral(asset);
 
@@ -167,7 +167,7 @@ namespace Xrpl.Sugar
             ushort managementFeeRate,
             bool integral,
             int minimumScale,
-            LoanScheduleOptions options)
+            LedgerRules options)
         {
             NumberContext c = options.Context;
             XrplNumber periodicRate = LendingMath.PeriodicRate(interestRate, interval, c);
