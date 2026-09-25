@@ -306,6 +306,19 @@ LoanPaymentDue full = LoanPayments.FullPaymentDue(loan, asset, broker.Management
 // late.Total, full.Total: the amount due; .Principal, .InterestToVault, .PaidToBroker: the split
 ```
 
+`LoanPayments.PaymentForAmount` computes what a regular payment does with a given `Amount`: the node makes as many regular payments as the amount covers, up to 100 in one transaction, and with `tfLoanOverpayment` on a loan created with that flag applies the rest as an overpayment. The overpayment pays `OverpaymentFee` and penalty interest at `OverpaymentInterestRate`, repays principal with the remainder, and re-amortizes the loan over the payments left, so `PeriodicPayment` falls. The node takes only what it applies: an amount without the flag, or an overpayment its fees would consume, leaves the rest with the payer.
+
+```csharp
+LoanAmountPayment plan = LoanPayments.PaymentForAmount(
+    loan, asset, broker.ManagementFeeRate ?? 0, amount: 25_000_000, at, overpayment: true, rules);
+if (plan.IsAccepted)
+{
+    // plan.Due.Total: what the node takes; plan.PaymentsMade; plan.IsOverpaid;
+    // plan.LoanAfter.PeriodicPayment, plan.LoanAfter.PrincipalOutstanding: the loan it leaves
+}
+// otherwise plan.Refusal: tecINSUFFICIENT_PAYMENT, tecEXPIRED, tecNO_PERMISSION, ...
+```
+
 ### 3. Delete a Fully Repaid Loan
 
 After the loan is fully repaid, the broker can delete it:
@@ -567,7 +580,7 @@ Fields read from the ledger arrive in the form rippled writes them, for example 
 | `tecINSUFFICIENT_FUNDS` | Broker vault lacks funds for the loan | Deposit more assets into the vault via `VaultDeposit` |
 | `tecHAS_OBLIGATIONS` | Cannot delete a loan with outstanding balance | Fully repay the loan via `LoanPay` before deleting |
 | `tecNO_ENTRY` | Referenced LoanBrokerID or LoanID not found | Verify the ID is correct and the object exists |
-| `tecNO_PERMISSION` | Action not allowed: a broker on an open-ended vault, a loan ending less than 60 s before `RedemptionDate`, an overpayment without the flag | Use a closed-ended vault; shorten the loan; check the account's permissions |
+| `tecNO_PERMISSION` | Action not allowed: a broker on an open-ended vault, a loan ending less than 60 s before `RedemptionDate`, an overpayment on a loan created without `tfLoanOverpayment` | Use a closed-ended vault; shorten the loan; check the account's permissions |
 | `tecTOO_SOON` | `LoanSet` in the subscription phase, `VaultWithdraw` in the investment phase | Wait until `SubscriptionDate` (for a withdrawal, `RedemptionDate`) has passed |
 | `tecEXPIRED` | `VaultDeposit` after `SubscriptionDate`, `LoanSet` after `RedemptionDate` | Deposit during the subscription phase; originate loans during the investment phase |
 | `tecINSUFFICIENT_PAYMENT` | Payment amount too small | Increase the payment amount |

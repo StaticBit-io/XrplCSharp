@@ -14,8 +14,9 @@ namespace Xrpl.Sugar
     /// <remarks>
     /// <see cref="RegularPaymentCap"/> bounds the next regular payment from the entry alone.
     /// <see cref="LatePaymentDue"/> and <see cref="FullPaymentDue"/> repeat rippled's own
-    /// computation for a given parent close time; <see cref="LoanSchedule"/> projects the regular
-    /// payments. An overpayment is what <see cref="PreviewSugar.PreviewLoanPay"/> reports.
+    /// computation for a given parent close time, and <see cref="PaymentForAmount"/> what a regular
+    /// <c>LoanPay</c> does with a given <c>Amount</c> - several payments, an overpayment;
+    /// <see cref="LoanSchedule"/> projects the regular payments.
     /// </remarks>
     public static class LoanPayments
     {
@@ -237,6 +238,152 @@ namespace Xrpl.Sugar
             return LoanPaymentDue.From(tracked, untrackedInterest, untrackedFee, c);
         }
 
+        /// <summary>
+        /// What a <c>LoanPay</c> without the late or full payment flag does with
+        /// <paramref name="amount"/> in a ledger whose parent closed at
+        /// <paramref name="parentCloseTime"/>: as many regular payments as the amount covers, up to
+        /// 100, then - with <paramref name="overpayment"/> (<c>tfLoanOverpayment</c>) on a loan that
+        /// allows it - the rest as an overpayment that repays principal and re-amortizes the loan.
+        /// Computed the way rippled's <c>makeRegularPayment</c> computes it.
+        /// </summary>
+        /// <param name="loan">The <c>Loan</c> entry.</param>
+        /// <param name="asset">The loan asset: the asset of the broker's vault.</param>
+        /// <param name="managementFeeRate">The broker's <c>ManagementFeeRate</c>, in 1/10th of a basis point.</param>
+        /// <param name="amount">The transaction's <c>Amount</c>, in the asset's own unit (drops for XRP).</param>
+        /// <param name="parentCloseTime">
+        /// The close time of the ledger before the one the payment lands in. A local time is
+        /// converted to UTC; an unspecified one is taken as UTC.
+        /// </param>
+        /// <param name="overpayment">Whether the transaction carries <c>tfLoanOverpayment</c>.</param>
+        /// <param name="options">The amendments in force; the current rules when null.</param>
+        /// <remarks>
+        /// The node takes what the payments cost, not the whole <c>Amount</c>: an amount the
+        /// overpayment cannot use - one its fee and penalty interest would eat, or one that would
+        /// leave the loan unable to amortize - is left with the payer, and the result then shows
+        /// no overpayment. An impaired loan is taken as it stands; the node unimpairs it first.
+        /// </remarks>
+        /// <exception cref="OverflowException">An amount is beyond <see cref="decimal"/>.</exception>
+        public static LoanAmountPayment PaymentForAmount(
+            LOLoan loan,
+            IssuedCurrency asset,
+            ushort managementFeeRate,
+            XrplNumber amount,
+            DateTime parentCloseTime,
+            bool overpayment = false,
+            LedgerRules options = null)
+        {
+            if (loan == null)
+                throw new ArgumentNullException(nameof(loan));
+            if (asset == null)
+                throw new ArgumentNullException(nameof(asset));
+
+            options ??= new LedgerRules();
+            bool overpaymentAllowed = loan.Flags is { } flags && flags.HasFlag(LoanFlags.lsfLoanOverpayment);
+            uint remaining = loan.PaymentRemaining ?? 0;
+
+            if (amount <= XrplNumber.Zero)
+                return LoanAmountPayment.Refused("temBAD_AMOUNT", "The amount is not positive.");
+            if (overpayment && !overpaymentAllowed)
+            {
+                return LoanAmountPayment.Refused(
+                    options.FixCleanup3_1_3 ? "tecNO_PERMISSION" : "temINVALID_FLAG",
+                    "The loan was not created with tfLoanOverpayment.");
+            }
+            if (remaining == 0 || (loan.PrincipalOutstanding ?? XrplNumber.Zero).IsZero)
+                return LoanAmountPayment.Refused("tecKILLED", "The loan is paid off.");
+            if (IsPaymentLate(loan, parentCloseTime, dueTimeIsLate: !options.FixCleanup3_4_0))
+                return LoanAmountPayment.Refused("tecEXPIRED", "The payment is late; it takes tfLoanLatePayment.");
+
+            LoanTerms terms = LoanTerms.Of(loan, asset, managementFeeRate, options);
+            NumberContext c = terms.Context;
+            XrplNumber serviceFee = loan.LoanServiceFee ?? XrplNumber.Zero;
+            LoanState state = LoanState.Of(loan, c);
+            DateTime? previousDue = loan.PreviousPaymentDueDate;
+            DateTime? nextDue = loan.NextPaymentDueDate;
+            uint interval = loan.PaymentInterval ?? 0;
+
+            XrplNumber principal = XrplNumber.Zero;
+            XrplNumber interest = XrplNumber.Zero;
+            XrplNumber fee = XrplNumber.Zero;
+            XrplNumber totalPaid = XrplNumber.Zero;
+            uint paymentsMade = 0;
+
+            LoanPaymentParts periodic = LendingMath.RegularPayment(state, remaining, terms);
+            XrplNumber totalDue = XrplNumber.Add(periodic.Value, serviceFee, c);
+            while (amount >= XrplNumber.Add(totalPaid, totalDue, c) && remaining > 0 && paymentsMade < MaximumPaymentsPerTransaction)
+            {
+                totalPaid = XrplNumber.Add(totalPaid, totalDue, c);
+                principal = XrplNumber.Add(principal, periodic.Principal, c);
+                interest = XrplNumber.Add(interest, periodic.Interest(c), c);
+                fee = XrplNumber.Add(fee, XrplNumber.Add(periodic.ManagementFee, serviceFee, c), c);
+                state = state.After(periodic, c);
+                paymentsMade++;
+
+                previousDue = nextDue;
+                if (periodic.IsFinal)
+                {
+                    remaining = 0;
+                    nextDue = null;
+                    break;
+                }
+
+                remaining--;
+                nextDue = nextDue?.AddSeconds(interval);
+                periodic = LendingMath.RegularPayment(state, remaining, terms);
+                totalDue = XrplNumber.Add(periodic.Value, serviceFee, c);
+            }
+
+            if (paymentsMade == 0)
+            {
+                return LoanAmountPayment.Refused(
+                    "tecINSUFFICIENT_PAYMENT",
+                    $"The amount does not cover the next payment of {totalDue}.");
+            }
+
+            // The amount is truncated to the loan's scale first, so dust does not become an overpayment.
+            XrplNumber roundedAmount = options.FixCleanup3_1_3
+                ? AssetRounding.Round(amount, terms.Integral, terms.Scale, c.WithRounding(NumberRounding.TowardsZero))
+                : amount;
+            XrplNumber? periodicPayment = loan.PeriodicPayment;
+            bool overpaid = false;
+            if (overpayment
+                && overpaymentAllowed
+                && remaining > 0
+                && totalPaid < roundedAmount
+                && paymentsMade < MaximumPaymentsPerTransaction)
+            {
+                XrplNumber rest = XrplNumber.Subtract(roundedAmount, totalPaid, c);
+                XrplNumber extra = state.Value < rest ? state.Value : rest;
+                if (options.FixCleanup3_2_0)
+                    extra = AssetRounding.Round(extra, terms.Integral, terms.Scale, c.WithRounding(NumberRounding.Downward));
+
+                if ((!options.FixCleanup3_2_0 || extra > XrplNumber.Zero)
+                    && LendingMath.Overpay(state, remaining, terms, extra, loan.OverpaymentInterestRate ?? 0, loan.OverpaymentFee ?? 0, options) is { } extraPaid)
+                {
+                    principal = XrplNumber.Add(principal, extraPaid.Principal, c);
+                    interest = XrplNumber.Add(interest, extraPaid.Interest, c);
+                    fee = XrplNumber.Add(fee, extraPaid.Fee, c);
+                    state = extraPaid.After;
+                    periodicPayment = extraPaid.PeriodicPayment;
+                    overpaid = true;
+                }
+            }
+
+            return new LoanAmountPayment
+            {
+                Due = new LoanPaymentDue
+                {
+                    Principal = LoanSchedule.ToDecimal(principal),
+                    InterestToVault = LoanSchedule.ToDecimal(interest),
+                    PaidToBroker = LoanSchedule.ToDecimal(fee),
+                    Total = LoanSchedule.ToDecimal(XrplNumber.Add(XrplNumber.Add(principal, interest, c), fee, c)),
+                },
+                PaymentsMade = paymentsMade,
+                IsOverpaid = overpaid,
+                LoanAfter = WithPayments(loan, state, remaining, periodicPayment, previousDue, nextDue),
+            };
+        }
+
         /// <summary>XRP and MPT amounts are whole numbers of their unit; issued currencies are not.</summary>
         internal static bool IsIntegral(IssuedCurrency asset) => asset.IsXrp() || asset.MptIssuanceId != null;
 
@@ -268,6 +415,49 @@ namespace Xrpl.Sugar
 
             return new XrplNumber((long)quotient, exponent);
         }
+
+        /// <summary>rippled's <c>kLoanMaximumPaymentsPerTransaction</c>.</summary>
+        private const uint MaximumPaymentsPerTransaction = 100;
+
+        /// <summary>The loan entry with the tracked values and schedule a payment leaves.</summary>
+        private static LOLoan WithPayments(
+            LOLoan loan,
+            LoanState state,
+            uint remaining,
+            XrplNumber? periodicPayment,
+            DateTime? previousDue,
+            DateTime? nextDue) => new LOLoan
+        {
+            LedgerEntryType = loan.LedgerEntryType,
+            Index = loan.Index,
+            LedgerIndex = loan.LedgerIndex,
+            Flags = loan.Flags,
+            Borrower = loan.Borrower,
+            LoanBrokerID = loan.LoanBrokerID,
+            LoanSequence = loan.LoanSequence,
+            InterestRate = loan.InterestRate,
+            LateInterestRate = loan.LateInterestRate,
+            CloseInterestRate = loan.CloseInterestRate,
+            OverpaymentInterestRate = loan.OverpaymentInterestRate,
+            OverpaymentFee = loan.OverpaymentFee,
+            PrincipalOutstanding = state.Principal,
+            TotalValueOutstanding = state.Value,
+            PeriodicPayment = periodicPayment,
+            ManagementFeeOutstanding = state.ManagementFee,
+            LoanOriginationFee = loan.LoanOriginationFee,
+            LoanServiceFee = loan.LoanServiceFee,
+            LatePaymentFee = loan.LatePaymentFee,
+            ClosePaymentFee = loan.ClosePaymentFee,
+            StartDate = loan.StartDate,
+            PaymentInterval = loan.PaymentInterval,
+            GracePeriod = loan.GracePeriod,
+            PreviousPaymentDueDate = previousDue,
+            NextPaymentDueDate = nextDue,
+            PaymentRemaining = remaining,
+            LoanScale = loan.LoanScale,
+            OwnerNode = loan.OwnerNode,
+            LoanBrokerNode = loan.LoanBrokerNode,
+        };
 
         /// <summary>
         /// Compares in UTC. Ledger times are UTC; a local time is converted, and an unspecified one
@@ -322,5 +512,44 @@ namespace Xrpl.Sugar
                 Total = LoanSchedule.ToDecimal(total),
             };
         }
+    }
+
+    /// <summary>
+    /// What a regular <c>LoanPay</c> does with its <c>Amount</c>: see
+    /// <see cref="LoanPayments.PaymentForAmount"/>.
+    /// </summary>
+    public sealed class LoanAmountPayment
+    {
+        /// <summary>What the transaction pays and where it goes; null when refused.</summary>
+        public LoanPaymentDue Due { get; init; }
+
+        /// <summary>Regular payments settled: the drop in <c>PaymentRemaining</c>.</summary>
+        public uint PaymentsMade { get; init; }
+
+        /// <summary>Whether an overpayment repaid principal beyond the regular payments.</summary>
+        public bool IsOverpaid { get; init; }
+
+        /// <summary>
+        /// The <c>Loan</c> as the transaction leaves it: <c>PrincipalOutstanding</c>,
+        /// <c>TotalValueOutstanding</c>, <c>ManagementFeeOutstanding</c>, <c>PeriodicPayment</c>
+        /// (re-amortized after an overpayment), <c>PaymentRemaining</c> and the due dates. null
+        /// when refused.
+        /// </summary>
+        public LOLoan LoanAfter { get; init; }
+
+        /// <summary>
+        /// The result the node would give instead, such as <c>tecINSUFFICIENT_PAYMENT</c> or
+        /// <c>tecEXPIRED</c>; null when the payment goes through.
+        /// </summary>
+        public string Refusal { get; init; }
+
+        /// <summary>Why the node would refuse, in words; null when the payment goes through.</summary>
+        public string RefusalReason { get; init; }
+
+        /// <summary>Whether the node takes the payment.</summary>
+        public bool IsAccepted => Refusal == null;
+
+        internal static LoanAmountPayment Refused(string result, string reason) =>
+            new LoanAmountPayment { Refusal = result, RefusalReason = reason };
     }
 }

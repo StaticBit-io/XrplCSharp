@@ -306,6 +306,19 @@ LoanPaymentDue full = LoanPayments.FullPaymentDue(loan, asset, broker.Management
 // late.Total, full.Total: сумма к оплате; .Principal, .InterestToVault, .PaidToBroker: разбивка
 ```
 
+`LoanPayments.PaymentForAmount` рассчитывает, что регулярный платёж сделает с заданной суммой `Amount`. Нода проводит столько регулярных платежей, сколько покрывает сумма, но не больше 100 за транзакцию, а с флагом `tfLoanOverpayment` по кредиту, созданному с этим флагом, направляет остаток на переплату. Из переплаты удерживаются `OverpaymentFee` и штрафные проценты по ставке `OverpaymentInterestRate`, остаток гасит основной долг, после чего кредит переамортизируется на оставшиеся платежи и `PeriodicPayment` уменьшается. Нода списывает только то, что провела: без флага, а также если переплату целиком съедают сборы, остаток суммы остаётся у плательщика.
+
+```csharp
+LoanAmountPayment plan = LoanPayments.PaymentForAmount(
+    loan, asset, broker.ManagementFeeRate ?? 0, amount: 25_000_000, at, overpayment: true, rules);
+if (plan.IsAccepted)
+{
+    // plan.Due.Total: сколько спишет нода; plan.PaymentsMade; plan.IsOverpaid;
+    // plan.LoanAfter.PeriodicPayment, plan.LoanAfter.PrincipalOutstanding: кредит после платежа
+}
+// иначе plan.Refusal: tecINSUFFICIENT_PAYMENT, tecEXPIRED, tecNO_PERMISSION, ...
+```
+
 ### 3. Удаление полностью погашенного кредита
 
 После полного погашения брокер может удалить кредит:

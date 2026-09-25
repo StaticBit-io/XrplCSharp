@@ -22,6 +22,12 @@ namespace Xrpl.Sugar
         public bool FixCleanup3_2_0 { get; init; } = true;
 
         /// <summary>
+        /// Whether <c>fixCleanup3_1_3</c> is enabled: the amount of a loan payment is rounded
+        /// toward zero to the loan's scale before the overpayment is taken from it.
+        /// </summary>
+        public bool FixCleanup3_1_3 { get; init; } = true;
+
+        /// <summary>
         /// Whether <c>fixCleanup3_3_0</c> is enabled, which selects the <c>Number</c> rounding the
         /// ledger computes with (<see cref="NumberMantissaScale.Large330"/>).
         /// </summary>
@@ -73,6 +79,7 @@ namespace Xrpl.Sugar
 
             return new LedgerRules
             {
+                FixCleanup3_1_3 = features.GetByName("fixCleanup3_1_3")?.Value?.Enabled == true,
                 FixCleanup3_2_0 = features.GetByName("fixCleanup3_2_0")?.Value?.Enabled == true,
                 FixCleanup3_3_0 = features.GetByName("fixCleanup3_3_0")?.Value?.Enabled == true,
                 FixCleanup3_4_0 = features.GetByName("fixCleanup3_4_0")?.Value?.Enabled == true,

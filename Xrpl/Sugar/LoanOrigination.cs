@@ -110,7 +110,14 @@ namespace Xrpl.Sugar
             ushort managementFeeRate = broker.ManagementFeeRate ?? 0;
             int vaultScale = AssetRounding.Scale(vault.AssetsTotal ?? XrplNumber.Zero, integral, c);
 
-            Properties properties = ComputeProperties(principal, interestRate, interval, paymentTotal, managementFeeRate, integral, vaultScale, options);
+            LoanProperties properties = LendingMath.ComputeLoanProperties(
+                principal,
+                LendingMath.PeriodicRate(interestRate, interval, c),
+                paymentTotal,
+                managementFeeRate,
+                integral,
+                vaultScale,
+                options);
 
             foreach ((string name, XrplNumber? value) in ValueFields(loanSet))
             {
@@ -122,7 +129,7 @@ namespace Xrpl.Sugar
                 }
             }
 
-            if (Guards(principal, interestRate != 0, paymentTotal, properties, integral, c) is { } guard)
+            if (LendingMath.LoanGuards(principal, interestRate != 0, paymentTotal, properties.Value, properties, c) is { } guard)
                 return Refused("tecPRECISION_LOSS", guard);
 
             if (properties.ManagementFee < XrplNumber.Zero || properties.Value <= XrplNumber.Zero || properties.PeriodicPayment <= XrplNumber.Zero)
@@ -158,72 +165,6 @@ namespace Xrpl.Sugar
             };
         }
 
-        /// <summary><c>computeLoanProperties</c>: the payment, total value, management fee and scale of a new loan.</summary>
-        private static Properties ComputeProperties(
-            XrplNumber principal,
-            uint interestRate,
-            uint interval,
-            uint paymentTotal,
-            ushort managementFeeRate,
-            bool integral,
-            int minimumScale,
-            LedgerRules options)
-        {
-            NumberContext c = options.Context;
-            XrplNumber periodicRate = LendingMath.PeriodicRate(interestRate, interval, c);
-            XrplNumber periodicPayment = LendingMath.PeriodicPayment(principal, periodicRate, paymentTotal, options.FixCleanup3_2_0, c);
-
-            // The total value is rounded up when there is interest, to nearest when there is none,
-            // and its exponent as an amount of the asset sets the loan's scale.
-            NumberContext valueRounding = c.WithRounding(periodicRate.IsZero ? NumberRounding.ToNearest : NumberRounding.Upward);
-            XrplNumber amount = AssetRounding.ToAmount(
-                XrplNumber.Multiply(periodicPayment, (XrplNumber)(long)paymentTotal, valueRounding),
-                integral,
-                valueRounding);
-            int loanScale = Math.Max(minimumScale, AssetRounding.AmountExponent(amount, integral));
-            XrplNumber value = AssetRounding.Round(amount, integral, loanScale, valueRounding);
-
-            XrplNumber roundedPrincipal = AssetRounding.Round(principal, integral, loanScale, c);
-            XrplNumber interest = XrplNumber.Subtract(value, roundedPrincipal, c);
-            XrplNumber fee = AssetRounding.Round(
-                LendingMath.TenthBipsOf(interest, managementFeeRate, c),
-                integral,
-                loanScale,
-                c.WithRounding(NumberRounding.Downward));
-
-            LoanTerms terms = LoanTerms.Create(c, options.FixCleanup3_2_0, integral, loanScale, periodicPayment, periodicRate, managementFeeRate);
-            XrplNumber firstPaymentPrincipal = XrplNumber.Subtract(
-                LendingMath.PrincipalFromPeriodicPayment(terms, paymentTotal),
-                LendingMath.PrincipalFromPeriodicPayment(terms, paymentTotal - 1),
-                c);
-
-            return new Properties(periodicPayment, value, fee, loanScale, firstPaymentPrincipal, terms.RoundedPeriodicPayment);
-        }
-
-        /// <summary><c>checkLoanGuards</c>: whether the loan can be amortized at its scale; the reason when not.</summary>
-        private static string Guards(XrplNumber principal, bool expectInterest, uint paymentTotal, Properties properties, bool integral, NumberContext c)
-        {
-            XrplNumber interest = XrplNumber.Subtract(properties.Value, principal, c);
-            if (expectInterest && interest <= XrplNumber.Zero)
-                return "The loan carries an interest rate but no interest at its scale.";
-            if (!expectInterest && interest > XrplNumber.Zero)
-                return "The loan carries no interest rate but interest at its scale.";
-            if (properties.FirstPaymentPrincipal <= XrplNumber.Zero)
-                return "The first payment repays no principal.";
-            if (properties.RoundedPeriodicPayment.IsZero)
-                return "The periodic payment rounds to zero.";
-
-            NumberContext upward = c.WithRounding(NumberRounding.Upward);
-            long payments = XrplNumber.Divide(properties.Value, properties.RoundedPeriodicPayment, upward).ToInt64(upward);
-            if (payments != paymentTotal)
-            {
-                return $"The rounded periodic payment {properties.RoundedPeriodicPayment} settles the total value "
-                    + $"{properties.Value} in {payments} payments, not {paymentTotal}.";
-            }
-
-            return null;
-        }
-
         private static (string Name, XrplNumber? Value)[] ValueFields(LoanSet loanSet) => new[]
         {
             ("PrincipalRequested", loanSet.PrincipalRequested),
@@ -242,36 +183,5 @@ namespace Xrpl.Sugar
             DateTimeKind.Unspecified => DateTime.SpecifyKind(time, DateTimeKind.Utc),
             _ => time,
         };
-
-        private readonly struct Properties
-        {
-            public Properties(
-                XrplNumber periodicPayment,
-                XrplNumber value,
-                XrplNumber managementFee,
-                int loanScale,
-                XrplNumber firstPaymentPrincipal,
-                XrplNumber roundedPeriodicPayment)
-            {
-                PeriodicPayment = periodicPayment;
-                Value = value;
-                ManagementFee = managementFee;
-                LoanScale = loanScale;
-                FirstPaymentPrincipal = firstPaymentPrincipal;
-                RoundedPeriodicPayment = roundedPeriodicPayment;
-            }
-
-            public XrplNumber PeriodicPayment { get; }
-
-            public XrplNumber Value { get; }
-
-            public XrplNumber ManagementFee { get; }
-
-            public int LoanScale { get; }
-
-            public XrplNumber FirstPaymentPrincipal { get; }
-
-            public XrplNumber RoundedPeriodicPayment { get; }
-        }
     }
 }
