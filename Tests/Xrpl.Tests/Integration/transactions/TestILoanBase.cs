@@ -118,7 +118,8 @@ public abstract class TestILoanBase
     protected static async Task<VaultCreate> BuildBrokerVaultAsync(
         IXrplClient client,
         string owner,
-        IssuedCurrency asset)
+        IssuedCurrency asset,
+        int investmentWindowSeconds = InvestmentWindowSeconds)
     {
         VaultCreate tx = new VaultCreate
         {
@@ -134,7 +135,7 @@ public abstract class TestILoanBase
 
         tx.VaultKind = (uint)VaultKind.ClosedEnded;
         tx.SubscriptionDate = subscriptionDate;
-        tx.RedemptionDate = subscriptionDate.AddSeconds(InvestmentWindowSeconds);
+        tx.RedemptionDate = subscriptionDate.AddSeconds(investmentWindowSeconds);
         return tx;
     }
 
