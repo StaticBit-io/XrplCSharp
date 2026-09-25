@@ -433,14 +433,14 @@
 
     private async Task<IReadOnlyList<LoanScheduleRow>> ProjectAsync(LOLoan loan)
     {
-        LoanScheduleOptions options;
+        LedgerRules options;
         try
         {
-            options = await LoanScheduleOptions.FromNodeAsync(Client);
+            options = await LedgerRules.FromNodeAsync(Client);
         }
         catch (Exception)
         {
-            options = new LoanScheduleOptions();
+            options = new LedgerRules();
         }
 
         return LoanSchedule.Project(loan, XrpAsset, _managementFeeRate, options);

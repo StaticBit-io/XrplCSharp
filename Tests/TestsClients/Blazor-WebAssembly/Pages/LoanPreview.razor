@@ -236,7 +236,7 @@ else
 
     private LOLoan? _loan;
     private LoanSetOutcome? _loanSet;
-    private LoanScheduleOptions? _options;
+    private LedgerRules? _options;
     private IReadOnlyList<LoanScheduleRow>? _schedule;
 
     private bool IsXrp => _asset?.IsXrp() == true;
@@ -358,12 +358,12 @@ else
     {
         try
         {
-            _options = await LoanScheduleOptions.FromNodeAsync(Client);
+            _options = await LedgerRules.FromNodeAsync(Client);
         }
         catch (Exception)
         {
             // feature can be restricted on a public node; project with the current rules
-            _options = new LoanScheduleOptions();
+            _options = new LedgerRules();
         }
 
         _schedule = LoanSchedule.Project(loan, asset, managementFeeRate, _options);

@@ -111,7 +111,7 @@ public class TestIPreviewLoanVault : TestILoanBase
         ValidateResult(created);
         LoanSetOutcome loanSet = LoanSetOutcome.FromMetadata(loanTx, created.Meta);
 
-        LoanScheduleOptions options = await LoanScheduleOptions.FromNodeAsync(client);
+        LedgerRules options = await LedgerRules.FromNodeAsync(client);
         IReadOnlyList<LoanScheduleRow> schedule = LoanSchedule.Project(loanSet.Loan, loanSet.Asset, managementFeeRate, options);
         Assert.HasCount(6, schedule);
 
@@ -162,7 +162,7 @@ public class TestIPreviewLoanVault : TestILoanBase
         ValidateResult(await client.SubmitAndWait(topUp, walletIssuer, true));
 
         IReadOnlyList<LoanScheduleRow> schedule = LoanSchedule.Project(
-            loanSet.Loan, loanSet.Asset, managementFeeRate: 0, await LoanScheduleOptions.FromNodeAsync(client));
+            loanSet.Loan, loanSet.Asset, managementFeeRate: 0, await LedgerRules.FromNodeAsync(client));
 
         await PayThroughAndCompare(schedule, loanSet, walletBorrower, cap => new Currency { Value = cap, MPTokenIssuanceID = mptIssuanceId });
     }
@@ -204,7 +204,7 @@ public class TestIPreviewLoanVault : TestILoanBase
         LoanSetOutcome loanSet = LoanSetOutcome.FromMetadata(loanTx, created.Meta);
 
         IReadOnlyList<LoanScheduleRow> schedule = LoanSchedule.Project(
-            loanSet.Loan, loanSet.Asset, managementFeeRate, await LoanScheduleOptions.FromNodeAsync(client));
+            loanSet.Loan, loanSet.Asset, managementFeeRate, await LedgerRules.FromNodeAsync(client));
         Assert.HasCount((int)payments, schedule);
 
         await PayThroughAndCompare(
@@ -246,7 +246,7 @@ public class TestIPreviewLoanVault : TestILoanBase
 
         TimedPayment paid = await PayWithFlag(loanSet, walletBorrower, LoanPayFlags.tfLoanLatePayment, "40000000", amount => new Currency { Value = amount, CurrencyCode = "XRP" });
         LoanPaymentDue expected = LoanPayments.LatePaymentDue(
-            loan, loanSet.Asset, managementFeeRate, paid.ParentCloseTime, await LoanScheduleOptions.FromNodeAsync(client));
+            loan, loanSet.Asset, managementFeeRate, paid.ParentCloseTime, await LedgerRules.FromNodeAsync(client));
 
         Assert.IsNotNull(expected, "the payment landed after the due date");
         AssertSame(expected, paid.Outcome);
@@ -286,7 +286,7 @@ public class TestIPreviewLoanVault : TestILoanBase
         LOLoan loan = await ReadLoan(loanSet.LoanId);
         TimedPayment paid = await PayWithFlag(loanSet, walletBorrower, LoanPayFlags.tfLoanFullPayment, "60000000", amount => new Currency { Value = amount, CurrencyCode = "XRP" });
         LoanPaymentDue expected = LoanPayments.FullPaymentDue(
-            loan, loanSet.Asset, managementFeeRate, paid.ParentCloseTime, await LoanScheduleOptions.FromNodeAsync(client));
+            loan, loanSet.Asset, managementFeeRate, paid.ParentCloseTime, await LedgerRules.FromNodeAsync(client));
 
         Assert.IsNotNull(expected);
         AssertSame(expected, paid.Outcome);
@@ -328,7 +328,7 @@ public class TestIPreviewLoanVault : TestILoanBase
         LOLoan loan = await ReadLoan(loanSet.LoanId);
         TimedPayment paid = await PayWithFlag(loanSet, walletBorrower, LoanPayFlags.tfLoanFullPayment, "10000", amount);
         LoanPaymentDue expected = LoanPayments.FullPaymentDue(
-            loan, loanSet.Asset, managementFeeRate, paid.ParentCloseTime, await LoanScheduleOptions.FromNodeAsync(client));
+            loan, loanSet.Asset, managementFeeRate, paid.ParentCloseTime, await LedgerRules.FromNodeAsync(client));
 
         Assert.IsNotNull(expected);
         AssertSame(expected, paid.Outcome);
@@ -347,7 +347,7 @@ public class TestIPreviewLoanVault : TestILoanBase
         string xrpBrokerId = await CreateBrokerWithManagementFee(walletXrpBroker, 10_000);
         IssuedCurrency usd = new IssuedCurrency { Currency = "USD", Issuer = walletIssuer.ClassicAddress };
         string usdBrokerId = await CreateIouBroker(walletIssuer, walletHolder, walletBorrower, usd, 1_234);
-        LoanScheduleOptions options = await LoanScheduleOptions.FromNodeAsync(client);
+        LedgerRules options = await LedgerRules.FromNodeAsync(client);
 
         const string precisionLoss = "tecPRECISION_LOSS";
         (string Broker, XrplWallet Owner, string Principal, uint Rate, uint Payments, string ServiceFee, string Refusal)[] cases =
