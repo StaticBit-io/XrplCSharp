@@ -330,12 +330,13 @@
 
     private AMMDeposit BuildDeposit(string account, AmmPool pool, IssuedCurrency side)
     {
-        bool single = UsesSide;
+        // The pool's own order, so the outcome's AssetChange and Asset2Change line up with the
+        // quote's rows; Amount chooses the side of a single-asset operation.
         AMMDeposit tx = new AMMDeposit
         {
             Account = account,
-            Asset = single ? side : pool.Asset,
-            Asset2 = single ? Other(pool, side) : pool.Asset2,
+            Asset = pool.Asset,
+            Asset2 = pool.Asset2,
         };
 
         switch (_operation)
@@ -365,12 +366,13 @@
 
     private AMMWithdraw BuildWithdraw(string account, AmmPool pool, IssuedCurrency side)
     {
-        bool single = UsesSide;
+        // The pool's own order, so the outcome's AssetChange and Asset2Change line up with the
+        // quote's rows; Amount chooses the side of a single-asset operation.
         AMMWithdraw tx = new AMMWithdraw
         {
             Account = account,
-            Asset = single ? side : pool.Asset,
-            Asset2 = single ? Other(pool, side) : pool.Asset2,
+            Asset = pool.Asset,
+            Asset2 = pool.Asset2,
         };
 
         switch (_operation)
@@ -453,9 +455,6 @@
         CurrencyCode = _amm!.LPTokenBalance.CurrencyCode,
         Issuer = _amm.LPTokenBalance.Issuer,
     };
-
-    private static IssuedCurrency Other(AmmPool pool, IssuedCurrency side) =>
-        ReferenceEquals(side, pool.Asset) ? pool.Asset2 : pool.Asset;
 
     /// <summary>"XRP", "CUR.rIssuer", or a 48-character MPT issuance ID.</summary>
     private static IssuedCurrency ParseAsset(string text)
