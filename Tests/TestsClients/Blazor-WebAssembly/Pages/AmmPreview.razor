@@ -1,0 +1,495 @@
+@page "/amm-preview"
+@using System.Globalization
+@using Xrpl.BinaryCodec.Numbers
+@using Xrpl.Client
+@using Xrpl.Models.Common
+@using Xrpl.Models.Methods
+@using Xrpl.Models.Transactions
+@using Xrpl.Sugar
+@using static Xrpl.Models.Common.Common
+
+<PageTitle>AMM preview</PageTitle>
+
+<h1>AMM preview</h1>
+
+<p style="color: #666;">
+    Server: <strong>@Client.Url()</strong> (@(Client.IsConnected() ? "connected" : "not connected")).
+    Switch it on the <a href="/">Connection</a> tab.
+    Nothing here is signed or submitted: the quote comes from <code>AmmLiquidity</code>, computed offline, and the
+    node's answer from <code>simulate</code> when an account is given.
+</p>
+
+<section style="background: #f5f5f5; padding: 15px; border-radius: 5px;">
+    <div style="display: grid; grid-template-columns: 220px 1fr; gap: 8px 12px; align-items: center; max-width: 900px;">
+        <label>Asset</label>
+        <input @bind="_asset1" style="font-family: monospace;" placeholder="XRP, CUR.rIssuer or an MPT issuance ID" />
+
+        <label>Asset2</label>
+        <input @bind="_asset2" style="font-family: monospace;" placeholder="XRP, CUR.rIssuer or an MPT issuance ID" />
+
+        <label>Account (optional)</label>
+        <input @bind="_account" style="font-family: monospace;" placeholder="r... - its LP tokens, its fee, and simulate" />
+    </div>
+    <button @onclick="LoadPoolAsync" disabled="@_busy" style="margin-top: 12px; padding: 8px 16px;">Load pool</button>
+</section>
+
+@if (_pool != null)
+{
+    <h2>Pool</h2>
+    <table style="border-collapse: collapse;">
+        <tbody>
+            <tr><td style="@Cell">@AssetName(_pool.Asset)</td><td style="@Number">@Amount(_pool.Balance, _pool.Asset)</td></tr>
+            <tr><td style="@Cell">@AssetName(_pool.Asset2)</td><td style="@Number">@Amount(_pool.Balance2, _pool.Asset2)</td></tr>
+            <tr><td style="@Cell">LP tokens outstanding</td><td style="@Number">@_pool.LpTokenBalance</td></tr>
+            <tr><td style="@Cell">Trading fee @(_discounted ? "(auction slot, discounted)" : string.Empty)</td><td style="@Number">@((_pool.TradingFee / 1000m).ToString(CultureInfo.InvariantCulture))%</td></tr>
+            @if (_holderLp is { } held)
+            {
+                <tr><td style="@Cell">Account's LP tokens</td><td style="@Number">@held</td></tr>
+            }
+        </tbody>
+    </table>
+
+    <h2>Operation</h2>
+    <section style="background: #f5f5f5; padding: 15px; border-radius: 5px;">
+        <div style="display: grid; grid-template-columns: 220px 1fr; gap: 8px 12px; align-items: center; max-width: 900px;">
+            <label>Mode</label>
+            <select @bind="_operation">
+                <optgroup label="Deposit">
+                    <option value="@Operation.DepositForTokens">for LP tokens (tfLPToken)</option>
+                    <option value="@Operation.DepositBoth">both assets (tfTwoAsset)</option>
+                    <option value="@Operation.DepositSingle">one asset (tfSingleAsset)</option>
+                    <option value="@Operation.DepositSingleForTokens">one asset for LP tokens (tfOneAssetLPToken)</option>
+                </optgroup>
+                <optgroup label="Withdraw">
+                    <option value="@Operation.WithdrawForTokens">for LP tokens (tfLPToken)</option>
+                    <option value="@Operation.WithdrawAll">everything held (tfWithdrawAll)</option>
+                    <option value="@Operation.WithdrawBoth">both assets (tfTwoAsset)</option>
+                    <option value="@Operation.WithdrawSingle">one asset (tfSingleAsset)</option>
+                    <option value="@Operation.WithdrawSingleForTokens">one asset for LP tokens (tfOneAssetLPToken)</option>
+                    <option value="@Operation.WithdrawAllOfAsset">everything held as one asset (tfOneAssetWithdrawAll)</option>
+                </optgroup>
+            </select>
+
+            @if (UsesSide)
+            {
+                <label>Asset</label>
+                <select @bind="_firstSide">
+                    <option value="@true">@AssetName(_pool.Asset)</option>
+                    <option value="@false">@AssetName(_pool.Asset2)</option>
+                </select>
+            }
+
+            @if (UsesAmount1)
+            {
+                <label>@Amount1Label</label>
+                <input @bind="_amount1" />
+            }
+
+            @if (UsesAmount2)
+            {
+                <label>Amount of @ShortName(_pool.Asset2) (@Unit(_pool.Asset2))</label>
+                <input @bind="_amount2" />
+            }
+
+            @if (UsesTokens)
+            {
+                <label>LP tokens</label>
+                <input @bind="_lpTokens" />
+            }
+
+            @if (IsWithdrawal)
+            {
+                <label>Only liquidity provider</label>
+                <label style="display: flex; gap: 8px; align-items: center;">
+                    <input type="checkbox" @bind="_onlyProvider" />
+                    <span style="color: #666;">the node then aligns the pool's LP token balance with the account's</span>
+                </label>
+            }
+        </div>
+        <button @onclick="QuoteAsync" disabled="@_busy" style="margin-top: 12px; padding: 8px 16px;">Quote</button>
+    </section>
+}
+
+@if (_busy)
+{
+    <p>Asking the node...</p>
+}
+
+@if (_error != null)
+{
+    <p style="color: #b32121; font-weight: bold;">@_error</p>
+}
+
+@if (_quote != null && _quoted != null)
+{
+    <h2>Result</h2>
+    <table style="border-collapse: collapse; min-width: 700px;">
+        <thead>
+            <tr style="background: #e9ecef;">
+                <th style="@Cell"></th>
+                <th style="@Cell">Offline (<code>AmmLiquidity</code>)</th>
+                <th style="@Cell">Node (<code>simulate</code>)</th>
+            </tr>
+        </thead>
+        <tbody>
+            <tr>
+                <td style="@Cell">Result</td>
+                <td style="@Cell"><strong style="color: @ResultColor(_quote.Refusal ?? "tesSUCCESS");">@(_quote.Refusal ?? "accepted")</strong> @_quote.RefusalReason</td>
+                <td style="@Cell">
+                    @if (_engineResult != null)
+                    {
+                        <strong style="color: @ResultColor(_engineResult);">@_engineResult</strong>
+                        <span> @_engineMessage</span>
+                    }
+                    else
+                    {
+                        <span style="color: #666;">give an account to ask the node</span>
+                    }
+                </td>
+            </tr>
+            <tr>
+                <td style="@Cell">@AssetName(_quoted.Asset)</td>
+                <td style="@Number">@Amount(_quote.Asset1, _quoted.Asset)</td>
+                <td style="@Number">@(_outcome == null ? string.Empty : Amount(Math.Abs(_outcome.AssetChange), _quoted.Asset))</td>
+            </tr>
+            <tr>
+                <td style="@Cell">@AssetName(_quoted.Asset2)</td>
+                <td style="@Number">@Amount(_quote.Asset2, _quoted.Asset2)</td>
+                <td style="@Number">@(_outcome == null ? string.Empty : Amount(Math.Abs(_outcome.Asset2Change), _quoted.Asset2))</td>
+            </tr>
+            <tr>
+                <td style="@Cell">LP tokens</td>
+                <td style="@Number">@_quote.LpTokens.ToString(CultureInfo.InvariantCulture)</td>
+                <td style="@Number">@(_outcome == null ? string.Empty : Math.Abs(_outcome.LpTokenChange).ToString(CultureInfo.InvariantCulture))</td>
+            </tr>
+        </tbody>
+    </table>
+    <p style="color: #666; max-width: 900px;">
+        The node's column is what the account's balances change by. An issued-currency balance keeps 16 significant
+        digits, so it can round the amount that moved: a deposit of 12.3456789 that moves 12.3456788999996 shows up as
+        12.3456789. The pool below is what the ledger will hold, digit for digit.
+    </p>
+
+    @if (_quote.PoolAfter is { } after)
+    {
+        <h3>Pool afterwards</h3>
+        <table style="border-collapse: collapse;">
+            <tbody>
+                <tr><td style="@Cell">@AssetName(after.Asset)</td><td style="@Number">@Amount(after.Balance, after.Asset)</td></tr>
+                <tr><td style="@Cell">@AssetName(after.Asset2)</td><td style="@Number">@Amount(after.Balance2, after.Asset2)</td></tr>
+                <tr><td style="@Cell">LP tokens outstanding</td><td style="@Number">@after.LpTokenBalance</td></tr>
+            </tbody>
+        </table>
+    }
+}
+
+@code {
+    private const string Cell = "border: 1px solid #ccc; padding: 4px 8px;";
+    private const string Number = "border: 1px solid #ccc; padding: 4px 8px; text-align: right; font-family: monospace;";
+
+    private enum Operation
+    {
+        DepositForTokens,
+        DepositBoth,
+        DepositSingle,
+        DepositSingleForTokens,
+        WithdrawForTokens,
+        WithdrawAll,
+        WithdrawBoth,
+        WithdrawSingle,
+        WithdrawSingleForTokens,
+        WithdrawAllOfAsset,
+    }
+
+    [Inject]
+    private IXrplClient Client { get; set; } = default!;
+
+    private bool _busy;
+    private string? _error;
+
+    private string _asset1 = "XRP";
+    private string _asset2 = string.Empty;
+    private string _account = string.Empty;
+
+    private AMMInfo? _amm;
+    private AmmPool? _pool;
+    private bool _discounted;
+    private XrplNumber? _holderLp;
+
+    private Operation _operation = Operation.DepositSingle;
+    private bool _firstSide = true;
+    private string _amount1 = "1";
+    private string _amount2 = "1";
+    private string _lpTokens = "1";
+    private bool _onlyProvider;
+
+    private AmmQuote? _quote;
+    private AmmPool? _quoted;
+    private string? _engineResult;
+    private string? _engineMessage;
+    private AmmOutcome? _outcome;
+
+    private bool IsWithdrawal => _operation >= Operation.WithdrawForTokens;
+
+    private bool UsesSide => _operation is Operation.DepositSingle or Operation.DepositSingleForTokens
+        or Operation.WithdrawSingle or Operation.WithdrawSingleForTokens or Operation.WithdrawAllOfAsset;
+
+    private bool UsesAmount1 => _operation is not (Operation.DepositForTokens or Operation.WithdrawForTokens or Operation.WithdrawAll);
+
+    private bool UsesAmount2 => _operation is Operation.DepositBoth or Operation.WithdrawBoth;
+
+    private bool UsesTokens => _operation is Operation.DepositForTokens or Operation.DepositSingleForTokens
+        or Operation.WithdrawForTokens or Operation.WithdrawSingleForTokens;
+
+    private IssuedCurrency SideAsset => _firstSide ? _pool!.Asset : _pool!.Asset2;
+
+    private string Amount1Label => _operation switch
+    {
+        Operation.DepositSingleForTokens => $"Most of the asset to pay ({Unit(SideAsset)})",
+        Operation.WithdrawSingleForTokens or Operation.WithdrawAllOfAsset => $"Least of the asset to accept, 0 for any ({Unit(SideAsset)})",
+        _ when UsesSide => $"Amount ({Unit(SideAsset)})",
+        _ => $"Amount of {ShortName(_pool!.Asset)} ({Unit(_pool!.Asset)})",
+    };
+
+    protected override async Task OnInitializedAsync()
+    {
+        if (!Client.IsConnected())
+            await Client.Connect();
+    }
+
+    private async Task LoadPoolAsync()
+    {
+        await RunAsync(async () =>
+        {
+            _amm = null;
+            _pool = null;
+            _holderLp = null;
+            string account = _account.Trim();
+            AMMInfoRequest request = new AMMInfoRequest { Asset = ParseAsset(_asset1), Asset2 = ParseAsset(_asset2) };
+            _amm = (await Client.AmmInfo(request).Typed()).Amm;
+            _pool = AmmPool.FromAmmInfo(_amm, account.Length == 0 ? null : account);
+            _discounted = _pool.TradingFee != _amm.TradingFee;
+
+            if (account.Length > 0)
+            {
+                AMMInfoRequest mineRequest = new AMMInfoRequest { Asset = request.Asset, Asset2 = request.Asset2, Account = account };
+                AMMInfo mine = (await Client.AmmInfo(mineRequest).Typed()).Amm;
+                _holderLp = XrplNumber.Parse(mine.LPTokenBalance.Value);
+                _onlyProvider = _holderLp is { } held && !held.IsZero
+                    && XrplNumber.Abs(XrplNumber.Subtract(_pool.LpTokenBalance, held, NumberContext.Default))
+                        <= XrplNumber.Multiply(_pool.LpTokenBalance, XrplNumber.Parse("0.001"), NumberContext.Default);
+            }
+        });
+    }
+
+    private async Task QuoteAsync()
+    {
+        AmmPool pool = _pool!;
+        await RunAsync(async () =>
+        {
+            LedgerRules rules;
+            try
+            {
+                rules = await LedgerRules.FromNodeAsync(Client);
+            }
+            catch (Exception)
+            {
+                // feature can be restricted on a public node; quote with the current rules
+                rules = new LedgerRules();
+            }
+
+            XrplNumber held = _holderLp ?? XrplNumber.Zero;
+            IssuedCurrency side = SideAsset;
+            _quoted = pool;
+            _quote = _operation switch
+            {
+                Operation.DepositForTokens => AmmLiquidity.DepositForTokens(pool, Tokens(), rules: rules),
+                Operation.DepositBoth => AmmLiquidity.DepositBoth(pool, Ledger(_amount1, pool.Asset), Ledger(_amount2, pool.Asset2), rules: rules),
+                Operation.DepositSingle => AmmLiquidity.DepositSingle(pool, side, Ledger(_amount1, side), rules: rules),
+                Operation.DepositSingleForTokens => AmmLiquidity.DepositSingleForTokens(pool, side, Ledger(_amount1, side), Tokens(), rules),
+                Operation.WithdrawForTokens => AmmLiquidity.WithdrawForTokens(pool, Tokens(), held, _onlyProvider, rules),
+                Operation.WithdrawAll => AmmLiquidity.WithdrawAll(pool, held, _onlyProvider, rules),
+                Operation.WithdrawBoth => AmmLiquidity.WithdrawBoth(pool, Ledger(_amount1, pool.Asset), Ledger(_amount2, pool.Asset2), held, _onlyProvider, rules),
+                Operation.WithdrawSingle => AmmLiquidity.WithdrawSingle(pool, side, Ledger(_amount1, side), held, _onlyProvider, rules),
+                Operation.WithdrawSingleForTokens => AmmLiquidity.WithdrawSingleForTokens(pool, side, Tokens(), Ledger(_amount1, side), held, _onlyProvider, rules),
+                _ => AmmLiquidity.WithdrawAllOfAsset(pool, side, Ledger(_amount1, side), held, _onlyProvider, rules),
+            };
+
+            string account = _account.Trim();
+            if (account.Length == 0)
+                return;
+
+            TransactionPreview<AmmOutcome> preview = IsWithdrawal
+                ? await Client.PreviewAMMWithdraw(BuildWithdraw(account, pool, side))
+                : await Client.PreviewAMMDeposit(BuildDeposit(account, pool, side));
+            _engineResult = preview.EngineResult;
+            _engineMessage = preview.EngineResultMessage;
+            _outcome = preview.Outcome;
+        });
+    }
+
+    private AMMDeposit BuildDeposit(string account, AmmPool pool, IssuedCurrency side)
+    {
+        // The pool's own order, so the outcome's AssetChange and Asset2Change line up with the
+        // quote's rows; Amount chooses the side of a single-asset operation.
+        AMMDeposit tx = new AMMDeposit
+        {
+            Account = account,
+            Asset = pool.Asset,
+            Asset2 = pool.Asset2,
+        };
+
+        switch (_operation)
+        {
+            case Operation.DepositForTokens:
+                tx.LPTokenOut = LpAmount(_lpTokens);
+                tx.Flags = AMMDepositFlags.tfLPToken;
+                break;
+            case Operation.DepositBoth:
+                tx.Amount = AssetAmount(_amount1, pool.Asset);
+                tx.Amount2 = AssetAmount(_amount2, pool.Asset2);
+                tx.Flags = AMMDepositFlags.tfTwoAsset;
+                break;
+            case Operation.DepositSingle:
+                tx.Amount = AssetAmount(_amount1, side);
+                tx.Flags = AMMDepositFlags.tfSingleAsset;
+                break;
+            default:
+                tx.Amount = AssetAmount(_amount1, side);
+                tx.LPTokenOut = LpAmount(_lpTokens);
+                tx.Flags = AMMDepositFlags.tfOneAssetLPToken;
+                break;
+        }
+
+        return tx;
+    }
+
+    private AMMWithdraw BuildWithdraw(string account, AmmPool pool, IssuedCurrency side)
+    {
+        // The pool's own order, so the outcome's AssetChange and Asset2Change line up with the
+        // quote's rows; Amount chooses the side of a single-asset operation.
+        AMMWithdraw tx = new AMMWithdraw
+        {
+            Account = account,
+            Asset = pool.Asset,
+            Asset2 = pool.Asset2,
+        };
+
+        switch (_operation)
+        {
+            case Operation.WithdrawForTokens:
+                tx.LPTokenIn = LpAmount(_lpTokens);
+                tx.Flags = AMMWithdrawFlags.tfLPToken;
+                break;
+            case Operation.WithdrawAll:
+                tx.Flags = AMMWithdrawFlags.tfWithdrawAll;
+                break;
+            case Operation.WithdrawBoth:
+                tx.Amount = AssetAmount(_amount1, pool.Asset);
+                tx.Amount2 = AssetAmount(_amount2, pool.Asset2);
+                tx.Flags = AMMWithdrawFlags.tfTwoAsset;
+                break;
+            case Operation.WithdrawSingle:
+                tx.Amount = AssetAmount(_amount1, side);
+                tx.Flags = AMMWithdrawFlags.tfSingleAsset;
+                break;
+            case Operation.WithdrawSingleForTokens:
+                tx.Amount = AssetAmount(_amount1, side);
+                tx.LPTokenIn = LpAmount(_lpTokens);
+                tx.Flags = AMMWithdrawFlags.tfOneAssetLPToken;
+                break;
+            default:
+                tx.Amount = AssetAmount(_amount1, side);
+                tx.Flags = AMMWithdrawFlags.tfOneAssetWithdrawAll;
+                break;
+        }
+
+        return tx;
+    }
+
+    private async Task RunAsync(Func<Task> action)
+    {
+        _busy = true;
+        _error = null;
+        _quote = null;
+        _quoted = null;
+        _engineResult = null;
+        _engineMessage = null;
+        _outcome = null;
+        try
+        {
+            await action();
+        }
+        catch (Exception exception)
+        {
+            _error = exception.Message;
+        }
+        finally
+        {
+            _busy = false;
+        }
+    }
+
+    private XrplNumber Tokens() => XrplNumber.Parse(_lpTokens.Trim());
+
+    /// <summary>XRP is entered in XRP and sent in drops; other assets in their own unit.</summary>
+    private static XrplNumber Ledger(string text, IssuedCurrency asset)
+    {
+        decimal value = decimal.Parse(text.Trim(), NumberStyles.Float, CultureInfo.InvariantCulture);
+        return (XrplNumber)(asset.IsXrp() ? decimal.Round(value * 1_000_000m, 0) : value);
+    }
+
+    private static Currency AssetAmount(string text, IssuedCurrency asset)
+    {
+        string value = Ledger(text, asset).ToString();
+        return asset.MptIssuanceId != null
+            ? new Currency { Value = value, MPTokenIssuanceID = asset.MptIssuanceId }
+            : asset.IsXrp()
+                ? new Currency { Value = value, CurrencyCode = "XRP" }
+                : new Currency { Value = value, CurrencyCode = asset.Currency, Issuer = asset.Issuer };
+    }
+
+    private Currency LpAmount(string text) => new Currency
+    {
+        Value = XrplNumber.Parse(text.Trim()).ToString(),
+        CurrencyCode = _amm!.LPTokenBalance.CurrencyCode,
+        Issuer = _amm.LPTokenBalance.Issuer,
+    };
+
+    /// <summary>"XRP", "CUR.rIssuer", or a 48-character MPT issuance ID.</summary>
+    private static IssuedCurrency ParseAsset(string text)
+    {
+        string value = text.Trim();
+        if (value.Equals("XRP", StringComparison.OrdinalIgnoreCase))
+            return new IssuedCurrency { Currency = "XRP" };
+
+        int dot = value.IndexOf('.');
+        if (dot > 0)
+            return new IssuedCurrency { Currency = value[..dot], Issuer = value[(dot + 1)..] };
+
+        if (value.Length == 48)
+            return new IssuedCurrency { MptIssuanceId = value };
+
+        throw new FormatException($"'{value}' is not XRP, CUR.rIssuer or an MPT issuance ID.");
+    }
+
+    private static string ResultColor(string result) => result == "tesSUCCESS" ? "#28a745" : "#b32121";
+
+    private static string Unit(IssuedCurrency asset) => asset.IsXrp() ? "XRP" : "units";
+
+    private static string Amount(decimal value, IssuedCurrency asset) =>
+        asset.IsXrp()
+            ? (value / 1_000_000m).ToString("0.000000", CultureInfo.InvariantCulture)
+            : value.ToString(CultureInfo.InvariantCulture);
+
+    private static string Amount(XrplNumber value, IssuedCurrency asset) =>
+        value.TryToDecimal(out decimal d) ? Amount(d, asset) : value.ToString();
+
+    private static string ShortName(IssuedCurrency asset) =>
+        asset.IsXrp() ? "XRP" : asset.MptIssuanceId != null ? "MPT" : asset.CurrencyName;
+
+    private static string AssetName(IssuedCurrency asset) =>
+        asset.IsXrp() ? "XRP"
+        : asset.MptIssuanceId != null ? $"MPT {asset.MptIssuanceId}"
+        : $"{asset.CurrencyName} ({asset.Issuer})";
+}
