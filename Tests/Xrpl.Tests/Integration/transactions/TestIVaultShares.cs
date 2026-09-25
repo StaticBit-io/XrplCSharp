@@ -123,14 +123,94 @@ public class TestIVaultShares : TestILoanBase
         });
     }
 
+    [TestMethod]
+    public async Task TestVaultShares_WithUnrealizedLoss_MatchWhatTheNodeMoves()
+    {
+        // An impaired loan books its exposure as LossUnrealized, and withdrawals are priced on the
+        // assets less that loss. Withdrawals open in the redemption phase of a closed-ended vault,
+        // so the investment window is kept to the minimum.
+        XrplWallet owner = XrplWallet.Generate();
+        XrplWallet alice = XrplWallet.Generate();
+        XrplWallet bob = XrplWallet.Generate();
+        XrplWallet borrower = XrplWallet.Generate();
+        await IntegrationTestConfig.TryFundWalletsAsync(client, nodeType, owner, alice, bob, borrower);
+        await IntegrationTestConfig.EnsureBalanceAsync(client, alice, 200m);
+        Func<string, Currency> xrp = value => new Currency { Value = value, CurrencyCode = "XRP" };
+
+        VaultCreate create = await client.Autofill(await BuildBrokerVaultAsync(
+            client, owner.ClassicAddress, new IssuedCurrency { Currency = "XRP" }, investmentWindowSeconds: 190));
+        TransactionSummary created = await client.SubmitAndWait(create, owner, true);
+        ValidateResult(created);
+        string vaultId = GetCreatedObjectId(created, LedgerEntryType.Vault);
+
+        Dictionary<string, ulong> shares = new Dictionary<string, ulong>();
+        await Exercise(vaultId, xrp, new[]
+        {
+            (Kind.Deposit, alice, "60000000"),
+            (Kind.Deposit, bob, "40000007"),
+        }, shares);
+
+        LoanBrokerSet brokerTx = await client.Autofill(new LoanBrokerSet { Account = owner.ClassicAddress, VaultID = vaultId });
+        TransactionSummary brokerResult = await client.SubmitAndWait(brokerTx, owner, true);
+        ValidateResult(brokerResult);
+        string brokerId = GetCreatedObjectId(brokerResult, LedgerEntryType.LoanBroker);
+        await EnterInvestmentPhaseAsync(client, vaultId);
+
+        LoanSet loanTx = new LoanSet
+        {
+            Account = owner.ClassicAddress,
+            LoanBrokerID = brokerId,
+            Counterparty = borrower.ClassicAddress,
+            PrincipalRequested = 30_000_000,
+            InterestRate = 50_000,
+            PaymentTotal = 1,
+            PaymentInterval = 60,
+            GracePeriod = 60,
+        };
+        TransactionSummary loan = await SubmitLoanSetWithCounterpartySig(client, loanTx, owner, borrower);
+        ValidateResult(loan);
+        string loanId = LoanSetOutcome.FromMetadata(loanTx, loan.Meta).LoanId;
+
+        // Since fixCleanup3_4_0 only a late loan can be impaired.
+        LOLoan entry = (LOLoan)(await client.LedgerEntry(new LedgerEntryRequest { Index = loanId }).Typed()).Node;
+        await IntegrationTestConfig.WaitForCloseTimeAsync(client, entry.NextPaymentDueDate.Value.AddSeconds(2), nodeType);
+
+        LoanManage impair = await client.Autofill(new LoanManage
+        {
+            Account = owner.ClassicAddress,
+            LoanID = loanId,
+            Flags = LoanManageFlags.tfLoanImpair,
+        });
+        ValidateResult(await client.SubmitAndWait(impair, owner, true));
+
+        LOVault vault = (LOVault)(await client.LedgerEntry(new LedgerEntryRequest { Index = vaultId }).Typed()).Node;
+        Assert.IsTrue((vault.LossUnrealized ?? XrplNumber.Zero) > XrplNumber.Zero, "the impaired loan books a loss");
+        if (vault.RedemptionDate is DateTime redemption)
+            await IntegrationTestConfig.WaitForCloseTimeAsync(client, redemption.AddSeconds(1), nodeType);
+
+        await Exercise(vaultId, xrp, new[]
+        {
+            (Kind.Withdraw, alice, "5000001"),
+            (Kind.Redeem, bob, "1234567"),
+            (Kind.Withdraw, bob, "99999999"),
+            (Kind.Withdraw, alice, "1"),
+            (Kind.Redeem, alice, "ALL"),
+        }, shares);
+    }
+
     /// <summary>
     /// Runs the steps against one vault. "ALL" redeems every share the account holds; a step the
-    /// node refuses must be refused offline with the same result.
+    /// node refuses must be refused offline with the same result. <paramref name="shares"/> carries
+    /// the holdings from an earlier run on the same vault.
     /// </summary>
-    private static async Task Exercise(string vaultId, Func<string, Currency> assetAmount, (Kind Kind, XrplWallet Account, string Value)[] steps)
+    private static async Task Exercise(
+        string vaultId,
+        Func<string, Currency> assetAmount,
+        (Kind Kind, XrplWallet Account, string Value)[] steps,
+        Dictionary<string, ulong> shares = null)
     {
         LedgerRules rules = await LedgerRules.FromNodeAsync(client);
-        Dictionary<string, ulong> shares = new Dictionary<string, ulong>();
+        shares ??= new Dictionary<string, ulong>();
         int accepted = 0;
 
         for (int i = 0; i < steps.Length; i++)
