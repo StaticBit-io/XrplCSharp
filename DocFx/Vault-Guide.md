@@ -179,6 +179,18 @@ if (preview.WouldSucceed)
 }
 ```
 
+`VaultShares` computes the same figures offline from the `Vault` entry and the share count - the `OutstandingAmount` of the `MPTokenIssuance` named by the vault's `ShareMPTID` - the way rippled's `VaultDeposit` and `VaultWithdraw` compute them, rounding to the vault's scale included:
+
+```csharp
+LedgerRules rules = await LedgerRules.FromNodeAsync(client);
+VaultQuote deposit = VaultShares.Deposit(vault, sharesOutstanding, XrplNumber.Parse("1234.5678"), depositorBalance, rules);
+VaultQuote withdraw = VaultShares.WithdrawAssets(vault, sharesOutstanding, holderShares, XrplNumber.Parse("100"), rules);
+VaultQuote redeem = VaultShares.RedeemShares(vault, sharesOutstanding, holderShares, 1_000_000, rules);
+// .Shares, .Assets; or .Refusal ("tecPRECISION_LOSS", "tecINSUFFICIENT_FUNDS", "tecLIMIT_EXCEEDED") and .RefusalReason
+```
+
+A quote repeats the checks that depend on the amounts; authorization, freezes, the vault's phase and the account's own funds are left to the preview.
+
 `VaultOutcome.FromMetadata` reads the same figures from a validated transaction. `BalanceChanges.GetBalanceChanges` reports MPT balances, vault shares included, alongside XRP and trust lines.
 
 ### 4. Withdraw Assets
