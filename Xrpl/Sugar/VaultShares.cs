@@ -22,7 +22,8 @@ namespace Xrpl.Sugar
 
         /// <summary>
         /// The result the node would give instead, such as <c>tecPRECISION_LOSS</c>,
-        /// <c>tecINSUFFICIENT_FUNDS</c> or <c>tecLIMIT_EXCEEDED</c>; null when these checks pass.
+        /// <c>tecINSUFFICIENT_FUNDS</c>, <c>tecLIMIT_EXCEEDED</c> or <c>tecPATH_DRY</c> (the
+        /// conversion overflows); null when these checks pass.
         /// </summary>
         public string Refusal { get; init; }
 
@@ -76,6 +77,76 @@ namespace Xrpl.Sugar
             LedgerRules rules = null)
         {
             VaultState state = VaultState.Of(vault, sharesOutstanding, rules);
+            return Guarded(() => DepositCore(state, vault, amount, depositorBalance));
+        }
+
+        /// <summary>
+        /// A <c>VaultWithdraw</c> of <paramref name="amount"/> in the vault asset: the shares burned
+        /// and the assets paid out.
+        /// </summary>
+        /// <param name="vault">The <c>Vault</c> entry.</param>
+        /// <param name="sharesOutstanding">The share issuance's <c>OutstandingAmount</c>.</param>
+        /// <param name="holderShares">The withdrawing account's shares.</param>
+        /// <param name="amount">The assets to withdraw.</param>
+        /// <param name="rules">The amendments in force; the current rules when null.</param>
+        /// <exception cref="OverflowException">An amount is beyond <see cref="decimal"/>.</exception>
+        public static VaultQuote WithdrawAssets(
+            LOVault vault,
+            ulong sharesOutstanding,
+            ulong holderShares,
+            XrplNumber amount,
+            LedgerRules rules = null)
+        {
+            VaultState state = VaultState.Of(vault, sharesOutstanding, rules);
+            return Guarded(() => WithdrawAssetsCore(state, holderShares, amount));
+        }
+
+        /// <summary>
+        /// A <c>VaultWithdraw</c> of <paramref name="shares"/> vault shares: the assets they pay out.
+        /// </summary>
+        /// <param name="vault">The <c>Vault</c> entry.</param>
+        /// <param name="sharesOutstanding">The share issuance's <c>OutstandingAmount</c>.</param>
+        /// <param name="holderShares">The withdrawing account's shares.</param>
+        /// <param name="shares">The shares to redeem.</param>
+        /// <param name="rules">The amendments in force; the current rules when null.</param>
+        /// <exception cref="OverflowException">An amount is beyond <see cref="decimal"/>.</exception>
+        public static VaultQuote RedeemShares(
+            LOVault vault,
+            ulong sharesOutstanding,
+            ulong holderShares,
+            ulong shares,
+            LedgerRules rules = null)
+        {
+            VaultState state = VaultState.Of(vault, sharesOutstanding, rules);
+            return Guarded(() => RedeemSharesCore(state, holderShares, shares));
+        }
+
+        /// <summary>
+        /// Runs a computation the way <c>VaultDeposit</c> and <c>VaultWithdraw</c> run theirs: an
+        /// overflow in the <c>Number</c> arithmetic, a division by zero included, is the node's
+        /// <c>tecPATH_DRY</c>. The result becomes a <see cref="decimal"/> outside the guard, so an
+        /// amount beyond it still throws.
+        /// </summary>
+        private static VaultQuote Guarded(Func<Outcome> compute)
+        {
+            Outcome outcome;
+            try
+            {
+                outcome = compute();
+            }
+            catch (ArithmeticException)
+            {
+                return new VaultQuote { Refusal = "tecPATH_DRY", RefusalReason = "The share and asset conversion overflows." };
+            }
+
+            return outcome.Refusal != null
+                ? new VaultQuote { Refusal = outcome.Refusal, RefusalReason = outcome.Reason }
+                : new VaultQuote { Shares = LoanSchedule.ToDecimal(outcome.Shares), Assets = LoanSchedule.ToDecimal(outcome.Assets) };
+        }
+
+        /// <summary><c>VaultDeposit::doApply</c>.</summary>
+        private static Outcome DepositCore(VaultState state, LOVault vault, XrplNumber amount, XrplNumber? depositorBalance)
+        {
             NumberContext c = state.Context;
             if (amount <= XrplNumber.Zero)
                 return Refused("temBAD_AMOUNT", "The amount is not positive.");
@@ -115,24 +186,9 @@ namespace Xrpl.Sugar
             return Quote(shares, deposited);
         }
 
-        /// <summary>
-        /// A <c>VaultWithdraw</c> of <paramref name="amount"/> in the vault asset: the shares burned
-        /// and the assets paid out.
-        /// </summary>
-        /// <param name="vault">The <c>Vault</c> entry.</param>
-        /// <param name="sharesOutstanding">The share issuance's <c>OutstandingAmount</c>.</param>
-        /// <param name="holderShares">The withdrawing account's shares.</param>
-        /// <param name="amount">The assets to withdraw.</param>
-        /// <param name="rules">The amendments in force; the current rules when null.</param>
-        /// <exception cref="OverflowException">An amount is beyond <see cref="decimal"/>.</exception>
-        public static VaultQuote WithdrawAssets(
-            LOVault vault,
-            ulong sharesOutstanding,
-            ulong holderShares,
-            XrplNumber amount,
-            LedgerRules rules = null)
+        /// <summary><c>VaultWithdraw::doApply</c> for an amount of the asset.</summary>
+        private static Outcome WithdrawAssetsCore(VaultState state, ulong holderShares, XrplNumber amount)
         {
-            VaultState state = VaultState.Of(vault, sharesOutstanding, rules);
             if (amount <= XrplNumber.Zero)
                 return Refused("temBAD_AMOUNT", "The amount is not positive.");
 
@@ -144,23 +200,9 @@ namespace Xrpl.Sugar
             return Withdraw(shares, SharesToAssetsWithdraw(shares, state, waive), byShares: false, holderShares, waive, state);
         }
 
-        /// <summary>
-        /// A <c>VaultWithdraw</c> of <paramref name="shares"/> vault shares: the assets they pay out.
-        /// </summary>
-        /// <param name="vault">The <c>Vault</c> entry.</param>
-        /// <param name="sharesOutstanding">The share issuance's <c>OutstandingAmount</c>.</param>
-        /// <param name="holderShares">The withdrawing account's shares.</param>
-        /// <param name="shares">The shares to redeem.</param>
-        /// <param name="rules">The amendments in force; the current rules when null.</param>
-        /// <exception cref="OverflowException">An amount is beyond <see cref="decimal"/>.</exception>
-        public static VaultQuote RedeemShares(
-            LOVault vault,
-            ulong sharesOutstanding,
-            ulong holderShares,
-            ulong shares,
-            LedgerRules rules = null)
+        /// <summary><c>VaultWithdraw::doApply</c> for a number of shares.</summary>
+        private static Outcome RedeemSharesCore(VaultState state, ulong holderShares, ulong shares)
         {
-            VaultState state = VaultState.Of(vault, sharesOutstanding, rules);
             if (shares == 0)
                 return Refused("temBAD_AMOUNT", "The amount is not positive.");
 
@@ -170,7 +212,7 @@ namespace Xrpl.Sugar
         }
 
         /// <summary>The checks <c>VaultWithdraw::doApply</c> makes once shares and assets are known.</summary>
-        private static VaultQuote Withdraw(XrplNumber shares, XrplNumber assets, bool byShares, ulong holderShares, bool waive, VaultState state)
+        private static Outcome Withdraw(XrplNumber shares, XrplNumber assets, bool byShares, ulong holderShares, bool waive, VaultState state)
         {
             NumberContext c = state.Context;
             bool final = shares == FromULong(state.SharesOutstanding);
@@ -323,14 +365,12 @@ namespace Xrpl.Sugar
         /// <summary>An MPT amount as a number; MPT amounts never exceed <see cref="long.MaxValue"/>.</summary>
         private static XrplNumber FromULong(ulong value) => (XrplNumber)checked((long)value);
 
-        private static VaultQuote Quote(XrplNumber shares, XrplNumber assets) => new VaultQuote
-        {
-            Shares = LoanSchedule.ToDecimal(shares),
-            Assets = LoanSchedule.ToDecimal(assets),
-        };
+        private static Outcome Quote(XrplNumber shares, XrplNumber assets) => new Outcome(shares, assets, null, null);
 
-        private static VaultQuote Refused(string result, string reason) =>
-            new VaultQuote { Refusal = result, RefusalReason = reason };
+        private static Outcome Refused(string result, string reason) => new Outcome(XrplNumber.Zero, XrplNumber.Zero, result, reason);
+
+        /// <summary>A computation's result before it becomes a <see cref="VaultQuote"/>.</summary>
+        private sealed record Outcome(XrplNumber Shares, XrplNumber Assets, string Refusal, string Reason);
 
         /// <summary>The vault fields the computations read.</summary>
         private sealed class VaultState
