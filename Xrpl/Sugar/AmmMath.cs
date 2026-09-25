@@ -49,6 +49,11 @@ namespace Xrpl.Sugar
     /// significant digits against 15. That is also why the square root here is Newton's method -
     /// <see cref="Math.Sqrt"/> would throw away the precision the rest of the calculation keeps.
     /// </para>
+    /// <para>
+    /// For the exact figures a deposit or withdrawal moves - rippled's own <c>Number</c> and
+    /// <c>STAmount</c> arithmetic, the rounding against the trader and the node's refusals - see
+    /// <see cref="AmmLiquidity"/>.
+    /// </para>
     /// </remarks>
     public static class AmmMath
     {
