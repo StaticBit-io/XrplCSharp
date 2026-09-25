@@ -9,7 +9,7 @@ using Xrpl.Models.Methods;
 namespace Xrpl.Sugar
 {
     /// <summary>
-    /// The amendments that change how rippled computes lending and vault amounts: which
+    /// The amendments that change how rippled computes lending, vault and AMM amounts: which
     /// <c>Number</c> rounding the ledger uses and which fixes apply. Defaults are the newest rules.
     /// </summary>
     public sealed class LedgerRules
@@ -33,8 +33,32 @@ namespace Xrpl.Sugar
         /// </summary>
         public bool FixCleanup3_4_0 { get; init; } = true;
 
-        /// <summary>The arithmetic rippled uses for a loan under these amendments.</summary>
-        internal NumberContext Context => NumberContext.ForAmendments(true, FixCleanup3_2_0, FixCleanup3_3_0);
+        /// <summary>
+        /// Whether SingleAssetVault or LendingProtocol is enabled, which switches rippled's
+        /// <c>Number</c> to the large mantissa. Lending and vaults imply it; AMM arithmetic follows it.
+        /// </summary>
+        public bool LargeNumbers { get; init; } = true;
+
+        /// <summary>
+        /// Whether <c>fixAMMv1_1</c> is enabled: a withdrawal by the only liquidity provider first
+        /// aligns the pool's LP token balance with the provider's.
+        /// </summary>
+        public bool FixAMMv1_1 { get; init; } = true;
+
+        /// <summary>
+        /// Whether <c>fixAMMv1_3</c> is enabled: AMM deposits and withdrawals round against the
+        /// trader. <see cref="AmmLiquidity"/> follows these rules only.
+        /// </summary>
+        public bool FixAMMv1_3 { get; init; } = true;
+
+        /// <summary>
+        /// Whether <c>MPTokensV2</c> is enabled, which refuses a withdrawal that empties a pool
+        /// side without its LP tokens or the other side.
+        /// </summary>
+        public bool MPTokensV2 { get; init; }
+
+        /// <summary>The arithmetic rippled uses under these amendments.</summary>
+        internal NumberContext Context => NumberContext.ForAmendments(LargeNumbers, FixCleanup3_2_0, FixCleanup3_3_0);
 
         /// <summary>Reads the amendments from the node.</summary>
         public static async Task<LedgerRules> FromNodeAsync(IXrplClient client, CancellationToken cancellationToken = default)
@@ -52,6 +76,11 @@ namespace Xrpl.Sugar
                 FixCleanup3_2_0 = features.GetByName("fixCleanup3_2_0")?.Value?.Enabled == true,
                 FixCleanup3_3_0 = features.GetByName("fixCleanup3_3_0")?.Value?.Enabled == true,
                 FixCleanup3_4_0 = features.GetByName("fixCleanup3_4_0")?.Value?.Enabled == true,
+                LargeNumbers = features.GetByName("SingleAssetVault")?.Value?.Enabled == true
+                    || features.GetByName("LendingProtocol")?.Value?.Enabled == true,
+                FixAMMv1_1 = features.GetByName("fixAMMv1_1")?.Value?.Enabled == true,
+                FixAMMv1_3 = features.GetByName("fixAMMv1_3")?.Value?.Enabled == true,
+                MPTokensV2 = features.GetByName("MPTokensV2")?.Value?.Enabled == true,
             };
         }
     }
