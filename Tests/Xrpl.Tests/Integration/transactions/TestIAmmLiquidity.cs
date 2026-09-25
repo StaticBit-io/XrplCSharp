@@ -76,6 +76,15 @@ public class TestIAmmLiquidity : TestIAMMBase
             ("single token for LP tokens, most allowed too small", other, true,
                 (p, h, o, r) => AmmLiquidity.DepositSingleForTokens(p, token, XrplNumber.Parse("0.0001"), XrplNumber.Parse("123.456"), r),
                 (p, a, lp) => new AMMDeposit { Account = a, Asset = token, Asset2 = xrp, Amount = Tok("0.0001"), LPTokenOut = Lp(lp, "123.456"), Flags = AMMDepositFlags.tfOneAssetLPToken }),
+            ("deposit within a generous effective price", other, true,
+                (p, h, o, r) => AmmLiquidity.DepositWithEffectivePrice(p, token, XrplNumber.Parse("10"), XrplNumber.Parse("1"), r),
+                (p, a, lp) => new AMMDeposit { Account = a, Asset = token, Asset2 = xrp, Amount = Tok("10"), EPrice = Tok("1"), Flags = AMMDepositFlags.tfLimitLPToken }),
+            ("deposit capped by a tight effective price", other, true,
+                (p, h, o, r) => AmmLiquidity.DepositWithEffectivePrice(p, token, XrplNumber.Parse("500"), XrplNumber.Parse("0.00715"), r),
+                (p, a, lp) => new AMMDeposit { Account = a, Asset = token, Asset2 = xrp, Amount = Tok("500"), EPrice = Tok("0.00715"), Flags = AMMDepositFlags.tfLimitLPToken }),
+            ("deposit up to an effective price alone", other, true,
+                (p, h, o, r) => AmmLiquidity.DepositWithEffectivePrice(p, token, XrplNumber.Zero, XrplNumber.Parse("0.0072"), r),
+                (p, a, lp) => new AMMDeposit { Account = a, Asset = token, Asset2 = xrp, Amount = Tok("0"), EPrice = Tok("0.0072"), Flags = AMMDepositFlags.tfLimitLPToken }),
             ("tiny single deposit", other, true,
                 (p, h, o, r) => AmmLiquidity.DepositSingle(p, xrp, XrplNumber.Parse("1"), rules: r),
                 (p, a, lp) => new AMMDeposit { Account = a, Asset = token, Asset2 = xrp, Amount = Drops("1"), Flags = AMMDepositFlags.tfSingleAsset }),
@@ -94,6 +103,9 @@ public class TestIAmmLiquidity : TestIAMMBase
             ("single XRP for LP tokens, least accepted too large", other, false,
                 (p, h, o, r) => AmmLiquidity.WithdrawSingleForTokens(p, xrp, XrplNumber.Parse("22.22"), XrplNumber.Parse("1000000"), h, o, r),
                 (p, a, lp) => new AMMWithdraw { Account = a, Asset = xrp, Asset2 = token, Amount = Drops("1000000"), LPTokenIn = Lp(lp, "22.22"), Flags = AMMWithdrawFlags.tfOneAssetLPToken }),
+            ("withdraw at an effective price", other, false,
+                (p, h, o, r) => AmmLiquidity.WithdrawWithEffectivePrice(p, token, XrplNumber.Zero, XrplNumber.Parse("138.8"), h, o, r),
+                (p, a, lp) => new AMMWithdraw { Account = a, Asset = token, Asset2 = xrp, Amount = Tok("0"), EPrice = Lp(lp, "138.8"), Flags = AMMWithdrawFlags.tfLimitLPToken }),
             ("withdraw more than held", other, false,
                 (p, h, o, r) => AmmLiquidity.WithdrawForTokens(p, XrplNumber.Parse("99999999"), h, o, r),
                 (p, a, lp) => new AMMWithdraw { Account = a, Asset = token, Asset2 = xrp, LPTokenIn = Lp(lp, "99999999"), Flags = AMMWithdrawFlags.tfLPToken }),
@@ -109,6 +121,32 @@ public class TestIAmmLiquidity : TestIAMMBase
         };
 
         await Exercise(token, xrp, steps, new[] { walletHolder, other });
+    }
+
+    [TestMethod]
+    public async Task TestInitialLpTokens_MatchWhatAMMCreateIssues()
+    {
+        // tfTwoAssetIfEmpty issues the tokens AMMCreate does: ammLPTokens, sqrt(amount * amount2)
+        // rounded down. An odd pair keeps the root irrational.
+        AssertSuccess(await CreatePool("1234.5678", 98.765432m), "AMMCreate");
+        AMMInfo amm = (await client.AmmInfo(new AMMInfoRequest { Asset = TokenAsset, Asset2 = XrpAsset }).Typed()).Amm;
+        LedgerRules rules = await LedgerRules.FromNodeAsync(client);
+
+        decimal offline = AmmLiquidity.InitialLpTokens(XrplNumber.Parse("1234.5678"), XrplNumber.Parse("98765432"), rules);
+        Assert.AreEqual(XrplNumber.Parse(amm.LPTokenBalance.Value), (XrplNumber)offline);
+
+        AmmPool empty = new AmmPool
+        {
+            Asset = TokenAsset,
+            Asset2 = XrpAsset,
+            Balance = XrplNumber.Zero,
+            Balance2 = XrplNumber.Zero,
+            LpTokenBalance = XrplNumber.Zero,
+        };
+        AmmQuote refill = AmmLiquidity.DepositIntoEmptyPool(empty, XrplNumber.Parse("1234.5678"), XrplNumber.Parse("98765432"), rules);
+        Assert.IsTrue(refill.IsAccepted, refill.RefusalReason);
+        Assert.AreEqual(offline, refill.LpTokens);
+        Assert.AreEqual("tecAMM_NOT_EMPTY", AmmLiquidity.DepositIntoEmptyPool(AmmPool.FromAmmInfo(amm), 1, 1, rules).Refusal);
     }
 
     private async Task Exercise(
