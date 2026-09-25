@@ -26,19 +26,8 @@ namespace Xrpl.Sugar
         /// <param name="context">The ledger's scale, with the rounding mode to apply.</param>
         internal static XrplNumber Round(XrplNumber value, bool integral, int scale, NumberContext context)
         {
-            if (value.IsZero)
-                return value;
-
-            if (integral)
-            {
-                long whole = XrplNumber.Abs(value).ToInt64(context);
-                return value.IsNegative ? -(XrplNumber)whole : (XrplNumber)whole;
-            }
-
-            // STAmount::fromNumber rounds the magnitude and puts the sign back.
-            XrplNumber magnitude = RoundToIouDigits(XrplNumber.Abs(value), context.Rounding);
-            XrplNumber amount = value.IsNegative ? -magnitude : magnitude;
-            if (IouExponent(amount) >= scale)
+            XrplNumber amount = ToAmount(value, integral, context);
+            if (integral || amount.IsZero || IouExponent(amount) >= scale)
                 return amount;
 
             // roundToScale: STAmount addition is Number addition followed by IOUAmount's signed
@@ -70,6 +59,47 @@ namespace Xrpl.Sugar
             long mantissa = (long)kept;
             return new XrplNumber(value.IsNegative ? -mantissa : mantissa, value.Exponent + dropped);
         }
+
+        /// <summary>
+        /// <c>STAmount{asset, value}</c>: the value as an amount of the asset, rounded in the
+        /// context's mode - to a whole unit for XRP and MPT, to 16 significant digits for an issued
+        /// currency - the magnitude rounded and the sign put back.
+        /// </summary>
+        internal static XrplNumber ToAmount(XrplNumber value, bool integral, NumberContext context)
+        {
+            if (value.IsZero)
+                return value;
+
+            XrplNumber magnitude = integral
+                ? (XrplNumber)XrplNumber.Abs(value).ToInt64(context)
+                : RoundToIouDigits(XrplNumber.Abs(value), context.Rounding);
+            return value.IsNegative ? -magnitude : magnitude;
+        }
+
+        /// <summary>
+        /// <c>STAmount::exponent()</c> of an amount of the asset: 0 for XRP and MPT; for an issued
+        /// currency the exponent that puts the mantissa in [10^15, 10^16), and -100 for zero.
+        /// </summary>
+        internal static int AmountExponent(XrplNumber amount, bool integral)
+        {
+            if (integral)
+                return 0;
+
+            return amount.IsZero ? -100 : IouExponent(amount);
+        }
+
+        /// <summary><c>scale(value, asset)</c>: the exponent of the value as an amount of the asset, rounded to nearest.</summary>
+        internal static int Scale(XrplNumber value, bool integral, NumberContext context) =>
+            AmountExponent(ToAmount(value, integral, context.WithRounding(NumberRounding.ToNearest)), integral);
+
+        /// <summary><c>STAmount{asset, value} == value</c>: whether an amount of the asset holds the value exactly.</summary>
+        internal static bool IsRepresentable(XrplNumber value, bool integral, NumberContext context) =>
+            ToAmount(value, integral, context.WithRounding(NumberRounding.ToNearest)) == value;
+
+        /// <summary><c>isRounded</c>: whether rounding down and up to the asset at the scale give the same value.</summary>
+        internal static bool IsRounded(XrplNumber value, bool integral, int scale, NumberContext context) =>
+            Round(value, integral, scale, context.WithRounding(NumberRounding.Downward))
+            == Round(value, integral, scale, context.WithRounding(NumberRounding.Upward));
 
         /// <summary>The exponent of an IOU amount: the one that puts its mantissa in [10^15, 10^16).</summary>
         private static int IouExponent(XrplNumber amount) =>

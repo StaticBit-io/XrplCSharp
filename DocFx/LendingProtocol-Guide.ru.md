@@ -219,6 +219,20 @@ if (preview.WouldSucceed)
 }
 ```
 
+`LoanOrigination.Compute` рассчитывает те же условия без ноды — по транзакции и объектам vault и брокера. Метод вычисляет то, что сохранит `LoanSet` (`PeriodicPayment`, `TotalValueOutstanding`, `ManagementFeeOutstanding`, `LoanScale`), и повторяет проверки, которые зависят от сумм: свободные активы vault, значение, которое актив не может хранить или которое точнее шкалы займа, и ограничения амортизации. Полной проверкой остаётся превью: лимиты, покрытие, резервы и авторизация офлайн не проверяются.
+
+```csharp
+LoanOriginationTerms offline = LoanOrigination.Compute(loanTx, vault, broker, startDate: null, options);
+if (offline.IsAccepted)
+{
+    // offline.Loan: объект Loan, который создал бы LoanSet
+}
+else
+{
+    // offline.Refusal: "tecPRECISION_LOSS" или "tecINSUFFICIENT_FUNDS"; offline.RefusalReason объясняет причину
+}
+```
+
 `LoanSchedule.Project` строит по этим условиям или по `Loan`, прочитанному из леджера, полный график регулярных платежей, повторяя для каждого периода `computePaymentComponents` из rippled. Ставка комиссии за управление берётся из `LoanBroker`, а `LoanScheduleOptions.FromNodeAsync` читает амендменты, которые влияют на округление:
 
 ```csharp

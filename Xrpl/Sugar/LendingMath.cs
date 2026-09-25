@@ -38,7 +38,19 @@ namespace Xrpl.Sugar
             if (terms.PeriodicRate.IsZero)
                 return XrplNumber.Multiply(terms.PeriodicPayment, (XrplNumber)(long)payments, c);
 
-            return XrplNumber.Divide(terms.PeriodicPayment, PaymentFactor(terms, payments), c);
+            return XrplNumber.Divide(terms.PeriodicPayment, PaymentFactor(terms.PeriodicRate, payments, terms.FixCleanup3_2_0, c), c);
+        }
+
+        /// <summary><c>loanPeriodicPayment</c>, equation (7) of XLS-66: the payment that amortizes the principal.</summary>
+        internal static XrplNumber PeriodicPayment(XrplNumber principal, XrplNumber periodicRate, uint payments, bool fixCleanup3_2_0, NumberContext c)
+        {
+            if (principal.IsZero || payments == 0)
+                return XrplNumber.Zero;
+
+            if (periodicRate.IsZero)
+                return XrplNumber.Divide(principal, (XrplNumber)(long)payments, c);
+
+            return XrplNumber.Multiply(principal, PaymentFactor(periodicRate, payments, fixCleanup3_2_0, c), c);
         }
 
         /// <summary>
@@ -158,11 +170,9 @@ namespace Xrpl.Sugar
         }
 
         /// <summary><c>computePaymentFactor</c>, equation (6) of XLS-66; <paramref name="payments"/> is not zero and the rate is not zero.</summary>
-        private static XrplNumber PaymentFactor(LoanTerms terms, uint payments)
+        private static XrplNumber PaymentFactor(XrplNumber rate, uint payments, bool fixCleanup3_2_0, NumberContext c)
         {
-            NumberContext c = terms.Context;
-            XrplNumber rate = terms.PeriodicRate;
-            if (terms.FixCleanup3_2_0)
+            if (fixCleanup3_2_0)
             {
                 XrplNumber raisedMinusOne = PowerMinusOneHybrid(rate, payments, c);
                 XrplNumber raised = XrplNumber.Add(1, raisedMinusOne, c);
@@ -319,6 +329,17 @@ namespace Xrpl.Sugar
         public XrplNumber PeriodicRate { get; }
 
         public ushort ManagementFeeRate { get; }
+
+        /// <summary>Terms from their parts.</summary>
+        public static LoanTerms Create(
+            NumberContext context,
+            bool fixCleanup3_2_0,
+            bool integral,
+            int scale,
+            XrplNumber periodicPayment,
+            XrplNumber periodicRate,
+            ushort managementFeeRate) =>
+            new LoanTerms(context, fixCleanup3_2_0, integral, scale, periodicPayment, periodicRate, managementFeeRate);
 
         /// <summary>The terms of a <c>Loan</c> entry; the entry must carry <c>PeriodicPayment</c>.</summary>
         public static LoanTerms Of(LOLoan loan, IssuedCurrency asset, ushort managementFeeRate, LoanScheduleOptions options)
