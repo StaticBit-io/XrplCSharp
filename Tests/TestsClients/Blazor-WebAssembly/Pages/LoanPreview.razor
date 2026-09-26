@@ -22,7 +22,11 @@
     }
     else
     {
-        <span>Nothing here is signed or submitted: the terms come from <code>simulate</code>, the schedule from <code>LoanSchedule.Project</code>.</span>
+        <span>
+            Nothing here is signed or submitted: the terms come from <code>simulate</code> and, offline, from
+            <code>LoanOrigination.Compute</code>; the schedule from <code>LoanSchedule.Project</code>; a payment from
+            <code>LoanPayments</code> next to <code>simulate</code>.
+        </span>
     }
 </p>
 
@@ -88,6 +92,21 @@
 
             <label>Origination fee (@UnitName)</label>
             <input @bind="_originationFee" />
+
+            <label>Overpayments</label>
+            <label style="display: flex; gap: 8px; align-items: center;">
+                <input type="checkbox" @bind="_allowOverpayment" />
+                <span style="color: #666;">tfLoanOverpayment: the borrower may pay principal ahead of the schedule</span>
+            </label>
+
+            @if (_allowOverpayment)
+            {
+                <label>Overpayment fee, % of the overpayment</label>
+                <input @bind="_overpaymentFeePercent" />
+
+                <label>Overpayment interest, % of the overpayment</label>
+                <input @bind="_overpaymentInterestPercent" />
+            }
         </div>
 
         <button @onclick="PreviewNewLoanAsync" disabled="@(_busy || _broker == null)" style="margin-top: 12px; padding: 8px 16px;">
@@ -156,6 +175,111 @@ else
     </table>
 }
 
+@if (_origination != null)
+{
+    <h2>Offline terms</h2>
+    <p style="color: #666;">
+        <code>LoanOrigination.Compute</code> from the LoanSet, the vault and the broker, without the node, next to what
+        <code>simulate</code> created.
+    </p>
+    <table style="border-collapse: collapse; min-width: 700px;">
+        <thead>
+            <tr style="background: #e9ecef;">
+                <th style="@Cell"></th>
+                <th style="@Cell">Offline</th>
+                <th style="@Cell">Node</th>
+            </tr>
+        </thead>
+        <tbody>
+            <tr>
+                <td style="@Cell">Result</td>
+                <td style="@Cell"><strong style="color: @ResultColor(_origination.Refusal ?? "tesSUCCESS");">@(_origination.Refusal ?? "accepted")</strong> @_origination.RefusalReason</td>
+                <td style="@Cell">@_engineResult</td>
+            </tr>
+            @if (_origination.Loan is { } offline)
+            {
+                <tr><td style="@Cell">Periodic payment</td><td style="@Number">@Amount(offline.PeriodicPayment)</td><td style="@Number">@Amount(_loan?.PeriodicPayment)</td></tr>
+                <tr><td style="@Cell">Total value outstanding</td><td style="@Number">@Amount(offline.TotalValueOutstanding)</td><td style="@Number">@Amount(_loan?.TotalValueOutstanding)</td></tr>
+                <tr><td style="@Cell">Principal outstanding</td><td style="@Number">@Amount(offline.PrincipalOutstanding)</td><td style="@Number">@Amount(_loan?.PrincipalOutstanding)</td></tr>
+                <tr><td style="@Cell">Management fee outstanding</td><td style="@Number">@Amount(offline.ManagementFeeOutstanding)</td><td style="@Number">@Amount(_loan?.ManagementFeeOutstanding)</td></tr>
+                <tr><td style="@Cell">Loan scale</td><td style="@Number">@offline.LoanScale</td><td style="@Number">@(_loan?.LoanScale ?? 0)</td></tr>
+            }
+        </tbody>
+    </table>
+}
+
+@if (_mode == Mode.ExistingLoan && _loan != null && _asset != null)
+{
+    <h2>Payment</h2>
+    <section style="background: #f5f5f5; padding: 15px; border-radius: 5px;">
+        <div style="display: grid; grid-template-columns: 220px 1fr; gap: 8px 12px; align-items: center; max-width: 900px;">
+            <label>Kind</label>
+            <select @bind="_payment">
+                <option value="@PaymentKind.Regular">regular: as many payments as the amount covers</option>
+                <option value="@PaymentKind.Overpayment">regular with tfLoanOverpayment: the rest repays principal</option>
+                <option value="@PaymentKind.Late">late (tfLoanLatePayment)</option>
+                <option value="@PaymentKind.Full">close early (tfLoanFullPayment)</option>
+            </select>
+
+            @if (_payment is PaymentKind.Regular or PaymentKind.Overpayment)
+            {
+                <label>Amount (@UnitName)</label>
+                <input @bind="_payAmount" />
+            }
+
+            <label>Payer</label>
+            <code>@_loan.Borrower</code>
+        </div>
+        <button @onclick="PreviewPaymentAsync" disabled="@_busy" style="margin-top: 12px; padding: 8px 16px;">Preview the payment</button>
+    </section>
+}
+
+@if (_paymentError != null)
+{
+    <p style="color: #b32121; font-weight: bold;">@_paymentError</p>
+}
+
+@if (_paymentShown)
+{
+    <p style="color: #666; max-width: 900px;">
+        Offline figures are computed at the close time of the latest validated ledger, @_paidAt?.ToString("u");
+        interest that runs by the second (late, full payment) can differ by the seconds until the ledger the node simulates in.
+    </p>
+    <table style="border-collapse: collapse; min-width: 700px;">
+        <thead>
+            <tr style="background: #e9ecef;">
+                <th style="@Cell"></th>
+                <th style="@Cell">Offline (<code>LoanPayments</code>)</th>
+                <th style="@Cell">Node (<code>simulate</code>)</th>
+            </tr>
+        </thead>
+        <tbody>
+            <tr>
+                <td style="@Cell">Result</td>
+                <td style="@Cell"><strong style="color: @ResultColor(_payRefusal ?? "tesSUCCESS");">@(_payRefusal ?? "accepted")</strong> @_payRefusalReason</td>
+                <td style="@Cell"><strong style="color: @ResultColor(_payEngineResult ?? string.Empty);">@_payEngineResult</strong> @_payEngineMessage</td>
+            </tr>
+            <tr><td style="@Cell">Principal</td><td style="@Number">@PaidAmount(_due?.Principal)</td><td style="@Number">@PaidAmount(_paid?.PrincipalPaid)</td></tr>
+            <tr><td style="@Cell">Interest to the vault</td><td style="@Number">@PaidAmount(_due?.InterestToVault)</td><td style="@Number">@PaidAmount(_paid?.InterestToVault)</td></tr>
+            <tr><td style="@Cell">Paid to the broker</td><td style="@Number">@PaidAmount(_due?.PaidToBroker)</td><td style="@Number">@PaidAmount(_paid?.PaidToBroker)</td></tr>
+            <tr><td style="@Cell"><strong>Total taken</strong></td><td style="@Number"><strong>@PaidAmount(_due?.Total)</strong></td><td style="@Number"><strong>@PaidAmount(_paid?.TotalPaid)</strong></td></tr>
+            @if (_amountPayment != null)
+            {
+                <tr><td style="@Cell">Payments made</td><td style="@Number">@_amountPayment.PaymentsMade</td><td style="@Number">@_paid?.PaymentsMade</td></tr>
+                <tr><td style="@Cell">Overpayment applied</td><td style="@Number">@(_amountPayment.IsAccepted ? (_amountPayment.IsOverpaid ? "yes" : "no") : string.Empty)</td><td style="@Cell"></td></tr>
+                @if (_amountPayment.LoanAfter is { } after)
+                {
+                    <tr><td style="@Cell">Principal outstanding after</td><td style="@Number">@Amount(after.PrincipalOutstanding)</td><td style="@Number">@Amount(_paid?.LoanAfter?.PrincipalOutstanding)</td></tr>
+                    <tr><td style="@Cell">Total value outstanding after</td><td style="@Number">@Amount(after.TotalValueOutstanding)</td><td style="@Number">@Amount(_paid?.LoanAfter?.TotalValueOutstanding)</td></tr>
+                    <tr><td style="@Cell">Periodic payment after</td><td style="@Number">@Amount(after.PeriodicPayment)</td><td style="@Number">@Amount(_paid?.LoanAfter?.PeriodicPayment)</td></tr>
+                    <tr><td style="@Cell">Payments remaining after</td><td style="@Number">@after.PaymentRemaining</td><td style="@Number">@_paid?.LoanAfter?.PaymentRemaining</td></tr>
+                    <tr><td style="@Cell">Next payment due after</td><td style="@Number">@after.NextPaymentDueDate?.ToString("u")</td><td style="@Number">@_paid?.LoanAfter?.NextPaymentDueDate?.ToString("u")</td></tr>
+                }
+            }
+        </tbody>
+    </table>
+}
+
 @if (_schedule != null)
 {
     <h2>Schedule</h2>
@@ -209,6 +333,8 @@ else
 
     private enum Mode { NewLoan, ExistingLoan, FullFlow }
 
+    private enum PaymentKind { Regular, Overpayment, Late, Full }
+
     [Inject]
     private IXrplClient Client { get; set; } = default!;
 
@@ -231,6 +357,9 @@ else
     private uint _gracePeriod = 86400;
     private string _serviceFee = "0";
     private string _originationFee = "0";
+    private bool _allowOverpayment;
+    private string _overpaymentFeePercent = "0";
+    private string _overpaymentInterestPercent = "0";
 
     private string _loanId = string.Empty;
 
@@ -238,6 +367,21 @@ else
     private LoanSetOutcome? _loanSet;
     private LedgerRules? _options;
     private IReadOnlyList<LoanScheduleRow>? _schedule;
+    private LoanOriginationTerms? _origination;
+    private LOLoanBroker? _loanBroker;
+
+    private PaymentKind _payment = PaymentKind.Regular;
+    private string _payAmount = "1";
+    private bool _paymentShown;
+    private string? _paymentError;
+    private DateTime? _paidAt;
+    private LoanPaymentDue? _due;
+    private LoanAmountPayment? _amountPayment;
+    private string? _payRefusal;
+    private string? _payRefusalReason;
+    private string? _payEngineResult;
+    private string? _payEngineMessage;
+    private LoanPaymentOutcome? _paid;
 
     private bool IsXrp => _asset?.IsXrp() == true;
     private string UnitName => _asset == null ? "asset units" : IsXrp ? "XRP" : AssetName(_asset);
@@ -282,6 +426,22 @@ else
         _loan = null;
         _loanSet = null;
         _schedule = null;
+        _origination = null;
+        ClearPayment();
+    }
+
+    private void ClearPayment()
+    {
+        _paymentShown = false;
+        _paymentError = null;
+        _paidAt = null;
+        _due = null;
+        _amountPayment = null;
+        _payRefusal = null;
+        _payRefusalReason = null;
+        _payEngineResult = null;
+        _payEngineMessage = null;
+        _paid = null;
     }
 
     private async Task LoadBrokerAsync()
@@ -329,6 +489,16 @@ else
             if (!originationFee.IsZero)
                 loanSet.LoanOriginationFee = originationFee;
 
+            if (_allowOverpayment)
+            {
+                loanSet.Flags = LoanSetFlags.tfLoanOverpayment;
+                loanSet.OverpaymentFee = (uint)Math.Round(ParseDecimal(_overpaymentFeePercent) * 1000m);
+                loanSet.OverpaymentInterestRate = (uint)Math.Round(ParseDecimal(_overpaymentInterestPercent) * 1000m);
+            }
+
+            LedgerRules rules = await RulesAsync();
+            _origination = LoanOrigination.Compute(loanSet, _vault!, _broker, options: rules);
+
             TransactionPreview<LoanSetOutcome> preview = await Client.PreviewLoanSet(loanSet);
             _engineResult = preview.EngineResult;
             _engineMessage = preview.EngineResultMessage;
@@ -349,6 +519,7 @@ else
             LOLoan loan = (LOLoan)(await Client.LedgerEntry(new LedgerEntryRequest { Index = _loanId.Trim() }).Typed()).Node;
             (LOLoanBroker broker, LOVault vault) = await LoadBrokerAndVaultAsync(loan.LoanBrokerID);
             _asset = vault.Asset;
+            _loanBroker = broker;
             _loan = loan;
             await ProjectAsync(loan, vault.Asset, broker.ManagementFeeRate ?? 0);
         });
@@ -356,18 +527,110 @@ else
 
     private async Task ProjectAsync(LOLoan loan, IssuedCurrency asset, ushort managementFeeRate)
     {
+        _options = await RulesAsync();
+        _schedule = LoanSchedule.Project(loan, asset, managementFeeRate, _options);
+    }
+
+    private async Task<LedgerRules> RulesAsync()
+    {
         try
         {
-            _options = await LedgerRules.FromNodeAsync(Client);
+            return await LedgerRules.FromNodeAsync(Client);
         }
         catch (Exception)
         {
-            // feature can be restricted on a public node; project with the current rules
-            _options = new LedgerRules();
+            // feature can be restricted on a public node; compute with the current rules
+            return new LedgerRules();
         }
-
-        _schedule = LoanSchedule.Project(loan, asset, managementFeeRate, _options);
     }
+
+    private async Task PreviewPaymentAsync()
+    {
+        LOLoan loan = _loan!;
+        IssuedCurrency asset = _asset!;
+        ushort managementFeeRate = _loanBroker?.ManagementFeeRate ?? 0;
+        _busy = true;
+        ClearPayment();
+        try
+        {
+            LedgerRules rules = await RulesAsync();
+            LOLedger ledger = await Client.Ledger(new LedgerRequest { LedgerIndex = new LedgerIndex(LedgerIndexType.Validated) }).Typed();
+            DateTime at = ((LedgerEntity)ledger.LedgerEntity).CloseTime ?? DateTime.UtcNow;
+            _paidAt = at;
+
+            XrplNumber amount;
+            LoanPayFlags? flags = null;
+            switch (_payment)
+            {
+                case PaymentKind.Late:
+                    _due = LoanPayments.LatePaymentDue(loan, asset, managementFeeRate, at, rules);
+                    _payRefusal = _due == null ? "refused" : null;
+                    _payRefusalReason = _due == null ? "not late at this time (tecTOO_SOON), or paid off" : null;
+                    flags = LoanPayFlags.tfLoanLatePayment;
+                    amount = PaymentAmount(_due);
+                    break;
+                case PaymentKind.Full:
+                    _due = LoanPayments.FullPaymentDue(loan, asset, managementFeeRate, at, rules);
+                    _payRefusal = _due == null ? "refused" : null;
+                    _payRefusalReason = _due == null ? "one payment or none left (tecKILLED), or already late (tecEXPIRED)" : null;
+                    flags = LoanPayFlags.tfLoanFullPayment;
+                    amount = PaymentAmount(_due);
+                    break;
+                default:
+                    bool overpayment = _payment == PaymentKind.Overpayment;
+                    amount = ToLedgerAmount(_payAmount);
+                    _amountPayment = LoanPayments.PaymentForAmount(loan, asset, managementFeeRate, amount, at, overpayment, rules);
+                    _due = _amountPayment.Due;
+                    _payRefusal = _amountPayment.Refusal;
+                    _payRefusalReason = _amountPayment.RefusalReason;
+                    flags = overpayment ? LoanPayFlags.tfLoanOverpayment : null;
+                    break;
+            }
+
+            TransactionPreview<LoanPaymentOutcome> preview = await Client.PreviewLoanPay(new LoanPay
+            {
+                Account = loan.Borrower,
+                LoanID = _loanId.Trim(),
+                Amount = AssetAmount(amount, asset),
+                Flags = flags,
+            });
+            _payEngineResult = preview.EngineResult;
+            _payEngineMessage = preview.EngineResultMessage;
+            _paid = preview.Outcome;
+            _paymentShown = true;
+        }
+        catch (Exception exception)
+        {
+            _paymentError = exception.Message;
+        }
+        finally
+        {
+            _busy = false;
+        }
+    }
+
+    /// <summary>
+    /// The amount to send with a late or full payment: what is due, rounded up to the asset, or
+    /// one unit (a drop for XRP) when nothing is due, so the node still answers.
+    /// </summary>
+    private XrplNumber PaymentAmount(LoanPaymentDue? due)
+    {
+        if (due == null)
+            return (XrplNumber)1m;
+
+        return (XrplNumber)(IsXrp ? decimal.Ceiling(due.Total) : due.Total);
+    }
+
+    private static Currency AssetAmount(XrplNumber value, IssuedCurrency asset) =>
+        asset.MptIssuanceId != null
+            ? new Currency { Value = value.ToString(), MPTokenIssuanceID = asset.MptIssuanceId }
+            : asset.IsXrp()
+                ? new Currency { Value = value.ToString(), CurrencyCode = "XRP" }
+                : new Currency { Value = value.ToString(), CurrencyCode = asset.Currency, Issuer = asset.Issuer };
+
+    private string PaidAmount(decimal? value) => value is { } d ? Amount(d) : string.Empty;
+
+    private static string ResultColor(string result) => result == "tesSUCCESS" ? "#28a745" : "#b32121";
 
     private async Task<(LOLoanBroker Broker, LOVault Vault)> LoadBrokerAndVaultAsync(string brokerId)
     {

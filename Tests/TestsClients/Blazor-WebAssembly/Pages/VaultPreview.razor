@@ -1,0 +1,306 @@
+@page "/vault-preview"
+@using System.Globalization
+@using Xrpl.BinaryCodec.Numbers
+@using Xrpl.Client
+@using Xrpl.Models.Common
+@using Xrpl.Models.Ledger
+@using Xrpl.Models.Methods
+@using Xrpl.Models.Transactions
+@using Xrpl.Sugar
+@using static Xrpl.Models.Common.Common
+
+<PageTitle>Vault preview</PageTitle>
+
+<h1>Vault preview</h1>
+
+<p style="color: #666;">
+    Server: <strong>@Client.Url()</strong> (@(Client.IsConnected() ? "connected" : "not connected")).
+    Switch it on the <a href="/">Connection</a> tab.
+    Nothing here is signed or submitted: the quote comes from <code>VaultShares</code>, computed offline, and the
+    node's answer from <code>simulate</code> when an account is given.
+</p>
+
+<section style="background: #f5f5f5; padding: 15px; border-radius: 5px;">
+    <div style="display: grid; grid-template-columns: 220px 1fr; gap: 8px 12px; align-items: center; max-width: 900px;">
+        <label>VaultID</label>
+        <input @bind="_vaultId" style="font-family: monospace;" placeholder="64 hex characters" />
+
+        <label>Account (optional)</label>
+        <input @bind="_account" style="font-family: monospace;" placeholder="r... - its shares, and simulate" />
+    </div>
+    <button @onclick="LoadVaultAsync" disabled="@_busy" style="margin-top: 12px; padding: 8px 16px;">Load vault</button>
+</section>
+
+@if (_vault != null)
+{
+    <h2>Vault</h2>
+    <table style="border-collapse: collapse;">
+        <tbody>
+            <tr><td style="@Cell">Asset</td><td style="@Number">@AssetName(_vault.Asset)</td></tr>
+            <tr><td style="@Cell">Assets total</td><td style="@Number">@Amount(_vault.AssetsTotal)</td></tr>
+            <tr><td style="@Cell">Assets available</td><td style="@Number">@Amount(_vault.AssetsAvailable)</td></tr>
+            <tr><td style="@Cell">Unrealized loss</td><td style="@Number">@Amount(_vault.LossUnrealized)</td></tr>
+            <tr><td style="@Cell">Shares outstanding</td><td style="@Number">@_sharesOutstanding</td></tr>
+            @if (_vault.RedemptionDate is DateTime redemption)
+            {
+                <tr>
+                    <td style="@Cell">Phases (closed-ended)</td>
+                    <td style="@Number">subscription to @(_vault.SubscriptionDate?.ToString("u")), redemption from @redemption.ToString("u")</td>
+                </tr>
+            }
+            @if (_holderShares is { } held)
+            {
+                <tr><td style="@Cell">Account's shares</td><td style="@Number">@held</td></tr>
+            }
+        </tbody>
+    </table>
+
+    <h2>Operation</h2>
+    <section style="background: #f5f5f5; padding: 15px; border-radius: 5px;">
+        <div style="display: grid; grid-template-columns: 220px 1fr; gap: 8px 12px; align-items: center; max-width: 900px;">
+            <label>Mode</label>
+            <select @bind="_operation">
+                <option value="@Operation.Deposit">deposit assets (VaultDeposit)</option>
+                <option value="@Operation.WithdrawAssets">withdraw assets (VaultWithdraw, Amount in the asset)</option>
+                <option value="@Operation.RedeemShares">redeem shares (VaultWithdraw, Amount in shares)</option>
+            </select>
+
+            <label>@(_operation == Operation.RedeemShares ? "Shares" : $"Amount ({Unit})")</label>
+            <input @bind="_amount" />
+        </div>
+        <button @onclick="QuoteAsync" disabled="@_busy" style="margin-top: 12px; padding: 8px 16px;">Quote</button>
+    </section>
+}
+
+@if (_busy)
+{
+    <p>Asking the node...</p>
+}
+
+@if (_error != null)
+{
+    <p style="color: #b32121; font-weight: bold;">@_error</p>
+}
+
+@if (_quote != null)
+{
+    <h2>Result</h2>
+    <table style="border-collapse: collapse; min-width: 700px;">
+        <thead>
+            <tr style="background: #e9ecef;">
+                <th style="@Cell"></th>
+                <th style="@Cell">Offline (<code>VaultShares</code>)</th>
+                <th style="@Cell">Node (<code>simulate</code>)</th>
+            </tr>
+        </thead>
+        <tbody>
+            <tr>
+                <td style="@Cell">Result</td>
+                <td style="@Cell"><strong style="color: @ResultColor(_quote.Refusal ?? "tesSUCCESS");">@(_quote.Refusal ?? "accepted")</strong> @_quote.RefusalReason</td>
+                <td style="@Cell">
+                    @if (_engineResult != null)
+                    {
+                        <strong style="color: @ResultColor(_engineResult);">@_engineResult</strong>
+                        <span> @_engineMessage</span>
+                    }
+                    else
+                    {
+                        <span style="color: #666;">give an account to ask the node</span>
+                    }
+                </td>
+            </tr>
+            <tr>
+                <td style="@Cell">Shares @(_operation == Operation.Deposit ? "minted" : "burned")</td>
+                <td style="@Number">@_quote.Shares.ToString(CultureInfo.InvariantCulture)</td>
+                <td style="@Number">@(_outcome == null ? string.Empty : Math.Abs(_outcome.AccountShareChange).ToString(CultureInfo.InvariantCulture))</td>
+            </tr>
+            <tr>
+                <td style="@Cell">Assets @(_operation == Operation.Deposit ? "taken by the vault" : "paid out")</td>
+                <td style="@Number">@Amount(_quote.Assets)</td>
+                <td style="@Number">@(_outcome == null ? string.Empty : Amount(Math.Abs(_outcome.VaultAssetChange)))</td>
+            </tr>
+        </tbody>
+    </table>
+    @if (_outcome?.VaultAfter is { } after)
+    {
+        <p style="color: #666;">
+            After the operation the node's vault holds @Amount(after.AssetsTotal) in total, @Amount(after.AssetsAvailable) available.
+        </p>
+    }
+    @if (_operation == Operation.Deposit && _vault?.Asset.Issuer != null && _vault.Asset.MptIssuanceId == null)
+    {
+        <p style="color: #666; max-width: 900px;">
+            For an issued currency the offline quote skips the check that the deposit changes the depositor's
+            16-significant-digit balance at all; the node makes it.
+        </p>
+    }
+}
+
+@code {
+    private const string Cell = "border: 1px solid #ccc; padding: 4px 8px;";
+    private const string Number = "border: 1px solid #ccc; padding: 4px 8px; text-align: right; font-family: monospace;";
+
+    private enum Operation
+    {
+        Deposit,
+        WithdrawAssets,
+        RedeemShares,
+    }
+
+    [Inject]
+    private IXrplClient Client { get; set; } = default!;
+
+    private bool _busy;
+    private string? _error;
+
+    private string _vaultId = string.Empty;
+    private string _account = string.Empty;
+
+    private LOVault? _vault;
+    private ulong _sharesOutstanding;
+    private ulong? _holderShares;
+
+    private Operation _operation = Operation.Deposit;
+    private string _amount = "1";
+
+    private VaultQuote? _quote;
+    private string? _engineResult;
+    private string? _engineMessage;
+    private VaultOutcome? _outcome;
+
+    private bool IsXrp => _vault?.Asset.IsXrp() == true;
+    private string Unit => IsXrp ? "XRP" : "units";
+
+    protected override async Task OnInitializedAsync()
+    {
+        if (!Client.IsConnected())
+            await Client.Connect();
+    }
+
+    private async Task LoadVaultAsync()
+    {
+        await RunAsync(async () =>
+        {
+            _vault = null;
+            _holderShares = null;
+            LOVault vault = (LOVault)(await Client.LedgerEntry(new LedgerEntryRequest { Index = _vaultId.Trim() }).Typed()).Node;
+            LOMPTokenIssuance issuance = (LOMPTokenIssuance)(await Client.LedgerEntry(new LedgerEntryRequest { MptIssuance = vault.ShareMPTID }).Typed()).Node;
+            _sharesOutstanding = issuance.OutstandingAmount ?? 0;
+
+            string account = _account.Trim();
+            if (account.Length > 0)
+                _holderShares = await HolderSharesAsync(vault.ShareMPTID, account);
+
+            _vault = vault;
+        });
+    }
+
+    private async Task<ulong> HolderSharesAsync(string shareMptId, string account)
+    {
+        try
+        {
+            LedgerEntryRequest request = new LedgerEntryRequest
+            {
+                MPToken = new MPTokenQuery { MPTokenIssuanceID = shareMptId, Account = account },
+            };
+            LOMPToken token = (LOMPToken)(await Client.LedgerEntry(request).Typed()).Node;
+            return token.MPTAmount ?? 0;
+        }
+        catch (Exception)
+        {
+            // entryNotFound: the account holds no shares of this vault
+            return 0;
+        }
+    }
+
+    private async Task QuoteAsync()
+    {
+        LOVault vault = _vault!;
+        await RunAsync(async () =>
+        {
+            LedgerRules rules;
+            try
+            {
+                rules = await LedgerRules.FromNodeAsync(Client);
+            }
+            catch (Exception)
+            {
+                // feature can be restricted on a public node; quote with the current rules
+                rules = new LedgerRules();
+            }
+
+            ulong held = _holderShares ?? 0;
+            _quote = _operation switch
+            {
+                Operation.Deposit => VaultShares.Deposit(vault, _sharesOutstanding, LedgerAmount(_amount), rules: rules),
+                Operation.WithdrawAssets => VaultShares.WithdrawAssets(vault, _sharesOutstanding, held, LedgerAmount(_amount), rules),
+                _ => VaultShares.RedeemShares(vault, _sharesOutstanding, held, ulong.Parse(_amount.Trim(), CultureInfo.InvariantCulture), rules),
+            };
+
+            string account = _account.Trim();
+            if (account.Length == 0)
+                return;
+
+            Currency amount = _operation == Operation.RedeemShares
+                ? new Currency { Value = _amount.Trim(), MPTokenIssuanceID = vault.ShareMPTID }
+                : AssetAmount(LedgerAmount(_amount), vault.Asset);
+            TransactionPreview<VaultOutcome> preview = _operation == Operation.Deposit
+                ? await Client.PreviewVaultDeposit(new VaultDeposit { Account = account, VaultID = _vaultId.Trim(), Amount = amount })
+                : await Client.PreviewVaultWithdraw(new VaultWithdraw { Account = account, VaultID = _vaultId.Trim(), Amount = amount });
+            _engineResult = preview.EngineResult;
+            _engineMessage = preview.EngineResultMessage;
+            _outcome = preview.Outcome;
+        });
+    }
+
+    private async Task RunAsync(Func<Task> action)
+    {
+        _busy = true;
+        _error = null;
+        _quote = null;
+        _engineResult = null;
+        _engineMessage = null;
+        _outcome = null;
+        try
+        {
+            await action();
+        }
+        catch (Exception exception)
+        {
+            _error = exception.Message;
+        }
+        finally
+        {
+            _busy = false;
+        }
+    }
+
+    /// <summary>XRP is entered in XRP and sent in drops; other assets in their own unit.</summary>
+    private XrplNumber LedgerAmount(string text)
+    {
+        decimal value = decimal.Parse(text.Trim(), NumberStyles.Float, CultureInfo.InvariantCulture);
+        return (XrplNumber)(IsXrp ? decimal.Round(value * 1_000_000m, 0) : value);
+    }
+
+    private static Currency AssetAmount(XrplNumber value, IssuedCurrency asset) =>
+        asset.MptIssuanceId != null
+            ? new Currency { Value = value.ToString(), MPTokenIssuanceID = asset.MptIssuanceId }
+            : asset.IsXrp()
+                ? new Currency { Value = value.ToString(), CurrencyCode = "XRP" }
+                : new Currency { Value = value.ToString(), CurrencyCode = asset.Currency, Issuer = asset.Issuer };
+
+    private static string ResultColor(string result) => result == "tesSUCCESS" ? "#28a745" : "#b32121";
+
+    private string Amount(decimal value) =>
+        IsXrp
+            ? (value / 1_000_000m).ToString("0.000000", CultureInfo.InvariantCulture)
+            : value.ToString(CultureInfo.InvariantCulture);
+
+    private string Amount(XrplNumber? value) =>
+        value is { } number && number.TryToDecimal(out decimal d) ? Amount(d) : value?.ToString() ?? "0";
+
+    private static string AssetName(IssuedCurrency asset) =>
+        asset.IsXrp() ? "XRP"
+        : asset.MptIssuanceId != null ? $"MPT {asset.MptIssuanceId}"
+        : $"{asset.CurrencyName} ({asset.Issuer})";
+}
