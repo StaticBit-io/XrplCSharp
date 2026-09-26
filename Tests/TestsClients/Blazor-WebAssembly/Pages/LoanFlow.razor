@@ -74,6 +74,9 @@
             <label>Grace period, seconds</label><input type="number" min="60" @bind="_gracePeriod" />
             <label>Service fee per payment (XRP)</label><input @bind="_serviceFee" />
             <label>Origination fee (XRP)</label><input @bind="_originationFee" />
+            <label>Allow overpayments</label><input type="checkbox" @bind="_allowOverpayment" style="justify-self: start;" />
+            <label>Overpayment fee, %</label><input @bind="_overpaymentFeePercent" disabled="@(!_allowOverpayment)" />
+            <label>Overpayment interest, %</label><input @bind="_overpaymentInterestPercent" disabled="@(!_allowOverpayment)" />
         </div>
         <button @onclick="PreviewAsync" disabled="@(_busy || _brokerId == null)" style="margin-top: 6px;">Preview</button>
         @if (_preview != null)
@@ -215,6 +218,9 @@
     private string _originationFee = "1";
 
     private LoanSetOutcome? _preview;
+    private bool _allowOverpayment;
+    private string _overpaymentFeePercent = "0.5";
+    private string _overpaymentInterestPercent = "1";
     private string? _loanId;
     private IReadOnlyList<LoanScheduleRow>? _plan;
     private readonly List<LoanPaymentOutcome> _paid = new();
@@ -358,6 +364,9 @@
         GracePeriod = _gracePeriod,
         LoanServiceFee = OptionalDrops(_serviceFee),
         LoanOriginationFee = OptionalDrops(_originationFee),
+        Flags = _allowOverpayment ? LoanSetFlags.tfLoanOverpayment : null,
+        OverpaymentFee = _allowOverpayment ? (uint)Math.Round(ParseDecimal(_overpaymentFeePercent) * 1000m) : null,
+        OverpaymentInterestRate = _allowOverpayment ? (uint)Math.Round(ParseDecimal(_overpaymentInterestPercent) * 1000m) : null,
     };
 
     private async Task PreviewAsync()

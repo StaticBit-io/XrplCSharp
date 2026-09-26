@@ -59,6 +59,8 @@
                     <option value="@Operation.DepositBoth">both assets (tfTwoAsset)</option>
                     <option value="@Operation.DepositSingle">one asset (tfSingleAsset)</option>
                     <option value="@Operation.DepositSingleForTokens">one asset for LP tokens (tfOneAssetLPToken)</option>
+                    <option value="@Operation.DepositWithEffectivePrice">one asset up to an effective price (tfLimitLPToken)</option>
+                    <option value="@Operation.DepositIntoEmptyPool">both assets into an empty pool (tfTwoAssetIfEmpty)</option>
                 </optgroup>
                 <optgroup label="Withdraw">
                     <option value="@Operation.WithdrawForTokens">for LP tokens (tfLPToken)</option>
@@ -67,15 +69,16 @@
                     <option value="@Operation.WithdrawSingle">one asset (tfSingleAsset)</option>
                     <option value="@Operation.WithdrawSingleForTokens">one asset for LP tokens (tfOneAssetLPToken)</option>
                     <option value="@Operation.WithdrawAllOfAsset">everything held as one asset (tfOneAssetWithdrawAll)</option>
+                    <option value="@Operation.WithdrawWithEffectivePrice">one asset at an effective price (tfLimitLPToken)</option>
                 </optgroup>
             </select>
 
             @if (UsesSide)
             {
                 <label>Asset</label>
-                <select @bind="_firstSide">
-                    <option value="@true">@AssetName(_pool.Asset)</option>
-                    <option value="@false">@AssetName(_pool.Asset2)</option>
+                <select @bind="_side">
+                    <option value="first">@AssetName(_pool.Asset)</option>
+                    <option value="second">@AssetName(_pool.Asset2)</option>
                 </select>
             }
 
@@ -95,6 +98,12 @@
             {
                 <label>LP tokens</label>
                 <input @bind="_lpTokens" />
+            }
+
+            @if (UsesPrice)
+            {
+                <label>@PriceLabel</label>
+                <input @bind="_ePrice" />
             }
 
             @if (IsWithdrawal)
@@ -193,12 +202,15 @@
         DepositBoth,
         DepositSingle,
         DepositSingleForTokens,
+        DepositWithEffectivePrice,
+        DepositIntoEmptyPool,
         WithdrawForTokens,
         WithdrawAll,
         WithdrawBoth,
         WithdrawSingle,
         WithdrawSingleForTokens,
         WithdrawAllOfAsset,
+        WithdrawWithEffectivePrice,
     }
 
     [Inject]
@@ -217,10 +229,11 @@
     private XrplNumber? _holderLp;
 
     private Operation _operation = Operation.DepositSingle;
-    private bool _firstSide = true;
+    private string _side = "first";
     private string _amount1 = "1";
     private string _amount2 = "1";
     private string _lpTokens = "1";
+    private string _ePrice = "1";
     private bool _onlyProvider;
 
     private AmmQuote? _quote;
@@ -231,22 +244,30 @@
 
     private bool IsWithdrawal => _operation >= Operation.WithdrawForTokens;
 
-    private bool UsesSide => _operation is Operation.DepositSingle or Operation.DepositSingleForTokens
-        or Operation.WithdrawSingle or Operation.WithdrawSingleForTokens or Operation.WithdrawAllOfAsset;
+    private bool UsesSide => _operation is Operation.DepositSingle or Operation.DepositSingleForTokens or Operation.DepositWithEffectivePrice
+        or Operation.WithdrawSingle or Operation.WithdrawSingleForTokens or Operation.WithdrawAllOfAsset or Operation.WithdrawWithEffectivePrice;
 
     private bool UsesAmount1 => _operation is not (Operation.DepositForTokens or Operation.WithdrawForTokens or Operation.WithdrawAll);
 
-    private bool UsesAmount2 => _operation is Operation.DepositBoth or Operation.WithdrawBoth;
+    private bool UsesAmount2 => _operation is Operation.DepositBoth or Operation.DepositIntoEmptyPool or Operation.WithdrawBoth;
+
+    private bool UsesPrice => _operation is Operation.DepositWithEffectivePrice or Operation.WithdrawWithEffectivePrice;
+
+    private string PriceLabel => _operation == Operation.DepositWithEffectivePrice
+        ? $"Effective price: most of the asset per LP token ({Unit(SideAsset)})"
+        : $"Effective price: LP tokens per {(SideAsset.IsXrp() ? "XRP" : "unit of the asset")}";
 
     private bool UsesTokens => _operation is Operation.DepositForTokens or Operation.DepositSingleForTokens
         or Operation.WithdrawForTokens or Operation.WithdrawSingleForTokens;
 
-    private IssuedCurrency SideAsset => _firstSide ? _pool!.Asset : _pool!.Asset2;
+    private IssuedCurrency SideAsset => _side == "second" ? _pool!.Asset2 : _pool!.Asset;
 
     private string Amount1Label => _operation switch
     {
         Operation.DepositSingleForTokens => $"Most of the asset to pay ({Unit(SideAsset)})",
         Operation.WithdrawSingleForTokens or Operation.WithdrawAllOfAsset => $"Least of the asset to accept, 0 for any ({Unit(SideAsset)})",
+        Operation.DepositWithEffectivePrice => $"Most of the asset to deposit, 0 for the price alone ({Unit(SideAsset)})",
+        Operation.WithdrawWithEffectivePrice => $"Amount of the asset, 0 for the price alone ({Unit(SideAsset)})",
         _ when UsesSide => $"Amount ({Unit(SideAsset)})",
         _ => $"Amount of {ShortName(_pool!.Asset)} ({Unit(_pool!.Asset)})",
     };
@@ -312,6 +333,9 @@
                 Operation.WithdrawBoth => AmmLiquidity.WithdrawBoth(pool, Ledger(_amount1, pool.Asset), Ledger(_amount2, pool.Asset2), held, _onlyProvider, rules),
                 Operation.WithdrawSingle => AmmLiquidity.WithdrawSingle(pool, side, Ledger(_amount1, side), held, _onlyProvider, rules),
                 Operation.WithdrawSingleForTokens => AmmLiquidity.WithdrawSingleForTokens(pool, side, Tokens(), Ledger(_amount1, side), held, _onlyProvider, rules),
+                Operation.DepositWithEffectivePrice => AmmLiquidity.DepositWithEffectivePrice(pool, side, Ledger(_amount1, side), Ledger(_ePrice, side), rules),
+                Operation.DepositIntoEmptyPool => AmmLiquidity.DepositIntoEmptyPool(pool, Ledger(_amount1, pool.Asset), Ledger(_amount2, pool.Asset2), rules),
+                Operation.WithdrawWithEffectivePrice => AmmLiquidity.WithdrawWithEffectivePrice(pool, side, Ledger(_amount1, side), LpPerUnit(_ePrice, side), held, _onlyProvider, rules),
                 _ => AmmLiquidity.WithdrawAllOfAsset(pool, side, Ledger(_amount1, side), held, _onlyProvider, rules),
             };
 
@@ -353,6 +377,16 @@
             case Operation.DepositSingle:
                 tx.Amount = AssetAmount(_amount1, side);
                 tx.Flags = AMMDepositFlags.tfSingleAsset;
+                break;
+            case Operation.DepositWithEffectivePrice:
+                tx.Amount = AssetAmount(_amount1, side);
+                tx.EPrice = AssetAmount(_ePrice, side);
+                tx.Flags = AMMDepositFlags.tfLimitLPToken;
+                break;
+            case Operation.DepositIntoEmptyPool:
+                tx.Amount = AssetAmount(_amount1, pool.Asset);
+                tx.Amount2 = AssetAmount(_amount2, pool.Asset2);
+                tx.Flags = AMMDepositFlags.tfTwoAssetIfEmpty;
                 break;
             default:
                 tx.Amount = AssetAmount(_amount1, side);
@@ -397,6 +431,11 @@
                 tx.Amount = AssetAmount(_amount1, side);
                 tx.LPTokenIn = LpAmount(_lpTokens);
                 tx.Flags = AMMWithdrawFlags.tfOneAssetLPToken;
+                break;
+            case Operation.WithdrawWithEffectivePrice:
+                tx.Amount = AssetAmount(_amount1, side);
+                tx.EPrice = LpAmount(LpPerUnit(_ePrice, side));
+                tx.Flags = AMMWithdrawFlags.tfLimitLPToken;
                 break;
             default:
                 tx.Amount = AssetAmount(_amount1, side);
@@ -449,12 +488,24 @@
                 : new Currency { Value = value, CurrencyCode = asset.Currency, Issuer = asset.Issuer };
     }
 
-    private Currency LpAmount(string text) => new Currency
+    private Currency LpAmount(string text) => LpAmount(XrplNumber.Parse(text.Trim()));
+
+    private Currency LpAmount(XrplNumber value) => new Currency
     {
-        Value = XrplNumber.Parse(text.Trim()).ToString(),
+        Value = value.ToString(),
         CurrencyCode = _amm!.LPTokenBalance.CurrencyCode,
         Issuer = _amm.LPTokenBalance.Issuer,
     };
+
+    /// <summary>
+    /// A withdrawal's EPrice is LP tokens per unit of the asset as the ledger counts it: per drop
+    /// for XRP, which the form takes per XRP.
+    /// </summary>
+    private static XrplNumber LpPerUnit(string text, IssuedCurrency asset)
+    {
+        XrplNumber perUnit = XrplNumber.Parse(text.Trim());
+        return asset.IsXrp() ? XrplNumber.Divide(perUnit, (XrplNumber)1_000_000m, NumberContext.Default) : perUnit;
+    }
 
     /// <summary>"XRP", "CUR.rIssuer", or a 48-character MPT issuance ID.</summary>
     private static IssuedCurrency ParseAsset(string text)
