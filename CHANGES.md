@@ -87,6 +87,9 @@
   * `TestUNumberVectors` replays 15,935 results printed by rippled's `Number.cpp` at 00606bec1 across all scales, rounding modes and operations; `Tests/Xrpl.BinaryCodec.Test/Fixtures/Number` holds the vectors, the generator and how to rebuild them. `TestUXrplNumberArithmetic` covers the public API
   * `Xrpl.BinaryCodec` exposes its internals to `Xrpl.BinaryCodec.Test`
 * Twelve `Xrpl.BinaryCodec.Test` classes take the `TestU` prefix that CI's unit-test filter matches (#218): `TestUBinarySerializer`, `TestUEnumParity`, `TestUFieldDispatch`, `TestUAmount`, `TestUInt32Type`, `TestUInt64Type`, `TestUIouValueTrailingDot`, `TestUIssueMpt`, `TestULoanSetEncode`, `TestUNumberType`, `TestUXChainBridgeType` and `TestUXrplNumber`
+* **Breaking: `AMMBid.AuthAccounts` is a `List<AuthAccountWrapper>`** (#219). It was a `List<AuthAccount>`, the `amm_info` shape (`{"account": ...}`), which the codec refuses in a transaction, so an `AMMBid` with any authorized account could not be signed. Each element is now the `AuthAccount` inner object, `{"AuthAccount": {"Account": ...}}`, in `AMMBid`, `IAMMBid` and `AMMBidResponse`; `AuctionSlot.AuthAccounts` keeps `AuthAccount` for `amm_info`
+  * migration: `new AuthAccount { Account = address }` becomes `new AuthAccountWrapper(address)`; read the address as `entry.AuthAccount.Account`
+  * `TestUAMMBidAuthAccounts` signs an `AMMBid` with an authorized account and decodes the blob, and reads both shapes; `TestAMMBid_AuthAccounts_TradeAtTheDiscountedFee` submits the bid, finds the account in `amm_info` and compares its deposit at the discounted fee with the node
 
 ## 11.8.1.0 23/09/2026
 

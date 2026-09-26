@@ -40,7 +40,7 @@ namespace Xrpl.Models.Transactions
         [JsonConverter(typeof(CurrencyConverter))]
         public Xrpl.Models.Common.Currency? BidMax { get; set; }
         /// <inheritdoc />
-        public List<AuthAccount> AuthAccounts { get; set; }
+        public List<AuthAccountWrapper>? AuthAccounts { get; set; }
     }
     /// <summary>
     /// AMMBid is used for submitting a vote for the trading fee of an AMM Instance.
@@ -72,9 +72,41 @@ namespace Xrpl.Models.Transactions
         /// <summary>
         /// This field represents an array of XRPL account IDs that are authorized to trade
         /// at the discounted fee against the AMM instance.
-        /// A maximum of four accounts can be provided.
+        /// A maximum of four accounts can be provided. Each element is the <c>AuthAccount</c>
+        /// inner object the ledger expects: <c>{"AuthAccount": {"Account": "r..."}}</c>.
         /// </summary>
-        public List<AuthAccount> AuthAccounts { get; set; }
+        public List<AuthAccountWrapper>? AuthAccounts { get; set; }
+    }
+
+    /// <summary>
+    /// An element of <see cref="IAMMBid.AuthAccounts"/>: the <c>AuthAccount</c> inner object of the
+    /// transaction. <c>amm_info</c> reports the same accounts in another shape,
+    /// <see cref="Xrpl.Models.Ledger.AuthAccount"/>.
+    /// </summary>
+    public class AuthAccountWrapper
+    {
+        /// <summary>An empty element, for the serializer.</summary>
+        public AuthAccountWrapper()
+        {
+        }
+
+        /// <summary>An element that authorizes <paramref name="account"/>.</summary>
+        public AuthAccountWrapper(string account)
+        {
+            AuthAccount = new AuthAccountEntry { Account = account };
+        }
+
+        /// <summary>The inner object.</summary>
+        [JsonPropertyName("AuthAccount")]
+        public AuthAccountEntry AuthAccount { get; set; } = default!;
+    }
+
+    /// <summary>The fields of an <c>AuthAccount</c> inner object.</summary>
+    public class AuthAccountEntry
+    {
+        /// <summary>The account authorized to trade at the discounted fee.</summary>
+        [JsonPropertyName("Account")]
+        public string Account { get; set; } = default!;
     }
 
     /// <inheritdoc cref="IAMMBid" />
@@ -95,7 +127,7 @@ namespace Xrpl.Models.Transactions
         [JsonConverter(typeof(CurrencyConverter))]
         public Currency? BidMax { get; set; }
         /// <inheritdoc />
-        public List<AuthAccount> AuthAccounts { get; set; }
+        public List<AuthAccountWrapper>? AuthAccounts { get; set; }
 
         #endregion
     }
