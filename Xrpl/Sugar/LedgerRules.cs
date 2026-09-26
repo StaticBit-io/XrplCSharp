@@ -63,6 +63,12 @@ namespace Xrpl.Sugar
         /// </summary>
         public bool MPTokensV2 { get; init; }
 
+        /// <summary>
+        /// Whether <c>LendingProtocolV1_1</c> is enabled: a closed-ended vault takes deposits only
+        /// in its subscription phase and pays out nothing in its investment phase.
+        /// </summary>
+        public bool LendingProtocolV1_1 { get; init; } = true;
+
         /// <summary>The arithmetic rippled uses under these amendments.</summary>
         internal NumberContext Context => NumberContext.ForAmendments(LargeNumbers, FixCleanup3_2_0, FixCleanup3_3_0);
 
@@ -88,6 +94,7 @@ namespace Xrpl.Sugar
                 FixAMMv1_1 = features.GetByName("fixAMMv1_1")?.Value?.Enabled == true,
                 FixAMMv1_3 = features.GetByName("fixAMMv1_3")?.Value?.Enabled == true,
                 MPTokensV2 = features.GetByName("MPTokensV2")?.Value?.Enabled == true,
+                LendingProtocolV1_1 = features.GetByName("LendingProtocolV1_1")?.Value?.Enabled == true,
             };
         }
     }

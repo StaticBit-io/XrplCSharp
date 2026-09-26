@@ -68,16 +68,22 @@ namespace Xrpl.Sugar
         /// changes it at all; null skips that check. Not used for XRP and MPT.
         /// </param>
         /// <param name="rules">The amendments in force; the current rules when null.</param>
+        /// <param name="parentCloseTime">
+        /// The close time of the ledger before the one the transaction lands in, for the phases of a
+        /// closed-ended vault; null skips that check. A local time is converted to UTC; an
+        /// unspecified one is taken as UTC.
+        /// </param>
         /// <exception cref="OverflowException">An amount is beyond <see cref="decimal"/>.</exception>
         public static VaultQuote Deposit(
             LOVault vault,
             ulong sharesOutstanding,
             XrplNumber amount,
             XrplNumber? depositorBalance = null,
-            LedgerRules rules = null)
+            LedgerRules rules = null,
+            DateTime? parentCloseTime = null)
         {
             VaultState state = VaultState.Of(vault, sharesOutstanding, rules);
-            return Guarded(() => DepositCore(state, vault, amount, depositorBalance));
+            return Guarded(() => DepositCore(state, vault, amount, depositorBalance, parentCloseTime));
         }
 
         /// <summary>
@@ -89,16 +95,22 @@ namespace Xrpl.Sugar
         /// <param name="holderShares">The withdrawing account's shares.</param>
         /// <param name="amount">The assets to withdraw.</param>
         /// <param name="rules">The amendments in force; the current rules when null.</param>
+        /// <param name="parentCloseTime">
+        /// The close time of the ledger before the one the transaction lands in, for the phases of a
+        /// closed-ended vault; null skips that check. A local time is converted to UTC; an
+        /// unspecified one is taken as UTC.
+        /// </param>
         /// <exception cref="OverflowException">An amount is beyond <see cref="decimal"/>.</exception>
         public static VaultQuote WithdrawAssets(
             LOVault vault,
             ulong sharesOutstanding,
             ulong holderShares,
             XrplNumber amount,
-            LedgerRules rules = null)
+            LedgerRules rules = null,
+            DateTime? parentCloseTime = null)
         {
             VaultState state = VaultState.Of(vault, sharesOutstanding, rules);
-            return Guarded(() => WithdrawAssetsCore(state, holderShares, amount));
+            return Guarded(() => WithdrawAssetsCore(state, vault, holderShares, amount, parentCloseTime));
         }
 
         /// <summary>
@@ -109,16 +121,22 @@ namespace Xrpl.Sugar
         /// <param name="holderShares">The withdrawing account's shares.</param>
         /// <param name="shares">The shares to redeem.</param>
         /// <param name="rules">The amendments in force; the current rules when null.</param>
+        /// <param name="parentCloseTime">
+        /// The close time of the ledger before the one the transaction lands in, for the phases of a
+        /// closed-ended vault; null skips that check. A local time is converted to UTC; an
+        /// unspecified one is taken as UTC.
+        /// </param>
         /// <exception cref="OverflowException">An amount is beyond <see cref="decimal"/>.</exception>
         public static VaultQuote RedeemShares(
             LOVault vault,
             ulong sharesOutstanding,
             ulong holderShares,
             ulong shares,
-            LedgerRules rules = null)
+            LedgerRules rules = null,
+            DateTime? parentCloseTime = null)
         {
             VaultState state = VaultState.Of(vault, sharesOutstanding, rules);
-            return Guarded(() => RedeemSharesCore(state, holderShares, shares));
+            return Guarded(() => RedeemSharesCore(state, vault, holderShares, shares, parentCloseTime));
         }
 
         /// <summary>
@@ -145,11 +163,14 @@ namespace Xrpl.Sugar
         }
 
         /// <summary><c>VaultDeposit::doApply</c>.</summary>
-        private static Outcome DepositCore(VaultState state, LOVault vault, XrplNumber amount, XrplNumber? depositorBalance)
+        private static Outcome DepositCore(VaultState state, LOVault vault, XrplNumber amount, XrplNumber? depositorBalance, DateTime? parentCloseTime)
         {
             NumberContext c = state.Context;
             if (amount <= XrplNumber.Zero)
                 return Refused("temBAD_AMOUNT", "The amount is not positive.");
+
+            if (state.Rules.LendingProtocolV1_1 && PhaseAt(vault, parentCloseTime) is VaultPhase.Investment or VaultPhase.Redemption)
+                return Refused("tecEXPIRED", "A closed-ended vault takes deposits only in its subscription phase.");
 
             XrplNumber assets = AssetRounding.ToAmount(amount, state.Integral, c);
             if (state.Rules.FixCleanup3_2_0)
@@ -187,10 +208,13 @@ namespace Xrpl.Sugar
         }
 
         /// <summary><c>VaultWithdraw::doApply</c> for an amount of the asset.</summary>
-        private static Outcome WithdrawAssetsCore(VaultState state, ulong holderShares, XrplNumber amount)
+        private static Outcome WithdrawAssetsCore(VaultState state, LOVault vault, ulong holderShares, XrplNumber amount, DateTime? parentCloseTime)
         {
             if (amount <= XrplNumber.Zero)
                 return Refused("temBAD_AMOUNT", "The amount is not positive.");
+
+            if (InvestmentPhaseRefusal(state, vault, parentCloseTime) is { } phase)
+                return phase;
 
             bool waive = WaivesLoss(state, holderShares);
             XrplNumber shares = AssetsToSharesWithdraw(AssetRounding.ToAmount(amount, state.Integral, state.Context), state, waive);
@@ -201,14 +225,53 @@ namespace Xrpl.Sugar
         }
 
         /// <summary><c>VaultWithdraw::doApply</c> for a number of shares.</summary>
-        private static Outcome RedeemSharesCore(VaultState state, ulong holderShares, ulong shares)
+        private static Outcome RedeemSharesCore(VaultState state, LOVault vault, ulong holderShares, ulong shares, DateTime? parentCloseTime)
         {
             if (shares == 0)
                 return Refused("temBAD_AMOUNT", "The amount is not positive.");
 
+            if (InvestmentPhaseRefusal(state, vault, parentCloseTime) is { } phase)
+                return phase;
+
             bool waive = WaivesLoss(state, holderShares);
             XrplNumber redeemed = FromULong(shares);
             return Withdraw(redeemed, SharesToAssetsWithdraw(redeemed, state, waive), byShares: true, holderShares, waive, state);
+        }
+
+        private static Outcome InvestmentPhaseRefusal(VaultState state, LOVault vault, DateTime? parentCloseTime) =>
+            state.Rules.LendingProtocolV1_1 && PhaseAt(vault, parentCloseTime) == VaultPhase.Investment
+                ? Refused("tecTOO_SOON", "A closed-ended vault pays out nothing in its investment phase.")
+                : null;
+
+        /// <summary>
+        /// <c>getVaultPhase</c>: subscription up to and including <c>SubscriptionDate</c>, investment
+        /// until <c>RedemptionDate</c>, redemption from it on. <see cref="VaultPhase.None"/> for an
+        /// open-ended vault, or when no time is given.
+        /// </summary>
+        private static VaultPhase PhaseAt(LOVault vault, DateTime? parentCloseTime)
+        {
+            if (parentCloseTime is not { } time || vault.VaultKind != (uint)VaultKind.ClosedEnded)
+                return VaultPhase.None;
+
+            DateTime now = time.Kind switch
+            {
+                DateTimeKind.Local => time.ToUniversalTime(),
+                DateTimeKind.Unspecified => DateTime.SpecifyKind(time, DateTimeKind.Utc),
+                _ => time,
+            };
+            if (vault.SubscriptionDate is not { } subscription || now <= subscription)
+                return VaultPhase.Subscription;
+            if (vault.RedemptionDate is not { } redemption || now < redemption)
+                return VaultPhase.Investment;
+            return VaultPhase.Redemption;
+        }
+
+        private enum VaultPhase
+        {
+            None,
+            Subscription,
+            Investment,
+            Redemption,
         }
 
         /// <summary>The checks <c>VaultWithdraw::doApply</c> makes once shares and assets are known.</summary>

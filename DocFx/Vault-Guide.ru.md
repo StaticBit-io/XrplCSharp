@@ -189,7 +189,7 @@ VaultQuote redeem = VaultShares.RedeemShares(vault, sharesOutstanding, holderSha
 // .Shares, .Assets; либо .Refusal ("tecPRECISION_LOSS", "tecINSUFFICIENT_FUNDS", "tecLIMIT_EXCEEDED") и .RefusalReason
 ```
 
-Расчёт повторяет проверки, которые зависят от сумм; авторизацию, заморозки, фазу vault и собственные средства аккаунта проверяет превью.
+Расчёт повторяет проверки, которые зависят от сумм. Если передать `parentCloseTime` — время закрытия леджера, предшествующего тому, в который попадёт транзакция, — он проверяет и фазу закрытого vault: депозит вне фазы подписки отклоняется с `tecEXPIRED`, вывод в фазе инвестирования — с `tecTOO_SOON`. Авторизацию, заморозки и собственные средства аккаунта проверяет превью.
 
 `VaultOutcome.FromMetadata` читает те же значения из уже проведённой транзакции. `BalanceChanges.GetBalanceChanges` возвращает балансы MPT, включая доли vault, вместе с XRP и trust line.
 
