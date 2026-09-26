@@ -130,7 +130,7 @@ namespace Xrpl.Sugar
             }
 
             if (LendingMath.LoanGuards(principal, interestRate != 0, paymentTotal, properties.Value, properties, c) is { } guard)
-                return Refused("tecPRECISION_LOSS", guard);
+                return Refused(guard.Result, guard.Reason);
 
             if (properties.ManagementFee < XrplNumber.Zero || properties.Value <= XrplNumber.Zero || properties.PeriodicPayment <= XrplNumber.Zero)
                 return Refused("tecINTERNAL", "The computed loan properties are invalid.");

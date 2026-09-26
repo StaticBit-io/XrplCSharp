@@ -185,6 +185,18 @@ public class TestIVaultShares : TestILoanBase
 
         LOVault vault = (LOVault)(await client.LedgerEntry(new LedgerEntryRequest { Index = vaultId }).Typed()).Node;
         Assert.IsTrue((vault.LossUnrealized ?? XrplNumber.Zero) > XrplNumber.Zero, "the impaired loan books a loss");
+
+        // Still the investment phase of a closed-ended vault: no deposit, no withdrawal.
+        if (vault.RedemptionDate != null)
+        {
+            await Exercise(vaultId, xrp, new[]
+            {
+                (Kind.Deposit, bob, "1000000"),
+                (Kind.Withdraw, alice, "1000000"),
+                (Kind.Redeem, bob, "1000"),
+            }, shares, allRefused: true);
+        }
+
         if (vault.RedemptionDate is DateTime redemption)
             await IntegrationTestConfig.WaitForCloseTimeAsync(client, redemption.AddSeconds(1), nodeType);
 
@@ -201,13 +213,16 @@ public class TestIVaultShares : TestILoanBase
     /// <summary>
     /// Runs the steps against one vault. "ALL" redeems every share the account holds; a step the
     /// node refuses must be refused offline with the same result. <paramref name="shares"/> carries
-    /// the holdings from an earlier run on the same vault.
+    /// the holdings from an earlier run on the same vault. Each step is quoted at the validated
+    /// close time, for the phases of a closed-ended vault; <paramref name="allRefused"/> expects the
+    /// node to refuse every step.
     /// </summary>
     private static async Task Exercise(
         string vaultId,
         Func<string, Currency> assetAmount,
         (Kind Kind, XrplWallet Account, string Value)[] steps,
-        Dictionary<string, ulong> shares = null)
+        Dictionary<string, ulong> shares = null,
+        bool allRefused = false)
     {
         LedgerRules rules = await LedgerRules.FromNodeAsync(client);
         shares ??= new Dictionary<string, ulong>();
@@ -231,7 +246,7 @@ public class TestIVaultShares : TestILoanBase
                 XrplNumber? balance = vault.Asset.Issuer != null && vault.Asset.MptIssuanceId == null
                     ? await IouBalance(account, vault.Asset)
                     : null;
-                quote = VaultShares.Deposit(vault, outstanding, XrplNumber.Parse(value), balance, rules);
+                quote = VaultShares.Deposit(vault, outstanding, XrplNumber.Parse(value), balance, rules, await IntegrationTestConfig.ValidatedCloseTimeAsync(client));
                 preview = await client.PreviewVaultDeposit(new VaultDeposit
                 {
                     Account = account.ClassicAddress,
@@ -242,8 +257,8 @@ public class TestIVaultShares : TestILoanBase
             else
             {
                 quote = kind == Kind.Withdraw
-                    ? VaultShares.WithdrawAssets(vault, outstanding, held, XrplNumber.Parse(value), rules)
-                    : VaultShares.RedeemShares(vault, outstanding, held, ulong.Parse(value, CultureInfo.InvariantCulture), rules);
+                    ? VaultShares.WithdrawAssets(vault, outstanding, held, XrplNumber.Parse(value), rules, await IntegrationTestConfig.ValidatedCloseTimeAsync(client))
+                    : VaultShares.RedeemShares(vault, outstanding, held, ulong.Parse(value, CultureInfo.InvariantCulture), rules, await IntegrationTestConfig.ValidatedCloseTimeAsync(client));
                 if (value == "0")
                 {
                     // A zero amount never reaches the node: preflight refuses it.
@@ -278,7 +293,10 @@ public class TestIVaultShares : TestILoanBase
             accepted++;
         }
 
-        Assert.IsTrue(accepted >= steps.Length / 2, $"only {accepted} of {steps.Length} steps went through");
+        if (allRefused)
+            Assert.AreEqual(0, accepted, "every step is refused");
+        else
+            Assert.IsTrue(accepted >= steps.Length / 2, $"only {accepted} of {steps.Length} steps went through");
     }
 
     private static async Task<string> CreateVault(XrplWallet owner, IssuedCurrency asset)

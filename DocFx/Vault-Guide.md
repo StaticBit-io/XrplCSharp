@@ -189,7 +189,7 @@ VaultQuote redeem = VaultShares.RedeemShares(vault, sharesOutstanding, holderSha
 // .Shares, .Assets; or .Refusal ("tecPRECISION_LOSS", "tecINSUFFICIENT_FUNDS", "tecLIMIT_EXCEEDED") and .RefusalReason
 ```
 
-A quote repeats the checks that depend on the amounts; authorization, freezes, the vault's phase and the account's own funds are left to the preview.
+A quote repeats the checks that depend on the amounts. Given `parentCloseTime` - the close time of the ledger before the one the transaction lands in - it also checks the phase of a closed-ended vault: a deposit outside the subscription phase is refused with `tecEXPIRED`, a withdrawal in the investment phase with `tecTOO_SOON`. Authorization, freezes and the account's own funds are left to the preview.
 
 `VaultOutcome.FromMetadata` reads the same figures from a validated transaction. `BalanceChanges.GetBalanceChanges` reports MPT balances, vault shares included, alongside XRP and trust lines.
 

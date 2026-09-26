@@ -138,26 +138,26 @@ namespace Xrpl.Sugar
 
         /// <summary>
         /// <c>checkLoanGuards</c>: whether a loan of total value <paramref name="value"/> can be
-        /// amortized at its scale; the reason when not.
+        /// amortized at its scale; the node's result and the reason when not.
         /// </summary>
-        internal static string LoanGuards(XrplNumber principal, bool expectInterest, uint paymentTotal, XrplNumber value, LoanProperties properties, NumberContext c)
+        internal static (string Result, string Reason)? LoanGuards(XrplNumber principal, bool expectInterest, uint paymentTotal, XrplNumber value, LoanProperties properties, NumberContext c)
         {
             XrplNumber interest = XrplNumber.Subtract(value, principal, c);
             if (expectInterest && interest <= XrplNumber.Zero)
-                return "The loan carries an interest rate but no interest at its scale.";
+                return ("tecPRECISION_LOSS", "The loan carries an interest rate but no interest at its scale.");
             if (!expectInterest && interest > XrplNumber.Zero)
-                return "The loan carries no interest rate but interest at its scale.";
+                return ("tecINTERNAL", "The loan carries no interest rate but interest at its scale.");
             if (properties.FirstPaymentPrincipal <= XrplNumber.Zero)
-                return "The first payment repays no principal.";
+                return ("tecPRECISION_LOSS", "The first payment repays no principal.");
             if (properties.RoundedPeriodicPayment.IsZero)
-                return "The periodic payment rounds to zero.";
+                return ("tecPRECISION_LOSS", "The periodic payment rounds to zero.");
 
             NumberContext upward = c.WithRounding(NumberRounding.Upward);
             long payments = XrplNumber.Divide(value, properties.RoundedPeriodicPayment, upward).ToInt64(upward);
             if (payments != paymentTotal)
             {
-                return $"The rounded periodic payment {properties.RoundedPeriodicPayment} settles the total value "
-                    + $"{value} in {payments} payments, not {paymentTotal}.";
+                return ("tecPRECISION_LOSS", $"The rounded periodic payment {properties.RoundedPeriodicPayment} settles the total value "
+                    + $"{value} in {payments} payments, not {paymentTotal}.");
             }
 
             return null;
