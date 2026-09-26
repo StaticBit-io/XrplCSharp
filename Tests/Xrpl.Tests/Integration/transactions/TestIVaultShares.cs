@@ -156,6 +156,18 @@ public class TestIVaultShares : TestILoanBase
         string brokerId = GetCreatedObjectId(brokerResult, LedgerEntryType.LoanBroker);
         await EnterInvestmentPhaseAsync(client, vaultId);
 
+        // The investment phase of a closed-ended vault takes no deposit and pays out nothing. Checked
+        // first, while the window is still wide open.
+        if (create.VaultKind == (uint)VaultKind.ClosedEnded)
+        {
+            await Exercise(vaultId, xrp, new[]
+            {
+                (Kind.Deposit, bob, "1000000"),
+                (Kind.Withdraw, alice, "1000000"),
+                (Kind.Redeem, bob, "1000"),
+            }, shares, allRefused: true);
+        }
+
         LoanSet loanTx = new LoanSet
         {
             Account = owner.ClassicAddress,
@@ -185,17 +197,6 @@ public class TestIVaultShares : TestILoanBase
 
         LOVault vault = (LOVault)(await client.LedgerEntry(new LedgerEntryRequest { Index = vaultId }).Typed()).Node;
         Assert.IsTrue((vault.LossUnrealized ?? XrplNumber.Zero) > XrplNumber.Zero, "the impaired loan books a loss");
-
-        // Still the investment phase of a closed-ended vault: no deposit, no withdrawal.
-        if (vault.RedemptionDate != null)
-        {
-            await Exercise(vaultId, xrp, new[]
-            {
-                (Kind.Deposit, bob, "1000000"),
-                (Kind.Withdraw, alice, "1000000"),
-                (Kind.Redeem, bob, "1000"),
-            }, shares, allRefused: true);
-        }
 
         if (vault.RedemptionDate is DateTime redemption)
             await IntegrationTestConfig.WaitForCloseTimeAsync(client, redemption.AddSeconds(1), nodeType);
