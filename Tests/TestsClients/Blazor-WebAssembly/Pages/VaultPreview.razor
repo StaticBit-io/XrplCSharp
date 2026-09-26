@@ -2,6 +2,7 @@
 @using System.Globalization
 @using Xrpl.BinaryCodec.Numbers
 @using Xrpl.Client
+@using Xrpl.Client.Exceptions
 @using Xrpl.Models.Common
 @using Xrpl.Models.Ledger
 @using Xrpl.Models.Methods
@@ -164,6 +165,8 @@
     private string _account = string.Empty;
 
     private LOVault? _vault;
+    private string _loadedVaultId = string.Empty;
+    private string _loadedAccount = string.Empty;
     private ulong _sharesOutstanding;
     private ulong? _holderShares;
 
@@ -199,6 +202,8 @@
             if (account.Length > 0)
                 _holderShares = await HolderSharesAsync(vault.ShareMPTID, account);
 
+            _loadedVaultId = _vaultId.Trim();
+            _loadedAccount = account;
             _vault = vault;
         });
     }
@@ -214,9 +219,9 @@
             LOMPToken token = (LOMPToken)(await Client.LedgerEntry(request).Typed()).Node;
             return token.MPTAmount ?? 0;
         }
-        catch (Exception)
+        catch (RippledException exception) when (exception.Response?.Error == XrplErrorCodes.EntryNotFound)
         {
-            // entryNotFound: the account holds no shares of this vault
+            // the account holds no shares of this vault
             return 0;
         }
     }
@@ -251,7 +256,7 @@
                 _ => VaultShares.RedeemShares(vault, _sharesOutstanding, held, ulong.Parse(_amount.Trim(), CultureInfo.InvariantCulture), rules, at),
             };
 
-            string account = _account.Trim();
+            string account = _loadedAccount;
             if (account.Length == 0)
                 return;
 
@@ -259,8 +264,8 @@
                 ? new Currency { Value = _amount.Trim(), MPTokenIssuanceID = vault.ShareMPTID }
                 : AssetAmount(LedgerAmount(_amount), vault.Asset);
             TransactionPreview<VaultOutcome> preview = _operation == Operation.Deposit
-                ? await Client.PreviewVaultDeposit(new VaultDeposit { Account = account, VaultID = _vaultId.Trim(), Amount = amount })
-                : await Client.PreviewVaultWithdraw(new VaultWithdraw { Account = account, VaultID = _vaultId.Trim(), Amount = amount });
+                ? await Client.PreviewVaultDeposit(new VaultDeposit { Account = account, VaultID = _loadedVaultId, Amount = amount })
+                : await Client.PreviewVaultWithdraw(new VaultWithdraw { Account = account, VaultID = _loadedVaultId, Amount = amount });
             _engineResult = preview.EngineResult;
             _engineMessage = preview.EngineResultMessage;
             _outcome = preview.Outcome;

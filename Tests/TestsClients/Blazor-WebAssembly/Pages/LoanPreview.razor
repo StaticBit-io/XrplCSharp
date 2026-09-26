@@ -369,6 +369,7 @@ else
     private IReadOnlyList<LoanScheduleRow>? _schedule;
     private LoanOriginationTerms? _origination;
     private LOLoanBroker? _loanBroker;
+    private string _loadedLoanId = string.Empty;
 
     private PaymentKind _payment = PaymentKind.Regular;
     private string _payAmount = "1";
@@ -520,6 +521,7 @@ else
             (LOLoanBroker broker, LOVault vault) = await LoadBrokerAndVaultAsync(loan.LoanBrokerID);
             _asset = vault.Asset;
             _loanBroker = broker;
+            _loadedLoanId = _loanId.Trim();
             _loan = loan;
             await ProjectAsync(loan, vault.Asset, broker.ManagementFeeRate ?? 0);
         });
@@ -590,7 +592,7 @@ else
             TransactionPreview<LoanPaymentOutcome> preview = await Client.PreviewLoanPay(new LoanPay
             {
                 Account = loan.Borrower,
-                LoanID = _loanId.Trim(),
+                LoanID = _loadedLoanId,
                 Amount = AssetAmount(amount, asset),
                 Flags = flags,
             });

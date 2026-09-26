@@ -76,9 +76,9 @@
             @if (UsesSide)
             {
                 <label>Asset</label>
-                <select @bind="_firstSide">
-                    <option value="True">@AssetName(_pool.Asset)</option>
-                    <option value="False">@AssetName(_pool.Asset2)</option>
+                <select @bind="_side">
+                    <option value="first">@AssetName(_pool.Asset)</option>
+                    <option value="second">@AssetName(_pool.Asset2)</option>
                 </select>
             }
 
@@ -229,7 +229,7 @@
     private XrplNumber? _holderLp;
 
     private Operation _operation = Operation.DepositSingle;
-    private bool _firstSide = true;
+    private string _side = "first";
     private string _amount1 = "1";
     private string _amount2 = "1";
     private string _lpTokens = "1";
@@ -255,12 +255,12 @@
 
     private string PriceLabel => _operation == Operation.DepositWithEffectivePrice
         ? $"Effective price: most of the asset per LP token ({Unit(SideAsset)})"
-        : "Effective price: LP tokens per unit of the asset";
+        : $"Effective price: LP tokens per {(SideAsset.IsXrp() ? "XRP" : "unit of the asset")}";
 
     private bool UsesTokens => _operation is Operation.DepositForTokens or Operation.DepositSingleForTokens
         or Operation.WithdrawForTokens or Operation.WithdrawSingleForTokens;
 
-    private IssuedCurrency SideAsset => _firstSide ? _pool!.Asset : _pool!.Asset2;
+    private IssuedCurrency SideAsset => _side == "second" ? _pool!.Asset2 : _pool!.Asset;
 
     private string Amount1Label => _operation switch
     {
@@ -335,7 +335,7 @@
                 Operation.WithdrawSingleForTokens => AmmLiquidity.WithdrawSingleForTokens(pool, side, Tokens(), Ledger(_amount1, side), held, _onlyProvider, rules),
                 Operation.DepositWithEffectivePrice => AmmLiquidity.DepositWithEffectivePrice(pool, side, Ledger(_amount1, side), Ledger(_ePrice, side), rules),
                 Operation.DepositIntoEmptyPool => AmmLiquidity.DepositIntoEmptyPool(pool, Ledger(_amount1, pool.Asset), Ledger(_amount2, pool.Asset2), rules),
-                Operation.WithdrawWithEffectivePrice => AmmLiquidity.WithdrawWithEffectivePrice(pool, side, Ledger(_amount1, side), XrplNumber.Parse(_ePrice.Trim()), held, _onlyProvider, rules),
+                Operation.WithdrawWithEffectivePrice => AmmLiquidity.WithdrawWithEffectivePrice(pool, side, Ledger(_amount1, side), LpPerUnit(_ePrice, side), held, _onlyProvider, rules),
                 _ => AmmLiquidity.WithdrawAllOfAsset(pool, side, Ledger(_amount1, side), held, _onlyProvider, rules),
             };
 
@@ -434,7 +434,7 @@
                 break;
             case Operation.WithdrawWithEffectivePrice:
                 tx.Amount = AssetAmount(_amount1, side);
-                tx.EPrice = LpAmount(_ePrice);
+                tx.EPrice = LpAmount(LpPerUnit(_ePrice, side));
                 tx.Flags = AMMWithdrawFlags.tfLimitLPToken;
                 break;
             default:
@@ -488,12 +488,24 @@
                 : new Currency { Value = value, CurrencyCode = asset.Currency, Issuer = asset.Issuer };
     }
 
-    private Currency LpAmount(string text) => new Currency
+    private Currency LpAmount(string text) => LpAmount(XrplNumber.Parse(text.Trim()));
+
+    private Currency LpAmount(XrplNumber value) => new Currency
     {
-        Value = XrplNumber.Parse(text.Trim()).ToString(),
+        Value = value.ToString(),
         CurrencyCode = _amm!.LPTokenBalance.CurrencyCode,
         Issuer = _amm.LPTokenBalance.Issuer,
     };
+
+    /// <summary>
+    /// A withdrawal's EPrice is LP tokens per unit of the asset as the ledger counts it: per drop
+    /// for XRP, which the form takes per XRP.
+    /// </summary>
+    private static XrplNumber LpPerUnit(string text, IssuedCurrency asset)
+    {
+        XrplNumber perUnit = XrplNumber.Parse(text.Trim());
+        return asset.IsXrp() ? XrplNumber.Divide(perUnit, (XrplNumber)1_000_000m, NumberContext.Default) : perUnit;
+    }
 
     /// <summary>"XRP", "CUR.rIssuer", or a 48-character MPT issuance ID.</summary>
     private static IssuedCurrency ParseAsset(string text)
