@@ -121,6 +121,13 @@
             </tr>
         </tbody>
     </table>
+    @if (_vault?.RedemptionDate != null && _quotedAt is { } quotedAt)
+    {
+        <p style="color: #666;">
+            The phase is judged at @quotedAt.ToString("u"), the close time of the latest validated ledger:
+            deposits only in the subscription phase, withdrawals not in the investment phase.
+        </p>
+    }
     @if (_outcome?.VaultAfter is { } after)
     {
         <p style="color: #666;">
@@ -164,6 +171,7 @@
     private string _amount = "1";
 
     private VaultQuote? _quote;
+    private DateTime? _quotedAt;
     private string? _engineResult;
     private string? _engineMessage;
     private VaultOutcome? _outcome;
@@ -229,12 +237,18 @@
                 rules = new LedgerRules();
             }
 
+            // The phase of a closed-ended vault is judged at the close time of the ledger the
+            // transaction would follow; the latest validated one is the usual estimate.
+            LOLedger ledger = await Client.Ledger(new LedgerRequest { LedgerIndex = new LedgerIndex(LedgerIndexType.Validated) }).Typed();
+            DateTime? at = ((LedgerEntity)ledger.LedgerEntity).CloseTime;
+            _quotedAt = at;
+
             ulong held = _holderShares ?? 0;
             _quote = _operation switch
             {
-                Operation.Deposit => VaultShares.Deposit(vault, _sharesOutstanding, LedgerAmount(_amount), rules: rules),
-                Operation.WithdrawAssets => VaultShares.WithdrawAssets(vault, _sharesOutstanding, held, LedgerAmount(_amount), rules),
-                _ => VaultShares.RedeemShares(vault, _sharesOutstanding, held, ulong.Parse(_amount.Trim(), CultureInfo.InvariantCulture), rules),
+                Operation.Deposit => VaultShares.Deposit(vault, _sharesOutstanding, LedgerAmount(_amount), rules: rules, parentCloseTime: at),
+                Operation.WithdrawAssets => VaultShares.WithdrawAssets(vault, _sharesOutstanding, held, LedgerAmount(_amount), rules, at),
+                _ => VaultShares.RedeemShares(vault, _sharesOutstanding, held, ulong.Parse(_amount.Trim(), CultureInfo.InvariantCulture), rules, at),
             };
 
             string account = _account.Trim();
