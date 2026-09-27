@@ -139,7 +139,7 @@ VaultCreate vaultTx = new VaultCreate
 {
     Account = wallet.ClassicAddress,
     Asset = new IssuedCurrency { Currency = "XRP" },
-    AssetsMaximum = "1000000000",           // max 1000 XRP (in drops)
+    AssetsMaximum = 1000000000,             // max 1000 XRP (in drops)
     MPTokenMetadata = "48656C6C6F",         // hex-encoded metadata for shares
     Data = "7B226E223A225465737420566175"
          + "6C74222C2277223A226578616D70"
@@ -166,6 +166,32 @@ VaultDeposit depositTx = new VaultDeposit
 depositTx = await client.Autofill(depositTx);
 await client.SubmitAndWait(depositTx, depositor, true);
 ```
+
+To see how many shares a deposit would mint before submitting it, preview it. `PreviewVaultDeposit` and `PreviewVaultWithdraw` run the transaction through `simulate`:
+
+```csharp
+TransactionPreview<VaultOutcome> preview = await client.PreviewVaultDeposit(depositTx);
+if (preview.WouldSucceed)
+{
+    decimal shares = preview.Outcome.AccountShareChange;   // shares the deposit would mint
+    decimal assets = preview.Outcome.AccountAssetChange;   // negative: what the deposit would take
+    await client.SubmitAndWait(preview.Transaction, depositor, false);
+}
+```
+
+`VaultShares` computes the same figures offline from the `Vault` entry and the share count - the `OutstandingAmount` of the `MPTokenIssuance` named by the vault's `ShareMPTID` - the way rippled's `VaultDeposit` and `VaultWithdraw` compute them, rounding to the vault's scale included:
+
+```csharp
+LedgerRules rules = await LedgerRules.FromNodeAsync(client);
+VaultQuote deposit = VaultShares.Deposit(vault, sharesOutstanding, XrplNumber.Parse("1234.5678"), depositorBalance, rules);
+VaultQuote withdraw = VaultShares.WithdrawAssets(vault, sharesOutstanding, holderShares, XrplNumber.Parse("100"), rules);
+VaultQuote redeem = VaultShares.RedeemShares(vault, sharesOutstanding, holderShares, 1_000_000, rules);
+// .Shares, .Assets; or .Refusal ("tecPRECISION_LOSS", "tecINSUFFICIENT_FUNDS", "tecLIMIT_EXCEEDED") and .RefusalReason
+```
+
+A quote repeats the checks that depend on the amounts. Given `parentCloseTime` - the close time of the ledger before the one the transaction lands in - it also checks the phase of a closed-ended vault: a deposit outside the subscription phase is refused with `tecEXPIRED`, a withdrawal in the investment phase with `tecTOO_SOON`. Authorization, freezes and the account's own funds are left to the preview.
+
+`VaultOutcome.FromMetadata` reads the same figures from a validated transaction. `BalanceChanges.GetBalanceChanges` reports MPT balances, vault shares included, alongside XRP and trust lines.
 
 ### 4. Withdraw Assets
 
@@ -208,7 +234,7 @@ VaultSet setTx = new VaultSet
 {
     Account = wallet.ClassicAddress,
     VaultID = vaultId,
-    AssetsMaximum = "2000000000",   // increase cap to 2000 XRP
+    AssetsMaximum = 2000000000,     // increase cap to 2000 XRP
     Data = "7B226E223A2255706461746564227D",  // new metadata
 };
 setTx = await client.Autofill(setTx);

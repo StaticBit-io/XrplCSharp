@@ -43,6 +43,16 @@ A **broker** (lender) creates a vault to hold lending assets, sets up a loan bro
 
 A vault holds the assets available for lending. Created via `VaultCreate`, it stores XRP or IOU tokens that the broker can lend out. Before creating a loan broker, you must create and fund a vault.
 
+With the `LendingProtocolV1_1` amendment a loan broker can only be attached to a **closed-ended** vault; `LoanBrokerSet` on an open-ended one fails with `tecNO_PERMISSION`. A closed-ended vault moves through three phases fixed at creation, and deposits, withdrawals and new loans are each tied to a phase:
+
+| Phase | Lasts | Allowed |
+|-------|-------|---------|
+| Subscription | until `SubscriptionDate` | `VaultDeposit`, `VaultWithdraw` |
+| Investment | from `SubscriptionDate` to `RedemptionDate` | `LoanSet`; `VaultDeposit` fails with `tecEXPIRED`, `VaultWithdraw` with `tecTOO_SOON` |
+| Redemption | from `RedemptionDate` | `VaultWithdraw`; `LoanSet` fails with `tecEXPIRED` |
+
+Creating the broker and depositing cover are not tied to a phase. See "Vault Kind (LendingProtocolV1_1)" in the [Vault Guide](Vault-Guide.md) for the date limits. On a network without the amendment, create the vault without `VaultKind`, `SubscriptionDate` and `RedemptionDate`; a node that does not know the amendment refuses them.
+
 ### Loan Broker
 
 A **LoanBroker** is a ledger object that represents a lending entity. It references a vault and defines lending parameters such as cover rates, management fees, and debt limits. Created via `LoanBrokerSet`.
@@ -85,18 +95,28 @@ Loan-specific numeric fields (e.g., `PrincipalRequested`, `DebtMaximum`) use the
 
 ### 1. Create a Vault
 
-The broker first creates a vault to hold lending assets:
+The broker first creates a closed-ended vault to hold lending assets:
 
 ```csharp
 using Xrpl.Models.Transactions;
 using Xrpl.Models.Common;
+using Xrpl.Models.Ledger;   // VaultKind, LedgerIndexType
+using Xrpl.Models.Methods;
 using Xrpl.Sugar;
 using static Xrpl.Models.Common.Common;
+
+// Phase dates are compared with the ledger's close time, not the machine clock
+LOLedger ledger = await client.Ledger(
+    new LedgerRequest { LedgerIndex = new LedgerIndex(LedgerIndexType.Validated) }).Typed();
+DateTime now = ((LedgerEntity)ledger.LedgerEntity).CloseTime.Value;
 
 VaultCreate vaultTx = new VaultCreate
 {
     Account = walletBroker.ClassicAddress,
     Asset = new IssuedCurrency { Currency = "XRP" },
+    VaultKind = (uint)VaultKind.ClosedEnded,
+    SubscriptionDate = now.AddHours(1),   // the deposit in step 2 must happen before this
+    RedemptionDate = now.AddDays(90),     // every loan must be repaid 60 s before this
 };
 vaultTx = await client.Autofill(vaultTx);
 TransactionSummary vaultResult = await client.SubmitAndWait(vaultTx, walletBroker, true);
@@ -107,7 +127,7 @@ string vaultId = GetCreatedObjectId(vaultResult, LedgerEntryType.Vault);
 
 ### 2. Deposit Assets into the Vault
 
-Fund the vault so the broker has assets to lend:
+Fund the vault so the broker has assets to lend. Deposits are accepted only in the subscription phase, before `SubscriptionDate`:
 
 ```csharp
 VaultDeposit depositTx = new VaultDeposit
@@ -122,13 +142,17 @@ await client.SubmitAndWait(depositTx, walletBroker, true);
 
 ### 3. Create the Loan Broker
 
-Create a broker that references the funded vault:
+Create a broker that references the funded vault. The three rates are optional; leave them out for a broker with none:
 
 ```csharp
 LoanBrokerSet brokerTx = new LoanBrokerSet
 {
     Account = walletBroker.ClassicAddress,
     VaultID = vaultId,
+    // Optional rates, fixed at creation. All are in 1/10th of a basis point: 100000 = 100%
+    CoverRateMinimum = 15000,        // 15% of outstanding debt must be covered by first-loss capital
+    CoverRateLiquidation = 12000,    // 12% of the minimum cover is moved to the vault on a default
+    ManagementFeeRate = 100,         // 0.1% management fee
 };
 brokerTx = await client.Autofill(brokerTx);
 TransactionSummary brokerResult = await client.SubmitAndWait(brokerTx, walletBroker, true);
@@ -136,24 +160,11 @@ TransactionSummary brokerResult = await client.SubmitAndWait(brokerTx, walletBro
 string brokerId = GetCreatedObjectId(brokerResult, LedgerEntryType.LoanBroker);
 ```
 
-### 4. Configure Broker Parameters (Optional)
+The rates can only be set here. A `LoanBrokerSet` that modifies an existing broker carries `LoanBrokerID` and must not include them: rippled rejects it with `temINVALID`.
 
-Update the broker with lending parameters:
+`CoverRateMinimum` and `CoverRateLiquidation` range from 0 to 100000 and must be both zero or both non-zero. `ManagementFeeRate` ranges from 0 to 10000 (10%).
 
-```csharp
-LoanBrokerSet updateTx = new LoanBrokerSet
-{
-    Account = walletBroker.ClassicAddress,
-    VaultID = vaultId,
-    CoverRateMinimum = 15000,        // 150% minimum cover rate
-    CoverRateLiquidation = 12000,    // 120% liquidation threshold
-    ManagementFeeRate = 100,         // 1% management fee (basis points / 100)
-};
-updateTx = await client.Autofill(updateTx);
-await client.SubmitAndWait(updateTx, walletBroker, true);
-```
-
-### 5. Deposit Cover
+### 4. Deposit Cover
 
 Deposit cover into the broker to enable loan issuance:
 
@@ -176,13 +187,15 @@ await client.SubmitAndWait(coverTx, walletBroker, true);
 
 `LoanSet` requires co-signing by both the broker and the borrower. See [CounterpartySignature](#counterpartysignature-loanset-co-signing) for the full signing flow.
 
+A loan can only be originated in the vault's investment phase: after `SubscriptionDate` (`tecTOO_SOON` before it) and before `RedemptionDate` (`tecEXPIRED` after it). Its final payment must fall at least 60 seconds before `RedemptionDate`, or `LoanSet` fails with `tecNO_PERMISSION`.
+
 ```csharp
 LoanSet loanTx = new LoanSet
 {
     Account = walletBroker.ClassicAddress,
     LoanBrokerID = brokerId,
     Counterparty = walletBorrower.ClassicAddress,
-    PrincipalRequested = "10000000",  // Number type (not drops)
+    PrincipalRequested = 10000000,  // Number type (not drops)
 };
 
 // Requires special co-signing — see CounterpartySignature section below
@@ -191,6 +204,49 @@ TransactionSummary result = await SubmitLoanSetWithCounterpartySig(
 
 string loanId = GetCreatedObjectId(result, LedgerEntryType.Loan);
 ```
+
+#### Terms and schedule before the borrower signs
+
+`PreviewLoanSet` runs the `LoanSet` through `simulate` before either party signs. The borrower's signature is not needed: the preview sends an empty `CounterpartySignature`, which `simulate` accepts without verifying. The result carries the exact terms the node would give the loan:
+
+```csharp
+TransactionPreview<LoanSetOutcome> preview = await client.PreviewLoanSet(loanTx);
+if (preview.WouldSucceed)
+{
+    LoanSetOutcome terms = preview.Outcome;
+    // terms.Loan.PeriodicPayment, terms.Loan.TotalValueOutstanding, terms.BorrowerReceives,
+    // terms.InterestTotal, terms.ServiceFeesTotal, terms.TotalToRepay
+}
+```
+
+`LoanOrigination.Compute` gives the same terms without a node, from the transaction and the vault and broker entries. It computes what `LoanSet` would store - `PeriodicPayment`, `TotalValueOutstanding`, `ManagementFeeOutstanding`, `LoanScale` - and repeats the checks that depend on the amounts: the vault's available assets, a value the asset cannot hold or that is finer than the loan's scale, and the amortization guards. The preview remains the complete check: limits, cover, reserves and authorization are not repeated offline.
+
+```csharp
+LoanOriginationTerms offline = LoanOrigination.Compute(loanTx, vault, broker, startDate: null, options);
+if (offline.IsAccepted)
+{
+    // offline.Loan: the Loan entry LoanSet would create
+}
+else
+{
+    // offline.Refusal: "tecPRECISION_LOSS" or "tecINSUFFICIENT_FUNDS"; offline.RefusalReason says why
+}
+```
+
+`LoanSchedule.Project` turns those terms, or a `Loan` read from the ledger, into the full schedule of regular payments. It repeats rippled's `computePaymentComponents` for each period. The management fee rate comes from the `LoanBroker`, and `LedgerRules.FromNodeAsync` reads the amendments that change the rounding:
+
+```csharp
+LedgerRules options = await LedgerRules.FromNodeAsync(client);
+IReadOnlyList<LoanScheduleRow> schedule = LoanSchedule.Project(
+    terms.Loan, terms.Asset, broker.ManagementFeeRate ?? 0, options);
+
+foreach (LoanScheduleRow row in schedule)
+{
+    // row.DueDate, row.Principal, row.Interest, row.ManagementFee, row.ServiceFee, row.Total
+}
+```
+
+The projection computes in the node's own arithmetic, `XrplNumber` rounded as rippled's `Number` rounds, so each row is what the node charges for an on-time regular payment, to the last unit of the asset; late payments add late interest and `LatePaymentFee`. The Blazor test client in `Tests/TestsClients/Blazor-WebAssembly` has a **Loan preview** tab that shows both for a broker on any node.
 
 ### 2. Make a Loan Payment
 
@@ -205,6 +261,62 @@ LoanPay payTx = new LoanPay
 };
 payTx = await client.Autofill(payTx);
 TransactionSummary result = await client.SubmitAndWait(payTx, walletBorrower, true);
+```
+
+#### How much to pay
+
+`LoanPayments.RegularPaymentCap` reads the `Loan` entry and returns an amount that always settles the next regular payment, in the asset's own unit (drops for XRP). On the final payment it is exact: `TotalValueOutstanding` plus `LoanServiceFee`. Before that it is `PeriodicPayment` rounded up to the asset, plus `LoanServiceFee`. The node charges what the amortization schedule calls for, which can be one rounding unit less, and it takes only what it charges, not the whole `Amount`.
+
+To see exactly what a payment will do before submitting it, preview it. `PreviewLoanPay` autofills the transaction, runs it through `simulate` and reads the split from the metadata:
+
+```csharp
+LOLoan loan = (LOLoan)(await client.LedgerEntry(new LedgerEntryRequest { Index = loanId }).Typed()).Node;
+// null when the entry carries no payment figures, or one beyond decimal: then choose the amount
+// yourself and let the preview below show what the node would take.
+if (LoanPayments.RegularPaymentCap(loan, new IssuedCurrency { Currency = "XRP" }) is not decimal cap)
+    return;
+
+LoanPay payTx = new LoanPay
+{
+    Account = walletBorrower.ClassicAddress,
+    LoanID = loanId,
+    Amount = new Currency { Value = cap.ToString(CultureInfo.InvariantCulture), CurrencyCode = "XRP" },
+};
+
+TransactionPreview<LoanPaymentOutcome> preview = await client.PreviewLoanPay(payTx);
+if (preview.WouldSucceed)
+{
+    LoanPaymentOutcome outcome = preview.Outcome;
+    // outcome.PrincipalPaid, outcome.InterestToVault, outcome.PaidToBroker, outcome.TotalPaid,
+    // outcome.PaymentsMade, outcome.LoanAfter
+    await client.SubmitAndWait(preview.Transaction, walletBorrower, false);
+}
+```
+
+`LoanPaymentOutcome.FromMetadata` reads the same split from a validated transaction's metadata. The split follows the money: the vault receives principal and interest, and the broker receives the rest (management, service, late and close fees). `LoanPayments.IsPaymentLate` and `LoanPayments.IsPastGracePeriod` tell whether a payment would be late and whether the broker may default the loan. A late payment adds late interest and `LatePaymentFee` above the cap.
+
+`LoanPayments.LatePaymentDue` and `LoanPayments.FullPaymentDue` compute what a late payment (`tfLoanLatePayment`) and closing the loan early (`tfLoanFullPayment`) cost, the way the node computes them: the regular payment with the late fee and late interest, or the outstanding balance with accrued interest, the prepayment penalty and `ClosePaymentFee`. Both need the close time of the ledger before the one the payment lands in, because interest runs to that time; the validated ledger's close time is the usual estimate, and a payment that lands a ledger later accrues a few more seconds. Both return null when the node would refuse that kind of payment at that time.
+
+```csharp
+LedgerRules rules = await LedgerRules.FromNodeAsync(client);
+DateTime at = /* close time of the latest validated ledger */;
+
+LoanPaymentDue late = LoanPayments.LatePaymentDue(loan, asset, broker.ManagementFeeRate ?? 0, at, rules);
+LoanPaymentDue full = LoanPayments.FullPaymentDue(loan, asset, broker.ManagementFeeRate ?? 0, at, rules);
+// late.Total, full.Total: the amount due; .Principal, .InterestToVault, .PaidToBroker: the split
+```
+
+`LoanPayments.PaymentForAmount` computes what a regular payment does with a given `Amount`: the node makes as many regular payments as the amount covers, up to 100 in one transaction, and with `tfLoanOverpayment` on a loan created with that flag applies the rest as an overpayment. The overpayment pays `OverpaymentFee` and penalty interest at `OverpaymentInterestRate`, repays principal with the remainder, and re-amortizes the loan over the payments left, so `PeriodicPayment` falls. The node takes only what it applies: an amount without the flag, or an overpayment its fees would consume, leaves the rest with the payer.
+
+```csharp
+LoanAmountPayment plan = LoanPayments.PaymentForAmount(
+    loan, asset, broker.ManagementFeeRate ?? 0, amount: 25_000_000, at, overpayment: true, rules);
+if (plan.IsAccepted)
+{
+    // plan.Due.Total: what the node takes; plan.PaymentsMade; plan.IsOverpaid;
+    // plan.LoanAfter.PeriodicPayment, plan.LoanAfter.PrincipalOutstanding: the loan it leaves
+}
+// otherwise plan.Refusal: tecINSUFFICIENT_PAYMENT, tecEXPIRED, tecNO_PERMISSION, ...
 ```
 
 ### 3. Delete a Fully Repaid Loan
@@ -380,17 +492,17 @@ The lending protocol creates the following ledger objects:
 
 | Field | Type | Description |
 |-------|------|-------------|
-| `Account` | AccountID | Broker account |
-| `Asset` | Issue | Primary lending asset |
-| `Asset2` | Issue | Secondary asset (collateral) |
-| `CoverAvailable` | Number | Available cover amount |
-| `AssetsAvailable` | Number | Available assets for lending |
-| `AssetsTotal` | Number | Total assets in vault |
+| `Owner` | AccountID | Broker owner, the account that submitted the creating `LoanBrokerSet` |
+| `Account` | AccountID | Broker pseudo-account |
+| `VaultID` | Hash256 | Vault the broker lends from |
+| `LoanSequence` | UInt32 | Sequence number assigned to the next loan |
+| `OwnerCount` | UInt32 | Number of loans the broker owns |
+| `CoverAvailable` | Number | Available first-loss capital |
 | `DebtTotal` | Number | Total outstanding debt |
 | `DebtMaximum` | Number | Maximum allowed debt |
-| `CoverRateMinimum` | UInt32 | Minimum cover rate (e.g. 15000 = 150%) |
-| `CoverRateLiquidation` | UInt32 | Liquidation threshold |
-| `ManagementFeeRate` | UInt16 | Fee rate (0-10000 basis points) |
+| `CoverRateMinimum` | UInt32 | Share of debt the cover must reach, 1/10th of a basis point (15000 = 15%) |
+| `CoverRateLiquidation` | UInt32 | Share of the minimum cover moved to the vault on a default, 1/10th of a basis point |
+| `ManagementFeeRate` | UInt16 | Management fee, 1/10th of a basis point (0-10000, up to 10%) |
 
 ### Loan Fields
 
@@ -402,7 +514,7 @@ The lending protocol creates the following ledger objects:
 | `PrincipalOutstanding` | Number | Remaining principal |
 | `TotalValueOutstanding` | Number | Total amount owed |
 | `PeriodicPayment` | Number | Amount due per interval |
-| `InterestRate` | UInt32 | Annual interest rate |
+| `InterestRate` | UInt32 | Annualized interest rate, 1/10th of a basis point (5000 = 5%) |
 | `PaymentInterval` | UInt32 | Seconds between payments |
 | `GracePeriod` | UInt32 | Seconds before late fees apply |
 | `PaymentRemaining` | UInt32 | Remaining payments |
@@ -453,7 +565,11 @@ The value `10000000000000` (10^13) is normalized to:
 
 ### In Transaction Models
 
-Number fields are represented as `string` in C# models (e.g., `PrincipalRequested = "10000000"`). The binary codec handles normalization and serialization automatically.
+Number fields are `XrplNumber?` in C# models (namespace `Xrpl.BinaryCodec.Numbers`). An `int` converts implicitly (`PrincipalRequested = 10000000`); other values come from `XrplNumber.Parse("1.5")` or an explicit cast from `long` or `decimal`. The binary codec handles normalization and serialization automatically.
+
+A value the ledger cannot hold exactly - more than 19 significant digits - is refused with a `FormatException` (or `OverflowException` for a cast) instead of being rounded, the way rippled refuses it in JSON. Round such a value yourself before assigning it.
+
+Fields read from the ledger arrive in the form rippled writes them, for example `"1e13"` for 10^13. Compare them by value (`==`, `<`) rather than as text, and use `TryToDecimal` when you need `decimal` arithmetic.
 
 ---
 
@@ -464,7 +580,9 @@ Number fields are represented as `string` in C# models (e.g., `PrincipalRequeste
 | `tecINSUFFICIENT_FUNDS` | Broker vault lacks funds for the loan | Deposit more assets into the vault via `VaultDeposit` |
 | `tecHAS_OBLIGATIONS` | Cannot delete a loan with outstanding balance | Fully repay the loan via `LoanPay` before deleting |
 | `tecNO_ENTRY` | Referenced LoanBrokerID or LoanID not found | Verify the ID is correct and the object exists |
-| `tecNO_PERMISSION` | Action not allowed (e.g., overpayment without flag) | Check that the account has the required permissions |
+| `tecNO_PERMISSION` | Action not allowed: a broker on an open-ended vault, a loan ending less than 60 s before `RedemptionDate`, an overpayment on a loan created without `tfLoanOverpayment` | Use a closed-ended vault; shorten the loan; check the account's permissions |
+| `tecTOO_SOON` | `LoanSet` in the subscription phase, `VaultWithdraw` in the investment phase | Wait until `SubscriptionDate` (for a withdrawal, `RedemptionDate`) has passed |
+| `tecEXPIRED` | `VaultDeposit` after `SubscriptionDate`, `LoanSet` after `RedemptionDate` | Deposit during the subscription phase; originate loans during the investment phase |
 | `tecINSUFFICIENT_PAYMENT` | Payment amount too small | Increase the payment amount |
 | `temBAD_SIGNER` | Missing or invalid CounterpartySignature | Ensure borrower co-signs the LoanSet (see co-signing section) |
 | `telINSUF_FEE_P` | Fee too low after adding CounterpartySignature | Re-run Autofill or increase the fee before submit |
@@ -474,7 +592,7 @@ Number fields are represented as `string` in C# models (e.g., `PrincipalRequeste
 
 ## Best Practices
 
-1. **Fund the vault before creating loans** — create the vault, deposit assets (`VaultDeposit`), create the broker (`LoanBrokerSet`), deposit cover (`LoanBrokerCoverDeposit`), then create loans.
+1. **Fund the vault before creating loans** — create the vault, deposit assets (`VaultDeposit`), create the broker (`LoanBrokerSet`), deposit cover (`LoanBrokerCoverDeposit`), then create loans. The vault deposit belongs to the subscription phase and the loans to the investment phase.
 
 2. **Autofill handles LoanSet fee** — `Autofill` automatically calculates the correct fee including `CounterpartySignature` overhead. No manual fee adjustment is needed.
 

@@ -139,7 +139,7 @@ VaultCreate vaultTx = new VaultCreate
 {
     Account = wallet.ClassicAddress,
     Asset = new IssuedCurrency { Currency = "XRP" },
-    AssetsMaximum = "1000000000",           // макс. 1000 XRP (в drops)
+    AssetsMaximum = 1000000000,             // макс. 1000 XRP (в drops)
     MPTokenMetadata = "48656C6C6F",         // hex-метаданные для долей
     Data = "7B226E223A225465737420566175"
          + "6C74222C2277223A226578616D70"
@@ -166,6 +166,32 @@ VaultDeposit depositTx = new VaultDeposit
 depositTx = await client.Autofill(depositTx);
 await client.SubmitAndWait(depositTx, depositor, true);
 ```
+
+Чтобы заранее узнать, сколько долей выпустит депозит, его можно отправить на превью. `PreviewVaultDeposit` и `PreviewVaultWithdraw` прогоняют транзакцию через `simulate`:
+
+```csharp
+TransactionPreview<VaultOutcome> preview = await client.PreviewVaultDeposit(depositTx);
+if (preview.WouldSucceed)
+{
+    decimal shares = preview.Outcome.AccountShareChange;   // сколько долей выпустит депозит
+    decimal assets = preview.Outcome.AccountAssetChange;   // отрицательное: сколько спишет депозит
+    await client.SubmitAndWait(preview.Transaction, depositor, false);
+}
+```
+
+`VaultShares` рассчитывает те же значения офлайн по объекту `Vault` и числу выпущенных долей — `OutstandingAmount` объекта `MPTokenIssuance`, на который указывает `ShareMPTID` vault, — так же, как `VaultDeposit` и `VaultWithdraw` в rippled, включая округление по шкале vault:
+
+```csharp
+LedgerRules rules = await LedgerRules.FromNodeAsync(client);
+VaultQuote deposit = VaultShares.Deposit(vault, sharesOutstanding, XrplNumber.Parse("1234.5678"), depositorBalance, rules);
+VaultQuote withdraw = VaultShares.WithdrawAssets(vault, sharesOutstanding, holderShares, XrplNumber.Parse("100"), rules);
+VaultQuote redeem = VaultShares.RedeemShares(vault, sharesOutstanding, holderShares, 1_000_000, rules);
+// .Shares, .Assets; либо .Refusal ("tecPRECISION_LOSS", "tecINSUFFICIENT_FUNDS", "tecLIMIT_EXCEEDED") и .RefusalReason
+```
+
+Расчёт повторяет проверки, которые зависят от сумм. Если передать `parentCloseTime` — время закрытия леджера, предшествующего тому, в который попадёт транзакция, — он проверяет и фазу закрытого vault: депозит вне фазы подписки отклоняется с `tecEXPIRED`, вывод в фазе инвестирования — с `tecTOO_SOON`. Авторизацию, заморозки и собственные средства аккаунта проверяет превью.
+
+`VaultOutcome.FromMetadata` читает те же значения из уже проведённой транзакции. `BalanceChanges.GetBalanceChanges` возвращает балансы MPT, включая доли vault, вместе с XRP и trust line.
 
 ### 4. Вывод активов
 
@@ -208,7 +234,7 @@ VaultSet setTx = new VaultSet
 {
     Account = wallet.ClassicAddress,
     VaultID = vaultId,
-    AssetsMaximum = "2000000000",   // увеличить лимит до 2000 XRP
+    AssetsMaximum = 2000000000,     // увеличить лимит до 2000 XRP
     Data = "7B226E223A2255706461746564227D",  // новые метаданные
 };
 setTx = await client.Autofill(setTx);

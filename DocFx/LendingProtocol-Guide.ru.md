@@ -43,6 +43,16 @@
 
 Хранилище содержит активы, доступные для кредитования. Создаётся через `VaultCreate`, хранит XRP или IOU-токены. Перед созданием кредитного брокера необходимо создать и пополнить хранилище.
 
+С поправкой `LendingProtocolV1_1` кредитного брокера можно привязать только к **закрытому** (closed-ended) хранилищу; `LoanBrokerSet` на открытом завершается с `tecNO_PERMISSION`. Закрытое хранилище проходит три фазы, зафиксированные при создании, и депозиты, вывод и выдача кредитов привязаны к фазам:
+
+| Фаза | Длится | Допускается |
+|------|--------|-------------|
+| Subscription | до `SubscriptionDate` | `VaultDeposit`, `VaultWithdraw` |
+| Investment | от `SubscriptionDate` до `RedemptionDate` | `LoanSet`; `VaultDeposit` завершается с `tecEXPIRED`, `VaultWithdraw` — с `tecTOO_SOON` |
+| Redemption | с `RedemptionDate` | `VaultWithdraw`; `LoanSet` завершается с `tecEXPIRED` |
+
+Создание брокера и внесение покрытия к фазе не привязаны. Ограничения на даты описаны в разделе «Вид vault (LendingProtocolV1_1)» [руководства по Vault](Vault-Guide.ru.md). В сети без этой поправки хранилище создаётся без `VaultKind`, `SubscriptionDate` и `RedemptionDate`: нода, не знающая поправку, эти поля отклоняет.
+
 ### Кредитный брокер (LoanBroker)
 
 **LoanBroker** — объект реестра, представляющий кредитную организацию. Ссылается на хранилище и определяет параметры кредитования: ставки покрытия, комиссии за управление и лимиты долга. Создаётся через `LoanBrokerSet`.
@@ -85,18 +95,28 @@
 
 ### 1. Создание хранилища
 
-Брокер создаёт хранилище для хранения активов кредитования:
+Брокер создаёт закрытое хранилище для хранения активов кредитования:
 
 ```csharp
 using Xrpl.Models.Transactions;
 using Xrpl.Models.Common;
+using Xrpl.Models.Ledger;   // VaultKind, LedgerIndexType
+using Xrpl.Models.Methods;
 using Xrpl.Sugar;
 using static Xrpl.Models.Common.Common;
+
+// Phase dates are compared with the ledger's close time, not the machine clock
+LOLedger ledger = await client.Ledger(
+    new LedgerRequest { LedgerIndex = new LedgerIndex(LedgerIndexType.Validated) }).Typed();
+DateTime now = ((LedgerEntity)ledger.LedgerEntity).CloseTime.Value;
 
 VaultCreate vaultTx = new VaultCreate
 {
     Account = walletBroker.ClassicAddress,
     Asset = new IssuedCurrency { Currency = "XRP" },
+    VaultKind = (uint)VaultKind.ClosedEnded,
+    SubscriptionDate = now.AddHours(1),   // the deposit in step 2 must happen before this
+    RedemptionDate = now.AddDays(90),     // every loan must be repaid 60 s before this
 };
 vaultTx = await client.Autofill(vaultTx);
 TransactionSummary vaultResult = await client.SubmitAndWait(vaultTx, walletBroker, true);
@@ -107,7 +127,7 @@ string vaultId = GetCreatedObjectId(vaultResult, LedgerEntryType.Vault);
 
 ### 2. Пополнение хранилища
 
-Внесение активов в хранилище для кредитования:
+Внесение активов в хранилище для кредитования. Депозит принимается только в фазе subscription, до `SubscriptionDate`:
 
 ```csharp
 VaultDeposit depositTx = new VaultDeposit
@@ -122,13 +142,17 @@ await client.SubmitAndWait(depositTx, walletBroker, true);
 
 ### 3. Создание кредитного брокера
 
-Создание брокера, ссылающегося на пополненное хранилище:
+Создание брокера, ссылающегося на пополненное хранилище. Три ставки необязательны; брокер без ставок создаётся без этих полей:
 
 ```csharp
 LoanBrokerSet brokerTx = new LoanBrokerSet
 {
     Account = walletBroker.ClassicAddress,
     VaultID = vaultId,
+    // Optional rates, fixed at creation. All are in 1/10th of a basis point: 100000 = 100%
+    CoverRateMinimum = 15000,        // 15% of outstanding debt must be covered by first-loss capital
+    CoverRateLiquidation = 12000,    // 12% of the minimum cover is moved to the vault on a default
+    ManagementFeeRate = 100,         // 0.1% management fee
 };
 brokerTx = await client.Autofill(brokerTx);
 TransactionSummary brokerResult = await client.SubmitAndWait(brokerTx, walletBroker, true);
@@ -136,24 +160,11 @@ TransactionSummary brokerResult = await client.SubmitAndWait(brokerTx, walletBro
 string brokerId = GetCreatedObjectId(brokerResult, LedgerEntryType.LoanBroker);
 ```
 
-### 4. Настройка параметров брокера (опционально)
+Задать ставки можно только здесь. `LoanBrokerSet`, изменяющий существующего брокера, несёт `LoanBrokerID` и не может включать эти поля: rippled отклоняет такую транзакцию с `temINVALID`.
 
-Обновление параметров кредитования:
+`CoverRateMinimum` и `CoverRateLiquidation` принимают значения от 0 до 100000 и должны быть либо оба нулевыми, либо оба ненулевыми. `ManagementFeeRate` принимает значения от 0 до 10000 (10%).
 
-```csharp
-LoanBrokerSet updateTx = new LoanBrokerSet
-{
-    Account = walletBroker.ClassicAddress,
-    VaultID = vaultId,
-    CoverRateMinimum = 15000,        // 150% минимальная ставка покрытия
-    CoverRateLiquidation = 12000,    // 120% порог ликвидации
-    ManagementFeeRate = 100,         // 1% комиссия за управление (базисные пункты / 100)
-};
-updateTx = await client.Autofill(updateTx);
-await client.SubmitAndWait(updateTx, walletBroker, true);
-```
-
-### 5. Внесение покрытия
+### 4. Внесение покрытия
 
 Депозит покрытия для возможности выдачи кредитов:
 
@@ -176,13 +187,15 @@ await client.SubmitAndWait(coverTx, walletBroker, true);
 
 `LoanSet` требует совместной подписи брокера и заёмщика. Подробности в разделе [CounterpartySignature](#counterpartysignature-совместная-подпись-loanset).
 
+Кредит можно выдать только в фазе investment: после `SubscriptionDate` (до неё — `tecTOO_SOON`) и до `RedemptionDate` (после неё — `tecEXPIRED`). Последний платёж по кредиту должен приходиться не позже чем за 60 секунд до `RedemptionDate`, иначе `LoanSet` завершается с `tecNO_PERMISSION`.
+
 ```csharp
 LoanSet loanTx = new LoanSet
 {
     Account = walletBroker.ClassicAddress,
     LoanBrokerID = brokerId,
     Counterparty = walletBorrower.ClassicAddress,
-    PrincipalRequested = "10000000",  // Тип Number (не drops)
+    PrincipalRequested = 10000000,  // Тип Number (не drops)
 };
 
 // Требуется специальная совместная подпись — см. раздел CounterpartySignature
@@ -191,6 +204,49 @@ TransactionSummary result = await SubmitLoanSetWithCounterpartySig(
 
 string loanId = GetCreatedObjectId(result, LedgerEntryType.Loan);
 ```
+
+#### Условия и график до подписи заёмщика
+
+`PreviewLoanSet` прогоняет `LoanSet` через `simulate` до того, как стороны подпишут транзакцию. Подпись заёмщика не нужна: превью отправляет пустой `CounterpartySignature`, который `simulate` принимает без проверки. Результат содержит точные условия, с которыми нода создала бы займ:
+
+```csharp
+TransactionPreview<LoanSetOutcome> preview = await client.PreviewLoanSet(loanTx);
+if (preview.WouldSucceed)
+{
+    LoanSetOutcome terms = preview.Outcome;
+    // terms.Loan.PeriodicPayment, terms.Loan.TotalValueOutstanding, terms.BorrowerReceives,
+    // terms.InterestTotal, terms.ServiceFeesTotal, terms.TotalToRepay
+}
+```
+
+`LoanOrigination.Compute` рассчитывает те же условия без ноды — по транзакции и объектам vault и брокера. Метод вычисляет то, что сохранит `LoanSet` (`PeriodicPayment`, `TotalValueOutstanding`, `ManagementFeeOutstanding`, `LoanScale`), и повторяет проверки, которые зависят от сумм: свободные активы vault, значение, которое актив не может хранить или которое точнее шкалы займа, и ограничения амортизации. Полной проверкой остаётся превью: лимиты, покрытие, резервы и авторизация офлайн не проверяются.
+
+```csharp
+LoanOriginationTerms offline = LoanOrigination.Compute(loanTx, vault, broker, startDate: null, options);
+if (offline.IsAccepted)
+{
+    // offline.Loan: объект Loan, который создал бы LoanSet
+}
+else
+{
+    // offline.Refusal: "tecPRECISION_LOSS" или "tecINSUFFICIENT_FUNDS"; offline.RefusalReason объясняет причину
+}
+```
+
+`LoanSchedule.Project` строит по этим условиям или по `Loan`, прочитанному из леджера, полный график регулярных платежей, повторяя для каждого периода `computePaymentComponents` из rippled. Ставка комиссии за управление берётся из `LoanBroker`, а `LedgerRules.FromNodeAsync` читает амендменты, которые влияют на округление:
+
+```csharp
+LedgerRules options = await LedgerRules.FromNodeAsync(client);
+IReadOnlyList<LoanScheduleRow> schedule = LoanSchedule.Project(
+    terms.Loan, terms.Asset, broker.ManagementFeeRate ?? 0, options);
+
+foreach (LoanScheduleRow row in schedule)
+{
+    // row.DueDate, row.Principal, row.Interest, row.ManagementFee, row.ServiceFee, row.Total
+}
+```
+
+Расчёт ведётся в арифметике самой ноды — `XrplNumber` с тем же округлением, что у `Number` в rippled, — поэтому каждая строка до последней единицы актива совпадает с суммой, которую нода спишет за регулярный платёж, внесённый вовремя; к просроченному платежу добавляются проценты за просрочку и `LatePaymentFee`. В тестовом Blazor-клиенте `Tests/TestsClients/Blazor-WebAssembly` есть вкладка **Loan preview**, которая показывает условия и график для брокера на любой ноде.
 
 ### 2. Внесение платежа по кредиту
 
@@ -205,6 +261,62 @@ LoanPay payTx = new LoanPay
 };
 payTx = await client.Autofill(payTx);
 TransactionSummary result = await client.SubmitAndWait(payTx, walletBorrower, true);
+```
+
+#### Сколько платить
+
+`LoanPayments.RegularPaymentCap` читает объект `Loan` и возвращает сумму, которой всегда хватает на ближайший регулярный платёж, в единицах актива (для XRP это drops). Для последнего платежа сумма точная: `TotalValueOutstanding` плюс `LoanServiceFee`. Для остальных платежей это `PeriodicPayment`, округлённый вверх по активу, плюс `LoanServiceFee`. Нода списывает столько, сколько требует график амортизации, а это может быть на одну единицу округления меньше. Весь `Amount` при этом не списывается, только нужная сумма.
+
+Чтобы заранее узнать, что именно сделает платёж, его можно отправить на превью. `PreviewLoanPay` выполняет autofill, прогоняет транзакцию через `simulate` и читает разбивку платежа из метаданных:
+
+```csharp
+LOLoan loan = (LOLoan)(await client.LedgerEntry(new LedgerEntryRequest { Index = loanId }).Typed()).Node;
+// null, если в объекте нет данных о платеже или значение не помещается в decimal: тогда сумму
+// нужно выбрать самостоятельно, а превью ниже покажет, сколько возьмёт нода.
+if (LoanPayments.RegularPaymentCap(loan, new IssuedCurrency { Currency = "XRP" }) is not decimal cap)
+    return;
+
+LoanPay payTx = new LoanPay
+{
+    Account = walletBorrower.ClassicAddress,
+    LoanID = loanId,
+    Amount = new Currency { Value = cap.ToString(CultureInfo.InvariantCulture), CurrencyCode = "XRP" },
+};
+
+TransactionPreview<LoanPaymentOutcome> preview = await client.PreviewLoanPay(payTx);
+if (preview.WouldSucceed)
+{
+    LoanPaymentOutcome outcome = preview.Outcome;
+    // outcome.PrincipalPaid, outcome.InterestToVault, outcome.PaidToBroker, outcome.TotalPaid,
+    // outcome.PaymentsMade, outcome.LoanAfter
+    await client.SubmitAndWait(preview.Transaction, walletBorrower, false);
+}
+```
+
+`LoanPaymentOutcome.FromMetadata` читает ту же разбивку из метаданных уже проведённой транзакции. Разбивка строится по движению средств: vault получает основной долг и проценты, брокер получает всё остальное (комиссию за управление, сервисный сбор, штраф за просрочку и сбор за досрочное погашение). `LoanPayments.IsPaymentLate` показывает, будет ли платёж просроченным, а `LoanPayments.IsPastGracePeriod` показывает, может ли брокер объявить дефолт. Просроченный платёж включает проценты за просрочку и `LatePaymentFee` сверх этой суммы.
+
+`LoanPayments.LatePaymentDue` и `LoanPayments.FullPaymentDue` рассчитывают стоимость просроченного платежа (`tfLoanLatePayment`) и досрочного погашения (`tfLoanFullPayment`) так же, как это делает нода: регулярный платёж со штрафом и процентами за просрочку либо остаток долга с начисленными процентами, штрафом за досрочное погашение и `ClosePaymentFee`. Обоим методам необходимо время закрытия леджера, предшествующего тому, в который попадёт платёж, потому что проценты начисляются по это время. Обычно берут время закрытия последнего валидированного леджера; если платёж попадёт в леджер на один позже, проценты успеют начислиться ещё за несколько секунд. Оба метода возвращают null, если нода отклонит такой платёж в это время.
+
+```csharp
+LedgerRules rules = await LedgerRules.FromNodeAsync(client);
+DateTime at = /* время закрытия последнего валидированного леджера */;
+
+LoanPaymentDue late = LoanPayments.LatePaymentDue(loan, asset, broker.ManagementFeeRate ?? 0, at, rules);
+LoanPaymentDue full = LoanPayments.FullPaymentDue(loan, asset, broker.ManagementFeeRate ?? 0, at, rules);
+// late.Total, full.Total: сумма к оплате; .Principal, .InterestToVault, .PaidToBroker: разбивка
+```
+
+`LoanPayments.PaymentForAmount` рассчитывает, что регулярный платёж сделает с заданной суммой `Amount`. Нода проводит столько регулярных платежей, сколько покрывает сумма, но не больше 100 за транзакцию, а с флагом `tfLoanOverpayment` по кредиту, созданному с этим флагом, направляет остаток на переплату. Из переплаты удерживаются `OverpaymentFee` и штрафные проценты по ставке `OverpaymentInterestRate`, остаток гасит основной долг, после чего кредит переамортизируется на оставшиеся платежи и `PeriodicPayment` уменьшается. Нода списывает только то, что провела: без флага, а также если переплату целиком съедают сборы, остаток суммы остаётся у плательщика.
+
+```csharp
+LoanAmountPayment plan = LoanPayments.PaymentForAmount(
+    loan, asset, broker.ManagementFeeRate ?? 0, amount: 25_000_000, at, overpayment: true, rules);
+if (plan.IsAccepted)
+{
+    // plan.Due.Total: сколько спишет нода; plan.PaymentsMade; plan.IsOverpaid;
+    // plan.LoanAfter.PeriodicPayment, plan.LoanAfter.PrincipalOutstanding: кредит после платежа
+}
+// иначе plan.Refusal: tecINSUFFICIENT_PAYMENT, tecEXPIRED, tecNO_PERMISSION, ...
 ```
 
 ### 3. Удаление полностью погашенного кредита
@@ -380,17 +492,17 @@ await client.SubmitRequest(composed.TxBlob);
 
 | Поле | Тип | Описание |
 |------|-----|----------|
-| `Account` | AccountID | Аккаунт брокера |
-| `Asset` | Issue | Основной актив кредитования |
-| `Asset2` | Issue | Вторичный актив (залог) |
-| `CoverAvailable` | Number | Доступное покрытие |
-| `AssetsAvailable` | Number | Доступные активы для кредитования |
-| `AssetsTotal` | Number | Общее количество активов в хранилище |
+| `Owner` | AccountID | Владелец брокера — аккаунт, отправивший создающий `LoanBrokerSet` |
+| `Account` | AccountID | Псевдоаккаунт брокера |
+| `VaultID` | Hash256 | Хранилище, из которого брокер выдаёт кредиты |
+| `LoanSequence` | UInt32 | Порядковый номер, который получит следующий кредит |
+| `OwnerCount` | UInt32 | Количество кредитов брокера |
+| `CoverAvailable` | Number | Доступный капитал первого убытка |
 | `DebtTotal` | Number | Общий непогашенный долг |
 | `DebtMaximum` | Number | Максимально допустимый долг |
-| `CoverRateMinimum` | UInt32 | Минимальная ставка покрытия (15000 = 150%) |
-| `CoverRateLiquidation` | UInt32 | Порог ликвидации |
-| `ManagementFeeRate` | UInt16 | Ставка комиссии (0-10000 базисных пунктов) |
+| `CoverRateMinimum` | UInt32 | Доля долга, которую должно покрывать покрытие, в десятых долях базисного пункта (15000 = 15%) |
+| `CoverRateLiquidation` | UInt32 | Доля минимального покрытия, переводимая в хранилище при дефолте, в десятых долях базисного пункта |
+| `ManagementFeeRate` | UInt16 | Комиссия за управление в десятых долях базисного пункта (0-10000, до 10%) |
 
 ### Поля Loan
 
@@ -402,7 +514,7 @@ await client.SubmitRequest(composed.TxBlob);
 | `PrincipalOutstanding` | Number | Остаток основной суммы |
 | `TotalValueOutstanding` | Number | Общая задолженность |
 | `PeriodicPayment` | Number | Сумма платежа за интервал |
-| `InterestRate` | UInt32 | Годовая процентная ставка |
+| `InterestRate` | UInt32 | Годовая процентная ставка в десятых долях базисного пункта (5000 = 5%) |
 | `PaymentInterval` | UInt32 | Интервал между платежами (секунды) |
 | `GracePeriod` | UInt32 | Отсрочка до начисления пеней (секунды) |
 | `PaymentRemaining` | UInt32 | Оставшиеся платежи |
@@ -453,7 +565,11 @@ foreach (var obj in response.AccountObjectList)
 
 ### В моделях транзакций
 
-Поля типа Number представлены как `string` в C#-моделях (например, `PrincipalRequested = "10000000"`). Бинарный кодек автоматически выполняет нормализацию и сериализацию.
+Поля типа Number представлены в C#-моделях типом `XrplNumber?` (пространство имён `Xrpl.BinaryCodec.Numbers`). `int` преобразуется неявно (`PrincipalRequested = 10000000`); остальные значения получаются через `XrplNumber.Parse("1.5")` или явное приведение из `long` или `decimal`. Бинарный кодек автоматически выполняет нормализацию и сериализацию.
+
+Значение, которое леджер не может хранить точно (больше 19 значащих цифр), отклоняется с `FormatException` (при приведении типа - с `OverflowException`), а не округляется: так же его отклоняет rippled в JSON. Такое значение необходимо округлить самостоятельно до присваивания.
+
+Поля, прочитанные из леджера, приходят в том виде, в каком их пишет rippled, например `"1e13"` для 10^13. Сравнивать их рекомендуется по значению (`==`, `<`), а не как текст; для арифметики на `decimal` используется `TryToDecimal`.
 
 ---
 
@@ -464,7 +580,9 @@ foreach (var obj in response.AccountObjectList)
 | `tecINSUFFICIENT_FUNDS` | В хранилище брокера недостаточно средств | Внесите больше активов через `VaultDeposit` |
 | `tecHAS_OBLIGATIONS` | Нельзя удалить кредит с непогашенным остатком | Полностью погасите кредит через `LoanPay` |
 | `tecNO_ENTRY` | LoanBrokerID или LoanID не найден | Проверьте корректность ID |
-| `tecNO_PERMISSION` | Действие не разрешено (например, переплата без флага) | Проверьте права аккаунта |
+| `tecNO_PERMISSION` | Действие не разрешено: брокер на открытом хранилище, кредит, заканчивающийся менее чем за 60 с до `RedemptionDate`, переплата без флага | Используйте закрытое хранилище; сократите срок кредита; проверьте права аккаунта |
+| `tecTOO_SOON` | `LoanSet` в фазе subscription, `VaultWithdraw` в фазе investment | Дождитесь `SubscriptionDate` (для вывода — `RedemptionDate`) |
+| `tecEXPIRED` | `VaultDeposit` после `SubscriptionDate`, `LoanSet` после `RedemptionDate` | Вносите депозит в фазе subscription, выдавайте кредиты в фазе investment |
 | `tecINSUFFICIENT_PAYMENT` | Сумма платежа слишком мала | Увеличьте сумму платежа |
 | `temBAD_SIGNER` | Отсутствует или некорректна CounterpartySignature | Убедитесь, что заёмщик совместно подписал LoanSet |
 | `telINSUF_FEE_P` | Комиссия слишком низкая после добавления CounterpartySignature | Повторно вызовите Autofill или увеличьте комиссию перед отправкой |
@@ -474,7 +592,7 @@ foreach (var obj in response.AccountObjectList)
 
 ## Лучшие практики
 
-1. **Пополните хранилище перед выдачей кредитов** — создайте хранилище, внесите активы (`VaultDeposit`), создайте брокера (`LoanBrokerSet`), внесите покрытие (`LoanBrokerCoverDeposit`), затем создавайте кредиты.
+1. **Пополните хранилище перед выдачей кредитов** — создайте хранилище, внесите активы (`VaultDeposit`), создайте брокера (`LoanBrokerSet`), внесите покрытие (`LoanBrokerCoverDeposit`), затем создавайте кредиты. Депозит в хранилище относится к фазе subscription, выдача кредитов — к фазе investment.
 
 2. **Autofill учитывает LoanSet fee** — `Autofill` автоматически рассчитывает корректную комиссию, включая overhead `CounterpartySignature`. Ручная корректировка комиссии не требуется.
 

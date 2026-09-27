@@ -1,4 +1,6 @@
-﻿using System.Collections.Generic;
+﻿using System;
+using System.Collections.Generic;
+using System.Globalization;
 using System.Linq;
 
 using Xrpl.Models;
@@ -14,7 +16,7 @@ using Xrpl.Models.Transactions;
 namespace Xrpl.Utils;
 
 /// <summary>
-/// Utilities for computing balance changes (XRP and issued currencies)
+/// Utilities for computing balance changes (XRP, issued currencies and MPTs)
 /// from transaction metadata's affected nodes.
 /// </summary>
 public static class BalanceChanges
@@ -142,6 +144,141 @@ public static class BalanceChanges
     }
 
     /// <summary>
+    /// One holder's <c>MPToken</c> node. <see cref="Delta"/> is null when the metadata does not say
+    /// whether the amount changed; <see cref="FinalAmount"/> is then the amount the holder ends with.
+    /// </summary>
+    private sealed class MptHolderChange
+    {
+        public string Account { get; set; } = string.Empty;
+
+        public string IssuanceId { get; set; } = string.Empty;
+
+        public decimal? Delta { get; set; }
+
+        public decimal FinalAmount { get; set; }
+    }
+
+    /// <summary>
+    /// Computes MPT balance changes: each holder's <c>MPToken</c> amount, and the issuer's side as
+    /// the opposite of the change in the issuance's <c>OutstandingAmount</c>, the way a trust line
+    /// reports its issuer.
+    /// </summary>
+    /// <remarks>
+    /// <c>MPTAmount</c> is a default field: a holder with nothing does not carry it, and rippled
+    /// lists in <c>PreviousFields</c> only the fields the node had before. A modified <c>MPToken</c>
+    /// that ends with an amount but lists no previous one therefore either went from zero to that
+    /// amount or did not change it. <c>OutstandingAmount</c> is a required field and is always
+    /// listed when it changes - and when the issuance node is absent, it did not change - and the
+    /// holders' changes of one issuance add up to its change, so a single such holder is resolved
+    /// from that sum. More than one is left unchanged.
+    /// </remarks>
+    private static List<BalanceChange> GetMptQuantities(List<(NodeInfo Node, bool Deleted)> nodes)
+    {
+        List<MptHolderChange> holders = new List<MptHolderChange>();
+        Dictionary<string, (string Issuer, decimal Delta)> issuances = new Dictionary<string, (string, decimal)>(StringComparer.Ordinal);
+
+        foreach ((NodeInfo node, bool deleted) in nodes)
+        {
+            if (node.LedgerEntryType == LedgerEntryType.MPToken)
+            {
+                if (ReadMptHolder(node, deleted) is { } holder)
+                    holders.Add(holder);
+            }
+            else if (node.LedgerEntryType == LedgerEntryType.MPTokenIssuance)
+            {
+                LOMPTokenIssuance created = node.NewFields as LOMPTokenIssuance;
+                LOMPTokenIssuance final = node.FinalFields as LOMPTokenIssuance;
+                LOMPTokenIssuance previous = node.PreviousFields as LOMPTokenIssuance;
+                LOMPTokenIssuance state = created ?? final;
+                if (state?.MPTokenIssuanceID is not { } id)
+                    continue;
+
+                // decimal before subtracting: OutstandingAmount is a ulong, and a decrease would wrap.
+                decimal delta = created != null
+                    ? created.OutstandingAmount ?? 0
+                    : previous?.OutstandingAmount is { } before
+                        ? (deleted ? 0m : (decimal)(final.OutstandingAmount ?? 0)) - before
+                        : 0;
+                issuances[id] = (state.Issuer, delta);
+            }
+        }
+
+        foreach (IGrouping<string, MptHolderChange> issuance in holders.GroupBy(h => h.IssuanceId, StringComparer.Ordinal))
+        {
+            List<MptHolderChange> unknown = issuance.Where(h => h.Delta == null).ToList();
+            if (unknown.Count == 1)
+            {
+                // No issuance node means OutstandingAmount did not change: a transfer between holders.
+                decimal outstandingDelta = issuances.TryGetValue(issuance.Key, out (string Issuer, decimal Delta) outstanding)
+                    ? outstanding.Delta
+                    : 0;
+                decimal rest = outstandingDelta - issuance.Where(h => h.Delta != null).Sum(h => h.Delta.Value);
+                if (rest == 0 || rest == unknown[0].FinalAmount)
+                    unknown[0].Delta = rest;
+            }
+        }
+
+        List<BalanceChange> changes = new List<BalanceChange>();
+        foreach (MptHolderChange holder in holders)
+        {
+            if (holder.Delta is { } delta and not 0)
+                changes.Add(new BalanceChange { Account = holder.Account, Balance = MptAmount(holder.IssuanceId, delta) });
+        }
+
+        foreach (KeyValuePair<string, (string Issuer, decimal Delta)> issuance in issuances)
+        {
+            if (issuance.Value.Delta != 0 && !string.IsNullOrEmpty(issuance.Value.Issuer))
+                changes.Add(new BalanceChange { Account = issuance.Value.Issuer, Balance = MptAmount(issuance.Key, -issuance.Value.Delta) });
+        }
+
+        return changes;
+    }
+
+    private static MptHolderChange ReadMptHolder(NodeInfo node, bool deleted)
+    {
+        LOMPToken created = node.NewFields as LOMPToken;
+        LOMPToken final = node.FinalFields as LOMPToken;
+        LOMPToken previous = node.PreviousFields as LOMPToken;
+
+        if (created != null)
+        {
+            return new MptHolderChange
+            {
+                Account = created.Account,
+                IssuanceId = created.MPTokenIssuanceID,
+                Delta = created.MPTAmount ?? 0,
+                FinalAmount = created.MPTAmount ?? 0,
+            };
+        }
+
+        if (final == null)
+            return null;
+
+        decimal finalAmount = deleted ? 0 : final.MPTAmount ?? 0;
+        decimal? delta;
+        if (previous?.MPTAmount is { } before)
+            delta = finalAmount - before;
+        else if (deleted)
+            delta = -(decimal)(final.MPTAmount ?? 0);
+        else
+            delta = finalAmount == 0 ? 0 : null;
+
+        return new MptHolderChange
+        {
+            Account = final.Account,
+            IssuanceId = final.MPTokenIssuanceID,
+            Delta = delta,
+            FinalAmount = finalAmount,
+        };
+    }
+
+    private static Currency MptAmount(string issuanceId, decimal value) => new Currency
+    {
+        MPTokenIssuanceID = issuanceId,
+        Value = value.ToString(CultureInfo.InvariantCulture),
+    };
+
+    /// <summary>
     /// Groups per-account balance changes and sums them.
     /// </summary>
     private static Dictionary<string, List<Currency>> GroupByAccount(IEnumerable<BalanceChange> changes)
@@ -175,6 +312,7 @@ public static class BalanceChanges
     public static Dictionary<string, List<Currency>> GetBalanceChanges(ITransactionMetadata metadata)
     {
         var list = new List<BalanceChange>();
+        var mptNodes = new List<(NodeInfo Node, bool Deleted)>();
 
         foreach (var n in metadata.AffectedNodes)
         {
@@ -223,7 +361,13 @@ public static class BalanceChanges
                     list.AddRange(values);
                 }
             }
+            else if (node.LedgerEntryType is LedgerEntryType.MPToken or LedgerEntryType.MPTokenIssuance)
+            {
+                mptNodes.Add((node, n.DeletedNode != null));
+            }
         }
+
+        list.AddRange(GetMptQuantities(mptNodes));
 
         return GroupByAccount(list);
     }

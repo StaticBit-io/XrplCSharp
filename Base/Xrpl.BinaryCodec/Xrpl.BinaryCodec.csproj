@@ -13,13 +13,16 @@
     <PackageLicenseExpression>Apache-2.0</PackageLicenseExpression>
     <PackageProjectUrl>https://github.com/StaticBit-io/XrplCSharp</PackageProjectUrl>
     <Title>XrplCSharp</Title>
-    <PackageVersion>11.8.0.0</PackageVersion>
+    <PackageVersion>11.9.0.0</PackageVersion>
   </PropertyGroup>
 
   <PropertyGroup>
     <WarningLevel>4</WarningLevel>
     <GenerateDocumentationFile>true</GenerateDocumentationFile>
   </PropertyGroup>
+  <ItemGroup>
+    <InternalsVisibleTo Include="Xrpl.BinaryCodec.Test" />
+  </ItemGroup>
   <ItemGroup>
     <PackageReference Include="System.Text.Json" Version="8.0.5" />
     <PackageReference Include="Portable.BouncyCastle" Version="1.9.0" />

@@ -407,11 +407,17 @@ namespace Xrpl.Sugar
             if (loan.PaymentRemaining is null or <= LOAN_PAYMENTS_PER_FEE_INCREMENT)
                 return BigInteger.One;
 
-            if (!TryParseNumber(loan.PeriodicPayment, out decimal periodicPayment) || periodicPayment <= 0)
+            if (loan.PeriodicPayment is not { } periodic
+                || LoanPayments.RoundUpToAsset(periodic, integralAsset, loan.LoanScale ?? 0) is not { } roundedPayment
+                || roundedPayment <= 0)
                 return BigInteger.One;
 
-            TryParseNumber(loan.LoanServiceFee, out decimal serviceFee);
-            decimal regularPayment = RoundPeriodicPayment(periodicPayment, integralAsset, loan.LoanScale ?? 0) + serviceFee;
+            decimal serviceFee = 0m;
+            if (loan.LoanServiceFee is { } fee)
+                fee.TryToDecimal(out serviceFee);
+            if (serviceFee > decimal.MaxValue - roundedPayment)
+                return BigInteger.One;
+            decimal regularPayment = roundedPayment + serviceFee;
             if (regularPayment <= 0)
                 return BigInteger.One;
 
@@ -460,36 +466,6 @@ namespace Xrpl.Sugar
         }
 
         /// <summary>
-        /// rippled roundPeriodicPayment: integral assets (XRP, MPT) round up to whole units,
-        /// IOUs round up to a multiple of 10^scale.
-        /// </summary>
-        private static decimal RoundPeriodicPayment(decimal periodicPayment, bool integralAsset, int scale)
-        {
-            if (integralAsset)
-                return Math.Ceiling(periodicPayment);
-
-            // Outside this range the step cannot be represented as a decimal; leave the value alone.
-            if (scale is < -28 or > 28)
-                return periodicPayment;
-
-            decimal step = scale >= 0
-                ? Pow10(scale)
-                : 1m / Pow10(-scale);
-
-            return Math.Ceiling(periodicPayment / step) * step;
-        }
-
-        private static decimal Pow10(int exponent)
-        {
-            decimal result = 1m;
-            for (int i = 0; i < exponent; i++)
-            {
-                result *= 10m;
-            }
-            return result;
-        }
-
-        /// <summary>
         /// Extracts the LoanPay amount and whether its asset is integral (XRP drops or MPT units,
         /// which rippled rounds to whole units) as opposed to an IOU.
         /// </summary>
@@ -532,7 +508,7 @@ namespace Xrpl.Sugar
         }
 
         /// <summary>
-        /// Parses a rippled Number field, which is serialized as a decimal string.
+        /// Parses an amount value of the transaction, written as a decimal string.
         /// </summary>
         private static bool TryParseNumber(object value, out decimal result)
         {

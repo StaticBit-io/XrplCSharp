@@ -1,5 +1,8 @@
 using System.Text.Json.Serialization;
 
+using Xrpl.BinaryCodec.Numbers;
+using Xrpl.Client.Json.Converters;
+
 using static Xrpl.Models.Common.Common;
 
 namespace Xrpl.Models.Ledger;
@@ -47,37 +50,41 @@ public class LOLoanBroker : BaseLedgerEntry
     public uint? OwnerCount { get; init; }
 
     /// <summary>
-    /// Total asset amount the protocol owes the vault, including interest (Number type, string representation).
+    /// Total asset amount the protocol owes the vault, including interest (Number type).
     /// </summary>
     [JsonPropertyName("DebtTotal")]
-    public string DebtTotal { get; init; }
+    [JsonConverter(typeof(LenientXrplNumberConverter))]
+    public XrplNumber? DebtTotal { get; init; }
 
     /// <summary>
-    /// Protocol debt ceiling; 0 indicates unlimited (Number type, string representation).
+    /// Protocol debt ceiling; 0 indicates unlimited (Number type).
     /// </summary>
     [JsonPropertyName("DebtMaximum")]
-    public string DebtMaximum { get; init; }
+    [JsonConverter(typeof(LenientXrplNumberConverter))]
+    public XrplNumber? DebtMaximum { get; init; }
 
     /// <summary>
-    /// Total amount of first-loss capital deposited (Number type, string representation).
+    /// Total amount of first-loss capital deposited (Number type).
     /// </summary>
     [JsonPropertyName("CoverAvailable")]
-    public string CoverAvailable { get; init; }
+    [JsonConverter(typeof(LenientXrplNumberConverter))]
+    public XrplNumber? CoverAvailable { get; init; }
 
     /// <summary>
-    /// Minimum first-loss capital coverage ratio, in 1/10th basis points.
+    /// The share of the broker's outstanding debt that first-loss capital must cover, in 1/10th of a basis point: 100000 = 100% (0–100000).
     /// </summary>
     [JsonPropertyName("CoverRateMinimum")]
     public uint? CoverRateMinimum { get; init; }
 
     /// <summary>
-    /// Minimum required first-loss capital moved to cover loan default.
+    /// The share of the minimum required first-loss capital moved to the vault to cover a loan default,
+    /// in 1/10th of a basis point: 100000 = 100% (0–100000).
     /// </summary>
     [JsonPropertyName("CoverRateLiquidation")]
     public uint? CoverRateLiquidation { get; init; }
 
     /// <summary>
-    /// Protocol fee in 1/10th basis points (0-100000).
+    /// The management fee rate charged by the broker, in 1/10th of a basis point: 10000 = 10% (0–10000).
     /// </summary>
     [JsonPropertyName("ManagementFeeRate")]
     public ushort? ManagementFeeRate { get; init; }

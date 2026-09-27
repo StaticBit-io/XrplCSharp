@@ -4,7 +4,7 @@ using Xrpl.BinaryCodec.Types;
 namespace XrplTests.BinaryCodecLib.Types
 {
     [TestClass]
-    public class TestIouValueTrailingDot
+    public class TestUIouValueTrailingDot
     {
         private static void AssertEquivalent(string withDot, string canonical)
         {

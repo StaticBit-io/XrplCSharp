@@ -8,6 +8,7 @@ using System.Numerics;
 using System.Threading;
 using System.Threading.Tasks;
 
+using Xrpl.BinaryCodec.Numbers;
 using Xrpl.Client;
 using Xrpl.Client.Exceptions;
 using Xrpl.Models.Ledger;
@@ -602,8 +603,8 @@ public class TestUAutofillFees
         int loanScale = 0) => new()
         {
             PaymentRemaining = paymentRemaining,
-            PeriodicPayment = periodicPayment,
-            LoanServiceFee = loanServiceFee,
+            PeriodicPayment = XrplNumber.Parse(periodicPayment),
+            LoanServiceFee = XrplNumber.Parse(loanServiceFee),
             LoanScale = loanScale
         };
 

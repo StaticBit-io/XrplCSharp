@@ -1,7 +1,9 @@
 using System.Collections.Generic;
 using System.Text.Json.Serialization;
 
+using Xrpl.BinaryCodec.Numbers;
 using Xrpl.Client.Exceptions;
+using Xrpl.Client.Json.Converters;
 
 // https://xrpl.org/docs/references/protocol/transactions/types/vaultset
 
@@ -27,7 +29,7 @@ namespace Xrpl.Models.Transactions
         /// The maximum asset amount that can be held in the vault.
         /// STNumber type (12 bytes: int64 mantissa + int32 exponent), serialized as string in JSON.
         /// </summary>
-        string AssetsMaximum { get; set; }
+        XrplNumber? AssetsMaximum { get; set; }
 
         /// <summary>
         /// The ID of a permissioned domain to associate with the vault.
@@ -53,7 +55,7 @@ namespace Xrpl.Models.Transactions
 
         /// <inheritdoc />
         [JsonPropertyName("AssetsMaximum")]
-        public string AssetsMaximum { get; set; }
+        public XrplNumber? AssetsMaximum { get; set; }
 
         /// <inheritdoc />
         [JsonPropertyName("DomainID")]
@@ -73,7 +75,8 @@ namespace Xrpl.Models.Transactions
 
         /// <inheritdoc />
         [JsonPropertyName("AssetsMaximum")]
-        public string AssetsMaximum { get; set; }
+        [JsonConverter(typeof(LenientXrplNumberConverter))]
+        public XrplNumber? AssetsMaximum { get; set; }
 
         /// <inheritdoc />
         [JsonPropertyName("DomainID")]

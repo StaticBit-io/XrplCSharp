@@ -52,6 +52,10 @@
                 <None Update="Fixtures\Responses\*.json">
                         <CopyToOutputDirectory>PreserveNewest</CopyToOutputDirectory>
                 </None>
+                <!-- simulate responses from a standalone node; see Fixtures\Simulate\README.md. -->
+                <None Update="Fixtures\Simulate\*.json">
+                        <CopyToOutputDirectory>PreserveNewest</CopyToOutputDirectory>
+                </None>
         </ItemGroup>
         <ItemGroup>
                 <ProjectReference Include="..\..\Xrpl\Xrpl.csproj" />

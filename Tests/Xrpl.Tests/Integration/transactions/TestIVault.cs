@@ -2,6 +2,7 @@ using System.Threading.Tasks;
 
 using Microsoft.VisualStudio.TestTools.UnitTesting;
 
+using Xrpl.BinaryCodec.Numbers;
 using Xrpl.Client;
 using Xrpl.Models;
 using Xrpl.Models.Common;
@@ -103,7 +104,7 @@ public class TestIVault : TestIVaultBase
         {
             Account = wallet.ClassicAddress,
             Asset = new IssuedCurrency { Currency = "XRP" },
-            AssetsMaximum = "10000000000",
+            AssetsMaximum = XrplNumber.Parse("10000000000"),
             MPTokenMetadata = "48656C6C6F",
             Data = "DEADBEEF",
             Flags = (uint)VaultCreateFlags.tfVaultShareNonTransferable,
@@ -279,7 +280,7 @@ public class TestIVault : TestIVaultBase
         {
             Account = wallet.ClassicAddress,
             VaultID = vaultId,
-            AssetsMaximum = "50000000000",
+            AssetsMaximum = XrplNumber.Parse("50000000000"),
         };
         setTx = await client.Autofill(setTx);
 
@@ -434,7 +435,7 @@ public class TestIVault : TestIVaultBase
         {
             Account = wallet.ClassicAddress,
             Asset = new IssuedCurrency { Currency = "XRP" },
-            AssetsMaximum = "50000000000",
+            AssetsMaximum = XrplNumber.Parse("50000000000"),
             Data = "7B226E223A2254657374205661756C74222C2277223A226578616D706C652E636F6D227D",
             Flags = (uint)VaultCreateFlags.tfVaultShareNonTransferable,
         };
@@ -474,7 +475,7 @@ public class TestIVault : TestIVaultBase
         // Verify Number fields
         Assert.IsNotNull(vault.AssetsTotal, "AssetsTotal should be set after deposit");
         Assert.IsNotNull(vault.AssetsAvailable, "AssetsAvailable should be set after deposit");
-        Assert.AreEqual("50000000000", vault.AssetsMaximum, "AssetsMaximum should match creation value");
+        Assert.AreEqual(XrplNumber.Parse("50000000000"), vault.AssetsMaximum, "AssetsMaximum should match creation value");
 
         // Verify ShareMPTID
         Assert.IsNotNull(vault.ShareMPTID, "ShareMPTID should be set");

@@ -1,7 +1,9 @@
 using System.Collections.Generic;
 using System.Text.Json.Serialization;
 
+using Xrpl.BinaryCodec.Numbers;
 using Xrpl.Client.Exceptions;
+using Xrpl.Client.Json.Converters;
 
 using static Xrpl.Models.Common.Common;
 
@@ -28,19 +30,19 @@ namespace Xrpl.Models.Transactions
         string LoanBrokerID { get; set; }
 
         /// <summary>
-        /// The minimum cover rate required for loans (1/100th of a basis point).
-        /// Valid range: 0–100000.
+        /// The share of the broker's outstanding debt that first-loss capital must cover,
+        /// in 1/10th of a basis point: 100000 = 100%, 5000 = 5%. Valid range: 0–100000.
         /// </summary>
         uint? CoverRateMinimum { get; set; }
 
         /// <summary>
-        /// The cover rate at which liquidation occurs (1/100th of a basis point).
-        /// Valid range: 0–100000.
+        /// The share of the minimum required first-loss capital moved to the vault to cover a loan default,
+        /// in 1/10th of a basis point: 100000 = 100%, 5000 = 5%. Valid range: 0–100000.
         /// </summary>
         uint? CoverRateLiquidation { get; set; }
 
         /// <summary>
-        /// The management fee rate charged by the broker (1/10th of a basis point).
+        /// The management fee rate charged by the broker, in 1/10th of a basis point: 10000 = 10%, 500 = 0.5%.
         /// Valid range: 0–10000.
         /// </summary>
         ushort? ManagementFeeRate { get; set; }
@@ -48,9 +50,9 @@ namespace Xrpl.Models.Transactions
         /// <summary>
         /// The maximum amount the protocol can owe the Vault.
         /// Default 0 means no limit. Must not be negative.
-        /// (Number type, string representation.)
+        /// (Number type.)
         /// </summary>
-        string DebtMaximum { get; set; }
+        XrplNumber? DebtMaximum { get; set; }
 
         /// <summary>
         /// Arbitrary hex-encoded metadata, limited to 256 bytes.
@@ -88,7 +90,7 @@ namespace Xrpl.Models.Transactions
 
         /// <inheritdoc />
         [JsonPropertyName("DebtMaximum")]
-        public string DebtMaximum { get; set; }
+        public XrplNumber? DebtMaximum { get; set; }
 
         /// <inheritdoc />
         [JsonPropertyName("Data")]
@@ -120,7 +122,8 @@ namespace Xrpl.Models.Transactions
 
         /// <inheritdoc />
         [JsonPropertyName("DebtMaximum")]
-        public string DebtMaximum { get; set; }
+        [JsonConverter(typeof(LenientXrplNumberConverter))]
+        public XrplNumber? DebtMaximum { get; set; }
 
         /// <inheritdoc />
         [JsonPropertyName("Data")]

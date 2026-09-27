@@ -2,6 +2,7 @@ using System;
 using System.Collections.Generic;
 using System.Text.Json.Serialization;
 
+using Xrpl.BinaryCodec.Numbers;
 using Xrpl.Client.Exceptions;
 using Xrpl.Client.Json.Converters;
 using Xrpl.Models.Common;
@@ -42,15 +43,10 @@ namespace Xrpl.Models.Transactions
         IssuedCurrency Asset { get; set; }
 
         /// <summary>
-        /// The initial deposit amount.
-        /// </summary>
-        Currency Amount { get; set; }
-
-        /// <summary>
         /// The maximum asset amount that can be held in the vault.
         /// STNumber type (12 bytes: int64 mantissa + int32 exponent), serialized as string in JSON.
         /// </summary>
-        string AssetsMaximum { get; set; }
+        XrplNumber? AssetsMaximum { get; set; }
 
         /// <summary>
         /// Arbitrary metadata for the vault shares (MPToken), limited in size. Hex-encoded string.
@@ -113,12 +109,8 @@ namespace Xrpl.Models.Transactions
         public IssuedCurrency Asset { get; set; }
 
         /// <inheritdoc />
-        [JsonPropertyName("Amount")]
-        public Currency Amount { get; set; }
-
-        /// <inheritdoc />
         [JsonPropertyName("AssetsMaximum")]
-        public string AssetsMaximum { get; set; }
+        public XrplNumber? AssetsMaximum { get; set; }
 
         /// <inheritdoc />
         [JsonPropertyName("MPTokenMetadata")]
@@ -164,12 +156,9 @@ namespace Xrpl.Models.Transactions
         public IssuedCurrency Asset { get; set; }
 
         /// <inheritdoc />
-        [JsonPropertyName("Amount")]
-        public Currency Amount { get; set; }
-
-        /// <inheritdoc />
         [JsonPropertyName("AssetsMaximum")]
-        public string AssetsMaximum { get; set; }
+        [JsonConverter(typeof(LenientXrplNumberConverter))]
+        public XrplNumber? AssetsMaximum { get; set; }
 
         /// <inheritdoc />
         [JsonPropertyName("MPTokenMetadata")]

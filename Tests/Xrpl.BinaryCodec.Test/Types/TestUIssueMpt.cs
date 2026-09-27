@@ -6,7 +6,7 @@ using Xrpl.BinaryCodec;
 namespace XrplTests.BinaryCodecLib.Types;
 
 [TestClass]
-public class TestIssueMpt
+public class TestUIssueMpt
 {
     [TestMethod]
     [TestCategory("TestU")]

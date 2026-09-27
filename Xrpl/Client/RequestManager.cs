@@ -570,7 +570,9 @@ namespace Xrpl.Client
                     var errMessage = response.Error is null
                         ? detail
                         : $"{response.Error} - {detail}";
-                    XrplException error = new XrplException(errMessage);
+                    // The same exception the status-bearing path raises, so Classify() and a
+                    // catch of RippledException see the server's error either way.
+                    RippledException error = new RippledException(errMessage, response);
                     this.Reject(id, error);
                     return (response, true);
                 }

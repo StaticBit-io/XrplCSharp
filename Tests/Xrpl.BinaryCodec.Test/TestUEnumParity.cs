@@ -5,7 +5,7 @@ using Xrpl.BinaryCodec.Types;
 namespace XrplTests.BinaryCodecLib
 {
     [TestClass]
-    public class TestEnumParity
+    public class TestUEnumParity
     {
 
         [TestMethod]

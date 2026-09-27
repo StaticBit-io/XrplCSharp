@@ -8,7 +8,7 @@ using Xrpl.BinaryCodec.Types;
 namespace XrplTests.BinaryCodecLib.Types
 {
     [TestClass]
-    public class TestInt32Type
+    public class TestUInt32Type
     {
         [TestMethod]
         public void TestFromJson_Positive()

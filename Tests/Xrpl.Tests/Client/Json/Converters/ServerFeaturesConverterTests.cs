@@ -13,6 +13,23 @@ namespace XrplTests.Client.Json.Converters;
 public class TestUServerFeaturesConverter
 {
     [TestMethod]
+    public void GetByName_UnknownName_IsNull()
+    {
+        // FirstOrDefault used to return an empty pair here, whose Value was null, so a caller that
+        // tested it for null went on to read Value.Enabled and threw.
+        ServerFeatures features = JsonSerializer.Deserialize<ServerFeatures>(@"{
+            ""features"": {
+                ""42426C4D4F1009EE67080A9B7965B44656D7714D104A72F9B4369F97ABF044EE"": { ""name"": ""Checks"", ""enabled"": true, ""supported"": true }
+            }
+        }", XrplJsonOptions.Default);
+
+        Assert.IsNull(features.GetByName("fixCleanup3_2_0"));
+        Assert.IsFalse(features.GetByName("fixCleanup3_2_0")?.Value?.Enabled == true);
+        Assert.IsTrue(features.GetByName("checks")?.Value?.Enabled == true);
+        Assert.IsNull(features.GetByName(" "));
+    }
+
+    [TestMethod]
     public void Read_Format1_WithFeaturesObject()
     {
         string json = @"{
