@@ -1,6 +1,6 @@
 ﻿# Changes
 
-## 11.9.0.0 23/09/2026
+## 11.9.0.0 26/09/2026
 
 * **`XrplNumber` is the value type of the XRPL `Number` fields** (#214, part of #211). It lives in `Xrpl.BinaryCodec.Numbers` and holds a value the way rippled's `Number` class does on the large mantissa scale: a sign, a mantissa in [10^18, 10^19 - 1] and an exponent in [-32768, 32768].
   * `Parse` / `TryParse` read decimal and scientific text; `ToString()` writes what rippled's `to_string(Number)` writes, `1e13` for 10^13; `Mantissa` / `Exponent` give the wire pair of `Number::mantissa()` / `Number::exponent()`
@@ -96,9 +96,6 @@
   * `forbidden` is `UnsupportedRequest`; `delegateActNotFound` and `noPathRequest` are `NotFound`; `masterDisabled`, `badCredentials`, `badSecret`, `badSeed`, `badKeyType`, `badIssuer`, `badFeature`, `channelMalformed`, `channelAmtMalformed`, `domainMalformed` and `oracleMalformed` are `InvalidInput`; `alreadyMultisig`, `alreadySingleSig`, `signingMalformed`, `transactionSigned`, `badSyntax` and `malformedStream` are `BadRequest`
   * an error response without `status` is rejected with `RippledException`, carrying the `ErrorResponse`, instead of a plain `XrplException`
   * `TestUXrplErrorCodes` checks every code of rippled 3.4.0's table has a constant, that no constant classifies as `Unknown`, and the status-less path
-
-## 11.8.1.0 23/09/2026
-
 * **`VaultCreate` no longer declares an `Amount` field** (#208). The property is removed from `IVaultCreate`, `VaultCreate` and `VaultCreateResponse`. `VaultCreate` has no such field in rippled's `transactions.macro`, and a node refuses any transaction that carries it with `invalidTransaction` ("Field 'Amount' found in disallowed location"), so it could not be used. A vault is created empty and funded with `VaultDeposit`.
   * `TestUTransactionModelFieldsConformance` checks every wire property a transaction request or response model declares against the fields the vendored `transactions.macro` gives its type. `VaultCreate.Amount` was the only violation
 * **Lending rates are documented in their actual unit, 1/10th of a basis point, where 100000 = 100%** (#209)
