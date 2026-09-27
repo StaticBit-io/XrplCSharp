@@ -95,7 +95,7 @@
   * `slowDown` (429) and `json_rpc` are `TemporaryServerProblem` and retryable; `highFee` is retryable and user-fixable
   * `unlBlocked`, `wrongNetwork`, `internal` and `dbDeserialization` are `ServerState`, not retryable
   * `forbidden` is `UnsupportedRequest`; `delegateActNotFound` and `noPathRequest` are `NotFound`; `masterDisabled`, `badCredentials`, `badSecret`, `badSeed`, `badKeyType`, `badIssuer`, `badFeature`, `channelMalformed`, `channelAmtMalformed`, `domainMalformed` and `oracleMalformed` are `InvalidInput`; `alreadyMultisig`, `alreadySingleSig`, `signingMalformed`, `transactionSigned`, `badSyntax` and `malformedStream` are `BadRequest`
-  * an error response without `status` is rejected with `RippledException`, carrying the `ErrorResponse`, instead of a plain `XrplException`; the message is unchanged
+  * an error response without `status` is rejected with `RippledException`, carrying the `ErrorResponse`, instead of a plain `XrplException`
   * `TestUXrplErrorCodes` checks every code of rippled 3.4.0's table has a constant, that no constant classifies as `Unknown`, and the status-less path
 
 ## 11.8.1.0 23/09/2026
