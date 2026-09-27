@@ -90,7 +90,6 @@
 * **Breaking: `AMMBid.AuthAccounts` changes from `List<AuthAccount>` to `List<AuthAccountWrapper>`** (#219). Entries in `AMMBid`, `IAMMBid` and `AMMBidResponse` serialize as `{"AuthAccount": {"Account": ...}}`; `AuctionSlot.AuthAccounts` keeps `AuthAccount` for `amm_info`
   * migration: `new AuthAccount { Account = address }` becomes `new AuthAccountWrapper(address)`; read the address as `entry.AuthAccount.Account`
   * `TestUAMMBidAuthAccounts` signs an `AMMBid` with an authorized account and decodes the blob, and reads both shapes; `TestAMMBid_AuthAccounts_TradeAtTheDiscountedFee` submits the bid, finds the account in `amm_info` and compares its deposit at the discounted fee with the node
-* **`XrplErrorCodes` covers rippled 3.4.0's error table** (#231). 27 codes were missing and classified as `Unknown`, not retryable; they now have constants and a category:
 * **`XrplErrorCodes` covers rippled 3.4.0's error table** (#231): 27 constants added, each mapped by `XrplErrorClassifier`:
   * `slowDown` (429) and `json_rpc` are `TemporaryServerProblem` and retryable; `highFee` is retryable and user-fixable
   * `unlBlocked`, `wrongNetwork`, `internal` and `dbDeserialization` are `ServerState`, not retryable
