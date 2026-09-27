@@ -91,8 +91,9 @@
   * migration: `new AuthAccount { Account = address }` becomes `new AuthAccountWrapper(address)`; read the address as `entry.AuthAccount.Account`
   * `TestUAMMBidAuthAccounts` signs an `AMMBid` with an authorized account and decodes the blob, and reads both shapes; `TestAMMBid_AuthAccounts_TradeAtTheDiscountedFee` submits the bid, finds the account in `amm_info` and compares its deposit at the discounted fee with the node
 * **`XrplErrorCodes` covers rippled 3.4.0's error table** (#231). 27 codes were missing and classified as `Unknown`, not retryable; they now have constants and a category:
+* **`XrplErrorCodes` covers rippled 3.4.0's error table** (#231): 27 constants added, each mapped by `XrplErrorClassifier`:
   * `slowDown` (429) and `json_rpc` are `TemporaryServerProblem` and retryable; `highFee` is retryable and user-fixable
-  * `unlBlocked`, `wrongNetwork`, `internal` and `dbDeserialization` are `ServerState`, not retryable; `internal` is not retried because the same request on the same server is unlikely to succeed
+  * `unlBlocked`, `wrongNetwork`, `internal` and `dbDeserialization` are `ServerState`, not retryable
   * `forbidden` is `UnsupportedRequest`; `delegateActNotFound` and `noPathRequest` are `NotFound`; `masterDisabled`, `badCredentials`, `badSecret`, `badSeed`, `badKeyType`, `badIssuer`, `badFeature`, `channelMalformed`, `channelAmtMalformed`, `domainMalformed` and `oracleMalformed` are `InvalidInput`; `alreadyMultisig`, `alreadySingleSig`, `signingMalformed`, `transactionSigned`, `badSyntax` and `malformedStream` are `BadRequest`
   * an error response without `status` is rejected with `RippledException`, carrying the `ErrorResponse`, instead of a plain `XrplException`; the message is unchanged
   * `TestUXrplErrorCodes` checks every code of rippled 3.4.0's table has a constant, that no constant classifies as `Unknown`, and the status-less path
