@@ -2051,6 +2051,13 @@ namespace Xrpl.Tests
         /// guaranteed to be open and the ending is guaranteed to be recorded - the exact
         /// interleaving that CI produced and this machine did not.
         /// </para>
+        /// <para>
+        /// <c>Connect()</c> itself is not ordered after that handler. The state change wakes the
+        /// connection waiters before the status is published, on purpose, so the caller inside
+        /// <c>Connect()</c> can resume on another thread and throw while the handler is still
+        /// running. The test therefore waits for the handler's answer rather than reading it the
+        /// moment <c>Connect()</c> throws.
+        /// </para>
         /// </remarks>
         [TestMethod]
         public async Task TestUAStoppedClientDoesNotCallItselfConnected()
@@ -2074,26 +2081,29 @@ namespace Xrpl.Tests
                 _client.connection.OnConnected += () => throw new InvalidOperationException("handler is permanently broken");
 
                 bool? socketWasStillOpen = null;
-                ConnectionWaitOutcome? answeredInsideTheWindow = null;
+                TaskCompletionSource<ConnectionWaitOutcome> answered =
+                    new TaskCompletionSource<ConnectionWaitOutcome>(TaskCreationOptions.RunContinuationsAsynchronously);
 
                 _client.connection.OnConnectionStatus += status =>
                 {
                     if (status.StopReason != ConnectionStopReason.ConnectHandlerFailed ||
-                        answeredInsideTheWindow != null)
+                        answered.Task.IsCompleted)
                     {
                         return;
                     }
 
                     socketWasStillOpen = _client.connection.IsConnected();
-                    answeredInsideTheWindow = _client.connection
+                    answered.TrySetResult(_client.connection
                         .WaitForConnectionOutcomeAsync(TimeSpan.FromSeconds(5))
                         .GetAwaiter()
-                        .GetResult();
+                        .GetResult());
                 };
 
                 await Assert.ThrowsExactlyAsync<ConnectHandlerFailedException>(async () => await _client.Connect());
 
-                Assert.IsNotNull(answeredInsideTheWindow, "The terminal notification has to be raised for this to test anything.");
+                Task finished = await Task.WhenAny(answered.Task, Task.Delay(TimeSpan.FromSeconds(10)));
+                Assert.AreSame(answered.Task, finished, "The terminal notification has to be raised for this to test anything.");
+                ConnectionWaitOutcome answeredInsideTheWindow = await answered.Task;
 
                 Assert.AreEqual(
                     ConnectionWaitOutcome.ConnectHandlerFailed,
