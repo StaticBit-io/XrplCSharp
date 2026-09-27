@@ -149,6 +149,49 @@ public class TestIAmmLiquidity : TestIAMMBase
         Assert.AreEqual("tecAMM_NOT_EMPTY", AmmLiquidity.DepositIntoEmptyPool(AmmPool.FromAmmInfo(amm), 1, 1, rules).Refusal);
     }
 
+    [TestMethod]
+    public async Task TestAMMBid_AuthAccounts_TradeAtTheDiscountedFee()
+    {
+        // The pool's creator holds the auction slot and authorizes another account on it, which
+        // then trades at DiscountedFee: amm_info lists it, and a deposit it makes is quoted with
+        // that fee and matches the node.
+        AssertSuccess(await CreatePool("1234.5678", 98.765432m), "AMMCreate");
+        XrplWallet other = XrplWallet.Generate();
+        await IntegrationTestConfig.TryFundWalletsAsync(client, nodeType, other);
+        await TrustAndFund(other, "5000");
+
+        AMMBid bid = await client.Autofill(new AMMBid
+        {
+            Account = walletHolder.ClassicAddress,
+            Asset = TokenAsset,
+            Asset2 = XrpAsset,
+            AuthAccounts = new List<AuthAccountWrapper> { new AuthAccountWrapper(other.ClassicAddress) },
+        });
+        AssertSuccess(await client.SubmitAndWait(bid, walletHolder, true), "AMMBid");
+
+        AMMInfo amm = (await client.AmmInfo(new AMMInfoRequest { Asset = TokenAsset, Asset2 = XrpAsset }).Typed()).Amm;
+        Assert.IsNotNull(amm.AuctionSlot?.AuthAccounts);
+        CollectionAssert.Contains(amm.AuctionSlot.AuthAccounts.ConvertAll(a => a.Account), other.ClassicAddress);
+
+        AmmPool pool = AmmPool.FromAmmInfo(amm, other.ClassicAddress);
+        Assert.AreEqual(amm.AuctionSlot.DiscountedFee, (uint)pool.TradingFee, "the authorized account pays the discounted fee");
+
+        LedgerRules rules = await LedgerRules.FromNodeAsync(client);
+        AmmQuote quote = AmmLiquidity.DepositSingle(pool, TokenAsset, XrplNumber.Parse("12.3456789"), rules: rules);
+        TransactionPreview<AmmOutcome> preview = await client.PreviewAMMDeposit(new AMMDeposit
+        {
+            Account = other.ClassicAddress,
+            Asset = TokenAsset,
+            Asset2 = XrpAsset,
+            Amount = new Currency { CurrencyCode = CurrencyCode, Issuer = walletIssuer.ClassicAddress, Value = "12.3456789" },
+            Flags = AMMDepositFlags.tfSingleAsset,
+        });
+
+        Assert.IsTrue(preview.WouldSucceed, preview.EngineResult);
+        Assert.IsTrue(quote.IsAccepted, quote.RefusalReason);
+        Assert.AreEqual(Math.Abs(preview.Outcome.LpTokenChange), quote.LpTokens, "LP tokens at the discounted fee");
+    }
+
     private async Task Exercise(
         IssuedCurrency asset,
         IssuedCurrency asset2,
