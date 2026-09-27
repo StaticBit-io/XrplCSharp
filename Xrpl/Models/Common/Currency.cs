@@ -251,6 +251,14 @@ public class Currency
     /// string interpolation, a debugger's watch window - are exactly where someone would be while
     /// working out why an amount is unusual. Failing there hides the value instead of showing it.
     /// </remarks>
+    /// <summary>
+    /// The amount as an <see cref="Xrpl.Amounts.XrplAmount"/>: exact over the ledger's whole range,
+    /// where <see cref="ValueAsNumber"/> is limited to what <see cref="decimal"/> holds.
+    /// </summary>
+    /// <exception cref="FormatException">The value is not an amount.</exception>
+    /// <exception cref="OverflowException">The value is beyond what the asset can hold.</exception>
+    public Xrpl.Amounts.XrplAmount ToXrplAmount() => Xrpl.Amounts.XrplAmount.FromCurrency(this);
+
     public override string ToString()
     {
         try

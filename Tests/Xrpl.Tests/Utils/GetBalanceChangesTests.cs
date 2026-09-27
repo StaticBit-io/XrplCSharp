@@ -1,10 +1,12 @@
 ﻿using Microsoft.VisualStudio.TestTools.UnitTesting;
 
+using System.Collections.Generic;
 using System.Linq;
 using System.Text.Json;
 
 using Xrpl.Client.Exceptions;
 using Xrpl.Client.Json;
+using Xrpl.Models.Common;
 
 using Xrpl.Models.Transactions;
 using Xrpl.Utils;
@@ -68,30 +70,24 @@ public class TestUGetBalanceChanges
         Assert.AreEqual(buyer, issuerTokenBuyerChanges.Issuer);
     }
     /// <summary>
-    /// An amount the ledger allows but <c>decimal</c> cannot hold stops this, and says so.
+    /// An amount the ledger allows but <c>decimal</c> cannot hold is reported, not refused.
     /// </summary>
     /// <remarks>
-    /// <para>
-    /// The exception is documented on <c>GetBalanceChanges</c> itself, so it is exercised through
-    /// <c>GetBalanceChanges</c> rather than by imitating the subtraction it performs. A test that
-    /// mimics the arithmetic proves the arithmetic; it does not prove that this method reaches it,
-    /// which is what the documentation promises a caller.
-    /// </para>
-    /// <para>
-    /// The balance below is negative, which is the ordinary shape for a <c>RippleState</c> node
-    /// from the low account's side, and it is out of range - so it exercises the case that used to
-    /// fail with <c>FormatException</c> before the parse fix, and now names the real problem.
-    /// </para>
+    /// The balance below is negative, the ordinary shape for a <c>RippleState</c> node from the
+    /// low account's side, and far beyond <c>decimal</c>. It used to make the whole call throw
+    /// <c>AmountOutOfRangeException</c>, taking every readable change down with it (#154).
     /// </remarks>
     [TestMethod]
-    public void TestUGetBalanceChanges_AmountBeyondDecimal_ThrowsRatherThanReportingSomethingElse()
+    public void TestUGetBalanceChanges_AmountBeyondDecimal_IsReportedExactly()
     {
         Meta metadata = JsonSerializer.Deserialize<Meta>(metaDataOutOfRange, XrplJsonOptions.Default);
 
-        AmountOutOfRangeException error = Assert.ThrowsExactly<AmountOutOfRangeException>(
-            () => BalanceChanges.GetBalanceChanges(metadata));
+        Dictionary<string, List<Currency>> changes = BalanceChanges.GetBalanceChanges(metadata);
 
-        Assert.AreEqual("-9999999999999999e80", error.Value);
+        // -9999999999999999e80 - (-100) is exact far beyond sixteen digits; rounded once to
+        // nearest it is the final balance itself, written as rippled writes it.
+        Assert.AreEqual("-9999999999999999e80", changes["rLiooJRSKeiNfRJcDBUhu4rcjQjGLWqa4p"].Single().Value);
+        Assert.AreEqual("9999999999999999e80", changes["rXPMxBeefHGxx2K7g5qmmWq3gFsgawkoa"].Single().Value);
     }
 
     private const string metaDataOutOfRange = @"{

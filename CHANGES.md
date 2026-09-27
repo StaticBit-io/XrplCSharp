@@ -1,5 +1,19 @@
 ﻿# Changes
 
+## 11.10.0.0 27/09/2026
+
+* **`XrplAmount`: an amount over the ledger's whole range** (#150, `Xrpl.Amounts`). It holds XRP drops, MPT units or an issued currency as a 16-digit mantissa with an exponent from -96 to 80, as rippled's `STAmount` does. `Parse`, `TryParse`, `FromNumber` (`STAmount::fromNumber`), `FromCurrency` / `ToCurrency`, `ToString` (`STAmount::getText`), comparison and `KindOf`. `AmountKind` (`Xrp`, `Iou`, `Mpt`) moves from `Xrpl.Sugar` to `Xrpl.Amounts` and becomes public
+  * `Currency.ToXrplAmount()` reads a wire amount exactly, beyond what `ValueAsNumber` holds
+* **`XrplAmountMath`: `STAmount` arithmetic** (#238): `Add`, `Subtract`, `Multiply(amount, fraction, rounding)` (`multiply(amount, frac, rm)`), `Multiply(v1, v2, asset)`, `Divide`, and the directed rounding of offer crossing - `MulRound`, `MulRoundStrict`, `DivRound`, `DivRoundStrict` - with `canonicalizeRound` / `canonicalizeRoundStrict`, the `MPTokensV2` `Number` path, and the fixed-width behaviour of `STAmount`'s constructor (a mantissa above `int64` wraps for an issued currency and loses its last digit for XRP and MPT)
+* **`XrplQuality`: rippled's `Quality`** (#238): the 64-bit encoding, `FromAmounts` (`getRate`), `FromBookDirectory`, `Rate`, rippled's ordering, `CeilIn`, `CeilOut`, `CeilInStrict`, `CeilOutStrict` and `WithinRelativeDistance`
+  * `Offer.BookQuality` is the quality the node crosses an offer at, from its `BookDirectory`; `Offer.RemainingQuality` the exact ratio of what it has left
+* **`OfferCrossing`: one offer sized as `BookStep` sizes it** (#238): `Fund` (transfer fees and the owner's funds), `LimitStepIn`, `LimitStepOut`, `ForwardPass` (the forward pass settling on the reverse pass's output), `Cross`, `LimitIn` / `LimitOut` (`TOffer::limitIn` / `limitOut`), `MulRatio` for XRP, MPT and issued currencies, and `PassesQualityLimit`; the result is an `OfferStep`
+  * `LedgerRules.FixReducedOffersV2` selects `ceilInStrict` in `LimitIn`; `FromNodeAsync` reads it
+* **`GetBalanceChanges` computes issued-currency deltas as `XrplAmount`** (#154): the difference is exact, then rounded once to 16 digits to nearest with ties to even, and written as rippled writes it. A balance beyond `decimal` is reported instead of throwing `AmountOutOfRangeException`
+* **Breaking: `Xrpl.Utils.Quality` is removed.** It was an empty class; the quality of an offer is `XrplQuality`
+* `Amounts-Guide` (both languages) covers `XrplAmount`, the arithmetic, `XrplQuality` and `OfferCrossing`
+* `TestUAmountVectors` replays 8,808 results computed by rippled 3.4.0's `STAmount`, `Quality` and `mulRatio` code over every `Number` scale and rounding mode; `Tests/Xrpl.Tests/Fixtures/Amount` holds the vectors and the generator. `TestUXrplAmount` pins the `ceilIn` / `ceilOut` cases of `Quality_test.cpp`, the `getRate` cases of `STAmount_test.cpp` and the text form. `TestIOfferCrossing` crosses offers on a node - partially, with a transfer fee, from an underfunded maker, between two issued currencies - and compares every amount with the metadata, and reads a 5e90 balance change
+
 ## 11.9.0.0 26/09/2026
 
 * **`XrplNumber` is the value type of the XRPL `Number` fields** (#214, part of #211). It lives in `Xrpl.BinaryCodec.Numbers` and holds a value the way rippled's `Number` class does on the large mantissa scale: a sign, a mantissa in [10^18, 10^19 - 1] and an exponent in [-32768, 32768].
