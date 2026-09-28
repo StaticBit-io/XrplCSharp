@@ -50,6 +50,21 @@ namespace Xrpl.Amounts
 
         internal static XrplAmount Min(XrplAmount a, XrplAmount b) => b < a ? b : a;
 
+        /// <summary>
+        /// The engine's typed form of an amount: an issued currency without its issuer, as rippled's
+        /// <c>IOUAmount</c> carries none, so amounts compare along a strand whoever issued them.
+        /// </summary>
+        internal static XrplAmount Typed(XrplAmount amount) =>
+            amount.Kind == AmountKind.Iou ? amount.WithAsset(TypedIou(amount.Asset.Currency)) : amount;
+
+        /// <summary>
+        /// The asset of <see cref="Typed"/> for a currency. The issuer is a placeholder no account
+        /// can have: an asset without one would read as XRP.
+        /// </summary>
+        internal static IssuedCurrency TypedIou(string currency) => new IssuedCurrency { Currency = currency, Issuer = TypedIssuer };
+
+        internal const string TypedIssuer = "(any issuer)";
+
         /// <summary><c>signum() &lt;= 0</c>.</summary>
         internal static bool IsNotPositive(XrplAmount amount) => amount.IsZero || amount.IsNegative;
 

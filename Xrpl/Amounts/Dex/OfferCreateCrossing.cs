@@ -192,20 +192,42 @@ namespace Xrpl.Amounts
                         : XrplAmount.Canonical(deliver.Asset, AmountKind.Iou, false, XrplAmount.MaxIouMantissa / 2, XrplAmount.MaxIouExponent, NumberRounding.ToNearest);
                 }
 
+                // The default path, and for two issued currencies a second one through XRP.
                 AmmFlowContext ammContext = new AmmFlowContext(account);
-                List<List<FlowStep>> strands = BuildStrands(psb, account, takerAmount.In.Asset, takerAmount.Out.Asset, threshold, ammContext);
-                ammContext.MultiPath = strands.Count > 1;
+                List<IReadOnlyList<PathElement>> paths = new List<IReadOnlyList<PathElement>>();
+                if (takerAmount.In.Kind != AmountKind.Xrp && takerAmount.Out.Kind != AmountKind.Xrp)
+                    paths.Add(new[] { new PathElement(null, "XRP", null) });
 
-                FlowResult flow = StrandFlow.Run(
-                    psb,
-                    strands,
-                    takerAmount.In.Asset,
-                    deliver,
-                    partialPayment: !flags.HasFlag(OfferCreateFlags.tfFillOrKill),
-                    sell ? CrossingMode.Sell : CrossingMode.Yes,
-                    threshold,
-                    sendMax,
-                    ammContext);
+                StrandBuilder.Request request = new StrandBuilder.Request
+                {
+                    Source = account,
+                    Destination = account,
+                    Deliver = takerAmount.Out.Asset,
+                    SendMax = takerAmount.In.Asset,
+                    LimitQuality = threshold,
+                    OfferCrossing = true,
+                    AmmContext = ammContext,
+                };
+                (string strandsResult, List<List<FlowStep>> strands) = StrandBuilder.ToStrands(psb, request, paths, addDefaultPath: true);
+                FlowResult flow;
+                if (strandsResult != null)
+                {
+                    flow = new FlowResult { Result = strandsResult, RemovableOffers = new HashSet<string>(StringComparer.Ordinal) };
+                }
+                else
+                {
+                    ammContext.MultiPath = strands.Count > 1;
+                    flow = StrandFlow.Run(
+                        psb,
+                        strands,
+                        takerAmount.In.Asset,
+                        deliver,
+                        partialPayment: !flags.HasFlag(OfferCreateFlags.tfFillOrKill),
+                        sell ? CrossingMode.Sell : CrossingMode.Yes,
+                        threshold,
+                        sendMax,
+                        ammContext);
+                }
 
                 if (flow.Succeeded)
                     flow.Sandbox.ApplyTo(psb);
@@ -266,72 +288,6 @@ namespace Xrpl.Amounts
             return (XrplAmountMath.MulRound(remainingOut, rate, takerAmount.In.Asset, roundUp: true, rules), remainingOut);
         }
 
-        /// <summary>
-        /// <c>toStrands</c> for offer crossing: the direct book, and when neither side is XRP a
-        /// second strand bridged through XRP, each wrapped in the steps that move the taker's funds.
-        /// </summary>
-        private static List<List<FlowStep>> BuildStrands(
-            DexView view,
-            string account,
-            IssuedCurrency @in,
-            IssuedCurrency @out,
-            XrplQuality threshold,
-            AmmFlowContext ammContext)
-        {
-            List<List<FlowStep>> strands = new List<List<FlowStep>> { BuildStrand(view, account, @in, @out, threshold, ammContext, bridged: false) };
-            if (XrplAmount.KindOf(@in) != AmountKind.Xrp && XrplAmount.KindOf(@out) != AmountKind.Xrp)
-                strands.Add(BuildStrand(view, account, @in, @out, threshold, ammContext, bridged: true));
-
-            return strands;
-        }
-
-        private static List<FlowStep> BuildStrand(
-            DexView view,
-            string account,
-            IssuedCurrency @in,
-            IssuedCurrency @out,
-            XrplQuality threshold,
-            AmmFlowContext ammContext,
-            bool bridged)
-        {
-            List<FlowStep> strand = new List<FlowStep>();
-            FlowStep first = null;
-            if (XrplAmount.KindOf(@in) == AmountKind.Xrp)
-            {
-                int reserveReduction = view.Read(HoldingKey.Of(account, @out)).Exists ? 0 : -1;
-                first = new XrpEndpointCrossingStep(account, isLast: false, reserveReduction);
-            }
-            else if (!string.Equals(account, @in.Issuer, StringComparison.Ordinal))
-            {
-                first = new DirectCrossingStep(account, @in.Issuer, @in, isLast: false);
-            }
-
-            if (first != null)
-                strand.Add(first);
-
-            FlowStep previous = first;
-            if (bridged)
-            {
-                IssuedCurrency xrp = new IssuedCurrency { Currency = "XRP" };
-                previous = new BookCrossingStep(view, @in, xrp, account, account, previous, defaultPath: false, threshold, ammContext);
-                strand.Add(previous);
-                previous = new BookCrossingStep(view, xrp, @out, account, account, previous, defaultPath: false, threshold, ammContext);
-                strand.Add(previous);
-            }
-            else
-            {
-                previous = new BookCrossingStep(view, @in, @out, account, account, previous, defaultPath: true, threshold, ammContext);
-                strand.Add(previous);
-            }
-
-            if (XrplAmount.KindOf(@out) == AmountKind.Xrp)
-                strand.Add(new XrpEndpointCrossingStep(account, isLast: true, reserveReduction: 0));
-            else if (!string.Equals(account, @out.Issuer, StringComparison.Ordinal))
-                strand.Add(new DirectCrossingStep(@out.Issuer, account, @out, isLast: true));
-
-            return strand;
-        }
-
         /// <summary>The result, with every offer and pool that ended up different from the snapshot.</summary>
         private static OfferCrossingResult Result(
             DexWorld world,
@@ -341,57 +297,7 @@ namespace Xrpl.Amounts
             XrplAmount got,
             (XrplAmount TakerPays, XrplAmount TakerGets)? placed)
         {
-            List<OfferChange> offers = new List<OfferChange>();
-            foreach (DexOffer offer in world.Snapshot.Offers)
-            {
-                if (offer == null)
-                    continue;
-
-                OfferState state = final.Offer(offer.Index);
-                if (state.Deleted)
-                    offers.Add(new OfferChange(offer.Index, offer.Account, null, null));
-                else if (state.TakerPays != offer.TakerPays || state.TakerGets != offer.TakerGets)
-                    offers.Add(new OfferChange(offer.Index, offer.Account, state.TakerPays, state.TakerGets));
-            }
-
-            List<AmmPoolChange> pools = new List<AmmPoolChange>();
-            foreach (DexAmmPool pool in world.Pools)
-            {
-                XrplAmount balance = final.Read(HoldingKey.Of(pool.Account, pool.Balance.Asset)).Current;
-                XrplAmount balance2 = final.Read(HoldingKey.Of(pool.Account, pool.Balance2.Asset)).Current;
-                if (balance != pool.Balance || balance2 != pool.Balance2)
-                    pools.Add(new AmmPoolChange(pool.Account, balance, balance2));
-            }
-
-            HashSet<string> poolAccounts = new HashSet<string>(StringComparer.Ordinal);
-            foreach (DexAmmPool pool in world.Pools)
-                poolAccounts.Add(pool.Account);
-
-            HashSet<HoldingKey> keys = new HashSet<HoldingKey>(final.TouchedHoldings());
-            if (world.Fee > 0)
-                keys.Add(HoldingKey.Of(world.FeeAccount, new IssuedCurrency { Currency = "XRP" }));
-
-            List<BalanceChange> balances = new List<BalanceChange>();
-            foreach (HoldingKey key in keys)
-            {
-                if (poolAccounts.Contains(key.Account))
-                    continue;
-
-                XrplAmount change = XrplAmountMath.ExactDifference(final.Read(key).Current, final.SnapshotBalance(key));
-                if (!change.IsZero)
-                    balances.Add(new BalanceChange(key.Account, change));
-            }
-
-            balances.Sort((a, b) =>
-            {
-                int byAccount = string.CompareOrdinal(a.Account, b.Account);
-                if (byAccount != 0)
-                    return byAccount;
-
-                int byCurrency = string.CompareOrdinal(a.Change.Asset?.Currency, b.Change.Asset?.Currency);
-                return byCurrency != 0 ? byCurrency : string.CompareOrdinal(a.Change.Asset?.Issuer, b.Change.Asset?.Issuer);
-            });
-
+            (List<OfferChange> offers, List<AmmPoolChange> pools, List<BalanceChange> balances) = LedgerChanges.Collect(world, final);
             return new OfferCrossingResult(engineResult, paid, got, placed?.TakerPays, placed?.TakerGets, offers, pools, balances);
         }
     }

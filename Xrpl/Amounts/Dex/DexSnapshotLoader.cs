@@ -1,13 +1,16 @@
 using System;
 using System.Collections.Generic;
+using System.Globalization;
 using System.Threading;
 using System.Threading.Tasks;
 
 using Xrpl.Client;
 using Xrpl.Client.Exceptions;
+using Xrpl.Models;
 using Xrpl.Models.Common;
 using Xrpl.Models.Ledger;
 using Xrpl.Models.Methods;
+using Xrpl.Models.Transactions;
 using Xrpl.Sugar;
 
 using static Xrpl.Models.Common.Common;
@@ -41,7 +44,7 @@ namespace Xrpl.Amounts
         /// <param name="takerPays">The asset the offer asks for.</param>
         /// <param name="takerGets">The asset the offer gives.</param>
         /// <param name="cancellationToken">Cancels the reads.</param>
-        public static async Task<DexSnapshot> FromNodeAsync(
+        public static Task<DexSnapshot> FromNodeAsync(
             IXrplClient client,
             string account,
             IssuedCurrency takerPays,
@@ -57,38 +60,124 @@ namespace Xrpl.Amounts
             if (takerGets == null)
                 throw new ArgumentNullException(nameof(takerGets));
 
+            StrandBuilder.Request request = new StrandBuilder.Request
+            {
+                Source = account,
+                Destination = account,
+                Deliver = takerPays,
+                SendMax = takerGets,
+                OfferCrossing = true,
+            };
+            List<IReadOnlyList<PathElement>> paths = new List<IReadOnlyList<PathElement>>();
+            if (XrplAmount.KindOf(takerGets) != AmountKind.Xrp && XrplAmount.KindOf(takerPays) != AmountKind.Xrp)
+                paths.Add(new[] { new PathElement(null, "XRP", null) });
+
+            return LoadAsync(client, request, paths, addDefaultPath: true, account, cancellationToken);
+        }
+
+        /// <summary>
+        /// Reads from a node, at one validated ledger, everything <paramref name="payment"/> can
+        /// reach: the trust lines along its paths and its default path, the books and AMM pools
+        /// on them, and the accounts involved - with the destination's deposit preauthorizations.
+        /// </summary>
+        /// <remarks>
+        /// Each book is read with one <c>book_offers</c> call, so only its first
+        /// <see cref="BookLimit"/> offers are included, and offers whose owner holds nothing are
+        /// left out, except the sender's own. The transaction lands in a later ledger, whose state
+        /// may differ.
+        /// </remarks>
+        /// <param name="client">The node to read from.</param>
+        /// <param name="payment">The payment, with its paths as <c>ripple_path_find</c> returned them.</param>
+        /// <param name="cancellationToken">Cancels the reads.</param>
+        public static Task<DexSnapshot> FromNodeAsync(IXrplClient client, Payment payment, CancellationToken cancellationToken = default)
+        {
+            if (client == null)
+                throw new ArgumentNullException(nameof(client));
+            if (payment?.Amount == null || payment.Account == null || payment.Destination == null)
+                throw new ArgumentException("A payment needs Account, Destination and Amount.", nameof(payment));
+
+            XrplAmount amount = payment.Amount.ToXrplAmount();
+            IssuedCurrency sendMax = payment.SendMax?.ToXrplAmount().Asset ?? (amount.Kind == AmountKind.Xrp
+                ? amount.Asset
+                : new IssuedCurrency { Currency = amount.Asset.Currency, Issuer = payment.Account });
+
+            StrandBuilder.Request request = new StrandBuilder.Request
+            {
+                Source = payment.Account,
+                Destination = payment.Destination,
+                Deliver = amount.Asset,
+                SendMax = sendMax,
+            };
+            List<IReadOnlyList<PathElement>> paths = new List<IReadOnlyList<PathElement>>();
+            foreach (List<PathStep> path in payment.Paths ?? new List<List<PathStep>>())
+            {
+                List<PathElement> elements = new List<PathElement>();
+                foreach (PathStep step in path ?? new List<PathStep>())
+                    elements.Add(new PathElement(step.Account, step.CurrencyCode, step.Issuer));
+                paths.Add(elements);
+            }
+
+            bool addDefaultPath = !((payment.Flags ?? 0).HasFlag(PaymentFlags.tfNoDirectRipple));
+            return LoadAsync(client, request, paths, addDefaultPath, payment.Account, cancellationToken);
+        }
+
+        /// <summary>The accounts, lines and books the planned strands reach, read at one validated ledger.</summary>
+        private static async Task<DexSnapshot> LoadAsync(
+            IXrplClient client,
+            StrandBuilder.Request request,
+            List<IReadOnlyList<PathElement>> paths,
+            bool addDefaultPath,
+            string taker,
+            CancellationToken cancellationToken)
+        {
             LOLedger header = await client
                 .Ledger(new LedgerRequest { LedgerIndex = new LedgerIndex(LedgerIndexType.Validated) }, cancellationToken)
                 .Typed()
                 .ConfigureAwait(false);
             LedgerEntity ledger = header.LedgerEntity as LedgerEntity
                                   ?? throw new InvalidOperationException("The node returned no ledger header.");
-            uint ledgerIndex = uint.Parse(ledger.LedgerIndex, System.Globalization.CultureInfo.InvariantCulture);
-            LedgerIndex at = new LedgerIndex(ledgerIndex);
+            LedgerIndex at = new LedgerIndex(uint.Parse(ledger.LedgerIndex, CultureInfo.InvariantCulture));
 
             (ulong reserveBase, ulong reserveIncrement) = await ReservesAsync(client, at, cancellationToken).ConfigureAwait(false);
 
-            // Crossing, the taker pays in its TakerGets asset and receives its TakerPays asset.
-            IssuedCurrency xrp = new IssuedCurrency { Currency = "XRP" };
-            List<(IssuedCurrency In, IssuedCurrency Out)> books = new List<(IssuedCurrency, IssuedCurrency)> { (takerGets, takerPays) };
-            if (XrplAmount.KindOf(takerGets) != AmountKind.Xrp && XrplAmount.KindOf(takerPays) != AmountKind.Xrp)
+            HashSet<string> accounts = new HashSet<string>(StringComparer.Ordinal) { request.Source, request.Destination };
+            HashSet<(string A, string B, string Currency)> lines = new HashSet<(string, string, string)>();
+            List<(IssuedCurrency In, IssuedCurrency Out)> books = new List<(IssuedCurrency, IssuedCurrency)>();
+            HashSet<BookKey> seenBooks = new HashSet<BookKey>();
+
+            List<IReadOnlyList<PathElement>> planned = new List<IReadOnlyList<PathElement>>(paths);
+            if (addDefaultPath)
+                planned.Insert(0, Array.Empty<PathElement>());
+
+            foreach (IReadOnlyList<PathElement> path in planned)
             {
-                books.Add((takerGets, xrp));
-                books.Add((xrp, takerPays));
+                foreach (StrandBuilder.Hop hop in StrandBuilder.Plan(request, path).Hops)
+                {
+                    switch (hop.Kind)
+                    {
+                        case StrandBuilder.HopKind.Direct:
+                            accounts.Add(hop.Source);
+                            accounts.Add(hop.Destination);
+                            AddLine(lines, hop.Source, hop.Destination, hop.Currency);
+                            break;
+                        case StrandBuilder.HopKind.XrpEndpoint:
+                            accounts.Add(hop.Source);
+                            break;
+                        default:
+                            AddIssuer(accounts, hop.In);
+                            AddIssuer(accounts, hop.Out);
+                            if (seenBooks.Add(BookKey.Of(hop.In, hop.Out)))
+                                books.Add((hop.In, hop.Out));
+                            break;
+                    }
+                }
             }
 
             List<DexOffer> offers = new List<DexOffer>();
             List<DexAmmPool> pools = new List<DexAmmPool>();
-            HashSet<string> accounts = new HashSet<string>(StringComparer.Ordinal) { account };
-            HashSet<(string Account, string Currency, string Issuer)> lines = new HashSet<(string, string, string)>();
-            AddLine(lines, account, takerPays);
-            AddLine(lines, account, takerGets);
-            AddIssuer(accounts, takerPays);
-            AddIssuer(accounts, takerGets);
-
             foreach ((IssuedCurrency @in, IssuedCurrency @out) in books)
             {
-                foreach (BookOffer offer in await BookAsync(client, account, @in, @out, at, cancellationToken).ConfigureAwait(false))
+                foreach (BookOffer offer in await BookAsync(client, taker, @in, @out, at, cancellationToken).ConfigureAwait(false))
                 {
                     XrplAmount pays = offer.TakerPays.ToXrplAmount();
                     XrplAmount gets = offer.TakerGets.ToXrplAmount();
@@ -102,8 +191,10 @@ namespace Xrpl.Amounts
                         Expiration = offer.Expiration is { } expiration ? (uint)LendingMath.RippleSeconds(expiration) : null,
                     });
                     accounts.Add(offer.Account);
-                    AddLine(lines, offer.Account, pays.Asset);
-                    AddLine(lines, offer.Account, gets.Asset);
+                    if (pays.Kind == AmountKind.Iou)
+                        AddLine(lines, offer.Account, pays.Asset.Issuer, pays.Asset.Currency);
+                    if (gets.Kind == AmountKind.Iou)
+                        AddLine(lines, offer.Account, gets.Asset.Issuer, gets.Asset.Currency);
                 }
 
                 if (await PoolAsync(client, @in, @out, at, cancellationToken).ConfigureAwait(false) is { } pool)
@@ -113,14 +204,16 @@ namespace Xrpl.Amounts
             List<DexAccount> accountStates = new List<DexAccount>();
             foreach (string address in accounts)
             {
+                if (address.Length == 0)
+                    continue;
                 if (await AccountAsync(client, address, at, cancellationToken).ConfigureAwait(false) is { } state)
                     accountStates.Add(state);
             }
 
             List<DexTrustLine> lineStates = new List<DexTrustLine>();
-            foreach ((string holder, string currency, string issuer) in lines)
+            foreach ((string a, string b, string currency) in lines)
             {
-                if (await LineAsync(client, holder, currency, issuer, at, cancellationToken).ConfigureAwait(false) is { } line)
+                if (await LineAsync(client, a, b, currency, at, cancellationToken).ConfigureAwait(false) is { } line)
                     lineStates.Add(line);
             }
 
@@ -143,10 +236,13 @@ namespace Xrpl.Amounts
                 accounts.Add(asset.Issuer);
         }
 
-        private static void AddLine(HashSet<(string, string, string)> lines, string holder, IssuedCurrency asset)
+        private static void AddLine(HashSet<(string, string, string)> lines, string a, string b, string currency)
         {
-            if (XrplAmount.KindOf(asset) == AmountKind.Iou && !string.Equals(holder, asset.Issuer, StringComparison.Ordinal))
-                lines.Add((holder, asset.Currency, asset.Issuer));
+            if (string.IsNullOrEmpty(a) || string.IsNullOrEmpty(b) || string.Equals(a, b, StringComparison.Ordinal))
+                return;
+
+            LineKey key = LineKey.Of(a, b, currency);
+            lines.Add((key.First, key.Second, key.Currency));
         }
 
         private static async Task<(ulong Base, ulong Increment)> ReservesAsync(IXrplClient client, LedgerIndex at, CancellationToken cancellationToken)
@@ -159,14 +255,14 @@ namespace Xrpl.Amounts
                 throw new InvalidOperationException("The node returned no FeeSettings.");
 
             if (fees.ReserveBaseDrops != null && fees.ReserveIncrementDrops != null)
-                return (ulong.Parse(fees.ReserveBaseDrops, System.Globalization.CultureInfo.InvariantCulture), ulong.Parse(fees.ReserveIncrementDrops, System.Globalization.CultureInfo.InvariantCulture));
+                return (ulong.Parse(fees.ReserveBaseDrops, CultureInfo.InvariantCulture), ulong.Parse(fees.ReserveIncrementDrops, CultureInfo.InvariantCulture));
 
             return (fees.ReserveBase ?? 0, fees.ReserveIncrement ?? 0);
         }
 
         private static async Task<IReadOnlyList<BookOffer>> BookAsync(
             IXrplClient client,
-            string account,
+            string taker,
             IssuedCurrency @in,
             IssuedCurrency @out,
             LedgerIndex at,
@@ -175,7 +271,7 @@ namespace Xrpl.Amounts
             // With the taker named, the account's own unfunded offers are returned too.
             BookOffersRequest request = new BookOffersRequest
             {
-                Taker = account,
+                Taker = taker,
                 TakerPays = TakerAmountOf(@in),
                 TakerGets = TakerAmountOf(@out),
                 Limit = BookLimit,
@@ -259,22 +355,49 @@ namespace Xrpl.Amounts
             if (root == null)
                 return null;
 
+            AccountRootFlags flags = root.Flags ?? 0;
+            List<string> preauthorized = new List<string>();
+            if (flags.HasFlag(AccountRootFlags.lsfDepositAuth))
+                preauthorized = await PreauthorizedAsync(client, address, at, cancellationToken).ConfigureAwait(false);
+
             return new DexAccount
             {
                 Address = address,
-                Balance = ulong.Parse(root.Balance.Value, System.Globalization.CultureInfo.InvariantCulture),
+                Balance = ulong.Parse(root.Balance.Value, CultureInfo.InvariantCulture),
                 OwnerCount = root.OwnerCount ?? 0,
                 TransferRate = root.TransferRate ?? 0,
                 TickSize = root.TickSize ?? 0,
-                GlobalFreeze = root.Flags is { } flags && flags.HasFlag(AccountRootFlags.lsfGlobalFreeze),
+                GlobalFreeze = flags.HasFlag(AccountRootFlags.lsfGlobalFreeze),
+                RequireAuth = flags.HasFlag(AccountRootFlags.lsfRequireAuth),
+                RequireDestinationTag = flags.HasFlag(AccountRootFlags.lsfRequireDestTag),
+                DepositAuth = flags.HasFlag(AccountRootFlags.lsfDepositAuth),
+                DepositPreauthorized = preauthorized,
             };
         }
 
+        /// <summary>The accounts <paramref name="address"/> preauthorized to pay it, read from its <c>DepositPreauth</c> objects.</summary>
+        private static async Task<List<string>> PreauthorizedAsync(IXrplClient client, string address, LedgerIndex at, CancellationToken cancellationToken)
+        {
+            List<string> result = new List<string>();
+            AccountObjects objects = await client
+                .AccountObjects(new AccountObjectsRequest(address) { Type = LedgerEntryType.DepositPreauth, LedgerIndex = at }, cancellationToken)
+                .Typed()
+                .ConfigureAwait(false);
+            foreach (BaseLedgerEntry entry in objects?.AccountObjectList ?? new List<BaseLedgerEntry>())
+            {
+                if (entry is LODepositPreauth preauth && preauth.Authorize != null)
+                    result.Add(preauth.Authorize);
+            }
+
+            return result;
+        }
+
+        /// <summary>The trust line between <paramref name="account"/> and <paramref name="peer"/>, from <paramref name="account"/>'s side.</summary>
         private static async Task<DexTrustLine> LineAsync(
             IXrplClient client,
-            string holder,
+            string account,
+            string peer,
             string currency,
-            string issuer,
             LedgerIndex at,
             CancellationToken cancellationToken)
         {
@@ -285,7 +408,7 @@ namespace Xrpl.Amounts
                     .LedgerEntry(
                         new LedgerEntryRequest
                         {
-                            RippleState = new RippleStateQuery { Addresses = new[] { holder, issuer }, Currency = currency },
+                            RippleState = new RippleStateQuery { Addresses = new[] { account, peer }, Currency = currency },
                             LedgerIndex = at,
                         },
                         cancellationToken)
@@ -301,17 +424,31 @@ namespace Xrpl.Amounts
             if (line == null)
                 return null;
 
-            IssuedCurrency asset = new IssuedCurrency { Currency = currency, Issuer = issuer };
-            bool holderIsLow = string.Equals(line.LowLimit?.Issuer, holder, StringComparison.Ordinal);
+            IssuedCurrency asset = new IssuedCurrency { Currency = currency, Issuer = peer };
+            bool accountIsLow = string.Equals(line.LowLimit?.Issuer, account, StringComparison.Ordinal);
             XrplAmount balance = XrplAmount.FromNumber(asset, line.Balance.ToXrplAmount().Value);
+            XrplAmount lowLimit = XrplAmount.FromNumber(asset, line.LowLimit.ToXrplAmount().Value);
+            XrplAmount highLimit = XrplAmount.FromNumber(asset, line.HighLimit.ToXrplAmount().Value);
             RippleStateFlags flags = line.Flags ?? 0;
-            RippleStateFlags issuerFreeze = holderIsLow ? RippleStateFlags.lsfHighFreeze : RippleStateFlags.lsfLowFreeze;
+            bool Low(RippleStateFlags low, RippleStateFlags high) => flags.HasFlag(accountIsLow ? low : high);
+            bool High(RippleStateFlags low, RippleStateFlags high) => flags.HasFlag(accountIsLow ? high : low);
             return new DexTrustLine
             {
-                Account = holder,
-                Balance = holderIsLow ? balance : -balance,
-                Frozen = flags.HasFlag(issuerFreeze),
+                Account = account,
+                Balance = accountIsLow ? balance : -balance,
+                Limit = accountIsLow ? lowLimit : highLimit,
+                PeerLimit = accountIsLow ? highLimit : lowLimit,
+                QualityIn = (accountIsLow ? line.LowQualityIn : line.HighQualityIn) ?? 0,
+                QualityOut = (accountIsLow ? line.LowQualityOut : line.HighQualityOut) ?? 0,
+                PeerQualityIn = (accountIsLow ? line.HighQualityIn : line.LowQualityIn) ?? 0,
+                PeerQualityOut = (accountIsLow ? line.HighQualityOut : line.LowQualityOut) ?? 0,
+                NoRipple = Low(RippleStateFlags.lsfLowNoRipple, RippleStateFlags.lsfHighNoRipple),
+                PeerNoRipple = High(RippleStateFlags.lsfLowNoRipple, RippleStateFlags.lsfHighNoRipple),
+                FrozenByAccount = Low(RippleStateFlags.lsfLowFreeze, RippleStateFlags.lsfHighFreeze),
+                Frozen = High(RippleStateFlags.lsfLowFreeze, RippleStateFlags.lsfHighFreeze),
                 DeepFrozen = flags.HasFlag(RippleStateFlags.lsfLowDeepFreeze) || flags.HasFlag(RippleStateFlags.lsfHighDeepFreeze),
+                Authorized = Low(RippleStateFlags.lsfLowAuth, RippleStateFlags.lsfHighAuth),
+                PeerAuthorized = High(RippleStateFlags.lsfLowAuth, RippleStateFlags.lsfHighAuth),
             };
         }
     }

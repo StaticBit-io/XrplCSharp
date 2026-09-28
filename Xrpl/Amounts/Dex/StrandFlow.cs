@@ -8,9 +8,10 @@ using static Xrpl.Models.Common.Common;
 
 namespace Xrpl.Amounts
 {
-    /// <summary>How the engine was asked to cross: <c>OfferCrossing::Yes</c> or, with <c>tfSell</c>, <c>Sell</c>.</summary>
+    /// <summary>rippled's <c>OfferCrossing</c>: a payment (<c>No</c>), offer crossing, or offer crossing with <c>tfSell</c>.</summary>
     internal enum CrossingMode
     {
+        No,
         Yes,
         Sell,
     }
@@ -232,7 +233,7 @@ namespace Xrpl.Amounts
             XrplAmount outRequested,
             bool partialPayment,
             CrossingMode crossing,
-            XrplQuality limitQuality,
+            XrplQuality? limitQuality,
             XrplAmount? sendMax,
             AmmFlowContext ammContext)
         {
@@ -240,7 +241,14 @@ namespace Xrpl.Amounts
             int currentTry = 0;
             int offersConsidered = 0;
 
-            XrplAmount? remainingIn = sendMax is { } max && !max.IsNegative ? max : null;
+            // Inside the engine amounts are typed: an issued currency carries no issuer.
+            IssuedCurrency outAsset = outRequested.Asset;
+            outRequested = StepMath.Typed(outRequested);
+            IssuedCurrency typedIn = inAsset;
+            if (XrplAmount.KindOf(inAsset) == AmountKind.Iou)
+                typedIn = StepMath.TypedIou(inAsset.Currency);
+
+            XrplAmount? remainingIn = sendMax is { } max && !max.IsNegative ? StepMath.Typed(max) : null;
             XrplAmount? sendMaxLimit = remainingIn;
             XrplAmount remainingOut = outRequested;
             DexView sb = new DexView(baseView);
@@ -260,8 +268,8 @@ namespace Xrpl.Amounts
                 ActivateNext(sb, limitQuality, current, next);
                 ammContext.MultiPath = current.Count > 1;
 
-                XrplAmount limitRemainingOut = current.Count == 1
-                    ? LimitOut(sb, current[0], remainingOut, limitQuality)
+                XrplAmount limitRemainingOut = current.Count == 1 && limitQuality is { } limitQ
+                    ? LimitOut(sb, current[0], remainingOut, limitQ)
                     : remainingOut;
                 bool adjustedRemainingOut = limitRemainingOut != remainingOut;
 
@@ -272,9 +280,12 @@ namespace Xrpl.Amounts
                     List<FlowStep> strand = current[index];
                     ammContext.Clear();
 
-                    XrplQuality? upperBound = QualityUpperBound(sb, strand);
-                    if (upperBound == null || upperBound.Value < limitQuality)
-                        continue;
+                    if (crossing != CrossingMode.No && limitQuality is { } threshold)
+                    {
+                        XrplQuality? upperBound = QualityUpperBound(sb, strand);
+                        if (upperBound == null || upperBound.Value < threshold)
+                            continue;
+                    }
 
                     StrandResult f = Run(sb, strand, remainingIn, limitRemainingOut);
                     offersToRemove.UnionWith(f.OffersToRemove);
@@ -283,8 +294,8 @@ namespace Xrpl.Amounts
                         continue;
 
                     XrplQuality quality = XrplQuality.FromAmounts(f.In, f.Out, rules);
-                    if (quality < limitQuality &&
-                        (!adjustedRemainingOut || !XrplQuality.WithinRelativeDistance(quality, limitQuality, new XrplNumber(1, -7), rules)))
+                    if (limitQuality is { } limit && quality < limit &&
+                        (!adjustedRemainingOut || !XrplQuality.WithinRelativeDistance(quality, limit, new XrplNumber(1, -7), rules)))
                     {
                         continue;
                     }
@@ -303,8 +314,8 @@ namespace Xrpl.Amounts
                     savedIns.Add(best.In);
                     savedOuts.Add(best.Out);
                     remainingOut = StepMath.Subtract(outRequested, StepMath.Sum(savedOuts, outRequested.Asset, rules), rules);
-                    if (sendMaxLimit is { } limit)
-                        remainingIn = StepMath.Subtract(limit, StepMath.Sum(savedIns, inAsset, rules), rules);
+                    if (sendMaxLimit is { } maxIn)
+                        remainingIn = StepMath.Subtract(maxIn, StepMath.Sum(savedIns, typedIn, rules), rules);
 
                     best.Sandbox.ApplyTo(sb);
                     ammContext.Update();
@@ -324,26 +335,28 @@ namespace Xrpl.Amounts
                     break;
             }
 
-            XrplAmount actualOut = StepMath.Sum(savedOuts, outRequested.Asset, rules);
-            XrplAmount actualIn = StepMath.Sum(savedIns, inAsset, rules);
+            XrplAmount actualOutTyped = StepMath.Sum(savedOuts, outRequested.Asset, rules);
+            XrplAmount actualOut = actualOutTyped.WithAsset(outAsset);
+            XrplAmount actualIn = StepMath.Sum(savedIns, typedIn, rules).WithAsset(inAsset);
 
-            if (actualOut != outRequested)
+            if (actualOutTyped != outRequested)
             {
-                if (actualOut > outRequested)
+                if (actualOutTyped > outRequested)
                     return new FlowResult { Result = "tefEXCEPTION", RemovableOffers = offersToRemoveOnFail };
 
                 if (!partialPayment)
                 {
-                    if (rules.FixFillOrKill && crossing != CrossingMode.Sell)
+                    // Offer crossing without partial payment is fill-or-kill; with tfSell it is handled below.
+                    if (crossing == CrossingMode.No || (rules.FixFillOrKill && crossing != CrossingMode.Sell))
                         return new FlowResult { Result = "tecPATH_PARTIAL", In = actualIn, Out = actualOut, RemovableOffers = offersToRemoveOnFail };
                 }
-                else if (actualOut.IsZero)
+                else if (actualOutTyped.IsZero)
                 {
                     return new FlowResult { Result = "tecPATH_DRY", RemovableOffers = offersToRemoveOnFail };
                 }
             }
 
-            if (!partialPayment && (!rules.FixFillOrKill || crossing == CrossingMode.Sell) &&
+            if (crossing != CrossingMode.No && !partialPayment && (!rules.FixFillOrKill || crossing == CrossingMode.Sell) &&
                 remainingIn is { } left && !left.IsZero)
             {
                 return new FlowResult { Result = "tecPATH_PARTIAL", In = actualIn, Out = actualOut, RemovableOffers = offersToRemoveOnFail };
@@ -363,7 +376,7 @@ namespace Xrpl.Amounts
         /// <c>ActiveStrands::activateNext</c>: the strands still in play, best estimated quality
         /// first; one worse than the limit is dropped for good.
         /// </summary>
-        private static void ActivateNext(DexView view, XrplQuality limitQuality, List<List<FlowStep>> current, List<List<FlowStep>> next)
+        private static void ActivateNext(DexView view, XrplQuality? limitQuality, List<List<FlowStep>> current, List<List<FlowStep>> next)
         {
             current.Clear();
             if (next.Count > 1)
@@ -371,7 +384,7 @@ namespace Xrpl.Amounts
                 List<(XrplQuality Quality, List<FlowStep> Strand)> ranked = new List<(XrplQuality, List<FlowStep>)>();
                 foreach (List<FlowStep> strand in next)
                 {
-                    if (QualityUpperBound(view, strand) is { } quality && !(quality < limitQuality))
+                    if (QualityUpperBound(view, strand) is { } quality && !(limitQuality is { } limit && quality < limit))
                         ranked.Add((quality, strand));
                 }
 

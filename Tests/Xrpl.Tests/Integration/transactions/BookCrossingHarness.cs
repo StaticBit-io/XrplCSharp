@@ -85,6 +85,22 @@ internal sealed class BookCrossingHarness
             },
             holder);
 
+    /// <summary>A trust line with its settings: <paramref name="flags"/> as TrustSet takes them, qualities in billionths.</summary>
+    internal Task TrustWith(XrplWallet holder, IssuedCurrency asset, string limit, TrustSetFlags flags, uint? qualityIn = null, uint? qualityOut = null) =>
+        Submit(
+            new TrustSet
+            {
+                Account = holder.ClassicAddress,
+                LimitAmount = new Currency { CurrencyCode = asset.Currency, Issuer = asset.Issuer, Value = limit },
+                Flags = flags,
+                QualityIn = qualityIn,
+                QualityOut = qualityOut,
+            },
+            holder);
+
+    internal Task SetFlag(XrplWallet wallet, AccountSetAsfFlags flag) =>
+        Submit(new AccountSet { Account = wallet.ClassicAddress, SetFlag = flag }, wallet);
+
     internal Task Pay(XrplWallet from, string to, XrplAmount amount) =>
         Submit(new Payment { Account = from.ClassicAddress, Destination = to, Amount = amount.ToCurrency() }, from);
 
@@ -206,8 +222,8 @@ internal sealed class BookCrossingHarness
         Assert.AreEqual(predicted.EngineResult, result.Meta.TransactionResult, "the engine result");
 
         AssertOffers(result.Meta, predicted, taker.ClassicAddress);
-        await AssertPools(snapshot, predicted);
-        AssertBalances(result.Meta, predicted, snapshot, takerPays.Asset, takerGets.Asset);
+        await AssertPools(snapshot, predicted.Pools);
+        AssertBalances(result.Meta, predicted.BalanceChanges, snapshot.Pools.Select(p => p.Account));
         return predicted;
     }
 
@@ -232,9 +248,50 @@ internal sealed class BookCrossingHarness
         return null;
     }
 
-    private static void AssertOffers(Meta meta, OfferCrossingResult predicted, string taker)
+    /// <summary>
+    /// Computes <paramref name="payment"/> from a fresh snapshot, submits it, and asserts the
+    /// node did exactly what was predicted: result, delivered amount, offers, pools and balances.
+    /// </summary>
+    internal async Task<PaymentFlowResult> PayAndCompare(XrplWallet sender, Payment payment)
     {
-        Dictionary<string, OfferChange> expected = predicted.Offers.ToDictionary(o => o.Index, StringComparer.OrdinalIgnoreCase);
+        Payment transaction = await _client.Autofill(payment);
+        LedgerRules rules = await LedgerRules.FromNodeAsync(_client);
+        DexSnapshot snapshot = await DexSnapshot.FromNodeAsync(_client, transaction);
+        PaymentFlowResult predicted = PaymentFlow.Evaluate(snapshot, transaction, rules);
+
+        TransactionSummary result;
+        try
+        {
+            result = await _client.SubmitAndWait(transaction, sender, false);
+        }
+        catch (TransactionFailedException failed) when (failed.EngineResult?.StartsWith("tec", StringComparison.Ordinal) == true)
+        {
+            result = failed.Result ?? await Validated(failed.Hash);
+        }
+        catch (TransactionFailedException failed)
+        {
+            // A tem, tel or tef never reaches a ledger.
+            Assert.AreEqual(predicted.EngineResult, failed.EngineResult, "the engine result");
+            Assert.IsFalse(predicted.Applied, "a result that never reaches a ledger");
+            return predicted;
+        }
+
+        Assert.AreEqual(predicted.EngineResult, result.Meta.TransactionResult, "the engine result");
+        if (predicted.EngineResult == "tesSUCCESS")
+            Assert.AreEqual(predicted.DeliveredAmount.Value, result.Meta.ActuallyDeliveredAmount.ToXrplAmount(), "delivered_amount");
+
+        AssertOffers(result.Meta, predicted.Offers, null, null, null);
+        await AssertPools(snapshot, predicted.Pools);
+        AssertBalances(result.Meta, predicted.BalanceChanges, snapshot.Pools.Select(p => p.Account));
+        return predicted;
+    }
+
+    private static void AssertOffers(Meta meta, OfferCrossingResult predicted, string taker) =>
+        AssertOffers(meta, predicted.Offers, predicted.PlacedTakerPays, predicted.PlacedTakerGets, taker);
+
+    private static void AssertOffers(Meta meta, IReadOnlyList<OfferChange> predictedOffers, XrplAmount? placedPays, XrplAmount? placedGets, string taker)
+    {
+        Dictionary<string, OfferChange> expected = predictedOffers.ToDictionary(o => o.Index, StringComparer.OrdinalIgnoreCase);
         HashSet<string> seen = new HashSet<string>(StringComparer.OrdinalIgnoreCase);
         LOOffer placed = null;
         foreach (AffectedNode node in meta.AffectedNodes)
@@ -263,10 +320,10 @@ internal sealed class BookCrossingHarness
             }
         }
 
-        foreach (OfferChange change in predicted.Offers)
+        foreach (OfferChange change in predictedOffers)
             Assert.IsTrue(seen.Contains(change.Index), $"offer {change.Index} predicted to change, untouched on the ledger");
 
-        if (predicted.PlacedTakerPays == null)
+        if (placedPays == null)
         {
             Assert.IsNull(placed, "no offer is placed");
             return;
@@ -274,16 +331,16 @@ internal sealed class BookCrossingHarness
 
         Assert.IsNotNull(placed, "the remainder is placed");
         Assert.AreEqual(taker, placed.Account);
-        Assert.AreEqual(predicted.PlacedTakerPays.Value, placed.TakerPays.ToXrplAmount(), "the placed offer's TakerPays");
-        Assert.AreEqual(predicted.PlacedTakerGets.Value, placed.TakerGets.ToXrplAmount(), "the placed offer's TakerGets");
+        Assert.AreEqual(placedPays.Value, placed.TakerPays.ToXrplAmount(), "the placed offer's TakerPays");
+        Assert.AreEqual(placedGets.Value, placed.TakerGets.ToXrplAmount(), "the placed offer's TakerGets");
     }
 
-    private async Task AssertPools(DexSnapshot snapshot, OfferCrossingResult predicted)
+    private async Task AssertPools(DexSnapshot snapshot, IReadOnlyList<AmmPoolChange> predictedPools)
     {
         foreach (DexAmmPool pool in snapshot.Pools)
         {
             AMMInfoResponse info = await _client.AmmInfo(new AMMInfoRequest { AmmAccount = pool.Account }).Typed();
-            AmmPoolChange change = predicted.Pools.SingleOrDefault(p => p.Account == pool.Account);
+            AmmPoolChange change = predictedPools.SingleOrDefault(p => p.Account == pool.Account);
             XrplAmount expected = change?.Balance ?? pool.Balance;
             XrplAmount expected2 = change?.Balance2 ?? pool.Balance2;
             XrplAmount actual = info.Amm.Amount.ToXrplAmount();
@@ -297,45 +354,35 @@ internal sealed class BookCrossingHarness
     }
 
     /// <summary>
-    /// Every holder's balance change in the traded assets, as the metadata records it, against the
-    /// prediction - both ways, so an unpredicted change fails too.
+    /// Every account's balance changes, as the metadata records them, against the prediction -
+    /// both ways, so an unpredicted change fails too. Pools are compared through amm_info.
     /// </summary>
-    private static void AssertBalances(Meta meta, OfferCrossingResult predicted, DexSnapshot snapshot, IssuedCurrency pays, IssuedCurrency gets)
+    internal static void AssertBalances(Meta meta, IReadOnlyList<BalanceChange> predicted, IEnumerable<string> poolAccounts)
     {
         Dictionary<string, List<Currency>> changes = BalanceChanges.GetBalanceChanges(meta);
-        HashSet<string> pools = snapshot.Pools.Select(p => p.Account).ToHashSet(StringComparer.Ordinal);
-        HashSet<string> issuers = new[] { pays, gets }
-            .Where(a => XrplAmount.KindOf(a) == AmountKind.Iou)
-            .Select(a => a.Issuer)
-            .ToHashSet(StringComparer.Ordinal);
+        HashSet<string> pools = poolAccounts.ToHashSet(StringComparer.Ordinal);
+        List<(string Account, XrplAmount Change)> recorded = changes
+            .Where(entry => !pools.Contains(entry.Key))
+            .SelectMany(entry => entry.Value.Select(c => (entry.Key, c.ToXrplAmount())))
+            .Where(entry => entry.Item2.Kind == AmountKind.Xrp || !pools.Contains(entry.Item2.Asset.Issuer))
+            .Where(entry => !entry.Item2.IsZero)
+            .ToList();
 
-        XrplAmount? Recorded(string account, IssuedCurrency asset) =>
-            changes.TryGetValue(account, out List<Currency> list)
-                ? list.Select(c => c.ToXrplAmount()).Where(a => XrplAmount.SameAsset(a.Asset, asset)).Cast<XrplAmount?>().SingleOrDefault()
-                : null;
-
-        foreach (BalanceChange change in predicted.BalanceChanges)
+        foreach (BalanceChange change in predicted)
         {
-            XrplAmount? recorded = Recorded(change.Account, change.Change.Asset);
-            Assert.IsNotNull(recorded, $"{change.Account}: {change.Change} predicted, no change on the ledger");
-            Assert.AreEqual(change.Change, recorded.Value, $"{change.Account}: {change.Change} predicted, {recorded} on the ledger");
+            XrplAmount[] match = recorded
+                .Where(r => r.Account == change.Account && XrplAmount.SameAsset(r.Change.Asset, change.Change.Asset))
+                .Select(r => r.Change)
+                .ToArray();
+            Assert.HasCount(1, match, $"{change.Account}: {change.Change} predicted, {match.Length} changes on the ledger");
+            Assert.AreEqual(change.Change, match[0], $"{change.Account}: {change.Change} predicted, {match[0]} on the ledger");
         }
 
-        foreach ((string account, List<Currency> list) in changes)
+        foreach ((string account, XrplAmount change) in recorded)
         {
-            if (pools.Contains(account))
-                continue;
-
-            foreach (XrplAmount recorded in list.Select(c => c.ToXrplAmount()))
-            {
-                bool traded = recorded.Kind == AmountKind.Xrp || issuers.Contains(recorded.Asset.Issuer);
-                if (!traded)
-                    continue;
-
-                Assert.IsTrue(
-                    predicted.BalanceChanges.Any(c => c.Account == account && XrplAmount.SameAsset(c.Change.Asset, recorded.Asset)),
-                    $"{account}: {recorded} on the ledger, not predicted");
-            }
+            Assert.IsTrue(
+                predicted.Any(c => c.Account == account && XrplAmount.SameAsset(c.Change.Asset, change.Asset)),
+                $"{account}: {change} on the ledger, not predicted");
         }
     }
 }

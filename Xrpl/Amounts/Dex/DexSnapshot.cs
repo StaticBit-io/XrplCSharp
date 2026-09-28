@@ -64,25 +64,74 @@ namespace Xrpl.Amounts
 
         /// <summary>Whether the issuer has frozen every trust line it issues on (<c>lsfGlobalFreeze</c>).</summary>
         public bool GlobalFreeze { get; init; }
+
+        /// <summary>Whether the account's issued currencies need its authorization to be held (<c>lsfRequireAuth</c>).</summary>
+        public bool RequireAuth { get; init; }
+
+        /// <summary>Whether a payment to the account must carry a destination tag (<c>lsfRequireDestTag</c>).</summary>
+        public bool RequireDestinationTag { get; init; }
+
+        /// <summary>Whether the account accepts payments only from accounts it preauthorized (<c>lsfDepositAuth</c>).</summary>
+        public bool DepositAuth { get; init; }
+
+        /// <summary>The accounts the account preauthorized to pay it (<c>DepositPreauth</c>).</summary>
+        public IReadOnlyList<string> DepositPreauthorized { get; init; } = Array.Empty<string>();
     }
 
-    /// <summary>A trust line from its holder's side.</summary>
+    /// <summary>
+    /// A trust line, described from one of its two accounts: <see cref="Account"/> and the peer
+    /// named by the currency's issuer in <see cref="Balance"/>. Each side's settings are given
+    /// for that side; the <c>Peer</c> properties belong to the other account.
+    /// </summary>
     public sealed class DexTrustLine
     {
-        /// <summary>The holder.</summary>
+        /// <summary>The account the line is described from.</summary>
         public string Account { get; init; }
 
         /// <summary>
-        /// What the holder holds: the currency and its issuer, positive when the issuer owes the
-        /// holder.
+        /// The balance from <see cref="Account"/>'s side: the currency, with the peer as its issuer,
+        /// positive when the peer owes the account.
         /// </summary>
         public XrplAmount Balance { get; init; }
 
-        /// <summary>Whether the issuer has frozen the line on its side.</summary>
+        /// <summary>How much of the peer's currency the account trusts it for; null for zero.</summary>
+        public XrplAmount? Limit { get; init; }
+
+        /// <summary>How much of the account's currency the peer trusts it for; null for zero.</summary>
+        public XrplAmount? PeerLimit { get; init; }
+
+        /// <summary>The account's <c>QualityIn</c> in billionths; 0 for none.</summary>
+        public uint QualityIn { get; init; }
+
+        /// <summary>The account's <c>QualityOut</c> in billionths; 0 for none.</summary>
+        public uint QualityOut { get; init; }
+
+        /// <summary>The peer's <c>QualityIn</c> in billionths; 0 for none.</summary>
+        public uint PeerQualityIn { get; init; }
+
+        /// <summary>The peer's <c>QualityOut</c> in billionths; 0 for none.</summary>
+        public uint PeerQualityOut { get; init; }
+
+        /// <summary>Whether the account set <c>NoRipple</c> on the line.</summary>
+        public bool NoRipple { get; init; }
+
+        /// <summary>Whether the peer set <c>NoRipple</c> on the line.</summary>
+        public bool PeerNoRipple { get; init; }
+
+        /// <summary>Whether the peer has frozen the line on its side.</summary>
         public bool Frozen { get; init; }
+
+        /// <summary>Whether the account has frozen the line on its side.</summary>
+        public bool FrozenByAccount { get; init; }
 
         /// <summary>Whether the line is deep-frozen by either side, which removes the holder's offers that buy the currency.</summary>
         public bool DeepFrozen { get; init; }
+
+        /// <summary>Whether the account authorized the peer to hold its currency (its <c>Auth</c> flag).</summary>
+        public bool Authorized { get; init; }
+
+        /// <summary>Whether the peer authorized the account to hold its currency.</summary>
+        public bool PeerAuthorized { get; init; }
     }
 
     /// <summary>An offer in a book.</summary>
