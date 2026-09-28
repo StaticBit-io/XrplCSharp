@@ -41,6 +41,7 @@ env:
 
 jobs:
   watch:
+    name: ${{ matrix.label }}
     runs-on: ubuntu-latest
     # Only one run per watch may read/update its tracking-issue state at a time
     concurrency:
@@ -215,7 +216,7 @@ jobs:
           echo "changed: $changed"
 
           if [ "$(echo "$changed" | jq length)" -eq 0 ]; then
-            echo "No protocol changes."
+            echo "No changes to the watched files."
             exit 0
           fi
 
