@@ -219,6 +219,64 @@ public class TestIPaymentFlow
     }
 
     [TestMethod]
+    public async Task TwoStrandsWithAPoolOnOne()
+    {
+        // XRP -> USD directly, where a pool and an order book meet, or through EUR: two strands,
+        // so the pool offers Fibonacci slices.
+        XrplWallet[] w = await dex.Wallets(7);
+        XrplWallet gUsd = w[0], gEur = w[1], creator = w[2], makerEur = w[3], makerUsd = w[4], sender = w[5], receiver = w[6];
+        IssuedCurrency usd = Iou("USD", gUsd);
+        IssuedCurrency eur = Iou("EUR", gEur);
+        await Task.WhenAll(dex.Issuer(gUsd), dex.Issuer(gEur));
+        await dex.Trusts((creator, usd), (makerEur, eur), (makerUsd, usd), (makerUsd, eur), (receiver, usd));
+        await dex.Pays((gUsd, creator, Amount(usd, "1000")), (gEur, makerEur, Amount(eur, "500")), (gUsd, makerUsd, Amount(usd, "500")));
+        await dex.CreateAmm(creator, Drops(200_000_000), Amount(usd, "400"), tradingFee: 200);
+        await dex.Offer(makerUsd, Amount(usd, "10"), Drops(5_100_000));
+        await dex.Offer(makerEur, Amount(eur, "40"), Drops(20_000_000));
+        await dex.Offer(makerUsd, Amount(usd, "45"), Amount(eur, "40"));
+
+        Payment payment = Pay(sender, receiver, Amount(usd, "60"));
+        payment.SendMax = Drops(40_000_000).ToCurrency();
+        payment.Flags = PaymentFlags.tfPartialPayment;
+        payment.Paths = Paths(new[] { new PathStep { CurrencyCode = "EUR", Issuer = gEur.ClassicAddress }, new PathStep { CurrencyCode = "USD", Issuer = gUsd.ClassicAddress } });
+        PaymentFlowResult result = await dex.PayAndCompare(sender, payment);
+        Assert.AreEqual("tesSUCCESS", result.EngineResult);
+    }
+
+    [TestMethod]
+    public async Task TheReceiversLimitCutsThePayment()
+    {
+        XrplWallet[] w = await dex.Wallets(3);
+        XrplWallet gw = w[0], sender = w[1], receiver = w[2];
+        IssuedCurrency usd = Iou("USD", gw);
+        await dex.Issuer(gw);
+        await Task.WhenAll(dex.Trust(sender, usd), dex.TrustWith(receiver, usd, "50", TrustSetFlags.tfSetNoRipple));
+        await dex.Pays((gw, sender, Amount(usd, "200")));
+
+        Assert.AreEqual("tecPATH_PARTIAL", (await dex.PayAndCompare(sender, Pay(sender, receiver, Amount(usd, "80")))).EngineResult);
+
+        Payment partial = Pay(sender, receiver, Amount(usd, "80"));
+        partial.Flags = PaymentFlags.tfPartialPayment;
+        PaymentFlowResult result = await dex.PayAndCompare(sender, partial);
+        Assert.AreEqual("tesSUCCESS", result.EngineResult);
+        Assert.AreEqual(Amount(usd, "50"), result.DeliveredAmount);
+    }
+
+    [TestMethod]
+    public async Task AFrozenLineStopsThePayment()
+    {
+        XrplWallet[] w = await dex.Wallets(3);
+        XrplWallet gw = w[0], sender = w[1], receiver = w[2];
+        IssuedCurrency usd = Iou("USD", gw);
+        await dex.Issuer(gw);
+        await dex.Trusts((sender, usd), (receiver, usd));
+        await dex.Pays((gw, sender, Amount(usd, "100")));
+        await dex.TrustWith(gw, Iou("USD", sender), "0", TrustSetFlags.tfSetFreeze);
+
+        Assert.AreEqual("tecPATH_DRY", (await dex.PayAndCompare(sender, Pay(sender, receiver, Amount(usd, "10")))).EngineResult);
+    }
+
+    [TestMethod]
     public async Task RefusedPayments()
     {
         XrplWallet[] w = await dex.Wallets(4);

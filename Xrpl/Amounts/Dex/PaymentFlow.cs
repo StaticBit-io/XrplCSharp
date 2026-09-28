@@ -312,11 +312,7 @@ namespace Xrpl.Amounts
                     if (step.MPTokenIssuanceID != null)
                         throw new NotSupportedException("MPT paths are not supported.");
 
-                    string currency = step.CurrencyCode;
-                    string issuer = step.Issuer;
-                    if (PathElement.IsXrpCurrency(currency) && issuer == null)
-                        issuer = null;
-                    elements.Add(new PathElement(step.Account, currency, issuer));
+                    elements.Add(new PathElement(step.Account, step.CurrencyCode, step.Issuer));
                 }
 
                 result.Add(elements);
