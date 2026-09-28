@@ -64,13 +64,26 @@ namespace Xrpl.Sugar
         public bool MPTokensV2 { get; init; }
 
         /// <summary>
+        /// Whether <c>fixReducedOffersV2</c> is enabled: an offer cut down to an input limit is
+        /// sized with <c>ceilInStrict</c>, rounded down, instead of <c>ceilIn</c>.
+        /// </summary>
+        public bool FixReducedOffersV2 { get; init; } = true;
+
+        /// <summary>
         /// Whether <c>LendingProtocolV1_1</c> is enabled: a closed-ended vault takes deposits only
         /// in its subscription phase and pays out nothing in its investment phase.
         /// </summary>
         public bool LendingProtocolV1_1 { get; init; } = true;
 
         /// <summary>The arithmetic rippled uses under these amendments.</summary>
-        internal NumberContext Context => NumberContext.ForAmendments(LargeNumbers, FixCleanup3_2_0, FixCleanup3_3_0);
+        internal NumberContext Context =>
+            NumberContext.ForAmendments(LargeNumbers, FixCleanup3_2_0, FixCleanup3_3_0).WithRounding(AmbientRounding);
+
+        /// <summary>
+        /// The <c>Number</c> rounding mode in effect outside any guard. A node processes a
+        /// transaction to nearest; the tests replay rippled's vectors in every mode.
+        /// </summary>
+        internal NumberRounding AmbientRounding { get; init; } = NumberRounding.ToNearest;
 
         /// <summary>Reads the amendments from the node.</summary>
         public static async Task<LedgerRules> FromNodeAsync(IXrplClient client, CancellationToken cancellationToken = default)
@@ -94,6 +107,7 @@ namespace Xrpl.Sugar
                 FixAMMv1_1 = features.GetByName("fixAMMv1_1")?.Value?.Enabled == true,
                 FixAMMv1_3 = features.GetByName("fixAMMv1_3")?.Value?.Enabled == true,
                 MPTokensV2 = features.GetByName("MPTokensV2")?.Value?.Enabled == true,
+                FixReducedOffersV2 = features.GetByName("fixReducedOffersV2")?.Value?.Enabled == true,
                 LendingProtocolV1_1 = features.GetByName("LendingProtocolV1_1")?.Value?.Enabled == true,
             };
         }

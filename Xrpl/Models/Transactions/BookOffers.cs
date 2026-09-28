@@ -123,6 +123,22 @@ namespace Xrpl.Models.Transactions
             }
         }
         /// <summary>
+        /// The quality the node crosses this offer at: the one its <see cref="BookDirectory"/>
+        /// encodes, set when the offer was placed. null when the entry carries no directory.
+        /// </summary>
+        [JsonIgnore]
+        public Xrpl.Amounts.XrplQuality? BookQuality =>
+            string.IsNullOrEmpty(BookDirectory) ? null : Xrpl.Amounts.XrplQuality.FromBookDirectory(BookDirectory);
+
+        /// <summary>
+        /// The exact quality of what the offer has left, <c>TakerPays / TakerGets</c>, over the
+        /// ledger's whole range - where <see cref="AmountEach"/> is limited to <see cref="decimal"/>.
+        /// </summary>
+        [JsonIgnore]
+        public Xrpl.Amounts.XrplQuality RemainingQuality =>
+            Xrpl.Amounts.XrplQuality.FromAmounts(TakerPays.ToXrplAmount(), TakerGets.ToXrplAmount());
+
+        /// <summary>
         /// A bit-map of boolean flags enabled for this Offer.
         /// </summary>
         public OfferFlags Flags { get; set; }

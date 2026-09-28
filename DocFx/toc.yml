@@ -12,6 +12,8 @@
   href: XChainBridge-Guide.md
 - name: Vault Guide
   href: Vault-Guide.md
+- name: Amounts & Offer Crossing
+  href: Amounts-Guide.md
 - name: Lending Protocol Guide
   href: LendingProtocol-Guide.md
 - name: Sponsored Fees & Reserves

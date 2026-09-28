@@ -1,18 +1,11 @@
 using System;
 using System.Numerics;
 
+using Xrpl.Amounts;
 using Xrpl.BinaryCodec.Numbers;
 
 namespace Xrpl.Sugar
 {
-    /// <summary>What an <c>STAmount</c> holds, which decides how it rounds.</summary>
-    internal enum AmountKind
-    {
-        Xrp,
-        Iou,
-        Mpt,
-    }
-
     /// <summary>
     /// The <c>STAmount</c> arithmetic rippled's AMM code relies on, in <see cref="XrplNumber"/>:
     /// conversion from a <c>Number</c>, addition, <c>divide</c> and <c>multiply</c>.

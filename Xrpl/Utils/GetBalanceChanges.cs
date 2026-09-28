@@ -3,6 +3,7 @@ using System.Collections.Generic;
 using System.Globalization;
 using System.Linq;
 
+using Xrpl.Amounts;
 using Xrpl.Models;
 using Xrpl.Client.Exceptions;
 using Xrpl.Models.Common;
@@ -84,7 +85,7 @@ public static class BalanceChanges
             return null;
         }
 
-        decimal? value = null;
+        XrplAmount? value = null;
         string account = null;
         string code = null;
         string issuer = null;
@@ -94,20 +95,21 @@ public static class BalanceChanges
 
         if (newField?.Balance is { } newBalance)
         {
-            value = newBalance.ValueAsNumber;
+            value = newBalance.ToXrplAmount();
             account = newField.LowLimit.Issuer;
             code = newBalance.CurrencyCode;
             issuer = newField.HighLimit.Issuer;
         }
         else if (previousField?.Balance is { } previousBalance && finalField?.Balance is { } finalBalance)
         {
-            value = finalBalance.ValueAsNumber - previousBalance.ValueAsNumber;
+            // Exact, then rounded once to the ledger's sixteen digits, to nearest with ties to even.
+            value = XrplAmountMath.ExactDifference(finalBalance.ToXrplAmount(), previousBalance.ToXrplAmount());
             account = finalField.LowLimit.Issuer;
             code = finalBalance.CurrencyCode;
             issuer = finalField.HighLimit.Issuer;
         }
 
-        if (value is not { } or 0)
+        if (value is not { } delta || delta.IsZero)
         {
             return null;
         }
@@ -117,7 +119,7 @@ public static class BalanceChanges
         {
             CurrencyCode = code,
             Issuer = issuer,
-            ValueAsNumber = value.Value,
+            Value = delta.ToString(),
         };
 
         return new List<BalanceChange>
@@ -137,7 +139,7 @@ public static class BalanceChanges
                 {
                     CurrencyCode = code,
                     Issuer = account,
-                    ValueAsNumber = -value.Value,
+                    Value = (-delta).ToString(),
                 },
             },
         };
@@ -294,21 +296,16 @@ public static class BalanceChanges
     /// <remarks>
     /// <para>
     /// This walks every affected node and computes a delta for every account on the payment path,
-    /// not only the one the caller has in mind. The amounts it reads are therefore untrusted: it
-    /// is enough for a payment to route through an offer in somebody's own token for a value
-    /// beyond <see cref="decimal"/> to reach this code, and then
-    /// <see cref="AmountOutOfRangeException"/> comes out - see issue #148.
-    /// </para>
-    /// <para>
-    /// That matters most to anything that re-reads history. A monitor catching up over a ledger
-    /// range, an indexer or a reconciler meets the same transaction on every pass, so an unguarded
-    /// call does not fail once, it stops there permanently. Catch it and decide what an
-    /// unrepresentable balance means for you; issue #150 tracks representing it instead.
+    /// not only the one the caller has in mind, so the amounts it reads are untrusted: a payment
+    /// can route through an offer in somebody's own token at any value the protocol allows.
+    /// Issued-currency deltas are computed as <see cref="XrplAmount"/>, over the ledger's whole
+    /// range: the difference is exact, then rounded once to sixteen significant digits, to nearest
+    /// with ties to even, as rippled rounds. A value too large or too small for
+    /// <see cref="decimal"/> is written in scientific notation, the way rippled writes it.
     /// </para>
     /// </remarks>
     /// <param name="metadata">Transaction metadata including affected nodes.</param>
     /// <returns>Dictionary mapping account addresses to balance changes (XRP string or IssuedCurrencyAmount).</returns>
-    /// <exception cref="AmountOutOfRangeException">An amount in the metadata exceeds what <see cref="decimal"/> can hold.</exception>
     public static Dictionary<string, List<Currency>> GetBalanceChanges(ITransactionMetadata metadata)
     {
         var list = new List<BalanceChange>();
