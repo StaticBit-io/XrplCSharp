@@ -181,16 +181,19 @@
         System.Diagnostics.Stopwatch watch = System.Diagnostics.Stopwatch.StartNew();
         try
         {
-            IBookIndex? books = await BooksAsync();
             IssuedCurrency asset = ParseAsset(_asset);
             XrplAmount amount = ParseAmount(_amount, asset);
+
+            // One ledger for the books, the local search and the node's, so that they compare.
+            LedgerIndex at = await ValidatedAsync();
+            IBookIndex? books = await BooksAsync(at);
 
             if (_mode == "deliver")
                 _quote = await Client.QuoteDeliverAsync(_source.Trim(), _destination.Trim(), amount, ParseAsset(_otherAsset), books: books);
             else if (_mode == "spend")
                 _quote = await Client.QuoteSpendAsync(_source.Trim(), _destination.Trim(), amount, ParseAsset(_otherAsset), books: books);
             else
-                await FindAsync(amount, books);
+                await FindAsync(amount, books, at);
         }
         catch (Exception exception)
         {
@@ -203,14 +206,20 @@
         }
     }
 
-    private async Task<IBookIndex?> BooksAsync() => _pathsFrom switch
+    private async Task<LedgerIndex> ValidatedAsync()
     {
-        "ledger" => await BookIndex.FromLedgerAsync(Client),
-        "accounts" => await BookIndex.FromAccountsAsync(Client, new[] { _source.Trim(), _destination.Trim() }),
+        LOLedger header = await Client.Ledger(new LedgerRequest { LedgerIndex = new LedgerIndex(LedgerIndexType.Validated) }).Typed();
+        return new LedgerIndex(uint.Parse(((LedgerEntity)header.LedgerEntity).LedgerIndex, CultureInfo.InvariantCulture));
+    }
+
+    private async Task<IBookIndex?> BooksAsync(LedgerIndex at) => _pathsFrom switch
+    {
+        "ledger" => await BookIndex.FromLedgerAsync(Client, at),
+        "accounts" => await BookIndex.FromAccountsAsync(Client, new[] { _source.Trim(), _destination.Trim() }, ledger: at),
         _ => null,
     };
 
-    private async Task FindAsync(XrplAmount amount, IBookIndex? books)
+    private async Task FindAsync(XrplAmount amount, IBookIndex? books, LedgerIndex at)
     {
         XrplAmount? sendMax = string.IsNullOrWhiteSpace(_sendMax) ? null : ParseAmountAndAsset(_sendMax);
         PathFindRequest request = new PathFindRequest
@@ -224,7 +233,8 @@
 
         if (books != null)
         {
-            PathFindResult local = await Client.FindPathsAsync(request, books);
+            PathfindingSource source = await PathfindingSource.FromNodeAsync(Client, books, at);
+            PathFindResult local = await PathFinding.FindAsync(source, request, await LedgerRules.FromNodeAsync(Client));
             if (local.Error != null)
                 throw new InvalidOperationException($"The request is refused: {local.Error}");
 
@@ -237,7 +247,7 @@
             RipplePathFindResponse node = await Client.RipplePathFind(new RipplePathFindRequest(request.SourceAccount, request.DestinationAccount, amount.ToCurrency())
             {
                 SendMax = sendMax?.ToCurrency(),
-                LedgerIndex = new LedgerIndex(LedgerIndexType.Validated),
+                LedgerIndex = at,
             }).Typed();
             _node = (node.Alternatives ?? new List<PathAlternative>())
                 .Select(a => (a.SourceAmount.ToXrplAmount(), a.DestinationAmount?.ToXrplAmount(), a.PathsComputed ?? new List<List<PathStep>>()))
@@ -307,8 +317,11 @@
         if (!asset.IsXrp())
             return XrplAmount.Parse(asset, value);
 
-        decimal xrp = decimal.Parse(value, NumberStyles.Float, CultureInfo.InvariantCulture);
-        return XrplAmount.Parse(asset, decimal.Round(xrp * 1_000_000m, 0).ToString(CultureInfo.InvariantCulture));
+        decimal drops = decimal.Parse(value, NumberStyles.Float, CultureInfo.InvariantCulture) * 1_000_000m;
+        if (drops != decimal.Truncate(drops))
+            throw new FormatException($"{value} XRP is not a whole number of drops; XRP has six decimal places.");
+
+        return XrplAmount.Parse(asset, decimal.Truncate(drops).ToString(CultureInfo.InvariantCulture));
     }
 
     /// <summary>"30 XRP" or "100 USD.rIssuer".</summary>

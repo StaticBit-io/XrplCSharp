@@ -62,6 +62,9 @@ namespace Xrpl.Amounts
         private const uint LedgerDataPage = 256;
         private const int ProbeConcurrency = 8;
 
+        /// <summary>The most assets <see cref="FromAssetsAsync"/> checks: the pairs grow with the square of them.</summary>
+        public const int MaxProbeAssets = 50;
+
         private static readonly IssuedCurrency XrpAsset = new IssuedCurrency { Currency = "XRP" };
 
         private readonly Dictionary<(AssetId In, string Domain), List<IssuedCurrency>> _books =
@@ -190,13 +193,15 @@ namespace Xrpl.Amounts
         /// </summary>
         /// <remarks>
         /// <c>book_offers</c> leaves out offers whose owner holds nothing, so a book of only such
-        /// offers is not found. The pairs grow with the square of the assets.
+        /// offers is not found. The pairs grow with the square of the assets, so at most
+        /// <see cref="MaxProbeAssets"/> assets are accepted, XRP included.
         /// </remarks>
         /// <param name="client">The node to read from.</param>
         /// <param name="assets">The assets; XRP is added.</param>
         /// <param name="domainId">A permissioned domain whose books to check too; null for the open books only.</param>
         /// <param name="ledger">The ledger to read; the last validated one when null.</param>
         /// <param name="cancellationToken">Cancels the reads.</param>
+        /// <exception cref="ArgumentException">More than <see cref="MaxProbeAssets"/> distinct assets.</exception>
         public static async Task<BookIndex> FromAssetsAsync(
             IXrplClient client,
             IEnumerable<IssuedCurrency> assets,
@@ -209,7 +214,6 @@ namespace Xrpl.Amounts
             if (assets == null)
                 throw new ArgumentNullException(nameof(assets));
 
-            LedgerIndex at = await PinAsync(client, ledger, cancellationToken).ConfigureAwait(false);
             List<IssuedCurrency> distinct = new List<IssuedCurrency> { XrpAsset };
             HashSet<AssetId> seen = new HashSet<AssetId> { AssetId.Xrp };
             foreach (IssuedCurrency asset in assets)
@@ -218,46 +222,56 @@ namespace Xrpl.Amounts
                     distinct.Add(AssetId.Of(asset).ToAsset());
             }
 
-            List<(IssuedCurrency In, IssuedCurrency Out, string Domain)> probes = new List<(IssuedCurrency, IssuedCurrency, string)>();
-            foreach (IssuedCurrency @in in distinct)
+            if (distinct.Count > MaxProbeAssets)
             {
-                foreach (IssuedCurrency @out in distinct)
-                {
-                    if (AssetId.Of(@in) == AssetId.Of(@out))
-                        continue;
-                    probes.Add((@in, @out, null));
-                    if (!string.IsNullOrEmpty(domainId))
-                        probes.Add((@in, @out, domainId));
-                }
+                throw new ArgumentException(
+                    $"{distinct.Count} assets, XRP included, exceed the {MaxProbeAssets} whose pairs are checked; " +
+                    "pass fewer assets, or read the books with FromLedgerAsync.",
+                    nameof(assets));
             }
 
-            BookIndex index = new BookIndex();
-            using SemaphoreSlim gate = new SemaphoreSlim(ProbeConcurrency);
-            bool[] found = await Task.WhenAll(probes.Select(async probe =>
-            {
-                await gate.WaitAsync(cancellationToken).ConfigureAwait(false);
-                try
-                {
-                    return await HasOfferAsync(client, probe.In, probe.Out, probe.Domain, at, cancellationToken).ConfigureAwait(false);
-                }
-                finally
-                {
-                    gate.Release();
-                }
-            })).ConfigureAwait(false);
-            for (int i = 0; i < probes.Count; i++)
-            {
-                if (found[i])
-                    index.Add(probes[i].In, probes[i].Out, probes[i].Domain);
-            }
+            LedgerIndex at = await PinAsync(client, ledger, cancellationToken).ConfigureAwait(false);
 
+            // (in, out, domain) for a book_offers probe; a null domain with pool set for an amm_info probe.
+            List<(IssuedCurrency In, IssuedCurrency Out, string Domain, bool Pool)> probes = new List<(IssuedCurrency, IssuedCurrency, string, bool)>();
             for (int i = 0; i < distinct.Count; i++)
             {
-                for (int j = i + 1; j < distinct.Count; j++)
+                for (int j = 0; j < distinct.Count; j++)
                 {
-                    if (await HasPoolAsync(client, distinct[i], distinct[j], at, cancellationToken).ConfigureAwait(false))
-                        index.AddPool(distinct[i], distinct[j]);
+                    if (i == j)
+                        continue;
+                    probes.Add((distinct[i], distinct[j], null, false));
+                    if (!string.IsNullOrEmpty(domainId))
+                        probes.Add((distinct[i], distinct[j], domainId, false));
+                    if (i < j)
+                        probes.Add((distinct[i], distinct[j], null, true));
                 }
+            }
+
+            bool[] found = new bool[probes.Count];
+            int next = -1;
+            async Task WorkAsync()
+            {
+                for (int k = Interlocked.Increment(ref next); k < probes.Count; k = Interlocked.Increment(ref next))
+                {
+                    (IssuedCurrency @in, IssuedCurrency @out, string domain, bool pool) = probes[k];
+                    found[k] = pool
+                        ? await HasPoolAsync(client, @in, @out, at, cancellationToken).ConfigureAwait(false)
+                        : await HasOfferAsync(client, @in, @out, domain, at, cancellationToken).ConfigureAwait(false);
+                }
+            }
+
+            await Task.WhenAll(Enumerable.Range(0, Math.Min(ProbeConcurrency, probes.Count)).Select(_ => WorkAsync())).ConfigureAwait(false);
+
+            BookIndex index = new BookIndex();
+            for (int k = 0; k < probes.Count; k++)
+            {
+                if (!found[k])
+                    continue;
+                if (probes[k].Pool)
+                    index.AddPool(probes[k].In, probes[k].Out);
+                else
+                    index.Add(probes[k].In, probes[k].Out, probes[k].Domain);
             }
 
             return index;
@@ -268,6 +282,12 @@ namespace Xrpl.Amounts
         /// found as <see cref="FromAssetsAsync"/> finds them: a guess at the books a payment
         /// between these accounts can use.
         /// </summary>
+        /// <remarks>
+        /// A line gives the peer's currency when the account holds some or trusts the peer for
+        /// it, and the account's own currency when the account owes some or the peer trusts it;
+        /// so a gateway's lines to its holders give its own currencies once each. More than
+        /// <see cref="MaxProbeAssets"/> assets fail as in <see cref="FromAssetsAsync"/>.
+        /// </remarks>
         /// <param name="client">The node to read from.</param>
         /// <param name="accounts">The accounts, usually the payment's source and destination.</param>
         /// <param name="domainId">A permissioned domain whose books to check too; null for the open books only.</param>
@@ -291,9 +311,11 @@ namespace Xrpl.Amounts
             {
                 foreach (DexTrustLine line in await PathfindingSource.AccountLinesAsync(client, account, at, cancellationToken).ConfigureAwait(false))
                 {
-                    // What the account holds is the peer's currency; what it owes, its own.
-                    assets.Add(line.Balance.Asset);
-                    assets.Add(new IssuedCurrency { Currency = line.Balance.Asset.Currency, Issuer = account });
+                    // What the account holds or may receive is the peer's currency; what it owes or may issue, its own.
+                    if (StepMath.IsPositive(line.Balance) || line.Limit is { IsZero: false })
+                        assets.Add(line.Balance.Asset);
+                    if (line.Balance.IsNegative || line.PeerLimit is { IsZero: false })
+                        assets.Add(new IssuedCurrency { Currency = line.Balance.Asset.Currency, Issuer = account });
                 }
             }
 

@@ -298,4 +298,16 @@ public class TestUPathFinding
         Assert.HasCount(1, index.BooksFrom(Iou("USD", "gateway"), null));
         Assert.IsEmpty(index.BooksFrom(Iou("USD", "gateway"), new string('A', 64)));
     }
+
+    [TestMethod]
+    public async Task BookIndexRefusesTooManyAssets()
+    {
+        // Refused before the node is asked anything, so the client never connects.
+        global::Xrpl.Client.XrplClient client = new global::Xrpl.Client.XrplClient("ws://127.0.0.1:1");
+        IssuedCurrency[] assets = Enumerable.Range(0, BookIndex.MaxProbeAssets)
+            .Select(i => Iou("USD", "holder" + i))
+            .ToArray();
+
+        await Assert.ThrowsExactlyAsync<ArgumentException>(() => BookIndex.FromAssetsAsync(client, assets));
+    }
 }
