@@ -27,9 +27,9 @@ namespace Xrpl.Amounts
     /// back at zero releases or deletes. A direct XRP payment is checked against the reserve.
     /// </para>
     /// <para>
-    /// Not covered: MPT payments and sponsored reserves. Path finding is not part of it: the
-    /// paths come with the payment, as <c>ripple_path_find</c> or <c>path_find</c> return them.
-    /// A result is exact only against the state it was given.
+    /// Not covered: MPT payments and sponsored reserves. The paths come with the payment, as
+    /// <c>ripple_path_find</c> returns them or <see cref="PathFinding"/> finds them. A result is
+    /// exact only against the state it was given.
     /// </para>
     /// </remarks>
     public static class PaymentFlow

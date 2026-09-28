@@ -8,7 +8,8 @@
 - `OfferCrossing` рассчитывает, сколько даёт один оффер в платеже или в `OfferCreate`;
 - `OfferCreateCrossing` пересекает `OfferCreate` целиком с книгами ордеров и пулами AMM, которых он достигает;
 - `PaymentFlow` проводит `Payment` по его путям;
-- `DexQuoteSugar` даёт котировки того и другого по леджеру ноды.
+- `DexQuoteSugar` даёт котировки того и другого по леджеру ноды;
+- `PathFinding` ищет пути платежа так же, как `ripple_path_find`.
 
 Каждый результат совпадает с rippled 3.4.0 побитно: мантисса, экспонента и знак. Тесты прогоняют 8 808 векторов, полученных из собственного кода rippled, воспроизводят пересечения офферов из `AMM_test.cpp` rippled и сверяют пересечение офферов с работающей нодой.
 
@@ -24,6 +25,7 @@
 - [Домены permissioned DEX и credentials](#домены-permissioned-dex-и-credentials)
 - [Чтение книг с ноды](#чтение-книг-с-ноды)
 - [Котировки](#котировки)
+- [Поиск путей](#поиск-путей)
 - [Изменения балансов за пределами decimal](#изменения-балансов-за-пределами-decimal)
 - [Правила леджера](#правила-леджера)
 
@@ -45,6 +47,7 @@
 | `OfferCreateCrossing` | `Xrpl.Amounts` | Что сделает `OfferCreate` с книгами целиком и пулами AMM — по `DexSnapshot` |
 | `PaymentFlow` | `Xrpl.Amounts` | Что сделает `Payment` на своих путях — по `DexSnapshot` |
 | `DexQuoteSugar` | `Xrpl.Sugar` | Котировки платежа или оффера, прочитанные и рассчитанные по валидированному леджеру ноды |
+| `PathFinding` | `Xrpl.Amounts` | Пути платежа, найденные так же, как их находит `ripple_path_find`, по снимку или по ноде |
 
 ## XrplAmount
 
@@ -220,7 +223,7 @@ PaymentFlowResult result = PaymentFlow.Evaluate(snapshot, payment, rules);
 // result.BalanceChanges, result.Offers, result.Pools: что изменил платёж
 ```
 
-`DexSnapshot.FromNodeAsync(client, payment)` читает на одном валидированном леджере trust lines вдоль всех путей, которыми может пройти платёж, книги и пулы на них, аккаунты, предварительные авторизации получателя, предъявленные платежом credentials и его домен. Поиск путей в движок не входит: пути приходят вместе с платежом или их находит [`QuoteDeliverAsync`](#котировки). Не поддерживаются: платежи MPT и спонсируемые резервы.
+`DexSnapshot.FromNodeAsync(client, payment)` читает на одном валидированном леджере trust lines вдоль всех путей, которыми может пройти платёж, книги и пулы на них, аккаунты, предварительные авторизации получателя, предъявленные платежом credentials и его домен. Пути приходят вместе с платежом: из `ripple_path_find` или от локального [поиска путей](#поиск-путей). Не поддерживаются: платежи MPT и спонсируемые резервы.
 
 ## Домены permissioned DEX и credentials
 
@@ -269,6 +272,45 @@ PaymentQuote spend = await client.QuoteSpendAsync(sender, receiver, XrplAmount.P
 
 `PaymentQuote.Payment` готов к autofill, подписи и отправке: при неизменном леджере он доставит ровно то, что показала котировка. Чтобы оставить запас на движение рынка, увеличьте его `SendMax` или добавьте `tfPartialPayment` с `DeliverMin`.
 
+
+## Поиск путей
+
+`PathFinding.FindAsync` ищет пути платежа так же, как `ripple_path_find` в rippled 3.4.0. Повторяются его `PathRequest` и `Pathfinder`: таблица форм путей для каждого вида платежа, аккаунты и книги, добавляемые звено за звеном, аккаунты-кандидаты, упорядоченные по числу путей дальше, и прогон каждого законченного пути через платёжный движок с ранжированием по качеству, ликвидности и длине. Затем считается стоимость лучших путей.
+
+Поиск идёт по `PathfindingSource`: это `DexSnapshot` или нода, прочитанная на одном леджере. Ещё ему нужны книги ордеров. Нода держит собственный индекс книг, клиент передаёт его как `IBookIndex`:
+
+| Фабрика `BookIndex` | Что содержит | Когда использовать |
+|---|---|---|
+| `FromLedgerAsync` | Все директории книг и пулы AMM леджера, как их держит `OrderBookDB` в rippled; `Observe(meta)` добавляет книги, созданные следующими транзакциями | Своя нода, standalone, тестовая сеть: те же пути, что у ноды |
+| `FromAssetsAsync` | Книги между заданными активами, найденные через `book_offers` и `amm_info` | Mainnet, когда нужные активы известны |
+| `FromAccountsAsync` | Книги между активами, которые держат или выпускают trust lines аккаунтов | Mainnet, как догадка по отправителю и получателю |
+| `FromSnapshot` | Книги офферов и пулов снимка | Снимок, собранный вручную |
+
+```csharp
+BookIndex books = await BookIndex.FromLedgerAsync(client);
+PathfindingSource source = await PathfindingSource.FromNodeAsync(client, books);
+PathFindResult result = await PathFinding.FindAsync(source, new PathFindRequest
+{
+    SourceAccount = sender,
+    DestinationAccount = receiver,
+    DestinationAmount = XrplAmount.Parse(usd, "20"),   // "-1": столько, сколько купит SendMax
+    SourceCurrencies = new[] { xrp },                   // пусто: все активы отправителя
+    SearchLevel = 2,                                    // по умолчанию на ноде; 7 - медленный поиск
+}, rules);
+
+foreach (PathFindAlternative alternative in result.Alternatives)
+{
+    // alternative.SourceAmount: стоимость платежа из этого актива
+    // alternative.PathsComputed: Paths платежа
+}
+
+// Или одним вызовом, с книгами между активами двух аккаунтов:
+PathFindResult found = await client.FindPathsAsync(request);
+```
+
+При том же леджере и тех же книгах каждая альтернатива совпадает с ответом ноды: стоимость, доставляемая сумма и пути в том же порядке. Нода выполняет поиск вне транзакции. Там проверки, которые rippled берёт из правил текущей транзакции (округление AMM по `fixAMMv1_1` и `fixAMMv1_3`, `fixReducedOffersV2`), видят свои амендменты выключенными, и локальный поиск ведёт себя так же. Поэтому платёж, собранный по результату поиска, может доставить на последнюю цифру меньше, чем обещал поиск, причём и на ноде, и локально. Порядок альтернатив и равноценных книг следует хэш-множествам ноды и может отличаться.
+
+`QuoteDeliverAsync` и `QuoteSpendAsync` тоже принимают аргумент `books`: если он передан, пути берутся из локального поиска вместо `ripple_path_find`.
 
 ## Изменения балансов за пределами decimal
 

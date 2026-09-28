@@ -1,5 +1,7 @@
 using System;
 using System.Collections.Generic;
+using System.Globalization;
+using System.Linq;
 using System.Threading;
 using System.Threading.Tasks;
 
@@ -7,6 +9,7 @@ using Xrpl.Amounts;
 using Xrpl.BinaryCodec.Numbers;
 using Xrpl.Client;
 using Xrpl.Models.Common;
+using Xrpl.Models.Ledger;
 using Xrpl.Models.Methods;
 using Xrpl.Models.Transactions;
 
@@ -95,7 +98,8 @@ namespace Xrpl.Sugar
         /// <summary>
         /// What delivering exactly <paramref name="deliver"/> to <paramref name="destination"/>
         /// costs <paramref name="source"/> in <paramref name="sourceAsset"/>, along the paths
-        /// <c>ripple_path_find</c> finds.
+        /// <c>ripple_path_find</c> finds - or, given <paramref name="books"/>, the local path
+        /// finder (<see cref="PathFinding"/>).
         /// </summary>
         /// <remarks>
         /// The quote's <see cref="PaymentQuote.Payment"/> carries those paths and a <c>SendMax</c>
@@ -108,6 +112,7 @@ namespace Xrpl.Sugar
         /// <param name="deliver">The amount to deliver.</param>
         /// <param name="sourceAsset">The asset to pay with; an issued currency's issuer may be <paramref name="source"/> itself for any issuer it holds.</param>
         /// <param name="destinationTag">The payment's destination tag, for a destination that requires one.</param>
+        /// <param name="books">The order books for a local path search; null to ask the node's <c>ripple_path_find</c>.</param>
         /// <param name="rules">The amendments in force; read from the node when null.</param>
         /// <param name="cancellationToken">Cancels the reads.</param>
         public static async Task<PaymentQuote> QuoteDeliverAsync(
@@ -117,6 +122,7 @@ namespace Xrpl.Sugar
             XrplAmount deliver,
             IssuedCurrency sourceAsset,
             uint? destinationTag = null,
+            IBookIndex books = null,
             LedgerRules rules = null,
             CancellationToken cancellationToken = default)
         {
@@ -134,14 +140,18 @@ namespace Xrpl.Sugar
             List<List<PathStep>> paths = null;
             if (!direct)
             {
-                RipplePathFindRequest find = new RipplePathFindRequest(source, destination, deliver.ToCurrency())
+                PathFindRequest find = new PathFindRequest
                 {
-                    SourceCurrencies = new List<SourceCurrency> { SourceCurrencyOf(sourceAsset) },
+                    SourceAccount = source,
+                    DestinationAccount = destination,
+                    DestinationAmount = deliver,
+                    SourceCurrencies = new[] { sourceAsset },
                 };
-                PathAlternative alternative = Matching(await FindAsync(client, find, cancellationToken).ConfigureAwait(false), sourceAsset);
-                if (alternative?.SourceAmount != null)
-                    sendMaxAsset = alternative.SourceAmount.ToXrplAmount().Asset;
-                paths = NonEmpty(alternative?.PathsComputed);
+                (XrplAmount SourceAmount, List<List<PathStep>> Paths)? alternative =
+                    Matching(await FindAsync(client, find, books, rules, cancellationToken).ConfigureAwait(false), sourceAsset);
+                if (alternative is { } found)
+                    sendMaxAsset = found.SourceAmount.Asset;
+                paths = NonEmpty(alternative?.Paths);
             }
 
             // Quoted with no ceiling, the engine takes what it needs, which is the cost.
@@ -154,7 +164,8 @@ namespace Xrpl.Sugar
 
         /// <summary>
         /// What spending exactly <paramref name="spend"/> delivers to <paramref name="destination"/>
-        /// in <paramref name="deliverAsset"/>, along the paths <c>ripple_path_find</c> finds.
+        /// in <paramref name="deliverAsset"/>, along the paths <c>ripple_path_find</c> finds - or,
+        /// given <paramref name="books"/>, the local path finder (<see cref="PathFinding"/>).
         /// </summary>
         /// <remarks>
         /// The quote's <see cref="PaymentQuote.Payment"/> carries those paths, the quoted delivery
@@ -168,6 +179,7 @@ namespace Xrpl.Sugar
         /// <param name="spend">The amount to spend, transfer fees included.</param>
         /// <param name="deliverAsset">The asset to deliver.</param>
         /// <param name="destinationTag">The payment's destination tag, for a destination that requires one.</param>
+        /// <param name="books">The order books for a local path search; null to ask the node's <c>ripple_path_find</c>.</param>
         /// <param name="rules">The amendments in force; read from the node when null.</param>
         /// <param name="cancellationToken">Cancels the reads.</param>
         public static async Task<PaymentQuote> QuoteSpendAsync(
@@ -177,6 +189,7 @@ namespace Xrpl.Sugar
             XrplAmount spend,
             IssuedCurrency deliverAsset,
             uint? destinationTag = null,
+            IBookIndex books = null,
             LedgerRules rules = null,
             CancellationToken cancellationToken = default)
         {
@@ -197,11 +210,14 @@ namespace Xrpl.Sugar
             }
 
             // Asked for "as much as possible" (-1), the path finder converts all of SendMax.
-            RipplePathFindRequest find = new RipplePathFindRequest(source, destination, AnyAmount(deliverAsset))
+            PathFindRequest find = new PathFindRequest
             {
-                SendMax = spend.ToCurrency(),
+                SourceAccount = source,
+                DestinationAccount = destination,
+                DestinationAmount = AnyAmount(deliverAsset),
+                SendMax = spend,
             };
-            List<List<PathStep>> paths = NonEmpty(Matching(await FindAsync(client, find, cancellationToken).ConfigureAwait(false), spend.Asset)?.PathsComputed);
+            List<List<PathStep>> paths = NonEmpty(Matching(await FindAsync(client, find, books, rules, cancellationToken).ConfigureAwait(false), spend.Asset)?.Paths);
 
             // Quoted with no delivery ceiling, a partial payment delivers what the spend buys.
             Payment quoted = Build(source, destination, Largest(deliverAsset), spend, paths, PaymentFlags.tfPartialPayment, destinationTag);
@@ -212,22 +228,77 @@ namespace Xrpl.Sugar
             return new PaymentQuote(payment, result);
         }
 
-        private static async Task<List<PathAlternative>> FindAsync(IXrplClient client, RipplePathFindRequest request, CancellationToken cancellationToken)
+        /// <summary>
+        /// Finds the paths of <paramref name="request"/> locally over the node's ledger, reading
+        /// the books from <paramref name="books"/> - or, when null, those between the assets the
+        /// source's and the destination's trust lines hold (<see cref="BookIndex.FromAccountsAsync"/>).
+        /// </summary>
+        /// <param name="client">The node to read from.</param>
+        /// <param name="request">What to find paths for.</param>
+        /// <param name="books">The order books; see <see cref="BookIndex"/>.</param>
+        /// <param name="rules">The amendments in force; read from the node when null.</param>
+        /// <param name="cancellationToken">Cancels the search and the reads.</param>
+        public static async Task<PathFindResult> FindPathsAsync(
+            this IXrplClient client,
+            PathFindRequest request,
+            IBookIndex books = null,
+            LedgerRules rules = null,
+            CancellationToken cancellationToken = default)
         {
-            RipplePathFindResponse response = await client.RipplePathFind(request, cancellationToken).Typed().ConfigureAwait(false);
-            return response?.Alternatives ?? new List<PathAlternative>();
+            if (client == null)
+                throw new ArgumentNullException(nameof(client));
+            if (request == null)
+                throw new ArgumentNullException(nameof(request));
+
+            LOLedger header = await client
+                .Ledger(new LedgerRequest { LedgerIndex = new LedgerIndex(LedgerIndexType.Validated) }, cancellationToken)
+                .Typed()
+                .ConfigureAwait(false);
+            LedgerIndex at = new LedgerIndex(uint.Parse(((LedgerEntity)header.LedgerEntity).LedgerIndex, CultureInfo.InvariantCulture));
+            books ??= await BookIndex
+                .FromAccountsAsync(client, new[] { request.SourceAccount, request.DestinationAccount }, request.DomainId, at, cancellationToken)
+                .ConfigureAwait(false);
+            rules ??= await LedgerRules.FromNodeAsync(client, cancellationToken).ConfigureAwait(false);
+            PathfindingSource source = await PathfindingSource.FromNodeAsync(client, books, at, cancellationToken).ConfigureAwait(false);
+            return await PathFinding.FindAsync(source, request, rules, cancellationToken).ConfigureAwait(false);
+        }
+
+        /// <summary>The alternatives of a path search: locally when books are given, from <c>ripple_path_find</c> otherwise.</summary>
+        private static async Task<List<(XrplAmount SourceAmount, List<List<PathStep>> Paths)>> FindAsync(
+            IXrplClient client,
+            PathFindRequest request,
+            IBookIndex books,
+            LedgerRules rules,
+            CancellationToken cancellationToken)
+        {
+            if (books != null)
+            {
+                PathFindResult local = await client.FindPathsAsync(request, books, rules, cancellationToken).ConfigureAwait(false);
+                return local.Alternatives.Select(a => (a.SourceAmount, a.PathsComputed)).ToList();
+            }
+
+            RipplePathFindRequest find = new RipplePathFindRequest(request.SourceAccount, request.DestinationAccount, request.DestinationAmount.ToCurrency())
+            {
+                SendMax = request.SendMax?.ToCurrency(),
+                SourceCurrencies = request.SourceCurrencies.Count == 0 ? null : request.SourceCurrencies.Select(SourceCurrencyOf).ToList(),
+                Domain = request.DomainId,
+            };
+            RipplePathFindResponse response = await client.RipplePathFind(find, cancellationToken).Typed().ConfigureAwait(false);
+            return (response?.Alternatives ?? new List<PathAlternative>())
+                .Where(a => a?.SourceAmount != null)
+                .Select(a => (a.SourceAmount.ToXrplAmount(), a.PathsComputed))
+                .ToList();
         }
 
         /// <summary>The alternative paying in <paramref name="asset"/>'s currency; the first when none matches.</summary>
-        private static PathAlternative Matching(List<PathAlternative> alternatives, IssuedCurrency asset)
+        private static (XrplAmount SourceAmount, List<List<PathStep>> Paths)? Matching(
+            List<(XrplAmount SourceAmount, List<List<PathStep>> Paths)> alternatives,
+            IssuedCurrency asset)
         {
             AmountKind kind = XrplAmount.KindOf(asset);
-            foreach (PathAlternative alternative in alternatives)
+            foreach ((XrplAmount SourceAmount, List<List<PathStep>> Paths) alternative in alternatives)
             {
-                if (alternative?.SourceAmount == null)
-                    continue;
-
-                IssuedCurrency source = alternative.SourceAmount.ToXrplAmount().Asset;
+                IssuedCurrency source = alternative.SourceAmount.Asset;
                 if (XrplAmount.KindOf(source) == kind &&
                     (kind == AmountKind.Xrp || string.Equals(source.Currency, asset.Currency, StringComparison.Ordinal)))
                 {
@@ -247,10 +318,7 @@ namespace Xrpl.Sugar
                 : new SourceCurrency { Currency = asset.Currency, Issuer = asset.Issuer };
 
         /// <summary><c>-1</c> of the asset: <c>ripple_path_find</c>'s "as much as SendMax buys".</summary>
-        private static Currency AnyAmount(IssuedCurrency asset) =>
-            XrplAmount.KindOf(asset) == AmountKind.Xrp
-                ? new Currency { CurrencyCode = "XRP", Value = "-1" }
-                : new Currency { CurrencyCode = asset.Currency, Issuer = asset.Issuer, Value = "-1" };
+        private static XrplAmount AnyAmount(IssuedCurrency asset) => XrplAmount.Parse(asset, "-1");
 
         /// <summary>The largest amount of the asset a transaction may name.</summary>
         private static XrplAmount Largest(IssuedCurrency asset) =>

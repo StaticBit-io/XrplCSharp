@@ -73,7 +73,7 @@ jobs:
             what: Payment engine sources
             # The release Xrpl.Amounts is ported from; bump it with the port.
             baseline_ref: '3.4.0'
-            follow_up: 'port the change to `Xrpl/Amounts` (steps in `Dex/FlowSteps.cs`, `Dex/BookCrossingStep.cs`, `Dex/StrandBuilder.cs`, `Dex/StrandFlow.cs`; pools in `Dex/AmmSwap.cs`, `Dex/AmmBookLiquidity.cs`; the view in `Dex/DexView.cs`; the transactors in `Dex/OfferCreateCrossing.cs`, `Dex/PaymentFlow.cs`; arithmetic in `XrplAmountMath.cs`, `XrplQuality.cs`, `XrplNumber`), gate it on its amendment in `LedgerRules`, extend the replayed rippled tests, and rerun `TestIBookCrossing*`, `TestIPaymentFlow`, `TestIOfferCreateChecks`, `TestIPermissionedDex` and `TestIDexQuotes` against a stand on the new build.'
+            follow_up: 'port the change to `Xrpl/Amounts` (steps in `Dex/FlowSteps.cs`, `Dex/BookCrossingStep.cs`, `Dex/StrandBuilder.cs`, `Dex/StrandFlow.cs`; pools in `Dex/AmmSwap.cs`, `Dex/AmmBookLiquidity.cs`; the view in `Dex/DexView.cs`; the transactors in `Dex/OfferCreateCrossing.cs`, `Dex/PaymentFlow.cs`; the path finder in `Paths/Pathfinder.cs`, `Paths/PathFinding.cs`, `Paths/BookIndex.cs`; the rules read outside a transaction in `LedgerRules`; arithmetic in `XrplAmountMath.cs`, `XrplQuality.cs`, `XrplNumber`), gate it on its amendment in `LedgerRules`, extend the replayed rippled tests, and rerun `TestIBookCrossing*`, `TestIPaymentFlow`, `TestIOfferCreateChecks`, `TestIPermissionedDex`, `TestIDexQuotes` and `TestIPathFinding` against a stand on the new build.'
             watch: |
               src/libxrpl/tx/paths/AMMLiquidity.cpp
               src/libxrpl/tx/paths/AMMOffer.cpp
@@ -116,6 +116,18 @@ jobs:
               src/libxrpl/ledger/helpers/CredentialHelpers.cpp
               src/libxrpl/tx/transactors/dex/OfferCreate.cpp
               src/libxrpl/tx/transactors/payment/Payment.cpp
+              src/xrpld/rpc/detail/Pathfinder.cpp
+              src/xrpld/rpc/detail/Pathfinder.h
+              src/xrpld/rpc/detail/PathfinderUtils.h
+              src/xrpld/rpc/detail/PathRequest.cpp
+              src/xrpld/rpc/detail/AssetCache.cpp
+              src/xrpld/rpc/detail/TrustLine.cpp
+              src/xrpld/rpc/detail/AccountAssets.cpp
+              src/xrpld/app/ledger/OrderBookDBImpl.cpp
+              src/xrpld/rpc/handlers/orderbook/RipplePathFind.cpp
+              include/xrpl/protocol/STPathSet.h
+              src/libxrpl/protocol/STPathSet.cpp
+              src/libxrpl/protocol/Rules.cpp
     steps:
       - name: Compare watched files against tracked baseline
         env:
@@ -207,6 +219,16 @@ jobs:
           if ! stored=$(echo "$block" | jq -ce 'select(type == "object" and (to_entries | all(.value | type == "string")))'); then
             echo "::error::Tracking issue #$number JSON baseline is malformed. Fix the issue body or close the issue to bootstrap a fresh baseline."
             exit 1
+          fi
+          # A path added to the watch list since the baseline was recorded starts from the
+          # baseline ref, like the rest - not from the tip, which would absorb what the tip
+          # already changed.
+          if [ -n "$BASELINE_REF" ]; then
+            added=$(jq -rn --argjson cur "$current" --argjson old "$stored" '($cur | keys) - ($old | keys) | .[]')
+            if [ -n "$added" ]; then
+              baseline_added=$(WATCH="$added" snapshot_at "$BASELINE_REF")
+              stored=$(jq -cn --argjson old "$stored" --argjson add "$baseline_added" '$add + $old')
+            fi
           fi
           echo "stored: $stored"
 

@@ -1,6 +1,6 @@
 # Amounts, Quality and Offer Crossing
 
-This guide covers the amount arithmetic of the XRP Ledger in the XrplCSharp SDK. `XrplAmount` holds an amount the way rippled's `STAmount` does. `XrplAmountMath` repeats the node's arithmetic on it, including the directed rounding used when offers cross. `XrplQuality` is the exchange rate of an offer, and `OfferCrossing` sizes what one offer contributes to a payment or an `OfferCreate`. `OfferCreateCrossing` crosses a whole `OfferCreate` against the order books and AMM pools it reaches, and `PaymentFlow` runs a `Payment` along its paths. `DexQuoteSugar` quotes both against a node's ledger.
+This guide covers the amount arithmetic of the XRP Ledger in the XrplCSharp SDK. `XrplAmount` holds an amount the way rippled's `STAmount` does. `XrplAmountMath` repeats the node's arithmetic on it, including the directed rounding used when offers cross. `XrplQuality` is the exchange rate of an offer, and `OfferCrossing` sizes what one offer contributes to a payment or an `OfferCreate`. `OfferCreateCrossing` crosses a whole `OfferCreate` against the order books and AMM pools it reaches, and `PaymentFlow` runs a `Payment` along its paths. `DexQuoteSugar` quotes both against a node's ledger, and `PathFinding` finds a payment's paths as `ripple_path_find` does.
 
 Every result matches rippled 3.4.0 bit for bit: mantissa, exponent and sign. The tests replay 8,808 vectors produced by rippled's own code, rebuild the offer crossings of rippled's `AMM_test.cpp`, and compare offer crossings with a live node.
 
@@ -16,6 +16,7 @@ Every result matches rippled 3.4.0 bit for bit: mantissa, exponent and sign. The
 - [Permissioned Domains and Credentials](#permissioned-domains-and-credentials)
 - [Reading Books from a Node](#reading-books-from-a-node)
 - [Quotes](#quotes)
+- [Finding Paths](#finding-paths)
 - [Balance Changes Beyond decimal](#balance-changes-beyond-decimal)
 - [Ledger Rules](#ledger-rules)
 
@@ -37,6 +38,7 @@ An issued currency on the ledger has 16 significant digits and an exponent from 
 | `OfferCreateCrossing` | `Xrpl.Amounts` | What an `OfferCreate` does against whole books and AMM pools, from a `DexSnapshot` |
 | `PaymentFlow` | `Xrpl.Amounts` | What a `Payment` does along its paths, from a `DexSnapshot` |
 | `DexQuoteSugar` | `Xrpl.Sugar` | Quotes for a payment or an offer, read and computed against a node's validated ledger |
+| `PathFinding` | `Xrpl.Amounts` | A payment's paths, found as `ripple_path_find` finds them, over a snapshot or a node |
 
 ## XrplAmount
 
@@ -207,7 +209,7 @@ PaymentFlowResult result = PaymentFlow.Evaluate(snapshot, payment, rules);
 // result.BalanceChanges, result.Offers, result.Pools: what the payment changed
 ```
 
-`DexSnapshot.FromNodeAsync(client, payment)` reads, at one validated ledger, the trust lines along every path the payment can take, the books and pools on them, the accounts, the destination's preauthorizations, the credentials the payment presents, and its domain. Path finding is not part of the engine: the paths come with the payment, or [`QuoteDeliverAsync`](#quotes) finds them. Not covered: MPT payments and sponsored reserves.
+`DexSnapshot.FromNodeAsync(client, payment)` reads, at one validated ledger, the trust lines along every path the payment can take, the books and pools on them, the accounts, the destination's preauthorizations, the credentials the payment presents, and its domain. The paths come with the payment: from `ripple_path_find`, or from the local [path finder](#finding-paths). Not covered: MPT payments and sponsored reserves.
 
 ## Permissioned Domains and Credentials
 
@@ -256,6 +258,45 @@ PaymentQuote spend = await client.QuoteSpendAsync(sender, receiver, XrplAmount.P
 
 A `PaymentQuote.Payment` is ready to autofill, sign and submit: against an unchanged ledger it delivers exactly what was quoted. To leave room for the market to move, raise its `SendMax`, or add `tfPartialPayment` with a `DeliverMin`.
 
+
+## Finding Paths
+
+`PathFinding.FindAsync` finds a payment's paths the way rippled 3.4.0's `ripple_path_find` does: its `PathRequest` and `Pathfinder` - the table of path shapes for each kind of payment, accounts and books added link by link, candidate accounts ranked by the ways they lead on, every complete path run through the payment engine and ranked by quality, liquidity and length - then the cost of the best ones.
+
+A search runs over a `PathfindingSource`: a `DexSnapshot`, or a node read at one ledger. It also needs the order books, which the node keeps in an index of its own and a client supplies as an `IBookIndex`:
+
+| `BookIndex` factory | What it holds | When to use it |
+|---|---|---|
+| `FromLedgerAsync` | Every book directory and AMM pool of a ledger, as rippled's `OrderBookDB` holds them; `Observe(meta)` adds the books later transactions create | A private node, a standalone one, a test network: the same paths as the node |
+| `FromAssetsAsync` | The books between the assets given, found with `book_offers` and `amm_info` | Mainnet, when the assets that matter are known |
+| `FromAccountsAsync` | The books between the assets the accounts' trust lines hold or issue | Mainnet, as a guess from the source and the destination |
+| `FromSnapshot` | The books of a snapshot's offers and pools | A snapshot built by hand |
+
+```csharp
+BookIndex books = await BookIndex.FromLedgerAsync(client);
+PathfindingSource source = await PathfindingSource.FromNodeAsync(client, books);
+PathFindResult result = await PathFinding.FindAsync(source, new PathFindRequest
+{
+    SourceAccount = sender,
+    DestinationAccount = receiver,
+    DestinationAmount = XrplAmount.Parse(usd, "20"),   // "-1" asks for as much as SendMax buys
+    SourceCurrencies = new[] { xrp },                   // every asset the sender holds when empty
+    SearchLevel = 2,                                    // the node's default; 7 is its slow search
+}, rules);
+
+foreach (PathFindAlternative alternative in result.Alternatives)
+{
+    // alternative.SourceAmount: what the payment costs from that asset
+    // alternative.PathsComputed: the payment's Paths
+}
+
+// Or in one call, with the books between the two accounts' assets:
+PathFindResult found = await client.FindPathsAsync(request);
+```
+
+Against the same ledger and the same books, every alternative - its cost, what it delivers, its paths in order - is the node's. The node computes a search outside any transaction, where the checks rippled reads from the current transaction's rules - the AMM's `fixAMMv1_1` and `fixAMMv1_3` rounding, `fixReducedOffersV2` - see their amendments as disabled; the local search does the same. A payment built from a search can therefore deliver a last digit less than the search said, on the node as locally. The order of the alternatives, and of books of equal worth, follows the node's hash sets and may differ.
+
+`QuoteDeliverAsync` and `QuoteSpendAsync` take a `books` argument too: with one, their paths come from the local search instead of `ripple_path_find`.
 
 ## Balance Changes Beyond decimal
 
