@@ -16,6 +16,16 @@ name: Protocol Watch
 # State lives in the tracking issue body (labeled protocol-watch), not in the
 # repo and not in actions cache: no commits through branch protection, no
 # cache eviction. The baseline JSON is keyed by full path.
+#
+# A second watch runs the same comparison over the rippled sources the
+# Xrpl.Amounts payment engine is ported from (engine-watch): the steps, the
+# offer stream, the AMM helpers, STAmount / IOUAmount / Number arithmetic,
+# Quality, PaymentSandbox, and the OfferCreate and Payment transactors with the
+# helpers they call. The port is exact to the last digit only while these files
+# stay as they were at the ported release, so any change to them is a decision
+# the port has to follow. Its baseline starts from that release (BASELINE_REF)
+# rather than from develop's tip, so what develop already changed since the
+# release is reported on the first run instead of being absorbed silently.
 
 on:
   schedule:
@@ -25,35 +35,98 @@ on:
 permissions:
   issues: write
 
-# Only one run may read/update the tracking-issue state at a time
-concurrency:
-  group: protocol-watch
-  cancel-in-progress: false
-
 env:
   UPSTREAM: XRPLF/rippled
   UPSTREAM_REF: develop
-  # Explicit watch list — full repo-relative paths, one per line
-  WATCH: |
-    include/xrpl/protocol/detail/features.macro
-    include/xrpl/protocol/detail/ledger_entries.macro
-    include/xrpl/protocol/detail/permissions.macro
-    include/xrpl/protocol/detail/sfields.macro
-    include/xrpl/protocol/detail/transactions.macro
-    include/xrpl/protocol/TxFlags.h
-    include/xrpl/protocol/TER.h
-    include/xrpl/protocol/LedgerFormats.h
-  ISSUE_TITLE: 'Protocol watch: rippled develop'
-  ISSUE_LABEL: protocol-watch
 
 jobs:
   watch:
     runs-on: ubuntu-latest
+    # Only one run per watch may read/update its tracking-issue state at a time
+    concurrency:
+      group: ${{ matrix.label }}
+      cancel-in-progress: false
+    strategy:
+      fail-fast: false
+      matrix:
+        include:
+          - label: protocol-watch
+            title: 'Protocol watch: rippled develop'
+            description: rippled develop protocol tracking
+            what: Protocol definitions
+            baseline_ref: ''
+            follow_up: 'sync `definitions.json` (`server_definitions` diff), new amendments for the nightly stand config, new transaction/ledger-object fields, flags or result codes for the models.'
+            # Explicit watch list — full repo-relative paths, one per line
+            watch: |
+              include/xrpl/protocol/detail/features.macro
+              include/xrpl/protocol/detail/ledger_entries.macro
+              include/xrpl/protocol/detail/permissions.macro
+              include/xrpl/protocol/detail/sfields.macro
+              include/xrpl/protocol/detail/transactions.macro
+              include/xrpl/protocol/TxFlags.h
+              include/xrpl/protocol/TER.h
+              include/xrpl/protocol/LedgerFormats.h
+          - label: engine-watch
+            title: 'Engine watch: rippled develop payment engine'
+            description: rippled develop payment engine tracking
+            what: Payment engine sources
+            # The release Xrpl.Amounts is ported from; bump it with the port.
+            baseline_ref: '3.4.0'
+            follow_up: 'port the change to `Xrpl/Amounts` (steps in `Dex/FlowSteps.cs`, `Dex/BookCrossingStep.cs`, `Dex/StrandBuilder.cs`, `Dex/StrandFlow.cs`; pools in `Dex/AmmSwap.cs`, `Dex/AmmBookLiquidity.cs`; the view in `Dex/DexView.cs`; the transactors in `Dex/OfferCreateCrossing.cs`, `Dex/PaymentFlow.cs`; arithmetic in `XrplAmountMath.cs`, `XrplQuality.cs`, `XrplNumber`), gate it on its amendment in `LedgerRules`, extend the replayed rippled tests, and rerun `TestIBookCrossing*`, `TestIPaymentFlow`, `TestIOfferCreateChecks`, `TestIPermissionedDex` and `TestIDexQuotes` against a stand on the new build.'
+            watch: |
+              src/libxrpl/tx/paths/AMMLiquidity.cpp
+              src/libxrpl/tx/paths/AMMOffer.cpp
+              src/libxrpl/tx/paths/BookStep.cpp
+              src/libxrpl/tx/paths/BookTip.cpp
+              src/libxrpl/tx/paths/DirectStep.cpp
+              src/libxrpl/tx/paths/Flow.cpp
+              src/libxrpl/tx/paths/OfferStream.cpp
+              src/libxrpl/tx/paths/PaySteps.cpp
+              src/libxrpl/tx/paths/RippleCalc.cpp
+              src/libxrpl/tx/paths/XRPEndpointStep.cpp
+              include/xrpl/tx/paths/AMMLiquidity.h
+              include/xrpl/tx/paths/AMMOffer.h
+              include/xrpl/tx/paths/Offer.h
+              include/xrpl/tx/paths/OfferStream.h
+              include/xrpl/tx/paths/detail/StepChecks.h
+              include/xrpl/tx/paths/detail/Steps.h
+              include/xrpl/tx/paths/detail/StrandFlow.h
+              include/xrpl/tx/transactors/dex/AMMContext.h
+              include/xrpl/ledger/helpers/AMMHelpers.h
+              src/libxrpl/ledger/helpers/AMMHelpers.cpp
+              include/xrpl/protocol/AMMCore.h
+              src/libxrpl/protocol/AMMCore.cpp
+              include/xrpl/protocol/Quality.h
+              src/libxrpl/protocol/Quality.cpp
+              include/xrpl/protocol/QualityFunction.h
+              src/libxrpl/protocol/QualityFunction.cpp
+              include/xrpl/protocol/STAmount.h
+              src/libxrpl/protocol/STAmount.cpp
+              include/xrpl/protocol/IOUAmount.h
+              src/libxrpl/protocol/IOUAmount.cpp
+              include/xrpl/basics/Number.h
+              src/libxrpl/basics/Number.cpp
+              include/xrpl/ledger/PaymentSandbox.h
+              src/libxrpl/ledger/PaymentSandbox.cpp
+              src/libxrpl/ledger/helpers/RippleStateHelpers.cpp
+              src/libxrpl/ledger/helpers/TokenHelpers.cpp
+              src/libxrpl/ledger/helpers/OfferHelpers.cpp
+              src/libxrpl/ledger/helpers/PermissionedDEXHelpers.cpp
+              src/libxrpl/ledger/helpers/CredentialHelpers.cpp
+              src/libxrpl/tx/transactors/dex/OfferCreate.cpp
+              src/libxrpl/tx/transactors/payment/Payment.cpp
     steps:
-      - name: Compare protocol files against tracked baseline
+      - name: Compare watched files against tracked baseline
         env:
           GH_TOKEN: ${{ secrets.GITHUB_TOKEN }}
           REPO: ${{ github.repository }}
+          WATCH: ${{ matrix.watch }}
+          ISSUE_TITLE: ${{ matrix.title }}
+          ISSUE_LABEL: ${{ matrix.label }}
+          LABEL_DESCRIPTION: ${{ matrix.description }}
+          WHAT: ${{ matrix.what }}
+          BASELINE_REF: ${{ matrix.baseline_ref }}
+          FOLLOW_UP: ${{ matrix.follow_up }}
         run: |
           set -euo pipefail
 
@@ -61,31 +134,40 @@ jobs:
           # so the recorded shas and the diff links refer to the same commit
           head_sha=$(gh api "repos/$UPSTREAM/commits/$UPSTREAM_REF" --jq .sha)
 
-          # Build the current path->blob-sha map from the explicit watch list.
+          # The path->blob-sha map of the explicit watch list at a ref.
           # Fail closed: only a genuine HTTP 404 means "removed upstream" (omit it
           # so the union diff flags it as removed); any other failure (401/403/429/
           # 5xx, network) aborts the run so a transient error can never drop an
           # entry and overwrite the baseline.
-          current='{}'
-          while IFS= read -r path; do
-            [ -z "$path" ] && continue
-            if resp=$(gh api "repos/$UPSTREAM/contents/$path?ref=$head_sha" 2>/tmp/gh_err); then
-              # A file returns an object with a string sha; a directory returns an array
-              sha=$(printf '%s' "$resp" | jq -r 'select(type == "object" and .type == "file") | .sha // empty')
-              if [ -z "$sha" ]; then
-                echo "::error::watched path is not a file with a sha: $path"
-                exit 1
+          snapshot_at() {
+            local ref=$1 map='{}' path resp sha
+            while IFS= read -r path; do
+              [ -z "$path" ] && continue
+              if resp=$(gh api "repos/$UPSTREAM/contents/$path?ref=$ref" 2>/tmp/gh_err); then
+                # A file returns an object with a string sha; a directory returns an array
+                sha=$(printf '%s' "$resp" | jq -r 'select(type == "object" and .type == "file") | .sha // empty')
+                if [ -z "$sha" ]; then
+                  echo "::error::watched path is not a file with a sha: $path" >&2
+                  return 1
+                fi
+                map=$(jq -n --argjson cur "$map" --arg p "$path" --arg s "$sha" '$cur + {($p): $s}')
+              elif grep -q 'HTTP 404' /tmp/gh_err; then
+                echo "::warning::watched path not found at $ref (404): $path" >&2
+              else
+                echo "::error::lookup failed for $path at $ref:" >&2
+                cat /tmp/gh_err >&2
+                return 1
               fi
-              current=$(jq -n --argjson cur "$current" --arg p "$path" --arg s "$sha" '$cur + {($p): $s}')
-            elif grep -q 'HTTP 404' /tmp/gh_err; then
-              echo "::warning::watched path not found upstream (404): $path"
-            else
-              echo "::error::lookup failed for $path:"
-              cat /tmp/gh_err
-              exit 1
-            fi
-          done <<< "$WATCH"
+            done <<< "$WATCH"
+            printf '%s' "$map"
+          }
+
+          current=$(snapshot_at "$head_sha")
           echo "current: $current"
+
+          baseline_body() {
+            printf 'Automated baseline for the weekly %s (.github/workflows/protocol-watch.yml). Do not edit the JSON block by hand.\n\nLast checked upstream commit: %s\n\n```json\n%s\n```\n' "$ISSUE_LABEL" "$1" "$2"
+          }
 
           # Find the tracking issue
           issue=$(gh issue list --repo "$REPO" --label "$ISSUE_LABEL" --state open \
@@ -93,11 +175,21 @@ jobs:
 
           if [ -z "$issue" ]; then
             gh label create "$ISSUE_LABEL" --repo "$REPO" \
-              --description "rippled develop protocol tracking" --color 5319e7 2>/dev/null || true
-            body=$(printf 'Automated baseline for the weekly protocol watch (.github/workflows/protocol-watch.yml). Do not edit the JSON block by hand.\n\nLast checked upstream commit: %s\n\n```json\n%s\n```\n' "$head_sha" "$current")
-            gh issue create --repo "$REPO" --title "$ISSUE_TITLE" --label "$ISSUE_LABEL" --body "$body"
-            echo "Baseline issue created."
-            exit 0
+              --description "$LABEL_DESCRIPTION" --color 5319e7 2>/dev/null || true
+
+            # Without a baseline ref the tip is the baseline and there is nothing to
+            # report yet; with one, the watch starts from that ref and goes on to
+            # report what the tip changed since.
+            if [ -z "$BASELINE_REF" ]; then
+              gh issue create --repo "$REPO" --title "$ISSUE_TITLE" --label "$ISSUE_LABEL" --body "$(baseline_body "$head_sha" "$current")"
+              echo "Baseline issue created."
+              exit 0
+            fi
+
+            baseline=$(snapshot_at "$BASELINE_REF")
+            url=$(gh issue create --repo "$REPO" --title "$ISSUE_TITLE" --label "$ISSUE_LABEL" --body "$(baseline_body "$BASELINE_REF" "$baseline")")
+            echo "Baseline issue created from $BASELINE_REF: $url"
+            issue=$(gh issue view "$url" --repo "$REPO" --json number,body)
           fi
 
           number=$(echo "$issue" | jq -r .number)
@@ -195,11 +287,10 @@ jobs:
           if grep -qF "$marker" <<< "$existing_comments"; then
             echo "Notification for $head_sha already posted; updating the baseline only."
           else
-            comment=$(printf '%s\nProtocol definitions changed on `%s` `%s` (checked at upstream commit %s):\n\n%s\nFollow-ups to consider: sync `definitions.json` (`server_definitions` diff), new amendments for the nightly stand config, new transaction/ledger-object fields, flags or result codes for the models.\n' "$marker" "$UPSTREAM" "$UPSTREAM_REF" "$head_sha" "$lines")
+            comment=$(printf '%s\n%s changed on `%s` `%s` (checked at upstream commit %s):\n\n%s\nFollow-ups to consider: %s\n' "$marker" "$WHAT" "$UPSTREAM" "$UPSTREAM_REF" "$head_sha" "$lines" "$FOLLOW_UP")
             gh issue comment "$number" --repo "$REPO" --body "$comment"
           fi
 
           # Update the baseline in the issue body
-          body=$(printf 'Automated baseline for the weekly protocol watch (.github/workflows/protocol-watch.yml). Do not edit the JSON block by hand.\n\nLast checked upstream commit: %s\n\n```json\n%s\n```\n' "$head_sha" "$current")
-          gh issue edit "$number" --repo "$REPO" --body "$body"
+          gh issue edit "$number" --repo "$REPO" --body "$(baseline_body "$head_sha" "$current")"
           echo "Comment posted and baseline updated."
