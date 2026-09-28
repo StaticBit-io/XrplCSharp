@@ -19,22 +19,24 @@ namespace Xrpl.Amounts
     /// <remarks>
     /// <para>
     /// Repeated are <c>Payment</c>'s checks (the <c>tem</c> codes of <c>preflight</c>, the
-    /// destination checks of <c>preclaim</c>, deposit authorization), <c>RippleCalc</c> and
+    /// destination checks of <c>preclaim</c>, the credentials it presents, the permissioned
+    /// domain, deposit authorization by account or by credentials), <c>RippleCalc</c> and
     /// <c>flow</c>: <c>toStrands</c> with its implied steps and loop checks, direct steps with
-    /// their qualities, limits, NoRipple and transfer fees, book steps and AMM pools, and
-    /// <c>StrandFlow</c>. A direct XRP payment is checked against the reserve.
+    /// their qualities, limits, NoRipple and transfer fees, book steps - the domain's books for
+    /// a payment in a domain - and AMM pools, <c>StrandFlow</c>, and the trust lines a balance
+    /// back at zero releases or deletes. A direct XRP payment is checked against the reserve.
     /// </para>
     /// <para>
-    /// Not covered: MPT payments, permissioned-DEX domains, credentials, deposit preauthorization
-    /// by credential, and trust lines deleted or cleared when a balance returns to zero. Path
-    /// finding is not part of it: the paths come with the payment, as <c>ripple_path_find</c> or
-    /// <c>path_find</c> return them. A result is exact only against the state it was given.
+    /// Not covered: MPT payments and sponsored reserves. Path finding is not part of it: the
+    /// paths come with the payment, as <c>ripple_path_find</c> or <c>path_find</c> return them.
+    /// A result is exact only against the state it was given.
     /// </para>
     /// </remarks>
     public static class PaymentFlow
     {
         private const int MaxPathSize = 6;
         private const int MaxPathLength = 8;
+        private const int MaxCredentials = 8;
 
         /// <summary>What <paramref name="payment"/> would do against <paramref name="snapshot"/>.</summary>
         /// <param name="snapshot">The ledger state; it must hold the sender, the accounts and lines on the paths, and the books they cross.</param>
@@ -72,6 +74,8 @@ namespace Xrpl.Amounts
 
             if (Preflight(account, destination, amount, sendMax, maxSource, deliverMin, hasPaths, partialPayment, limitQuality, defaultPaths) is { } malformed)
                 return NotApplied(snapshot, malformed);
+            if (PreflightExtras(payment, rules) is { } malformedExtras)
+                return NotApplied(snapshot, malformedExtras);
 
             DexWorld world = new DexWorld(snapshot, account, fee);
             if (!world.Accounts.ContainsKey(account))
@@ -96,6 +100,18 @@ namespace Xrpl.Amounts
             if (ripple && (paths.Count > MaxPathSize || paths.Exists(p => p.Count > MaxPathLength)))
                 return NotApplied(snapshot, "telBAD_PATH_COUNT");
 
+            if (CheckCredentials(world, payment.CredentialIDs, account) is { } badCredentials)
+                return Applied(world, new DexView(world, rules), badCredentials, null, null);
+            if (CheckDomain(world, payment.DomainID, account, destination, rules) is { } notInDomain)
+                return Applied(world, new DexView(world, rules), notInDomain, null, null);
+
+            // doApply: a member whose only matching credentials have expired is refused now.
+            if (!string.IsNullOrEmpty(payment.DomainID) && rules.FixCleanup3_4_0 &&
+                (VerifyDomain(world, payment.DomainID, account) ?? VerifyDomain(world, payment.DomainID, destination)) is { } expired)
+            {
+                return Applied(world, new DexView(world, rules), expired, null, null);
+            }
+
             // The destination account is created before any funds move.
             if (!destinationExists)
                 world.Accounts[destination] = destinationAccount = new DexAccount { Address = destination };
@@ -103,8 +119,80 @@ namespace Xrpl.Amounts
             DexView view = new DexView(world, rules);
             return ripple
                 ? Ripple(world, view, payment, account, destination, destinationAccount, amount, maxSource, deliverMin, paths, partialPayment, limitQuality, defaultPaths, rules)
-                : DirectXrp(world, view, account, destination, destinationAccount, amount, fee);
+                : DirectXrp(world, view, payment, account, destination, destinationAccount, amount, fee);
         }
+
+        /// <summary>The credential and domain fields' own malformations (<c>credentials::checkFields</c>).</summary>
+        private static string PreflightExtras(Payment payment, LedgerRules rules)
+        {
+            if (rules.FixCleanup3_2_0 && payment.DomainID != null && payment.DomainID.Trim('0').Length == 0)
+                return "temMALFORMED";
+
+            if (payment.CredentialIDs == null)
+                return null;
+            if (payment.CredentialIDs.Count == 0 || payment.CredentialIDs.Count > MaxCredentials)
+                return "temMALFORMED";
+
+            HashSet<string> seen = new HashSet<string>(StringComparer.OrdinalIgnoreCase);
+            foreach (string id in payment.CredentialIDs)
+            {
+                if (rules.FixCleanup3_4_0 && (id == null || id.Trim('0').Length == 0))
+                    return "temMALFORMED";
+                if (!seen.Add(id ?? string.Empty))
+                    return "temMALFORMED";
+            }
+
+            return null;
+        }
+
+        /// <summary><c>credentials::valid</c>: each credential presented exists, is the sender's, and was accepted.</summary>
+        private static string CheckCredentials(DexWorld world, List<string> credentialIds, string account)
+        {
+            foreach (string id in credentialIds ?? new List<string>())
+            {
+                if (!world.CredentialsById.TryGetValue(id, out DexCredential credential) ||
+                    !string.Equals(credential.Subject, account, StringComparison.Ordinal) ||
+                    !credential.Accepted)
+                {
+                    return "tecBAD_CREDENTIALS";
+                }
+            }
+
+            return null;
+        }
+
+        /// <summary><c>Payment::preclaim</c>'s domain check: the sender and the destination are both members.</summary>
+        private static string CheckDomain(DexWorld world, string domainId, string account, string destination, LedgerRules rules)
+        {
+            if (string.IsNullOrEmpty(domainId))
+                return null;
+
+            foreach (string member in new[] { account, destination })
+            {
+                if (rules.FixCleanup3_4_0)
+                {
+                    // Expired credentials pass here; doApply refuses them.
+                    string valid = world.ValidDomain(domainId, member);
+                    if (valid == "tecOBJECT_NOT_FOUND" || (valid != null && valid != "tecEXPIRED"))
+                        return "tecNO_PERMISSION";
+                }
+                else if (!world.AccountInDomain(member, domainId))
+                {
+                    return "tecNO_PERMISSION";
+                }
+            }
+
+            return null;
+        }
+
+        /// <summary><c>verifyValidDomain</c>: null for a member, <c>tecEXPIRED</c> when its matching credentials have expired.</summary>
+        private static string VerifyDomain(DexWorld world, string domainId, string member) =>
+            world.ValidDomain(domainId, member) switch
+            {
+                null => null,
+                "tecEXPIRED" => "tecEXPIRED",
+                _ => "tecNO_PERMISSION",
+            };
 
         /// <summary><c>Payment::preflight</c>: the malformed payments, refused before any fee.</summary>
         private static string Preflight(
@@ -173,8 +261,8 @@ namespace Xrpl.Amounts
             bool defaultPaths,
             LedgerRules rules)
         {
-            if (!DepositAllowed(account, destination, destinationAccount))
-                return Applied(world, new DexView(world, rules), "tecNO_PERMISSION", null, null);
+            if (VerifyDepositPreauth(world, payment.CredentialIDs, account, destination, destinationAccount) is { } refused)
+                return Applied(world, new DexView(world, rules), refused, null, null);
 
             XrplQuality? limit = limitQuality && StepMath.IsPositive(maxSource)
                 ? XrplQuality.FromAmounts(maxSource, amount, rules)
@@ -190,6 +278,7 @@ namespace Xrpl.Amounts
                 LimitQuality = limit,
                 OfferCrossing = false,
                 AmmContext = ammContext,
+                DomainId = payment.DomainID,
             };
 
             string result;
@@ -241,6 +330,7 @@ namespace Xrpl.Amounts
         private static PaymentFlowResult DirectXrp(
             DexWorld world,
             DexView view,
+            Payment payment,
             string account,
             string destination,
             DexAccount destinationAccount,
@@ -258,9 +348,9 @@ namespace Xrpl.Amounts
                 return Applied(world, new DexView(world, view.Rules), "tecNO_PERMISSION", null, null);
 
             if ((amount.StMantissa > snapshot.ReserveBase || destinationAccount.Balance > snapshot.ReserveBase) &&
-                !DepositAllowed(account, destination, destinationAccount))
+                VerifyDepositPreauth(world, payment.CredentialIDs, account, destination, destinationAccount) is { } refused)
             {
-                return Applied(world, new DexView(world, view.Rules), "tecNO_PERMISSION", null, null);
+                return Applied(world, new DexView(world, view.Rules), refused, null, null);
             }
 
             view.Send(account, string.Empty, amount);
@@ -268,29 +358,68 @@ namespace Xrpl.Amounts
             return Applied(world, view, "tesSUCCESS", amount, amount);
         }
 
-        /// <summary><c>checkDepositPreauth</c>: a destination with deposit authorization takes only from itself and those it preauthorized.</summary>
-        private static bool DepositAllowed(string account, string destination, DexAccount destinationAccount)
+        /// <summary>
+        /// <c>verifyDepositPreauth</c>: expired credentials refuse the payment; then a destination
+        /// with deposit authorization takes only from itself, from the accounts it preauthorized,
+        /// and from a sender presenting a set of credentials it preauthorized.
+        /// </summary>
+        private static string VerifyDepositPreauth(
+            DexWorld world,
+            List<string> credentialIds,
+            string account,
+            string destination,
+            DexAccount destinationAccount)
         {
+            foreach (string id in credentialIds ?? new List<string>())
+            {
+                if (world.CredentialsById.TryGetValue(id, out DexCredential credential) && world.Expired(credential))
+                    return "tecEXPIRED";
+            }
+
             if (!destinationAccount.DepositAuth || string.Equals(account, destination, StringComparison.Ordinal))
-                return true;
+                return null;
 
             foreach (string preauthorized in destinationAccount.DepositPreauthorized ?? Array.Empty<string>())
             {
                 if (string.Equals(preauthorized, account, StringComparison.Ordinal))
+                    return null;
+            }
+
+            if (credentialIds == null)
+                return "tecNO_PERMISSION";
+
+            return PreauthorizedCredentials(world, credentialIds, destinationAccount) ? null : "tecNO_PERMISSION";
+        }
+
+        /// <summary><c>authorizedDepositPreauth</c>: the credentials presented, as a set of issuer and type, are one the destination preauthorized.</summary>
+        private static bool PreauthorizedCredentials(DexWorld world, List<string> credentialIds, DexAccount destinationAccount)
+        {
+            HashSet<(string Issuer, string Type)> presented = new HashSet<(string Issuer, string Type)>();
+            foreach (string id in credentialIds)
+            {
+                DexCredential credential = world.CredentialsById[id];
+                if (!presented.Add((credential.Issuer, credential.CredentialType.ToUpperInvariant())))
+                    return false;
+            }
+
+            foreach (IReadOnlyList<DexCredentialType> set in destinationAccount.DepositPreauthorizedCredentials ?? Array.Empty<IReadOnlyList<DexCredentialType>>())
+            {
+                HashSet<(string Issuer, string Type)> accepted = new HashSet<(string Issuer, string Type)>();
+                foreach (DexCredentialType type in set ?? Array.Empty<DexCredentialType>())
+                    accepted.Add((type.Issuer, type.CredentialType?.ToUpperInvariant()));
+
+                if (accepted.SetEquals(presented))
                     return true;
             }
 
             return false;
         }
 
-        private static PaymentFlowResult Applied(DexWorld world, DexView final, string result, XrplAmount? delivered, XrplAmount? paid)
-        {
-            (List<OfferChange> offers, List<AmmPoolChange> pools, List<BalanceChange> balances) = LedgerChanges.Collect(world, final);
-            return new PaymentFlowResult(result, true, delivered, paid, offers, pools, balances);
-        }
+        private static PaymentFlowResult Applied(DexWorld world, DexView final, string result, XrplAmount? delivered, XrplAmount? paid) =>
+            new PaymentFlowResult(result, true, delivered, paid, LedgerChanges.Collect(world, final));
 
         private static PaymentFlowResult NotApplied(DexSnapshot snapshot, string result) =>
-            new PaymentFlowResult(result, false, null, null, Array.Empty<OfferChange>(), Array.Empty<AmmPoolChange>(), Array.Empty<BalanceChange>());
+            new PaymentFlowResult(result, false, null, null, LedgerChanges.None);
 
         private static XrplAmount Read(Currency amount)
         {
@@ -330,17 +459,17 @@ namespace Xrpl.Amounts
             bool applied,
             XrplAmount? delivered,
             XrplAmount? paid,
-            IReadOnlyList<OfferChange> offers,
-            IReadOnlyList<AmmPoolChange> pools,
-            IReadOnlyList<BalanceChange> balances)
+            LedgerChanges changes)
         {
             EngineResult = engineResult;
             Applied = applied;
             DeliveredAmount = delivered;
             Paid = paid;
-            Offers = offers;
-            Pools = pools;
-            BalanceChanges = balances;
+            Offers = changes.Offers;
+            Pools = changes.Pools;
+            BalanceChanges = changes.Balances;
+            TrustLines = changes.TrustLines;
+            NeedsDeeperBooks = changes.ReachedPartialBook;
         }
 
         /// <summary>The node's result, such as <c>tesSUCCESS</c>, <c>tecPATH_PARTIAL</c>, <c>tecPATH_DRY</c> or a <c>tem</c> code.</summary>
@@ -363,5 +492,15 @@ namespace Xrpl.Amounts
 
         /// <summary>How every account's balances moved, the fee included, as the metadata will record them.</summary>
         public IReadOnlyList<BalanceChange> BalanceChanges { get; }
+
+        /// <summary>The trust lines the payment created or deleted.</summary>
+        public IReadOnlyList<TrustLineChange> TrustLines { get; }
+
+        /// <summary>
+        /// Whether the engine walked past the last offer the snapshot read of a book it holds
+        /// only in part (<see cref="DexSnapshot.PartialBooks"/>): the node may cross offers the
+        /// snapshot does not have, so the result is exact only once the snapshot is read deeper.
+        /// </summary>
+        public bool NeedsDeeperBooks { get; }
     }
 }

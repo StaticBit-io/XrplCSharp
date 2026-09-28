@@ -14,7 +14,8 @@ namespace Xrpl.Amounts
     /// fee-adjusted and cut to what the strand still needs, and the stale ones on the way removed.
     /// Offer crossing (<c>BookOfferCrossingStep</c>) has the owner pay the transfer fee on what it
     /// gives and prunes by the taker's price; a payment (<c>BookPaymentStep</c>) leaves the fee to
-    /// the next step and takes any quality.
+    /// the next step and takes any quality. A book in a permissioned domain holds the domain's
+    /// offers, hybrid ones included, and no AMM pool.
     /// </summary>
     internal sealed class BookCrossingStep : FlowStep
     {
@@ -22,6 +23,7 @@ namespace Xrpl.Amounts
 
         private readonly IssuedCurrency _in;
         private readonly IssuedCurrency _out;
+        private readonly string _domain;
         private readonly string _strandSource;
         private readonly string _strandDestination;
         private readonly FlowStep _previous;
@@ -37,6 +39,7 @@ namespace Xrpl.Amounts
         {
             _in = @in;
             _out = @out;
+            _domain = BookKey.DomainKey(context.DomainId);
             _strandSource = context.StrandSource;
             _strandDestination = context.StrandDestination;
             _previous = context.PreviousStep;
@@ -112,7 +115,7 @@ namespace Xrpl.Amounts
         private object Tip(DexView view)
         {
             XrplQuality? book = null;
-            foreach (DexOffer offer in view.World.Book(_in, _out))
+            foreach (DexOffer offer in Offers(view.World))
             {
                 if (!view.Offer(offer.Index).Deleted)
                 {
@@ -121,12 +124,28 @@ namespace Xrpl.Amounts
                 }
             }
 
+            if (book == null && IsPartial(view.World))
+                view.World.ReachedPartialBook = true;
+
             XrplQuality? threshold = view.Rules.FixAMMv1_1 && book is { } lob ? QualityThresholdForAmm(lob) : null;
-            AmmBookOffer amm = _amm?.GetOffer(view, threshold);
+            AmmBookOffer amm = AmmOffer(view, threshold);
             if (amm != null && (book == null || amm.Quality > book.Value))
                 return amm;
 
             return book;
+        }
+
+        private IReadOnlyList<DexOffer> Offers(DexWorld world) => world.Book(_in, _out, _domain);
+
+        private bool IsPartial(DexWorld world) => world.PartialBooks.Contains(BookKey.Of(_in, _out, _domain));
+
+        /// <summary><c>getAMMOffer</c>: none for a domain book, which the pool does not serve, under <c>fixCleanup3_3_0</c>.</summary>
+        private AmmBookOffer AmmOffer(DexView view, XrplQuality? threshold)
+        {
+            if (_domain.Length != 0 && view.Rules.FixCleanup3_3_0)
+                return null;
+
+            return _amm?.GetOffer(view, threshold);
         }
 
         /// <summary>
@@ -182,7 +201,7 @@ namespace Xrpl.Amounts
             uint rateIn = previous == Amounts.DebtDirection.Redeems ? sb.Rate(_in, _strandDestination) : OfferCrossing.QualityOne;
             uint rateOut = _offerCrossing ? sb.Rate(_out, _strandDestination) : OfferCrossing.QualityOne;
 
-            OfferStream offers = new OfferStream(sb, afView, sb.World.Book(_in, _out), MaxOffersToConsume);
+            OfferStream offers = new OfferStream(sb, afView, Offers(sb.World), MaxOffersToConsume, _domain, IsPartial(sb.World));
             bool offerAttempted = false;
             XrplQuality? offerQuality = null;
 
@@ -197,6 +216,17 @@ namespace Xrpl.Amounts
                 if (_offerCrossing && _defaultPath && offer.Quality >= _qualityThreshold &&
                     string.Equals(_strandSource, offer.Owner, StringComparison.Ordinal) &&
                     string.Equals(_strandDestination, offer.Owner, StringComparison.Ordinal))
+                {
+                    if (offer.Key != null)
+                        offers.PermanentlyRemove(offer.Key);
+                    if (!offerAttempted)
+                        offerQuality = null;
+                    return true;
+                }
+
+                // An owner the issuer has not authorized to hold what it buys loses the offer.
+                DexView authView = rules.MPTokensV2 ? sb : afView;
+                if (authView.RequireAuth(offer.Owner, _in) != null)
                 {
                     if (offer.Key != null)
                         offers.PermanentlyRemove(offer.Key);
@@ -241,8 +271,12 @@ namespace Xrpl.Amounts
 
             bool TryAmm(XrplQuality? lobQuality)
             {
+                // The pool does not serve a domain book.
+                if (_domain.Length != 0)
+                    return true;
+
                 XrplQuality? threshold = rules.FixAMMv1_1 && lobQuality is { } lob ? QualityThresholdForAmm(lob) : lobQuality;
-                AmmBookOffer amm = _amm?.GetOffer(sb, threshold);
+                AmmBookOffer amm = AmmOffer(sb, threshold);
                 return amm == null || ExecOffer(amm);
             }
 
@@ -549,7 +583,8 @@ namespace Xrpl.Amounts
         /// <summary>
         /// rippled's <c>FlowOfferStream</c> over <c>BookTip</c>: the book's live offers in order,
         /// each tip deleted as the walk moves past it, and the unusable ones - expired, empty,
-        /// deep-frozen, unfunded, or too small to keep their quality - skipped on the way.
+        /// deep-frozen, out of their domain, unfunded, or too small to keep their quality -
+        /// skipped on the way.
         /// </summary>
         private sealed class OfferStream
         {
@@ -557,15 +592,19 @@ namespace Xrpl.Amounts
             private readonly DexView _cancelView;
             private readonly IReadOnlyList<DexOffer> _book;
             private readonly int _limit;
+            private readonly string _domain;
+            private readonly bool _partial;
             private int _position;
             private DexOffer _tipEntry;
 
-            internal OfferStream(DexView view, DexView cancelView, IReadOnlyList<DexOffer> book, int limit)
+            internal OfferStream(DexView view, DexView cancelView, IReadOnlyList<DexOffer> book, int limit, string domain, bool partial)
             {
                 _view = view;
                 _cancelView = cancelView;
                 _book = book;
                 _limit = limit;
+                _domain = domain;
+                _partial = partial;
             }
 
             internal ClobOffer Tip { get; private set; }
@@ -595,7 +634,12 @@ namespace Xrpl.Amounts
 
                     DexOffer entry = NextLive();
                     if (entry == null)
+                    {
+                        // The walk ran off what the snapshot read of the book, not off the book.
+                        if (_partial)
+                            _view.World.ReachedPartialBook = true;
                         return false;
+                    }
 
                     _tipEntry = entry;
                     if (Count >= _limit)
@@ -616,6 +660,15 @@ namespace Xrpl.Amounts
                     }
 
                     if (_view.IsDeepFrozen(offer.Owner, offer.AssetIn))
+                    {
+                        PermanentlyRemove(entry.Index);
+                        continue;
+                    }
+
+                    // A domain offer whose owner left the domain is removed where the domain is
+                    // walked; before fixCleanup3_3_0, in the open book too.
+                    if ((!_view.Rules.FixCleanup3_3_0 || _domain.Length != 0) && !string.IsNullOrEmpty(entry.DomainId) &&
+                        !_view.World.AccountInDomain(entry.Account, entry.DomainId))
                     {
                         PermanentlyRemove(entry.Index);
                         continue;

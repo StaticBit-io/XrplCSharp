@@ -1,6 +1,6 @@
 # Amounts, Quality and Offer Crossing
 
-This guide covers the amount arithmetic of the XRP Ledger in the XrplCSharp SDK. `XrplAmount` holds an amount the way rippled's `STAmount` does. `XrplAmountMath` repeats the node's arithmetic on it, including the directed rounding used when offers cross. `XrplQuality` is the exchange rate of an offer, and `OfferCrossing` sizes what one offer contributes to a payment or an `OfferCreate`. `OfferCreateCrossing` crosses a whole `OfferCreate` against the order books and AMM pools it reaches, and `PaymentFlow` runs a `Payment` along its paths.
+This guide covers the amount arithmetic of the XRP Ledger in the XrplCSharp SDK. `XrplAmount` holds an amount the way rippled's `STAmount` does. `XrplAmountMath` repeats the node's arithmetic on it, including the directed rounding used when offers cross. `XrplQuality` is the exchange rate of an offer, and `OfferCrossing` sizes what one offer contributes to a payment or an `OfferCreate`. `OfferCreateCrossing` crosses a whole `OfferCreate` against the order books and AMM pools it reaches, and `PaymentFlow` runs a `Payment` along its paths. `DexQuoteSugar` quotes both against a node's ledger.
 
 Every result matches rippled 3.4.0 bit for bit: mantissa, exponent and sign. The tests replay 8,808 vectors produced by rippled's own code, rebuild the offer crossings of rippled's `AMM_test.cpp`, and compare offer crossings with a live node.
 
@@ -13,6 +13,9 @@ Every result matches rippled 3.4.0 bit for bit: mantissa, exponent and sign. The
 - [Offer Crossing](#offer-crossing)
 - [Crossing an OfferCreate](#crossing-an-offercreate)
 - [Evaluating a Payment](#evaluating-a-payment)
+- [Permissioned Domains and Credentials](#permissioned-domains-and-credentials)
+- [Reading Books from a Node](#reading-books-from-a-node)
+- [Quotes](#quotes)
 - [Balance Changes Beyond decimal](#balance-changes-beyond-decimal)
 - [Ledger Rules](#ledger-rules)
 
@@ -33,6 +36,7 @@ An issued currency on the ledger has 16 significant digits and an exponent from 
 | `OfferCrossing` | `Xrpl.Amounts` | What one offer contributes when it is crossed, as `BookStep` sizes it |
 | `OfferCreateCrossing` | `Xrpl.Amounts` | What an `OfferCreate` does against whole books and AMM pools, from a `DexSnapshot` |
 | `PaymentFlow` | `Xrpl.Amounts` | What a `Payment` does along its paths, from a `DexSnapshot` |
+| `DexQuoteSugar` | `Xrpl.Sugar` | Quotes for a payment or an offer, read and computed against a node's validated ledger |
 
 ## XrplAmount
 
@@ -143,40 +147,46 @@ This sizes one offer. To cross a whole `OfferCreate`, use [`OfferCreateCrossing`
 - **Book walk.** Each pass takes the offers of one quality level, in book order. On the way it removes offers that are expired, empty, deep-frozen, unfunded, or too small to keep their quality. Each owner pays from what it still holds after the transaction's earlier transfers, since funds received during a transaction cannot be spent in it.
 - **AMM pool.** The pool is tried before the book at each pass. On a single strand, its offer is sized so the pool's price meets the book's best quality. With two strands, it offers slices that grow along the Fibonacci sequence, for at most 30 passes.
 - **Limits.** The taker's price, `tfPassive`, `tfSell`, `tfImmediateOrCancel` and `tfFillOrKill` apply, and so does the issuer's tick size.
+- **Checks.** Given the SDK's `OfferCreate` model, the crossing first runs the offer's own checks: the malformed offers of `preflight` (`temINVALID_FLAG`, `temBAD_EXPIRATION`, `temBAD_SEQUENCE`, `temBAD_OFFER`, `temREDUNDANT`, `temBAD_CURRENCY`), then `preclaim`'s `tecFROZEN`, `tecUNFUNDED_OFFER`, `tecEXPIRED`, `tecNO_ISSUER`, and `tecNO_LINE` or `tecNO_AUTH` when the issuer of what the account asks for requires authorization. `OfferSequence` cancels the account's older offer before anything crosses.
+- **Authorization.** An offer whose owner the issuer no longer lets hold what the offer asks for is removed, not crossed.
+- **Trust lines.** A line the crossing creates is owned by the account that receives on it. A line whose balance returns to zero, with the sending side back at its defaults, stops counting toward that account's reserve, and is deleted when neither side counts it. `TrustLines` lists both kinds.
 
 ```csharp
 LedgerRules rules = await LedgerRules.FromNodeAsync(client);
-DexSnapshot snapshot = await DexSnapshot.FromNodeAsync(client, account, takerPays.Asset, takerGets.Asset);
+OfferCreate offer = await client.Autofill(new OfferCreate
+{
+    Account = account,
+    TakerPays = takerPays.ToCurrency(),     // what the account wants
+    TakerGets = takerGets.ToCurrency(),     // what it gives
+    Flags = OfferCreateFlags.tfImmediateOrCancel,
+});
 
-OfferCrossingResult result = OfferCreateCrossing.Cross(
-    snapshot,
-    account,
-    takerPays,                              // what the account wants
-    takerGets,                              // what it gives
-    fee: 12,                                // the transaction's fee, in drops
-    OfferCreateFlags.tfImmediateOrCancel,
-    rules);
+DexSnapshot snapshot = await DexSnapshot.FromNodeAsync(client, offer);
+OfferCrossingResult result = OfferCreateCrossing.Cross(snapshot, offer, rules);
 
-// result.EngineResult: tesSUCCESS, tecKILLED, tecUNFUNDED_OFFER or tecINSUF_RESERVE_OFFER
+// result.EngineResult and result.Applied: the code, and whether the fee is charged
 // result.BalanceChanges: every account's change, as the metadata will record it
 // result.Offers: the offers crossed or removed, and what is left of each
 // result.Pools: the pools' balances afterwards
+// result.TrustLines: the trust lines created or deleted
 // result.PlacedTakerPays / PlacedTakerGets: the offer left in the book, if any
 ```
 
-`DexSnapshot.FromNodeAsync` reads everything at one validated ledger: the books the crossing can reach, the pools on them, and the accounts and trust lines it reads. Each book is read with one `book_offers` call, so a crossing deeper than the first 400 offers of a book is not represented. `book_offers` also leaves out offers whose owner holds nothing, other than the account's own; the node removes them on the way, and the result does not list them. A snapshot can also be built by hand, as the unit tests do.
+`OfferCreateCrossing.Cross(snapshot, account, takerPays, takerGets, fee, flags, rules)` takes the same offer as separate values, without `OfferSequence`, `Expiration` or a domain.
 
-The result is exact against the snapshot. The transaction lands in a later ledger, whose state can differ, so `simulate` stays the reference before submitting. Not covered: permissioned-DEX domains, MPT books, `RequireAuth`, the transaction's `Expiration` and `OfferSequence`, and sponsored reserves. A payment is evaluated by [`PaymentFlow`](#evaluating-a-payment).
+`DexSnapshot.FromNodeAsync` reads everything at one validated ledger: the books the crossing can reach, the pools on them, the accounts and trust lines it reads, and the offer `OfferSequence` cancels. [Reading Books from a Node](#reading-books-from-a-node) explains how deep. A snapshot can also be built by hand, as the unit tests do.
+
+The result is exact against the snapshot. The transaction lands in a later ledger, whose state can differ, so `simulate` stays the reference before submitting. Not covered: MPT books and sponsored reserves. A payment is evaluated by [`PaymentFlow`](#evaluating-a-payment).
 
 ## Evaluating a Payment
 
 `PaymentFlow.Evaluate` runs a `Payment` against a `DexSnapshot` the way rippled 3.4.0 applies it. It takes the SDK's own `Payment` model, with its `Fee`, `SendMax`, `DeliverMin`, `Paths` and flags.
 
-- **Checks.** The malformed payments of `preflight` (`temBAD_AMOUNT`, `temREDUNDANT`, the `temBAD_SEND_XRP_*` codes) and the destination checks of `preclaim` (`tecNO_DST`, `tecNO_DST_INSUF_XRP`, `tecDST_TAG_NEEDED`), then deposit authorization.
+- **Checks.** The malformed payments of `preflight` (`temBAD_AMOUNT`, `temREDUNDANT`, the `temBAD_SEND_XRP_*` codes, `temMALFORMED` for a bad `CredentialIDs` or `DomainID`), the destination checks of `preclaim` (`tecNO_DST`, `tecNO_DST_INSUF_XRP`, `tecDST_TAG_NEEDED`), the credentials presented and the domain (see [Permissioned Domains and Credentials](#permissioned-domains-and-credentials)), then deposit authorization.
 - **Strands.** Each path, and the default path unless `tfNoDirectRipple` is set, becomes a strand: the source, SendMax's issuer, the path, a book to the delivered asset and its issuer, the destination. A malformed or looping path is refused with the node's `temBAD_PATH` or `temBAD_PATH_LOOP`.
 - **Trust lines.** Each step along a line reads who owes whom, the line's `QualityIn` and `QualityOut`, its limit, NoRipple, freezes and authorization. The transfer fee applies where the payment redeems into an issuer and it issues onward.
 - **Books and pools.** They are walked as for an `OfferCreate`, except that the offer's owner does not pay the fee on what it gives: the next step charges it to the sender.
-- **The result.** `SendMax`, `DeliverMin`, `tfPartialPayment` and `tfLimitQuality` decide how much flows and the result code: `tecPATH_PARTIAL`, `tecPATH_DRY`, or `tesSUCCESS` with the delivered amount.
+- **The result.** `SendMax`, `DeliverMin`, `tfPartialPayment` and `tfLimitQuality` decide how much flows and the result code: `tecPATH_PARTIAL`, `tecPATH_DRY`, or `tesSUCCESS` with the delivered amount. Trust lines are created and deleted as for an `OfferCreate`.
 
 ```csharp
 Payment payment = await client.Autofill(new Payment
@@ -197,7 +207,54 @@ PaymentFlowResult result = PaymentFlow.Evaluate(snapshot, payment, rules);
 // result.BalanceChanges, result.Offers, result.Pools: what the payment changed
 ```
 
-`DexSnapshot.FromNodeAsync(client, payment)` reads, at one validated ledger, the trust lines along every path the payment can take, the books and pools on them, the accounts, and the destination's preauthorizations. Path finding is not part of the engine: the paths come with the payment. Not covered: MPT payments, permissioned-DEX domains, credentials, and trust lines deleted when a balance returns to zero.
+`DexSnapshot.FromNodeAsync(client, payment)` reads, at one validated ledger, the trust lines along every path the payment can take, the books and pools on them, the accounts, the destination's preauthorizations, the credentials the payment presents, and its domain. Path finding is not part of the engine: the paths come with the payment, or [`QuoteDeliverAsync`](#quotes) finds them. Not covered: MPT payments and sponsored reserves.
+
+## Permissioned Domains and Credentials
+
+An `OfferCreate` or a `Payment` with a `DomainID` trades in that permissioned domain:
+
+- **Membership.** The account - and a payment's destination - must be in the domain: its owner, or the holder of a credential the domain accepts, accepted and not expired. Otherwise the result is `tecNO_PERMISSION`; a member whose only matching credential has expired gets `tecEXPIRED`.
+- **Books.** The strands walk the domain's books instead of the open ones: the domain's offers and the hybrid offers (`tfHybrid`), which sit in the open book as well. An AMM pool never serves a domain book. An offer whose owner has left the domain - its credential expired - is removed from the domain's book on the way.
+- **Credentials.** A payment's `CredentialIDs` must name credentials that exist, belong to the sender and were accepted (`tecBAD_CREDENTIALS`), and have not expired (`tecEXPIRED`). A destination with deposit authorization lets the payment through when the credentials, as a set of issuer and type, are one it preauthorized.
+
+`DexSnapshot.FromNodeAsync` reads the domain, the domain's books, and the credentials the domain accepts for the accounts involved and for every owner of a domain offer. A snapshot built by hand lists them in `Domains` and `Credentials`, and marks each domain offer with its `DomainId` and `Hybrid`.
+
+## Reading Books from a Node
+
+By default `DexSnapshot.FromNodeAsync` reads each book with one `book_offers` request. That gives the funded offers at the top of the book: at most 100 from a public node, up to 400 over an admin connection. A book that returns a full page is listed in `DexSnapshot.PartialBooks`, and a result whose engine walks past the last offer read of such a book says so with `NeedsDeeperBooks`: the node may cross offers the snapshot does not have.
+
+`DexSnapshotOptions.BookDepth` reads deeper. The loader walks the book's directories the way the engine does - quality by quality, page by page - and reads up to that many offers from each book, unfunded ones included, so the offers the node removes on the way appear in the result as well:
+
+```csharp
+DexSnapshot snapshot = await DexSnapshot.FromNodeAsync(client, offer, new DexSnapshotOptions { BookDepth = 1_000 });
+OfferCrossingResult result = OfferCreateCrossing.Cross(snapshot, offer, rules);
+if (result.NeedsDeeperBooks)
+{
+    // More than 1,000 offers of a book were reached: read deeper, or treat the result as a bound.
+}
+```
+
+A walk costs one `ledger_entry` request per offer, so it is worth it for the books a transaction actually reaches deep into.
+
+## Quotes
+
+`DexQuoteSugar` reads the snapshot and runs the engine in one call, and reads deeper by itself while a result `NeedsDeeperBooks`:
+
+```csharp
+// What the offer or the payment would do if it were applied now.
+OfferCrossingResult crossing = await client.QuoteOfferCreateAsync(offer);
+PaymentFlowResult payment = await client.QuotePaymentAsync(existingPayment);
+
+// Deliver exactly 20 USD: the cost in XRP, along the paths ripple_path_find returns.
+PaymentQuote deliver = await client.QuoteDeliverAsync(sender, receiver, XrplAmount.Parse(usd, "20"), xrp);
+// deliver.Cost: what the sender spends; deliver.Payment: Amount, SendMax = Cost, Paths
+
+// Spend exactly 10 XRP: how much USD it delivers.
+PaymentQuote spend = await client.QuoteSpendAsync(sender, receiver, XrplAmount.Parse(xrp, "10000000"), usd);
+// spend.Delivered: what the receiver gets; spend.Payment: Amount = Delivered, SendMax = 10 XRP, Paths
+```
+
+A `PaymentQuote.Payment` is ready to autofill, sign and submit: against an unchanged ledger it delivers exactly what was quoted. To leave room for the market to move, raise its `SendMax`, or add `tfPartialPayment` with a `DeliverMin`.
 
 
 ## Balance Changes Beyond decimal

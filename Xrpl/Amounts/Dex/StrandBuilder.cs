@@ -64,6 +64,9 @@ namespace Xrpl.Amounts
             internal bool OfferCrossing { get; init; }
 
             internal AmmFlowContext AmmContext { get; init; }
+
+            /// <summary>The permissioned domain whose books the strands walk; null for the open books.</summary>
+            internal string DomainId { get; init; }
         }
 
         /// <summary><c>toStrands</c>: the default path, when allowed, and each given path, duplicates dropped.</summary>
@@ -347,6 +350,7 @@ namespace Xrpl.Amounts
                     SeenDirectAssets = seenDirectAssets,
                     SeenBookOuts = seenBookOuts,
                     AmmContext = request.AmmContext,
+                    DomainId = request.DomainId,
                 };
 
                 (string result, FlowStep step) = hop.Kind switch

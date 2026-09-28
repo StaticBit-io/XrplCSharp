@@ -71,5 +71,12 @@ namespace Xrpl.Models.Methods
         /// </summary>
         [JsonPropertyName("taker_pays")]
         public TakerAmount TakerPays { get; set; }
+
+        /// <summary>
+        /// The permissioned domain whose book to read, as its 64-character ledger index;
+        /// omitted for the open book.
+        /// </summary>
+        [JsonPropertyName("domain")]
+        public string Domain { get; set; }
     }
 }

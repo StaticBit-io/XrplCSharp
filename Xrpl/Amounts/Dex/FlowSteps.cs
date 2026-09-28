@@ -74,6 +74,9 @@ namespace Xrpl.Amounts
         internal HashSet<AssetKey> SeenBookOuts { get; init; }
 
         internal AmmFlowContext AmmContext { get; init; }
+
+        /// <summary>The permissioned domain whose books the strand walks; null for the open books.</summary>
+        internal string DomainId { get; init; }
     }
 
     /// <summary>rippled's <c>Step</c>: one hop of a strand, run backwards from the output, then forwards.</summary>
