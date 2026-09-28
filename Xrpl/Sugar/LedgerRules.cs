@@ -52,6 +52,12 @@ namespace Xrpl.Sugar
         public bool FixAMMv1_1 { get; init; } = true;
 
         /// <summary>
+        /// Whether <c>fixAMMv1_2</c> is enabled: when a pool cannot be brought to the order book's
+        /// quality, its largest offer is still taken if it beats the book.
+        /// </summary>
+        public bool FixAMMv1_2 { get; init; } = true;
+
+        /// <summary>
         /// Whether <c>fixAMMv1_3</c> is enabled: AMM deposits and withdrawals round against the
         /// trader. <see cref="AmmLiquidity"/> follows these rules only.
         /// </summary>
@@ -70,6 +76,12 @@ namespace Xrpl.Sugar
         public bool FixReducedOffersV2 { get; init; } = true;
 
         /// <summary>
+        /// Whether <c>fixFillOrKill</c> is enabled: a fill-or-kill offer without <c>tfSell</c> must
+        /// receive all of its <c>TakerPays</c>, not spend all of its <c>TakerGets</c>.
+        /// </summary>
+        public bool FixFillOrKill { get; init; } = true;
+
+        /// <summary>
         /// Whether <c>LendingProtocolV1_1</c> is enabled: a closed-ended vault takes deposits only
         /// in its subscription phase and pays out nothing in its investment phase.
         /// </summary>
@@ -83,7 +95,15 @@ namespace Xrpl.Sugar
         /// The <c>Number</c> rounding mode in effect outside any guard. A node processes a
         /// transaction to nearest; the tests replay rippled's vectors in every mode.
         /// </summary>
-        internal NumberRounding AmbientRounding { get; init; } = NumberRounding.ToNearest;
+        internal NumberRounding AmbientRounding { get; set; } = NumberRounding.ToNearest;
+
+        /// <summary>These rules with <paramref name="rounding"/> as the ambient mode, as a <c>Number::setround</c> scope sees them.</summary>
+        internal LedgerRules WithRounding(NumberRounding rounding)
+        {
+            LedgerRules copy = (LedgerRules)MemberwiseClone();
+            copy.AmbientRounding = rounding;
+            return copy;
+        }
 
         /// <summary>Reads the amendments from the node.</summary>
         public static async Task<LedgerRules> FromNodeAsync(IXrplClient client, CancellationToken cancellationToken = default)
@@ -105,9 +125,11 @@ namespace Xrpl.Sugar
                 LargeNumbers = features.GetByName("SingleAssetVault")?.Value?.Enabled == true
                     || features.GetByName("LendingProtocol")?.Value?.Enabled == true,
                 FixAMMv1_1 = features.GetByName("fixAMMv1_1")?.Value?.Enabled == true,
+                FixAMMv1_2 = features.GetByName("fixAMMv1_2")?.Value?.Enabled == true,
                 FixAMMv1_3 = features.GetByName("fixAMMv1_3")?.Value?.Enabled == true,
                 MPTokensV2 = features.GetByName("MPTokensV2")?.Value?.Enabled == true,
                 FixReducedOffersV2 = features.GetByName("fixReducedOffersV2")?.Value?.Enabled == true,
+                FixFillOrKill = features.GetByName("fixFillOrKill")?.Value?.Enabled == true,
                 LendingProtocolV1_1 = features.GetByName("LendingProtocolV1_1")?.Value?.Enabled == true,
             };
         }

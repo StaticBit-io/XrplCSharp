@@ -328,6 +328,14 @@ namespace Xrpl.Amounts
 
         public static bool operator >=(XrplAmount left, XrplAmount right) => left.CompareTo(right) >= 0;
 
+        /// <summary>
+        /// An XRP or MPT amount of <paramref name="units"/>, anywhere in the <c>int64</c> range, as
+        /// the payment engine's <c>XRPAmount</c> and <c>MPTAmount</c> hold it: the engine asks for
+        /// up to <c>kMaxNative</c> drops when an offer sells, beyond what a ledger amount may hold.
+        /// </summary>
+        internal static XrplAmount FromUnits(IssuedCurrency asset, AmountKind kind, long units) =>
+            new XrplAmount(asset, kind, units < 0 ? (ulong)-units : (ulong)units, 0, units < 0);
+
         /// <summary>An amount with no asset, for the rates <see cref="XrplQuality"/> works with (<c>noIssue()</c>).</summary>
         internal static XrplAmount Rate(ulong mantissa, int exponent) =>
             FromStParts(null, AmountKind.Iou, mantissa, exponent, false, NumberRounding.ToNearest);

@@ -1,0 +1,401 @@
+using System;
+using System.Collections.Generic;
+
+using Xrpl.BinaryCodec.Numbers;
+using Xrpl.Sugar;
+
+using static Xrpl.Models.Common.Common;
+
+namespace Xrpl.Amounts
+{
+    /// <summary>How the engine was asked to cross: <c>OfferCrossing::Yes</c> or, with <c>tfSell</c>, <c>Sell</c>.</summary>
+    internal enum CrossingMode
+    {
+        Yes,
+        Sell,
+    }
+
+    /// <summary>What running one strand gave (<c>StrandResult</c>).</summary>
+    internal sealed class StrandResult
+    {
+        internal bool Success { get; init; }
+
+        internal XrplAmount In { get; init; }
+
+        internal XrplAmount Out { get; init; }
+
+        internal DexView Sandbox { get; init; }
+
+        internal HashSet<string> OffersToRemove { get; init; }
+
+        internal int OffersUsed { get; init; }
+
+        internal bool Inactive { get; init; }
+    }
+
+    /// <summary>What the engine's loop over the strands gave (<c>FlowResult</c>).</summary>
+    internal sealed class FlowResult
+    {
+        internal string Result { get; init; }
+
+        internal XrplAmount In { get; init; }
+
+        internal XrplAmount Out { get; init; }
+
+        /// <summary>The state after the flow, when it succeeded.</summary>
+        internal DexView Sandbox { get; init; }
+
+        internal HashSet<string> RemovableOffers { get; init; }
+
+        internal bool Succeeded => Result == "tesSUCCESS";
+    }
+
+    /// <summary>
+    /// rippled's <c>StrandFlow.h</c>: each strand run backwards from the output and forwards from
+    /// the limiting step, and the loop that takes the best strand's liquidity iteration by
+    /// iteration until the request, the funds or the price is exhausted.
+    /// </summary>
+    internal static class StrandFlow
+    {
+        private const int MaxTries = 1000;
+        private const int MaxOffersToConsider = 1500;
+
+        /// <summary>The single-strand <c>flow</c>.</summary>
+        internal static StrandResult Run(DexView baseView, List<FlowStep> strand, XrplAmount? maxIn, XrplAmount @out)
+        {
+            HashSet<string> offersToRemove = new HashSet<string>(StringComparer.Ordinal);
+            StrandResult Failed() => new StrandResult { OffersToRemove = offersToRemove, OffersUsed = OffersUsed(strand) };
+
+            try
+            {
+                int count = strand.Count;
+                int limitingStep = count;
+                DexView sb = new DexView(baseView);
+                DexView afView = new DexView(baseView);
+                XrplAmount limitStepOut = default;
+
+                XrplAmount stepOut = @out;
+                for (int i = count - 1; i >= 0; i--)
+                {
+                    (XrplAmount In, XrplAmount Out) r = strand[i].Rev(sb, afView, offersToRemove, stepOut);
+                    if (r.Out.IsZero)
+                        return Failed();
+
+                    if (i == 0 && maxIn is { } max && max < r.In)
+                    {
+                        // The input is limited: throw the reverse pass away and run this step forward.
+                        sb = new DexView(baseView);
+                        limitingStep = i;
+                        r = strand[i].Fwd(sb, afView, offersToRemove, max);
+                        limitStepOut = r.Out;
+                        if (r.Out.IsZero || r.In != max)
+                            return Failed();
+                    }
+                    else if (r.Out != stepOut)
+                    {
+                        // This step limits the strand: start again from what it can give.
+                        sb = new DexView(baseView);
+                        afView = new DexView(baseView);
+                        limitingStep = i;
+                        stepOut = r.Out;
+                        r = strand[i].Rev(sb, afView, offersToRemove, stepOut);
+                        limitStepOut = r.Out;
+                        if (r.Out.IsZero || r.Out != stepOut)
+                            return Failed();
+                    }
+
+                    stepOut = r.In;
+                }
+
+                XrplAmount stepIn = limitStepOut;
+                for (int i = limitingStep + 1; i < count; i++)
+                {
+                    (XrplAmount In, XrplAmount Out) r = strand[i].Fwd(sb, afView, offersToRemove, stepIn);
+                    if (r.Out.IsZero || r.In != stepIn)
+                        return Failed();
+
+                    stepIn = r.Out;
+                }
+
+                bool inactive = false;
+                foreach (FlowStep step in strand)
+                    inactive |= step.Inactive;
+
+                return new StrandResult
+                {
+                    Success = true,
+                    In = strand[0].CachedIn.Value,
+                    Out = strand[count - 1].CachedOut.Value,
+                    Sandbox = sb,
+                    OffersToRemove = offersToRemove,
+                    OffersUsed = OffersUsed(strand),
+                    Inactive = inactive,
+                };
+            }
+            catch (FlowFailedException)
+            {
+                return Failed();
+            }
+        }
+
+        private static int OffersUsed(List<FlowStep> strand)
+        {
+            int used = 0;
+            foreach (FlowStep step in strand)
+                used += step.OffersUsed;
+            return used;
+        }
+
+        /// <summary><c>qualityUpperBound</c>: the best quality a strand can give now.</summary>
+        internal static XrplQuality? QualityUpperBound(DexView view, List<FlowStep> strand)
+        {
+            XrplQuality quality = new XrplQuality(FlowStep.QualityOneEncoded);
+            DebtDirection direction = DebtDirection.Issues;
+            foreach (FlowStep step in strand)
+            {
+                (XrplQuality? stepQuality, DebtDirection next) = step.QualityUpperBound(view, direction);
+                direction = next;
+                if (stepQuality == null)
+                    return null;
+
+                quality = BookCrossingStep.Composed(quality, stepQuality.Value, view.Rules);
+            }
+
+            return quality;
+        }
+
+        /// <summary>
+        /// <c>limitOut</c>: on a single strand whose quality depends on its size - an AMM pool -
+        /// the output that gives exactly the limit quality on average.
+        /// </summary>
+        private static XrplAmount LimitOut(DexView view, List<FlowStep> strand, XrplAmount remainingOut, XrplQuality limitQuality)
+        {
+            NumberContext c = view.Rules.Context;
+            QualityFunction combined = null;
+            DebtDirection direction = DebtDirection.Issues;
+            foreach (FlowStep step in strand)
+            {
+                (QualityFunction function, DebtDirection next) = step.GetQualityFunc(view, direction);
+                direction = next;
+                if (function == null)
+                    return remainingOut;
+
+                if (combined == null)
+                    combined = function;
+                else
+                    combined.Combine(function, c);
+            }
+
+            if (combined == null || combined.IsConst)
+                return remainingOut;
+
+            XrplNumber? target = combined.OutFromAvgQ(limitQuality, c);
+            XrplAmount limited;
+            if (target == null)
+            {
+                limited = remainingOut;
+            }
+            else if (remainingOut.IsIntegral)
+            {
+                limited = StepMath.ToAmount(remainingOut.Asset, target.Value, c.Rounding, c.Rounding);
+                if (view.Rules.MPTokensV2 && limited.Value > target.Value && !combined.SatisfiesAvgQ(limitQuality, limited.Value, c))
+                    limited = StepMath.ToAmount(remainingOut.Asset, target.Value, NumberRounding.Downward, NumberRounding.Downward);
+            }
+            else
+            {
+                limited = XrplAmount.FromNumber(remainingOut.Asset, target.Value, c.Rounding);
+            }
+
+            // A tiny difference is round-off.
+            if (WithinRelativeDistance(limited, remainingOut, new XrplNumber(1, -9), view.Rules))
+                return remainingOut;
+
+            return StepMath.Min(limited, remainingOut);
+        }
+
+        private static bool WithinRelativeDistance(XrplAmount calculated, XrplAmount requested, XrplNumber distance, LedgerRules rules)
+        {
+            if (calculated == requested)
+                return true;
+
+            XrplAmount min = calculated < requested ? calculated : requested;
+            XrplAmount max = calculated < requested ? requested : calculated;
+            XrplAmount difference = StepMath.Subtract(max, min, rules);
+            return XrplNumber.Divide(difference.Value, max.Value, rules.Context) < distance;
+        }
+
+        /// <summary>The multi-strand <c>flow</c>.</summary>
+        internal static FlowResult Run(
+            DexView baseView,
+            List<List<FlowStep>> strands,
+            IssuedCurrency inAsset,
+            XrplAmount outRequested,
+            bool partialPayment,
+            CrossingMode crossing,
+            XrplQuality limitQuality,
+            XrplAmount? sendMax,
+            AmmFlowContext ammContext)
+        {
+            LedgerRules rules = baseView.Rules;
+            int currentTry = 0;
+            int offersConsidered = 0;
+
+            XrplAmount? remainingIn = sendMax is { } max && !max.IsNegative ? max : null;
+            XrplAmount? sendMaxLimit = remainingIn;
+            XrplAmount remainingOut = outRequested;
+            DexView sb = new DexView(baseView);
+
+            List<List<FlowStep>> current = new List<List<FlowStep>>();
+            List<List<FlowStep>> next = new List<List<FlowStep>>(strands);
+
+            List<XrplAmount> savedIns = new List<XrplAmount>();
+            List<XrplAmount> savedOuts = new List<XrplAmount>();
+            HashSet<string> offersToRemoveOnFail = new HashSet<string>(StringComparer.Ordinal);
+
+            while (StepMath.IsPositive(remainingOut) && (remainingIn == null || StepMath.IsPositive(remainingIn.Value)))
+            {
+                if (++currentTry >= MaxTries)
+                    return new FlowResult { Result = "telFAILED_PROCESSING", RemovableOffers = offersToRemoveOnFail };
+
+                ActivateNext(sb, limitQuality, current, next);
+                ammContext.MultiPath = current.Count > 1;
+
+                XrplAmount limitRemainingOut = current.Count == 1
+                    ? LimitOut(sb, current[0], remainingOut, limitQuality)
+                    : remainingOut;
+                bool adjustedRemainingOut = limitRemainingOut != remainingOut;
+
+                HashSet<string> offersToRemove = new HashSet<string>(StringComparer.Ordinal);
+                StrandResult best = null;
+                for (int index = 0; index < current.Count; index++)
+                {
+                    List<FlowStep> strand = current[index];
+                    ammContext.Clear();
+
+                    XrplQuality? upperBound = QualityUpperBound(sb, strand);
+                    if (upperBound == null || upperBound.Value < limitQuality)
+                        continue;
+
+                    StrandResult f = Run(sb, strand, remainingIn, limitRemainingOut);
+                    offersToRemove.UnionWith(f.OffersToRemove);
+                    offersConsidered += f.OffersUsed;
+                    if (!f.Success || f.Out.IsZero)
+                        continue;
+
+                    XrplQuality quality = XrplQuality.FromAmounts(f.In, f.Out, rules);
+                    if (quality < limitQuality &&
+                        (!adjustedRemainingOut || !XrplQuality.WithinRelativeDistance(quality, limitQuality, new XrplNumber(1, -7), rules)))
+                    {
+                        continue;
+                    }
+
+                    if (!f.Inactive)
+                        next.Add(strand);
+                    best = f;
+                    for (int rest = index + 1; rest < current.Count; rest++)
+                        next.Add(current[rest]);
+                    break;
+                }
+
+                bool shouldBreak = best == null || offersConsidered >= MaxOffersToConsider;
+                if (best != null)
+                {
+                    savedIns.Add(best.In);
+                    savedOuts.Add(best.Out);
+                    remainingOut = StepMath.Subtract(outRequested, StepMath.Sum(savedOuts, outRequested.Asset, rules), rules);
+                    if (sendMaxLimit is { } limit)
+                        remainingIn = StepMath.Subtract(limit, StepMath.Sum(savedIns, inAsset, rules), rules);
+
+                    best.Sandbox.ApplyTo(sb);
+                    ammContext.Update();
+                }
+
+                if (offersToRemove.Count > 0)
+                {
+                    offersToRemoveOnFail.UnionWith(offersToRemove);
+                    foreach (string index in offersToRemove)
+                    {
+                        if (!sb.Offer(index).Deleted)
+                            sb.DeleteOffer(index);
+                    }
+                }
+
+                if (shouldBreak)
+                    break;
+            }
+
+            XrplAmount actualOut = StepMath.Sum(savedOuts, outRequested.Asset, rules);
+            XrplAmount actualIn = StepMath.Sum(savedIns, inAsset, rules);
+
+            if (actualOut != outRequested)
+            {
+                if (actualOut > outRequested)
+                    return new FlowResult { Result = "tefEXCEPTION", RemovableOffers = offersToRemoveOnFail };
+
+                if (!partialPayment)
+                {
+                    if (rules.FixFillOrKill && crossing != CrossingMode.Sell)
+                        return new FlowResult { Result = "tecPATH_PARTIAL", In = actualIn, Out = actualOut, RemovableOffers = offersToRemoveOnFail };
+                }
+                else if (actualOut.IsZero)
+                {
+                    return new FlowResult { Result = "tecPATH_DRY", RemovableOffers = offersToRemoveOnFail };
+                }
+            }
+
+            if (!partialPayment && (!rules.FixFillOrKill || crossing == CrossingMode.Sell) &&
+                remainingIn is { } left && !left.IsZero)
+            {
+                return new FlowResult { Result = "tecPATH_PARTIAL", In = actualIn, Out = actualOut, RemovableOffers = offersToRemoveOnFail };
+            }
+
+            return new FlowResult
+            {
+                Result = "tesSUCCESS",
+                In = actualIn,
+                Out = actualOut,
+                Sandbox = sb,
+                RemovableOffers = offersToRemoveOnFail,
+            };
+        }
+
+        /// <summary>
+        /// <c>ActiveStrands::activateNext</c>: the strands still in play, best estimated quality
+        /// first; one worse than the limit is dropped for good.
+        /// </summary>
+        private static void ActivateNext(DexView view, XrplQuality limitQuality, List<List<FlowStep>> current, List<List<FlowStep>> next)
+        {
+            current.Clear();
+            if (next.Count > 1)
+            {
+                List<(XrplQuality Quality, List<FlowStep> Strand)> ranked = new List<(XrplQuality, List<FlowStep>)>();
+                foreach (List<FlowStep> strand in next)
+                {
+                    if (QualityUpperBound(view, strand) is { } quality && !(quality < limitQuality))
+                        ranked.Add((quality, strand));
+                }
+
+                // A stable sort, better quality first.
+                for (int i = 1; i < ranked.Count; i++)
+                {
+                    (XrplQuality Quality, List<FlowStep> Strand) item = ranked[i];
+                    int j = i - 1;
+                    while (j >= 0 && item.Quality > ranked[j].Quality)
+                    {
+                        ranked[j + 1] = ranked[j];
+                        j--;
+                    }
+
+                    ranked[j + 1] = item;
+                }
+
+                next.Clear();
+                foreach ((XrplQuality _, List<FlowStep> strand) in ranked)
+                    next.Add(strand);
+            }
+
+            current.AddRange(next);
+            next.Clear();
+        }
+    }
+}
