@@ -147,4 +147,4 @@ The arithmetic depends on the amendments in force:
 - `MPTokensV2`, under which an MPT result goes through `Number` arithmetic;
 - `fixReducedOffersV2`, which selects `ceilInStrict` in `LimitIn`.
 
-`LedgerRules.FromNodeAsync(client)` reads them from the node. When no rules are passed, every method assumes the current rules.
+`LedgerRules.FromNodeAsync(client)` reads them from the node. Pass what it returns to get the node's own results. When no rules are passed, a method uses `new LedgerRules()`: every amendment above enabled except `MPTokensV2`, whatever the node actually runs. That matches a ledger with all of them enabled, and may not match yours.
