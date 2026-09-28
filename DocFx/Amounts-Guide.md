@@ -1,8 +1,8 @@
 # Amounts, Quality and Offer Crossing
 
-This guide covers the amount arithmetic of the XRP Ledger in the XrplCSharp SDK. `XrplAmount` holds an amount the way rippled's `STAmount` does. `XrplAmountMath` repeats the node's arithmetic on it, including the directed rounding used when offers cross. `XrplQuality` is the exchange rate of an offer, and `OfferCrossing` sizes what one offer contributes to a payment or an `OfferCreate`.
+This guide covers the amount arithmetic of the XRP Ledger in the XrplCSharp SDK. `XrplAmount` holds an amount the way rippled's `STAmount` does. `XrplAmountMath` repeats the node's arithmetic on it, including the directed rounding used when offers cross. `XrplQuality` is the exchange rate of an offer, and `OfferCrossing` sizes what one offer contributes to a payment or an `OfferCreate`. `OfferCreateCrossing` crosses a whole `OfferCreate` against the order books and AMM pools it reaches.
 
-Every result matches rippled 3.4.0 bit for bit: mantissa, exponent and sign. The tests replay 8,808 vectors produced by rippled's own code and compare offer crossings with a live node.
+Every result matches rippled 3.4.0 bit for bit: mantissa, exponent and sign. The tests replay 8,808 vectors produced by rippled's own code, rebuild the offer crossings of rippled's `AMM_test.cpp`, and compare offer crossings with a live node.
 
 ## Table of Contents
 
@@ -11,6 +11,7 @@ Every result matches rippled 3.4.0 bit for bit: mantissa, exponent and sign. The
 - [Arithmetic](#arithmetic)
 - [Quality](#quality)
 - [Offer Crossing](#offer-crossing)
+- [Crossing an OfferCreate](#crossing-an-offercreate)
 - [Balance Changes Beyond decimal](#balance-changes-beyond-decimal)
 - [Ledger Rules](#ledger-rules)
 
@@ -29,6 +30,7 @@ An issued currency on the ledger has 16 significant digits and an exponent from 
 | `XrplAmountMath` | `Xrpl.Amounts` | `STAmount` arithmetic: add, multiply, divide, `mulRound`, `divRound` |
 | `XrplQuality` | `Xrpl.Amounts` | The 64-bit exchange rate the ledger sorts order books by |
 | `OfferCrossing` | `Xrpl.Amounts` | What one offer contributes when it is crossed, as `BookStep` sizes it |
+| `OfferCreateCrossing` | `Xrpl.Amounts` | What an `OfferCreate` does against whole books and AMM pools, from a `DexSnapshot` |
 
 ## XrplAmount
 
@@ -129,7 +131,40 @@ OfferStep step = OfferCrossing.Cross(funded, deliver: wanted, sendMax: willingTo
 // step.OfferIn / step.OfferOut: how much of the offer is consumed
 ```
 
-This sizes one offer. A path through several offers or books takes one step per offer, and a strand that combines several books or AMM pools is the node's to evaluate. `simulate` shows that result without submitting it.
+This sizes one offer. To cross a whole `OfferCreate`, use [`OfferCreateCrossing`](#crossing-an-offercreate).
+
+## Crossing an OfferCreate
+
+`OfferCreateCrossing.Cross` runs an `OfferCreate` the way rippled 3.4.0's payment engine runs it, against a `DexSnapshot` of the ledger:
+
+- **Strands.** The engine crosses the direct book. When neither side is XRP, it also crosses a bridge through XRP - two books in a row - and on each pass takes the strand with the better quality.
+- **Book walk.** Each pass takes the offers of one quality level, in book order. On the way it removes offers that are expired, empty, deep-frozen, unfunded, or too small to keep their quality. Each owner pays from what it still holds after the transaction's earlier transfers, since funds received during a transaction cannot be spent in it.
+- **AMM pool.** The pool is tried before the book at each pass. On a single strand, its offer is sized so the pool's price meets the book's best quality. With two strands, it offers slices that grow along the Fibonacci sequence, for at most 30 passes.
+- **Limits.** The taker's price, `tfPassive`, `tfSell`, `tfImmediateOrCancel` and `tfFillOrKill` apply, and so does the issuer's tick size.
+
+```csharp
+LedgerRules rules = await LedgerRules.FromNodeAsync(client);
+DexSnapshot snapshot = await DexSnapshot.FromNodeAsync(client, account, takerPays.Asset, takerGets.Asset);
+
+OfferCrossingResult result = OfferCreateCrossing.Cross(
+    snapshot,
+    account,
+    takerPays,                              // what the account wants
+    takerGets,                              // what it gives
+    fee: 12,                                // the transaction's fee, in drops
+    OfferCreateFlags.tfImmediateOrCancel,
+    rules);
+
+// result.EngineResult: tesSUCCESS, tecKILLED, tecUNFUNDED_OFFER or tecINSUF_RESERVE_OFFER
+// result.BalanceChanges: every account's change, as the metadata will record it
+// result.Offers: the offers crossed or removed, and what is left of each
+// result.Pools: the pools' balances afterwards
+// result.PlacedTakerPays / PlacedTakerGets: the offer left in the book, if any
+```
+
+`DexSnapshot.FromNodeAsync` reads everything at one validated ledger: the books the crossing can reach, the pools on them, and the accounts and trust lines it reads. Each book is read with one `book_offers` call, so a crossing deeper than the first 400 offers of a book is not represented. A snapshot can also be built by hand, as the unit tests do.
+
+The result is exact against the snapshot. The transaction lands in a later ledger, whose state can differ, so `simulate` stays the reference before submitting. Not covered: permissioned-DEX domains, MPT books, `RequireAuth`, the transaction's `Expiration` and `OfferSequence`, and sponsored reserves. Payments are not covered either; their full engine is tracked in [#240](https://github.com/StaticBit-io/XrplCSharp/issues/240).
 
 ## Balance Changes Beyond decimal
 
@@ -145,6 +180,7 @@ XrplAmount received = changes[holder].Single().ToXrplAmount();   // exact at any
 The arithmetic depends on the amendments in force:
 - the `Number` scale, selected by `SingleAssetVault` / `LendingProtocol`, `fixCleanup3_2_0` and `fixCleanup3_3_0`;
 - `MPTokensV2`, under which an MPT result goes through `Number` arithmetic;
-- `fixReducedOffersV2`, which selects `ceilInStrict` in `LimitIn`.
+- `fixReducedOffersV2`, which selects `ceilInStrict` in `LimitIn`;
+- `fixAMMv1_1`, `fixAMMv1_2` and `fixFillOrKill`, which change how `OfferCreateCrossing` sizes pool offers and treats `tfFillOrKill`.
 
 `LedgerRules.FromNodeAsync(client)` reads them from the node. Pass what it returns to get the node's own results. When no rules are passed, a method uses `new LedgerRules()`: every amendment above enabled except `MPTokensV2`, whatever the node actually runs. That matches a ledger with all of them enabled, and may not match yours.
