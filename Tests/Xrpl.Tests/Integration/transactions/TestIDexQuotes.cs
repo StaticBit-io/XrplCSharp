@@ -1,3 +1,4 @@
+using System.Collections.Generic;
 using System.Linq;
 using System.Threading.Tasks;
 
@@ -5,6 +6,7 @@ using Microsoft.VisualStudio.TestTools.UnitTesting;
 
 using Xrpl.Amounts;
 using Xrpl.Client;
+using Xrpl.Models.Common;
 using Xrpl.Models.Transactions;
 using Xrpl.Sugar;
 using Xrpl.Wallet;
@@ -104,6 +106,12 @@ public class TestIDexQuotes
         PaymentQuote deliver = await client.QuoteDeliverAsync(sender.ClassicAddress, receiver.ClassicAddress, Amount(usd, "20"), Xrp);
         Assert.AreEqual("tesSUCCESS", deliver.Result.EngineResult);
         Assert.AreEqual(Amount(usd, "20"), deliver.Delivered);
+
+        // The local path finder, over the ledger's books, quotes the same.
+        BookIndex books = await BookIndex.FromLedgerAsync(client);
+        PaymentQuote local = await client.QuoteDeliverAsync(sender.ClassicAddress, receiver.ClassicAddress, Amount(usd, "20"), Xrp, books: books);
+        Assert.AreEqual(deliver.Cost, local.Cost, "the local search's cost");
+        Assert.HasCount(deliver.Payment.Paths?.Count ?? 0, local.Payment.Paths ?? new List<List<PathStep>>());
         PaymentFlowResult paid = await dex.PayAndCompare(sender, deliver.Payment);
         Assert.AreEqual("tesSUCCESS", paid.EngineResult);
         Assert.AreEqual(deliver.Delivered, paid.DeliveredAmount);

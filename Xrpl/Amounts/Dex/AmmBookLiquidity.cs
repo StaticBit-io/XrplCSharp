@@ -250,7 +250,7 @@ namespace Xrpl.Amounts
         {
             if (_liquidity.MultiPath)
             {
-                return (rules ?? new LedgerRules()).FixReducedOffersV2
+                return (rules ?? new LedgerRules()).CurrentFixReducedOffersV2
                     ? _quality.CeilInStrict(amount.In, amount.Out, limit, roundUp, rules)
                     : _quality.CeilIn(amount.In, amount.Out, limit, rules);
             }

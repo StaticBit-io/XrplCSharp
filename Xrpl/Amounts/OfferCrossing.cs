@@ -44,7 +44,7 @@ namespace Xrpl.Amounts
             bool roundUp,
             LedgerRules rules = null)
         {
-            return (rules ?? new LedgerRules()).FixReducedOffersV2
+            return (rules ?? new LedgerRules()).CurrentFixReducedOffersV2
                 ? quality.CeilInStrict(offerIn, offerOut, limit, roundUp, rules)
                 : quality.CeilIn(offerIn, offerOut, limit, rules);
         }

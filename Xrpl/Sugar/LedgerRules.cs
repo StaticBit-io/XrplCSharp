@@ -89,7 +89,40 @@ namespace Xrpl.Sugar
 
         /// <summary>The arithmetic rippled uses under these amendments.</summary>
         internal NumberContext Context =>
-            NumberContext.ForAmendments(LargeNumbers, FixCleanup3_2_0, FixCleanup3_3_0).WithRounding(AmbientRounding);
+            (OutsideTransaction
+                ? NumberContext.ForAmendments(true, true, true)
+                : NumberContext.ForAmendments(LargeNumbers, FixCleanup3_2_0, FixCleanup3_3_0)).WithRounding(AmbientRounding);
+
+        /// <summary>
+        /// Whether the code runs outside a transaction, as <c>ripple_path_find</c> does: rippled
+        /// then has no current transaction rules, so every check made through them sees its
+        /// amendment disabled, and <c>Number</c> keeps its default, large scale.
+        /// </summary>
+        internal bool OutsideTransaction { get; private set; }
+
+        /// <summary>
+        /// <c>useRulesGuards</c>: whether a transaction sets its rules as the current ones. Without
+        /// one of these amendments it does not, and the checks made through the current rules see
+        /// every amendment disabled.
+        /// </summary>
+        private bool CurrentRulesSet => !OutsideTransaction && (LargeNumbers || FixCleanup3_2_0 || FixCleanup3_3_0);
+
+        /// <summary><c>fixAMMv1_1</c> as <c>swapAssetIn</c> and <c>swapAssetOut</c> read it: from the current transaction rules.</summary>
+        internal bool CurrentFixAMMv1_1 => CurrentRulesSet && FixAMMv1_1;
+
+        /// <summary><c>fixAMMv1_3</c> as an offer's <c>checkInvariant</c> reads it: from the current transaction rules.</summary>
+        internal bool CurrentFixAMMv1_3 => CurrentRulesSet && FixAMMv1_3;
+
+        /// <summary><c>fixReducedOffersV2</c> as an offer's <c>limitIn</c> reads it: from the current transaction rules.</summary>
+        internal bool CurrentFixReducedOffersV2 => CurrentRulesSet && FixReducedOffersV2;
+
+        /// <summary>These rules as code outside a transaction sees them.</summary>
+        internal LedgerRules OutsideOfTransaction()
+        {
+            LedgerRules copy = (LedgerRules)MemberwiseClone();
+            copy.OutsideTransaction = true;
+            return copy;
+        }
 
         /// <summary>
         /// The <c>Number</c> rounding mode in effect outside any guard. A node processes a

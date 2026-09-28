@@ -67,6 +67,10 @@ namespace Xrpl.Amounts
             HashSet<string> offersToRemove = new HashSet<string>(StringComparer.Ordinal);
             StrandResult Failed() => new StrandResult { OffersToRemove = offersToRemove, OffersUsed = OffersUsed(strand) };
 
+            // isDirectXrpToXrp: the engine does not move XRP straight from one account to another.
+            if (strand.Count == 2 && @out.Kind == AmountKind.Xrp && strand[0] is XrpEndpointStep)
+                return Failed();
+
             try
             {
                 int count = strand.Count;

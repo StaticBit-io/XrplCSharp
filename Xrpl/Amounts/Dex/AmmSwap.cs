@@ -19,7 +19,7 @@ namespace Xrpl.Amounts
         {
             rules ??= new LedgerRules();
             NumberContext c = rules.Context;
-            if (!rules.FixAMMv1_1)
+            if (!rules.CurrentFixAMMv1_1)
             {
                 XrplNumber legacy = XrplNumber.Subtract(
                     poolOut.Value,
@@ -57,7 +57,7 @@ namespace Xrpl.Amounts
         {
             rules ??= new LedgerRules();
             NumberContext c = rules.Context;
-            if (!rules.FixAMMv1_1)
+            if (!rules.CurrentFixAMMv1_1)
             {
                 XrplNumber legacy = XrplNumber.Divide(
                     XrplNumber.Subtract(

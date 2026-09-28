@@ -93,7 +93,7 @@ namespace Xrpl.Amounts
 
         internal override bool CheckInvariant(XrplAmount consumedIn, XrplAmount consumedOut, LedgerRules rules)
         {
-            if (!(rules ?? new LedgerRules()).FixAMMv1_3)
+            if (!(rules ?? new LedgerRules()).CurrentFixAMMv1_3)
                 return true;
 
             return !(consumedIn > In) && !(consumedOut > Out);

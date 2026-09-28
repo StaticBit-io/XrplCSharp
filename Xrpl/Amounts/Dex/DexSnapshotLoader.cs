@@ -190,6 +190,39 @@ namespace Xrpl.Amounts
             internal uint? CancelSequence { get; set; }
 
             internal List<string> CredentialIds { get; init; }
+
+            /// <summary>More requests whose strands the snapshot must cover as well: the same payment from other source assets.</summary>
+            internal List<StrandBuilder.Request> ExtraRequests { get; } = new List<StrandBuilder.Request>();
+
+            /// <summary>The ledger to read; the last validated one when null.</summary>
+            internal LedgerIndex At { get; init; }
+        }
+
+        /// <summary>
+        /// The state the payment engine reads for <paramref name="requests"/> along
+        /// <paramref name="paths"/> and, when <paramref name="addDefaultPath"/>, the default
+        /// path, read at <paramref name="at"/>.
+        /// </summary>
+        internal static Task<DexSnapshot> ForPathsAsync(
+            IXrplClient client,
+            IReadOnlyList<StrandBuilder.Request> requests,
+            IEnumerable<IReadOnlyList<PathElement>> paths,
+            bool addDefaultPath,
+            LedgerIndex at,
+            CancellationToken cancellationToken)
+        {
+            LoadPlan plan = new LoadPlan
+            {
+                Request = requests[0],
+                AddDefaultPath = addDefaultPath,
+                Taker = requests[0].Source,
+                At = at,
+            };
+            plan.Paths.AddRange(paths);
+            for (int i = 1; i < requests.Count; i++)
+                plan.ExtraRequests.Add(requests[i]);
+
+            return LoadAsync(client, plan, null, cancellationToken);
         }
 
         private static LoadPlan CrossingPlan(string account, IssuedCurrency takerPays, IssuedCurrency takerGets, string domainId)
@@ -220,7 +253,7 @@ namespace Xrpl.Amounts
             StrandBuilder.Request request = plan.Request;
             string domainId = string.IsNullOrEmpty(request.DomainId) ? null : request.DomainId;
             LOLedger header = await client
-                .Ledger(new LedgerRequest { LedgerIndex = new LedgerIndex(LedgerIndexType.Validated) }, cancellationToken)
+                .Ledger(new LedgerRequest { LedgerIndex = plan.At ?? new LedgerIndex(LedgerIndexType.Validated) }, cancellationToken)
                 .Typed()
                 .ConfigureAwait(false);
             LedgerEntity ledger = header.LedgerEntity as LedgerEntity
@@ -238,9 +271,12 @@ namespace Xrpl.Amounts
             if (plan.AddDefaultPath)
                 planned.Insert(0, Array.Empty<PathElement>());
 
+            List<StrandBuilder.Request> routes = new List<StrandBuilder.Request> { request };
+            routes.AddRange(plan.ExtraRequests);
+            foreach (StrandBuilder.Request route in routes)
             foreach (IReadOnlyList<PathElement> path in planned)
             {
-                foreach (StrandBuilder.Hop hop in StrandBuilder.Plan(request, path).Hops)
+                foreach (StrandBuilder.Hop hop in StrandBuilder.Plan(route, path).Hops)
                 {
                     switch (hop.Kind)
                     {
@@ -394,7 +430,7 @@ namespace Xrpl.Amounts
             lines.Add((key.First, key.Second, key.Currency));
         }
 
-        private static async Task<(ulong Base, ulong Increment)> ReservesAsync(IXrplClient client, LedgerIndex at, CancellationToken cancellationToken)
+        internal static async Task<(ulong Base, ulong Increment)> ReservesAsync(IXrplClient client, LedgerIndex at, CancellationToken cancellationToken)
         {
             LedgerEntryResponse response = await client
                 .LedgerEntry(new LedgerEntryRequest { Index = "4BC50C9B0D8515D3EAAE1E74B29A95804346C491EE1A95BF25E4AAB854A6A651", LedgerIndex = at }, cancellationToken)
@@ -736,7 +772,7 @@ namespace Xrpl.Amounts
 
         // ---- accounts and lines ----
 
-        private static async Task<DexAccount> AccountAsync(IXrplClient client, string address, LedgerIndex at, CancellationToken cancellationToken)
+        internal static async Task<DexAccount> AccountAsync(IXrplClient client, string address, LedgerIndex at, CancellationToken cancellationToken)
         {
             LOAccountRoot root;
             try
@@ -813,7 +849,7 @@ namespace Xrpl.Amounts
         }
 
         /// <summary>The trust line between <paramref name="account"/> and <paramref name="peer"/>, from <paramref name="account"/>'s side.</summary>
-        private static async Task<DexTrustLine> LineAsync(
+        internal static async Task<DexTrustLine> LineAsync(
             IXrplClient client,
             string account,
             string peer,
