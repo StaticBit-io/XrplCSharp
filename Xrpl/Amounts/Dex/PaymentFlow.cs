@@ -40,7 +40,7 @@ namespace Xrpl.Amounts
         /// <param name="snapshot">The ledger state; it must hold the sender, the accounts and lines on the paths, and the books they cross.</param>
         /// <param name="payment">The payment, with its <c>Fee</c> set.</param>
         /// <param name="rules">The amendments in force; the current rules when null.</param>
-        /// <exception cref="ArgumentException">The sender is not in the snapshot.</exception>
+        /// <exception cref="ArgumentException">The sender is not in the snapshot, or the snapshot lists a trust line twice.</exception>
         /// <exception cref="NotSupportedException">The payment moves an MPT.</exception>
         public static PaymentFlowResult Evaluate(DexSnapshot snapshot, Payment payment, LedgerRules rules = null)
         {

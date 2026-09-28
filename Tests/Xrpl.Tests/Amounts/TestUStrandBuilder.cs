@@ -155,6 +155,16 @@ public class TestUStrandBuilder
     }
 
     [TestMethod]
+    public void ALineListedTwiceIsRefused()
+    {
+        DexSnapshot snapshot = Snapshot(
+            new[] { Account(Alice), Account(Gw) },
+            Line(Alice, Usd, "100"),
+            new DexTrustLine { Account = Gw, Balance = XrplAmount.Parse(new IssuedCurrency { Currency = "USD", Issuer = Alice }, "-100") });
+        Assert.ThrowsExactly<System.ArgumentException>(() => new DexWorld(snapshot));
+    }
+
+    [TestMethod]
     public void AuthorizationRequired()
     {
         DexSnapshot snapshot = Snapshot(

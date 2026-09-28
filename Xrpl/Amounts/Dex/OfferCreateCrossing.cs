@@ -43,7 +43,7 @@ namespace Xrpl.Amounts
         /// <param name="fee">The transaction's fee in drops, charged before anything is crossed.</param>
         /// <param name="flags">The offer's flags: <c>tfPassive</c>, <c>tfImmediateOrCancel</c>, <c>tfFillOrKill</c>, <c>tfSell</c>.</param>
         /// <param name="rules">The amendments in force; the current rules when null.</param>
-        /// <exception cref="ArgumentException">The account is not in the snapshot, or the two sides are the same asset.</exception>
+        /// <exception cref="ArgumentException">The account is not in the snapshot, the two sides are the same asset, or the snapshot lists a trust line twice.</exception>
         /// <exception cref="NotSupportedException">A side is an MPT.</exception>
         public static OfferCrossingResult Cross(
             DexSnapshot snapshot,
@@ -353,7 +353,7 @@ namespace Xrpl.Amounts
         /// <summary>
         /// How every account's balances moved, the transaction's fee included, as the ledger
         /// records them - the same figures <c>BalanceChanges.GetBalanceChanges</c> reads from the
-        /// metadata. Pools are in <see cref="Pools"/>; an issuer's side of its trust lines is left out.
+        /// metadata, both sides of each trust line included. Pools are in <see cref="Pools"/>.
         /// </summary>
         public IReadOnlyList<BalanceChange> BalanceChanges { get; }
     }

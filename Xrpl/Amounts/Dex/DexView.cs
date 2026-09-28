@@ -118,6 +118,12 @@ namespace Xrpl.Amounts
                     Auth = line.PeerAuthorized,
                 };
                 bool accountFirst = key.IsFirst(line.Account);
+                if (Lines.ContainsKey(key))
+                {
+                    throw new ArgumentException(
+                        $"The trust line {key.First}/{key.Second} {key.Currency} is listed twice; describe it once, with the other side in its Peer properties.");
+                }
+
                 Lines[key] = new LineInfo
                 {
                     Key = key,

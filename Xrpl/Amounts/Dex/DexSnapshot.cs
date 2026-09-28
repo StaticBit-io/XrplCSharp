@@ -34,7 +34,10 @@ namespace Xrpl.Amounts
         /// <summary>The accounts the crossing reads.</summary>
         public IReadOnlyList<DexAccount> Accounts { get; init; } = Array.Empty<DexAccount>();
 
-        /// <summary>The trust lines the crossing reads, each from its holder's side.</summary>
+        /// <summary>
+        /// The trust lines the transaction reads, each listed once from one of its two accounts,
+        /// with the other account's settings in the <c>Peer</c> properties.
+        /// </summary>
         public IReadOnlyList<DexTrustLine> TrustLines { get; init; } = Array.Empty<DexTrustLine>();
 
         /// <summary>The offers of the books the crossing can reach, each book in book order.</summary>
