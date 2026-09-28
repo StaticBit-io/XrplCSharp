@@ -5,10 +5,42 @@ using static Xrpl.Models.Common.Common;
 
 namespace Xrpl.Amounts
 {
-    /// <summary>What a transaction changed against its snapshot: offers, pools and balances.</summary>
-    internal static class LedgerChanges
+    /// <summary>What a transaction changed against its snapshot: offers, pools, balances and trust lines.</summary>
+    internal sealed class LedgerChanges
     {
-        internal static (List<OfferChange> Offers, List<AmmPoolChange> Pools, List<BalanceChange> Balances) Collect(DexWorld world, DexView final)
+        internal static readonly LedgerChanges None = new LedgerChanges(
+            Array.Empty<OfferChange>(),
+            Array.Empty<AmmPoolChange>(),
+            Array.Empty<BalanceChange>(),
+            Array.Empty<TrustLineChange>(),
+            false);
+
+        private LedgerChanges(
+            IReadOnlyList<OfferChange> offers,
+            IReadOnlyList<AmmPoolChange> pools,
+            IReadOnlyList<BalanceChange> balances,
+            IReadOnlyList<TrustLineChange> trustLines,
+            bool reachedPartialBook)
+        {
+            Offers = offers;
+            Pools = pools;
+            Balances = balances;
+            TrustLines = trustLines;
+            ReachedPartialBook = reachedPartialBook;
+        }
+
+        internal IReadOnlyList<OfferChange> Offers { get; }
+
+        internal IReadOnlyList<AmmPoolChange> Pools { get; }
+
+        internal IReadOnlyList<BalanceChange> Balances { get; }
+
+        internal IReadOnlyList<TrustLineChange> TrustLines { get; }
+
+        /// <summary>Whether the engine ran off the end of a book the snapshot holds only in part.</summary>
+        internal bool ReachedPartialBook { get; }
+
+        internal static LedgerChanges Collect(DexWorld world, DexView final)
         {
             List<OfferChange> offers = new List<OfferChange>();
             foreach (DexOffer offer in world.Snapshot.Offers)
@@ -57,7 +89,26 @@ namespace Xrpl.Amounts
                 return byCurrency != 0 ? byCurrency : string.CompareOrdinal(a.Change.Asset?.Issuer, b.Change.Asset?.Issuer);
             });
 
-            return (offers, pools, balances);
+            List<TrustLineChange> lines = new List<TrustLineChange>();
+            foreach (LineKey line in final.TouchedLines())
+            {
+                bool before = final.LineExistedBefore(line);
+                bool after = final.LineExistsNow(line);
+                if (before != after)
+                    lines.Add(new TrustLineChange(line.First, line.Second, line.Currency, created: after));
+            }
+
+            lines.Sort((a, b) =>
+            {
+                int byAccount = string.CompareOrdinal(a.Account, b.Account);
+                if (byAccount != 0)
+                    return byAccount;
+
+                int byPeer = string.CompareOrdinal(a.Peer, b.Peer);
+                return byPeer != 0 ? byPeer : string.CompareOrdinal(a.Currency, b.Currency);
+            });
+
+            return new LedgerChanges(offers, pools, balances, lines, world.ReachedPartialBook);
         }
     }
 }

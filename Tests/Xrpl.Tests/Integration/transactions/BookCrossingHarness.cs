@@ -10,6 +10,7 @@ using Xrpl.Amounts;
 using Xrpl.BinaryCodec.Numbers;
 using Xrpl.Client;
 using Xrpl.Client.Exceptions;
+using Xrpl.Models;
 using Xrpl.Models.Common;
 using Xrpl.Models.Ledger;
 using Xrpl.Models.Methods;
@@ -58,12 +59,57 @@ internal sealed class BookCrossingHarness
     internal static XrplAmount Drops(long drops) => XrplAmount.FromNumber(Xrp, (XrplNumber)drops);
 
     internal async Task Submit<T>(T transaction, XrplWallet wallet, string expected = "tesSUCCESS")
+        where T : ITransactionRequest =>
+        await SubmitWithMeta(transaction, wallet, expected);
+
+    internal async Task<TransactionSummary> SubmitWithMeta<T>(T transaction, XrplWallet wallet, string expected = "tesSUCCESS")
         where T : ITransactionRequest
     {
         T filled = await _client.Autofill(transaction);
         TransactionSummary result = await _client.SubmitAndWait(filled, wallet, false);
         Assert.AreEqual(expected, result.Meta.TransactionResult, $"{typeof(T).Name} by {wallet.ClassicAddress}");
+        return result;
     }
+
+    /// <summary>A credential of <paramref name="type"/> for <paramref name="subject"/>, accepted by it unless told otherwise.</summary>
+    internal async Task Credential(XrplWallet issuer, XrplWallet subject, string type, uint? expiration = null, bool accept = true)
+    {
+        await Submit(
+            new CredentialCreate
+            {
+                Account = issuer.ClassicAddress,
+                Subject = subject.ClassicAddress,
+                CredentialType = type,
+                Expiration = expiration is { } seconds ? RippleEpoch.AddSeconds(seconds) : null,
+            },
+            issuer);
+        if (accept)
+            await Submit(new CredentialAccept { Account = subject.ClassicAddress, Issuer = issuer.ClassicAddress, CredentialType = type }, subject);
+    }
+
+    /// <summary>A permissioned domain owned by <paramref name="owner"/>, accepting the credentials given; returns its DomainID.</summary>
+    internal async Task<string> Domain(XrplWallet owner, params (XrplWallet Issuer, string Type)[] accepted)
+    {
+        TransactionSummary result = await SubmitWithMeta(
+            new PermissionedDomainSet
+            {
+                Account = owner.ClassicAddress,
+                AcceptedCredentials = accepted
+                    .Select(a => new AcceptedCredentialWrapper { Credential = new AcceptedCredential { Issuer = a.Issuer.ClassicAddress, CredentialType = a.Type } })
+                    .ToList(),
+            },
+            owner);
+        AffectedNode created = result.Meta.AffectedNodes.Single(n => n.CreatedNode?.LedgerEntryType == LedgerEntryType.PermissionedDomain);
+        return created.CreatedNode.LedgerIndex;
+    }
+
+    /// <summary>The ledger index of the credential of <paramref name="type"/> that <paramref name="issuer"/> gave <paramref name="subject"/>.</summary>
+    internal static string CredentialId(XrplWallet subject, XrplWallet issuer, string type) =>
+        global::Xrpl.Utils.Hashes.Hashes.HashCredential(subject.ClassicAddress, issuer.ClassicAddress, HexType(type));
+
+    /// <summary>A credential type as the ledger stores it: its bytes in upper-case hex.</summary>
+    internal static string HexType(string type) =>
+        string.Concat(System.Text.Encoding.UTF8.GetBytes(type).Select(b => b.ToString("X2", CultureInfo.InvariantCulture)));
 
     internal Task Issuer(XrplWallet issuer, uint? transferRate = null, uint? tickSize = null) =>
         Submit(
@@ -130,8 +176,8 @@ internal sealed class BookCrossingHarness
                     await Pay(from, to.ClassicAddress, amount);
             }));
 
-    /// <summary>Places an offer that gives <paramref name="gets"/> for <paramref name="pays"/>.</summary>
-    internal Task Offer(XrplWallet maker, XrplAmount gets, XrplAmount pays, OfferCreateFlags flags = 0, uint? expiration = null) =>
+    /// <summary>Places an offer that gives <paramref name="gets"/> for <paramref name="pays"/>, in a domain when one is named.</summary>
+    internal Task Offer(XrplWallet maker, XrplAmount gets, XrplAmount pays, OfferCreateFlags flags = 0, uint? expiration = null, string domainId = null) =>
         Submit(
             new OfferCreate
             {
@@ -140,8 +186,23 @@ internal sealed class BookCrossingHarness
                 TakerPays = pays.ToCurrency(),
                 Flags = flags,
                 Expiration = expiration is { } seconds ? RippleEpoch.AddSeconds(seconds) : null,
+                DomainID = domainId,
             },
             maker);
+
+    /// <summary>Places an offer and returns its sequence, for a later <c>OfferSequence</c>.</summary>
+    internal async Task<uint> OfferWithSequence(XrplWallet maker, XrplAmount gets, XrplAmount pays)
+    {
+        OfferCreate filled = await _client.Autofill(new OfferCreate
+        {
+            Account = maker.ClassicAddress,
+            TakerGets = gets.ToCurrency(),
+            TakerPays = pays.ToCurrency(),
+        });
+        TransactionSummary result = await _client.SubmitAndWait(filled, maker, false);
+        Assert.AreEqual("tesSUCCESS", result.Meta.TransactionResult, "the offer to cancel later");
+        return filled.Sequence.Value;
+    }
 
     /// <summary>The close time of the last validated ledger, in seconds since the Ripple epoch.</summary>
     internal async Task<uint> LastCloseTime()
@@ -193,7 +254,8 @@ internal sealed class BookCrossingHarness
         XrplWallet taker,
         XrplAmount takerPays,
         XrplAmount takerGets,
-        OfferCreateFlags flags = 0)
+        OfferCreateFlags flags = 0,
+        DexSnapshotOptions options = null)
     {
         OfferCreate transaction = await _client.Autofill(new OfferCreate
         {
@@ -204,9 +266,28 @@ internal sealed class BookCrossingHarness
         });
 
         LedgerRules rules = await LedgerRules.FromNodeAsync(_client);
-        DexSnapshot snapshot = await DexSnapshot.FromNodeAsync(_client, taker.ClassicAddress, takerPays.Asset, takerGets.Asset);
+        DexSnapshot snapshot = await DexSnapshot.FromNodeAsync(_client, taker.ClassicAddress, takerPays.Asset, takerGets.Asset, options);
         ulong fee = ulong.Parse(transaction.Fee.Value, CultureInfo.InvariantCulture);
         OfferCrossingResult predicted = OfferCreateCrossing.Cross(snapshot, taker.ClassicAddress, takerPays, takerGets, fee, flags, rules);
+        return await SubmitAndCompare(taker, transaction, snapshot, predicted);
+    }
+
+    /// <summary>
+    /// Computes <paramref name="offer"/> from a fresh snapshot read for it, submits it, and
+    /// asserts the node did exactly what was predicted - including the codes the offer's own
+    /// checks return.
+    /// </summary>
+    internal async Task<OfferCrossingResult> CrossAndCompare(XrplWallet taker, OfferCreate offer, DexSnapshotOptions options = null)
+    {
+        OfferCreate transaction = await _client.Autofill(offer);
+        LedgerRules rules = await LedgerRules.FromNodeAsync(_client);
+        DexSnapshot snapshot = await DexSnapshot.FromNodeAsync(_client, transaction, options);
+        OfferCrossingResult predicted = OfferCreateCrossing.Cross(snapshot, transaction, rules);
+        return await SubmitAndCompare(taker, transaction, snapshot, predicted);
+    }
+
+    private async Task<OfferCrossingResult> SubmitAndCompare(XrplWallet taker, OfferCreate transaction, DexSnapshot snapshot, OfferCrossingResult predicted)
+    {
 
         TransactionSummary result;
         try
@@ -218,12 +299,21 @@ internal sealed class BookCrossingHarness
             // A tec is applied: wait for its ledger to read the metadata.
             result = failed.Result ?? await Validated(failed.Hash);
         }
+        catch (TransactionFailedException failed)
+        {
+            // A tem, tel or tef never reaches a ledger.
+            Assert.AreEqual(predicted.EngineResult, failed.EngineResult, "the engine result");
+            Assert.IsFalse(predicted.Applied, "a result that never reaches a ledger");
+            return predicted;
+        }
 
         Assert.AreEqual(predicted.EngineResult, result.Meta.TransactionResult, "the engine result");
+        Assert.IsTrue(predicted.Applied, "a tes or tec result is applied");
 
-        AssertOffers(result.Meta, predicted, taker.ClassicAddress);
+        AssertOffers(result.Meta, predicted, transaction.Account);
         await AssertPools(snapshot, predicted.Pools);
         AssertBalances(result.Meta, predicted.BalanceChanges, snapshot.Pools.Select(p => p.Account));
+        AssertTrustLines(result.Meta, predicted.TrustLines);
         return predicted;
     }
 
@@ -252,11 +342,11 @@ internal sealed class BookCrossingHarness
     /// Computes <paramref name="payment"/> from a fresh snapshot, submits it, and asserts the
     /// node did exactly what was predicted: result, delivered amount, offers, pools and balances.
     /// </summary>
-    internal async Task<PaymentFlowResult> PayAndCompare(XrplWallet sender, Payment payment)
+    internal async Task<PaymentFlowResult> PayAndCompare(XrplWallet sender, Payment payment, DexSnapshotOptions options = null)
     {
         Payment transaction = await _client.Autofill(payment);
         LedgerRules rules = await LedgerRules.FromNodeAsync(_client);
-        DexSnapshot snapshot = await DexSnapshot.FromNodeAsync(_client, transaction);
+        DexSnapshot snapshot = await DexSnapshot.FromNodeAsync(_client, transaction, options);
         PaymentFlowResult predicted = PaymentFlow.Evaluate(snapshot, transaction, rules);
 
         TransactionSummary result;
@@ -283,7 +373,37 @@ internal sealed class BookCrossingHarness
         AssertOffers(result.Meta, predicted.Offers, null, null, null);
         await AssertPools(snapshot, predicted.Pools);
         AssertBalances(result.Meta, predicted.BalanceChanges, snapshot.Pools.Select(p => p.Account));
+        AssertTrustLines(result.Meta, predicted.TrustLines);
         return predicted;
+    }
+
+    /// <summary>The trust lines the metadata created and deleted, against the prediction, both ways.</summary>
+    internal static void AssertTrustLines(Meta meta, IReadOnlyList<TrustLineChange> predicted)
+    {
+        static (string, string, string) Key(string a, string b, string currency) =>
+            string.CompareOrdinal(a, b) <= 0 ? (a, b, currency) : (b, a, currency);
+
+        HashSet<(string, string, string, bool)> recorded = new HashSet<(string, string, string, bool)>();
+        foreach (AffectedNode node in meta.AffectedNodes)
+        {
+            if (node.CreatedNode != null && node.CreatedNode.TryGetNew(out LORippleState created))
+            {
+                (string a, string b, string c) = Key(created.LowLimit.Issuer, created.HighLimit.Issuer, created.Balance.CurrencyCode);
+                recorded.Add((a, b, c, true));
+            }
+            else if (node.DeletedNode != null && node.DeletedNode.TryGetFinal(out LORippleState deleted))
+            {
+                (string a, string b, string c) = Key(deleted.LowLimit.Issuer, deleted.HighLimit.Issuer, deleted.Balance.CurrencyCode);
+                recorded.Add((a, b, c, false));
+            }
+        }
+
+        HashSet<(string, string, string, bool)> expected = predicted
+            .Select(l => (l.Account, l.Peer, l.Currency, l.Created))
+            .ToHashSet();
+        Assert.IsTrue(
+            recorded.SetEquals(expected),
+            $"trust lines: predicted [{string.Join(", ", expected)}], on the ledger [{string.Join(", ", recorded)}]");
     }
 
     private static void AssertOffers(Meta meta, OfferCrossingResult predicted, string taker) =>

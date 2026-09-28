@@ -12,10 +12,14 @@ namespace Xrpl.Amounts
     /// current as the state is.
     /// </summary>
     /// <remarks>
-    /// <see cref="FromNodeAsync"/> reads everything from a node. A snapshot built by hand must list
+    /// <c>FromNodeAsync</c> reads everything from a node. A snapshot built by hand must list
     /// every offer of each book it covers, in book order - as <c>book_offers</c> returns them -
     /// and every account whose balance the crossing reads: the taker, each offer's owner, and
-    /// each issuer with a transfer rate or tick size.
+    /// each issuer with a transfer rate or tick size. A book read only in part goes in
+    /// <see cref="PartialBooks"/>. For a transaction in a permissioned domain, the domain and the
+    /// credentials that decide its members go in <see cref="Domains"/> and
+    /// <see cref="Credentials"/>; where a hybrid offer shares a quality with domain offers, the
+    /// offers are listed in the order they were placed.
     /// </remarks>
     public sealed partial class DexSnapshot
     {
@@ -45,6 +49,22 @@ namespace Xrpl.Amounts
 
         /// <summary>The AMM pools on those books.</summary>
         public IReadOnlyList<DexAmmPool> Pools { get; init; } = Array.Empty<DexAmmPool>();
+
+        /// <summary>The permissioned domains whose books the transaction walks, or whose membership it checks.</summary>
+        public IReadOnlyList<DexDomain> Domains { get; init; } = Array.Empty<DexDomain>();
+
+        /// <summary>
+        /// The credentials the transaction reads: those a domain accepts, held by the accounts
+        /// whose membership is checked, and those a payment names in <c>CredentialIDs</c>.
+        /// </summary>
+        public IReadOnlyList<DexCredential> Credentials { get; init; } = Array.Empty<DexCredential>();
+
+        /// <summary>
+        /// The books whose offers the snapshot holds only in part: their first offers, the rest
+        /// left unread. A result that walked past the last of them says so in its
+        /// <c>NeedsDeeperBooks</c>.
+        /// </summary>
+        public IReadOnlyList<DexBook> PartialBooks { get; init; } = Array.Empty<DexBook>();
     }
 
     /// <summary>An account as the crossing reads it: its XRP, its reserve and, for an issuer, its settings.</summary>
@@ -58,6 +78,15 @@ namespace Xrpl.Amounts
 
         /// <summary>The objects the account owns (<c>OwnerCount</c>).</summary>
         public uint OwnerCount { get; init; }
+
+        /// <summary>The account's next sequence number, which an <c>OfferSequence</c> must be below.</summary>
+        public uint Sequence { get; init; }
+
+        /// <summary>Whether the account set <c>lsfDefaultRipple</c>: its new trust lines ripple, and NoRipple is its non-default setting.</summary>
+        public bool DefaultRipple { get; init; }
+
+        /// <summary>Whether the issuer refuses trust lines it did not ask for (<c>lsfDisallowIncomingTrustline</c>).</summary>
+        public bool DisallowIncomingTrustline { get; init; }
 
         /// <summary>The issuer's <c>TransferRate</c> in billionths; 0 or 1,000,000,000 for none.</summary>
         public uint TransferRate { get; init; }
@@ -79,6 +108,13 @@ namespace Xrpl.Amounts
 
         /// <summary>The accounts the account preauthorized to pay it (<c>DepositPreauth</c>).</summary>
         public IReadOnlyList<string> DepositPreauthorized { get; init; } = Array.Empty<string>();
+
+        /// <summary>
+        /// The sets of credentials the account preauthorized: a payment that presents exactly one
+        /// of these sets in its <c>CredentialIDs</c> is let through.
+        /// </summary>
+        public IReadOnlyList<IReadOnlyList<DexCredentialType>> DepositPreauthorizedCredentials { get; init; } =
+            Array.Empty<IReadOnlyList<DexCredentialType>>();
     }
 
     /// <summary>
@@ -135,6 +171,16 @@ namespace Xrpl.Amounts
 
         /// <summary>Whether the peer authorized the account to hold its currency.</summary>
         public bool PeerAuthorized { get; init; }
+
+        /// <summary>
+        /// Whether the line counts toward the account's owner count (its <c>Reserve</c> flag). A
+        /// line whose balance returns to zero with the account's side at its defaults stops
+        /// counting, and is deleted when neither side counts it.
+        /// </summary>
+        public bool Reserve { get; init; }
+
+        /// <summary>Whether the line counts toward the peer's owner count.</summary>
+        public bool PeerReserve { get; init; }
     }
 
     /// <summary>An offer in a book.</summary>
@@ -156,6 +202,70 @@ namespace Xrpl.Amounts
         public XrplQuality Quality { get; init; }
 
         /// <summary>The offer's <c>Expiration</c>, in seconds since the Ripple epoch; null for none.</summary>
+        public uint? Expiration { get; init; }
+
+        /// <summary>
+        /// The permissioned domain the offer was placed in; null for an offer of the open book.
+        /// A domain offer sits in the domain's book, and a hybrid one in the open book as well.
+        /// </summary>
+        public string DomainId { get; init; }
+
+        /// <summary>Whether the domain offer is also in the open book (<c>lsfHybrid</c>).</summary>
+        public bool Hybrid { get; init; }
+    }
+
+    /// <summary>A book: the asset its offers ask for and the asset they give, in a domain or the open book.</summary>
+    public sealed class DexBook
+    {
+        /// <summary>What the book's offers ask for.</summary>
+        public IssuedCurrency TakerPays { get; init; }
+
+        /// <summary>What the book's offers give.</summary>
+        public IssuedCurrency TakerGets { get; init; }
+
+        /// <summary>The permissioned domain of the book; null for the open book.</summary>
+        public string DomainId { get; init; }
+    }
+
+    /// <summary>A permissioned domain: its owner, and the credentials that make an account a member.</summary>
+    public sealed class DexDomain
+    {
+        /// <summary>The domain's ledger index (<c>DomainID</c>).</summary>
+        public string DomainId { get; init; }
+
+        /// <summary>The domain's owner, a member without a credential.</summary>
+        public string Owner { get; init; }
+
+        /// <summary>The credentials the domain accepts; an account holding any of them, accepted and unexpired, is a member.</summary>
+        public IReadOnlyList<DexCredentialType> AcceptedCredentials { get; init; } = Array.Empty<DexCredentialType>();
+    }
+
+    /// <summary>A kind of credential: who issues it and its type.</summary>
+    public sealed class DexCredentialType
+    {
+        /// <summary>The credential's issuer.</summary>
+        public string Issuer { get; init; }
+
+        /// <summary>The credential's type, hex-encoded.</summary>
+        public string CredentialType { get; init; }
+    }
+
+    /// <summary>A credential an account holds.</summary>
+    public sealed class DexCredential
+    {
+        /// <summary>The account the credential is about.</summary>
+        public string Subject { get; init; }
+
+        /// <summary>The credential's issuer.</summary>
+        public string Issuer { get; init; }
+
+        /// <summary>The credential's type, hex-encoded.</summary>
+        public string CredentialType { get; init; }
+
+        /// <summary>Whether the subject accepted the credential (<c>lsfAccepted</c>).</summary>
+        public bool Accepted { get; init; }
+
+        /// <summary>When the credential expires, in seconds since the Ripple epoch; null for never.</summary>
         public uint? Expiration { get; init; }
     }
 

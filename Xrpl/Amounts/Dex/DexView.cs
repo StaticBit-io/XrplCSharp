@@ -2,6 +2,7 @@ using System;
 using System.Collections.Generic;
 
 using Xrpl.Sugar;
+using Xrpl.Utils.Hashes;
 
 using static Xrpl.Models.Common.Common;
 
@@ -16,15 +17,22 @@ namespace Xrpl.Amounts
                 : new HoldingKey(account, asset.Currency, asset.Issuer);
     }
 
-    /// <summary>The order books a snapshot covers, keyed by the asset taken in and the asset given out.</summary>
-    internal readonly record struct BookKey(string InCurrency, string InIssuer, string OutCurrency, string OutIssuer)
+    /// <summary>
+    /// The order books a snapshot covers, keyed by the asset taken in, the asset given out and
+    /// the permissioned domain - empty for the open book.
+    /// </summary>
+    internal readonly record struct BookKey(string InCurrency, string InIssuer, string OutCurrency, string OutIssuer, string Domain)
     {
-        internal static BookKey Of(IssuedCurrency @in, IssuedCurrency @out)
+        internal static BookKey Of(IssuedCurrency @in, IssuedCurrency @out, string domain = null)
         {
             HoldingKey i = HoldingKey.Of(string.Empty, @in);
             HoldingKey o = HoldingKey.Of(string.Empty, @out);
-            return new BookKey(i.Currency, i.Issuer, o.Currency, o.Issuer);
+            return new BookKey(i.Currency, i.Issuer, o.Currency, o.Issuer, DomainKey(domain));
         }
+
+        /// <summary>A domain id as book keys compare it: upper-case hex, empty for the open book.</summary>
+        internal static string DomainKey(string domain) =>
+            string.IsNullOrEmpty(domain) ? string.Empty : domain.ToUpperInvariant();
     }
 
     /// <summary>A trust line's identity: its two accounts in ordinal order and the currency.</summary>
@@ -39,7 +47,7 @@ namespace Xrpl.Amounts
     }
 
     /// <summary>One account's settings on a trust line.</summary>
-    internal sealed class LineSide
+    internal sealed record LineSide
     {
         internal static readonly LineSide Default = new LineSide();
 
@@ -57,6 +65,17 @@ namespace Xrpl.Amounts
 
         /// <summary>Whether this account authorized the peer to hold its currency.</summary>
         internal bool Auth { get; init; }
+
+        /// <summary>Whether the line counts toward this account's owner count.</summary>
+        internal bool Reserve { get; init; }
+
+        /// <summary>
+        /// Whether this side holds nothing but defaults, so the line may stop counting toward the
+        /// account's reserve once its balance is gone: no limit, no qualities, no freeze, and
+        /// NoRipple as the account's <c>DefaultRipple</c> implies.
+        /// </summary>
+        internal bool AtDefaults(bool defaultRipple) =>
+            NoRipple != defaultRipple && !Freeze && (Limit == null || Limit.Value.IsZero) && QualityIn == 0 && QualityOut == 0;
     }
 
     /// <summary>A trust line's fixed settings, as the snapshot gives them.</summary>
@@ -107,6 +126,7 @@ namespace Xrpl.Amounts
                     NoRipple = line.NoRipple,
                     Freeze = line.FrozenByAccount,
                     Auth = line.Authorized,
+                    Reserve = line.Reserve,
                 };
                 LineSide peerSide = new LineSide
                 {
@@ -116,6 +136,7 @@ namespace Xrpl.Amounts
                     NoRipple = line.PeerNoRipple,
                     Freeze = line.Frozen,
                     Auth = line.PeerAuthorized,
+                    Reserve = line.PeerReserve,
                 };
                 bool accountFirst = key.IsFirst(line.Account);
                 if (Lines.ContainsKey(key))
@@ -141,12 +162,16 @@ namespace Xrpl.Amounts
                 if (offer.TakerPays.Kind == AmountKind.Mpt || offer.TakerGets.Kind == AmountKind.Mpt)
                     throw new NotSupportedException("MPT order books are not supported.");
 
-                // Crossing, the taker pays what the offer asks for and gets what it gives.
-                BookKey book = BookKey.Of(offer.TakerPays.Asset, offer.TakerGets.Asset);
-                if (!Books.TryGetValue(book, out List<DexOffer> list))
-                    Books[book] = list = new List<DexOffer>();
+                if (offer.Hybrid && string.IsNullOrEmpty(offer.DomainId))
+                    throw new ArgumentException($"The hybrid offer {offer.Index} names no domain.");
 
-                list.Add(offer);
+                // Crossing, the taker pays what the offer asks for and gets what it gives. A domain
+                // offer sits in its domain's book; a hybrid one in the open book too.
+                if (string.IsNullOrEmpty(offer.DomainId) || offer.Hybrid)
+                    AddToBook(BookKey.Of(offer.TakerPays.Asset, offer.TakerGets.Asset), offer);
+                if (!string.IsNullOrEmpty(offer.DomainId))
+                    AddToBook(BookKey.Of(offer.TakerPays.Asset, offer.TakerGets.Asset, offer.DomainId), offer);
+
                 Offers[offer.Index] = offer;
             }
 
@@ -173,7 +198,40 @@ namespace Xrpl.Amounts
                     Lines[key] = new LineInfo { Key = key, Balance = FirstView(key, pool.Account, held) };
                 }
             }
+
+            foreach (DexDomain domain in snapshot.Domains ?? Array.Empty<DexDomain>())
+            {
+                if (domain?.DomainId != null)
+                    Domains[BookKey.DomainKey(domain.DomainId)] = domain;
+            }
+
+            foreach (DexCredential credential in snapshot.Credentials ?? Array.Empty<DexCredential>())
+            {
+                if (credential?.Subject == null || credential.Issuer == null || credential.CredentialType == null)
+                    continue;
+
+                (string Subject, string Issuer, string Type) key = CredentialKey(credential.Subject, credential.Issuer, credential.CredentialType);
+                Credentials[key] = credential;
+                CredentialsById[Hashes.HashCredential(credential.Subject, credential.Issuer, key.Type)] = credential;
+            }
+
+            foreach (DexBook book in snapshot.PartialBooks ?? Array.Empty<DexBook>())
+            {
+                if (book?.TakerPays != null && book.TakerGets != null)
+                    PartialBooks.Add(BookKey.Of(book.TakerPays, book.TakerGets, book.DomainId));
+            }
         }
+
+        private void AddToBook(BookKey book, DexOffer offer)
+        {
+            if (!Books.TryGetValue(book, out List<DexOffer> list))
+                Books[book] = list = new List<DexOffer>();
+
+            list.Add(offer);
+        }
+
+        private static (string Subject, string Issuer, string Type) CredentialKey(string subject, string issuer, string type) =>
+            (subject, issuer, type.ToUpperInvariant());
 
         internal DexSnapshot Snapshot { get; }
 
@@ -195,8 +253,81 @@ namespace Xrpl.Amounts
 
         internal HashSet<string> PoolAccounts { get; } = new HashSet<string>(StringComparer.Ordinal);
 
-        internal IReadOnlyList<DexOffer> Book(IssuedCurrency @in, IssuedCurrency @out) =>
-            Books.TryGetValue(BookKey.Of(@in, @out), out List<DexOffer> list) ? list : Array.Empty<DexOffer>();
+        internal Dictionary<string, DexDomain> Domains { get; } = new Dictionary<string, DexDomain>(StringComparer.Ordinal);
+
+        internal Dictionary<(string Subject, string Issuer, string Type), DexCredential> Credentials { get; } =
+            new Dictionary<(string Subject, string Issuer, string Type), DexCredential>();
+
+        /// <summary>The credentials by ledger index, as a payment's <c>CredentialIDs</c> name them.</summary>
+        internal Dictionary<string, DexCredential> CredentialsById { get; } = new Dictionary<string, DexCredential>(StringComparer.OrdinalIgnoreCase);
+
+        internal HashSet<BookKey> PartialBooks { get; } = new HashSet<BookKey>();
+
+        /// <summary>Whether a book step ran out of offers in a book the snapshot holds only in part.</summary>
+        internal bool ReachedPartialBook { get; set; }
+
+        internal IReadOnlyList<DexOffer> Book(IssuedCurrency @in, IssuedCurrency @out, string domain = null) =>
+            Books.TryGetValue(BookKey.Of(@in, @out, domain), out List<DexOffer> list) ? list : Array.Empty<DexOffer>();
+
+        /// <summary>Whether the account is a pseudo-account: an AMM's, in this model.</summary>
+        internal bool IsPseudoAccount(string account) => account != null && PoolAccounts.Contains(account);
+
+        /// <summary>The credential <paramref name="subject"/> holds of this kind; null when it holds none.</summary>
+        internal DexCredential Credential(string subject, string issuer, string type) =>
+            Credentials.TryGetValue(CredentialKey(subject, issuer, type), out DexCredential credential) ? credential : null;
+
+        /// <summary><c>credentials::checkExpired</c>: a credential is expired once the parent ledger closed after its expiration.</summary>
+        internal bool Expired(DexCredential credential) =>
+            credential.Expiration is { } expiration && Snapshot.ParentCloseTime > expiration;
+
+        /// <summary><c>permissioned_dex::accountInDomain</c>: the owner, or a holder of an accepted, unexpired credential the domain accepts.</summary>
+        internal bool AccountInDomain(string account, string domainId)
+        {
+            if (!Domains.TryGetValue(BookKey.DomainKey(domainId), out DexDomain domain))
+                return false;
+            if (string.Equals(domain.Owner, account, StringComparison.Ordinal))
+                return true;
+
+            foreach (DexCredentialType accepted in domain.AcceptedCredentials ?? Array.Empty<DexCredentialType>())
+            {
+                DexCredential credential = Credential(account, accepted.Issuer, accepted.CredentialType);
+                if (credential != null && credential.Accepted && !Expired(credential))
+                    return true;
+            }
+
+            return false;
+        }
+
+        /// <summary>
+        /// <c>credentials::validDomain</c> with the owner let through, as a transaction's checks
+        /// run it: null for a member, <c>tecEXPIRED</c> when only expired credentials match, and
+        /// <c>tecNO_AUTH</c> or <c>tecOBJECT_NOT_FOUND</c> otherwise.
+        /// </summary>
+        internal string ValidDomain(string domainId, string subject)
+        {
+            if (!Domains.TryGetValue(BookKey.DomainKey(domainId), out DexDomain domain))
+                return "tecOBJECT_NOT_FOUND";
+            if (string.Equals(domain.Owner, subject, StringComparison.Ordinal))
+                return null;
+
+            bool foundExpired = false;
+            foreach (DexCredentialType accepted in domain.AcceptedCredentials ?? Array.Empty<DexCredentialType>())
+            {
+                DexCredential credential = Credential(subject, accepted.Issuer, accepted.CredentialType);
+                if (credential == null)
+                    continue;
+                if (Expired(credential))
+                {
+                    foundExpired = true;
+                    continue;
+                }
+
+                if (credential.Accepted)
+                    return null;
+            }
+
+            return foundExpired ? "tecEXPIRED" : "tecNO_AUTH";
+        }
 
         /// <summary>The pool that trades these two assets; null when there is none.</summary>
         internal DexAmmPool Pool(IssuedCurrency a, IssuedCurrency b)
@@ -277,8 +408,24 @@ namespace Xrpl.Amounts
 
         internal bool Exists { get; set; }
 
+        /// <summary>The first account's settings, its reserve flag as the transaction left it.</summary>
+        internal LineSide First { get; set; } = LineSide.Default;
+
+        internal LineSide Second { get; set; } = LineSide.Default;
+
+        internal bool DeepFrozen { get; set; }
+
         internal LineState Copy() =>
-            new LineState { Balance = Balance, FirstDebits = FirstDebits, SecondDebits = SecondDebits, Exists = Exists };
+            new LineState
+            {
+                Balance = Balance,
+                FirstDebits = FirstDebits,
+                SecondDebits = SecondDebits,
+                Exists = Exists,
+                First = First,
+                Second = Second,
+                DeepFrozen = DeepFrozen,
+            };
     }
 
     /// <summary>An account's owner count while a crossing runs, and the largest it has been (<c>ownerCountHook</c>).</summary>
@@ -513,7 +660,16 @@ namespace Xrpl.Amounts
             IssuedCurrency asset = new IssuedCurrency { Currency = line.Currency, Issuer = line.Second };
             XrplAmount zero = XrplAmount.Zero(asset);
             return World.Lines.TryGetValue(line, out LineInfo info)
-                ? new LineState { Balance = info.Balance, FirstDebits = zero, SecondDebits = zero, Exists = true }
+                ? new LineState
+                {
+                    Balance = info.Balance,
+                    FirstDebits = zero,
+                    SecondDebits = zero,
+                    Exists = true,
+                    First = info.First,
+                    Second = info.Second,
+                    DeepFrozen = info.DeepFrozen,
+                }
                 : new LineState { Balance = zero, FirstDebits = zero, SecondDebits = zero, Exists = false };
         }
 
@@ -530,9 +686,34 @@ namespace Xrpl.Amounts
         internal bool LineExists(string a, string b, string currency) =>
             !string.Equals(a, b, StringComparison.Ordinal) && ReadLine(LineKey.Of(a, b, currency)).Exists;
 
-        /// <summary>The line's fixed settings; null when the snapshot has no such line.</summary>
-        internal LineInfo LineInfo(string a, string b, string currency) =>
-            World.Lines.TryGetValue(LineKey.Of(a, b, currency), out LineInfo info) ? info : null;
+        /// <summary>The line's settings as they stand now; null when there is no such line.</summary>
+        internal LineInfo LineInfo(string a, string b, string currency)
+        {
+            if (string.Equals(a, b, StringComparison.Ordinal))
+                return null;
+
+            LineKey key = LineKey.Of(a, b, currency);
+            LineState state = ReadLine(key);
+            return state.Exists
+                ? new LineInfo { Key = key, First = state.First, Second = state.Second, DeepFrozen = state.DeepFrozen, Balance = state.Balance }
+                : null;
+        }
+
+        /// <summary>Whether the line existed before the transaction.</summary>
+        internal bool LineExistedBefore(LineKey key) => InitialLine(key).Exists;
+
+        /// <summary>The trust lines this view or a parent has written.</summary>
+        internal IEnumerable<LineKey> TouchedLines()
+        {
+            HashSet<LineKey> keys = new HashSet<LineKey>();
+            for (DexView view = this; view != null; view = view._parent)
+                keys.UnionWith(view._lines.Keys);
+
+            return keys;
+        }
+
+        /// <summary>Whether the line exists now.</summary>
+        internal bool LineExistsNow(LineKey key) => ReadLine(key).Exists;
 
         /// <summary>
         /// <c>accountSend</c> without a transfer fee: <c>rippleCredit</c> on the trust line between
@@ -564,7 +745,23 @@ namespace Xrpl.Amounts
             LineKey line = LineKey.Of(from, to, amount.Asset.Currency);
             LineState state = LineForWrite(line);
             XrplAmount moved = amount.WithAsset(state.Balance.Asset);
-            if (line.IsFirst(from))
+            bool fromFirst = line.IsFirst(from);
+            if (!state.Exists)
+            {
+                // trustCreate: the receiver owns the new line, which ripples as each account's
+                // DefaultRipple says.
+                state.Exists = true;
+                state.DeepFrozen = false;
+                LineSide receiver = new LineSide { Reserve = true, NoRipple = !DefaultRipple(to) };
+                LineSide sender = new LineSide { NoRipple = !DefaultRipple(from) };
+                state.First = fromFirst ? sender : receiver;
+                state.Second = fromFirst ? receiver : sender;
+                AdjustOwnerCount(to, 1);
+            }
+
+            // The sender's view of the balance, before and after.
+            XrplAmount before = fromFirst ? state.Balance : -state.Balance;
+            if (fromFirst)
             {
                 state.Balance = StepMath.Subtract(state.Balance, moved, Rules);
                 state.FirstDebits = StepMath.Add(state.FirstDebits, moved, Rules);
@@ -575,13 +772,35 @@ namespace Xrpl.Amounts
                 state.SecondDebits = StepMath.Add(state.SecondDebits, moved, Rules);
             }
 
-            if (!state.Exists)
-            {
-                // The trust line is created on the way in, and the receiver owns it.
-                state.Exists = true;
-                AdjustOwnerCount(to, 1);
-            }
+            XrplAmount after = fromFirst ? state.Balance : -state.Balance;
+            ReleaseReserve(state, from, fromFirst, before, after);
         }
+
+        /// <summary>
+        /// <c>directSendNoFeeIOU</c>'s cleanup: a sender whose positive balance is gone, and whose
+        /// side of the line holds nothing but defaults, stops paying the line's reserve; the line
+        /// is deleted when its balance is zero and the receiver does not pay a reserve for it either.
+        /// </summary>
+        private void ReleaseReserve(LineState state, string from, bool fromFirst, XrplAmount before, XrplAmount after)
+        {
+            LineSide sender = fromFirst ? state.First : state.Second;
+            LineSide receiver = fromFirst ? state.Second : state.First;
+            if (!StepMath.IsPositive(before) || StepMath.IsPositive(after) || !sender.Reserve || !sender.AtDefaults(DefaultRipple(from)))
+                return;
+
+            AdjustOwnerCount(from, -1);
+            sender = sender with { Reserve = false };
+            if (fromFirst)
+                state.First = sender;
+            else
+                state.Second = sender;
+
+            if (after.IsZero && !receiver.Reserve)
+                state.Exists = false;
+        }
+
+        private bool DefaultRipple(string account) =>
+            World.Accounts.TryGetValue(account, out DexAccount dex) && dex.DefaultRipple;
 
         private Holding XrpForWrite(string account)
         {
@@ -702,6 +921,31 @@ namespace Xrpl.Amounts
 
             LineInfo info = LineInfo(account, asset.Issuer, asset.Currency);
             return info != null && info.DeepFrozen;
+        }
+
+        /// <summary>
+        /// <c>requireAuth</c> with <c>AuthType::Legacy</c>: null when <paramref name="account"/>
+        /// may hold <paramref name="asset"/>, otherwise <c>tecNO_LINE</c> or <c>tecNO_AUTH</c>.
+        /// An issuer without <c>lsfRequireAuth</c> lets anyone hold its currency.
+        /// </summary>
+        internal string RequireAuth(string account, IssuedCurrency asset)
+        {
+            if (XrplAmount.KindOf(asset) != AmountKind.Iou || string.Equals(account, asset.Issuer, StringComparison.Ordinal))
+                return null;
+            if (!World.Accounts.TryGetValue(asset.Issuer, out DexAccount issuer) || !issuer.RequireAuth)
+                return null;
+
+            LineInfo line = LineInfo(account, asset.Issuer, asset.Currency);
+            if (line == null)
+                return "tecNO_LINE";
+            if (line.Side(asset.Issuer).Auth)
+                return null;
+
+            // A pseudo-account only holds assets for the object that owns it.
+            if (Rules.FixCleanup3_4_0 && World.IsPseudoAccount(account))
+                return null;
+
+            return "tecNO_AUTH";
         }
 
         /// <summary><c>accountHolds</c> with <c>ZeroIfFrozen</c>.</summary>

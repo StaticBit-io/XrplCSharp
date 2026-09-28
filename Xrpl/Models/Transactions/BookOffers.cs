@@ -185,6 +185,11 @@ namespace Xrpl.Models.Transactions
         [JsonConverter(typeof(RippleDateTimeConverter))]
         public DateTime? Expiration { get; set; }
 
+        /// <summary>
+        /// The permissioned domain the offer was placed in; absent for an offer of the open book.
+        /// </summary>
+        public string DomainID { get; set; }
+
 
         //todo move this fields to BookOffer class
         //https://github.com/XRPLF/xrpl.js/blob/b20c05c3680d80344006d20c44b4ae1c3b0ffcac/packages/xrpl/src/models/methods/bookOffers.ts#L51
