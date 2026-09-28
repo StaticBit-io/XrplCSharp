@@ -332,21 +332,31 @@ namespace Xrpl.Amounts
                 }
             }
 
-            List<DexAccount> accountStates = new List<DexAccount>();
-            foreach (string address in accounts)
+            // A deep book brings an account and up to two lines per owner: read them in parallel, bounded.
+            using SemaphoreSlim gate = new SemaphoreSlim(OfferReadConcurrency);
+            async Task<T> Gated<T>(Func<Task<T>> read)
             {
-                if (string.IsNullOrEmpty(address))
-                    continue;
-                if (await AccountAsync(client, address, at, cancellationToken).ConfigureAwait(false) is { } state)
-                    accountStates.Add(state);
+                await gate.WaitAsync(cancellationToken).ConfigureAwait(false);
+                try
+                {
+                    return await read().ConfigureAwait(false);
+                }
+                finally
+                {
+                    gate.Release();
+                }
             }
 
-            List<DexTrustLine> lineStates = new List<DexTrustLine>();
-            foreach ((string a, string b, string currency) in lines)
-            {
-                if (await LineAsync(client, a, b, currency, at, cancellationToken).ConfigureAwait(false) is { } line)
-                    lineStates.Add(line);
-            }
+            DexAccount[] accountReads = await Task.WhenAll(accounts
+                    .Where(address => !string.IsNullOrEmpty(address))
+                    .Select(address => Gated(() => AccountAsync(client, address, at, cancellationToken))))
+                .ConfigureAwait(false);
+            List<DexAccount> accountStates = accountReads.Where(state => state != null).ToList();
+
+            DexTrustLine[] lineReads = await Task.WhenAll(lines
+                    .Select(line => Gated(() => LineAsync(client, line.A, line.B, line.Currency, at, cancellationToken))))
+                .ConfigureAwait(false);
+            List<DexTrustLine> lineStates = lineReads.Where(line => line != null).ToList();
 
             return new DexSnapshot
             {
