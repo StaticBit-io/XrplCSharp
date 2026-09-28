@@ -336,6 +336,9 @@ namespace Xrpl.Amounts
         internal static XrplAmount FromUnits(IssuedCurrency asset, AmountKind kind, long units) =>
             new XrplAmount(asset, kind, units < 0 ? (ulong)-units : (ulong)units, 0, units < 0);
 
+        /// <summary>The same value as an amount of <paramref name="asset"/>, of the same kind.</summary>
+        internal XrplAmount WithAsset(IssuedCurrency asset) => new XrplAmount(asset, Kind, StMantissa, StExponent, IsNegative);
+
         /// <summary>An amount with no asset, for the rates <see cref="XrplQuality"/> works with (<c>noIssue()</c>).</summary>
         internal static XrplAmount Rate(ulong mantissa, int exponent) =>
             FromStParts(null, AmountKind.Iou, mantissa, exponent, false, NumberRounding.ToNearest);

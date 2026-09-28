@@ -6,7 +6,8 @@
 - `XrplAmountMath` повторяет арифметику ноды над такими суммами, включая направленное округление при пересечении офферов;
 - `XrplQuality` — курс оффера;
 - `OfferCrossing` рассчитывает, сколько даёт один оффер в платеже или в `OfferCreate`;
-- `OfferCreateCrossing` пересекает `OfferCreate` целиком с книгами ордеров и пулами AMM, которых он достигает.
+- `OfferCreateCrossing` пересекает `OfferCreate` целиком с книгами ордеров и пулами AMM, которых он достигает;
+- `PaymentFlow` проводит `Payment` по его путям.
 
 Каждый результат совпадает с rippled 3.4.0 побитно: мантисса, экспонента и знак. Тесты прогоняют 8 808 векторов, полученных из собственного кода rippled, воспроизводят пересечения офферов из `AMM_test.cpp` rippled и сверяют пересечение офферов с работающей нодой.
 
@@ -18,6 +19,7 @@
 - [Качество](#качество)
 - [Пересечение офферов](#пересечение-офферов)
 - [Пересечение OfferCreate](#пересечение-offercreate)
+- [Выполнение Payment](#выполнение-payment)
 - [Изменения балансов за пределами decimal](#изменения-балансов-за-пределами-decimal)
 - [Правила леджера](#правила-леджера)
 
@@ -37,6 +39,7 @@
 | `XrplQuality` | `Xrpl.Amounts` | 64-битный курс, по которому леджер сортирует книги ордеров |
 | `OfferCrossing` | `Xrpl.Amounts` | Сколько даёт один оффер при пересечении — так, как это считает `BookStep` |
 | `OfferCreateCrossing` | `Xrpl.Amounts` | Что сделает `OfferCreate` с книгами целиком и пулами AMM — по `DexSnapshot` |
+| `PaymentFlow` | `Xrpl.Amounts` | Что сделает `Payment` на своих путях — по `DexSnapshot` |
 
 ## XrplAmount
 
@@ -175,7 +178,39 @@ OfferCrossingResult result = OfferCreateCrossing.Cross(
 
 `DexSnapshot.FromNodeAsync` читает всё на одном валидированном леджере: книги, которых может достичь пересечение, пулы на них, аккаунты и trust lines, которые оно читает. Каждая книга читается одним вызовом `book_offers`, поэтому пересечение глубже первых 400 офферов книги в снимок не попадает. `book_offers` к тому же не возвращает офферы, у владельца которых нет средств, кроме офферов самого аккаунта: нода удаляет их по пути, а в результате их нет. Снимок можно собрать и вручную, как это делают юнит-тесты.
 
-Результат точен относительно снимка. Транзакция попадает в более поздний леджер, состояние которого может отличаться, поэтому перед отправкой эталоном остаётся `simulate`. Не поддерживаются: домены permissioned DEX, книги MPT, `RequireAuth`, `Expiration` и `OfferSequence` самой транзакции, спонсируемые резервы. Платежи тоже не поддерживаются: полный движок для них отслеживается в [#240](https://github.com/StaticBit-io/XrplCSharp/issues/240).
+Результат точен относительно снимка. Транзакция попадает в более поздний леджер, состояние которого может отличаться, поэтому перед отправкой эталоном остаётся `simulate`. Не поддерживаются: домены permissioned DEX, книги MPT, `RequireAuth`, `Expiration` и `OfferSequence` самой транзакции, спонсируемые резервы. Платёж рассчитывает [`PaymentFlow`](#выполнение-payment).
+
+## Выполнение Payment
+
+`PaymentFlow.Evaluate` выполняет `Payment` против `DexSnapshot` так же, как его применяет rippled 3.4.0. Принимается собственная модель `Payment` из SDK с её `Fee`, `SendMax`, `DeliverMin`, `Paths` и флагами.
+
+- **Проверки.** Некорректные платежи из `preflight` (`temBAD_AMOUNT`, `temREDUNDANT`, коды `temBAD_SEND_XRP_*`) и проверки получателя из `preclaim` (`tecNO_DST`, `tecNO_DST_INSUF_XRP`, `tecDST_TAG_NEEDED`), затем deposit authorization.
+- **Стрэнды.** Каждый путь, а также путь по умолчанию, если не задан `tfNoDirectRipple`, становится стрэндом: отправитель, эмитент SendMax, сам путь, книга к доставляемому активу и его эмитент, получатель. Некорректный или зацикленный путь отклоняется с кодом ноды `temBAD_PATH` или `temBAD_PATH_LOOP`.
+- **Trust lines.** Каждый шаг по линии учитывает, кто кому должен, `QualityIn` и `QualityOut` линии, её лимит, NoRipple, заморозки и авторизацию. Комиссия эмитента берётся там, где платёж возвращается к эмитенту, а тот выпускает дальше.
+- **Книги и пулы.** Они обходятся так же, как для `OfferCreate`, но владелец оффера не платит комиссию с того, что отдаёт: её берёт со стороны отправителя следующий шаг.
+- **Результат.** `SendMax`, `DeliverMin`, `tfPartialPayment` и `tfLimitQuality` определяют, сколько пройдёт, и код результата: `tecPATH_PARTIAL`, `tecPATH_DRY` или `tesSUCCESS` с доставленной суммой.
+
+```csharp
+Payment payment = await client.Autofill(new Payment
+{
+    Account = sender,
+    Destination = receiver,
+    Amount = new Currency { CurrencyCode = "EUR", Issuer = eurIssuer, Value = "20" },
+    SendMax = new Currency { CurrencyCode = "USD", Issuer = usdIssuer, Value = "25" },
+    Paths = alternative.PathsComputed,      // из ripple_path_find
+});
+
+DexSnapshot snapshot = await DexSnapshot.FromNodeAsync(client, payment);
+PaymentFlowResult result = PaymentFlow.Evaluate(snapshot, payment, rules);
+
+// result.EngineResult и result.Applied: код и будет ли списана комиссия
+// result.DeliveredAmount: delivered_amount
+// result.Paid: сколько потратил отправитель с учётом комиссий
+// result.BalanceChanges, result.Offers, result.Pools: что изменил платёж
+```
+
+`DexSnapshot.FromNodeAsync(client, payment)` читает на одном валидированном леджере trust lines вдоль всех путей, которыми может пройти платёж, книги и пулы на них, аккаунты и предварительные авторизации получателя. Поиск путей в движок не входит: пути приходят вместе с платежом. Не поддерживаются: платежи MPT, домены permissioned DEX, credentials и удаление trust lines, баланс которых вернулся к нулю.
+
 
 ## Изменения балансов за пределами decimal
 

@@ -27,7 +27,56 @@ namespace Xrpl.Amounts
         }
     }
 
-    /// <summary>The fixed part of a snapshot, indexed for the crossing.</summary>
+    /// <summary>A trust line's identity: its two accounts in ordinal order and the currency.</summary>
+    internal readonly record struct LineKey(string First, string Second, string Currency)
+    {
+        internal static LineKey Of(string a, string b, string currency) =>
+            string.CompareOrdinal(a, b) <= 0 ? new LineKey(a, b, currency) : new LineKey(b, a, currency);
+
+        internal bool IsFirst(string account) => string.Equals(First, account, StringComparison.Ordinal);
+
+        internal string PeerOf(string account) => IsFirst(account) ? Second : First;
+    }
+
+    /// <summary>One account's settings on a trust line.</summary>
+    internal sealed class LineSide
+    {
+        internal static readonly LineSide Default = new LineSide();
+
+        /// <summary>How much of the peer's currency this account trusts it for; null for zero.</summary>
+        internal XrplAmount? Limit { get; init; }
+
+        internal uint QualityIn { get; init; }
+
+        internal uint QualityOut { get; init; }
+
+        internal bool NoRipple { get; init; }
+
+        /// <summary>Whether this account froze the line.</summary>
+        internal bool Freeze { get; init; }
+
+        /// <summary>Whether this account authorized the peer to hold its currency.</summary>
+        internal bool Auth { get; init; }
+    }
+
+    /// <summary>A trust line's fixed settings, as the snapshot gives them.</summary>
+    internal sealed class LineInfo
+    {
+        internal LineKey Key { get; init; }
+
+        internal LineSide First { get; init; } = LineSide.Default;
+
+        internal LineSide Second { get; init; } = LineSide.Default;
+
+        internal bool DeepFrozen { get; init; }
+
+        /// <summary>The balance from the first account's side, the second as the issuer.</summary>
+        internal XrplAmount Balance { get; init; }
+
+        internal LineSide Side(string account) => Key.IsFirst(account) ? First : Second;
+    }
+
+    /// <summary>The fixed part of a snapshot, indexed for the engine.</summary>
     internal sealed class DexWorld
     {
         internal DexWorld(DexSnapshot snapshot, string feeAccount = null, ulong fee = 0)
@@ -48,7 +97,41 @@ namespace Xrpl.Amounts
                 if (XrplAmount.KindOf(line.Balance.Asset) != AmountKind.Iou)
                     throw new NotSupportedException("A trust line holds an issued currency.");
 
-                Lines[HoldingKey.Of(line.Account, line.Balance.Asset)] = line;
+                string peer = line.Balance.Asset.Issuer;
+                LineKey key = LineKey.Of(line.Account, peer, line.Balance.Asset.Currency);
+                LineSide side = new LineSide
+                {
+                    Limit = line.Limit,
+                    QualityIn = line.QualityIn,
+                    QualityOut = line.QualityOut,
+                    NoRipple = line.NoRipple,
+                    Freeze = line.FrozenByAccount,
+                    Auth = line.Authorized,
+                };
+                LineSide peerSide = new LineSide
+                {
+                    Limit = line.PeerLimit,
+                    QualityIn = line.PeerQualityIn,
+                    QualityOut = line.PeerQualityOut,
+                    NoRipple = line.PeerNoRipple,
+                    Freeze = line.Frozen,
+                    Auth = line.PeerAuthorized,
+                };
+                bool accountFirst = key.IsFirst(line.Account);
+                if (Lines.ContainsKey(key))
+                {
+                    throw new ArgumentException(
+                        $"The trust line {key.First}/{key.Second} {key.Currency} is listed twice; describe it once, with the other side in its Peer properties.");
+                }
+
+                Lines[key] = new LineInfo
+                {
+                    Key = key,
+                    First = accountFirst ? side : peerSide,
+                    Second = accountFirst ? peerSide : side,
+                    DeepFrozen = line.DeepFrozen,
+                    Balance = FirstView(key, line.Account, line.Balance),
+                };
             }
 
             foreach (DexOffer offer in snapshot.Offers ?? Array.Empty<DexOffer>())
@@ -79,12 +162,22 @@ namespace Xrpl.Amounts
                     throw new NotSupportedException("MPT pools are not supported.");
 
                 Pools.Add(pool);
+                PoolAccounts.Add(pool.Account);
+                foreach (XrplAmount held in new[] { pool.Balance, pool.Balance2 })
+                {
+                    if (held.Kind != AmountKind.Iou)
+                        continue;
+
+                    // The pool's balance is what its account holds on the line to the issuer.
+                    LineKey key = LineKey.Of(pool.Account, held.Asset.Issuer, held.Asset.Currency);
+                    Lines[key] = new LineInfo { Key = key, Balance = FirstView(key, pool.Account, held) };
+                }
             }
         }
 
         internal DexSnapshot Snapshot { get; }
 
-        /// <summary>The account that paid the transaction's fee, charged before anything is crossed.</summary>
+        /// <summary>The account that paid the transaction's fee, charged before anything moves.</summary>
         internal string FeeAccount { get; }
 
         /// <summary>The fee, in drops.</summary>
@@ -92,13 +185,15 @@ namespace Xrpl.Amounts
 
         internal Dictionary<string, DexAccount> Accounts { get; } = new Dictionary<string, DexAccount>(StringComparer.Ordinal);
 
-        internal Dictionary<HoldingKey, DexTrustLine> Lines { get; } = new Dictionary<HoldingKey, DexTrustLine>();
+        internal Dictionary<LineKey, LineInfo> Lines { get; } = new Dictionary<LineKey, LineInfo>();
 
         internal Dictionary<BookKey, List<DexOffer>> Books { get; } = new Dictionary<BookKey, List<DexOffer>>();
 
         internal Dictionary<string, DexOffer> Offers { get; } = new Dictionary<string, DexOffer>(StringComparer.Ordinal);
 
         internal List<DexAmmPool> Pools { get; } = new List<DexAmmPool>();
+
+        internal HashSet<string> PoolAccounts { get; } = new HashSet<string>(StringComparer.Ordinal);
 
         internal IReadOnlyList<DexOffer> Book(IssuedCurrency @in, IssuedCurrency @out) =>
             Books.TryGetValue(BookKey.Of(@in, @out), out List<DexOffer> list) ? list : Array.Empty<DexOffer>();
@@ -127,6 +222,16 @@ namespace Xrpl.Amounts
             return account.TransferRate;
         }
 
+        /// <summary>Whether the account exists: in the snapshot, or an AMM's.</summary>
+        internal bool AccountExists(string account) => account != null && (Accounts.ContainsKey(account) || PoolAccounts.Contains(account));
+
+        /// <summary>A balance seen from <paramref name="holder"/> turned to the line's first account's side.</summary>
+        internal static XrplAmount FirstView(LineKey key, string holder, XrplAmount balance)
+        {
+            IssuedCurrency firstAsset = new IssuedCurrency { Currency = key.Currency, Issuer = key.Second };
+            return key.IsFirst(holder) ? balance.WithAsset(firstAsset) : (-balance).WithAsset(firstAsset);
+        }
+
         private static void StableSortByQuality(List<DexOffer> offers)
         {
             // List.Sort is not stable: an insertion sort keeps the snapshot's order within a quality.
@@ -145,7 +250,7 @@ namespace Xrpl.Amounts
         }
     }
 
-    /// <summary>What an account holds of one asset while a crossing runs.</summary>
+    /// <summary>What an account holds of one asset, as a view reads it.</summary>
     internal sealed class Holding
     {
         /// <summary>The balance now.</summary>
@@ -158,6 +263,22 @@ namespace Xrpl.Amounts
         internal bool Exists { get; set; }
 
         internal Holding Copy() => new Holding { Current = Current, Debits = Debits, Exists = Exists };
+    }
+
+    /// <summary>A trust line's balance while the transaction runs, and what each side has sent.</summary>
+    internal sealed class LineState
+    {
+        /// <summary>The balance from the first account's side.</summary>
+        internal XrplAmount Balance { get; set; }
+
+        internal XrplAmount FirstDebits { get; set; }
+
+        internal XrplAmount SecondDebits { get; set; }
+
+        internal bool Exists { get; set; }
+
+        internal LineState Copy() =>
+            new LineState { Balance = Balance, FirstDebits = FirstDebits, SecondDebits = SecondDebits, Exists = Exists };
     }
 
     /// <summary>An account's owner count while a crossing runs, and the largest it has been (<c>ownerCountHook</c>).</summary>
@@ -191,7 +312,10 @@ namespace Xrpl.Amounts
     /// </summary>
     internal sealed class DexView
     {
-        private readonly Dictionary<HoldingKey, Holding> _holdings = new Dictionary<HoldingKey, Holding>();
+        private static readonly IssuedCurrency XrpAsset = new IssuedCurrency { Currency = "XRP" };
+
+        private readonly Dictionary<string, Holding> _xrp = new Dictionary<string, Holding>(StringComparer.Ordinal);
+        private readonly Dictionary<LineKey, LineState> _lines = new Dictionary<LineKey, LineState>();
         private readonly Dictionary<string, OfferState> _offers = new Dictionary<string, OfferState>(StringComparer.Ordinal);
         private readonly Dictionary<string, OwnerCounts> _counts = new Dictionary<string, OwnerCounts>(StringComparer.Ordinal);
         private readonly DexView _parent;
@@ -218,20 +342,31 @@ namespace Xrpl.Amounts
         /// <summary>Writes this layer's changes into its parent.</summary>
         internal void ApplyTo(DexView parent)
         {
-            foreach (KeyValuePair<HoldingKey, Holding> entry in _holdings)
-                parent._holdings[entry.Key] = entry.Value.Copy();
+            foreach (KeyValuePair<string, Holding> entry in _xrp)
+                parent._xrp[entry.Key] = entry.Value.Copy();
+            foreach (KeyValuePair<LineKey, LineState> entry in _lines)
+                parent._lines[entry.Key] = entry.Value.Copy();
             foreach (KeyValuePair<string, OfferState> entry in _offers)
                 parent._offers[entry.Key] = entry.Value.Copy();
             foreach (KeyValuePair<string, OwnerCounts> entry in _counts)
                 parent._counts[entry.Key] = entry.Value.Copy();
         }
 
-        /// <summary>Every holding this view or a parent has written.</summary>
+        /// <summary>Both sides of every trust line, and every XRP balance, this view or a parent has written.</summary>
         internal IEnumerable<HoldingKey> TouchedHoldings()
         {
             HashSet<HoldingKey> keys = new HashSet<HoldingKey>();
             for (DexView view = this; view != null; view = view._parent)
-                keys.UnionWith(view._holdings.Keys);
+            {
+                foreach (string account in view._xrp.Keys)
+                    keys.Add(new HoldingKey(account, "XRP", string.Empty));
+                foreach (LineKey line in view._lines.Keys)
+                {
+                    keys.Add(new HoldingKey(line.First, line.Currency, line.Second));
+                    keys.Add(new HoldingKey(line.Second, line.Currency, line.First));
+                }
+            }
+
             return keys;
         }
 
@@ -296,52 +431,90 @@ namespace Xrpl.Amounts
 
         // ---- balances ----
 
+        /// <summary>What <see cref="HoldingKey.Account"/> holds: its XRP, or its side of the line to <see cref="HoldingKey.Issuer"/>.</summary>
         internal Holding Read(HoldingKey key)
         {
-            for (DexView view = this; view != null; view = view._parent)
+            if (key.Issuer.Length == 0)
+                return ReadXrp(key.Account);
+
+            if (string.Equals(key.Account, key.Issuer, StringComparison.Ordinal))
             {
-                if (view._holdings.TryGetValue(key, out Holding holding))
-                    return holding;
+                IssuedCurrency own = new IssuedCurrency { Currency = key.Currency, Issuer = key.Issuer };
+                return new Holding { Current = XrplAmount.Zero(own), Debits = XrplAmount.Zero(own), Exists = false };
             }
 
-            return Initial(key);
+            LineKey line = LineKey.Of(key.Account, key.Issuer, key.Currency);
+            return SideOf(line, key.Account, ReadLine(line));
         }
 
         private Holding Initial(HoldingKey key)
         {
             if (key.Issuer.Length == 0)
+                return InitialXrp(key.Account);
+
+            LineKey line = LineKey.Of(key.Account, key.Issuer, key.Currency);
+            return SideOf(line, key.Account, InitialLine(line));
+        }
+
+        private static Holding SideOf(LineKey line, string account, LineState state)
+        {
+            IssuedCurrency asset = new IssuedCurrency { Currency = line.Currency, Issuer = line.PeerOf(account) };
+            bool first = line.IsFirst(account);
+            XrplAmount balance = first ? state.Balance : -state.Balance;
+            XrplAmount debits = first ? state.FirstDebits : state.SecondDebits;
+            return new Holding { Current = balance.WithAsset(asset), Debits = debits.WithAsset(asset), Exists = state.Exists };
+        }
+
+        private Holding ReadXrp(string account)
+        {
+            for (DexView view = this; view != null; view = view._parent)
             {
-                IssuedCurrency xrp = new IssuedCurrency { Currency = "XRP" };
-                bool exists = World.Accounts.TryGetValue(key.Account, out DexAccount account);
-                XrplAmount balance = XrplAmount.Zero(xrp);
-                if (exists)
-                {
-                    ulong drops = account.Balance;
-                    if (string.Equals(key.Account, World.FeeAccount, StringComparison.Ordinal))
-                        drops = drops >= World.Fee ? drops - World.Fee : 0;
-                    balance = XrplAmount.FromUnits(xrp, AmountKind.Xrp, checked((long)drops));
-                }
-
-                foreach (DexAmmPool pool in World.Pools)
-                {
-                    if (string.Equals(pool.Account, key.Account, StringComparison.Ordinal))
-                        balance = PoolBalance(pool, xrp) ?? balance;
-                }
-
-                return new Holding { Current = balance, Debits = XrplAmount.Zero(xrp), Exists = exists };
+                if (view._xrp.TryGetValue(account, out Holding holding))
+                    return holding;
             }
 
-            IssuedCurrency asset = new IssuedCurrency { Currency = key.Currency, Issuer = key.Issuer };
+            return InitialXrp(account);
+        }
+
+        private Holding InitialXrp(string account)
+        {
+            bool exists = World.Accounts.TryGetValue(account, out DexAccount dex);
+            XrplAmount balance = XrplAmount.Zero(XrpAsset);
+            if (exists)
+            {
+                ulong drops = dex.Balance;
+                if (string.Equals(account, World.FeeAccount, StringComparison.Ordinal))
+                    drops = drops >= World.Fee ? drops - World.Fee : 0;
+                balance = XrplAmount.FromUnits(XrpAsset, AmountKind.Xrp, checked((long)drops));
+            }
+
             foreach (DexAmmPool pool in World.Pools)
             {
-                if (string.Equals(pool.Account, key.Account, StringComparison.Ordinal) && PoolBalance(pool, asset) is { } held)
-                    return new Holding { Current = held, Debits = XrplAmount.Zero(asset), Exists = true };
+                if (string.Equals(pool.Account, account, StringComparison.Ordinal))
+                    balance = PoolBalance(pool, XrpAsset) ?? balance;
             }
 
-            if (World.Lines.TryGetValue(key, out DexTrustLine line))
-                return new Holding { Current = line.Balance, Debits = XrplAmount.Zero(asset), Exists = true };
+            return new Holding { Current = balance, Debits = XrplAmount.Zero(XrpAsset), Exists = exists };
+        }
 
-            return new Holding { Current = XrplAmount.Zero(asset), Debits = XrplAmount.Zero(asset), Exists = false };
+        private LineState ReadLine(LineKey line)
+        {
+            for (DexView view = this; view != null; view = view._parent)
+            {
+                if (view._lines.TryGetValue(line, out LineState state))
+                    return state;
+            }
+
+            return InitialLine(line);
+        }
+
+        private LineState InitialLine(LineKey line)
+        {
+            IssuedCurrency asset = new IssuedCurrency { Currency = line.Currency, Issuer = line.Second };
+            XrplAmount zero = XrplAmount.Zero(asset);
+            return World.Lines.TryGetValue(line, out LineInfo info)
+                ? new LineState { Balance = info.Balance, FirstDebits = zero, SecondDebits = zero, Exists = true }
+                : new LineState { Balance = zero, FirstDebits = zero, SecondDebits = zero, Exists = false };
         }
 
         private static XrplAmount? PoolBalance(DexAmmPool pool, IssuedCurrency asset)
@@ -353,43 +526,77 @@ namespace Xrpl.Amounts
             return null;
         }
 
-        private Holding HoldingForWrite(HoldingKey key)
-        {
-            if (!_holdings.TryGetValue(key, out Holding holding))
-                _holdings[key] = holding = Read(key).Copy();
+        /// <summary>Whether the trust line between the two accounts exists now.</summary>
+        internal bool LineExists(string a, string b, string currency) =>
+            !string.Equals(a, b, StringComparison.Ordinal) && ReadLine(LineKey.Of(a, b, currency)).Exists;
 
-            return holding;
-        }
+        /// <summary>The line's fixed settings; null when the snapshot has no such line.</summary>
+        internal LineInfo LineInfo(string a, string b, string currency) =>
+            World.Lines.TryGetValue(LineKey.Of(a, b, currency), out LineInfo info) ? info : null;
 
         /// <summary>
-        /// <c>accountSend</c> without a transfer fee: <paramref name="amount"/> from
-        /// <paramref name="from"/> to <paramref name="to"/>, where the issuer of an issued
-        /// currency - and the empty account for XRP - creates and destroys it.
+        /// <c>accountSend</c> without a transfer fee: <c>rippleCredit</c> on the trust line between
+        /// the two accounts for an issued currency, or XRP between an account and the empty account.
         /// </summary>
         internal void Send(string from, string to, XrplAmount amount)
         {
             if (amount.IsZero || string.Equals(from, to, StringComparison.Ordinal))
                 return;
 
-            string issuer = amount.Kind == AmountKind.Xrp ? string.Empty : amount.Asset.Issuer;
-            if (!string.Equals(from, issuer, StringComparison.Ordinal))
+            if (amount.Kind == AmountKind.Xrp)
             {
-                Holding sender = HoldingForWrite(HoldingKey.Of(from, amount.Asset));
-                sender.Current = StepMath.Subtract(sender.Current, amount, Rules);
-                sender.Debits = StepMath.Add(sender.Debits, amount, Rules);
+                if (from.Length != 0)
+                {
+                    Holding sender = XrpForWrite(from);
+                    sender.Current = StepMath.Subtract(sender.Current, amount, Rules);
+                    sender.Debits = StepMath.Add(sender.Debits, amount, Rules);
+                }
+
+                if (to.Length != 0)
+                {
+                    Holding receiver = XrpForWrite(to);
+                    receiver.Current = StepMath.Add(receiver.Current, amount, Rules);
+                }
+
+                return;
             }
 
-            if (!string.Equals(to, issuer, StringComparison.Ordinal))
+            LineKey line = LineKey.Of(from, to, amount.Asset.Currency);
+            LineState state = LineForWrite(line);
+            XrplAmount moved = amount.WithAsset(state.Balance.Asset);
+            if (line.IsFirst(from))
             {
-                Holding receiver = HoldingForWrite(HoldingKey.Of(to, amount.Asset));
-                receiver.Current = StepMath.Add(receiver.Current, amount, Rules);
-                if (!receiver.Exists && amount.Kind == AmountKind.Iou)
-                {
-                    // The trust line is created on the way in, and the receiver owns it.
-                    receiver.Exists = true;
-                    AdjustOwnerCount(to, 1);
-                }
+                state.Balance = StepMath.Subtract(state.Balance, moved, Rules);
+                state.FirstDebits = StepMath.Add(state.FirstDebits, moved, Rules);
             }
+            else
+            {
+                state.Balance = StepMath.Add(state.Balance, moved, Rules);
+                state.SecondDebits = StepMath.Add(state.SecondDebits, moved, Rules);
+            }
+
+            if (!state.Exists)
+            {
+                // The trust line is created on the way in, and the receiver owns it.
+                state.Exists = true;
+                AdjustOwnerCount(to, 1);
+            }
+        }
+
+        private Holding XrpForWrite(string account)
+        {
+            if (!_xrp.TryGetValue(account, out Holding holding))
+                _xrp[account] = holding = ReadXrp(account).Copy();
+
+            return holding;
+        }
+
+        private LineState LineForWrite(LineKey line)
+        {
+            if (!_lines.TryGetValue(line, out LineState state))
+                _lines[line] = state = ReadLine(line).Copy();
+
+            return state;
         }
 
         /// <summary>
@@ -415,7 +622,7 @@ namespace Xrpl.Amounts
             if (frozen)
                 return XrplAmount.Zero(asset);
 
-            return Read(HoldingKey.Of(pool.Account, asset)).Current;
+            return Read(HoldingKey.Of(pool.Account, asset)).Current.WithAsset(asset);
         }
 
         // ---- owner counts ----
@@ -460,18 +667,17 @@ namespace Xrpl.Amounts
         /// </summary>
         internal XrplAmount XrpLiquid(string account, int ownerCountAdjustment = 0)
         {
-            IssuedCurrency xrp = new IssuedCurrency { Currency = "XRP" };
             if (!World.Accounts.ContainsKey(account))
-                return XrplAmount.Zero(xrp);
+                return XrplAmount.Zero(XrpAsset);
 
             long ownerCount = Math.Max(0, ReserveOwnerCount(account) + ownerCountAdjustment);
             decimal reserve = World.Snapshot.ReserveBase + (decimal)World.Snapshot.ReserveIncrement * ownerCount;
-            XrplAmount balance = Spendable(HoldingKey.Of(account, xrp));
-            decimal drops = (decimal)balance.StMantissa;
+            XrplAmount balance = Spendable(HoldingKey.Of(account, XrpAsset));
+            decimal drops = balance.StMantissa;
             if (drops < reserve)
-                return XrplAmount.Zero(xrp);
+                return XrplAmount.Zero(XrpAsset);
 
-            return XrplAmount.FromUnits(xrp, AmountKind.Xrp, (long)(drops - reserve));
+            return XrplAmount.FromUnits(XrpAsset, AmountKind.Xrp, (long)(drops - reserve));
         }
 
         /// <summary>Whether the issuer or the line freezes <paramref name="account"/>'s holding (<c>isFrozen</c>).</summary>
@@ -484,7 +690,8 @@ namespace Xrpl.Amounts
             if (string.Equals(account, asset.Issuer, StringComparison.Ordinal))
                 return false;
 
-            return World.Lines.TryGetValue(HoldingKey.Of(account, asset), out DexTrustLine line) && line.Frozen;
+            LineInfo info = LineInfo(account, asset.Issuer, asset.Currency);
+            return info != null && info.Side(asset.Issuer).Freeze;
         }
 
         /// <summary><c>isDeepFrozen</c>.</summary>
@@ -493,7 +700,8 @@ namespace Xrpl.Amounts
             if (XrplAmount.KindOf(asset) != AmountKind.Iou || string.Equals(account, asset.Issuer, StringComparison.Ordinal))
                 return false;
 
-            return World.Lines.TryGetValue(HoldingKey.Of(account, asset), out DexTrustLine line) && line.DeepFrozen;
+            LineInfo info = LineInfo(account, asset.Issuer, asset.Currency);
+            return info != null && info.DeepFrozen;
         }
 
         /// <summary><c>accountHolds</c> with <c>ZeroIfFrozen</c>.</summary>
@@ -506,7 +714,7 @@ namespace Xrpl.Amounts
             if (!Read(key).Exists || IsFrozen(account, asset) || IsDeepFrozen(account, asset))
                 return XrplAmount.Zero(asset);
 
-            return Spendable(key);
+            return Spendable(key).WithAsset(asset);
         }
 
         /// <summary><c>accountFunds</c>: <paramref name="whenIssuer"/> for the issuer of an issued currency, otherwise <see cref="AccountHolds"/>.</summary>

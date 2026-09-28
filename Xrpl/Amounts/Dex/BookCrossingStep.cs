@@ -9,10 +9,12 @@ using static Xrpl.Models.Common.Common;
 namespace Xrpl.Amounts
 {
     /// <summary>
-    /// rippled's <c>BookOfferCrossingStep</c>: one order book walked the way the payment engine
-    /// walks it during offer crossing - the AMM pool first, then the order book's offers of one
-    /// quality per pass, each funded, fee-adjusted and cut to what the strand still needs, and
-    /// the stale ones on the way removed.
+    /// rippled's <c>BookStep</c>: one order book walked the way the payment engine walks it - the
+    /// AMM pool first, then the order book's offers of one quality per pass, each funded,
+    /// fee-adjusted and cut to what the strand still needs, and the stale ones on the way removed.
+    /// Offer crossing (<c>BookOfferCrossingStep</c>) has the owner pay the transfer fee on what it
+    /// gives and prunes by the taker's price; a payment (<c>BookPaymentStep</c>) leaves the fee to
+    /// the next step and takes any quality.
     /// </summary>
     internal sealed class BookCrossingStep : FlowStep
     {
@@ -24,48 +26,43 @@ namespace Xrpl.Amounts
         private readonly string _strandDestination;
         private readonly FlowStep _previous;
         private readonly bool _defaultPath;
+        private readonly bool _offerCrossing;
         private readonly XrplQuality _qualityThreshold;
         private readonly AmmBookLiquidity _amm;
         private (XrplAmount In, XrplAmount Out)? _cache;
         private bool _inactive;
         private int _offersUsed;
 
-        internal BookCrossingStep(
-            DexView view,
-            IssuedCurrency @in,
-            IssuedCurrency @out,
-            string strandSource,
-            string strandDestination,
-            FlowStep previous,
-            bool defaultPath,
-            XrplQuality qualityThreshold,
-            AmmFlowContext ammContext)
+        internal BookCrossingStep(StrandContext context, IssuedCurrency @in, IssuedCurrency @out)
         {
             _in = @in;
             _out = @out;
-            _strandSource = strandSource;
-            _strandDestination = strandDestination;
-            _previous = previous;
-            _defaultPath = defaultPath;
-            _qualityThreshold = qualityThreshold;
+            _strandSource = context.StrandSource;
+            _strandDestination = context.StrandDestination;
+            _previous = context.PreviousStep;
+            _defaultPath = context.IsDefaultPath;
+            _offerCrossing = context.OfferCrossing;
+            if (_offerCrossing)
+                _qualityThreshold = context.LimitQuality ?? throw new FlowFailedException("tefINTERNAL", "Offer requires quality.");
 
-            DexAmmPool pool = view.World.Pool(@in, @out);
+            DexAmmPool pool = context.View.World.Pool(@in, @out);
             if (pool != null)
-                _amm = new AmmBookLiquidity(view, pool, @in, @out, ammContext);
+                _amm = new AmmBookLiquidity(context.View, pool, @in, @out, context.AmmContext);
         }
 
-        internal override XrplAmount? CachedIn => _cache?.In;
+        internal override XrplAmount? CachedIn => _cache is { } cache ? StepMath.Typed(cache.In) : null;
 
-        internal override XrplAmount? CachedOut => _cache?.Out;
+        internal override XrplAmount? CachedOut => _cache is { } cache ? StepMath.Typed(cache.Out) : null;
+
+        internal override (IssuedCurrency In, IssuedCurrency Out)? BookStepBook => (_in, _out);
 
         internal override int OffersUsed => _offersUsed;
 
         internal override bool Inactive => _inactive;
 
-        internal override bool IsBookStep => true;
-
-        /// <summary>The offer owner pays the transfer fee when offer crossing: the step issues.</summary>
-        internal override DebtDirection DebtDirection(DexView sb, StrandDirection direction) => Amounts.DebtDirection.Issues;
+        /// <summary>The offer owner pays the transfer fee when offer crossing, so the step issues; a payment's step redeems.</summary>
+        internal override DebtDirection DebtDirection(DexView sb, StrandDirection direction) =>
+            _offerCrossing ? Amounts.DebtDirection.Issues : Amounts.DebtDirection.Redeems;
 
         // ---- quality estimates ----
 
@@ -133,21 +130,19 @@ namespace Xrpl.Amounts
         }
 
         /// <summary>
-        /// <c>adjustQualityWithFees</c> for offer crossing: only a single-path AMM offer, under
-        /// <c>fixAMMv1_1</c>, carries the input's transfer fee into the estimate.
+        /// <c>adjustQualityWithFees</c>. A payment composes the input's transfer fee, charged when
+        /// the previous step redeems, with the offer's quality. Offer crossing leaves the quality
+        /// alone, except for a single-path AMM offer under <c>fixAMMv1_1</c>.
         /// </summary>
         private XrplQuality AdjustQualityWithFees(DexView view, XrplQuality offerQuality, DebtDirection previous, bool isAmm)
         {
-            if (!view.Rules.FixAMMv1_1 || !isAmm || (_amm != null && _amm.MultiPath))
+            if (_offerCrossing && (!view.Rules.FixAMMv1_1 || !isAmm || (_amm != null && _amm.MultiPath)))
                 return offerQuality;
 
             uint rateIn = previous == Amounts.DebtDirection.Redeems ? view.Rate(_in, _strandDestination) : OfferCrossing.QualityOne;
-            IssuedCurrency xrp = new IssuedCurrency { Currency = "XRP" };
-            XrplQuality fees = XrplQuality.FromAmounts(
-                XrplAmount.FromUnits(xrp, AmountKind.Xrp, rateIn),
-                XrplAmount.FromUnits(xrp, AmountKind.Xrp, OfferCrossing.QualityOne),
-                view.Rules);
-            return Composed(fees, offerQuality, view.Rules);
+
+            // A payment's offer owner does not pay the fee on what it gives, and a pool never does.
+            return Composed(QualityOfRates(rateIn, OfferCrossing.QualityOne, view.Rules), offerQuality, view.Rules);
         }
 
         /// <summary><c>composedQuality</c>: the product of two rates, rounded up.</summary>
@@ -164,7 +159,7 @@ namespace Xrpl.Amounts
         /// </summary>
         private XrplQuality? QualityThresholdForAmm(XrplQuality lobQuality)
         {
-            if (_amm != null && !_amm.MultiPath && _qualityThreshold > lobQuality)
+            if (_offerCrossing && _amm != null && !_amm.MultiPath && _qualityThreshold > lobQuality)
                 return null;
 
             return lobQuality;
@@ -185,7 +180,7 @@ namespace Xrpl.Amounts
         {
             LedgerRules rules = sb.Rules;
             uint rateIn = previous == Amounts.DebtDirection.Redeems ? sb.Rate(_in, _strandDestination) : OfferCrossing.QualityOne;
-            uint rateOut = sb.Rate(_out, _strandDestination);
+            uint rateOut = _offerCrossing ? sb.Rate(_out, _strandDestination) : OfferCrossing.QualityOne;
 
             OfferStream offers = new OfferStream(sb, afView, sb.World.Book(_in, _out), MaxOffersToConsume);
             bool offerAttempted = false;
@@ -199,7 +194,7 @@ namespace Xrpl.Amounts
                     return false;
 
                 // An offer of the taker's own at or better than its price is deleted, not crossed.
-                if (_defaultPath && offer.Quality >= _qualityThreshold &&
+                if (_offerCrossing && _defaultPath && offer.Quality >= _qualityThreshold &&
                     string.Equals(_strandSource, offer.Owner, StringComparison.Ordinal) &&
                     string.Equals(_strandDestination, offer.Owner, StringComparison.Ordinal))
                 {
@@ -210,12 +205,15 @@ namespace Xrpl.Amounts
                     return true;
                 }
 
-                if (_defaultPath && !(offer.Quality >= _qualityThreshold))
+                if (_offerCrossing && _defaultPath && !(offer.Quality >= _qualityThreshold))
                     return false;
 
+                // Offer crossing does not charge the taker a fee to pay itself.
                 string sourceAccount = _previous?.DirectStepSourceAccount;
-                uint offerRateIn = string.Equals(offer.Owner, sourceAccount, StringComparison.Ordinal) ? OfferCrossing.QualityOne : rateIn;
-                uint offerRateOut = _previous != null && _previous.IsBookStep &&
+                uint offerRateIn = _offerCrossing && string.Equals(offer.Owner, sourceAccount, StringComparison.Ordinal)
+                    ? OfferCrossing.QualityOne
+                    : rateIn;
+                uint offerRateOut = _offerCrossing && _previous != null && _previous.IsBookStep &&
                                     string.Equals(offer.Owner, _strandDestination, StringComparison.Ordinal)
                     ? OfferCrossing.QualityOne
                     : rateOut;
@@ -329,6 +327,7 @@ namespace Xrpl.Amounts
 
         internal override (XrplAmount In, XrplAmount Out) Rev(DexView sb, DexView afView, HashSet<string> offersToRemove, XrplAmount @out)
         {
+            @out = @out.WithAsset(_out);
             _cache = null;
             LedgerRules rules = sb.Rules;
             XrplAmount resultIn = XrplAmount.Zero(_in);
@@ -387,18 +386,19 @@ namespace Xrpl.Amounts
             if (remainingOut.IsNegative)
             {
                 _cache = (XrplAmount.Zero(_in), XrplAmount.Zero(_out));
-                return _cache.Value;
+                return (StepMath.Typed(_cache.Value.In), StepMath.Typed(_cache.Value.Out));
             }
 
             if (remainingOut.IsZero)
                 resultOut = @out;
 
             _cache = (resultIn, resultOut);
-            return _cache.Value;
+            return (StepMath.Typed(resultIn), StepMath.Typed(resultOut));
         }
 
         internal override (XrplAmount In, XrplAmount Out) Fwd(DexView sb, DexView afView, HashSet<string> offersToRemove, XrplAmount @in)
         {
+            @in = @in.WithAsset(_in);
             if (_cache == null)
                 throw new InvalidOperationException("BookStep::fwdImp : cache is not set");
 
@@ -504,14 +504,46 @@ namespace Xrpl.Amounts
             if (remainingIn.IsNegative)
             {
                 _cache = (XrplAmount.Zero(_in), XrplAmount.Zero(_out));
-                return _cache.Value;
+                return (StepMath.Typed(_cache.Value.In), StepMath.Typed(_cache.Value.Out));
             }
 
             if (remainingIn.IsZero)
                 resultIn = @in;
 
             _cache = (resultIn, resultOut);
-            return _cache.Value;
+            return (StepMath.Typed(resultIn), StepMath.Typed(resultOut));
+        }
+
+        /// <summary><c>BookStep::check</c>: a book that changes the asset, outputs it once, has issuers, and is reached through a line that ripples.</summary>
+        internal string Check(StrandContext context)
+        {
+            DexView view = context.View;
+            AssetKey inKey = AssetKey.Of(_in);
+            AssetKey outKey = AssetKey.Of(_out);
+            if (inKey == outKey)
+                return "temBAD_PATH";
+
+            // Two books may not output the same asset: offers on one could unfund offers on the other.
+            if (!context.SeenBookOuts.Add(outKey) || context.SeenDirectAssets[0].Contains(outKey))
+                return "temBAD_PATH_LOOP";
+            if (context.SeenDirectAssets[1].Contains(outKey))
+                return "temBAD_PATH_LOOP";
+
+            if ((inKey.Issuer.Length != 0 && !view.World.AccountExists(inKey.Issuer)) ||
+                (outKey.Issuer.Length != 0 && !view.World.AccountExists(outKey.Issuer)))
+            {
+                return "tecNO_ISSUER";
+            }
+
+            if (context.PreviousStep?.DirectStepSourceAccount is { } previous && inKey.Issuer.Length != 0)
+            {
+                if (!view.LineExists(previous, inKey.Issuer, inKey.Currency))
+                    return "terNO_LINE";
+                if (view.LineInfo(previous, inKey.Issuer, inKey.Currency)?.Side(inKey.Issuer).NoRipple == true)
+                    return "terNO_RIPPLE";
+            }
+
+            return null;
         }
 
         /// <summary>

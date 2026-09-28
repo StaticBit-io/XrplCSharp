@@ -1,6 +1,6 @@
 # Amounts, Quality and Offer Crossing
 
-This guide covers the amount arithmetic of the XRP Ledger in the XrplCSharp SDK. `XrplAmount` holds an amount the way rippled's `STAmount` does. `XrplAmountMath` repeats the node's arithmetic on it, including the directed rounding used when offers cross. `XrplQuality` is the exchange rate of an offer, and `OfferCrossing` sizes what one offer contributes to a payment or an `OfferCreate`. `OfferCreateCrossing` crosses a whole `OfferCreate` against the order books and AMM pools it reaches.
+This guide covers the amount arithmetic of the XRP Ledger in the XrplCSharp SDK. `XrplAmount` holds an amount the way rippled's `STAmount` does. `XrplAmountMath` repeats the node's arithmetic on it, including the directed rounding used when offers cross. `XrplQuality` is the exchange rate of an offer, and `OfferCrossing` sizes what one offer contributes to a payment or an `OfferCreate`. `OfferCreateCrossing` crosses a whole `OfferCreate` against the order books and AMM pools it reaches, and `PaymentFlow` runs a `Payment` along its paths.
 
 Every result matches rippled 3.4.0 bit for bit: mantissa, exponent and sign. The tests replay 8,808 vectors produced by rippled's own code, rebuild the offer crossings of rippled's `AMM_test.cpp`, and compare offer crossings with a live node.
 
@@ -12,6 +12,7 @@ Every result matches rippled 3.4.0 bit for bit: mantissa, exponent and sign. The
 - [Quality](#quality)
 - [Offer Crossing](#offer-crossing)
 - [Crossing an OfferCreate](#crossing-an-offercreate)
+- [Evaluating a Payment](#evaluating-a-payment)
 - [Balance Changes Beyond decimal](#balance-changes-beyond-decimal)
 - [Ledger Rules](#ledger-rules)
 
@@ -31,6 +32,7 @@ An issued currency on the ledger has 16 significant digits and an exponent from 
 | `XrplQuality` | `Xrpl.Amounts` | The 64-bit exchange rate the ledger sorts order books by |
 | `OfferCrossing` | `Xrpl.Amounts` | What one offer contributes when it is crossed, as `BookStep` sizes it |
 | `OfferCreateCrossing` | `Xrpl.Amounts` | What an `OfferCreate` does against whole books and AMM pools, from a `DexSnapshot` |
+| `PaymentFlow` | `Xrpl.Amounts` | What a `Payment` does along its paths, from a `DexSnapshot` |
 
 ## XrplAmount
 
@@ -164,7 +166,39 @@ OfferCrossingResult result = OfferCreateCrossing.Cross(
 
 `DexSnapshot.FromNodeAsync` reads everything at one validated ledger: the books the crossing can reach, the pools on them, and the accounts and trust lines it reads. Each book is read with one `book_offers` call, so a crossing deeper than the first 400 offers of a book is not represented. `book_offers` also leaves out offers whose owner holds nothing, other than the account's own; the node removes them on the way, and the result does not list them. A snapshot can also be built by hand, as the unit tests do.
 
-The result is exact against the snapshot. The transaction lands in a later ledger, whose state can differ, so `simulate` stays the reference before submitting. Not covered: permissioned-DEX domains, MPT books, `RequireAuth`, the transaction's `Expiration` and `OfferSequence`, and sponsored reserves. Payments are not covered either; their full engine is tracked in [#240](https://github.com/StaticBit-io/XrplCSharp/issues/240).
+The result is exact against the snapshot. The transaction lands in a later ledger, whose state can differ, so `simulate` stays the reference before submitting. Not covered: permissioned-DEX domains, MPT books, `RequireAuth`, the transaction's `Expiration` and `OfferSequence`, and sponsored reserves. A payment is evaluated by [`PaymentFlow`](#evaluating-a-payment).
+
+## Evaluating a Payment
+
+`PaymentFlow.Evaluate` runs a `Payment` against a `DexSnapshot` the way rippled 3.4.0 applies it. It takes the SDK's own `Payment` model, with its `Fee`, `SendMax`, `DeliverMin`, `Paths` and flags.
+
+- **Checks.** The malformed payments of `preflight` (`temBAD_AMOUNT`, `temREDUNDANT`, the `temBAD_SEND_XRP_*` codes) and the destination checks of `preclaim` (`tecNO_DST`, `tecNO_DST_INSUF_XRP`, `tecDST_TAG_NEEDED`), then deposit authorization.
+- **Strands.** Each path, and the default path unless `tfNoDirectRipple` is set, becomes a strand: the source, SendMax's issuer, the path, a book to the delivered asset and its issuer, the destination. A malformed or looping path is refused with the node's `temBAD_PATH` or `temBAD_PATH_LOOP`.
+- **Trust lines.** Each step along a line reads who owes whom, the line's `QualityIn` and `QualityOut`, its limit, NoRipple, freezes and authorization. The transfer fee applies where the payment redeems into an issuer and it issues onward.
+- **Books and pools.** They are walked as for an `OfferCreate`, except that the offer's owner does not pay the fee on what it gives: the next step charges it to the sender.
+- **The result.** `SendMax`, `DeliverMin`, `tfPartialPayment` and `tfLimitQuality` decide how much flows and the result code: `tecPATH_PARTIAL`, `tecPATH_DRY`, or `tesSUCCESS` with the delivered amount.
+
+```csharp
+Payment payment = await client.Autofill(new Payment
+{
+    Account = sender,
+    Destination = receiver,
+    Amount = new Currency { CurrencyCode = "EUR", Issuer = eurIssuer, Value = "20" },
+    SendMax = new Currency { CurrencyCode = "USD", Issuer = usdIssuer, Value = "25" },
+    Paths = alternative.PathsComputed,      // from ripple_path_find
+});
+
+DexSnapshot snapshot = await DexSnapshot.FromNodeAsync(client, payment);
+PaymentFlowResult result = PaymentFlow.Evaluate(snapshot, payment, rules);
+
+// result.EngineResult and result.Applied: the code, and whether the fee is charged
+// result.DeliveredAmount: delivered_amount
+// result.Paid: what the sender spent, fees included
+// result.BalanceChanges, result.Offers, result.Pools: what the payment changed
+```
+
+`DexSnapshot.FromNodeAsync(client, payment)` reads, at one validated ledger, the trust lines along every path the payment can take, the books and pools on them, the accounts, and the destination's preauthorizations. Path finding is not part of the engine: the paths come with the payment. Not covered: MPT payments, permissioned-DEX domains, credentials, and trust lines deleted when a balance returns to zero.
+
 
 ## Balance Changes Beyond decimal
 
