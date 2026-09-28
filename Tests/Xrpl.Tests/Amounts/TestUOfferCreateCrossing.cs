@@ -218,6 +218,7 @@ public class TestUOfferCreateCrossing
             Assert.AreEqual(Iou(Eur, "30072.93416277865"), XrplAmountMath.Add(Iou(Eur, "30000"), Change(result, Carol, Eur)));
             Assert.AreEqual(Iou(Gbp, "10"), Change(result, Bob, Gbp));
             Assert.AreEqual(Iou(Eur, "-12.5"), Change(result, Ed, Eur));
+            CollectionAssert.AreEquivalent(new[] { "B0B", "ED0" }, result.Offers.Select(o => o.Index).ToArray(), "both bridge offers change");
             Assert.IsTrue(result.Offers.All(o => o.Deleted), "both bridge offers are taken");
         }
 

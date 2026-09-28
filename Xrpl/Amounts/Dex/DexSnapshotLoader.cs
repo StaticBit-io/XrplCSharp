@@ -32,7 +32,9 @@ namespace Xrpl.Amounts
         /// <remarks>
         /// Each book is read with one <c>book_offers</c> call, so only its first
         /// <see cref="BookLimit"/> offers are included; a crossing deeper than that is not
-        /// represented. The transaction lands in a later ledger, whose state may differ.
+        /// represented. <c>book_offers</c> leaves out offers whose owner holds nothing, except the
+        /// account's own: the node removes such offers on the way, and the crossing does not list
+        /// them. The transaction lands in a later ledger, whose state may differ.
         /// </remarks>
         /// <param name="client">The node to read from.</param>
         /// <param name="account">The account placing the offer.</param>
@@ -86,7 +88,7 @@ namespace Xrpl.Amounts
 
             foreach ((IssuedCurrency @in, IssuedCurrency @out) in books)
             {
-                foreach (BookOffer offer in await BookAsync(client, @in, @out, at, cancellationToken).ConfigureAwait(false))
+                foreach (BookOffer offer in await BookAsync(client, account, @in, @out, at, cancellationToken).ConfigureAwait(false))
                 {
                     XrplAmount pays = offer.TakerPays.ToXrplAmount();
                     XrplAmount gets = offer.TakerGets.ToXrplAmount();
@@ -164,13 +166,16 @@ namespace Xrpl.Amounts
 
         private static async Task<IReadOnlyList<BookOffer>> BookAsync(
             IXrplClient client,
+            string account,
             IssuedCurrency @in,
             IssuedCurrency @out,
             LedgerIndex at,
             CancellationToken cancellationToken)
         {
+            // With the taker named, the account's own unfunded offers are returned too.
             BookOffersRequest request = new BookOffersRequest
             {
+                Taker = account,
                 TakerPays = TakerAmountOf(@in),
                 TakerGets = TakerAmountOf(@out),
                 Limit = BookLimit,

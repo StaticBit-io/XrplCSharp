@@ -149,7 +149,7 @@ public class TestIBookCrossing
     {
         (_, XrplWallet m1, XrplWallet m2, XrplWallet taker, IssuedCurrency usd) = await Market();
         // Ledger time, not the machine's clock: a standalone node's close times run their own course.
-        uint expiration = await dex.LastCloseTime() + 30;
+        uint expiration = await dex.LastCloseTime() + 90;
         await dex.Offer(m1, Amount(usd, "10"), Drops(2_000_000), expiration: expiration);
         await dex.Offer(m2, Amount(usd, "10"), Drops(2_500_000));
 

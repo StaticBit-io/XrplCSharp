@@ -162,7 +162,7 @@ OfferCrossingResult result = OfferCreateCrossing.Cross(
 // result.PlacedTakerPays / PlacedTakerGets: the offer left in the book, if any
 ```
 
-`DexSnapshot.FromNodeAsync` reads everything at one validated ledger: the books the crossing can reach, the pools on them, and the accounts and trust lines it reads. Each book is read with one `book_offers` call, so a crossing deeper than the first 400 offers of a book is not represented. A snapshot can also be built by hand, as the unit tests do.
+`DexSnapshot.FromNodeAsync` reads everything at one validated ledger: the books the crossing can reach, the pools on them, and the accounts and trust lines it reads. Each book is read with one `book_offers` call, so a crossing deeper than the first 400 offers of a book is not represented. `book_offers` also leaves out offers whose owner holds nothing, other than the account's own; the node removes them on the way, and the result does not list them. A snapshot can also be built by hand, as the unit tests do.
 
 The result is exact against the snapshot. The transaction lands in a later ledger, whose state can differ, so `simulate` stays the reference before submitting. Not covered: permissioned-DEX domains, MPT books, `RequireAuth`, the transaction's `Expiration` and `OfferSequence`, and sponsored reserves. Payments are not covered either; their full engine is tracked in [#240](https://github.com/StaticBit-io/XrplCSharp/issues/240).
 

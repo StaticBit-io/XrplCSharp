@@ -73,7 +73,7 @@ namespace Xrpl.Amounts
 
             bool sell = flags.HasFlag(OfferCreateFlags.tfSell);
             if (!RoundToTickSize(world, ref takerPays, ref takerGets, sell, rules))
-                return Result(world, ledger, "tesSUCCESS", takerPays, takerGets, null);
+                return Result(world, ledger, "tesSUCCESS", XrplAmount.Zero(takerGets.Asset), XrplAmount.Zero(takerPays.Asset), null);
 
             // Crossing, the account is the taker: it pays in what the offer gives.
             (XrplAmount In, XrplAmount Out) takerAmount = (takerGets, takerPays);
@@ -385,7 +385,11 @@ namespace Xrpl.Amounts
             balances.Sort((a, b) =>
             {
                 int byAccount = string.CompareOrdinal(a.Account, b.Account);
-                return byAccount != 0 ? byAccount : string.CompareOrdinal(a.Change.Asset?.Currency, b.Change.Asset?.Currency);
+                if (byAccount != 0)
+                    return byAccount;
+
+                int byCurrency = string.CompareOrdinal(a.Change.Asset?.Currency, b.Change.Asset?.Currency);
+                return byCurrency != 0 ? byCurrency : string.CompareOrdinal(a.Change.Asset?.Issuer, b.Change.Asset?.Issuer);
             });
 
             return new OfferCrossingResult(engineResult, paid, got, placed?.TakerPays, placed?.TakerGets, offers, pools, balances);
