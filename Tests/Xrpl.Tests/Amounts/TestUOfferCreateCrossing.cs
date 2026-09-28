@@ -293,8 +293,8 @@ public class TestUOfferCreateCrossing
     [TestMethod]
     public void ChangeSpotPriceQuality_MatchesRippledsTable()
     {
-        LedgerRules fixedRules = new LedgerRules { LargeNumbers = false, FixCleanup3_2_0 = false, FixCleanup3_3_0 = false };
-        LedgerRules legacyRules = new LedgerRules { LargeNumbers = false, FixCleanup3_2_0 = false, FixCleanup3_3_0 = false, FixAMMv1_1 = false, FixAMMv1_3 = false };
+        LedgerRules fixedRules = new LedgerRules { LargeNumbers = false };
+        LedgerRules legacyRules = new LedgerRules { LargeNumbers = false, FixAMMv1_1 = false, FixAMMv1_3 = false };
         IssuedCurrency iou = new IssuedCurrency { Currency = "IOU", Issuer = Gw };
 
         XrplAmount Pool(string value) => value.All(char.IsDigit) ? XrplAmount.Parse(Xrp, value) : XrplAmount.Parse(iou, value);
