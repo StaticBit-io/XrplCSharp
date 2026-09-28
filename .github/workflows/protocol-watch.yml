@@ -239,15 +239,26 @@ jobs:
             gh api "repos/$UPSTREAM/git/blobs/$1" --jq '.content' 2>/dev/null | base64 -d 2>/dev/null
           }
 
+          # GitHub refuses an issue comment over 65536 characters, and a refused
+          # comment would leave the baseline unchanged for every later run to
+          # retry. Past this size the notification drops the diffs and keeps the
+          # links, which stay small however many files moved.
+          MAX_COMMENT_CHARS=60000
+
           files=$(echo "$changed" | jq -r '.[]')
           lines=""
+          links=""
           for f in $files; do
             if [ "$(echo "$current" | jq --arg f "$f" 'has($f)')" != "true" ]; then
-              lines="$lines- \`$f\` — **removed or renamed upstream** · [history](https://github.com/$UPSTREAM/commits/$UPSTREAM_REF/$f)"$'\n'
+              entry="- \`$f\` — **removed or renamed upstream** · [history](https://github.com/$UPSTREAM/commits/$UPSTREAM_REF/$f)"$'\n'
+              lines="$lines$entry"
+              links="$links$entry"
               continue
             fi
 
-            lines="$lines- \`$f\` — [history](https://github.com/$UPSTREAM/commits/$UPSTREAM_REF/$f) · [current](https://github.com/$UPSTREAM/blob/$head_sha/$f)"$'\n'
+            entry="- \`$f\` — [history](https://github.com/$UPSTREAM/commits/$UPSTREAM_REF/$f) · [current](https://github.com/$UPSTREAM/blob/$head_sha/$f)"$'\n'
+            lines="$lines$entry"
+            links="$links$entry"
 
             new_sha=$(echo "$current" | jq -r --arg f "$f" '.[$f]')
             old_sha=$(echo "$stored" | jq -r --arg f "$f" '.[$f] // empty')
@@ -289,6 +300,10 @@ jobs:
             echo "Notification for $head_sha already posted; updating the baseline only."
           else
             comment=$(printf '%s\n%s changed on `%s` `%s` (checked at upstream commit %s):\n\n%s\nFollow-ups to consider: %s\n' "$marker" "$WHAT" "$UPSTREAM" "$UPSTREAM_REF" "$head_sha" "$lines" "$FOLLOW_UP")
+            if [ "${#comment}" -gt "$MAX_COMMENT_CHARS" ]; then
+              links="$links"$'\n'"*The diffs would exceed a comment's size limit, so they are left out: follow the links.*"$'\n'
+              comment=$(printf '%s\n%s changed on `%s` `%s` (checked at upstream commit %s):\n\n%s\nFollow-ups to consider: %s\n' "$marker" "$WHAT" "$UPSTREAM" "$UPSTREAM_REF" "$head_sha" "$links" "$FOLLOW_UP")
+            fi
             gh issue comment "$number" --repo "$REPO" --body "$comment"
           fi
 
