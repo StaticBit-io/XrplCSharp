@@ -1,5 +1,6 @@
 using System;
 
+using Xrpl.Amounts;
 using Xrpl.BinaryCodec.Numbers;
 using Xrpl.Models.Methods;
 

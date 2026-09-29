@@ -1,0 +1,352 @@
+@page "/dex-quotes"
+@using System.Globalization
+@using System.Text.Json
+@using Xrpl.Amounts
+@using Xrpl.Client
+@using Xrpl.Models
+@using Xrpl.Models.Ledger
+@using Xrpl.Models.Common
+@using Xrpl.Models.Methods
+@using Xrpl.Models.Transactions
+@using Xrpl.Sugar
+@using static Xrpl.Models.Common.Common
+
+<PageTitle>Paths &amp; quotes</PageTitle>
+
+<h1>Paths &amp; quotes</h1>
+
+<p style="color: #666;">
+    Server: <strong>@Client.Url()</strong> (@(Client.IsConnected() ? "connected" : "not connected")).
+    Switch it on the <a href="/">Connection</a> tab.
+    Nothing here is signed or submitted: paths come from the local path finder (<code>PathFinding</code>) or the node's
+    <code>ripple_path_find</code>, and quotes from the local payment engine (<code>DexQuoteSugar</code>) over the last
+    validated ledger.
+</p>
+
+<section style="background: #f5f5f5; padding: 15px; border-radius: 5px;">
+    <div style="display: grid; grid-template-columns: 220px 1fr; gap: 8px 12px; align-items: center; max-width: 900px;">
+        <label>Mode</label>
+        <select @bind="_mode">
+            <option value="deliver">Deliver exactly - what it costs</option>
+            <option value="spend">Spend exactly - what it delivers</option>
+            <option value="paths">Find paths only</option>
+        </select>
+
+        <label>Source account</label>
+        <input @bind="_source" style="font-family: monospace;" placeholder="r..." />
+
+        <label>Destination account</label>
+        <input @bind="_destination" style="font-family: monospace;" placeholder="r..." />
+
+        <label>@(_mode == "spend" ? "Amount to spend" : "Amount to deliver")</label>
+        <input @bind="_amount" style="font-family: monospace;" placeholder="@(_mode == "paths" ? "a number, or -1 for as much as possible" : "a number; XRP in XRP")" />
+
+        <label>@(_mode == "spend" ? "Asset spent" : "Asset delivered")</label>
+        <input @bind="_asset" style="font-family: monospace;" placeholder="XRP or CUR.rIssuer" />
+
+        @if (_mode != "paths")
+        {
+            <label>@(_mode == "spend" ? "Asset delivered" : "Asset paid with")</label>
+            <input @bind="_otherAsset" style="font-family: monospace;" placeholder="XRP or CUR.rIssuer" />
+        }
+        else
+        {
+            <label>Send max (with -1)</label>
+            <input @bind="_sendMax" style="font-family: monospace;" placeholder="optional: amount and asset, e.g. 30 XRP or 100 USD.rIssuer" />
+        }
+
+        <label>Paths from</label>
+        <select @bind="_pathsFrom">
+            <option value="node">the node's ripple_path_find</option>
+            <option value="ledger">local search, books read from the whole ledger</option>
+            <option value="accounts">local search, books between the accounts' assets</option>
+        </select>
+
+        @if (_pathsFrom != "node")
+        {
+            <label>Search level</label>
+            <select @bind="_level">
+                <option value="2">2 - the node's default</option>
+                <option value="4">4 - fast</option>
+                <option value="7">7 - slow</option>
+                <option value="10">10 - deepest</option>
+            </select>
+        }
+
+        @if (_mode == "paths" && _pathsFrom != "node")
+        {
+            <label>Compare with the node</label>
+            <select @bind="_compare">
+                <option value="yes">yes - also ask ripple_path_find</option>
+                <option value="no">no</option>
+            </select>
+        }
+    </div>
+    <button @onclick="RunAsync" disabled="@_busy" style="margin-top: 12px; padding: 8px 16px;">@(_busy ? "Working..." : "Run")</button>
+    @if (_elapsed != null)
+    {
+        <span style="margin-left: 12px; color: #666;">@_elapsed</span>
+    }
+</section>
+
+@if (_error != null)
+{
+    <p style="color: #b32121; margin-top: 12px;">@_error</p>
+}
+
+@if (_quote != null)
+{
+    PaymentFlowResult result = _quote.Result;
+    <h2>Quote</h2>
+    <table style="border-collapse: collapse;">
+        <tbody>
+            <tr><td style="@Cell">Engine result</td><td style="@Cell; color: @ResultColor(result.EngineResult);">@result.EngineResult</td></tr>
+            <tr><td style="@Cell">Delivered</td><td style="@Number">@Show(_quote.Delivered)</td></tr>
+            <tr><td style="@Cell">Cost, transfer fees included</td><td style="@Number">@Show(_quote.Cost)</td></tr>
+            <tr><td style="@Cell">Offers crossed or removed</td><td style="@Number">@result.Offers.Count</td></tr>
+            <tr><td style="@Cell">Pools traded against</td><td style="@Number">@result.Pools.Count</td></tr>
+            <tr><td style="@Cell">Trust lines created / deleted</td><td style="@Number">@result.TrustLines.Count(l => l.Created) / @result.TrustLines.Count(l => l.Deleted)</td></tr>
+            @if (result.NeedsDeeperBooks)
+            {
+                <tr><td style="@Cell" colspan="2">The engine reached the end of a book read in part - the deepest read was not enough.</td></tr>
+            }
+        </tbody>
+    </table>
+
+    <h3>Balance changes</h3>
+    <table style="border-collapse: collapse;">
+        <thead><tr><th style="@Cell">Account</th><th style="@Cell">Change</th></tr></thead>
+        <tbody>
+            @foreach (BalanceChange change in result.BalanceChanges)
+            {
+                <tr><td style="@Cell; font-family: monospace;">@change.Account</td><td style="@Number">@Show(change.Change)</td></tr>
+            }
+        </tbody>
+    </table>
+
+    <h3>Payment to sign</h3>
+    <pre style="background: #f5f5f5; padding: 10px; border-radius: 5px; max-width: 900px; overflow-x: auto;">@Json(_quote.Payment)</pre>
+}
+
+@if (_found != null)
+{
+    <h2>Alternatives (@_foundBy)</h2>
+    @AlternativesTable(_found)
+}
+
+@if (_node != null)
+{
+    <h2>Alternatives (the node's ripple_path_find)</h2>
+    @AlternativesTable(_node)
+    <p style="color: @(_matches ? "#28a745" : "#b32121");">
+        @(_matches ? "The local search and the node agree on every alternative." : "The local search and the node differ - see above.")
+    </p>
+}
+
+@code {
+    private const string Cell = "border: 1px solid #ccc; padding: 4px 8px;";
+    private const string Number = "border: 1px solid #ccc; padding: 4px 8px; text-align: right; font-family: monospace;";
+
+    [Inject]
+    private IXrplClient Client { get; set; } = default!;
+
+    // Selects bind to strings: a bool binding renders boolean attributes and cannot be chosen.
+    private string _mode = "deliver";
+    private string _pathsFrom = "ledger";
+    private string _level = "2";
+    private string _compare = "yes";
+    private string _source = string.Empty;
+    private string _destination = string.Empty;
+    private string _amount = string.Empty;
+    private string _asset = string.Empty;
+    private string _otherAsset = "XRP";
+    private string _sendMax = string.Empty;
+
+    private bool _busy;
+    private string? _error;
+    private string? _elapsed;
+    private PaymentQuote? _quote;
+    private List<(XrplAmount Source, XrplAmount? Delivered, List<List<PathStep>> Paths)>? _found;
+    private List<(XrplAmount Source, XrplAmount? Delivered, List<List<PathStep>> Paths)>? _node;
+    private string _foundBy = string.Empty;
+    private bool _matches;
+
+    private async Task RunAsync()
+    {
+        _busy = true;
+        _error = null;
+        _quote = null;
+        _found = null;
+        _node = null;
+        System.Diagnostics.Stopwatch watch = System.Diagnostics.Stopwatch.StartNew();
+        try
+        {
+            IssuedCurrency asset = ParseAsset(_asset);
+            XrplAmount amount = ParseAmount(_amount, asset);
+
+            // One ledger for the books, the local search and the node's, so that they compare.
+            LedgerIndex at = await ValidatedAsync();
+            IBookIndex? books = await BooksAsync(at);
+
+            if (_mode == "deliver")
+                _quote = await Client.QuoteDeliverAsync(_source.Trim(), _destination.Trim(), amount, ParseAsset(_otherAsset), books: books);
+            else if (_mode == "spend")
+                _quote = await Client.QuoteSpendAsync(_source.Trim(), _destination.Trim(), amount, ParseAsset(_otherAsset), books: books);
+            else
+                await FindAsync(amount, books, at);
+        }
+        catch (Exception exception)
+        {
+            _error = exception.Message;
+        }
+        finally
+        {
+            _elapsed = $"{watch.ElapsedMilliseconds} ms";
+            _busy = false;
+        }
+    }
+
+    private async Task<LedgerIndex> ValidatedAsync()
+    {
+        LOLedger header = await Client.Ledger(new LedgerRequest { LedgerIndex = new LedgerIndex(LedgerIndexType.Validated) }).Typed();
+        return new LedgerIndex(uint.Parse(((LedgerEntity)header.LedgerEntity).LedgerIndex, CultureInfo.InvariantCulture));
+    }
+
+    private async Task<IBookIndex?> BooksAsync(LedgerIndex at) => _pathsFrom switch
+    {
+        "ledger" => await BookIndex.FromLedgerAsync(Client, at),
+        "accounts" => await BookIndex.FromAccountsAsync(Client, new[] { _source.Trim(), _destination.Trim() }, ledger: at),
+        _ => null,
+    };
+
+    private async Task FindAsync(XrplAmount amount, IBookIndex? books, LedgerIndex at)
+    {
+        XrplAmount? sendMax = string.IsNullOrWhiteSpace(_sendMax) ? null : ParseAmountAndAsset(_sendMax);
+        PathFindRequest request = new PathFindRequest
+        {
+            SourceAccount = _source.Trim(),
+            DestinationAccount = _destination.Trim(),
+            DestinationAmount = amount,
+            SendMax = sendMax,
+            SearchLevel = int.Parse(_level, CultureInfo.InvariantCulture),
+        };
+
+        if (books != null)
+        {
+            PathfindingSource source = await PathfindingSource.FromNodeAsync(Client, books, at);
+            PathFindResult local = await PathFinding.FindAsync(source, request, await LedgerRules.FromNodeAsync(Client));
+            if (local.Error != null)
+                throw new InvalidOperationException($"The request is refused: {local.Error}");
+
+            _found = local.Alternatives.Select(a => (a.SourceAmount, a.DestinationAmount, a.PathsComputed)).ToList();
+            _foundBy = "local search";
+        }
+
+        if (books == null || _compare == "yes")
+        {
+            RipplePathFindResponse node = await Client.RipplePathFind(new RipplePathFindRequest(request.SourceAccount, request.DestinationAccount, amount.ToCurrency())
+            {
+                SendMax = sendMax?.ToCurrency(),
+                LedgerIndex = at,
+            }).Typed();
+            _node = (node.Alternatives ?? new List<PathAlternative>())
+                .Select(a => (a.SourceAmount.ToXrplAmount(), a.DestinationAmount?.ToXrplAmount(), a.PathsComputed ?? new List<List<PathStep>>()))
+                .ToList();
+            if (books == null)
+            {
+                _found = _node;
+                _foundBy = "the node's ripple_path_find";
+                _node = null;
+            }
+            else
+            {
+                _matches = _found!.Count == _node.Count && _node.All(n => _found.Any(f =>
+                    f.Source == n.Source && Equals(f.Delivered, n.Delivered) && PathsText(f.Paths) == PathsText(n.Paths)));
+            }
+        }
+    }
+
+    private RenderFragment AlternativesTable(List<(XrplAmount Source, XrplAmount? Delivered, List<List<PathStep>> Paths)> alternatives) => __builder =>
+    {
+        if (alternatives.Count == 0)
+        {
+            <p>No alternative.</p>
+            return;
+        }
+
+        <table style="border-collapse: collapse;">
+            <thead><tr><th style="@Cell">Source amount</th><th style="@Cell">Delivered</th><th style="@Cell">Paths</th></tr></thead>
+            <tbody>
+                @foreach (var alternative in alternatives)
+                {
+                    <tr>
+                        <td style="@Number">@Show(alternative.Source)</td>
+                        <td style="@Number">@Show(alternative.Delivered)</td>
+                        <td style="@Cell; font-family: monospace; white-space: pre;">@(alternative.Paths.Count == 0 ? "(default path)" : PathsText(alternative.Paths))</td>
+                    </tr>
+                }
+            </tbody>
+        </table>
+    };
+
+    private static string PathsText(List<List<PathStep>> paths) =>
+        string.Join("\n", paths.Select(path => string.Join(" -> ", path.Select(step =>
+            step.Account ?? (step.Issuer == null ? $"book {step.CurrencyCode}" : $"book {step.CurrencyCode}.{step.Issuer}")))));
+
+    /// <summary>"XRP" or "CUR.rIssuer".</summary>
+    private static IssuedCurrency ParseAsset(string text)
+    {
+        string value = text.Trim();
+        if (value.Equals("XRP", StringComparison.OrdinalIgnoreCase))
+            return new IssuedCurrency { Currency = "XRP" };
+
+        int dot = value.IndexOf('.');
+        if (dot > 0)
+            return new IssuedCurrency { Currency = value[..dot], Issuer = value[(dot + 1)..] };
+
+        throw new FormatException($"'{value}' is not XRP or CUR.rIssuer.");
+    }
+
+    /// <summary>A value in the asset's own unit - XRP in XRP - or -1 for as much as possible.</summary>
+    private static XrplAmount ParseAmount(string text, IssuedCurrency asset)
+    {
+        string value = text.Trim();
+        if (value == "-1")
+            return XrplAmount.Parse(asset, "-1");
+
+        if (!asset.IsXrp())
+            return XrplAmount.Parse(asset, value);
+
+        decimal drops = decimal.Parse(value, NumberStyles.Float, CultureInfo.InvariantCulture) * 1_000_000m;
+        if (drops != decimal.Truncate(drops))
+            throw new FormatException($"{value} XRP is not a whole number of drops; XRP has six decimal places.");
+
+        return XrplAmount.Parse(asset, decimal.Truncate(drops).ToString(CultureInfo.InvariantCulture));
+    }
+
+    /// <summary>"30 XRP" or "100 USD.rIssuer".</summary>
+    private static XrplAmount ParseAmountAndAsset(string text)
+    {
+        string[] parts = text.Trim().Split(' ', StringSplitOptions.RemoveEmptyEntries);
+        if (parts.Length != 2)
+            throw new FormatException("Send max is an amount and an asset: 30 XRP, or 100 USD.rIssuer.");
+
+        return ParseAmount(parts[0], ParseAsset(parts[1]));
+    }
+
+    private static string Show(XrplAmount? amount)
+    {
+        if (amount is not { } value)
+            return "-";
+
+        if (value.Kind == AmountKind.Xrp)
+            return (decimal.Parse(value.ToString(), CultureInfo.InvariantCulture) / 1_000_000m).ToString("0.000000", CultureInfo.InvariantCulture) + " XRP";
+
+        return $"{value} {value.Asset.CurrencyName}";
+    }
+
+    private static string ResultColor(string result) => result == "tesSUCCESS" ? "#28a745" : "#b32121";
+
+    private static string Json(Payment payment) =>
+        JsonSerializer.Serialize(payment, new JsonSerializerOptions { WriteIndented = true, DefaultIgnoreCondition = System.Text.Json.Serialization.JsonIgnoreCondition.WhenWritingNull });
+}

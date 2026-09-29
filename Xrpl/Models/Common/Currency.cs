@@ -239,6 +239,14 @@ public class Currency
         }
     }
 
+    /// <summary>
+    /// The amount as an <see cref="Xrpl.Amounts.XrplAmount"/>: exact over the ledger's whole range,
+    /// where <see cref="ValueAsNumber"/> is limited to what <see cref="decimal"/> holds.
+    /// </summary>
+    /// <exception cref="FormatException">The value is not an amount.</exception>
+    /// <exception cref="OverflowException">The value is beyond what the asset can hold.</exception>
+    public Xrpl.Amounts.XrplAmount ToXrplAmount() => Xrpl.Amounts.XrplAmount.FromCurrency(this);
+
     #region Overrides of Object
 
     /// <summary>

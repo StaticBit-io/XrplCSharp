@@ -97,6 +97,13 @@ namespace Xrpl.Models.Methods
         /// </summary>
         [JsonPropertyName("source_currencies")]
         public List<SourceCurrency> SourceCurrencies { get; set; }
+
+        /// <summary>
+        /// The permissioned domain whose books to search, as its 64-character ledger index;
+        /// omitted for the open books.
+        /// </summary>
+        [JsonPropertyName("domain")]
+        public string Domain { get; set; }
     }
 
     /// <summary>

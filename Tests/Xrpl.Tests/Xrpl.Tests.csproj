@@ -33,6 +33,8 @@
                 <!-- Update, not Include: the SDK's default None glob already picks these up,
                      so Include would declare them twice. Only the fixtures themselves are
                      copied — the .ref sidecars document the pin and are never read by tests. -->
+                <!-- STAmount / Quality / mulRatio vectors from rippled 3.4.0; see Fixtures\Amount\README.md. -->
+                <EmbeddedResource Include="Fixtures\Amount\vectors.txt.gz" LogicalName="XrplTests.Fixtures.Amount.vectors.txt.gz" />
                 <None Update="Fixtures\transactions.macro">
                         <CopyToOutputDirectory>PreserveNewest</CopyToOutputDirectory>
                 </None>
