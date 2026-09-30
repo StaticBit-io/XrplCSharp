@@ -104,12 +104,28 @@ public class TestUXrplAmount
     [DataRow("1e-81", "1000000000000000e-96")]
     [DataRow("0.00000000000000000000000001", "1000000000000000e-41")]
     [DataRow("0", "0")]
+    [DataRow("12345678901", "12345678901")]
+    [DataRow("123456789012", "1234567890120000e-4")]
+    [DataRow("-100000000000", "-1000000000000000e-4")]
+    [DataRow("0.0000000001", "0.0000000001")]
+    [DataRow("0.00000000001", "1000000000000000e-26")]
     public void IssuedCurrency_ReadsAndWritesAsRippledDoes(string text, string written)
     {
         XrplAmount amount = XrplAmount.Parse(Usd, text);
 
         Assert.AreEqual(written, amount.ToString());
         Assert.AreEqual(amount, XrplAmount.Parse(Usd, amount.ToString()));
+    }
+
+    /// <summary>The scientific form <c>getText</c> writes reads back through <see cref="Currency.ValueAsNumber"/>.</summary>
+    [TestMethod]
+    [DataRow("1234567890120000e-4", "123456789012")]
+    [DataRow("-1000000000000000e-4", "-100000000000")]
+    [DataRow("1000000000000000e-26", "0.00000000001")]
+    public void ScientificValueReadsAsDecimal(string value, string expected)
+    {
+        Currency currency = new Currency { CurrencyCode = "USD", Issuer = Usd.Issuer, Value = value };
+        Assert.AreEqual(decimal.Parse(expected, System.Globalization.CultureInfo.InvariantCulture), currency.ValueAsNumber);
     }
 
     [TestMethod]

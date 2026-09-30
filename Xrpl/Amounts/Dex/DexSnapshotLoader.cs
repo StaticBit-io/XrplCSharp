@@ -302,7 +302,11 @@ namespace Xrpl.Amounts
             HashSet<string> offerIndexes = new HashSet<string>(StringComparer.OrdinalIgnoreCase);
             List<DexAmmPool> pools = new List<DexAmmPool>();
             List<DexBook> partialBooks = new List<DexBook>();
-            HashSet<string> domainOwners = new HashSet<string>(StringComparer.Ordinal);
+            // The owners of the offers each domain was read for: a hybrid offer in the open book
+            // carries its domain too, and before fixCleanup3_3_0 the open book checks it.
+            Dictionary<string, HashSet<string>> domainOwners = new Dictionary<string, HashSet<string>>(StringComparer.OrdinalIgnoreCase);
+            if (domainId != null)
+                domainOwners[domainId] = new HashSet<string>(StringComparer.Ordinal) { request.Source, request.Destination };
             void AddOffer(DexOffer offer)
             {
                 if (!offerIndexes.Add(offer.Index))
@@ -315,7 +319,11 @@ namespace Xrpl.Amounts
                 if (offer.TakerGets.Kind == AmountKind.Iou)
                     AddLine(lines, offer.Account, offer.TakerGets.Asset.Issuer, offer.TakerGets.Asset.Currency);
                 if (!string.IsNullOrEmpty(offer.DomainId))
-                    domainOwners.Add(offer.Account);
+                {
+                    if (!domainOwners.TryGetValue(offer.DomainId, out HashSet<string> owners))
+                        domainOwners[offer.DomainId] = owners = new HashSet<string>(StringComparer.Ordinal);
+                    owners.Add(offer.Account);
+                }
             }
 
             foreach ((IssuedCurrency @in, IssuedCurrency @out) in books)
@@ -342,16 +350,19 @@ namespace Xrpl.Amounts
 
             List<DexDomain> domains = new List<DexDomain>();
             List<DexCredential> credentials = new List<DexCredential>();
-            if (domainId != null && await DomainAsync(client, domainId, at, cancellationToken).ConfigureAwait(false) is { } domain)
+            foreach ((string readDomainId, HashSet<string> members) in domainOwners)
             {
+                if (await DomainAsync(client, readDomainId, at, cancellationToken).ConfigureAwait(false) is not { } domain)
+                    continue;
+
                 domains.Add(domain);
-                HashSet<string> members = new HashSet<string>(domainOwners, StringComparer.Ordinal) { request.Source, request.Destination };
-                foreach (string member in members)
+                foreach (string member in members.Where(m => !string.IsNullOrEmpty(m)))
                 {
                     foreach (DexCredentialType accepted in domain.AcceptedCredentials)
                     {
                         if (await CredentialAsync(client, new CredentialQuery { Subject = member, Issuer = accepted.Issuer, CredentialType = accepted.CredentialType }, at, cancellationToken)
-                                .ConfigureAwait(false) is { } credential)
+                                .ConfigureAwait(false) is { } credential &&
+                            !credentials.Exists(c => SameCredential(c, credential)))
                         {
                             credentials.Add(credential);
                         }

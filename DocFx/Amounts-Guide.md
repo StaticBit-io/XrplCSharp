@@ -300,7 +300,9 @@ Against the same ledger and the same books, every alternative - its cost, what i
 
 ## Balance Changes Beyond decimal
 
-`BalanceChanges.GetBalanceChanges` computes issued-currency deltas as `XrplAmount`. Each difference is exact, then rounded once to 16 significant digits, to nearest with ties to even, as rippled rounds. A balance far beyond `decimal` is reported rather than refused, and it is written in scientific notation the way rippled writes it:
+`BalanceChanges.GetBalanceChanges` computes issued-currency deltas as `XrplAmount`. Each difference is exact, then rounded once to 16 significant digits, to nearest with ties to even, as rippled rounds. A balance far beyond `decimal` is reported rather than refused.
+
+`Value` is the text rippled's `STAmount::getText` writes. That is scientific notation - a 16-digit mantissa and an exponent - whenever the exponent is above -5 or below -25, which is from about 1e11 up and below about 1e-10: a delta of 123456789012 is written `1234567890120000e-4`. Read it with `ToXrplAmount()`, or with `ValueAsNumber` within the range of `decimal`; showing `Value` as it is, or parsing it with `NumberStyles.Number`, does not work:
 
 ```csharp
 Dictionary<string, List<Currency>> changes = BalanceChanges.GetBalanceChanges(result.Meta);

@@ -215,7 +215,10 @@ internal sealed class BookCrossingHarness
     /// <summary>Waits until a validated ledger closed after <paramref name="rippleSeconds"/>.</summary>
     internal async Task WaitForCloseAfter(uint rippleSeconds)
     {
-        for (int attempt = 0; attempt < 120; attempt++)
+        // Bounded by the clock, not by attempts: under a parallel run a standalone node closes
+        // ledgers more slowly, and each read takes longer.
+        System.Diagnostics.Stopwatch waited = System.Diagnostics.Stopwatch.StartNew();
+        while (waited.Elapsed < TimeSpan.FromMinutes(5))
         {
             if (await LastCloseTime() > rippleSeconds)
                 return;

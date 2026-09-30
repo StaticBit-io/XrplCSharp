@@ -316,7 +316,9 @@ PathFindResult found = await client.FindPathsAsync(request);
 
 `BalanceChanges.GetBalanceChanges` считает изменения по выпущенным валютам в `XrplAmount`: разность точная, затем она один раз округляется до 16 значащих цифр к ближайшему, половина — к чётному, как в rippled.
 
-Баланс далеко за пределами `decimal` возвращается, а не вызывает исключение. Такие значения записываются научной записью, как у rippled:
+Баланс далеко за пределами `decimal` возвращается, а не вызывает исключение.
+
+`Value` — это текст, который пишет `STAmount::getText` в rippled. Он переходит в научную запись (16-значная мантисса и показатель), когда показатель больше -5 или меньше -25, то есть примерно от 1e11 и выше и ниже 1e-10: изменение на 123456789012 записывается как `1234567890120000e-4`. Читать значение следует через `ToXrplAmount()` или, в пределах `decimal`, через `ValueAsNumber`. Выводить `Value` как есть или разбирать через `NumberStyles.Number` нельзя:
 
 ```csharp
 Dictionary<string, List<Currency>> changes = BalanceChanges.GetBalanceChanges(result.Meta);

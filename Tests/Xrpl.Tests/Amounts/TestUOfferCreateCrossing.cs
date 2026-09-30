@@ -289,6 +289,29 @@ public class TestUOfferCreateCrossing
             OfferCreateCrossing.Cross(snapshot, Carol, XrplAmount.Parse(mpt, "10"), XrpOf(1), Fee));
     }
 
+    /// <summary>
+    /// <c>Transactor::operator()</c> sets the current rules for every <c>doApply</c>, even when
+    /// none of the amendments behind <c>useRulesGuards</c> is enabled; only code outside a
+    /// transaction sees them unset.
+    /// </summary>
+    [TestMethod]
+    public void CurrentRulesAreSetInsideEveryTransaction()
+    {
+        LedgerRules reduced = new LedgerRules { LargeNumbers = false, FixCleanup3_2_0 = false, FixCleanup3_3_0 = false };
+        Assert.IsTrue(reduced.CurrentFixAMMv1_1);
+        Assert.IsTrue(reduced.CurrentFixAMMv1_3);
+        Assert.IsTrue(reduced.CurrentFixReducedOffersV2);
+
+        LedgerRules withoutFixes = new LedgerRules { LargeNumbers = false, FixCleanup3_2_0 = false, FixCleanup3_3_0 = false, FixAMMv1_1 = false, FixReducedOffersV2 = false };
+        Assert.IsFalse(withoutFixes.CurrentFixAMMv1_1);
+        Assert.IsFalse(withoutFixes.CurrentFixReducedOffersV2);
+
+        LedgerRules outside = reduced.OutsideOfTransaction();
+        Assert.IsFalse(outside.CurrentFixAMMv1_1);
+        Assert.IsFalse(outside.CurrentFixAMMv1_3);
+        Assert.IsFalse(outside.CurrentFixReducedOffersV2);
+    }
+
     /// <summary><c>testFixChangeSpotPriceQuality</c>: which pools can be brought to a quality, at the small <c>Number</c> scale.</summary>
     [TestMethod]
     public void ChangeSpotPriceQuality_MatchesRippledsTable()
