@@ -101,6 +101,28 @@ namespace Xrpl.Amounts
             CeilOut(@in, @out, limit, roundUp, strict: true, rules);
 
         /// <summary>
+        /// <c>Quality::round</c>: the quality with its mantissa rounded up, to a worse quality, to
+        /// <paramref name="digits"/> significant digits - the rounding a tick size applies to an offer.
+        /// </summary>
+        /// <param name="digits">The significant digits to keep, 1 to 16; 16 leaves the quality as it is.</param>
+        /// <exception cref="ArgumentOutOfRangeException"><paramref name="digits"/> is outside 1 to 16.</exception>
+        public XrplQuality Round(int digits)
+        {
+            if (digits < 1 || digits > 16)
+                throw new ArgumentOutOfRangeException(nameof(digits), digits, "A quality keeps 1 to 16 significant digits.");
+
+            ulong modulus = 1;
+            for (int i = digits; i < 16; i++)
+                modulus *= 10;
+
+            ulong exponent = Value >> 56;
+            ulong mantissa = Value & 0x00ffffffffffffffUL;
+            mantissa += modulus - 1;
+            mantissa -= mantissa % modulus;
+            return new XrplQuality((exponent << 56) | mantissa);
+        }
+
+        /// <summary>
         /// Whether two qualities are within a relative distance of each other, as rippled's
         /// <c>withinRelativeDistance(Quality, Quality, Number)</c> decides it from their rates.
         /// </summary>

@@ -1,9 +1,11 @@
+using System.Linq;
 using System.Threading.Tasks;
 
 using Microsoft.VisualStudio.TestTools.UnitTesting;
 
 using Xrpl.Amounts;
 using Xrpl.Client;
+using Xrpl.Models.Common;
 using Xrpl.Models.Transactions;
 using Xrpl.Wallet;
 
@@ -158,6 +160,27 @@ public class TestIBookCrossing
 
         OfferCrossingResult result = await dex.CrossAndCompare(taker, Amount(usd, "10"), Drops(3_000_000));
         Assert.AreEqual("tesSUCCESS", result.EngineResult);
+    }
+
+    [TestMethod]
+    public async Task SnapshotReadsTheLedgerAsked()
+    {
+        (_, XrplWallet m1, _, XrplWallet taker, IssuedCurrency usd) = await Market();
+        DexSnapshot before = await DexSnapshot.FromNodeAsync(dex.Client, taker.ClassicAddress, usd, Xrp);
+        await dex.Offer(m1, Amount(usd, "10"), Drops(3_000_000));
+
+        DexSnapshot after = await DexSnapshot.FromNodeAsync(dex.Client, taker.ClassicAddress, usd, Xrp);
+        DexSnapshot replay = await DexSnapshot.FromNodeAsync(
+            dex.Client,
+            taker.ClassicAddress,
+            usd,
+            Xrp,
+            new DexSnapshotOptions { Ledger = new LedgerIndex(before.LedgerSequence) });
+
+        Assert.IsGreaterThan(before.LedgerSequence, after.LedgerSequence);
+        Assert.IsTrue(after.Offers.Any(o => o.Account == m1.ClassicAddress), "the offer is in the book now");
+        Assert.AreEqual(before.LedgerSequence, replay.LedgerSequence);
+        Assert.IsFalse(replay.Offers.Any(o => o.Account == m1.ClassicAddress), "the ledger asked for is read, before the offer");
     }
 
     [TestMethod]

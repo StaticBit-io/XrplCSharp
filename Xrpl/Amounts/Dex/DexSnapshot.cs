@@ -29,6 +29,12 @@ namespace Xrpl.Amounts
         /// </summary>
         public uint ParentCloseTime { get; init; }
 
+        /// <summary>
+        /// The sequence of the ledger the snapshot was read at; 0 for one built by hand. A
+        /// deeper read of the same books can be made at it with <see cref="DexSnapshotOptions.Ledger"/>.
+        /// </summary>
+        public uint LedgerSequence { get; init; }
+
         /// <summary>The account reserve, in drops.</summary>
         public ulong ReserveBase { get; init; }
 
