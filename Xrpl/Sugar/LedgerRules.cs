@@ -139,6 +139,16 @@ namespace Xrpl.Sugar
         }
 
         /// <summary>Reads the amendments from the node.</summary>
+        /// <remarks>
+        /// The rules come from the <c>feature</c> command, which reports the amendments the
+        /// ledger's <c>Amendments</c> object records. A node can also apply amendments listed in
+        /// the <c>[features]</c> stanza of its config: they act as presets of its rules without
+        /// being enabled on the ledger, and <c>feature</c> reports them as disabled. A standalone
+        /// test node started that way runs amendments this method sees as off, and the engine
+        /// then differs from it; build the <see cref="LedgerRules"/> by hand for such a node, or
+        /// enable the amendments at genesis through the <c>[amendments]</c> stanza. Mainnet,
+        /// testnet and devnet enable amendments on the ledger.
+        /// </remarks>
         public static async Task<LedgerRules> FromNodeAsync(IXrplClient client, CancellationToken cancellationToken = default)
         {
             if (client == null)

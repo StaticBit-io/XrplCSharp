@@ -185,6 +185,8 @@ namespace Xrpl.Amounts
                     continue;
                 if (pool.Balance.Kind == AmountKind.Mpt || pool.Balance2.Kind == AmountKind.Mpt)
                     throw new NotSupportedException("MPT pools are not supported.");
+                AmmOfferMath.RequireTradingFee(pool.TradingFee, nameof(snapshot));
+                AmmOfferMath.RequireTradingFee(pool.DiscountedFee, nameof(snapshot));
 
                 Pools.Add(pool);
                 PoolAccounts.Add(pool.Account);
