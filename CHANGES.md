@@ -1,6 +1,6 @@
 ﻿# Changes
 
-## 11.11.0.0 29/09/2026
+## 11.11.0.0 30/09/2026
 
 * The engine reads `fixAMMv1_1` (`swapAssetIn`, `swapAssetOut`), `fixAMMv1_3` (an offer's `checkInvariant`) and `fixReducedOffersV2` (`limitIn`) as the ledger has them inside every transaction, whatever `useRulesGuards` decides; they read as disabled only outside a transaction (#250)
 * `DexSnapshot.FromNodeAsync` reads the domain of every domain or hybrid offer it loads, and the credentials of the offer owners that domain accepts, also for an order or a payment without a `DomainID`
