@@ -101,11 +101,11 @@ namespace Xrpl.Sugar
         internal bool OutsideTransaction { get; private set; }
 
         /// <summary>
-        /// <c>useRulesGuards</c>: whether a transaction sets its rules as the current ones. Without
-        /// one of these amendments it does not, and the checks made through the current rules see
-        /// every amendment disabled.
+        /// Whether the current transaction rules are set. <c>Transactor::operator()</c> sets them
+        /// for every <c>doApply</c>, whatever <c>useRulesGuards</c> decides for the other steps, so
+        /// only code outside a transaction sees them unset.
         /// </summary>
-        private bool CurrentRulesSet => !OutsideTransaction && (LargeNumbers || FixCleanup3_2_0 || FixCleanup3_3_0);
+        private bool CurrentRulesSet => !OutsideTransaction;
 
         /// <summary><c>fixAMMv1_1</c> as <c>swapAssetIn</c> and <c>swapAssetOut</c> read it: from the current transaction rules.</summary>
         internal bool CurrentFixAMMv1_1 => CurrentRulesSet && FixAMMv1_1;

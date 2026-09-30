@@ -1,5 +1,13 @@
 ﻿# Changes
 
+## 11.11.0.0 29/09/2026
+
+* The engine reads `fixAMMv1_1` (`swapAssetIn`, `swapAssetOut`), `fixAMMv1_3` (an offer's `checkInvariant`) and `fixReducedOffersV2` (`limitIn`) as the ledger has them inside every transaction, whatever `useRulesGuards` decides; they read as disabled only outside a transaction (#250)
+* `DexSnapshot.FromNodeAsync` reads the domain of every domain or hybrid offer it loads, and the credentials of the offer owners that domain accepts, also for an order or a payment without a `DomainID`
+* `GetBalanceChanges` and `Amounts-Guide` (both languages) describe the `getText` form of `Currency.Value` (#254)
+* `TestUOfferCreateCrossing.CurrentRulesAreSetInsideEveryTransaction`; `TestUXrplAmount` pins the `getText` boundaries and reads the scientific form through `ValueAsNumber`
+* The integration harness waits for a ledger closed after an expiration for up to five minutes of wall time
+
 ## 11.10.0.0 27/09/2026
 
 * **`XrplAmount`: an amount over the ledger's whole range** (#150, `Xrpl.Amounts`). It holds XRP drops, MPT units or an issued currency as a 16-digit mantissa with an exponent from -96 to 80, as rippled's `STAmount` does. `Parse`, `TryParse`, `FromNumber` (`STAmount::fromNumber`), `FromCurrency` / `ToCurrency`, `ToString` (`STAmount::getText`), comparison and `KindOf`. `AmountKind` (`Xrp`, `Iou`, `Mpt`) moves from `Xrpl.Sugar` to `Xrpl.Amounts` and becomes public
@@ -35,9 +43,10 @@
   * `IBookIndex` and `BookIndex`: the order books, which rippled's `OrderBookDB` holds and a client supplies - `FromLedgerAsync` (every book directory and AMM pool of a ledger), `FromAssetsAsync` (the books between given assets, at most `MaxProbeAssets`), `FromAccountsAsync` (between the assets the accounts' trust lines hold, owe or trust for), `FromSnapshot`, and `Observe` for the books later transactions create
   * `DexQuoteSugar.FindPathsAsync`, and a `books` argument on `QuoteDeliverAsync` and `QuoteSpendAsync` that takes the paths from the local search instead of `ripple_path_find`
   * `RipplePathFindRequest.Domain`
-* **The engine outside a transaction**: rippled reads some amendments from the current transaction's rules, which a node has none of outside a transaction - in `ripple_path_find` - and which a transaction sets only under `SingleAssetVault`, `LendingProtocol`, `fixCleanup3_2_0` or `fixCleanup3_3_0`. `swapAssetIn` and `swapAssetOut` (`fixAMMv1_1`), an offer's `checkInvariant` (`fixAMMv1_3`) and `limitIn` (`fixReducedOffersV2`) now read them that way, while `BookStep`, `AMMLiquidity` and `changeSpotPriceQuality` keep reading the view's rules; outside a transaction `Number` keeps its large scale
+* **The engine outside a transaction**: rippled reads some amendments from the current transaction's rules, which a node has none of outside a transaction - in `ripple_path_find`. `swapAssetIn` and `swapAssetOut` (`fixAMMv1_1`), an offer's `checkInvariant` (`fixAMMv1_3`) and `limitIn` (`fixReducedOffersV2`) now read them that way, while `BookStep`, `AMMLiquidity` and `changeSpotPriceQuality` keep reading the view's rules; outside a transaction `Number` keeps its large scale
 * The engine no longer moves XRP straight from one account to another along a strand of two XRP endpoints (`isDirectXrpToXrp`), as rippled's flow refuses
 * **`GetBalanceChanges` computes issued-currency deltas as `XrplAmount`** (#154): the difference is exact, then rounded once to 16 digits to nearest with ties to even, and written as rippled writes it. A balance beyond `decimal` is reported instead of throwing `AmountOutOfRangeException`
+  * **Behaviour change:** `Currency.Value` of an issued-currency delta is the `STAmount::getText` form, in scientific notation when the exponent is above -5 or below -25 (from about 1e11 up and below about 1e-10): 123456789012 is written `1234567890120000e-4`, where 11.9.0.0 wrote `123456789012`. Read it with `ToXrplAmount()` or `ValueAsNumber`, not as display text or with `NumberStyles.Number`
 * **Breaking: `Xrpl.Utils.Quality` is removed.** It was an empty class; the quality of an offer is `XrplQuality`
 * `Amounts-Guide` (both languages) covers `XrplAmount`, the arithmetic, `XrplQuality`, `OfferCrossing`, `OfferCreateCrossing`, `PaymentFlow`, permissioned domains and credentials, reading books from a node, quotes, and finding paths
 * `protocol-watch.yml`: `engine-watch` also follows the path finder's sources (`Pathfinder`, `PathRequest`, `AssetCache`, `TrustLine`, `AccountAssets`, `OrderBookDBImpl`, `RipplePathFind`, `STPathSet`) and `Rules.cpp`; a path added to its list starts from the baseline ref
