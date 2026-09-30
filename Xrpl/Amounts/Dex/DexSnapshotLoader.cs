@@ -493,8 +493,14 @@ namespace Xrpl.Amounts
             };
         }
 
-        /// <summary>A big enough amount of an issued currency: what the unlimited taker holds and may receive.</summary>
-        private static XrplAmount Plenty(IssuedCurrency asset) => XrplAmount.Parse(asset, "1e40");
+        /// <summary>
+        /// Half the largest issued-currency amount: what the unlimited taker holds, so that it can
+        /// pay any amount an offer names and still receive as much again without overflowing.
+        /// </summary>
+        private static XrplAmount Plenty(IssuedCurrency asset) => XrplAmount.Parse(asset, "4999999999999999e80");
+
+        /// <summary>The largest issued-currency amount: the limit of the unlimited taker's lines.</summary>
+        private static XrplAmount MostOf(IssuedCurrency asset) => XrplAmount.Parse(asset, "9999999999999999e80");
 
         /// <summary>
         /// <see cref="DexSnapshot.UnlimitedTaker"/>: the most XRP there is, plenty of each issued
@@ -519,7 +525,7 @@ namespace Xrpl.Amounts
                 {
                     Account = DexSnapshot.UnlimitedTaker,
                     Balance = Plenty(asset),
-                    Limit = XrplAmount.Parse(asset, "1e41"),
+                    Limit = MostOf(asset),
                     PeerAuthorized = true,
                     Reserve = true,
                 });
