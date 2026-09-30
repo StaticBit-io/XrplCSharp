@@ -1,10 +1,13 @@
+using System.Linq;
 using System.Threading.Tasks;
 
 using Microsoft.VisualStudio.TestTools.UnitTesting;
 
 using Xrpl.Amounts;
 using Xrpl.Client;
+using Xrpl.Models.Common;
 using Xrpl.Models.Transactions;
+using Xrpl.Sugar;
 using Xrpl.Wallet;
 
 using static Xrpl.Models.Common.Common;
@@ -158,6 +161,84 @@ public class TestIBookCrossing
 
         OfferCrossingResult result = await dex.CrossAndCompare(taker, Amount(usd, "10"), Drops(3_000_000));
         Assert.AreEqual("tesSUCCESS", result.EngineResult);
+    }
+
+    [TestMethod]
+    public async Task OwnerFundsFromTheBookCrossAsTheNodeDoes()
+    {
+        // As TransferFeeAndOwnersWhoCannotPay, with the makers built from owner_funds.
+        (XrplWallet issuer, XrplWallet m1, XrplWallet m2, XrplWallet taker, IssuedCurrency usd) =
+            await Market(transferRate: 1_002_500_000, maker1Funds: "40", maker2Funds: "500");
+        await dex.Offer(m1, Amount(usd, "100"), Drops(30_000_000));
+        await dex.Offer(m2, Amount(usd, "123.456789"), Drops(40_000_000));
+        DexSnapshotOptions fromBook = new DexSnapshotOptions { OwnerFundsFromBook = true };
+
+        DexSnapshot snapshot = await DexSnapshot.FromNodeAsync(dex.Client, taker.ClassicAddress, usd, Xrp, fromBook);
+        CollectionAssert.AreEquivalent(new[] { m1.ClassicAddress, m2.ClassicAddress }, snapshot.ApproximatedOwners.ToArray());
+        Assert.IsFalse(snapshot.ApproximatedOwners.Contains(issuer.ClassicAddress), "the issuer is read");
+
+        OfferCrossingResult result = await dex.CrossAndCompare(taker, Amount(usd, "150"), Drops(60_000_000), OfferCreateFlags.tfImmediateOrCancel, fromBook);
+        Assert.AreEqual("tesSUCCESS", result.EngineResult);
+    }
+
+    [TestMethod]
+    public async Task UnlimitedTakerQuotesAsAFundedOne()
+    {
+        (_, XrplWallet m1, XrplWallet m2, XrplWallet taker, IssuedCurrency usd) = await Market();
+        await dex.Offer(m1, Amount(usd, "100"), Drops(30_000_000));
+        await dex.Offer(m2, Amount(usd, "70"), Drops(21_000_000));
+
+        OfferCreate Order(string account) => new OfferCreate
+        {
+            Account = account,
+            TakerPays = Amount(usd, "150").ToCurrency(),
+            TakerGets = Drops(50_000_000).ToCurrency(),
+            Flags = OfferCreateFlags.tfImmediateOrCancel,
+        };
+
+        OfferCrossingResult funded = await dex.Client.QuoteOfferCreateAsync(Order(taker.ClassicAddress));
+        OfferCrossingResult anyone = await dex.Client.QuoteOfferCreateAsync(Order(DexSnapshot.UnlimitedTaker));
+        Assert.AreEqual("tesSUCCESS", anyone.EngineResult);
+        Assert.AreEqual(funded.Paid, anyone.Paid);
+        Assert.AreEqual(funded.Received, anyone.Received);
+        CollectionAssert.AreEqual(funded.Fills.Select(f => (f.OfferIndex, f.In, f.Out)).ToList(), anyone.Fills.Select(f => (f.OfferIndex, f.In, f.Out)).ToList());
+
+        // A payment quoted from the unlimited taker delivers as one from a funded sender.
+        XrplWallet sender = (await dex.Wallets(1))[0];
+        Payment Pay(string from) => new Payment
+        {
+            Account = from,
+            Destination = taker.ClassicAddress,
+            Amount = Amount(usd, "50").ToCurrency(),
+            SendMax = Drops(20_000_000).ToCurrency(),
+        };
+
+        PaymentFlowResult paid = await dex.Client.QuotePaymentAsync(Pay(sender.ClassicAddress));
+        PaymentFlowResult quoted = await dex.Client.QuotePaymentAsync(Pay(DexSnapshot.UnlimitedTaker));
+        Assert.AreEqual("tesSUCCESS", quoted.EngineResult);
+        Assert.AreEqual(paid.DeliveredAmount, quoted.DeliveredAmount);
+        Assert.AreEqual(paid.Paid, quoted.Paid);
+    }
+
+    [TestMethod]
+    public async Task SnapshotReadsTheLedgerAsked()
+    {
+        (_, XrplWallet m1, _, XrplWallet taker, IssuedCurrency usd) = await Market();
+        DexSnapshot before = await DexSnapshot.FromNodeAsync(dex.Client, taker.ClassicAddress, usd, Xrp);
+        await dex.Offer(m1, Amount(usd, "10"), Drops(3_000_000));
+
+        DexSnapshot after = await DexSnapshot.FromNodeAsync(dex.Client, taker.ClassicAddress, usd, Xrp);
+        DexSnapshot replay = await DexSnapshot.FromNodeAsync(
+            dex.Client,
+            taker.ClassicAddress,
+            usd,
+            Xrp,
+            new DexSnapshotOptions { Ledger = new LedgerIndex(before.LedgerSequence) });
+
+        Assert.IsGreaterThan(before.LedgerSequence, after.LedgerSequence);
+        Assert.IsTrue(after.Offers.Any(o => o.Account == m1.ClassicAddress), "the offer is in the book now");
+        Assert.AreEqual(before.LedgerSequence, replay.LedgerSequence);
+        Assert.IsFalse(replay.Offers.Any(o => o.Account == m1.ClassicAddress), "the ledger asked for is read, before the offer");
     }
 
     [TestMethod]

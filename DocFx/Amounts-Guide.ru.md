@@ -20,6 +20,7 @@
 - [Арифметика](#арифметика)
 - [Качество](#качество)
 - [Пересечение офферов](#пересечение-офферов)
+- [Офферы пулов AMM](#офферы-пулов-amm)
 - [Пересечение OfferCreate](#пересечение-offercreate)
 - [Выполнение Payment](#выполнение-payment)
 - [Домены permissioned DEX и credentials](#домены-permissioned-dex-и-credentials)
@@ -44,6 +45,7 @@
 | `XrplAmountMath` | `Xrpl.Amounts` | Арифметика `STAmount`: сложение, умножение, деление, `mulRound`, `divRound` |
 | `XrplQuality` | `Xrpl.Amounts` | 64-битный курс, по которому леджер сортирует книги ордеров |
 | `OfferCrossing` | `Xrpl.Amounts` | Сколько даёт один оффер при пересечении — так, как это считает `BookStep` |
+| `AmmOfferMath` | `Xrpl.Amounts` | Обмены в пуле AMM и оффер, который пул выставляет рядом с книгой |
 | `OfferCreateCrossing` | `Xrpl.Amounts` | Что сделает `OfferCreate` с книгами целиком и пулами AMM — по `DexSnapshot` |
 | `PaymentFlow` | `Xrpl.Amounts` | Что сделает `Payment` на своих путях — по `DexSnapshot` |
 | `DexQuoteSugar` | `Xrpl.Sugar` | Котировки платежа или оффера, прочитанные и рассчитанные по валидированному леджеру ноды |
@@ -117,7 +119,7 @@ XrplQuality remaining = offer.RemainingQuality;     // соотношение т
 
 Нода пересекает оффер по качеству его директории в книге ордеров. Оно задаётся при размещении оффера и не равно соотношению того, что в оффере осталось.
 
-`CeilIn`, `CeilOut`, `CeilInStrict` и `CeilOutStrict` урезают суммы оффера по ограничению на вход или выход при данном качестве — как `Quality::ceilIn` и `Quality::ceilOut`.
+`CeilIn`, `CeilOut`, `CeilInStrict` и `CeilOutStrict` урезают суммы оффера по ограничению на вход или выход при данном качестве — как `Quality::ceilIn` и `Quality::ceilOut`. `Round(digits)` — это `Quality::round`: мантисса округляется вверх, к худшему качеству, до заданного числа значащих цифр, как это делает tick size.
 
 ## Пересечение офферов
 
@@ -155,6 +157,25 @@ OfferStep step = OfferCrossing.Cross(funded, deliver: wanted, sendMax: willingTo
 
 Здесь рассчитывается один оффер. Чтобы пересечь `OfferCreate` целиком, используйте [`OfferCreateCrossing`](#пересечение-offercreate).
 
+## Офферы пулов AMM
+
+`AmmOfferMath` даёт арифметику синтетического оффера пула AMM с округлением `Number`, как в rippled:
+
+- `SwapIn` и `SwapOut` — это `swapAssetIn` и `swapAssetOut`: сколько пул отдаёт за вход и сколько берёт за выход.
+- `ChangeSpotPriceQuality` — оффер, который доводит спотовую цену пула до заданного качества.
+- `PoolOffer` — оффер, который пул выставляет рядом с книгой на одном стрэнде. При наличии книги это оффер, доводящий спотовую цену до лучшего качества книги. При `fixAMMv1_2` это самый крупный оффер пула, если он лучше книги. Без книги это 99% выхода пула. Если спотовая цена пула не лучше книги, возвращается null.
+
+```csharp
+AmmPoolOffer? offer = AmmOfferMath.PoolOffer(poolXrp, poolUsd, tradingFee, bookQuality: bestAsk, rules);
+if (offer is { } pool)
+{
+    // pool.In / pool.Out: сколько пул берёт и отдаёт до лучшего оффера книги
+    // pool.Quality: где пул стоит относительно книги
+}
+```
+
+Торговая комиссия задаётся в единицах 1/100 000, то есть 1000 — это 1%. На двух стрэндах движок режет офферы пула на доли исходного пула и берёт не больше 30 офферов пула за транзакцию. Оба правила зависят от всего потока, поэтому их моделируют `OfferCreateCrossing` и `PaymentFlow`, а `PoolOffer` — нет.
+
 ## Пересечение OfferCreate
 
 `OfferCreateCrossing.Cross` выполняет `OfferCreate` так же, как платёжный движок rippled 3.4.0, против снимка леджера `DexSnapshot`:
@@ -182,15 +203,51 @@ OfferCrossingResult result = OfferCreateCrossing.Cross(snapshot, offer, rules);
 
 // result.EngineResult и result.Applied: код и будет ли списана комиссия
 // result.BalanceChanges: изменения балансов всех аккаунтов, как их запишут метаданные
-// result.Offers: пересечённые и удалённые офферы и что от них осталось
+// result.Offers: пересечённые и удалённые офферы, что от них осталось и почему они ушли
+// result.Fills / result.Passes: что взял движок, по порядку, и какие стрэнды он пробовал
 // result.Pools: балансы пулов после транзакции
 // result.TrustLines: созданные и удалённые trust lines
 // result.PlacedTakerPays / PlacedTakerGets: оффер, оставшийся в книге, если он есть
 ```
 
+### Как движок взял ликвидность
+
+`Fills` перечисляет офферы и доли пулов, которые взял движок, в том порядке, в каком он их брал. `Passes` перечисляет стрэнды, которые движок пробовал в каждом проходе, и итог каждого. `Offers` сообщает, почему удалённый оффер ушёл из леджера и сколько взято от каждого оффера:
+
+```csharp
+foreach (OfferFill fill in result.Fills)
+{
+    // fill.Pass, fill.Strand (0 — прямая книга, 1 — через XRP), fill.Step
+    // fill.OfferIndex (null для пула), fill.Owner, fill.IsPool
+    // fill.In / fill.Out: что оффер или пул получил и отдал; fill.Quality
+}
+
+foreach (FlowPass pass in result.Passes)
+{
+    // pass.Outcome: Taken, Dry, BelowLimitQuality, OutOfReach
+}
+
+foreach (OfferChange offer in result.Offers)
+{
+    // offer.Reason: Consumed, Unfunded, Expired, Empty, DeepFrozen, NotInDomain,
+    //               TooSmall, Unauthorized, SelfCrossed или Cancelled; null для оставшегося оффера
+    // offer.FilledTakerPays / FilledTakerGets: сколько взято от оффера
+}
+```
+
+Каждый проход берёт ликвидность одного качества у лучшего стрэнда. Внутри прохода исполнения упорядочены по позиции книги в стрэнде, а исполнения одной книги идут в том порядке, в каком книга их отдала. Доля пула стоит перед офферами книги своего прохода, потому что движок сначала пробует пул. У неудавшейся транзакции исполнений нет, но её `Passes` всё равно объясняют, почему каждый стрэнд ничего не дал. В `PaymentFlowResult` есть те же `Fills` и `Passes`; стрэнды платежа нумеруются так, как их строит движок: сначала путь по умолчанию, если он используется, затем каждый отличающийся путь из `Paths`.
+
 `OfferCreateCrossing.Cross(snapshot, account, takerPays, takerGets, fee, flags, rules)` принимает тот же оффер отдельными значениями, без `OfferSequence`, `Expiration` и домена.
 
-`DexSnapshot.FromNodeAsync` читает всё на одном валидированном леджере: книги, которых может достичь пересечение, пулы на них, аккаунты и trust lines, которые оно читает, и оффер, который отменяет `OfferSequence`. Насколько глубоко читаются книги, описано в разделе [Чтение книг с ноды](#чтение-книг-с-ноды). Снимок можно собрать и вручную, как это делают юнит-тесты.
+`OfferCreateCrossing.RoundToTickSize` даёт суммы, которые нода запишет для оффера перед пересечением. Берётся меньший из `TickSize` эмитентов тех сторон оффера, что в выпущенной валюте. Качество оффера округляется до этого числа цифр, а сдвигается неточная сторона: `TakerPays` у оффера с `tfSell`, иначе `TakerGets`. Форма может показать эти суммы до подписи оффера:
+
+```csharp
+(XrplAmount TakerPays, XrplAmount TakerGets)? written =
+    OfferCreateCrossing.RoundToTickSize(takerPays, takerGets, tickSize: 5, sell: false, rules);
+// null, если одна из сторон округлилась до нуля
+```
+
+`DexSnapshot.FromNodeAsync` читает всё на одном леджере: книги, которых может достичь пересечение, пулы на них, аккаунты и trust lines, которые оно читает, и оффер, который отменяет `OfferSequence`. Насколько глубоко читаются книги, описано в разделе [Чтение книг с ноды](#чтение-книг-с-ноды). Снимок можно собрать и вручную, как это делают юнит-тесты.
 
 Результат точен относительно снимка. Транзакция попадает в более поздний леджер, состояние которого может отличаться, поэтому перед отправкой эталоном остаётся `simulate`. Не поддерживаются: книги MPT и спонсируемые резервы. Платёж рассчитывает [`PaymentFlow`](#выполнение-payment).
 
@@ -223,7 +280,7 @@ PaymentFlowResult result = PaymentFlow.Evaluate(snapshot, payment, rules);
 // result.BalanceChanges, result.Offers, result.Pools: что изменил платёж
 ```
 
-`DexSnapshot.FromNodeAsync(client, payment)` читает на одном валидированном леджере trust lines вдоль всех путей, которыми может пройти платёж, книги и пулы на них, аккаунты, предварительные авторизации получателя, предъявленные платежом credentials и его домен. Пути приходят вместе с платежом: из `ripple_path_find` или от локального [поиска путей](#поиск-путей). Не поддерживаются: платежи MPT и спонсируемые резервы.
+`DexSnapshot.FromNodeAsync(client, payment)` читает на одном леджере trust lines вдоль всех путей, которыми может пройти платёж, книги и пулы на них, аккаунты, предварительные авторизации получателя, предъявленные платежом credentials и его домен. Пути приходят вместе с платежом: из `ripple_path_find` или от локального [поиска путей](#поиск-путей). Не поддерживаются: платежи MPT и спонсируемые резервы.
 
 ## Домены permissioned DEX и credentials
 
@@ -251,6 +308,27 @@ if (result.NeedsDeeperBooks)
 ```
 
 Обход стоит одного запроса `ledger_entry` на оффер, поэтому он оправдан для книг, в глубину которых транзакция действительно заходит.
+
+`DexSnapshotOptions.Ledger` задаёт леджер для чтения: номер либо `validated`, `closed` или `current`. Если он null, читается последний валидированный. `DexSnapshot.LedgerSequence` хранит леджер, на котором прочитан снимок, поэтому более глубокое чтение тех же книг можно закрепить на нём. Чтобы воспроизвести прошлую транзакцию, прочитайте леджер перед ней:
+
+```csharp
+DexSnapshot before = await DexSnapshot.FromNodeAsync(client, offer, new DexSnapshotOptions { Ledger = new LedgerIndex(transactionLedger - 1) });
+```
+
+`QuotePaymentAsync` и `QuoteOfferCreateAsync` делают каждое следующее, более глубокое чтение на леджере первого.
+
+Каждый владелец оффера стоит одного запроса `account_info` и до двух запросов `ledger_entry`: около 125 запросов на книгу из 100 офферов. `DexSnapshotOptions.OwnerFundsFromBook` вместо этого строит владельцев по тому, что `book_offers` сообщает об их средствах (`owner_funds`), и книга стоит одного запроса. Аккаунты, до которых доходит транзакция, и эмитенты по-прежнему читаются. Построенные так владельцы перечислены в `DexSnapshot.ApproximatedOwners`. Их средства в том, что отдают их офферы, точны, и резерв, освобождаемый удалённым оффером, учитывается. Что снимок о них предполагает: trust line для того, что они получают, с запасом на любую сумму; качество, NoRipple и заморозку этой линии по умолчанию; авторизацию эмитента. С `BookDepth` опция не сочетается: обход директорий не читает средства.
+
+`DexSnapshot.UnlimitedTaker` позволяет получить котировку до подключения кошелька. Если он указан аккаунтом `OfferCreate` или отправителем `Payment`, загрузчик ничего для него не читает, даёт ему неограниченные средства того, что он платит, и запас для того, что он получает:
+
+```csharp
+OfferCrossingResult preview = await client.QuoteOfferCreateAsync(new OfferCreate
+{
+    Account = DexSnapshot.UnlimitedTaker,
+    TakerPays = usd100.ToCurrency(),
+    TakerGets = xrp40.ToCurrency(),
+});
+```
 
 ## Котировки
 
@@ -316,7 +394,9 @@ PathFindResult found = await client.FindPathsAsync(request);
 
 `BalanceChanges.GetBalanceChanges` считает изменения по выпущенным валютам в `XrplAmount`: разность точная, затем она один раз округляется до 16 значащих цифр к ближайшему, половина — к чётному, как в rippled.
 
-Баланс далеко за пределами `decimal` возвращается, а не вызывает исключение. Такие значения записываются научной записью, как у rippled:
+Баланс далеко за пределами `decimal` возвращается, а не вызывает исключение.
+
+`Value` — это текст, который пишет `STAmount::getText` в rippled. Он переходит в научную запись (16-значная мантисса и показатель), когда показатель больше -5 или меньше -25, то есть примерно от 1e11 и выше и ниже 1e-10: изменение на 123456789012 записывается как `1234567890120000e-4`. Читать значение следует через `ToXrplAmount()` или, в пределах `decimal`, через `ValueAsNumber`. Выводить `Value` как есть или разбирать через `NumberStyles.Number` нельзя:
 
 ```csharp
 Dictionary<string, List<Currency>> changes = BalanceChanges.GetBalanceChanges(result.Meta);
@@ -331,4 +411,4 @@ XrplAmount received = changes[holder].Single().ToXrplAmount();   // точно �
 - `fixReducedOffersV2`, который включает `ceilInStrict` в `LimitIn`;
 - `fixAMMv1_1`, `fixAMMv1_2` и `fixFillOrKill`, которые меняют расчёт офферов пула и обработку `tfFillOrKill` в `OfferCreateCrossing`.
 
-`LedgerRules.FromNodeAsync(client)` читает их с ноды. Чтобы результат совпал с результатом ноды, необходимо передавать именно их. Если правила не переданы, метод использует `new LedgerRules()`: все перечисленные амендменты включены, кроме `MPTokensV2`, — независимо от того, что действует на ноде. Это соответствует леджеру со всеми этими амендментами и может не соответствовать вашему.
+`LedgerRules.FromNodeAsync(client)` читает их с ноды. Чтобы результат совпал с результатом ноды, необходимо передавать именно их. Метод читает то, что записано в объекте `Amendments` леджера, через команду `feature`. Нода может применять и амендменты из секции `[features]` своего конфига — как пресеты, не включая их в леджере, и `feature` показывает их выключенными. Для standalone-ноды, запущенной так, правила следует собрать вручную или включить амендменты с генезиса через секцию `[amendments]`. Если правила не переданы, метод использует `new LedgerRules()`: все перечисленные амендменты включены, кроме `MPTokensV2`, — независимо от того, что действует на ноде. Это соответствует леджеру со всеми этими амендментами и может не соответствовать вашему.

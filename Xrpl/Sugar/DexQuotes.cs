@@ -51,11 +51,14 @@ namespace Xrpl.Sugar
 
             rules ??= await LedgerRules.FromNodeAsync(client, cancellationToken).ConfigureAwait(false);
             PaymentFlowResult result = null;
+            LedgerIndex at = null;
             foreach (int? depth in Depths)
             {
+                // Every deeper read at the ledger of the first, so that the reads agree.
                 DexSnapshot snapshot = await DexSnapshot
-                    .FromNodeAsync(client, payment, new DexSnapshotOptions { BookDepth = depth }, cancellationToken)
+                    .FromNodeAsync(client, payment, new DexSnapshotOptions { BookDepth = depth, Ledger = at }, cancellationToken)
                     .ConfigureAwait(false);
+                at ??= new LedgerIndex(snapshot.LedgerSequence);
                 result = PaymentFlow.Evaluate(snapshot, payment, rules);
                 if (!result.NeedsDeeperBooks)
                     break;
@@ -82,11 +85,14 @@ namespace Xrpl.Sugar
 
             rules ??= await LedgerRules.FromNodeAsync(client, cancellationToken).ConfigureAwait(false);
             OfferCrossingResult result = null;
+            LedgerIndex at = null;
             foreach (int? depth in Depths)
             {
+                // Every deeper read at the ledger of the first, so that the reads agree.
                 DexSnapshot snapshot = await DexSnapshot
-                    .FromNodeAsync(client, offer, new DexSnapshotOptions { BookDepth = depth }, cancellationToken)
+                    .FromNodeAsync(client, offer, new DexSnapshotOptions { BookDepth = depth, Ledger = at }, cancellationToken)
                     .ConfigureAwait(false);
+                at ??= new LedgerIndex(snapshot.LedgerSequence);
                 result = OfferCreateCrossing.Cross(snapshot, offer, rules);
                 if (!result.NeedsDeeperBooks)
                     break;

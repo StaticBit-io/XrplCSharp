@@ -104,10 +104,31 @@ namespace Xrpl.Amounts
                 return null;
 
             (XrplAmount In, XrplAmount Out) balances = FetchBalances(view);
+            LedgerRules rules = view.Rules;
+            Func<(XrplAmount In, XrplAmount Out), (XrplAmount In, XrplAmount Out)> slice =
+                Context.MultiPath ? b => FibonacciOffer(b, rules) : null;
+            return OfferFor(balances, TradingFee, clobQuality, rules, slice) is { } offer
+                ? new AmmBookOffer(this, (offer.In, offer.Out), balances, offer.Quality)
+                : null;
+        }
+
+        /// <summary>
+        /// <c>getOffer</c> for a pool at <paramref name="balances"/>: null when the pool is empty,
+        /// its spot price does not beat <paramref name="clobQuality"/>, or no offer can be
+        /// generated. <paramref name="slice"/> sizes the offer when the flow runs on several
+        /// strands; on one, the offer brings the spot price to the book's quality, or is the
+        /// pool's largest offer when there is no book.
+        /// </summary>
+        internal static (XrplAmount In, XrplAmount Out, XrplQuality Quality)? OfferFor(
+            (XrplAmount In, XrplAmount Out) balances,
+            ushort tradingFee,
+            XrplQuality? clobQuality,
+            LedgerRules rules,
+            Func<(XrplAmount In, XrplAmount Out), (XrplAmount In, XrplAmount Out)> slice)
+        {
             if (balances.In.IsZero || balances.Out.IsZero)
                 return null;
 
-            LedgerRules rules = view.Rules;
             XrplQuality spotPrice = XrplQuality.FromAmounts(balances.In, balances.Out, rules);
             if (clobQuality is { } clob &&
                 (spotPrice <= clob || XrplQuality.WithinRelativeDistance(spotPrice, clob, new XrplNumber(1, -7), rules)))
@@ -115,45 +136,49 @@ namespace Xrpl.Amounts
                 return null;
             }
 
-            AmmBookOffer offer;
+            (XrplAmount In, XrplAmount Out, XrplQuality Quality)? offer;
             try
             {
-                offer = Generate(balances, clobQuality, rules);
+                offer = Generate(balances, tradingFee, clobQuality, rules, slice);
             }
             catch (Exception exception) when (exception is OverflowException or InvalidOperationException or DivideByZeroException)
             {
                 return null;
             }
 
-            if (offer != null && StepMath.IsPositive(offer.In) && StepMath.IsPositive(offer.Out))
-                return offer;
+            if (offer is { } generated && StepMath.IsPositive(generated.In) && StepMath.IsPositive(generated.Out))
+                return generated;
 
             return null;
         }
 
-        private AmmBookOffer Generate((XrplAmount In, XrplAmount Out) balances, XrplQuality? clobQuality, LedgerRules rules)
+        private static (XrplAmount In, XrplAmount Out, XrplQuality Quality)? Generate(
+            (XrplAmount In, XrplAmount Out) balances,
+            ushort tradingFee,
+            XrplQuality? clobQuality,
+            LedgerRules rules,
+            Func<(XrplAmount In, XrplAmount Out), (XrplAmount In, XrplAmount Out)> slice)
         {
-            if (Context.MultiPath)
+            if (slice != null)
             {
-                (XrplAmount In, XrplAmount Out) amounts = FibonacciOffer(balances, rules);
+                (XrplAmount In, XrplAmount Out) amounts = slice(balances);
                 XrplQuality quality = XrplQuality.FromAmounts(amounts.In, amounts.Out, rules);
                 if (clobQuality is { } clob && quality < clob)
                     return null;
 
-                return new AmmBookOffer(this, amounts, balances, quality);
+                return (amounts.In, amounts.Out, quality);
             }
 
             if (clobQuality == null)
-                return MaxOffer(balances, rules);
+                return MaxOffer(balances, tradingFee, rules);
 
-            if (AmmSwap.ChangeSpotPriceQuality(balances.In, balances.Out, clobQuality.Value, TradingFee, rules) is { } changed)
-                return new AmmBookOffer(this, changed, balances, XrplQuality.FromAmounts(changed.In, changed.Out, rules));
+            if (AmmSwap.ChangeSpotPriceQuality(balances.In, balances.Out, clobQuality.Value, tradingFee, rules) is { } changed)
+                return (changed.In, changed.Out, XrplQuality.FromAmounts(changed.In, changed.Out, rules));
 
-            if (rules.FixAMMv1_2)
+            if (rules.FixAMMv1_2 && MaxOffer(balances, tradingFee, rules) is { } max &&
+                XrplQuality.FromAmounts(max.In, max.Out, rules) > clobQuality.Value)
             {
-                AmmBookOffer max = MaxOffer(balances, rules);
-                if (max != null && XrplQuality.FromAmounts(max.In, max.Out, rules) > clobQuality.Value)
-                    return max;
+                return max;
             }
 
             return null;
@@ -184,21 +209,20 @@ namespace Xrpl.Amounts
         }
 
         /// <summary><c>maxOffer</c>: 99% of the pool's output, at the spot price quality.</summary>
-        private AmmBookOffer MaxOffer((XrplAmount In, XrplAmount Out) balances, LedgerRules rules)
+        private static (XrplAmount In, XrplAmount Out, XrplQuality Quality)? MaxOffer((XrplAmount In, XrplAmount Out) balances, ushort tradingFee, LedgerRules rules)
         {
             NumberContext c = rules.Context;
             XrplAmount @out = StepMath.ToAmount(
-                AssetOut,
+                balances.Out.Asset,
                 XrplNumber.Multiply(balances.Out.Value, new XrplNumber(99, -2), c),
                 NumberRounding.Downward,
                 c.Rounding);
             if (StepMath.IsNotPositive(@out) || @out >= balances.Out)
                 return null;
 
-            return new AmmBookOffer(
-                this,
-                (AmmSwap.SwapAssetOut(balances.In, balances.Out, @out, TradingFee, rules), @out),
-                balances,
+            return (
+                AmmSwap.SwapAssetOut(balances.In, balances.Out, @out, tradingFee, rules),
+                @out,
                 XrplQuality.FromAmounts(balances.In, balances.Out, rules));
         }
     }

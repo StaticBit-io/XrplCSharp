@@ -203,6 +203,9 @@ public class TestUDexGaps
         Assert.AreEqual("tesSUCCESS", bob.EngineResult);
         Assert.HasCount(1, bob.Offers);
         Assert.IsTrue(bob.Offers[0].Deleted);
+        Assert.AreEqual(OfferRemovalReason.Unauthorized, bob.Offers[0].Reason);
+        Assert.IsTrue(bob.Offers[0].FilledTakerPays.IsZero && bob.Offers[0].FilledTakerGets.IsZero, "nothing taken of it");
+        Assert.IsEmpty(bob.Fills);
         Assert.AreEqual(Dollars("40"), bob.PlacedTakerGets, "bob's offer is placed whole");
 
         // alice cannot ask for USD: no line, then a line gw has not authorized.
@@ -231,8 +234,81 @@ public class TestUDexGaps
         replacing.OfferSequence = 5;
         OfferCrossingResult result = OfferCreateCrossing.Cross(snapshot, replacing);
         Assert.AreEqual("tesSUCCESS", result.EngineResult);
-        Assert.IsTrue(result.Offers.Single(o => o.Index == cancelled).Deleted);
-        Assert.IsTrue(result.Offers.Single(o => o.Index == "B1").Deleted);
+        Assert.AreEqual(OfferRemovalReason.Cancelled, result.Offers.Single(o => o.Index == cancelled).Reason);
+        OfferChange taken = result.Offers.Single(o => o.Index == "B1");
+        Assert.AreEqual(OfferRemovalReason.Consumed, taken.Reason);
+        Assert.AreEqual(Drops(1_000_000), taken.FilledTakerPays);
+        Assert.AreEqual(Dollars("1"), taken.FilledTakerGets);
+    }
+
+    [TestMethod]
+    public void RemovedOffersSayWhyAndFillsRunInOrder()
+    {
+        // The book, best first: an expired offer, an unfunded one, alice's own at the same
+        // price as her new one, then two funded ones - the first taken whole, the second in part.
+        DexSnapshot snapshot = Snapshot(
+            new[] { Account(Gw), Account(Alice, 1), Account(Bob, 3), Account(Carol, 2) },
+            new[] { Line(Alice, "0"), Line(Bob, "5"), Line(Carol, "0") },
+            new[]
+            {
+                new DexOffer
+                {
+                    Index = "E1", Account = Bob, TakerPays = Drops(900_000), TakerGets = Dollars("1"),
+                    Quality = XrplQuality.FromAmounts(Drops(900_000), Dollars("1")), Expiration = Now,
+                },
+                Offer("U1", Carol, Drops(950_000), Dollars("1")),
+                Offer("B1", Bob, Drops(1_000_000), Dollars("1")),
+                Offer("B2", Bob, Drops(2_200_000), Dollars("2")),
+            });
+
+        OfferCrossingResult result = OfferCreateCrossing.Cross(snapshot, Create(Alice, Dollars("2"), Drops(2_200_000)));
+
+        Assert.AreEqual("tesSUCCESS", result.EngineResult);
+        Assert.AreEqual(OfferRemovalReason.Expired, result.Offers.Single(o => o.Index == "E1").Reason);
+        Assert.AreEqual(OfferRemovalReason.Unfunded, result.Offers.Single(o => o.Index == "U1").Reason);
+        Assert.AreEqual(OfferRemovalReason.Consumed, result.Offers.Single(o => o.Index == "B1").Reason);
+
+        OfferChange partial = result.Offers.Single(o => o.Index == "B2");
+        Assert.IsFalse(partial.Deleted);
+        Assert.IsNull(partial.Reason);
+        Assert.AreEqual(Dollars("1"), partial.FilledTakerGets);
+        Assert.AreEqual(Drops(1_100_000), partial.FilledTakerPays);
+
+        // B1 at the better quality in the first pass, then B2.
+        Assert.HasCount(2, result.Fills);
+        Assert.AreEqual("B1", result.Fills[0].OfferIndex);
+        Assert.AreEqual("B2", result.Fills[1].OfferIndex);
+        Assert.IsTrue(result.Fills[0].Pass < result.Fills[1].Pass, "one quality per pass");
+        Assert.IsTrue(result.Fills.All(f => f.Strand == 0 && !f.IsPool && f.Owner == Bob));
+        Assert.AreEqual(Dollars("1"), result.Fills[0].Out);
+        Assert.AreEqual(Drops(1_000_000), result.Fills[0].In);
+        Assert.IsTrue(result.Passes.Where(p => p.Outcome == FlowPassOutcome.Taken).Select(p => p.Pass).SequenceEqual(result.Fills.Select(f => f.Pass)));
+    }
+
+    [TestMethod]
+    public void AnEmptyBookIsADryPass()
+    {
+        DexSnapshot snapshot = Snapshot(new[] { Account(Gw), Account(Alice, 1) }, new[] { Line(Alice, "0") });
+
+        OfferCrossingResult result = OfferCreateCrossing.Cross(snapshot, Create(Alice, Dollars("1"), Drops(1_000_000)));
+        Assert.AreEqual("tesSUCCESS", result.EngineResult);
+        Assert.AreEqual(FlowPassOutcome.Dry, result.Passes.Single().Outcome, "no liquidity, not liquidity out of reach");
+        Assert.IsEmpty(result.Fills);
+    }
+
+    [TestMethod]
+    public void OwnOfferAtTheSamePriceIsSelfCrossed()
+    {
+        DexSnapshot snapshot = Snapshot(
+            new[] { Account(Gw), Account(Alice, 2) },
+            new[] { Line(Alice, "10") },
+            new[] { Offer("A1", Alice, Drops(1_000_000), Dollars("1")) });
+
+        // alice buys USD at the price she sells it: her own offer is deleted, not crossed.
+        OfferCrossingResult result = OfferCreateCrossing.Cross(snapshot, Create(Alice, Dollars("1"), Drops(1_000_000)));
+        Assert.AreEqual("tesSUCCESS", result.EngineResult);
+        Assert.AreEqual(OfferRemovalReason.SelfCrossed, result.Offers.Single().Reason);
+        Assert.IsEmpty(result.Fills);
     }
 
     // ---- trust lines back at zero ----
@@ -327,7 +403,7 @@ public class TestUDexGaps
         inDomain.DomainID = DomainId;
         OfferCrossingResult result = OfferCreateCrossing.Cross(snapshot, inDomain);
         Assert.AreEqual("tesSUCCESS", result.EngineResult);
-        Assert.IsTrue(result.Offers.Single().Deleted, "removed as out of the domain");
+        Assert.AreEqual(OfferRemovalReason.NotInDomain, result.Offers.Single().Reason, "removed as out of the domain");
         Assert.IsNotNull(result.PlacedTakerPays, "nothing crossed");
 
         OfferCreate bobs = Create(Bob, Drops(1_000_000), Dollars("1"));

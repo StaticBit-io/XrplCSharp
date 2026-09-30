@@ -195,7 +195,7 @@ namespace Xrpl.Amounts
             uint rateOut);
 
         /// <summary><c>forEachOffer</c>: the pool, then the order book's offers, one quality at most.</summary>
-        private (HashSet<string> ToRemove, int Count) ForEachOffer(DexView sb, DexView afView, DebtDirection previous, OfferCallback callback)
+        private (OfferRemovals ToRemove, int Count) ForEachOffer(DexView sb, DexView afView, DebtDirection previous, OfferCallback callback)
         {
             LedgerRules rules = sb.Rules;
             uint rateIn = previous == Amounts.DebtDirection.Redeems ? sb.Rate(_in, _strandDestination) : OfferCrossing.QualityOne;
@@ -218,7 +218,7 @@ namespace Xrpl.Amounts
                     string.Equals(_strandDestination, offer.Owner, StringComparison.Ordinal))
                 {
                     if (offer.Key != null)
-                        offers.PermanentlyRemove(offer.Key);
+                        offers.PermanentlyRemove(offer.Key, OfferRemovalReason.SelfCrossed);
                     if (!offerAttempted)
                         offerQuality = null;
                     return true;
@@ -229,7 +229,7 @@ namespace Xrpl.Amounts
                 if (authView.RequireAuth(offer.Owner, _in) != null)
                 {
                     if (offer.Key != null)
-                        offers.PermanentlyRemove(offer.Key);
+                        offers.PermanentlyRemove(offer.Key, OfferRemovalReason.Unauthorized);
                     if (!offerAttempted)
                         offerQuality = null;
                     return true;
@@ -354,12 +354,22 @@ namespace Xrpl.Amounts
             sb.Send(IssuerOf(_in), offer.Owner, offerAmount.In);
             sb.Send(offer.Owner, IssuerOf(_out), ownerGives);
             offer.Consume(sb, offerAmount.In, offerAmount.Out);
+            sb.RecordFill(new FillRecord
+            {
+                Step = Position,
+                OfferIndex = offer.Key,
+                Owner = offer.Owner,
+                IsPool = offer.IsAmm,
+                In = offerAmount.In.WithAsset(_in),
+                Out = offerAmount.Out.WithAsset(_out),
+                Quality = offer.Quality,
+            });
         }
 
         private static string IssuerOf(IssuedCurrency asset) =>
             XrplAmount.KindOf(asset) == AmountKind.Xrp ? string.Empty : asset.Issuer;
 
-        internal override (XrplAmount In, XrplAmount Out) Rev(DexView sb, DexView afView, HashSet<string> offersToRemove, XrplAmount @out)
+        internal override (XrplAmount In, XrplAmount Out) Rev(DexView sb, DexView afView, OfferRemovals offersToRemove, XrplAmount @out)
         {
             @out = @out.WithAsset(_out);
             _cache = null;
@@ -411,9 +421,9 @@ namespace Xrpl.Amounts
             }
 
             DebtDirection previous = _previous?.DebtDirection(sb, StrandDirection.Reverse) ?? Amounts.DebtDirection.Issues;
-            (HashSet<string> toRemove, int consumed) = ForEachOffer(sb, afView, previous, EachOffer);
+            (OfferRemovals toRemove, int consumed) = ForEachOffer(sb, afView, previous, EachOffer);
             _offersUsed = consumed;
-            offersToRemove.UnionWith(toRemove);
+            offersToRemove.Merge(toRemove);
             if (consumed >= MaxOffersToConsume)
                 _inactive = true;
 
@@ -430,7 +440,7 @@ namespace Xrpl.Amounts
             return (StepMath.Typed(resultIn), StepMath.Typed(resultOut));
         }
 
-        internal override (XrplAmount In, XrplAmount Out) Fwd(DexView sb, DexView afView, HashSet<string> offersToRemove, XrplAmount @in)
+        internal override (XrplAmount In, XrplAmount Out) Fwd(DexView sb, DexView afView, OfferRemovals offersToRemove, XrplAmount @in)
         {
             @in = @in.WithAsset(_in);
             if (_cache == null)
@@ -529,9 +539,9 @@ namespace Xrpl.Amounts
             }
 
             DebtDirection previous = _previous?.DebtDirection(sb, StrandDirection.Forward) ?? Amounts.DebtDirection.Issues;
-            (HashSet<string> toRemove, int consumed) = ForEachOffer(sb, afView, previous, EachOffer);
+            (OfferRemovals toRemove, int consumed) = ForEachOffer(sb, afView, previous, EachOffer);
             _offersUsed = consumed;
-            offersToRemove.UnionWith(toRemove);
+            offersToRemove.Merge(toRemove);
             if (consumed >= MaxOffersToConsume)
                 _inactive = true;
 
@@ -611,11 +621,29 @@ namespace Xrpl.Amounts
 
             internal XrplAmount? OwnerFunds { get; private set; }
 
-            internal HashSet<string> ToRemove { get; } = new HashSet<string>(StringComparer.Ordinal);
+            internal OfferRemovals ToRemove { get; } = new OfferRemovals();
 
             internal int Count { get; private set; }
 
-            internal void PermanentlyRemove(string index) => ToRemove.Add(index);
+            internal void PermanentlyRemove(string index, OfferRemovalReason reason) => ToRemove.Mark(index, reason);
+
+            /// <summary>
+            /// Why the current tip is left behind when the stream steps past it: the check it
+            /// failed, or null for a usable tip, which is either taken in full or left to an owner
+            /// out of funds.
+            /// </summary>
+            private OfferRemovalReason? _tipReason;
+
+            private OfferRemovalReason TipReason(DexOffer entry)
+            {
+                if (ToRemove.TryGetValue(entry.Index, out OfferRemovalReason marked))
+                    return marked;
+                if (_tipReason is { } reason)
+                    return reason;
+
+                OfferState state = _view.Offer(entry.Index);
+                return state.TakerPays.IsZero || state.TakerGets.IsZero ? OfferRemovalReason.Consumed : OfferRemovalReason.Unfunded;
+            }
 
             /// <summary><c>TOfferStreamBase::step</c>, its checks in the protocol's order.</summary>
             internal bool Step()
@@ -628,9 +656,11 @@ namespace Xrpl.Amounts
                     // BookTip::step deletes the previous tip before moving to the next one.
                     if (_tipEntry != null)
                     {
-                        _view.DeleteOffer(_tipEntry.Index);
+                        _view.DeleteOffer(_tipEntry.Index, TipReason(_tipEntry));
                         _tipEntry = null;
                     }
+
+                    _tipReason = null;
 
                     DexOffer entry = NextLive();
                     if (entry == null)
@@ -648,20 +678,20 @@ namespace Xrpl.Amounts
 
                     if (entry.Expiration is { } expiration && expiration <= _view.ParentCloseTime)
                     {
-                        PermanentlyRemove(entry.Index);
+                        PermanentlyRemove(entry.Index, OfferRemovalReason.Expired);
                         continue;
                     }
 
                     ClobOffer offer = new ClobOffer(entry, _view.Offer(entry.Index));
                     if (StepMath.IsNotPositive(offer.In) || StepMath.IsNotPositive(offer.Out))
                     {
-                        PermanentlyRemove(entry.Index);
+                        PermanentlyRemove(entry.Index, OfferRemovalReason.Empty);
                         continue;
                     }
 
                     if (_view.IsDeepFrozen(offer.Owner, offer.AssetIn))
                     {
-                        PermanentlyRemove(entry.Index);
+                        PermanentlyRemove(entry.Index, OfferRemovalReason.DeepFrozen);
                         continue;
                     }
 
@@ -670,7 +700,7 @@ namespace Xrpl.Amounts
                     if ((!_view.Rules.FixCleanup3_3_0 || _domain.Length != 0) && !string.IsNullOrEmpty(entry.DomainId) &&
                         !_view.World.AccountInDomain(entry.Account, entry.DomainId))
                     {
-                        PermanentlyRemove(entry.Index);
+                        PermanentlyRemove(entry.Index, OfferRemovalReason.NotInDomain);
                         continue;
                     }
 
@@ -679,15 +709,17 @@ namespace Xrpl.Amounts
                     if (StepMath.IsNotPositive(funds))
                     {
                         // Found unfunded, not made unfunded by this strand: removed for good.
+                        _tipReason = OfferRemovalReason.Unfunded;
                         if (FundsOf(_cancelView, offer) == funds)
-                            PermanentlyRemove(entry.Index);
+                            PermanentlyRemove(entry.Index, OfferRemovalReason.Unfunded);
                         continue;
                     }
 
                     if (ShouldRemoveSmallIncreasedQualityOffer(offer, funds))
                     {
+                        _tipReason = OfferRemovalReason.TooSmall;
                         if (FundsOf(_cancelView, offer) == funds)
-                            PermanentlyRemove(entry.Index);
+                            PermanentlyRemove(entry.Index, OfferRemovalReason.TooSmall);
                         continue;
                     }
 

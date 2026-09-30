@@ -85,6 +85,8 @@ namespace Xrpl.Amounts
                         return;
                 }
 
+                for (int position = 0; position < strand.Count; position++)
+                    strand[position].Position = position;
                 result.Add(strand);
             }
 

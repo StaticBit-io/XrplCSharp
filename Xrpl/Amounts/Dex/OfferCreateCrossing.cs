@@ -172,7 +172,7 @@ namespace Xrpl.Amounts
         /// <summary><c>OfferCreate::preclaim</c>, against the ledger before the fee.</summary>
         private static string Preclaim(DexSnapshot snapshot, Order order, DexAccount creator, LedgerRules rules)
         {
-            DexView view = new DexView(new DexWorld(snapshot), rules);
+            DexView view = new DexView(new DexWorld(snapshot) { RecordPasses = true }, rules);
             DexWorld world = view.World;
             if (IsGloballyFrozen(world, order.TakerPays.Asset) || IsGloballyFrozen(world, order.TakerGets.Asset))
                 return "tecFROZEN";
@@ -246,7 +246,7 @@ namespace Xrpl.Amounts
             XrplAmount takerGets = order.TakerGets;
             OfferCreateFlags flags = order.Flags;
 
-            DexWorld world = new DexWorld(snapshot, account, order.Fee);
+            DexWorld world = new DexWorld(snapshot, account, order.Fee) { RecordPasses = true };
             if (!world.Accounts.TryGetValue(account, out DexAccount creator))
                 throw new ArgumentException("The account is not in the snapshot.", nameof(order));
 
@@ -269,7 +269,7 @@ namespace Xrpl.Amounts
                     if (existing != null && string.Equals(existing.Index, cancelled, StringComparison.OrdinalIgnoreCase) &&
                         string.Equals(existing.Account, account, StringComparison.Ordinal))
                     {
-                        ledger.DeleteOffer(existing.Index);
+                        ledger.DeleteOffer(existing.Index, OfferRemovalReason.Cancelled);
                         break;
                     }
                 }
@@ -336,30 +336,51 @@ namespace Xrpl.Amounts
             if (!takerGets.IsIntegral && world.Accounts.TryGetValue(takerGets.Asset.Issuer, out DexAccount getsIssuer) && getsIssuer.TickSize != 0)
                 tickSize = Math.Min(tickSize, getsIssuer.TickSize);
 
-            if (tickSize >= MaxTickSize)
-                return true;
+            if (RoundToTickSize(takerPays, takerGets, tickSize, sell, rules) is not { } rounded)
+                return false;
 
-            XrplAmount rate = Round(XrplQuality.FromAmounts(takerPays, takerGets, rules), tickSize).RateAmount;
+            (takerPays, takerGets) = rounded;
+            return true;
+        }
+
+        /// <summary>
+        /// The tick-size rounding an <c>OfferCreate</c> goes through before it crosses
+        /// (<c>applyGuts</c>): the offer's quality is rounded to <paramref name="tickSize"/>
+        /// significant digits, to a worse quality, and the side that is not exact moves -
+        /// <c>TakerPays</c> for a <c>tfSell</c> offer, <c>TakerGets</c> otherwise.
+        /// </summary>
+        /// <remarks>
+        /// The node takes the smaller <c>TickSize</c> of the issuers of the offer's issued-currency
+        /// sides; an XRP or MPT side has none.
+        /// </remarks>
+        /// <param name="takerPays">What the offer asks for.</param>
+        /// <param name="takerGets">What the offer gives.</param>
+        /// <param name="tickSize">The tick size, 3 to 15; 0 or 16 for none.</param>
+        /// <param name="sell">Whether the offer has <c>tfSell</c>.</param>
+        /// <param name="rules">The amendments in force; all of them when null.</param>
+        /// <returns>The amounts the node writes, or null when a side rounds to nothing.</returns>
+        /// <exception cref="ArgumentOutOfRangeException"><paramref name="tickSize"/> is outside 0 to 16.</exception>
+        public static (XrplAmount TakerPays, XrplAmount TakerGets)? RoundToTickSize(
+            XrplAmount takerPays,
+            XrplAmount takerGets,
+            int tickSize,
+            bool sell,
+            LedgerRules rules = null)
+        {
+            if (tickSize < 0 || tickSize > MaxTickSize)
+                throw new ArgumentOutOfRangeException(nameof(tickSize), tickSize, "A tick size is 0 to 16.");
+
+            if (tickSize == 0 || tickSize == MaxTickSize)
+                return (takerPays, takerGets);
+
+            rules ??= new LedgerRules();
+            XrplAmount rate = XrplQuality.FromAmounts(takerPays, takerGets, rules).Round(tickSize).RateAmount;
             if (sell)
                 takerPays = XrplAmountMath.Multiply(takerGets, rate, takerPays.Asset, rules);
             else
                 takerGets = XrplAmountMath.Divide(takerPays, rate, takerGets.Asset, rules);
 
-            return !takerPays.IsZero && !takerGets.IsZero;
-        }
-
-        /// <summary><c>Quality::round</c>: the mantissa rounded up to <paramref name="digits"/> significant digits.</summary>
-        private static XrplQuality Round(XrplQuality quality, int digits)
-        {
-            ulong modulus = 1;
-            for (int i = digits; i < MaxTickSize; i++)
-                modulus *= 10;
-
-            ulong exponent = quality.Value >> 56;
-            ulong mantissa = quality.Value & 0x00ffffffffffffffUL;
-            mantissa += modulus - 1;
-            mantissa -= mantissa % modulus;
-            return new XrplQuality((exponent << 56) | mantissa);
+            return takerPays.IsZero || takerGets.IsZero ? null : (takerPays, takerGets);
         }
 
         /// <summary><c>OfferCreate::flowCross</c>: the crossing, and what is left of the offer after it.</summary>
@@ -426,7 +447,7 @@ namespace Xrpl.Amounts
                 FlowResult flow;
                 if (strandsResult != null)
                 {
-                    flow = new FlowResult { Result = strandsResult, RemovableOffers = new HashSet<string>(StringComparer.Ordinal) };
+                    flow = new FlowResult { Result = strandsResult, RemovableOffers = new OfferRemovals() };
                 }
                 else
                 {
@@ -446,12 +467,12 @@ namespace Xrpl.Amounts
                 if (flow.Succeeded)
                     flow.Sandbox.ApplyTo(psb);
 
-                foreach (string index in flow.RemovableOffers)
+                foreach ((string index, OfferRemovalReason reason) in flow.RemovableOffers)
                 {
                     if (!psb.Offer(index).Deleted)
-                        psb.DeleteOffer(index);
+                        psb.DeleteOffer(index, reason);
                     if (!psbCancel.Offer(index).Deleted)
-                        psbCancel.DeleteOffer(index);
+                        psbCancel.DeleteOffer(index, reason);
                 }
 
                 (XrplAmount In, XrplAmount Out) afterCross = takerAmount;
@@ -552,6 +573,8 @@ namespace Xrpl.Amounts
             BalanceChanges = changes.Balances;
             TrustLines = changes.TrustLines;
             NeedsDeeperBooks = changes.ReachedPartialBook;
+            Fills = changes.Fills;
+            Passes = changes.Passes;
         }
 
         /// <summary>
@@ -603,6 +626,19 @@ namespace Xrpl.Amounts
         /// snapshot does not have, so the result is exact only once the snapshot is read deeper.
         /// </summary>
         public bool NeedsDeeperBooks { get; }
+
+        /// <summary>
+        /// The offers and pool slices the engine took, in the order it took them: pass by pass,
+        /// and within a pass by the position of the book in the strand. Empty when the
+        /// transaction fails, since nothing it took stays.
+        /// </summary>
+        public IReadOnlyList<OfferFill> Fills { get; }
+
+        /// <summary>
+        /// Every strand the engine tried, pass by pass, and how it fared - including the passes
+        /// of a transaction that failed, which say why it found no liquidity.
+        /// </summary>
+        public IReadOnlyList<FlowPass> Passes { get; }
     }
 
     /// <summary>A trust line the transaction created or deleted.</summary>
@@ -651,12 +687,22 @@ namespace Xrpl.Amounts
     /// <summary>An offer after the crossing.</summary>
     public sealed class OfferChange
     {
-        internal OfferChange(string index, string account, XrplAmount? takerPays, XrplAmount? takerGets)
+        internal OfferChange(
+            string index,
+            string account,
+            XrplAmount? takerPays,
+            XrplAmount? takerGets,
+            OfferRemovalReason? reason,
+            XrplAmount filledTakerPays,
+            XrplAmount filledTakerGets)
         {
             Index = index;
             Account = account;
             TakerPays = takerPays;
             TakerGets = takerGets;
+            Reason = reason;
+            FilledTakerPays = filledTakerPays;
+            FilledTakerGets = filledTakerGets;
         }
 
         /// <summary>The offer's ledger index.</summary>
@@ -673,6 +719,15 @@ namespace Xrpl.Amounts
 
         /// <summary>What the offer still gives; null when it was deleted.</summary>
         public XrplAmount? TakerGets { get; }
+
+        /// <summary>Why the offer left the ledger; null when it stays.</summary>
+        public OfferRemovalReason? Reason { get; }
+
+        /// <summary>What the offer received: how much of its <c>TakerPays</c> was taken. Zero when none was.</summary>
+        public XrplAmount FilledTakerPays { get; }
+
+        /// <summary>What the offer gave: how much of its <c>TakerGets</c> was taken, before its owner's transfer fee. Zero when none was.</summary>
+        public XrplAmount FilledTakerGets { get; }
     }
 
     /// <summary>An AMM pool's balances after the crossing.</summary>

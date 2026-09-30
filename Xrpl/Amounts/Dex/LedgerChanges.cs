@@ -1,5 +1,6 @@
 using System;
 using System.Collections.Generic;
+using System.Linq;
 
 using static Xrpl.Models.Common.Common;
 
@@ -13,21 +14,31 @@ namespace Xrpl.Amounts
             Array.Empty<AmmPoolChange>(),
             Array.Empty<BalanceChange>(),
             Array.Empty<TrustLineChange>(),
-            false);
+            false,
+            Array.Empty<OfferFill>(),
+            Array.Empty<FlowPass>());
 
         private LedgerChanges(
             IReadOnlyList<OfferChange> offers,
             IReadOnlyList<AmmPoolChange> pools,
             IReadOnlyList<BalanceChange> balances,
             IReadOnlyList<TrustLineChange> trustLines,
-            bool reachedPartialBook)
+            bool reachedPartialBook,
+            IReadOnlyList<OfferFill> fills,
+            IReadOnlyList<FlowPass> passes)
         {
             Offers = offers;
             Pools = pools;
             Balances = balances;
             TrustLines = trustLines;
             ReachedPartialBook = reachedPartialBook;
+            Fills = fills;
+            Passes = passes;
         }
+
+        internal IReadOnlyList<OfferFill> Fills { get; }
+
+        internal IReadOnlyList<FlowPass> Passes { get; }
 
         internal IReadOnlyList<OfferChange> Offers { get; }
 
@@ -49,10 +60,12 @@ namespace Xrpl.Amounts
                     continue;
 
                 OfferState state = final.Offer(offer.Index);
+                XrplAmount filledPays = state.FilledTakerPays.WithAsset(offer.TakerPays.Asset);
+                XrplAmount filledGets = state.FilledTakerGets.WithAsset(offer.TakerGets.Asset);
                 if (state.Deleted)
-                    offers.Add(new OfferChange(offer.Index, offer.Account, null, null));
+                    offers.Add(new OfferChange(offer.Index, offer.Account, null, null, state.Reason, filledPays, filledGets));
                 else if (state.TakerPays != offer.TakerPays || state.TakerGets != offer.TakerGets)
-                    offers.Add(new OfferChange(offer.Index, offer.Account, state.TakerPays, state.TakerGets));
+                    offers.Add(new OfferChange(offer.Index, offer.Account, state.TakerPays, state.TakerGets, null, filledPays, filledGets));
             }
 
             List<AmmPoolChange> pools = new List<AmmPoolChange>();
@@ -108,7 +121,16 @@ namespace Xrpl.Amounts
                 return byPeer != 0 ? byPeer : string.CompareOrdinal(a.Currency, b.Currency);
             });
 
-            return new LedgerChanges(offers, pools, balances, lines, world.ReachedPartialBook);
+            // Stable: within a pass, by the book's position in the strand, each book in its own order.
+            List<OfferFill> fills = final.AllFills()
+                .Select((fill, order) => (fill, order))
+                .OrderBy(entry => entry.fill.Pass)
+                .ThenBy(entry => entry.fill.Step)
+                .ThenBy(entry => entry.order)
+                .Select(entry => entry.fill.ToPublic())
+                .ToList();
+
+            return new LedgerChanges(offers, pools, balances, lines, world.ReachedPartialBook, fills, world.Passes.ToArray());
         }
     }
 }

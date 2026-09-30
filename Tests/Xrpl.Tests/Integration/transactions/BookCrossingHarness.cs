@@ -215,7 +215,10 @@ internal sealed class BookCrossingHarness
     /// <summary>Waits until a validated ledger closed after <paramref name="rippleSeconds"/>.</summary>
     internal async Task WaitForCloseAfter(uint rippleSeconds)
     {
-        for (int attempt = 0; attempt < 120; attempt++)
+        // Bounded by the clock, not by attempts: under a parallel run a standalone node closes
+        // ledgers more slowly, and each read takes longer.
+        System.Diagnostics.Stopwatch waited = System.Diagnostics.Stopwatch.StartNew();
+        while (waited.Elapsed < TimeSpan.FromMinutes(5))
         {
             if (await LastCloseTime() > rippleSeconds)
                 return;
@@ -310,8 +313,9 @@ internal sealed class BookCrossingHarness
         Assert.AreEqual(predicted.EngineResult, result.Meta.TransactionResult, "the engine result");
         Assert.IsTrue(predicted.Applied, "a tes or tec result is applied");
 
-        AssertOffers(result.Meta, predicted, transaction.Account);
+        AssertOffers(result.Meta, snapshot, predicted, transaction.Account);
         await AssertPools(snapshot, predicted.Pools);
+        AssertFills(snapshot, predicted.Fills, predicted.Offers, predicted.Pools);
         AssertBalances(result.Meta, predicted.BalanceChanges, snapshot.Pools.Select(p => p.Account));
         AssertTrustLines(result.Meta, predicted.TrustLines);
         return predicted;
@@ -370,8 +374,9 @@ internal sealed class BookCrossingHarness
         if (predicted.EngineResult == "tesSUCCESS")
             Assert.AreEqual(predicted.DeliveredAmount.Value, result.Meta.ActuallyDeliveredAmount.ToXrplAmount(), "delivered_amount");
 
-        AssertOffers(result.Meta, predicted.Offers, null, null, null);
+        AssertOffers(result.Meta, snapshot, predicted.Offers, predicted.Fills, null, null, null);
         await AssertPools(snapshot, predicted.Pools);
+        AssertFills(snapshot, predicted.Fills, predicted.Offers, predicted.Pools);
         AssertBalances(result.Meta, predicted.BalanceChanges, snapshot.Pools.Select(p => p.Account));
         AssertTrustLines(result.Meta, predicted.TrustLines);
         return predicted;
@@ -406,10 +411,17 @@ internal sealed class BookCrossingHarness
             $"trust lines: predicted [{string.Join(", ", expected)}], on the ledger [{string.Join(", ", recorded)}]");
     }
 
-    private static void AssertOffers(Meta meta, OfferCrossingResult predicted, string taker) =>
-        AssertOffers(meta, predicted.Offers, predicted.PlacedTakerPays, predicted.PlacedTakerGets, taker);
+    private static void AssertOffers(Meta meta, DexSnapshot snapshot, OfferCrossingResult predicted, string taker) =>
+        AssertOffers(meta, snapshot, predicted.Offers, predicted.Fills, predicted.PlacedTakerPays, predicted.PlacedTakerGets, taker);
 
-    private static void AssertOffers(Meta meta, IReadOnlyList<OfferChange> predictedOffers, XrplAmount? placedPays, XrplAmount? placedGets, string taker)
+    private static void AssertOffers(
+        Meta meta,
+        DexSnapshot snapshot,
+        IReadOnlyList<OfferChange> predictedOffers,
+        IReadOnlyList<OfferFill> fills,
+        XrplAmount? placedPays,
+        XrplAmount? placedGets,
+        string taker)
     {
         Dictionary<string, OfferChange> expected = predictedOffers.ToDictionary(o => o.Index, StringComparer.OrdinalIgnoreCase);
         HashSet<string> seen = new HashSet<string>(StringComparer.OrdinalIgnoreCase);
@@ -422,11 +434,20 @@ internal sealed class BookCrossingHarness
                 continue;
             }
 
-            if (node.DeletedNode != null && node.DeletedNode.TryGetFinal(out LOOffer _))
+            if (node.DeletedNode != null && node.DeletedNode.TryGetFinal(out LOOffer last))
             {
                 string index = node.DeletedNode.LedgerIndex;
                 Assert.IsTrue(expected.TryGetValue(index, out OfferChange change), $"offer {index} deleted but not predicted");
                 Assert.IsTrue(change.Deleted, $"offer {index} deleted, predicted to remain {change.TakerPays} / {change.TakerGets}");
+                Assert.IsNotNull(change.Reason, $"offer {index}: deleted without a reason");
+                AssertFilled(index, snapshot, fills, last);
+                if (change.Reason == OfferRemovalReason.Consumed)
+                {
+                    Assert.IsTrue(
+                        last.TakerPays.ToXrplAmount().IsZero || last.TakerGets.ToXrplAmount().IsZero,
+                        $"offer {index}: predicted consumed, deleted with {last.TakerPays.ToXrplAmount()} / {last.TakerGets.ToXrplAmount()} left");
+                }
+
                 seen.Add(index);
             }
             else if (node.ModifiedNode != null && node.ModifiedNode.TryGetFinal(out LOOffer final))
@@ -434,8 +455,10 @@ internal sealed class BookCrossingHarness
                 string index = node.ModifiedNode.LedgerIndex;
                 Assert.IsTrue(expected.TryGetValue(index, out OfferChange change), $"offer {index} changed but not predicted");
                 Assert.IsFalse(change.Deleted, $"offer {index} remains, predicted deleted");
+                Assert.IsNull(change.Reason, $"offer {index}: remains, with a removal reason");
                 Assert.AreEqual(change.TakerPays.Value, final.TakerPays.ToXrplAmount(), $"offer {index}: what it still asks for");
                 Assert.AreEqual(change.TakerGets.Value, final.TakerGets.ToXrplAmount(), $"offer {index}: what it still gives");
+                AssertFilled(index, snapshot, fills, final);
                 seen.Add(index);
             }
         }
@@ -453,6 +476,60 @@ internal sealed class BookCrossingHarness
         Assert.AreEqual(taker, placed.Account);
         Assert.AreEqual(placedPays.Value, placed.TakerPays.ToXrplAmount(), "the placed offer's TakerPays");
         Assert.AreEqual(placedGets.Value, placed.TakerGets.ToXrplAmount(), "the placed offer's TakerGets");
+    }
+
+    /// <summary>
+    /// The offer's fills, replayed from its amounts in the snapshot - each subtraction rounded, as
+    /// the ledger stores it - leave what the metadata's final fields show.
+    /// </summary>
+    private static void AssertFilled(string index, DexSnapshot snapshot, IReadOnlyList<OfferFill> fills, LOOffer after)
+    {
+        DexOffer original = snapshot.Offers.Single(o => string.Equals(o.Index, index, StringComparison.OrdinalIgnoreCase));
+        XrplAmount pays = original.TakerPays;
+        XrplAmount gets = original.TakerGets;
+        foreach (OfferFill fill in fills.Where(f => string.Equals(f.OfferIndex, index, StringComparison.OrdinalIgnoreCase)))
+        {
+            pays = XrplAmountMath.Subtract(pays, fill.In);
+            gets = XrplAmountMath.Subtract(gets, fill.Out);
+        }
+
+        Assert.AreEqual(after.TakerPays.ToXrplAmount(), pays, $"offer {index}: its fills replayed leave what it asks for");
+        Assert.AreEqual(after.TakerGets.ToXrplAmount(), gets, $"offer {index}: its fills replayed leave what it gives");
+    }
+
+    /// <summary>The fills add up to what was taken of each offer and to each pool's change, and run pass by pass.</summary>
+    private static void AssertFills(DexSnapshot snapshot, IReadOnlyList<OfferFill> fills, IReadOnlyList<OfferChange> offers, IReadOnlyList<AmmPoolChange> pools)
+    {
+        for (int i = 1; i < fills.Count; i++)
+            Assert.IsTrue(fills[i - 1].Pass <= fills[i].Pass, "the fills run pass by pass");
+
+        foreach (OfferChange change in offers)
+        {
+            List<OfferFill> taken = fills.Where(f => string.Equals(f.OfferIndex, change.Index, StringComparison.OrdinalIgnoreCase)).ToList();
+            XrplAmount received = taken.Aggregate(XrplAmount.Zero(change.FilledTakerPays.Asset), (sum, f) => XrplAmountMath.Add(sum, f.In));
+            XrplAmount gave = taken.Aggregate(XrplAmount.Zero(change.FilledTakerGets.Asset), (sum, f) => XrplAmountMath.Add(sum, f.Out));
+            Assert.AreEqual(change.FilledTakerPays, received, $"offer {change.Index}: its fills received");
+            Assert.AreEqual(change.FilledTakerGets, gave, $"offer {change.Index}: its fills gave");
+        }
+
+        foreach (DexAmmPool pool in snapshot.Pools)
+        {
+            AmmPoolChange change = pools.SingleOrDefault(p => p.Account == pool.Account);
+            foreach ((XrplAmount before, XrplAmount after) in new[] { (pool.Balance, change?.Balance ?? pool.Balance), (pool.Balance2, change?.Balance2 ?? pool.Balance2) })
+            {
+                // Replayed fill by fill, as the engine moves the balance, each step rounded.
+                XrplAmount balance = before;
+                foreach (OfferFill fill in fills.Where(f => f.IsPool && f.Owner == pool.Account))
+                {
+                    if (XrplAmount.SameAsset(fill.In.Asset, before.Asset))
+                        balance = XrplAmountMath.Add(balance, fill.In);
+                    if (XrplAmount.SameAsset(fill.Out.Asset, before.Asset))
+                        balance = XrplAmountMath.Subtract(balance, fill.Out);
+                }
+
+                Assert.AreEqual(after, balance, $"pool {pool.Account}: its fills replayed give its balance of {before.Asset.Currency}");
+            }
+        }
     }
 
     private async Task AssertPools(DexSnapshot snapshot, IReadOnlyList<AmmPoolChange> predictedPools)

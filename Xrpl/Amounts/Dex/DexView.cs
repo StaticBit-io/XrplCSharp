@@ -185,6 +185,8 @@ namespace Xrpl.Amounts
                     continue;
                 if (pool.Balance.Kind == AmountKind.Mpt || pool.Balance2.Kind == AmountKind.Mpt)
                     throw new NotSupportedException("MPT pools are not supported.");
+                AmmOfferMath.RequireTradingFee(pool.TradingFee, nameof(snapshot));
+                AmmOfferMath.RequireTradingFee(pool.DiscountedFee, nameof(snapshot));
 
                 Pools.Add(pool);
                 PoolAccounts.Add(pool.Account);
@@ -265,6 +267,12 @@ namespace Xrpl.Amounts
 
         /// <summary>Whether a book step ran out of offers in a book the snapshot holds only in part.</summary>
         internal bool ReachedPartialBook { get; set; }
+
+        /// <summary>Whether the engine's passes are recorded in <see cref="Passes"/>: for the transaction evaluated, not for a path search's trial runs.</summary>
+        internal bool RecordPasses { get; set; }
+
+        /// <summary>The strands the engine tried, pass by pass, over every flow run against this world.</summary>
+        internal List<FlowPass> Passes { get; } = new List<FlowPass>();
 
         internal IReadOnlyList<DexOffer> Book(IssuedCurrency @in, IssuedCurrency @out, string domain = null) =>
             Books.TryGetValue(BookKey.Of(@in, @out, domain), out List<DexOffer> list) ? list : Array.Empty<DexOffer>();
@@ -438,16 +446,32 @@ namespace Xrpl.Amounts
         internal OwnerCounts Copy() => new OwnerCounts { Actual = Actual, Max = Max };
     }
 
-    /// <summary>What is left of an offer while a crossing runs.</summary>
+    /// <summary>What is left of an offer while a crossing runs, and what was taken of it.</summary>
     internal sealed class OfferState
     {
         internal XrplAmount TakerPays { get; set; }
 
         internal XrplAmount TakerGets { get; set; }
 
+        /// <summary>What the offer received: the sum of what was taken of its <c>TakerPays</c>.</summary>
+        internal XrplAmount FilledTakerPays { get; set; }
+
+        /// <summary>What the offer gave: the sum of what was taken of its <c>TakerGets</c>.</summary>
+        internal XrplAmount FilledTakerGets { get; set; }
+
         internal bool Deleted { get; set; }
 
-        internal OfferState Copy() => new OfferState { TakerPays = TakerPays, TakerGets = TakerGets, Deleted = Deleted };
+        internal OfferRemovalReason? Reason { get; set; }
+
+        internal OfferState Copy() => new OfferState
+        {
+            TakerPays = TakerPays,
+            TakerGets = TakerGets,
+            FilledTakerPays = FilledTakerPays,
+            FilledTakerGets = FilledTakerGets,
+            Deleted = Deleted,
+            Reason = Reason,
+        };
     }
 
     /// <summary>
@@ -465,6 +489,7 @@ namespace Xrpl.Amounts
         private readonly Dictionary<LineKey, LineState> _lines = new Dictionary<LineKey, LineState>();
         private readonly Dictionary<string, OfferState> _offers = new Dictionary<string, OfferState>(StringComparer.Ordinal);
         private readonly Dictionary<string, OwnerCounts> _counts = new Dictionary<string, OwnerCounts>(StringComparer.Ordinal);
+        private readonly List<FillRecord> _fills = new List<FillRecord>();
         private readonly DexView _parent;
 
         internal DexView(DexWorld world, LedgerRules rules)
@@ -497,6 +522,30 @@ namespace Xrpl.Amounts
                 parent._offers[entry.Key] = entry.Value.Copy();
             foreach (KeyValuePair<string, OwnerCounts> entry in _counts)
                 parent._counts[entry.Key] = entry.Value.Copy();
+
+            // Moved, not copied: a fill belongs to one view of a chain.
+            parent._fills.AddRange(_fills);
+            _fills.Clear();
+        }
+
+        /// <summary>A fill this view took, before its pass and strand are known.</summary>
+        internal void RecordFill(FillRecord fill) => _fills.Add(fill);
+
+        /// <summary>The fills this view recorded and has not yet passed on.</summary>
+        internal IReadOnlyList<FillRecord> OwnFills => _fills;
+
+        /// <summary>Every fill of this view and its parents, oldest first.</summary>
+        internal List<FillRecord> AllFills()
+        {
+            List<List<FillRecord>> layers = new List<List<FillRecord>>();
+            for (DexView view = this; view != null; view = view._parent)
+                layers.Add(view._fills);
+
+            List<FillRecord> all = new List<FillRecord>();
+            for (int i = layers.Count - 1; i >= 0; i--)
+                all.AddRange(layers[i]);
+
+            return all;
         }
 
         /// <summary>Both sides of every trust line, and every XRP balance, this view or a parent has written.</summary>
@@ -541,7 +590,13 @@ namespace Xrpl.Amounts
             }
 
             DexOffer offer = World.Offers[index];
-            return new OfferState { TakerPays = offer.TakerPays, TakerGets = offer.TakerGets };
+            return new OfferState
+            {
+                TakerPays = offer.TakerPays,
+                TakerGets = offer.TakerGets,
+                FilledTakerPays = XrplAmount.Zero(offer.TakerPays.Asset),
+                FilledTakerGets = XrplAmount.Zero(offer.TakerGets.Asset),
+            };
         }
 
         /// <summary><c>TOffer::consume</c>: the offer reduced by what was taken from it.</summary>
@@ -555,16 +610,19 @@ namespace Xrpl.Amounts
 
             state.TakerPays = StepMath.Subtract(state.TakerPays, consumedIn, Rules);
             state.TakerGets = StepMath.Subtract(state.TakerGets, consumedOut, Rules);
+            state.FilledTakerPays = StepMath.Add(state.FilledTakerPays, consumedIn, Rules);
+            state.FilledTakerGets = StepMath.Add(state.FilledTakerGets, consumedOut, Rules);
         }
 
         /// <summary><c>offerDelete</c>: the offer leaves the book and its owner owns one object less.</summary>
-        internal void DeleteOffer(string index)
+        internal void DeleteOffer(string index, OfferRemovalReason reason)
         {
             OfferState state = OfferForWrite(index);
             if (state.Deleted)
                 return;
 
             state.Deleted = true;
+            state.Reason = reason;
             AdjustOwnerCount(World.Offers[index].Account, -1);
         }
 

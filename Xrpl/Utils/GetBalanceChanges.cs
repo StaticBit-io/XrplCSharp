@@ -300,8 +300,13 @@ public static class BalanceChanges
     /// can route through an offer in somebody's own token at any value the protocol allows.
     /// Issued-currency deltas are computed as <see cref="XrplAmount"/>, over the ledger's whole
     /// range: the difference is exact, then rounded once to sixteen significant digits, to nearest
-    /// with ties to even, as rippled rounds. A value too large or too small for
-    /// <see cref="decimal"/> is written in scientific notation, the way rippled writes it.
+    /// with ties to even, as rippled rounds. <see cref="Currency.Value"/> is written as rippled's
+    /// <c>STAmount::getText</c> writes it: in scientific notation, a sixteen-digit mantissa and
+    /// an exponent, when the exponent is above -5 or below -25 - from about 1e11 up and below
+    /// about 1e-10, e.g. <c>1234567890120000e-4</c> for 123456789012. Read the value with
+    /// <see cref="Currency.ToXrplAmount"/>, or with <see cref="Currency.ValueAsNumber"/> within
+    /// the range of <see cref="decimal"/>, rather than as display text or with
+    /// <see cref="System.Globalization.NumberStyles.Number"/>.
     /// </para>
     /// </remarks>
     /// <param name="metadata">Transaction metadata including affected nodes.</param>

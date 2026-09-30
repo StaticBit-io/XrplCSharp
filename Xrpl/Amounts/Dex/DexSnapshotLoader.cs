@@ -33,6 +33,31 @@ namespace Xrpl.Amounts
         /// were read is listed in <see cref="DexSnapshot.PartialBooks"/>.
         /// </summary>
         public int? BookDepth { get; init; }
+
+        /// <summary>
+        /// The ledger to read: a sequence - the ledger before a past transaction's, to replay
+        /// it - or <c>validated</c>, <c>closed</c> or <c>current</c>; null for the last validated one.
+        /// </summary>
+        public LedgerIndex Ledger { get; init; }
+
+        /// <summary>
+        /// Whether to build each offer owner from what <c>book_offers</c> reports of its funds
+        /// (<c>owner_funds</c>) instead of reading its account and trust lines: one request per
+        /// book instead of up to three per owner. Owners the snapshot reads anyway - the
+        /// transaction's accounts, the issuers - are still read.
+        /// </summary>
+        /// <remarks>
+        /// <para>
+        /// Such an owner is listed in <see cref="DexSnapshot.ApproximatedOwners"/>. Its funds of
+        /// what an offer gives are exact, and the reserve an offer frees when it is deleted is
+        /// counted. What the snapshot does not know about it: whether it trusts the issuer of
+        /// what it receives and for how much - a line is assumed, with room for anything - and its
+        /// line's quality, NoRipple and freeze settings, which are assumed at their defaults, with
+        /// the issuer's authorization granted.
+        /// </para>
+        /// <para>Not combined with <see cref="BookDepth"/>: a directory walk reads no funds.</para>
+        /// </remarks>
+        public bool OwnerFundsFromBook { get; init; }
     }
 
     public sealed partial class DexSnapshot
@@ -52,7 +77,7 @@ namespace Xrpl.Amounts
         private const uint CredentialAccepted = 0x00010000;
 
         /// <summary>
-        /// Reads from a node, at one validated ledger, everything an <c>OfferCreate</c> by
+        /// Reads from a node, at one ledger (the last validated one unless <see cref="DexSnapshotOptions.Ledger"/> names another), everything an <c>OfferCreate</c> by
         /// <paramref name="account"/> trading <paramref name="takerGets"/> for
         /// <paramref name="takerPays"/> can reach: the book it crosses, the two books of the
         /// bridge through XRP when neither side is XRP, the AMM pools on them, and the accounts
@@ -68,7 +93,7 @@ namespace Xrpl.Amounts
         /// <param name="account">The account placing the offer.</param>
         /// <param name="takerPays">The asset the offer asks for.</param>
         /// <param name="takerGets">The asset the offer gives.</param>
-        /// <param name="options">How deep to read the books; one page each when null.</param>
+        /// <param name="options">How deep to read the books, and at which ledger; one page each, at the last validated ledger, when null.</param>
         /// <param name="cancellationToken">Cancels the reads.</param>
         public static Task<DexSnapshot> FromNodeAsync(
             IXrplClient client,
@@ -91,7 +116,7 @@ namespace Xrpl.Amounts
         }
 
         /// <summary>
-        /// Reads from a node, at one validated ledger, everything <paramref name="offer"/> can
+        /// Reads from a node, at one ledger (the last validated one unless <see cref="DexSnapshotOptions.Ledger"/> names another), everything <paramref name="offer"/> can
         /// reach: the books it crosses - its domain's when it names one - the AMM pools on the open
         /// ones, the accounts and trust lines the crossing reads, the offer <c>OfferSequence</c>
         /// cancels, and the domain with the credentials that decide who is in it.
@@ -99,7 +124,7 @@ namespace Xrpl.Amounts
         /// <remarks>As the other overload, for the books.</remarks>
         /// <param name="client">The node to read from.</param>
         /// <param name="offer">The transaction.</param>
-        /// <param name="options">How deep to read the books; one page each when null.</param>
+        /// <param name="options">How deep to read the books, and at which ledger; one page each, at the last validated ledger, when null.</param>
         /// <param name="cancellationToken">Cancels the reads.</param>
         public static Task<DexSnapshot> FromNodeAsync(
             IXrplClient client,
@@ -118,7 +143,7 @@ namespace Xrpl.Amounts
         }
 
         /// <summary>
-        /// Reads from a node, at one validated ledger, everything <paramref name="payment"/> can
+        /// Reads from a node, at one ledger (the last validated one unless <see cref="DexSnapshotOptions.Ledger"/> names another), everything <paramref name="payment"/> can
         /// reach: the trust lines along its paths and its default path, the books on them - its
         /// domain's when it names one - with the AMM pools on the open ones, the accounts involved
         /// with the destination's deposit preauthorizations, the credentials it presents, and the
@@ -132,7 +157,7 @@ namespace Xrpl.Amounts
         /// </remarks>
         /// <param name="client">The node to read from.</param>
         /// <param name="payment">The payment, with its paths as <c>ripple_path_find</c> returned them.</param>
-        /// <param name="options">How deep to read the books; one page each when null.</param>
+        /// <param name="options">How deep to read the books, and at which ledger; one page each, at the last validated ledger, when null.</param>
         /// <param name="cancellationToken">Cancels the reads.</param>
         public static Task<DexSnapshot> FromNodeAsync(
             IXrplClient client,
@@ -247,13 +272,17 @@ namespace Xrpl.Amounts
             return plan;
         }
 
-        /// <summary>The accounts, lines, books, domain and credentials the planned strands reach, read at one validated ledger.</summary>
+        /// <summary>The accounts, lines, books, domain and credentials the planned strands reach, read at one ledger.</summary>
         private static async Task<DexSnapshot> LoadAsync(IXrplClient client, LoadPlan plan, DexSnapshotOptions options, CancellationToken cancellationToken)
         {
             StrandBuilder.Request request = plan.Request;
             string domainId = string.IsNullOrEmpty(request.DomainId) ? null : request.DomainId;
+            bool fundsFromBook = options?.OwnerFundsFromBook == true;
+            if (fundsFromBook && options.BookDepth != null)
+                throw new ArgumentException("OwnerFundsFromBook reads one book_offers page per book; it does not combine with BookDepth.", nameof(options));
+
             LOLedger header = await client
-                .Ledger(new LedgerRequest { LedgerIndex = plan.At ?? new LedgerIndex(LedgerIndexType.Validated) }, cancellationToken)
+                .Ledger(new LedgerRequest { LedgerIndex = plan.At ?? options?.Ledger ?? new LedgerIndex(LedgerIndexType.Validated) }, cancellationToken)
                 .Typed()
                 .ConfigureAwait(false);
             LedgerEntity ledger = header.LedgerEntity as LedgerEntity
@@ -302,29 +331,57 @@ namespace Xrpl.Amounts
             HashSet<string> offerIndexes = new HashSet<string>(StringComparer.OrdinalIgnoreCase);
             List<DexAmmPool> pools = new List<DexAmmPool>();
             List<DexBook> partialBooks = new List<DexBook>();
-            HashSet<string> domainOwners = new HashSet<string>(StringComparer.Ordinal);
-            void AddOffer(DexOffer offer)
+            // The owners of the offers each domain was read for: a hybrid offer in the open book
+            // carries its domain too, and before fixCleanup3_3_0 the open book checks it.
+            Dictionary<string, HashSet<string>> domainOwners = new Dictionary<string, HashSet<string>>(StringComparer.OrdinalIgnoreCase);
+            if (domainId != null)
+                domainOwners[domainId] = new HashSet<string>(StringComparer.Ordinal) { request.Source, request.Destination };
+            // The accounts the transaction itself reaches are read whatever the option says.
+            HashSet<string> readAnyway = new HashSet<string>(accounts, StringComparer.Ordinal);
+            Dictionary<string, List<DexOffer>> bookOwners = new Dictionary<string, List<DexOffer>>(StringComparer.Ordinal);
+            Dictionary<(string Owner, AssetKey Asset), XrplAmount> ownerFunds = new Dictionary<(string, AssetKey), XrplAmount>();
+            void AddOffer(DexOffer offer, IReadOnlyDictionary<string, XrplAmount> funds = null)
             {
                 if (!offerIndexes.Add(offer.Index))
                     return;
 
                 offers.Add(offer);
-                accounts.Add(offer.Account);
-                if (offer.TakerPays.Kind == AmountKind.Iou)
-                    AddLine(lines, offer.Account, offer.TakerPays.Asset.Issuer, offer.TakerPays.Asset.Currency);
-                if (offer.TakerGets.Kind == AmountKind.Iou)
-                    AddLine(lines, offer.Account, offer.TakerGets.Asset.Issuer, offer.TakerGets.Asset.Currency);
+                if (fundsFromBook && funds != null && !readAnyway.Contains(offer.Account))
+                {
+                    if (!bookOwners.TryGetValue(offer.Account, out List<DexOffer> owned))
+                        bookOwners[offer.Account] = owned = new List<DexOffer>();
+                    owned.Add(offer);
+                    if (funds.TryGetValue(offer.Account, out XrplAmount owns))
+                        ownerFunds[(offer.Account, AssetKey.Of(offer.TakerGets.Asset))] = owns;
+                }
+                else
+                {
+                    accounts.Add(offer.Account);
+                    if (offer.TakerPays.Kind == AmountKind.Iou)
+                        AddLine(lines, offer.Account, offer.TakerPays.Asset.Issuer, offer.TakerPays.Asset.Currency);
+                    if (offer.TakerGets.Kind == AmountKind.Iou)
+                        AddLine(lines, offer.Account, offer.TakerGets.Asset.Issuer, offer.TakerGets.Asset.Currency);
+                }
+
                 if (!string.IsNullOrEmpty(offer.DomainId))
-                    domainOwners.Add(offer.Account);
+                {
+                    if (!domainOwners.TryGetValue(offer.DomainId, out HashSet<string> owners))
+                        domainOwners[offer.DomainId] = owners = new HashSet<string>(StringComparer.Ordinal);
+                    owners.Add(offer.Account);
+                }
             }
 
             foreach ((IssuedCurrency @in, IssuedCurrency @out) in books)
             {
-                (IReadOnlyList<DexOffer> bookOffers, bool partial) = options?.BookDepth is { } depth
-                    ? await WalkBookAsync(client, @in, @out, domainId, depth, at, cancellationToken).ConfigureAwait(false)
-                    : await BookAsync(client, plan.Taker, @in, @out, domainId, at, cancellationToken).ConfigureAwait(false);
+                IReadOnlyList<DexOffer> bookOffers;
+                bool partial;
+                IReadOnlyDictionary<string, XrplAmount> funds = null;
+                if (options?.BookDepth is { } depth)
+                    (bookOffers, partial) = await WalkBookAsync(client, @in, @out, domainId, depth, at, cancellationToken).ConfigureAwait(false);
+                else
+                    (bookOffers, partial, funds) = await BookAsync(client, plan.Taker, @in, @out, domainId, at, cancellationToken).ConfigureAwait(false);
                 foreach (DexOffer offer in bookOffers)
-                    AddOffer(offer);
+                    AddOffer(offer, funds);
                 if (partial)
                     partialBooks.Add(new DexBook { TakerPays = @in, TakerGets = @out, DomainId = domainId });
 
@@ -342,16 +399,19 @@ namespace Xrpl.Amounts
 
             List<DexDomain> domains = new List<DexDomain>();
             List<DexCredential> credentials = new List<DexCredential>();
-            if (domainId != null && await DomainAsync(client, domainId, at, cancellationToken).ConfigureAwait(false) is { } domain)
+            foreach ((string readDomainId, HashSet<string> members) in domainOwners)
             {
+                if (await DomainAsync(client, readDomainId, at, cancellationToken).ConfigureAwait(false) is not { } domain)
+                    continue;
+
                 domains.Add(domain);
-                HashSet<string> members = new HashSet<string>(domainOwners, StringComparer.Ordinal) { request.Source, request.Destination };
-                foreach (string member in members)
+                foreach (string member in members.Where(m => !string.IsNullOrEmpty(m)))
                 {
                     foreach (DexCredentialType accepted in domain.AcceptedCredentials)
                     {
                         if (await CredentialAsync(client, new CredentialQuery { Subject = member, Issuer = accepted.Issuer, CredentialType = accepted.CredentialType }, at, cancellationToken)
-                                .ConfigureAwait(false) is { } credential)
+                                .ConfigureAwait(false) is { } credential &&
+                            !credentials.Exists(c => SameCredential(c, credential)))
                         {
                             credentials.Add(credential);
                         }
@@ -383,8 +443,16 @@ namespace Xrpl.Amounts
                 }
             }
 
+            // The unlimited taker is built, not read.
+            bool unlimited = string.Equals(request.Source, DexSnapshot.UnlimitedTaker, StringComparison.Ordinal);
+            List<(string A, string B, string Currency)> takerLines = lines
+                .Where(line => unlimited && (line.A == DexSnapshot.UnlimitedTaker || line.B == DexSnapshot.UnlimitedTaker))
+                .ToList();
+            foreach ((string A, string B, string Currency) line in takerLines)
+                lines.Remove(line);
+
             DexAccount[] accountReads = await Task.WhenAll(accounts
-                    .Where(address => !string.IsNullOrEmpty(address))
+                    .Where(address => !string.IsNullOrEmpty(address) && !(unlimited && address == DexSnapshot.UnlimitedTaker))
                     .Select(address => Gated(() => AccountAsync(client, address, at, cancellationToken))))
                 .ConfigureAwait(false);
             List<DexAccount> accountStates = accountReads.Where(state => state != null).ToList();
@@ -394,10 +462,24 @@ namespace Xrpl.Amounts
                 .ConfigureAwait(false);
             List<DexTrustLine> lineStates = lineReads.Where(line => line != null).ToList();
 
+            if (unlimited)
+                AddUnlimitedTaker(request, takerLines, accountStates, lineStates);
+
+            List<string> approximated = new List<string>();
+            foreach ((string owner, List<DexOffer> owned) in bookOwners)
+            {
+                if (accountStates.Exists(state => state.Address == owner))
+                    continue;
+
+                approximated.Add(owner);
+                AddBookOwner(owner, owned, ownerFunds, reserveBase, reserveIncrement, accountStates, lineStates);
+            }
+
             return new DexSnapshot
             {
                 // The transaction lands in a later ledger, whose parent closed no earlier than this one.
                 ParentCloseTime = ledger.CloseTime is { } closed ? (uint)LendingMath.RippleSeconds(closed) : 0,
+                LedgerSequence = uint.Parse(ledger.LedgerIndex, CultureInfo.InvariantCulture),
                 ReserveBase = reserveBase,
                 ReserveIncrement = reserveIncrement,
                 Accounts = accountStates,
@@ -407,7 +489,120 @@ namespace Xrpl.Amounts
                 Domains = domains,
                 Credentials = credentials,
                 PartialBooks = partialBooks,
+                ApproximatedOwners = approximated,
             };
+        }
+
+        /// <summary>
+        /// Half the largest issued-currency amount: what the unlimited taker holds, so that it can
+        /// pay any amount an offer names and still receive as much again without overflowing.
+        /// </summary>
+        private static XrplAmount Plenty(IssuedCurrency asset) => XrplAmount.Parse(asset, "4999999999999999e80");
+
+        /// <summary>The largest issued-currency amount: the limit of the unlimited taker's lines.</summary>
+        private static XrplAmount MostOf(IssuedCurrency asset) => XrplAmount.Parse(asset, "9999999999999999e80");
+
+        /// <summary>
+        /// <see cref="DexSnapshot.UnlimitedTaker"/>: the most XRP there is, plenty of each issued
+        /// currency it holds or pays through, and room for anything it receives.
+        /// </summary>
+        private static void AddUnlimitedTaker(
+            StrandBuilder.Request request,
+            List<(string A, string B, string Currency)> takerLines,
+            List<DexAccount> accounts,
+            List<DexTrustLine> lines)
+        {
+            accounts.Add(new DexAccount { Address = DexSnapshot.UnlimitedTaker, Balance = 100_000_000_000_000_000 });
+
+            HashSet<(string Peer, string Currency)> built = new HashSet<(string, string)>();
+            void Line(string peer, string currency)
+            {
+                if (string.IsNullOrEmpty(peer) || peer == DexSnapshot.UnlimitedTaker || !built.Add((peer, currency)))
+                    return;
+
+                IssuedCurrency asset = new IssuedCurrency { Currency = currency, Issuer = peer };
+                lines.Add(new DexTrustLine
+                {
+                    Account = DexSnapshot.UnlimitedTaker,
+                    Balance = Plenty(asset),
+                    Limit = MostOf(asset),
+                    PeerAuthorized = true,
+                    Reserve = true,
+                });
+            }
+
+            foreach ((string A, string B, string Currency) line in takerLines)
+                Line(line.A == DexSnapshot.UnlimitedTaker ? line.B : line.A, line.Currency);
+            if (XrplAmount.KindOf(request.SendMax) == AmountKind.Iou)
+                Line(request.SendMax.Issuer, request.SendMax.Currency);
+            if (request.Destination == DexSnapshot.UnlimitedTaker && XrplAmount.KindOf(request.Deliver) == AmountKind.Iou)
+                Line(request.Deliver.Issuer, request.Deliver.Currency);
+        }
+
+        /// <summary>
+        /// An offer owner built from <c>owner_funds</c>: its XRP, if its offers give XRP, with the
+        /// reserve of the offers it owns on top; a line with its funds of each issued currency its
+        /// offers give; and a line with room for each one they ask for.
+        /// </summary>
+        private static void AddBookOwner(
+            string owner,
+            List<DexOffer> owned,
+            Dictionary<(string Owner, AssetKey Asset), XrplAmount> ownerFunds,
+            ulong reserveBase,
+            ulong reserveIncrement,
+            List<DexAccount> accounts,
+            List<DexTrustLine> lines)
+        {
+            uint ownerCount = (uint)owned.Count;
+            ulong reserve = reserveBase + ownerCount * reserveIncrement;
+            ulong xrp = reserve;
+            Dictionary<AssetKey, (IssuedCurrency Asset, XrplAmount Holds, bool Receives)> held = new Dictionary<AssetKey, (IssuedCurrency, XrplAmount, bool)>();
+
+            foreach (DexOffer offer in owned)
+            {
+                IssuedCurrency gives = offer.TakerGets.Asset;
+                XrplAmount funds = ownerFunds.TryGetValue((owner, AssetKey.Of(gives)), out XrplAmount reported) ? reported : offer.TakerGets;
+                if (offer.TakerGets.Kind == AmountKind.Xrp)
+                {
+                    xrp = Math.Max(xrp, reserve + (funds.IsNegative ? 0UL : ulong.Parse(funds.ToString(), CultureInfo.InvariantCulture)));
+                }
+                else if (offer.TakerGets.Kind == AmountKind.Iou && gives.Issuer != owner)
+                {
+                    AssetKey key = AssetKey.Of(gives);
+                    bool receives = held.TryGetValue(key, out (IssuedCurrency Asset, XrplAmount Holds, bool Receives) known) && known.Receives;
+                    held[key] = (gives, funds, receives);
+                }
+
+                IssuedCurrency asks = offer.TakerPays.Asset;
+                if (offer.TakerPays.Kind == AmountKind.Iou && asks.Issuer != owner)
+                {
+                    AssetKey key = AssetKey.Of(asks);
+                    XrplAmount holds = held.TryGetValue(key, out (IssuedCurrency Asset, XrplAmount Holds, bool Receives) known) ? known.Holds : XrplAmount.Zero(asks);
+                    held[key] = (asks, holds, true);
+                }
+            }
+
+            accounts.Add(new DexAccount { Address = owner, Balance = xrp, OwnerCount = ownerCount });
+            foreach ((IssuedCurrency asset, XrplAmount holds, bool receives) in held.Values)
+            {
+                lines.Add(new DexTrustLine
+                {
+                    Account = owner,
+                    Balance = holds,
+                    Limit = receives ? XrplAmount.Parse(asset, "1e41") : holds,
+                    PeerAuthorized = true,
+                    Reserve = true,
+                });
+            }
+        }
+
+        /// <summary>An asset as a dictionary key: its currency and issuer, or its MPT issuance.</summary>
+        private readonly record struct AssetKey(string Currency, string Issuer)
+        {
+            internal static AssetKey Of(IssuedCurrency asset) =>
+                XrplAmount.KindOf(asset) == AmountKind.Xrp
+                    ? new AssetKey("XRP", null)
+                    : new AssetKey(asset.MptIssuanceId ?? asset.Currency, asset.Issuer);
         }
 
         private static bool SameCredential(DexCredential a, DexCredential b) =>
@@ -448,7 +643,7 @@ namespace Xrpl.Amounts
         // ---- books ----
 
         /// <summary>One <c>book_offers</c> page of the book, and whether the book may hold more.</summary>
-        private static async Task<(IReadOnlyList<DexOffer> Offers, bool Partial)> BookAsync(
+        private static async Task<(IReadOnlyList<DexOffer> Offers, bool Partial, IReadOnlyDictionary<string, XrplAmount> OwnerFunds)> BookAsync(
             IXrplClient client,
             string taker,
             IssuedCurrency @in,
@@ -469,8 +664,13 @@ namespace Xrpl.Amounts
             };
             BookOffersResponse response = await client.BookOffers(request, cancellationToken).Typed().ConfigureAwait(false);
             List<DexOffer> offers = new List<DexOffer>();
+            Dictionary<string, XrplAmount> ownerFunds = new Dictionary<string, XrplAmount>(StringComparer.Ordinal);
             foreach (BookOffer offer in response?.Offers ?? new List<BookOffer>())
             {
+                // owner_funds comes with an owner's first offer in the page: its funds of what the book gives.
+                if (!string.IsNullOrEmpty(offer.OwnerFunds) && !ownerFunds.ContainsKey(offer.Account))
+                    ownerFunds[offer.Account] = XrplAmount.Parse(@out, offer.OwnerFunds);
+
                 offers.Add(new DexOffer
                 {
                     Index = offer.Index,
@@ -485,7 +685,7 @@ namespace Xrpl.Amounts
             }
 
             // A full public page may have been cut; so may an admin one, which unfunded offers do not fill.
-            return (offers, offers.Count >= PublicBookLimit);
+            return (offers, offers.Count >= PublicBookLimit, ownerFunds);
         }
 
         private static TakerAmount TakerAmountOf(IssuedCurrency asset) =>

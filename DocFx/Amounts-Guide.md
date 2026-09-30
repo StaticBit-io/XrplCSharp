@@ -11,6 +11,7 @@ Every result matches rippled 3.4.0 bit for bit: mantissa, exponent and sign. The
 - [Arithmetic](#arithmetic)
 - [Quality](#quality)
 - [Offer Crossing](#offer-crossing)
+- [AMM Pool Offers](#amm-pool-offers)
 - [Crossing an OfferCreate](#crossing-an-offercreate)
 - [Evaluating a Payment](#evaluating-a-payment)
 - [Permissioned Domains and Credentials](#permissioned-domains-and-credentials)
@@ -35,6 +36,7 @@ An issued currency on the ledger has 16 significant digits and an exponent from 
 | `XrplAmountMath` | `Xrpl.Amounts` | `STAmount` arithmetic: add, multiply, divide, `mulRound`, `divRound` |
 | `XrplQuality` | `Xrpl.Amounts` | The 64-bit exchange rate the ledger sorts order books by |
 | `OfferCrossing` | `Xrpl.Amounts` | What one offer contributes when it is crossed, as `BookStep` sizes it |
+| `AmmOfferMath` | `Xrpl.Amounts` | An AMM pool's swaps and the offer it puts beside an order book |
 | `OfferCreateCrossing` | `Xrpl.Amounts` | What an `OfferCreate` does against whole books and AMM pools, from a `DexSnapshot` |
 | `PaymentFlow` | `Xrpl.Amounts` | What a `Payment` does along its paths, from a `DexSnapshot` |
 | `DexQuoteSugar` | `Xrpl.Sugar` | Quotes for a payment or an offer, read and computed against a node's validated ledger |
@@ -106,7 +108,7 @@ XrplQuality remaining = offer.RemainingQuality;     // the ratio of what it has 
 
 The node crosses an offer at the quality of its book directory. That quality is set when the offer is placed, and it is not the ratio of what the offer has left.
 
-`CeilIn`, `CeilOut`, `CeilInStrict` and `CeilOutStrict` cut an offer's amounts to an input or output limit at the quality, as `Quality::ceilIn` and `Quality::ceilOut` do.
+`CeilIn`, `CeilOut`, `CeilInStrict` and `CeilOutStrict` cut an offer's amounts to an input or output limit at the quality, as `Quality::ceilIn` and `Quality::ceilOut` do. `Round(digits)` is `Quality::round`: it rounds the mantissa up, to a worse quality, to that many significant digits, as a tick size does.
 
 ## Offer Crossing
 
@@ -141,6 +143,25 @@ OfferStep step = OfferCrossing.Cross(funded, deliver: wanted, sendMax: willingTo
 
 This sizes one offer. To cross a whole `OfferCreate`, use [`OfferCreateCrossing`](#crossing-an-offercreate).
 
+## AMM Pool Offers
+
+`AmmOfferMath` gives the arithmetic of an AMM pool's synthetic offer, with rippled's `Number` rounding:
+
+- `SwapIn` and `SwapOut` are `swapAssetIn` and `swapAssetOut`: what the pool pays out for an input, and what it takes in for an output.
+- `ChangeSpotPriceQuality` is the offer that brings the pool's spot price to a quality.
+- `PoolOffer` is the offer the pool puts beside an order book on one strand. With a book, it is the offer that brings the spot price to the book's best quality. Under `fixAMMv1_2`, it is the pool's largest offer when that one beats the book. With no book, it is 99% of the pool's output. It is null when the pool's spot price does not beat the book.
+
+```csharp
+AmmPoolOffer? offer = AmmOfferMath.PoolOffer(poolXrp, poolUsd, tradingFee, bookQuality: bestAsk, rules);
+if (offer is { } pool)
+{
+    // pool.In / pool.Out: what the pool takes and gives before the book's best offer is reached
+    // pool.Quality: where the pool ranks against the book
+}
+```
+
+The trading fee is in units of 1/100,000, so 1000 is 1%. On two strands the engine sizes the pool's offers in slices of the initial pool instead, and it takes at most 30 pool offers per transaction. Both depend on the whole flow, so `OfferCreateCrossing` and `PaymentFlow` model them and `PoolOffer` does not.
+
 ## Crossing an OfferCreate
 
 `OfferCreateCrossing.Cross` runs an `OfferCreate` the way rippled 3.4.0's payment engine runs it, against a `DexSnapshot` of the ledger:
@@ -168,15 +189,51 @@ OfferCrossingResult result = OfferCreateCrossing.Cross(snapshot, offer, rules);
 
 // result.EngineResult and result.Applied: the code, and whether the fee is charged
 // result.BalanceChanges: every account's change, as the metadata will record it
-// result.Offers: the offers crossed or removed, and what is left of each
+// result.Offers: the offers crossed or removed, what is left of each, and why it went
+// result.Fills / result.Passes: what the engine took, in order, and the strands it tried
 // result.Pools: the pools' balances afterwards
 // result.TrustLines: the trust lines created or deleted
 // result.PlacedTakerPays / PlacedTakerGets: the offer left in the book, if any
 ```
 
+### How the engine took the liquidity
+
+`Fills` lists the offers and pool slices the engine took, in the order it took them. `Passes` lists every strand the engine tried in each pass, and how the strand fared. `Offers` says why each deleted offer left the ledger and how much of each offer was taken:
+
+```csharp
+foreach (OfferFill fill in result.Fills)
+{
+    // fill.Pass, fill.Strand (0: the direct book, 1: through XRP), fill.Step
+    // fill.OfferIndex (null for a pool), fill.Owner, fill.IsPool
+    // fill.In / fill.Out: what the offer or the pool received and gave; fill.Quality
+}
+
+foreach (FlowPass pass in result.Passes)
+{
+    // pass.Outcome: Taken, Dry, BelowLimitQuality, OutOfReach
+}
+
+foreach (OfferChange offer in result.Offers)
+{
+    // offer.Reason: Consumed, Unfunded, Expired, Empty, DeepFrozen, NotInDomain,
+    //               TooSmall, Unauthorized, SelfCrossed or Cancelled; null for an offer that stays
+    // offer.FilledTakerPays / FilledTakerGets: how much of the offer was taken
+}
+```
+
+Each pass takes the liquidity of one quality from the best strand. Within a pass, the fills are ordered by the book's position in the strand, and each book's fills are in the order the book gave them. A pool slice comes before the book's offers of its pass, because the engine tries the pool first. A transaction that fails keeps no fills, but its `Passes` still say why each strand gave nothing. `PaymentFlowResult` carries the same `Fills` and `Passes`, numbering a payment's strands as the engine builds them: the default path first when it is used, then each distinct path of `Paths`.
+
 `OfferCreateCrossing.Cross(snapshot, account, takerPays, takerGets, fee, flags, rules)` takes the same offer as separate values, without `OfferSequence`, `Expiration` or a domain.
 
-`DexSnapshot.FromNodeAsync` reads everything at one validated ledger: the books the crossing can reach, the pools on them, the accounts and trust lines it reads, and the offer `OfferSequence` cancels. [Reading Books from a Node](#reading-books-from-a-node) explains how deep. A snapshot can also be built by hand, as the unit tests do.
+`OfferCreateCrossing.RoundToTickSize` gives the amounts the node writes for an offer before it crosses. It takes the smaller `TickSize` of the issuers of the offer's issued-currency sides. The offer's quality is rounded to that many digits, and the side that is not exact moves: `TakerPays` for a `tfSell` offer, `TakerGets` otherwise. A form can show these amounts before the offer is signed:
+
+```csharp
+(XrplAmount TakerPays, XrplAmount TakerGets)? written =
+    OfferCreateCrossing.RoundToTickSize(takerPays, takerGets, tickSize: 5, sell: false, rules);
+// null when a side rounds to nothing
+```
+
+`DexSnapshot.FromNodeAsync` reads everything at one ledger: the books the crossing can reach, the pools on them, the accounts and trust lines it reads, and the offer `OfferSequence` cancels. [Reading Books from a Node](#reading-books-from-a-node) explains how deep. A snapshot can also be built by hand, as the unit tests do.
 
 The result is exact against the snapshot. The transaction lands in a later ledger, whose state can differ, so `simulate` stays the reference before submitting. Not covered: MPT books and sponsored reserves. A payment is evaluated by [`PaymentFlow`](#evaluating-a-payment).
 
@@ -209,7 +266,7 @@ PaymentFlowResult result = PaymentFlow.Evaluate(snapshot, payment, rules);
 // result.BalanceChanges, result.Offers, result.Pools: what the payment changed
 ```
 
-`DexSnapshot.FromNodeAsync(client, payment)` reads, at one validated ledger, the trust lines along every path the payment can take, the books and pools on them, the accounts, the destination's preauthorizations, the credentials the payment presents, and its domain. The paths come with the payment: from `ripple_path_find`, or from the local [path finder](#finding-paths). Not covered: MPT payments and sponsored reserves.
+`DexSnapshot.FromNodeAsync(client, payment)` reads, at one ledger, the trust lines along every path the payment can take, the books and pools on them, the accounts, the destination's preauthorizations, the credentials the payment presents, and its domain. The paths come with the payment: from `ripple_path_find`, or from the local [path finder](#finding-paths). Not covered: MPT payments and sponsored reserves.
 
 ## Permissioned Domains and Credentials
 
@@ -237,6 +294,27 @@ if (result.NeedsDeeperBooks)
 ```
 
 A walk costs one `ledger_entry` request per offer, so it is worth it for the books a transaction actually reaches deep into.
+
+`DexSnapshotOptions.Ledger` names the ledger to read: a sequence, or `validated`, `closed` or `current`. It is the last validated one when null. `DexSnapshot.LedgerSequence` records the ledger a snapshot was read at, so a deeper read of the same books can be pinned to it. To replay a past transaction, read the ledger before it:
+
+```csharp
+DexSnapshot before = await DexSnapshot.FromNodeAsync(client, offer, new DexSnapshotOptions { Ledger = new LedgerIndex(transactionLedger - 1) });
+```
+
+`QuotePaymentAsync` and `QuoteOfferCreateAsync` make every deeper read at the ledger of the first one.
+
+Each offer owner costs an `account_info` request and up to two `ledger_entry` requests: about 125 requests for a book of 100 offers. `DexSnapshotOptions.OwnerFundsFromBook` builds the owners from what `book_offers` reports of their funds (`owner_funds`) instead, so a book costs one request. The accounts the transaction reaches, and the issuers, are still read. The owners built this way are listed in `DexSnapshot.ApproximatedOwners`. Their funds of what their offers give are exact, and the reserve a deleted offer frees is counted. What the snapshot assumes about them: a trust line for what they receive, with room for anything; that line's quality, NoRipple and freeze settings at their defaults; and the issuer's authorization. The option does not combine with `BookDepth`, because a directory walk reads no funds.
+
+`DexSnapshot.UnlimitedTaker` quotes before a wallet is connected. As the account of an `OfferCreate` or the source of a `Payment`, the loader reads nothing for it, gives it unlimited funds of what it pays, and gives it room for what it receives:
+
+```csharp
+OfferCrossingResult preview = await client.QuoteOfferCreateAsync(new OfferCreate
+{
+    Account = DexSnapshot.UnlimitedTaker,
+    TakerPays = usd100.ToCurrency(),
+    TakerGets = xrp40.ToCurrency(),
+});
+```
 
 ## Quotes
 
@@ -300,7 +378,9 @@ Against the same ledger and the same books, every alternative - its cost, what i
 
 ## Balance Changes Beyond decimal
 
-`BalanceChanges.GetBalanceChanges` computes issued-currency deltas as `XrplAmount`. Each difference is exact, then rounded once to 16 significant digits, to nearest with ties to even, as rippled rounds. A balance far beyond `decimal` is reported rather than refused, and it is written in scientific notation the way rippled writes it:
+`BalanceChanges.GetBalanceChanges` computes issued-currency deltas as `XrplAmount`. Each difference is exact, then rounded once to 16 significant digits, to nearest with ties to even, as rippled rounds. A balance far beyond `decimal` is reported rather than refused.
+
+`Value` is the text rippled's `STAmount::getText` writes. That is scientific notation - a 16-digit mantissa and an exponent - whenever the exponent is above -5 or below -25, which is from about 1e11 up and below about 1e-10: a delta of 123456789012 is written `1234567890120000e-4`. Read it with `ToXrplAmount()`, or with `ValueAsNumber` within the range of `decimal`; showing `Value` as it is, or parsing it with `NumberStyles.Number`, does not work:
 
 ```csharp
 Dictionary<string, List<Currency>> changes = BalanceChanges.GetBalanceChanges(result.Meta);
@@ -315,4 +395,4 @@ The arithmetic depends on the amendments in force:
 - `fixReducedOffersV2`, which selects `ceilInStrict` in `LimitIn`;
 - `fixAMMv1_1`, `fixAMMv1_2` and `fixFillOrKill`, which change how `OfferCreateCrossing` sizes pool offers and treats `tfFillOrKill`.
 
-`LedgerRules.FromNodeAsync(client)` reads them from the node. Pass what it returns to get the node's own results. When no rules are passed, a method uses `new LedgerRules()`: every amendment above enabled except `MPTokensV2`, whatever the node actually runs. That matches a ledger with all of them enabled, and may not match yours.
+`LedgerRules.FromNodeAsync(client)` reads them from the node. Pass what it returns to get the node's own results. It reads what the ledger's `Amendments` object records, through the `feature` command. A node can also apply the amendments listed in the `[features]` stanza of its config as presets, without enabling them on the ledger, and `feature` reports those as disabled. For a standalone node started that way, build the rules by hand, or enable the amendments at genesis with the `[amendments]` stanza. When no rules are passed, a method uses `new LedgerRules()`: every amendment above enabled except `MPTokensV2`, whatever the node actually runs. That matches a ledger with all of them enabled, and may not match yours.
