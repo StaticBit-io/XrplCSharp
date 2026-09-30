@@ -317,6 +317,19 @@ DexSnapshot before = await DexSnapshot.FromNodeAsync(client, offer, new DexSnaps
 
 `QuotePaymentAsync` и `QuoteOfferCreateAsync` делают каждое следующее, более глубокое чтение на леджере первого.
 
+Каждый владелец оффера стоит одного запроса `account_info` и до двух запросов `ledger_entry`: около 125 запросов на книгу из 100 офферов. `DexSnapshotOptions.OwnerFundsFromBook` вместо этого строит владельцев по тому, что `book_offers` сообщает об их средствах (`owner_funds`), и книга стоит одного запроса. Аккаунты, до которых доходит транзакция, и эмитенты по-прежнему читаются. Построенные так владельцы перечислены в `DexSnapshot.ApproximatedOwners`. Их средства в том, что отдают их офферы, точны, и резерв, освобождаемый удалённым оффером, учитывается. Что снимок о них предполагает: trust line для того, что они получают, с запасом на любую сумму; качество, NoRipple и заморозку этой линии по умолчанию; авторизацию эмитента. С `BookDepth` опция не сочетается: обход директорий не читает средства.
+
+`DexSnapshot.UnlimitedTaker` позволяет получить котировку до подключения кошелька. Если он указан аккаунтом `OfferCreate` или отправителем `Payment`, загрузчик ничего для него не читает, даёт ему неограниченные средства того, что он платит, и запас для того, что он получает:
+
+```csharp
+OfferCrossingResult preview = await client.QuoteOfferCreateAsync(new OfferCreate
+{
+    Account = DexSnapshot.UnlimitedTaker,
+    TakerPays = usd100.ToCurrency(),
+    TakerGets = xrp40.ToCurrency(),
+});
+```
+
 ## Котировки
 
 `DexQuoteSugar` читает снимок и запускает движок одним вызовом, а пока результат `NeedsDeeperBooks`, сам перечитывает книги глубже:

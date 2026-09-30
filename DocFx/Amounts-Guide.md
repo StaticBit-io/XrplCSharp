@@ -303,6 +303,19 @@ DexSnapshot before = await DexSnapshot.FromNodeAsync(client, offer, new DexSnaps
 
 `QuotePaymentAsync` and `QuoteOfferCreateAsync` make every deeper read at the ledger of the first one.
 
+Each offer owner costs an `account_info` request and up to two `ledger_entry` requests: about 125 requests for a book of 100 offers. `DexSnapshotOptions.OwnerFundsFromBook` builds the owners from what `book_offers` reports of their funds (`owner_funds`) instead, so a book costs one request. The accounts the transaction reaches, and the issuers, are still read. The owners built this way are listed in `DexSnapshot.ApproximatedOwners`. Their funds of what their offers give are exact, and the reserve a deleted offer frees is counted. What the snapshot assumes about them: a trust line for what they receive, with room for anything; that line's quality, NoRipple and freeze settings at their defaults; and the issuer's authorization. The option does not combine with `BookDepth`, because a directory walk reads no funds.
+
+`DexSnapshot.UnlimitedTaker` quotes before a wallet is connected. As the account of an `OfferCreate` or the source of a `Payment`, the loader reads nothing for it, gives it unlimited funds of what it pays, and gives it room for what it receives:
+
+```csharp
+OfferCrossingResult preview = await client.QuoteOfferCreateAsync(new OfferCreate
+{
+    Account = DexSnapshot.UnlimitedTaker,
+    TakerPays = usd100.ToCurrency(),
+    TakerGets = xrp40.ToCurrency(),
+});
+```
+
 ## Quotes
 
 `DexQuoteSugar` reads the snapshot and runs the engine in one call, and reads deeper by itself while a result `NeedsDeeperBooks`:
