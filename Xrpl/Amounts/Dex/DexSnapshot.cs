@@ -71,6 +71,22 @@ namespace Xrpl.Amounts
         /// <c>NeedsDeeperBooks</c>.
         /// </summary>
         public IReadOnlyList<DexBook> PartialBooks { get; init; } = Array.Empty<DexBook>();
+
+        /// <summary>
+        /// The offer owners whose account and trust lines were not read but built from what
+        /// <c>book_offers</c> reports of their funds (<see cref="DexSnapshotOptions.OwnerFundsFromBook"/>).
+        /// A result that crosses their offers is exact as far as their funds go; see the option
+        /// for what it leaves out.
+        /// </summary>
+        public IReadOnlyList<string> ApproximatedOwners { get; init; } = Array.Empty<string>();
+
+        /// <summary>
+        /// An address to quote with before a wallet is connected: as the account of an
+        /// <c>OfferCreate</c> or the source of a <c>Payment</c>, <c>FromNodeAsync</c> reads nothing
+        /// for it and gives it unlimited funds of what it pays and room for what it receives.
+        /// It is <c>ACCOUNT_ONE</c>, which no key controls, so no real account ever has it.
+        /// </summary>
+        public const string UnlimitedTaker = "rrrrrrrrrrrrrrrrrrrrBZbvji";
     }
 
     /// <summary>An account as the crossing reads it: its XRP, its reserve and, for an issuer, its settings.</summary>
