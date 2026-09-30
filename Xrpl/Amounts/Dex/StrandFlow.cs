@@ -27,7 +27,7 @@ namespace Xrpl.Amounts
 
         internal DexView Sandbox { get; init; }
 
-        internal HashSet<string> OffersToRemove { get; init; }
+        internal OfferRemovals OffersToRemove { get; init; }
 
         internal int OffersUsed { get; init; }
 
@@ -46,7 +46,7 @@ namespace Xrpl.Amounts
         /// <summary>The state after the flow, when it succeeded.</summary>
         internal DexView Sandbox { get; init; }
 
-        internal HashSet<string> RemovableOffers { get; init; }
+        internal OfferRemovals RemovableOffers { get; init; }
 
         internal bool Succeeded => Result == "tesSUCCESS";
     }
@@ -64,7 +64,7 @@ namespace Xrpl.Amounts
         /// <summary>The single-strand <c>flow</c>.</summary>
         internal static StrandResult Run(DexView baseView, List<FlowStep> strand, XrplAmount? maxIn, XrplAmount @out)
         {
-            HashSet<string> offersToRemove = new HashSet<string>(StringComparer.Ordinal);
+            OfferRemovals offersToRemove = new OfferRemovals();
             StrandResult Failed() => new StrandResult { OffersToRemove = offersToRemove, OffersUsed = OffersUsed(strand) };
 
             // isDirectXrpToXrp: the engine does not move XRP straight from one account to another.
@@ -262,14 +262,20 @@ namespace Xrpl.Amounts
 
             List<XrplAmount> savedIns = new List<XrplAmount>();
             List<XrplAmount> savedOuts = new List<XrplAmount>();
-            HashSet<string> offersToRemoveOnFail = new HashSet<string>(StringComparer.Ordinal);
+            OfferRemovals offersToRemoveOnFail = new OfferRemovals();
 
             while (StepMath.IsPositive(remainingOut) && (remainingIn == null || StepMath.IsPositive(remainingIn.Value)))
             {
                 if (++currentTry >= MaxTries)
                     return new FlowResult { Result = "telFAILED_PROCESSING", RemovableOffers = offersToRemoveOnFail };
 
-                ActivateNext(sb, limitQuality, current, next);
+                void Tried(List<FlowStep> tried, FlowPassOutcome outcome, XrplAmount? triedIn = null, XrplAmount? triedOut = null)
+                {
+                    if (sb.World.RecordPasses)
+                        sb.World.Passes.Add(new FlowPass(currentTry, strands.IndexOf(tried), outcome, triedIn, triedOut));
+                }
+
+                ActivateNext(sb, limitQuality, current, next, Tried);
                 ammContext.MultiPath = current.Count > 1;
 
                 XrplAmount limitRemainingOut = current.Count == 1 && limitQuality is { } limitQ
@@ -277,8 +283,10 @@ namespace Xrpl.Amounts
                     : remainingOut;
                 bool adjustedRemainingOut = limitRemainingOut != remainingOut;
 
-                HashSet<string> offersToRemove = new HashSet<string>(StringComparer.Ordinal);
+                OfferRemovals offersToRemove = new OfferRemovals();
                 StrandResult best = null;
+                int bestStrand = -1;
+
                 for (int index = 0; index < current.Count; index++)
                 {
                     List<FlowStep> strand = current[index];
@@ -288,22 +296,31 @@ namespace Xrpl.Amounts
                     {
                         XrplQuality? upperBound = QualityUpperBound(sb, strand);
                         if (upperBound == null || upperBound.Value < threshold)
+                        {
+                            Tried(strand, FlowPassOutcome.OutOfReach);
                             continue;
+                        }
                     }
 
                     StrandResult f = Run(sb, strand, remainingIn, limitRemainingOut);
-                    offersToRemove.UnionWith(f.OffersToRemove);
+                    offersToRemove.Merge(f.OffersToRemove);
                     offersConsidered += f.OffersUsed;
                     if (!f.Success || f.Out.IsZero)
+                    {
+                        Tried(strand, FlowPassOutcome.Dry);
                         continue;
+                    }
 
                     XrplQuality quality = XrplQuality.FromAmounts(f.In, f.Out, rules);
                     if (limitQuality is { } limit && quality < limit &&
                         (!adjustedRemainingOut || !XrplQuality.WithinRelativeDistance(quality, limit, new XrplNumber(1, -7), rules)))
                     {
+                        Tried(strand, FlowPassOutcome.BelowLimitQuality, f.In.WithAsset(inAsset), f.Out.WithAsset(outAsset));
                         continue;
                     }
 
+                    Tried(strand, FlowPassOutcome.Taken, f.In.WithAsset(inAsset), f.Out.WithAsset(outAsset));
+                    bestStrand = strands.IndexOf(strand);
                     if (!f.Inactive)
                         next.Add(strand);
                     best = f;
@@ -321,17 +338,23 @@ namespace Xrpl.Amounts
                     if (sendMaxLimit is { } maxIn)
                         remainingIn = StepMath.Subtract(maxIn, StepMath.Sum(savedIns, typedIn, rules), rules);
 
+                    foreach (FillRecord fill in best.Sandbox.OwnFills)
+                    {
+                        fill.Pass = currentTry;
+                        fill.Strand = bestStrand;
+                    }
+
                     best.Sandbox.ApplyTo(sb);
                     ammContext.Update();
                 }
 
                 if (offersToRemove.Count > 0)
                 {
-                    offersToRemoveOnFail.UnionWith(offersToRemove);
-                    foreach (string index in offersToRemove)
+                    offersToRemoveOnFail.Merge(offersToRemove);
+                    foreach ((string index, OfferRemovalReason reason) in offersToRemove)
                     {
                         if (!sb.Offer(index).Deleted)
-                            sb.DeleteOffer(index);
+                            sb.DeleteOffer(index, reason);
                     }
                 }
 
@@ -380,7 +403,12 @@ namespace Xrpl.Amounts
         /// <c>ActiveStrands::activateNext</c>: the strands still in play, best estimated quality
         /// first; one worse than the limit is dropped for good.
         /// </summary>
-        private static void ActivateNext(DexView view, XrplQuality? limitQuality, List<List<FlowStep>> current, List<List<FlowStep>> next)
+        private static void ActivateNext(
+            DexView view,
+            XrplQuality? limitQuality,
+            List<List<FlowStep>> current,
+            List<List<FlowStep>> next,
+            Action<List<FlowStep>, FlowPassOutcome, XrplAmount?, XrplAmount?> dropped)
         {
             current.Clear();
             if (next.Count > 1)
@@ -388,7 +416,12 @@ namespace Xrpl.Amounts
                 List<(XrplQuality Quality, List<FlowStep> Strand)> ranked = new List<(XrplQuality, List<FlowStep>)>();
                 foreach (List<FlowStep> strand in next)
                 {
-                    if (QualityUpperBound(view, strand) is { } quality && !(limitQuality is { } limit && quality < limit))
+                    XrplQuality? upperBound = QualityUpperBound(view, strand);
+                    if (upperBound is not { } quality)
+                        dropped(strand, FlowPassOutcome.Dry, null, null);
+                    else if (limitQuality is { } limit && quality < limit)
+                        dropped(strand, FlowPassOutcome.OutOfReach, null, null);
+                    else
                         ranked.Add((quality, strand));
                 }
 

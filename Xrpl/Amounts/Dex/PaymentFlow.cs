@@ -77,7 +77,7 @@ namespace Xrpl.Amounts
             if (PreflightExtras(payment, rules) is { } malformedExtras)
                 return NotApplied(snapshot, malformedExtras);
 
-            DexWorld world = new DexWorld(snapshot, account, fee);
+            DexWorld world = new DexWorld(snapshot, account, fee) { RecordPasses = true };
             if (!world.Accounts.ContainsKey(account))
                 throw new ArgumentException("The sender is not in the snapshot.", nameof(payment));
 
@@ -470,6 +470,8 @@ namespace Xrpl.Amounts
             BalanceChanges = changes.Balances;
             TrustLines = changes.TrustLines;
             NeedsDeeperBooks = changes.ReachedPartialBook;
+            Fills = changes.Fills;
+            Passes = changes.Passes;
         }
 
         /// <summary>The node's result, such as <c>tesSUCCESS</c>, <c>tecPATH_PARTIAL</c>, <c>tecPATH_DRY</c> or a <c>tem</c> code.</summary>
@@ -502,5 +504,18 @@ namespace Xrpl.Amounts
         /// snapshot does not have, so the result is exact only once the snapshot is read deeper.
         /// </summary>
         public bool NeedsDeeperBooks { get; }
+
+        /// <summary>
+        /// The offers and pool slices the engine took, in the order it took them: pass by pass,
+        /// and within a pass by the position of the book in the strand. Empty when the
+        /// transaction fails, since nothing it took stays.
+        /// </summary>
+        public IReadOnlyList<OfferFill> Fills { get; }
+
+        /// <summary>
+        /// Every strand the engine tried, pass by pass, and how it fared - including the passes
+        /// of a transaction that failed, which say why it found no liquidity.
+        /// </summary>
+        public IReadOnlyList<FlowPass> Passes { get; }
     }
 }
