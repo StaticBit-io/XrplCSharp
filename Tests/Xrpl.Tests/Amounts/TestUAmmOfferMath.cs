@@ -96,6 +96,32 @@ public class TestUAmmOfferMath
     }
 
     [TestMethod]
+    public void TradingFeeAboveTheProtocolMaximumIsRefused()
+    {
+        XrplAmount poolIn = Drops(10_000_000_000);
+        XrplAmount poolOut = Amount(Usd, "10000");
+        XrplQuality book = XrplQuality.FromAmounts(Drops(1_010_000), Amount(Usd, "1"));
+
+        // 20% passed where 1/100,000 units are meant.
+        Assert.ThrowsExactly<ArgumentException>(() => AmmOfferMath.SwapIn(poolIn, poolOut, Drops(1_000_000), 20_000));
+        Assert.ThrowsExactly<ArgumentException>(() => AmmOfferMath.SwapOut(poolIn, poolOut, Amount(Usd, "1"), 20_000));
+        Assert.ThrowsExactly<ArgumentException>(() => AmmOfferMath.ChangeSpotPriceQuality(poolIn, poolOut, book, 20_000));
+        Assert.ThrowsExactly<ArgumentException>(() => AmmOfferMath.PoolOffer(poolIn, poolOut, 20_000, book));
+        Assert.IsNotNull(AmmOfferMath.PoolOffer(poolIn, poolOut, AmmOfferMath.MaxTradingFee, bookQuality: null), "1% is allowed");
+
+        // So is a snapshot built by hand with one.
+        DexSnapshot snapshot = new DexSnapshot
+        {
+            Pools = new[]
+            {
+                new DexAmmPool { Account = "rPool", Balance = poolIn, Balance2 = poolOut, TradingFee = 20_000 },
+            },
+        };
+        Assert.ThrowsExactly<ArgumentException>(() =>
+            OfferCreateCrossing.Cross(snapshot, "rTaker", Amount(Usd, "1"), Drops(2_000_000), 10));
+    }
+
+    [TestMethod]
     public void Swaps_GoBothWaysAtThePoolsRounding()
     {
         XrplAmount poolIn = Drops(10_000_000_000);
