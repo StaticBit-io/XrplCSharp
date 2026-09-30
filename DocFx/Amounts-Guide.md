@@ -267,7 +267,7 @@ if (result.NeedsDeeperBooks)
 
 A walk costs one `ledger_entry` request per offer, so it is worth it for the books a transaction actually reaches deep into.
 
-`DexSnapshotOptions.Ledger` names the ledger to read, by sequence or hash. It is the last validated one when null. `DexSnapshot.LedgerSequence` records the ledger a snapshot was read at, so a deeper read of the same books can be pinned to it. To replay a past transaction, read the ledger before it:
+`DexSnapshotOptions.Ledger` names the ledger to read: a sequence, or `validated`, `closed` or `current`. It is the last validated one when null. `DexSnapshot.LedgerSequence` records the ledger a snapshot was read at, so a deeper read of the same books can be pinned to it. To replay a past transaction, read the ledger before it:
 
 ```csharp
 DexSnapshot before = await DexSnapshot.FromNodeAsync(client, offer, new DexSnapshotOptions { Ledger = new LedgerIndex(transactionLedger - 1) });

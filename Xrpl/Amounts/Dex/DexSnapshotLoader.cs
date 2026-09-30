@@ -35,8 +35,8 @@ namespace Xrpl.Amounts
         public int? BookDepth { get; init; }
 
         /// <summary>
-        /// The ledger to read: a sequence or hash - the ledger before a past transaction's, to
-        /// replay it - or null for the last validated one.
+        /// The ledger to read: a sequence - the ledger before a past transaction's, to replay
+        /// it - or <c>validated</c>, <c>closed</c> or <c>current</c>; null for the last validated one.
         /// </summary>
         public LedgerIndex Ledger { get; init; }
     }

@@ -281,7 +281,7 @@ if (result.NeedsDeeperBooks)
 
 Обход стоит одного запроса `ledger_entry` на оффер, поэтому он оправдан для книг, в глубину которых транзакция действительно заходит.
 
-`DexSnapshotOptions.Ledger` задаёт леджер для чтения по номеру или хэшу. Если он null, читается последний валидированный. `DexSnapshot.LedgerSequence` хранит леджер, на котором прочитан снимок, поэтому более глубокое чтение тех же книг можно закрепить на нём. Чтобы воспроизвести прошлую транзакцию, прочитайте леджер перед ней:
+`DexSnapshotOptions.Ledger` задаёт леджер для чтения: номер либо `validated`, `closed` или `current`. Если он null, читается последний валидированный. `DexSnapshot.LedgerSequence` хранит леджер, на котором прочитан снимок, поэтому более глубокое чтение тех же книг можно закрепить на нём. Чтобы воспроизвести прошлую транзакцию, прочитайте леджер перед ней:
 
 ```csharp
 DexSnapshot before = await DexSnapshot.FromNodeAsync(client, offer, new DexSnapshotOptions { Ledger = new LedgerIndex(transactionLedger - 1) });
