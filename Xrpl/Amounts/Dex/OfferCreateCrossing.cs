@@ -336,30 +336,51 @@ namespace Xrpl.Amounts
             if (!takerGets.IsIntegral && world.Accounts.TryGetValue(takerGets.Asset.Issuer, out DexAccount getsIssuer) && getsIssuer.TickSize != 0)
                 tickSize = Math.Min(tickSize, getsIssuer.TickSize);
 
-            if (tickSize >= MaxTickSize)
-                return true;
+            if (RoundToTickSize(takerPays, takerGets, tickSize, sell, rules) is not { } rounded)
+                return false;
 
-            XrplAmount rate = Round(XrplQuality.FromAmounts(takerPays, takerGets, rules), tickSize).RateAmount;
+            (takerPays, takerGets) = rounded;
+            return true;
+        }
+
+        /// <summary>
+        /// The tick-size rounding an <c>OfferCreate</c> goes through before it crosses
+        /// (<c>applyGuts</c>): the offer's quality is rounded to <paramref name="tickSize"/>
+        /// significant digits, to a worse quality, and the side that is not exact moves -
+        /// <c>TakerPays</c> for a <c>tfSell</c> offer, <c>TakerGets</c> otherwise.
+        /// </summary>
+        /// <remarks>
+        /// The node takes the smaller <c>TickSize</c> of the issuers of the offer's issued-currency
+        /// sides; an XRP or MPT side has none.
+        /// </remarks>
+        /// <param name="takerPays">What the offer asks for.</param>
+        /// <param name="takerGets">What the offer gives.</param>
+        /// <param name="tickSize">The tick size, 3 to 15; 0 or 16 for none.</param>
+        /// <param name="sell">Whether the offer has <c>tfSell</c>.</param>
+        /// <param name="rules">The amendments in force; all of them when null.</param>
+        /// <returns>The amounts the node writes, or null when a side rounds to nothing.</returns>
+        /// <exception cref="ArgumentOutOfRangeException"><paramref name="tickSize"/> is outside 0 to 16.</exception>
+        public static (XrplAmount TakerPays, XrplAmount TakerGets)? RoundToTickSize(
+            XrplAmount takerPays,
+            XrplAmount takerGets,
+            int tickSize,
+            bool sell,
+            LedgerRules rules = null)
+        {
+            if (tickSize < 0 || tickSize > MaxTickSize)
+                throw new ArgumentOutOfRangeException(nameof(tickSize), tickSize, "A tick size is 0 to 16.");
+
+            if (tickSize == 0 || tickSize == MaxTickSize)
+                return (takerPays, takerGets);
+
+            rules ??= new LedgerRules();
+            XrplAmount rate = XrplQuality.FromAmounts(takerPays, takerGets, rules).Round(tickSize).RateAmount;
             if (sell)
                 takerPays = XrplAmountMath.Multiply(takerGets, rate, takerPays.Asset, rules);
             else
                 takerGets = XrplAmountMath.Divide(takerPays, rate, takerGets.Asset, rules);
 
-            return !takerPays.IsZero && !takerGets.IsZero;
-        }
-
-        /// <summary><c>Quality::round</c>: the mantissa rounded up to <paramref name="digits"/> significant digits.</summary>
-        private static XrplQuality Round(XrplQuality quality, int digits)
-        {
-            ulong modulus = 1;
-            for (int i = digits; i < MaxTickSize; i++)
-                modulus *= 10;
-
-            ulong exponent = quality.Value >> 56;
-            ulong mantissa = quality.Value & 0x00ffffffffffffffUL;
-            mantissa += modulus - 1;
-            mantissa -= mantissa % modulus;
-            return new XrplQuality((exponent << 56) | mantissa);
+            return takerPays.IsZero || takerGets.IsZero ? null : (takerPays, takerGets);
         }
 
         /// <summary><c>OfferCreate::flowCross</c>: the crossing, and what is left of the offer after it.</summary>

@@ -33,6 +33,12 @@ namespace Xrpl.Amounts
         /// were read is listed in <see cref="DexSnapshot.PartialBooks"/>.
         /// </summary>
         public int? BookDepth { get; init; }
+
+        /// <summary>
+        /// The ledger to read: a sequence or hash - the ledger before a past transaction's, to
+        /// replay it - or null for the last validated one.
+        /// </summary>
+        public LedgerIndex Ledger { get; init; }
     }
 
     public sealed partial class DexSnapshot
@@ -52,7 +58,7 @@ namespace Xrpl.Amounts
         private const uint CredentialAccepted = 0x00010000;
 
         /// <summary>
-        /// Reads from a node, at one validated ledger, everything an <c>OfferCreate</c> by
+        /// Reads from a node, at one ledger (the last validated one unless <see cref="DexSnapshotOptions.Ledger"/> names another), everything an <c>OfferCreate</c> by
         /// <paramref name="account"/> trading <paramref name="takerGets"/> for
         /// <paramref name="takerPays"/> can reach: the book it crosses, the two books of the
         /// bridge through XRP when neither side is XRP, the AMM pools on them, and the accounts
@@ -68,7 +74,7 @@ namespace Xrpl.Amounts
         /// <param name="account">The account placing the offer.</param>
         /// <param name="takerPays">The asset the offer asks for.</param>
         /// <param name="takerGets">The asset the offer gives.</param>
-        /// <param name="options">How deep to read the books; one page each when null.</param>
+        /// <param name="options">How deep to read the books, and at which ledger; one page each, at the last validated ledger, when null.</param>
         /// <param name="cancellationToken">Cancels the reads.</param>
         public static Task<DexSnapshot> FromNodeAsync(
             IXrplClient client,
@@ -91,7 +97,7 @@ namespace Xrpl.Amounts
         }
 
         /// <summary>
-        /// Reads from a node, at one validated ledger, everything <paramref name="offer"/> can
+        /// Reads from a node, at one ledger (the last validated one unless <see cref="DexSnapshotOptions.Ledger"/> names another), everything <paramref name="offer"/> can
         /// reach: the books it crosses - its domain's when it names one - the AMM pools on the open
         /// ones, the accounts and trust lines the crossing reads, the offer <c>OfferSequence</c>
         /// cancels, and the domain with the credentials that decide who is in it.
@@ -99,7 +105,7 @@ namespace Xrpl.Amounts
         /// <remarks>As the other overload, for the books.</remarks>
         /// <param name="client">The node to read from.</param>
         /// <param name="offer">The transaction.</param>
-        /// <param name="options">How deep to read the books; one page each when null.</param>
+        /// <param name="options">How deep to read the books, and at which ledger; one page each, at the last validated ledger, when null.</param>
         /// <param name="cancellationToken">Cancels the reads.</param>
         public static Task<DexSnapshot> FromNodeAsync(
             IXrplClient client,
@@ -118,7 +124,7 @@ namespace Xrpl.Amounts
         }
 
         /// <summary>
-        /// Reads from a node, at one validated ledger, everything <paramref name="payment"/> can
+        /// Reads from a node, at one ledger (the last validated one unless <see cref="DexSnapshotOptions.Ledger"/> names another), everything <paramref name="payment"/> can
         /// reach: the trust lines along its paths and its default path, the books on them - its
         /// domain's when it names one - with the AMM pools on the open ones, the accounts involved
         /// with the destination's deposit preauthorizations, the credentials it presents, and the
@@ -132,7 +138,7 @@ namespace Xrpl.Amounts
         /// </remarks>
         /// <param name="client">The node to read from.</param>
         /// <param name="payment">The payment, with its paths as <c>ripple_path_find</c> returned them.</param>
-        /// <param name="options">How deep to read the books; one page each when null.</param>
+        /// <param name="options">How deep to read the books, and at which ledger; one page each, at the last validated ledger, when null.</param>
         /// <param name="cancellationToken">Cancels the reads.</param>
         public static Task<DexSnapshot> FromNodeAsync(
             IXrplClient client,
@@ -247,13 +253,13 @@ namespace Xrpl.Amounts
             return plan;
         }
 
-        /// <summary>The accounts, lines, books, domain and credentials the planned strands reach, read at one validated ledger.</summary>
+        /// <summary>The accounts, lines, books, domain and credentials the planned strands reach, read at one ledger.</summary>
         private static async Task<DexSnapshot> LoadAsync(IXrplClient client, LoadPlan plan, DexSnapshotOptions options, CancellationToken cancellationToken)
         {
             StrandBuilder.Request request = plan.Request;
             string domainId = string.IsNullOrEmpty(request.DomainId) ? null : request.DomainId;
             LOLedger header = await client
-                .Ledger(new LedgerRequest { LedgerIndex = plan.At ?? new LedgerIndex(LedgerIndexType.Validated) }, cancellationToken)
+                .Ledger(new LedgerRequest { LedgerIndex = plan.At ?? options?.Ledger ?? new LedgerIndex(LedgerIndexType.Validated) }, cancellationToken)
                 .Typed()
                 .ConfigureAwait(false);
             LedgerEntity ledger = header.LedgerEntity as LedgerEntity
@@ -409,6 +415,7 @@ namespace Xrpl.Amounts
             {
                 // The transaction lands in a later ledger, whose parent closed no earlier than this one.
                 ParentCloseTime = ledger.CloseTime is { } closed ? (uint)LendingMath.RippleSeconds(closed) : 0,
+                LedgerSequence = uint.Parse(ledger.LedgerIndex, CultureInfo.InvariantCulture),
                 ReserveBase = reserveBase,
                 ReserveIncrement = reserveIncrement,
                 Accounts = accountStates,

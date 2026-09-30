@@ -4,7 +4,11 @@
 
 * The engine reads `fixAMMv1_1` (`swapAssetIn`, `swapAssetOut`), `fixAMMv1_3` (an offer's `checkInvariant`) and `fixReducedOffersV2` (`limitIn`) as the ledger has them inside every transaction, whatever `useRulesGuards` decides; they read as disabled only outside a transaction (#250)
 * `DexSnapshot.FromNodeAsync` reads the domain of every domain or hybrid offer it loads, and the credentials of the offer owners that domain accepts, also for an order or a payment without a `DomainID`
-* `GetBalanceChanges` and `Amounts-Guide` (both languages) describe the `getText` form of `Currency.Value` (#254)
+* **`AmmOfferMath`: an AMM pool's offer arithmetic** (#253, `Xrpl.Amounts`): `SwapIn` (`swapAssetIn`), `SwapOut` (`swapAssetOut`), `ChangeSpotPriceQuality` and `PoolOffer` - the offer a pool puts beside an order book on one strand (`AMMLiquidity::getOffer`), as an `AmmPoolOffer` with its `In`, `Out` and `Quality`. The engine generates its pool offers through the same code
+* `XrplQuality.Round(digits)` (`Quality::round`) and `OfferCreateCrossing.RoundToTickSize(takerPays, takerGets, tickSize, sell, rules)`, the amounts an offer is written with under a tick size (#253)
+* `DexSnapshotOptions.Ledger` reads a snapshot at a given ledger, and `DexSnapshot.LedgerSequence` records the ledger a snapshot was read at (#252). `QuotePaymentAsync` and `QuoteOfferCreateAsync` make every deeper read at the ledger of the first
+* `GetBalanceChanges` and `Amounts-Guide` (both languages) describe the `getText` form of `Currency.Value` (#254); `Amounts-Guide` also covers `AmmOfferMath`, `RoundToTickSize` and `DexSnapshotOptions.Ledger`
+* `TestUAmmOfferMath` replays `Offer_test.cpp`'s `testTickSize` offers through `RoundToTickSize` and covers `XrplQuality.Round` and the pool offers; `TestIBookCrossing.SnapshotReadsTheLedgerAsked` reads a book before and after an offer is placed
 * `TestUOfferCreateCrossing.CurrentRulesAreSetInsideEveryTransaction`; `TestUXrplAmount` pins the `getText` boundaries and reads the scientific form through `ValueAsNumber`
 * The integration harness waits for a ledger closed after an expiration for up to five minutes of wall time
 
