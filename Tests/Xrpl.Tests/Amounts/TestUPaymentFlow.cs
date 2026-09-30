@@ -205,6 +205,25 @@ public class TestUPaymentFlow
     }
 
     [TestMethod]
+    public void StrandsBelowTheLimitQualityAreReportedOutOfReach()
+    {
+        DexSnapshot snapshot = new Ledger(Alice, Bob, Carol, Dan, Erin)
+            .Trust(Bob, Alice, "10").Trust(Carol, Alice, "10").Trust(Dan, Bob, "10").Trust(Alice, Carol, "10").Trust(Dan, Carol, "10").Trust(Erin, Dan, "20")
+            .Holds(Alice, Carol, "10")
+            .Snapshot();
+
+        // 4 for 5 is better than either path can do: both are dropped before any is run.
+        PaymentFlowResult result = PaymentFlow.Evaluate(
+            snapshot,
+            Pay(Alice, Erin, XrplAmount.Parse(Usd(Dan), "5"), Iou(Alice, "4"), PaymentFlags.tfNoDirectRipple | PaymentFlags.tfLimitQuality | PaymentFlags.tfPartialPayment,
+                new[] { Carol, Dan }, new[] { Bob, Dan }));
+
+        Assert.AreEqual("tecPATH_DRY", result.EngineResult);
+        Assert.IsTrue(result.Passes.All(p => p.Outcome == FlowPassOutcome.OutOfReach), string.Join(", ", result.Passes.Select(p => p.Outcome)));
+        CollectionAssert.AreEquivalent(new[] { 0, 1 }, result.Passes.Select(p => p.Strand).ToArray());
+    }
+
+    [TestMethod]
     public void TheBetterOfTwoPathsIsTaken()
     {
         // alice -> carol -> dan -> erin charges carol's 10%; alice -> bob -> dan -> erin does not.
