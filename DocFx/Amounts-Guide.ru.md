@@ -203,11 +203,39 @@ OfferCrossingResult result = OfferCreateCrossing.Cross(snapshot, offer, rules);
 
 // result.EngineResult и result.Applied: код и будет ли списана комиссия
 // result.BalanceChanges: изменения балансов всех аккаунтов, как их запишут метаданные
-// result.Offers: пересечённые и удалённые офферы и что от них осталось
+// result.Offers: пересечённые и удалённые офферы, что от них осталось и почему они ушли
+// result.Fills / result.Passes: что взял движок, по порядку, и какие стрэнды он пробовал
 // result.Pools: балансы пулов после транзакции
 // result.TrustLines: созданные и удалённые trust lines
 // result.PlacedTakerPays / PlacedTakerGets: оффер, оставшийся в книге, если он есть
 ```
+
+### Как движок взял ликвидность
+
+`Fills` перечисляет офферы и доли пулов, которые взял движок, в том порядке, в каком он их брал. `Passes` перечисляет стрэнды, которые движок пробовал в каждом проходе, и итог каждого. `Offers` сообщает, почему удалённый оффер ушёл из леджера и сколько взято от каждого оффера:
+
+```csharp
+foreach (OfferFill fill in result.Fills)
+{
+    // fill.Pass, fill.Strand (0 — прямая книга, 1 — через XRP), fill.Step
+    // fill.OfferIndex (null для пула), fill.Owner, fill.IsPool
+    // fill.In / fill.Out: что оффер или пул получил и отдал; fill.Quality
+}
+
+foreach (FlowPass pass in result.Passes)
+{
+    // pass.Outcome: Taken, Dry, BelowLimitQuality, OutOfReach
+}
+
+foreach (OfferChange offer in result.Offers)
+{
+    // offer.Reason: Consumed, Unfunded, Expired, Empty, DeepFrozen, NotInDomain,
+    //               TooSmall, Unauthorized, SelfCrossed или Cancelled; null для оставшегося оффера
+    // offer.FilledTakerPays / FilledTakerGets: сколько взято от оффера
+}
+```
+
+Каждый проход берёт ликвидность одного качества у лучшего стрэнда. Внутри прохода исполнения упорядочены по позиции книги в стрэнде, а исполнения одной книги идут в том порядке, в каком книга их отдала. Доля пула стоит перед офферами книги своего прохода, потому что движок сначала пробует пул. У неудавшейся транзакции исполнений нет, но её `Passes` всё равно объясняют, почему каждый стрэнд ничего не дал. В `PaymentFlowResult` есть те же `Fills` и `Passes`; стрэнды платежа нумеруются так, как их строит движок: сначала путь по умолчанию, если он используется, затем каждый отличающийся путь из `Paths`.
 
 `OfferCreateCrossing.Cross(snapshot, account, takerPays, takerGets, fee, flags, rules)` принимает тот же оффер отдельными значениями, без `OfferSequence`, `Expiration` и домена.
 

@@ -230,6 +230,8 @@ public class TestUPaymentFlow
             snapshot,
             Pay(Alice, Carol, Iou(Bob, "5"), Iou(Alice, "4"), PaymentFlags.tfLimitQuality | PaymentFlags.tfPartialPayment));
         Assert.AreEqual("tecPATH_DRY", limited.EngineResult);
+        Assert.AreEqual(FlowPassOutcome.BelowLimitQuality, limited.Passes.Single().Outcome, "the one strand is worse than the limit");
+        Assert.IsEmpty(limited.Fills);
 
         PaymentFlowResult partial = PaymentFlow.Evaluate(snapshot, Pay(Alice, Carol, Iou(Bob, "5"), Iou(Alice, "4"), PaymentFlags.tfPartialPayment));
         Assert.AreEqual("tesSUCCESS", partial.EngineResult);

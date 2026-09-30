@@ -189,11 +189,39 @@ OfferCrossingResult result = OfferCreateCrossing.Cross(snapshot, offer, rules);
 
 // result.EngineResult and result.Applied: the code, and whether the fee is charged
 // result.BalanceChanges: every account's change, as the metadata will record it
-// result.Offers: the offers crossed or removed, and what is left of each
+// result.Offers: the offers crossed or removed, what is left of each, and why it went
+// result.Fills / result.Passes: what the engine took, in order, and the strands it tried
 // result.Pools: the pools' balances afterwards
 // result.TrustLines: the trust lines created or deleted
 // result.PlacedTakerPays / PlacedTakerGets: the offer left in the book, if any
 ```
+
+### How the engine took the liquidity
+
+`Fills` lists the offers and pool slices the engine took, in the order it took them. `Passes` lists every strand the engine tried in each pass, and how the strand fared. `Offers` says why each deleted offer left the ledger and how much of each offer was taken:
+
+```csharp
+foreach (OfferFill fill in result.Fills)
+{
+    // fill.Pass, fill.Strand (0: the direct book, 1: through XRP), fill.Step
+    // fill.OfferIndex (null for a pool), fill.Owner, fill.IsPool
+    // fill.In / fill.Out: what the offer or the pool received and gave; fill.Quality
+}
+
+foreach (FlowPass pass in result.Passes)
+{
+    // pass.Outcome: Taken, Dry, BelowLimitQuality, OutOfReach
+}
+
+foreach (OfferChange offer in result.Offers)
+{
+    // offer.Reason: Consumed, Unfunded, Expired, Empty, DeepFrozen, NotInDomain,
+    //               TooSmall, Unauthorized, SelfCrossed or Cancelled; null for an offer that stays
+    // offer.FilledTakerPays / FilledTakerGets: how much of the offer was taken
+}
+```
+
+Each pass takes the liquidity of one quality from the best strand. Within a pass, the fills are ordered by the book's position in the strand, and each book's fills are in the order the book gave them. A pool slice comes before the book's offers of its pass, because the engine tries the pool first. A transaction that fails keeps no fills, but its `Passes` still say why each strand gave nothing. `PaymentFlowResult` carries the same `Fills` and `Passes`, numbering a payment's strands as the engine builds them: the default path first when it is used, then each distinct path of `Paths`.
 
 `OfferCreateCrossing.Cross(snapshot, account, takerPays, takerGets, fee, flags, rules)` takes the same offer as separate values, without `OfferSequence`, `Expiration` or a domain.
 

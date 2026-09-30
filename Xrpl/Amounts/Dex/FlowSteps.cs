@@ -82,9 +82,12 @@ namespace Xrpl.Amounts
     /// <summary>rippled's <c>Step</c>: one hop of a strand, run backwards from the output, then forwards.</summary>
     internal abstract class FlowStep
     {
-        internal abstract (XrplAmount In, XrplAmount Out) Rev(DexView sb, DexView afView, HashSet<string> offersToRemove, XrplAmount @out);
+        /// <summary>The step's position in its strand.</summary>
+        internal int Position { get; set; }
 
-        internal abstract (XrplAmount In, XrplAmount Out) Fwd(DexView sb, DexView afView, HashSet<string> offersToRemove, XrplAmount @in);
+        internal abstract (XrplAmount In, XrplAmount Out) Rev(DexView sb, DexView afView, OfferRemovals offersToRemove, XrplAmount @out);
+
+        internal abstract (XrplAmount In, XrplAmount Out) Fwd(DexView sb, DexView afView, OfferRemovals offersToRemove, XrplAmount @in);
 
         internal abstract XrplAmount? CachedIn { get; }
 
@@ -287,7 +290,7 @@ namespace Xrpl.Amounts
             return (QualityOfRates(srcQOut, dstQIn, view.Rules), direction);
         }
 
-        internal override (XrplAmount In, XrplAmount Out) Rev(DexView sb, DexView afView, HashSet<string> offersToRemove, XrplAmount @out)
+        internal override (XrplAmount In, XrplAmount Out) Rev(DexView sb, DexView afView, OfferRemovals offersToRemove, XrplAmount @out)
         {
             @out = @out.WithAsset(_asset);
             LedgerRules rules = sb.Rules;
@@ -317,7 +320,7 @@ namespace Xrpl.Amounts
             return (limitedIn, actualOut);
         }
 
-        internal override (XrplAmount In, XrplAmount Out) Fwd(DexView sb, DexView afView, HashSet<string> offersToRemove, XrplAmount @in)
+        internal override (XrplAmount In, XrplAmount Out) Fwd(DexView sb, DexView afView, OfferRemovals offersToRemove, XrplAmount @in)
         {
             @in = @in.WithAsset(_asset);
             LedgerRules rules = sb.Rules;
@@ -471,7 +474,7 @@ namespace Xrpl.Amounts
         internal override (string Source, string Destination)? DirectStepAccounts =>
             _isLast ? (string.Empty, _account) : (_account, string.Empty);
 
-        internal override (XrplAmount In, XrplAmount Out) Rev(DexView sb, DexView afView, HashSet<string> offersToRemove, XrplAmount @out)
+        internal override (XrplAmount In, XrplAmount Out) Rev(DexView sb, DexView afView, OfferRemovals offersToRemove, XrplAmount @out)
         {
             XrplAmount balance = sb.XrpLiquid(_account, _reserveReduction);
             XrplAmount result = _isLast ? @out : StepMath.Min(balance, @out);
@@ -480,7 +483,7 @@ namespace Xrpl.Amounts
             return (result, result);
         }
 
-        internal override (XrplAmount In, XrplAmount Out) Fwd(DexView sb, DexView afView, HashSet<string> offersToRemove, XrplAmount @in)
+        internal override (XrplAmount In, XrplAmount Out) Fwd(DexView sb, DexView afView, OfferRemovals offersToRemove, XrplAmount @in)
         {
             XrplAmount balance = sb.XrpLiquid(_account, _reserveReduction);
             XrplAmount result = _isLast ? @in : StepMath.Min(balance, @in);
