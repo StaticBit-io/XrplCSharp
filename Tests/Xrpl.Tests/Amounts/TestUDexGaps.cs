@@ -286,6 +286,17 @@ public class TestUDexGaps
     }
 
     [TestMethod]
+    public void AnEmptyBookIsADryPass()
+    {
+        DexSnapshot snapshot = Snapshot(new[] { Account(Gw), Account(Alice, 1) }, new[] { Line(Alice, "0") });
+
+        OfferCrossingResult result = OfferCreateCrossing.Cross(snapshot, Create(Alice, Dollars("1"), Drops(1_000_000)));
+        Assert.AreEqual("tesSUCCESS", result.EngineResult);
+        Assert.AreEqual(FlowPassOutcome.Dry, result.Passes.Single().Outcome, "no liquidity, not liquidity out of reach");
+        Assert.IsEmpty(result.Fills);
+    }
+
+    [TestMethod]
     public void OwnOfferAtTheSamePriceIsSelfCrossed()
     {
         DexSnapshot snapshot = Snapshot(

@@ -297,7 +297,8 @@ namespace Xrpl.Amounts
                         XrplQuality? upperBound = QualityUpperBound(sb, strand);
                         if (upperBound == null || upperBound.Value < threshold)
                         {
-                            Tried(strand, FlowPassOutcome.OutOfReach);
+                            // No bound is no liquidity at all; a bound below the limit is out of reach.
+                            Tried(strand, upperBound == null ? FlowPassOutcome.Dry : FlowPassOutcome.OutOfReach);
                             continue;
                         }
                     }

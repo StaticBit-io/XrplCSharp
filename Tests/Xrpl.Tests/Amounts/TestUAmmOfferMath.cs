@@ -3,7 +3,9 @@ using System;
 using Microsoft.VisualStudio.TestTools.UnitTesting;
 
 using Xrpl.Amounts;
+using Xrpl.Models.Transactions;
 using Xrpl.Sugar;
+using Xrpl.Wallet;
 
 using static Xrpl.Models.Common.Common;
 
@@ -109,16 +111,22 @@ public class TestUAmmOfferMath
         Assert.ThrowsExactly<ArgumentException>(() => AmmOfferMath.PoolOffer(poolIn, poolOut, 20_000, book));
         Assert.IsNotNull(AmmOfferMath.PoolOffer(poolIn, poolOut, AmmOfferMath.MaxTradingFee, bookQuality: null), "1% is allowed");
 
-        // So is a snapshot built by hand with one.
-        DexSnapshot snapshot = new DexSnapshot
+        // So is a snapshot built by hand with one; the same snapshot at 1% crosses.
+        string pool = XrplWallet.Generate().ClassicAddress;
+        string taker = XrplWallet.Generate().ClassicAddress;
+        DexSnapshot Snapshot(ushort fee) => new DexSnapshot
         {
-            Pools = new[]
-            {
-                new DexAmmPool { Account = "rPool", Balance = poolIn, Balance2 = poolOut, TradingFee = 20_000 },
-            },
+            ReserveBase = 10_000_000,
+            ReserveIncrement = 2_000_000,
+            Accounts = new[] { new DexAccount { Address = taker, Balance = 100_000_000 }, new DexAccount { Address = Usd.Issuer, Balance = 100_000_000 } },
+            Pools = new[] { new DexAmmPool { Account = pool, Balance = poolIn, Balance2 = poolOut, TradingFee = fee } },
         };
+
         Assert.ThrowsExactly<ArgumentException>(() =>
-            OfferCreateCrossing.Cross(snapshot, "rTaker", Amount(Usd, "1"), Drops(2_000_000), 10));
+            OfferCreateCrossing.Cross(Snapshot(20_000), taker, Amount(Usd, "1"), Drops(2_000_000), 10, OfferCreateFlags.tfImmediateOrCancel));
+        OfferCrossingResult allowed = OfferCreateCrossing.Cross(Snapshot(AmmOfferMath.MaxTradingFee), taker, Amount(Usd, "1"), Drops(2_000_000), 10, OfferCreateFlags.tfImmediateOrCancel);
+        Assert.AreEqual("tesSUCCESS", allowed.EngineResult);
+        Assert.IsNotEmpty(allowed.Pools, "the taker crosses the pool");
     }
 
     [TestMethod]

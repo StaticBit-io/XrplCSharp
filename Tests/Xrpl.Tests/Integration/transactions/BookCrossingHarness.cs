@@ -313,7 +313,7 @@ internal sealed class BookCrossingHarness
         Assert.AreEqual(predicted.EngineResult, result.Meta.TransactionResult, "the engine result");
         Assert.IsTrue(predicted.Applied, "a tes or tec result is applied");
 
-        AssertOffers(result.Meta, predicted, transaction.Account);
+        AssertOffers(result.Meta, snapshot, predicted, transaction.Account);
         await AssertPools(snapshot, predicted.Pools);
         AssertFills(snapshot, predicted.Fills, predicted.Offers, predicted.Pools);
         AssertBalances(result.Meta, predicted.BalanceChanges, snapshot.Pools.Select(p => p.Account));
@@ -374,7 +374,7 @@ internal sealed class BookCrossingHarness
         if (predicted.EngineResult == "tesSUCCESS")
             Assert.AreEqual(predicted.DeliveredAmount.Value, result.Meta.ActuallyDeliveredAmount.ToXrplAmount(), "delivered_amount");
 
-        AssertOffers(result.Meta, predicted.Offers, null, null, null);
+        AssertOffers(result.Meta, snapshot, predicted.Offers, predicted.Fills, null, null, null);
         await AssertPools(snapshot, predicted.Pools);
         AssertFills(snapshot, predicted.Fills, predicted.Offers, predicted.Pools);
         AssertBalances(result.Meta, predicted.BalanceChanges, snapshot.Pools.Select(p => p.Account));
@@ -411,10 +411,17 @@ internal sealed class BookCrossingHarness
             $"trust lines: predicted [{string.Join(", ", expected)}], on the ledger [{string.Join(", ", recorded)}]");
     }
 
-    private static void AssertOffers(Meta meta, OfferCrossingResult predicted, string taker) =>
-        AssertOffers(meta, predicted.Offers, predicted.PlacedTakerPays, predicted.PlacedTakerGets, taker);
+    private static void AssertOffers(Meta meta, DexSnapshot snapshot, OfferCrossingResult predicted, string taker) =>
+        AssertOffers(meta, snapshot, predicted.Offers, predicted.Fills, predicted.PlacedTakerPays, predicted.PlacedTakerGets, taker);
 
-    private static void AssertOffers(Meta meta, IReadOnlyList<OfferChange> predictedOffers, XrplAmount? placedPays, XrplAmount? placedGets, string taker)
+    private static void AssertOffers(
+        Meta meta,
+        DexSnapshot snapshot,
+        IReadOnlyList<OfferChange> predictedOffers,
+        IReadOnlyList<OfferFill> fills,
+        XrplAmount? placedPays,
+        XrplAmount? placedGets,
+        string taker)
     {
         Dictionary<string, OfferChange> expected = predictedOffers.ToDictionary(o => o.Index, StringComparer.OrdinalIgnoreCase);
         HashSet<string> seen = new HashSet<string>(StringComparer.OrdinalIgnoreCase);
@@ -433,8 +440,7 @@ internal sealed class BookCrossingHarness
                 Assert.IsTrue(expected.TryGetValue(index, out OfferChange change), $"offer {index} deleted but not predicted");
                 Assert.IsTrue(change.Deleted, $"offer {index} deleted, predicted to remain {change.TakerPays} / {change.TakerGets}");
                 Assert.IsNotNull(change.Reason, $"offer {index}: deleted without a reason");
-                node.DeletedNode.TryGetPrevious(out LOOffer before);
-                AssertFilled(index, change, before, last);
+                AssertFilled(index, snapshot, fills, last);
                 if (change.Reason == OfferRemovalReason.Consumed)
                 {
                     Assert.IsTrue(
@@ -452,8 +458,7 @@ internal sealed class BookCrossingHarness
                 Assert.IsNull(change.Reason, $"offer {index}: remains, with a removal reason");
                 Assert.AreEqual(change.TakerPays.Value, final.TakerPays.ToXrplAmount(), $"offer {index}: what it still asks for");
                 Assert.AreEqual(change.TakerGets.Value, final.TakerGets.ToXrplAmount(), $"offer {index}: what it still gives");
-                node.ModifiedNode.TryGetPrevious(out LOOffer before);
-                AssertFilled(index, change, before, final);
+                AssertFilled(index, snapshot, fills, final);
                 seen.Add(index);
             }
         }
@@ -473,15 +478,23 @@ internal sealed class BookCrossingHarness
         Assert.AreEqual(placedGets.Value, placed.TakerGets.ToXrplAmount(), "the placed offer's TakerGets");
     }
 
-    /// <summary>What was taken of an offer, as the metadata's previous and final fields tell it, against the prediction.</summary>
-    private static void AssertFilled(string index, OfferChange change, LOOffer before, LOOffer after)
+    /// <summary>
+    /// The offer's fills, replayed from its amounts in the snapshot - each subtraction rounded, as
+    /// the ledger stores it - leave what the metadata's final fields show.
+    /// </summary>
+    private static void AssertFilled(string index, DexSnapshot snapshot, IReadOnlyList<OfferFill> fills, LOOffer after)
     {
-        XrplAmount finalPays = after.TakerPays.ToXrplAmount();
-        XrplAmount finalGets = after.TakerGets.ToXrplAmount();
-        XrplAmount takenPays = before?.TakerPays == null ? XrplAmount.Zero(finalPays.Asset) : XrplAmountMath.Subtract(before.TakerPays.ToXrplAmount(), finalPays);
-        XrplAmount takenGets = before?.TakerGets == null ? XrplAmount.Zero(finalGets.Asset) : XrplAmountMath.Subtract(before.TakerGets.ToXrplAmount(), finalGets);
-        Assert.AreEqual(takenPays, change.FilledTakerPays, $"offer {index}: what it received");
-        Assert.AreEqual(takenGets, change.FilledTakerGets, $"offer {index}: what it gave");
+        DexOffer original = snapshot.Offers.Single(o => string.Equals(o.Index, index, StringComparison.OrdinalIgnoreCase));
+        XrplAmount pays = original.TakerPays;
+        XrplAmount gets = original.TakerGets;
+        foreach (OfferFill fill in fills.Where(f => string.Equals(f.OfferIndex, index, StringComparison.OrdinalIgnoreCase)))
+        {
+            pays = XrplAmountMath.Subtract(pays, fill.In);
+            gets = XrplAmountMath.Subtract(gets, fill.Out);
+        }
+
+        Assert.AreEqual(after.TakerPays.ToXrplAmount(), pays, $"offer {index}: its fills replayed leave what it asks for");
+        Assert.AreEqual(after.TakerGets.ToXrplAmount(), gets, $"offer {index}: its fills replayed leave what it gives");
     }
 
     /// <summary>The fills add up to what was taken of each offer and to each pool's change, and run pass by pass.</summary>
