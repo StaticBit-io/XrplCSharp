@@ -411,6 +411,71 @@ public class TestILoan : TestILoanBase
     // ==================== MPT-backed Loan Tests ====================
 
     [TestMethod]
+    public async Task TestLoanPay_WithOverpaymentFlag_Rejected()
+    {
+        // tfLoanOverpayment requires specific loan configuration to be permitted.
+        // Without it, the protocol correctly rejects with tecNO_PERMISSION.
+        XrplWallet walletBroker = XrplWallet.Generate();
+        XrplWallet walletBorrower = XrplWallet.Generate();
+        await IntegrationTestConfig.TryFundWalletsAsync(client, nodeType, walletBroker, walletBorrower);
+
+        string brokerId = await CreateBroker(client, walletBroker);
+
+        LoanSet loanTx = new LoanSet
+        {
+            Account = walletBroker.ClassicAddress,
+            LoanBrokerID = brokerId,
+            Counterparty = walletBorrower.ClassicAddress,
+            PrincipalRequested = 10000000,
+        };
+        TransactionSummary loanResult = await SubmitLoanSetWithCounterpartySig(client, loanTx, walletBroker, walletBorrower);
+        ValidateResult(loanResult);
+
+        string loanId = GetCreatedObjectId(loanResult, LedgerEntryType.Loan);
+
+        // Pay with overpayment flag — should be rejected with tecNO_PERMISSION
+        // because the loan was not configured to allow overpayment
+        LoanPay payTx = new LoanPay
+        {
+            Account = walletBorrower.ClassicAddress,
+            LoanID = loanId,
+            Amount = new Currency { Value = "15000000", CurrencyCode = "XRP" },
+            Flags = LoanPayFlags.tfLoanOverpayment,
+        };
+        payTx = await client.Autofill(payTx);
+
+        // SubmitAndWait throws RippleException for tec codes
+        try
+        {
+            await client.SubmitAndWait(payTx, walletBorrower, true);
+            Assert.Fail("Expected RippleException for tecNO_PERMISSION");
+        }
+        catch (RippleException ex)
+        {
+            Assert.IsTrue(ex.Message.Contains("tecNO_PERMISSION"),
+                $"Expected tecNO_PERMISSION but got: {ex.Message}");
+        }
+    }
+}
+
+/// <summary>The loan transactions on an MPT vault, in a class of their own so that they run beside <see cref="TestILoan"/>.</summary>
+[TestClass]
+[TestCategory("Loan")]
+public class TestILoanMpt : TestILoanBase
+{
+    private static IXrplClient client;
+    protected override IXrplClient GetClient() => client;
+
+    [ClassInitialize]
+    public static async Task ClassInitializeAsync(TestContext testContext)
+    {
+        client = await CreateStandaloneClient();
+    }
+
+    [ClassCleanup]
+    public static void ClassCleanup() => client?.Dispose();
+
+    [TestMethod]
     public async Task TestLoanBrokerSet_MPT()
     {
         // Create a LoanBroker backed by an MPT-backed vault
@@ -508,52 +573,5 @@ public class TestILoan : TestILoanBase
         payTx = await client.Autofill(payTx);
         TransactionSummary payResult = await client.SubmitAndWait(payTx, walletBorrower, true);
         ValidateResult(payResult);
-    }
-
-    [TestMethod]
-    public async Task TestLoanPay_WithOverpaymentFlag_Rejected()
-    {
-        // tfLoanOverpayment requires specific loan configuration to be permitted.
-        // Without it, the protocol correctly rejects with tecNO_PERMISSION.
-        XrplWallet walletBroker = XrplWallet.Generate();
-        XrplWallet walletBorrower = XrplWallet.Generate();
-        await IntegrationTestConfig.TryFundWalletsAsync(client, nodeType, walletBroker, walletBorrower);
-
-        string brokerId = await CreateBroker(client, walletBroker);
-
-        LoanSet loanTx = new LoanSet
-        {
-            Account = walletBroker.ClassicAddress,
-            LoanBrokerID = brokerId,
-            Counterparty = walletBorrower.ClassicAddress,
-            PrincipalRequested = 10000000,
-        };
-        TransactionSummary loanResult = await SubmitLoanSetWithCounterpartySig(client, loanTx, walletBroker, walletBorrower);
-        ValidateResult(loanResult);
-
-        string loanId = GetCreatedObjectId(loanResult, LedgerEntryType.Loan);
-
-        // Pay with overpayment flag — should be rejected with tecNO_PERMISSION
-        // because the loan was not configured to allow overpayment
-        LoanPay payTx = new LoanPay
-        {
-            Account = walletBorrower.ClassicAddress,
-            LoanID = loanId,
-            Amount = new Currency { Value = "15000000", CurrencyCode = "XRP" },
-            Flags = LoanPayFlags.tfLoanOverpayment,
-        };
-        payTx = await client.Autofill(payTx);
-
-        // SubmitAndWait throws RippleException for tec codes
-        try
-        {
-            await client.SubmitAndWait(payTx, walletBorrower, true);
-            Assert.Fail("Expected RippleException for tecNO_PERMISSION");
-        }
-        catch (RippleException ex)
-        {
-            Assert.IsTrue(ex.Message.Contains("tecNO_PERMISSION"),
-                $"Expected tecNO_PERMISSION but got: {ex.Message}");
-        }
     }
 }

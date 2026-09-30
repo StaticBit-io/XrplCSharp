@@ -43,12 +43,22 @@ jobs:
     - name: Test Unit
       run: dotnet test --verbosity normal --settings test.runsettings --filter "TestU"
 
-  integration:
-    # PRs into dev skip integration — it runs for real in the merge queue
-    # (merge_group) before the merge lands, and on promotion PRs into release.
-    # A skipped required check counts as satisfied, but the dev merge queue
-    # re-runs it on the merge result, so the gate holds.
-    if: github.event_name != 'pull_request' || github.base_ref == 'release'
+  integration-shard:
+    # Integration runs in the merge queue (merge_group) before a merge into dev lands, on
+    # promotion PRs into release, on the push to release that publishes, and on demand.
+    # It skips PRs into dev - the queue re-runs it on the merge result - and the push to dev
+    # that follows a queued merge, which is the commit the queue has just tested.
+    if: >-
+      (github.event_name != 'pull_request' || github.base_ref == 'release') &&
+      !(github.event_name == 'push' && github.ref == 'refs/heads/dev')
+    # Three runners, each with its own stand: MSTest runs one class at a time per core, and
+    # one runner took the suite past 25 minutes. .ci-config/integration-shards.txt assigns
+    # the classes; the last shard takes every class not listed.
+    strategy:
+      fail-fast: false
+      matrix:
+        shard: [1, 2, 3]
+    name: integration (${{ matrix.shard }}/3)
     runs-on: ubuntu-latest
 
     steps:
@@ -101,7 +111,10 @@ jobs:
     # a stand on other ports or a public network is selected with XRPL_TEST_NODE_URL /
     # XRPL_TEST_NODE, see Tests/Xrpl.Tests/Integration/README.md and devnet-coverage.yml.
     - name: Test Integration
-      run: dotnet test Tests/Xrpl.Tests/Xrpl.Tests.csproj --verbosity normal --settings test.runsettings --filter "TestI"
+      run: |
+        filter=$(bash .ci-config/integration-shard-filter.sh ${{ matrix.shard }})
+        echo "Shard ${{ matrix.shard }}: $filter"
+        dotnet test Tests/Xrpl.Tests/Xrpl.Tests.csproj --verbosity normal --settings test.runsettings --filter "$filter"
 
     # x402 integration tests: hermetic E2E against the standalone rippled above.
     # The live t54 interop tests (TestCategory=Live) are excluded — they are the only tests
@@ -110,6 +123,7 @@ jobs:
     # services. Run them deliberately:
     #   dotnet test Tests/Xrpl.X402.Tests/Xrpl.X402.Tests.csproj --filter "TestCategory=Live"
     - name: Test Integration (Xrpl.X402)
+      if: matrix.shard == 3
       run: dotnet test Tests/Xrpl.X402.Tests/Xrpl.X402.Tests.csproj --verbosity normal --settings test.runsettings --filter "TestI&TestCategory!=Live"
       env:
         HOST: localhost
@@ -118,3 +132,18 @@ jobs:
     - name: Stop docker containers
       if: always()
       run: docker compose -f .ci-config/docker-compose.ci.yml down
+
+  integration:
+    # The required check the branch rules name: green when every shard is. It skips exactly
+    # when the shards do, and a skipped required check counts as satisfied.
+    needs: integration-shard
+    if: >-
+      always() &&
+      (github.event_name != 'pull_request' || github.base_ref == 'release') &&
+      !(github.event_name == 'push' && github.ref == 'refs/heads/dev')
+    runs-on: ubuntu-latest
+    steps:
+    - name: All shards passed
+      run: |
+        echo "integration-shard: ${{ needs.integration-shard.result }}"
+        test "${{ needs.integration-shard.result }}" = "success"
