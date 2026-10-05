@@ -84,5 +84,10 @@ namespace Xrpl.BinaryCodec.Enums
         public static readonly Uint32Field AuditorKeyEpoch = new Uint32Field(nameof(AuditorKeyEpoch), 78);
         public static readonly Uint32Field IssuerKeyMirrorEpoch = new Uint32Field(nameof(IssuerKeyMirrorEpoch), 79);
         public static readonly Uint32Field AuditorKeyMirrorEpoch = new Uint32Field(nameof(AuditorKeyMirrorEpoch), 80);
+        public static readonly Uint32Field GasLimit = new Uint32Field(nameof(GasLimit), 81);
+        public static readonly Uint32Field BytecodeSizeLimit = new Uint32Field(nameof(BytecodeSizeLimit), 82);
+        public static readonly Uint32Field GasPrice = new Uint32Field(nameof(GasPrice), 83);
+        public static readonly Uint32Field Gas = new Uint32Field(nameof(Gas), 84);
+        public static readonly Uint32Field GasUsed = new Uint32Field(nameof(GasUsed), 85);
     }
 }

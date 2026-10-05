@@ -8,5 +8,6 @@ namespace Xrpl.BinaryCodec.Enums
     {
         public static readonly Int32Field LoanScale = new Int32Field(nameof(LoanScale), 1);
         public static readonly Int32Field RemainingOwnerCountDelta = new Int32Field(nameof(RemainingOwnerCountDelta), 2);
+        public static readonly Int32Field VMReturnCode = new Int32Field(nameof(VMReturnCode), 3);
     }
 }
