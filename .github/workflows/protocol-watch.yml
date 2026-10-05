@@ -361,7 +361,7 @@ jobs:
             "repos/$UPSTREAM/contents/include/xrpl/protocol/detail/features.macro?ref=$UPSTREAM_REF" > /tmp/features.macro
 
           rc=0
-          .ci-config/check-retired-rules.sh /tmp/features.macro > /tmp/retired-rules.txt || rc=$?
+          bash .ci-config/check-retired-rules.sh /tmp/features.macro > /tmp/retired-rules.txt || rc=$?
           cat /tmp/retired-rules.txt
           {
             echo "### LedgerRules amendments on \`$UPSTREAM\` \`$UPSTREAM_REF\`"
