@@ -1,0 +1,23 @@
+# Integration test classes of shards 1 and 2 of dotnet.test.yml's integration job, one
+# "<shard> <class>" per line. Every other TestI class runs in shard 3, so a new class is never
+# left out; list it here only to move it. The lists balance the measured run time of each class:
+# MSTest runs one class at a time per worker, so a long class also bounds its shard.
+# Rebalance from a TRX of a full run (see .ci-config/integration-shard-filter.sh).
+1 TestIBatch
+1 TestIBookCrossing
+1 TestIConnectionStates
+1 TestILoanMpt
+1 TestIPathFinding
+1 TestIPreviewLoanPayment
+1 TestIPreviewLoanVault
+1 TestIVaultShares
+1 TestIXChainAttestation
+1 TestIXChainNegative
+2 TestIEscrow
+2 TestILoan
+2 TestIPaymentFlow
+2 TestIPermissionedDex
+2 TestIPreviewLoanDue
+2 TestIPreviewLoanSchedule
+2 TestISponsoredTypes
+2 TestISponsoredVaultLoan

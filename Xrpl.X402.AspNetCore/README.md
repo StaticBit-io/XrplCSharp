@@ -12,7 +12,7 @@ Pairs with the client package [`Xrpl.X402`](https://www.nuget.org/packages/Xrpl.
 |---|---|
 | `RequirePayment(...)` endpoint filter | Returns **402** + `PAYMENT-REQUIRED` when no payment is presented; with a valid `PAYMENT-SIGNATURE` it verifies + settles, sets `PAYMENT-RESPONSE`, and runs your handler. |
 | `IX402Facilitator` | Abstraction that verifies a signed payment and settles it on-ledger. |
-| `LedgerSettlingFacilitator(IXrplClient)` | Settles **locally** against your own connected node (`SubmitRequestAndWait`, waits for `tesSUCCESS`). |
+| `LedgerSettlingFacilitator(IXrplClient)` | Settles **locally** against your own connected node (`SubmitRequestAndWait`, waits for `tesSUCCESS`). An outcome it cannot tell is answered as `settlement_unknown` with the transaction hash, to reconcile. |
 | `T54Facilitator(HttpClient, baseUrl)` | Delegates verify + settle to an **external t54 facilitator** (`POST /verify`, `/settle`). Verified live against the t54 testnet facilitator. |
 
 ## Usage

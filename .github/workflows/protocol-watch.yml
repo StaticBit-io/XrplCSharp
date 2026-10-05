@@ -26,6 +26,11 @@ name: Protocol Watch
 # the port has to follow. Its baseline starts from that release (BASELINE_REF)
 # rather than from develop's tip, so what develop already changed since the
 # release is reported on the first run instead of being absorbed silently.
+#
+# A separate job (retired-rules) checks the amendments LedgerRules reads from the
+# node against develop's features.macro and goes red when one is retired or no
+# longer registered. A retired amendment is always on in the node while the
+# ledger, and so the `feature` command, may still report it disabled.
 
 on:
   schedule:
@@ -332,3 +337,44 @@ jobs:
           # Update the baseline in the issue body
           gh issue edit "$number" --repo "$REPO" --body "$(baseline_body "$head_sha" "$current")"
           echo "Comment posted and baseline updated."
+
+  retired-rules:
+    name: retired-rules
+    runs-on: ubuntu-latest
+    permissions:
+      contents: read
+    steps:
+      - uses: actions/checkout@v4
+        with:
+          persist-credentials: false
+
+      # Red while an amendment LedgerRules reads is retired or no longer registered on develop:
+      # the node then runs the new behaviour regardless of the ledger, and the port has to be
+      # hardwired the same way. The protocol-watch diff of features.macro shows the move; this
+      # step keeps it from being read past.
+      - name: Check LedgerRules amendments against develop's features.macro
+        env:
+          GH_TOKEN: ${{ github.token }}
+        run: |
+          set -euo pipefail
+          gh api -H 'Accept: application/vnd.github.raw' \
+            "repos/$UPSTREAM/contents/include/xrpl/protocol/detail/features.macro?ref=$UPSTREAM_REF" > /tmp/features.macro
+
+          rc=0
+          bash .ci-config/check-retired-rules.sh /tmp/features.macro > /tmp/retired-rules.txt || rc=$?
+          cat /tmp/retired-rules.txt
+          {
+            echo "### LedgerRules amendments on \`$UPSTREAM\` \`$UPSTREAM_REF\`"
+            echo
+            echo '```'
+            cat /tmp/retired-rules.txt
+            echo '```'
+          } >> "$GITHUB_STEP_SUMMARY"
+
+          if grep -q '^RETIRED' /tmp/retired-rules.txt; then
+            echo "::error::An amendment LedgerRules reads is retired on $UPSTREAM_REF. A retired amendment is always on in the node: hardwire it on in Xrpl.Amounts and Xrpl.Sugar, drop its LedgerRules flag from FromNodeAsync, and keep the replayed rippled tests that still need the old path behind a hand-built rule."
+          fi
+          if grep -q '^UNKNOWN' /tmp/retired-rules.txt; then
+            echo "::error::An amendment LedgerRules reads is no longer registered on $UPSTREAM_REF. Investigate before changing the port: it may have been dropped without ever being enabled, or renamed (Batch became BatchV1_1). Every node that does not know the name reports it disabled, so follow the replacement or remove the flag."
+          fi
+          exit "$rc"

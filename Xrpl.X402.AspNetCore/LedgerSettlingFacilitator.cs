@@ -4,6 +4,8 @@ using System.Threading;
 using System.Threading.Tasks;
 using Xrpl.BinaryCodec;
 using Xrpl.Client;
+using Xrpl.Client.Exceptions;
+using Xrpl.Models.Methods;
 using Xrpl.Sugar;
 using Xrpl.X402.Wire;
 
@@ -14,9 +16,17 @@ namespace Xrpl.X402.AspNetCore;
 /// validates the destination address, submits the transaction to the ledger, and waits
 /// for a validated outcome.
 /// </summary>
+/// <remarks>
+/// A settlement whose outcome the client could not tell - the submit request lost on a
+/// reconnect, a lookup that failed while waiting - is waited for once more before it is
+/// refused, since the payer's funds may already have moved. If it still cannot be told, the
+/// response is <c>settlement_unknown</c> and carries the transaction hash, so the payment can be
+/// reconciled rather than lost.
+/// </remarks>
 public sealed class LedgerSettlingFacilitator : IX402Facilitator
 {
-    private readonly IXrplClient _client;
+    private readonly Func<string, CancellationToken, Task<TransactionSummary>> _submit;
+    private readonly Func<TransactionOutcomeUnknownException, CancellationToken, Task<TransactionSummary>> _resolve;
 
     /// <summary>
     /// Initializes a new instance of <see cref="LedgerSettlingFacilitator"/>.
@@ -25,7 +35,21 @@ public sealed class LedgerSettlingFacilitator : IX402Facilitator
     /// <exception cref="ArgumentNullException">Thrown when <paramref name="client"/> is null.</exception>
     public LedgerSettlingFacilitator(IXrplClient client)
     {
-        _client = client ?? throw new ArgumentNullException(nameof(client));
+        if (client == null)
+            throw new ArgumentNullException(nameof(client));
+
+        _submit = (blob, cancellationToken) => client.SubmitRequestAndWait(blob, failHard: false, cancellationToken);
+        _resolve = (unknown, cancellationToken) => client.WaitForTransactionOutcome(
+            unknown.Hash, unknown.LastLedgerSequence, unknown.MinLedger, cancellationToken);
+    }
+
+    /// <summary>Settles through <paramref name="submit"/> and resolves an unknown outcome through <paramref name="resolve"/>.</summary>
+    internal LedgerSettlingFacilitator(
+        Func<string, CancellationToken, Task<TransactionSummary>> submit,
+        Func<TransactionOutcomeUnknownException, CancellationToken, Task<TransactionSummary>> resolve)
+    {
+        _submit = submit;
+        _resolve = resolve;
     }
 
     /// <inheritdoc />
@@ -61,8 +85,29 @@ public sealed class LedgerSettlingFacilitator : IX402Facilitator
         // Submit the signed transaction and wait for validated outcome
         try
         {
-            Xrpl.Models.Methods.TransactionSummary summary =
-                await _client.SubmitRequestAndWait(signedBlob, failHard: false, cancellationToken);
+            TransactionSummary summary;
+            try
+            {
+                summary = await _submit(signedBlob, cancellationToken);
+            }
+            catch (TransactionOutcomeUnknownException unknown)
+            {
+                try
+                {
+                    summary = await _resolve(unknown, cancellationToken);
+                }
+                catch (TransactionOutcomeUnknownException stillUnknown)
+                {
+                    return new PaymentResponseEnvelope
+                    {
+                        Success = false,
+                        ErrorReason = "settlement_unknown",
+                        Transaction = stillUnknown.Hash,
+                        Network = envelope.Accepted.Network,
+                        Payer = payer
+                    };
+                }
+            }
 
             string? txResult = summary.Meta?.TransactionResult;
             bool succeeded = summary.Validated
@@ -89,6 +134,14 @@ public sealed class LedgerSettlingFacilitator : IX402Facilitator
         catch (OperationCanceledException) when (cancellationToken.IsCancellationRequested)
         {
             throw;
+        }
+        catch (Exception ex) when (ex is TransactionFailedException or TransactionExpiredException)
+        {
+            return new PaymentResponseEnvelope
+            {
+                Success = false,
+                ErrorReason = "settlement_failed"
+            };
         }
         catch
         {

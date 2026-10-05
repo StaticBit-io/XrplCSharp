@@ -18,10 +18,11 @@ namespace Xrpl.Sugar
         /// Returns the index of the most recently validated ledger.
         /// </summary>
         /// <param name="client">The Client used to connect to the ledger.</param>
-        // <returns>The most recently validated ledger index.</returns>
+        /// <param name="cancellationToken">Cancels the request.</param>
+        /// <returns>The most recently validated ledger index.</returns>
         public static async Task<uint> GetLedgerIndex(this IXrplClient client, CancellationToken cancellationToken = default)
         {
-            LedgerIndex index = new LedgerIndex(LedgerIndexType.Current);
+            LedgerIndex index = new LedgerIndex(LedgerIndexType.Validated);
             LedgerRequest request = new LedgerRequest() { LedgerIndex = index };
             LOLedger ledgerResponse = await client.Ledger(request, cancellationToken).Typed();
             // See DomainAccess for why this is checked rather than cast: a missing "ledger" member

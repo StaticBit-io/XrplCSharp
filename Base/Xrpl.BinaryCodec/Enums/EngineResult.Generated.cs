@@ -78,6 +78,8 @@ namespace Xrpl.BinaryCodec.Enums
         public static readonly EngineResult temINVALID_INNER_BATCH = Add(nameof(temINVALID_INNER_BATCH), -250);
         public static readonly EngineResult temBAD_MPT = Add(nameof(temBAD_MPT), -249);
         public static readonly EngineResult temBAD_CIPHERTEXT = Add(nameof(temBAD_CIPHERTEXT), -248);
+        public static readonly EngineResult temINVALID_BYTECODE = Add(nameof(temINVALID_BYTECODE), -247);
+        public static readonly EngineResult temTEMP_DISABLED = Add(nameof(temTEMP_DISABLED), -246);
 
         // ─── tef ───
         public static readonly EngineResult tefFAILURE = Add(nameof(tefFAILURE), -199);
@@ -104,6 +106,8 @@ namespace Xrpl.BinaryCodec.Enums
         public static readonly EngineResult tefINVALID_LEDGER_FIX_TYPE = Add(nameof(tefINVALID_LEDGER_FIX_TYPE), -178);
         public static readonly EngineResult tefNO_DST_PARTIAL = Add(nameof(tefNO_DST_PARTIAL), -177);
         public static readonly EngineResult tefBAD_PATH_COUNT = Add(nameof(tefBAD_PATH_COUNT), -176);
+        public static readonly EngineResult tefNO_BYTECODE = Add(nameof(tefNO_BYTECODE), -175);
+        public static readonly EngineResult tefBYTECODE_NOT_INCLUDED = Add(nameof(tefBYTECODE_NOT_INCLUDED), -174);
 
         // ─── ter ───
         public static readonly EngineResult terRETRY = Add(nameof(terRETRY), -99);
@@ -214,5 +218,7 @@ namespace Xrpl.BinaryCodec.Enums
         public static readonly EngineResult tecNO_DELEGATE_PERMISSION = Add(nameof(tecNO_DELEGATE_PERMISSION), 198);
         public static readonly EngineResult tecBAD_PROOF = Add(nameof(tecBAD_PROOF), 199);
         public static readonly EngineResult tecNO_SPONSOR_PERMISSION = Add(nameof(tecNO_SPONSOR_PERMISSION), 200);
+        public static readonly EngineResult tecOUT_OF_GAS = Add(nameof(tecOUT_OF_GAS), 201);
+        public static readonly EngineResult tecBYTECODE_REJECTED = Add(nameof(tecBYTECODE_REJECTED), 202);
     }
 }

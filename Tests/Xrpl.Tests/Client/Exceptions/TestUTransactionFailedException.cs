@@ -62,6 +62,23 @@ namespace Xrpl.Tests.Client.Exceptions
         }
 
         /// <summary>
+        /// A <c>tec</c> refused under <c>fail_hard</c> was discarded, not applied: said so explicitly,
+        /// it overrides what the code alone would suggest.
+        /// </summary>
+        [TestMethod]
+        public void TestUATecRefusedUnderFailHardDidNotReachALedger()
+        {
+            TransactionFailedException error = new TransactionFailedException(
+                "Final tx result is not success: tecUNFUNDED_PAYMENT",
+                engineResult: "tecUNFUNDED_PAYMENT",
+                hash: "5F8A1B2C3D4E5F60718293A4B5C6D7E8F90A1B2C3D4E5F60718293A4B5C6D7E8",
+                reachedLedger: false);
+
+            Assert.IsFalse(error.ReachedLedger);
+            Assert.IsNull(error.Result);
+        }
+
+        /// <summary>
         /// A <c>tec</c> reported before the ledger closed is still a <c>tec</c>: applied, fee taken,
         /// and no summary to hand over yet.
         /// </summary>
