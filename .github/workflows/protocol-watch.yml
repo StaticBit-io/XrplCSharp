@@ -371,7 +371,10 @@ jobs:
             echo '```'
           } >> "$GITHUB_STEP_SUMMARY"
 
-          if [ "$rc" -eq 1 ]; then
-            echo "::error::An amendment LedgerRules reads is retired or unregistered on $UPSTREAM_REF. A retired amendment is always on in the node: hardwire it on in Xrpl.Amounts and Xrpl.Sugar, drop its LedgerRules flag from FromNodeAsync, and keep the replayed rippled tests that still need the old path behind a hand-built rule."
+          if grep -q '^RETIRED' /tmp/retired-rules.txt; then
+            echo "::error::An amendment LedgerRules reads is retired on $UPSTREAM_REF. A retired amendment is always on in the node: hardwire it on in Xrpl.Amounts and Xrpl.Sugar, drop its LedgerRules flag from FromNodeAsync, and keep the replayed rippled tests that still need the old path behind a hand-built rule."
+          fi
+          if grep -q '^UNKNOWN' /tmp/retired-rules.txt; then
+            echo "::error::An amendment LedgerRules reads is no longer registered on $UPSTREAM_REF. Investigate before changing the port: it may have been dropped without ever being enabled, or renamed (Batch became BatchV1_1). Every node that does not know the name reports it disabled, so follow the replacement or remove the flag."
           fi
           exit "$rc"

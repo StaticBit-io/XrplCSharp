@@ -13,6 +13,10 @@
 # A name features.macro no longer registers at all is reported too: the node cannot report it,
 # so LedgerRules reads it as disabled.
 #
+# A retired name is hardwired on in the port. An unregistered one is investigated instead: the
+# amendment may have been dropped before it was ever enabled (Batch, replaced by BatchV1_1) or
+# renamed, and nothing says its behaviour is now unconditional.
+#
 # Exit codes: 0 every name is active upstream; 1 a name is retired or unregistered; 2 bad input.
 set -euo pipefail
 
@@ -31,9 +35,13 @@ registry=$(sed -nE \
   "$macro")
 [ -n "$registry" ] || { echo "no amendment entries parsed from $macro" >&2; exit 2; }
 
-# The names LedgerRules reads from the `feature` response. Finding none means the reading code
-# changed shape; fail rather than report an empty list as clean.
-names=$( (grep -oE '(GetByName|Enabled)\("[A-Za-z0-9_]+"\)' "$rules" || true) | sed -E 's/.*\("([^"]+)"\)/\1/' | sort -u)
+# The names LedgerRules reads from the `feature` response. Whitespace, line breaks included, is
+# folded first, so `GetByName( "Flow" )` and a call split over lines are read like the compact
+# form. Finding none means the reading code changed shape; fail rather than report an empty list
+# as clean.
+names=$( (tr '\r\n\t' '   ' < "$rules" \
+  | grep -oE '(GetByName|Enabled)[[:space:]]*\([[:space:]]*"[A-Za-z0-9_]+"[[:space:]]*\)' || true) \
+  | sed -E 's/.*"([A-Za-z0-9_]+)".*/\1/' | sort -u)
 [ -n "$names" ] || { echo "no amendment names found in $rules" >&2; exit 2; }
 
 status=0
