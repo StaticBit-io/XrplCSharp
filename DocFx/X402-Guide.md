@@ -201,7 +201,7 @@ Without a `PAYMENT-SIGNATURE` the endpoint returns **402** + `PAYMENT-REQUIRED`.
 
 Two [`IX402Facilitator`](reference/Xrpl.X402.AspNetCore.IX402Facilitator.html) implementations ship:
 
-- [`LedgerSettlingFacilitator`](reference/Xrpl.X402.AspNetCore.LedgerSettlingFacilitator.html) — settles **locally** against your own connected node.
+- [`LedgerSettlingFacilitator`](reference/Xrpl.X402.AspNetCore.LedgerSettlingFacilitator.html) — settles **locally** against your own connected node. A settlement it cannot tell the outcome of is waited for once more, then refused as `settlement_unknown` with the transaction hash in `PAYMENT-RESPONSE`: the payer's funds may have moved, so reconcile it rather than drop it.
 - [`T54Facilitator`](reference/Xrpl.X402.AspNetCore.T54Facilitator.html) — delegates verify + settle to an **external t54 facilitator** over HTTP.
 
 ## Verifiable Intent

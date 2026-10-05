@@ -428,14 +428,26 @@ public class TestUSubmitOutcome
         Assert.AreSame(timeout, error.InnerException);
     }
 
+    /// <summary>
+    /// A cancelled wait stays an <see cref="OperationCanceledException"/> carrying the caller's token,
+    /// and carries what resuming the wait takes.
+    /// </summary>
     [TestMethod]
-    public async Task CancellationPropagates()
+    public async Task ACancelledWaitCarriesWhatResumingTakes()
     {
         using CancellationTokenSource cancel = new CancellationTokenSource();
         cancel.Cancel();
         Script script = new Script();
 
-        await Assert.ThrowsAsync<OperationCanceledException>(() => script.Run("tesSUCCESS", cancellationToken: cancel.Token));
+        TransactionWaitCanceledException error = await Assert.ThrowsExactlyAsync<TransactionWaitCanceledException>(
+            () => script.Run("terQUEUED", cancellationToken: cancel.Token));
+
+        Assert.IsInstanceOfType<OperationCanceledException>(error);
+        Assert.AreEqual(cancel.Token, error.CancellationToken);
+        Assert.AreEqual(Hash, error.Hash);
+        Assert.AreEqual(LastLedger, error.LastLedgerSequence);
+        Assert.AreEqual(MinLedger, error.MinLedger);
+        Assert.AreEqual("terQUEUED", error.PreliminaryResult);
     }
 
     /// <summary>
@@ -512,28 +524,59 @@ public class TestUSubmitOutcome
     [TestMethod]
     public void OnlyAnErrorAnswerProvesNothingWasSubmitted()
     {
-        Assert.IsTrue(SubmitSugar.WasNotSubmitted(new RippledException("invalidTransaction", new ErrorResponse { Error = "invalidTransaction" }), CancellationToken.None));
+        Assert.IsTrue(SubmitSugar.WasNotSubmitted(new RippledException("invalidTransaction", new ErrorResponse { Error = "invalidTransaction" })));
 
         // rippled answers these when processing the transaction threw, or after it was processed.
-        Assert.IsFalse(SubmitSugar.WasNotSubmitted(new RippledException("internalSubmit", new ErrorResponse { Error = "internalSubmit" }), CancellationToken.None));
-        Assert.IsFalse(SubmitSugar.WasNotSubmitted(new RippledException("internalJson", new ErrorResponse { Error = "internalJson" }), CancellationToken.None));
+        Assert.IsFalse(SubmitSugar.WasNotSubmitted(new RippledException("internalSubmit", new ErrorResponse { Error = "internalSubmit" })));
+        Assert.IsFalse(SubmitSugar.WasNotSubmitted(new RippledException("internalJson", new ErrorResponse { Error = "internalJson" })));
 
-        Assert.IsFalse(SubmitSugar.WasNotSubmitted(new DisconnectedException("websocket was closed, code: 1001, reason: going away"), CancellationToken.None));
-        Assert.IsFalse(SubmitSugar.WasNotSubmitted(new NotConnectedException(), CancellationToken.None));
-        Assert.IsFalse(SubmitSugar.WasNotSubmitted(new ConnectHandlerFailedException("gave up", 3), CancellationToken.None));
-        Assert.IsFalse(SubmitSugar.WasNotSubmitted(new TimeoutException("Timeout for request"), CancellationToken.None));
-        Assert.IsFalse(SubmitSugar.WasNotSubmitted(
-            new ConnectionSupersededException("swept", ConnectionTransitionKind.Reconnect),
-            CancellationToken.None));
+        Assert.IsFalse(SubmitSugar.WasNotSubmitted(new DisconnectedException("websocket was closed, code: 1001, reason: going away")));
+        Assert.IsFalse(SubmitSugar.WasNotSubmitted(new NotConnectedException()));
+        Assert.IsFalse(SubmitSugar.WasNotSubmitted(new ConnectHandlerFailedException("gave up", 3)));
+        Assert.IsFalse(SubmitSugar.WasNotSubmitted(new TimeoutException("Timeout for request")));
+        Assert.IsFalse(SubmitSugar.WasNotSubmitted(new ConnectionSupersededException("swept", ConnectionTransitionKind.Reconnect)));
+    }
+
+    private static Task<Submit> Submitting(Exception failure) => SubmitSugar.SubmitTracked(
+        _ => throw failure, Hash, LastLedger, MinLedger, CancellationToken.None);
+
+    [TestMethod]
+    public async Task ASubmitRequestThatMayHaveReachedTheNodeIsUnknown()
+    {
+        TimeoutException timeout = new TimeoutException("Timeout for request");
+        RippledException internalSubmit = new RippledException("internalSubmit", new ErrorResponse { Error = "internalSubmit" });
+
+        TransactionOutcomeUnknownException timedOut = await Assert.ThrowsExactlyAsync<TransactionOutcomeUnknownException>(() => Submitting(timeout));
+        await Assert.ThrowsExactlyAsync<TransactionOutcomeUnknownException>(() => Submitting(internalSubmit));
+
+        Assert.AreSame(timeout, timedOut.InnerException);
+        Assert.AreEqual(Hash, timedOut.Hash);
+        Assert.AreEqual(MinLedger, timedOut.MinLedger);
+        Assert.IsNull(timedOut.PreliminaryResult);
     }
 
     [TestMethod]
-    public void TheCallersCancellationPropagatesAsItIs()
+    public async Task ARefusedSubmitRequestPropagatesAsItIs()
+    {
+        RippledException refused = new RippledException("invalidTransaction", new ErrorResponse { Error = "invalidTransaction" });
+
+        RippledException error = await Assert.ThrowsExactlyAsync<RippledException>(() => Submitting(refused));
+
+        Assert.AreSame(refused, error);
+    }
+
+    [TestMethod]
+    public async Task ACancelledSubmitRequestCarriesWhatResumingTakes()
     {
         using CancellationTokenSource cancel = new CancellationTokenSource();
         cancel.Cancel();
 
-        Assert.IsTrue(SubmitSugar.WasNotSubmitted(new OperationCanceledException(cancel.Token), cancel.Token));
+        TransactionWaitCanceledException error = await Assert.ThrowsExactlyAsync<TransactionWaitCanceledException>(
+            () => SubmitSugar.SubmitTracked(token => throw new OperationCanceledException(token), Hash, LastLedger, MinLedger, cancel.Token));
+
+        Assert.AreEqual(cancel.Token, error.CancellationToken);
+        Assert.AreEqual(Hash, error.Hash);
+        Assert.AreEqual(MinLedger, error.MinLedger);
     }
 
     [TestMethod]

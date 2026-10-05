@@ -1,4 +1,5 @@
 using System;
+using System.Threading;
 
 namespace Xrpl.Client.Exceptions
 {
@@ -61,6 +62,53 @@ namespace Xrpl.Client.Exceptions
             MinLedger = minLedger;
             PreliminaryResult = preliminaryResult;
             SearchedAll = searchedAll;
+        }
+    }
+
+    /// <summary>
+    /// The caller cancelled while waiting for a transaction that may already be on the network.
+    /// </summary>
+    /// <remarks>
+    /// An <see cref="OperationCanceledException"/>, so a <c>catch</c> of it and a check of
+    /// <see cref="OperationCanceledException.CancellationToken"/> work as for any cancellation. What it
+    /// adds is what resuming takes: call <c>WaitForTransactionOutcome</c> with <see cref="Hash"/>,
+    /// <see cref="LastLedgerSequence"/> and <see cref="MinLedger"/>.
+    /// </remarks>
+    public class TransactionWaitCanceledException : OperationCanceledException
+    {
+        /// <summary>The transaction's hash.</summary>
+        public string Hash { get; }
+
+        /// <summary>The transaction's <c>LastLedgerSequence</c>.</summary>
+        public uint LastLedgerSequence { get; }
+
+        /// <summary>The first ledger the transaction could be in: the one validated before it was submitted.</summary>
+        public uint MinLedger { get; }
+
+        /// <summary>The node's provisional answer to the submission, when one arrived.</summary>
+        public string PreliminaryResult { get; }
+
+        /// <param name="message">What was cancelled.</param>
+        /// <param name="hash">The transaction's hash.</param>
+        /// <param name="lastLedgerSequence">The transaction's <c>LastLedgerSequence</c>.</param>
+        /// <param name="minLedger">The first ledger the transaction could be in.</param>
+        /// <param name="preliminaryResult">The provisional answer to the submission, if any.</param>
+        /// <param name="innerException">The cancellation as it was raised.</param>
+        /// <param name="cancellationToken">The caller's token that was cancelled.</param>
+        public TransactionWaitCanceledException(
+            string message,
+            string hash,
+            uint lastLedgerSequence,
+            uint minLedger,
+            string preliminaryResult,
+            Exception innerException,
+            CancellationToken cancellationToken)
+            : base(message, innerException, cancellationToken)
+        {
+            Hash = hash;
+            LastLedgerSequence = lastLedgerSequence;
+            MinLedger = minLedger;
+            PreliminaryResult = preliminaryResult;
         }
     }
 

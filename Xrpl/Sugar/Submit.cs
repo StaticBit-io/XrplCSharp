@@ -128,11 +128,10 @@ public static class SubmitSugar
     /// <item><description>an error answer to the submit request (<see cref="RippledException"/>), or any
     /// failure before it - autofill, signing, reading the validated ledger: nothing was submitted.</description></item>
     /// </list>
-    /// A cancelled <paramref name="cancellationToken"/> raises <see cref="OperationCanceledException"/>
-    /// whatever stage it stopped; after the submission, the outcome is then unknown. A caller that
-    /// needs to resume after cancelling reads <c>GetLedgerIndex</c> before submitting, submits with
-    /// <c>SubmitRequest</c>, and waits with <see cref="WaitForTransactionOutcome"/>, keeping the hash
-    /// and that ledger itself.
+    /// A cancelled <paramref name="cancellationToken"/> raises <see cref="OperationCanceledException"/>.
+    /// Once the submit request is sent it is a <see cref="TransactionWaitCanceledException"/>, whose
+    /// <c>Hash</c>, <c>LastLedgerSequence</c> and <c>MinLedger</c> resume the wait with
+    /// <see cref="WaitForTransactionOutcome"/>.
     /// </remarks>
     public static async Task<TransactionSummary> SubmitRequestAndWait(this IXrplClient client, object signedTransaction, bool failHard, CancellationToken cancellationToken = default)
     {
@@ -203,21 +202,12 @@ public static class SubmitSugar
         // transaction cannot be in this ledger or an earlier one, which bounds the search for it.
         uint minLedger = await client.GetLedgerIndex(cancellationToken);
 
-        Submit response;
-        try
-        {
-            response = await client.SubmitRequest(signedTx, failHard, cancellationToken);
-        }
-        catch (Exception ex) when (!WasNotSubmitted(ex, cancellationToken))
-        {
-            throw new TransactionOutcomeUnknownException(
-                $"Submitting transaction {txHash} failed after it may have reached the network: {ex.Message}",
-                txHash,
-                lastLedger,
-                minLedger,
-                preliminaryResult: null,
-                ex);
-        }
+        Submit response = await SubmitTracked(
+            token => client.SubmitRequest(signedTx, failHard, token),
+            txHash,
+            lastLedger,
+            minLedger,
+            cancellationToken);
 
         return await WaitForFinalTransactionOutcome(
             Lookup(client),
@@ -233,8 +223,56 @@ public static class SubmitSugar
     }
 
     /// <summary>
-    /// Whether a failed submit request certainly left nothing on the network - or is the caller's
-    /// cancellation, which propagates as it is.
+    /// Sends the submit request. A failure after which the transaction may be on the network
+    /// becomes <see cref="TransactionOutcomeUnknownException"/>, or
+    /// <see cref="TransactionWaitCanceledException"/> when the caller cancelled; the rest
+    /// propagates as it is.
+    /// </summary>
+    internal static async Task<Submit> SubmitTracked(
+        Func<CancellationToken, Task<Submit>> submit,
+        string txHash,
+        uint lastLedgerSequence,
+        uint minLedger,
+        CancellationToken cancellationToken)
+    {
+        try
+        {
+            return await submit(cancellationToken);
+        }
+        catch (OperationCanceledException ex) when (cancellationToken.IsCancellationRequested)
+        {
+            throw Canceled(ex, txHash, lastLedgerSequence, minLedger, preliminaryResult: null, cancellationToken);
+        }
+        catch (Exception ex) when (!WasNotSubmitted(ex))
+        {
+            throw new TransactionOutcomeUnknownException(
+                $"Submitting transaction {txHash} failed after it may have reached the network: {ex.Message}",
+                txHash,
+                lastLedgerSequence,
+                minLedger,
+                preliminaryResult: null,
+                ex);
+        }
+    }
+
+    private static TransactionWaitCanceledException Canceled(
+        OperationCanceledException cancellation,
+        string txHash,
+        uint lastLedgerSequence,
+        uint minLedger,
+        string preliminaryResult,
+        CancellationToken cancellationToken) =>
+        new TransactionWaitCanceledException(
+            $"Cancelled while transaction {txHash} may already be on the network.",
+            txHash,
+            lastLedgerSequence,
+            minLedger,
+            preliminaryResult,
+            cancellation,
+            cancellationToken);
+
+    /// <summary>
+    /// Whether a failed submit request certainly left nothing on the network.
     /// </summary>
     /// <remarks>
     /// Only an error answer from the node is certain: it refused the request. The connection
@@ -244,10 +282,9 @@ public static class SubmitSugar
     /// error: rippled answers <c>internalSubmit</c> when processing the transaction throws, and
     /// <c>internalJson</c> after it was processed.
     /// </remarks>
-    internal static bool WasNotSubmitted(Exception exception, CancellationToken cancellationToken) =>
-        (exception is RippledException rippled
-            && !(rippled.Response?.Error?.StartsWith("internal", StringComparison.Ordinal) ?? false))
-        || (exception is OperationCanceledException && cancellationToken.IsCancellationRequested);
+    internal static bool WasNotSubmitted(Exception exception) =>
+        exception is RippledException rippled
+        && !(rippled.Response?.Error?.StartsWith("internal", StringComparison.Ordinal) ?? false);
 
     private static Func<TxRequest, CancellationToken, Task<TransactionSummary>> Lookup(IXrplClient client) =>
         (request, cancellationToken) => client.TxV2(request, cancellationToken).Typed();
@@ -594,6 +631,31 @@ public static class SubmitSugar
     /// </para>
     /// </remarks>
     internal static async Task<TransactionSummary> WaitForFinalTransactionOutcome(
+        Func<TxRequest, CancellationToken, Task<TransactionSummary>> lookup,
+        Func<CancellationToken, Task<uint>> validatedLedgerIndex,
+        Func<uint, CancellationToken, Task<bool?>> ledgerHoldsTransaction,
+        string txHash,
+        uint lastLedgerSequence,
+        uint minLedger,
+        string submissionResult,
+        bool failHard,
+        TimeSpan pollInterval,
+        CancellationToken cancellationToken)
+    {
+        try
+        {
+            return await PollForOutcome(
+                lookup, validatedLedgerIndex, ledgerHoldsTransaction, txHash, lastLedgerSequence, minLedger,
+                submissionResult, failHard, pollInterval, cancellationToken);
+        }
+        catch (OperationCanceledException ex) when (cancellationToken.IsCancellationRequested && ex is not TransactionWaitCanceledException)
+        {
+            // Everything the wait does follows the submission: the transaction may be on the network.
+            throw Canceled(ex, txHash, lastLedgerSequence, minLedger, submissionResult, cancellationToken);
+        }
+    }
+
+    private static async Task<TransactionSummary> PollForOutcome(
         Func<TxRequest, CancellationToken, Task<TransactionSummary>> lookup,
         Func<CancellationToken, Task<uint>> validatedLedgerIndex,
         Func<uint, CancellationToken, Task<bool?>> ledgerHoldsTransaction,

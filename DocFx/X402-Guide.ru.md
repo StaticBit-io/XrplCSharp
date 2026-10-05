@@ -201,7 +201,7 @@ app.MapGet("/paid", () => "premium content")
 
 Поставляются две реализации [`IX402Facilitator`](reference/Xrpl.X402.AspNetCore.IX402Facilitator.html):
 
-- [`LedgerSettlingFacilitator`](reference/Xrpl.X402.AspNetCore.LedgerSettlingFacilitator.html) — сеттлит **локально** через ваш подключённый узел.
+- [`LedgerSettlingFacilitator`](reference/Xrpl.X402.AspNetCore.LedgerSettlingFacilitator.html) — сеттлит **локально** через ваш подключённый узел. Сеттлмент с неизвестным исходом он дожидается ещё раз, а затем отклоняет как `settlement_unknown` с хешем транзакции в `PAYMENT-RESPONSE`: средства плательщика могли уйти, поэтому такой платёж нужно сверить, а не отбросить.
 - [`T54Facilitator`](reference/Xrpl.X402.AspNetCore.T54Facilitator.html) — делегирует verify + settle **внешнему фасилитатору t54** по HTTP.
 
 ## Verifiable Intent
