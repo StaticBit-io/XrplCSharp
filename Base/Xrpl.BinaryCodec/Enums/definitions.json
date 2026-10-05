@@ -2501,6 +2501,16 @@
       }
     ],
     [
+      "VMReturnCode",
+      {
+        "isSerialized": true,
+        "isSigningField": true,
+        "isVLEncoded": false,
+        "nth": 3,
+        "type": "Int32"
+      }
+    ],
+    [
       "TransactionMetaData",
       {
         "isSerialized": true,
@@ -3661,6 +3671,16 @@
       }
     ],
     [
+      "Bytecode",
+      {
+        "isSerialized": true,
+        "isSigningField": true,
+        "isVLEncoded": true,
+        "nth": 47,
+        "type": "Blob"
+      }
+    ],
+    [
       "BlindingFactor",
       {
         "isSerialized": true,
@@ -3767,6 +3787,56 @@
         "isSigningField": true,
         "isVLEncoded": false,
         "nth": 80,
+        "type": "UInt32"
+      }
+    ],
+    [
+      "GasLimit",
+      {
+        "isSerialized": true,
+        "isSigningField": true,
+        "isVLEncoded": false,
+        "nth": 81,
+        "type": "UInt32"
+      }
+    ],
+    [
+      "BytecodeSizeLimit",
+      {
+        "isSerialized": true,
+        "isSigningField": true,
+        "isVLEncoded": false,
+        "nth": 82,
+        "type": "UInt32"
+      }
+    ],
+    [
+      "GasPrice",
+      {
+        "isSerialized": true,
+        "isSigningField": true,
+        "isVLEncoded": false,
+        "nth": 83,
+        "type": "UInt32"
+      }
+    ],
+    [
+      "Gas",
+      {
+        "isSerialized": true,
+        "isSigningField": true,
+        "isVLEncoded": false,
+        "nth": 84,
+        "type": "UInt32"
+      }
+    ],
+    [
+      "GasUsed",
+      {
+        "isSerialized": true,
+        "isSigningField": true,
+        "isVLEncoded": false,
+        "nth": 85,
         "type": "UInt32"
       }
     ],
@@ -4132,7 +4202,13 @@
     "terLOCKED": -84,
     "terNO_PERMISSION": -83,
     "tecBAD_PROOF": 199,
-    "tecNO_SPONSOR_PERMISSION": 200
+    "tecNO_SPONSOR_PERMISSION": 200,
+    "temINVALID_BYTECODE": -247,
+    "temTEMP_DISABLED": -246,
+    "tefNO_BYTECODE": -175,
+    "tefBYTECODE_NOT_INCLUDED": -174,
+    "tecOUT_OF_GAS": 201,
+    "tecBYTECODE_REJECTED": 202
   },
   "TRANSACTION_TYPES": {
     "AMMBid": 39,

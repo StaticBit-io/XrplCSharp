@@ -1,5 +1,11 @@
 ﻿# Changes
 
+## 11.12.0.0 05/10/2026
+
+* **The protocol schema follows the nightly stand's pin, rippled develop at `0229c29`** (`Xrpl.BinaryCodec` 11.12.0.0): the SmartEscrow fields `GasLimit`, `BytecodeSizeLimit`, `GasPrice`, `Gas`, `GasUsed` (UInt32 81-85), `Bytecode` (Blob 47) and `VMReturnCode` (Int32 3), and the results `temINVALID_BYTECODE`, `temTEMP_DISABLED`, `tefNO_BYTECODE`, `tefBYTECODE_NOT_INCLUDED`, `tecOUT_OF_GAS` and `tecBYTECODE_REJECTED`, taken from the node's `server_definitions`. definitions-watch had reported them as node-only since 21/09/2026
+* `LedgerRules.FromNodeAsync` sets `LargeNumbers` when `MPTokensV2` is enabled, as rippled develop's `setCurrentTransactionRules` now selects the large `Number` mantissa for it. A `LedgerRules` built by hand keeps the scale its `LargeNumbers` gives
+* `TestULedgerRules` checks the scale `FromNodeAsync` reads for each amendment that selects the large mantissa, and without them
+
 ## 11.11.0.0 30/09/2026
 
 * The engine reads `fixAMMv1_1` (`swapAssetIn`, `swapAssetOut`), `fixAMMv1_3` (an offer's `checkInvariant`) and `fixReducedOffersV2` (`limitIn`) as the ledger has them inside every transaction, whatever `useRulesGuards` decides; they read as disabled only outside a transaction (#250)

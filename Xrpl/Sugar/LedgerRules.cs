@@ -40,8 +40,10 @@ namespace Xrpl.Sugar
         public bool FixCleanup3_4_0 { get; init; } = true;
 
         /// <summary>
-        /// Whether SingleAssetVault or LendingProtocol is enabled, which switches rippled's
-        /// <c>Number</c> to the large mantissa. Lending and vaults imply it; AMM arithmetic follows it.
+        /// Whether SingleAssetVault, LendingProtocol or MPTokensV2 is enabled, which switches
+        /// rippled's <c>Number</c> to the large mantissa. Lending and vaults imply it; AMM arithmetic
+        /// follows it. <see cref="FromNodeAsync"/> derives it from those amendments; set by hand, it
+        /// selects the scale on its own, as rippled's tests do through <c>setMantissaScale</c>.
         /// </summary>
         public bool LargeNumbers { get; init; } = true;
 
@@ -65,7 +67,8 @@ namespace Xrpl.Sugar
 
         /// <summary>
         /// Whether <c>MPTokensV2</c> is enabled, which refuses a withdrawal that empties a pool
-        /// side without its LP tokens or the other side.
+        /// side without its LP tokens or the other side. On a node it also selects the large
+        /// <c>Number</c> mantissa, which <see cref="FromNodeAsync"/> records in <see cref="LargeNumbers"/>.
         /// </summary>
         public bool MPTokensV2 { get; init; }
 
@@ -91,7 +94,7 @@ namespace Xrpl.Sugar
         internal NumberContext Context =>
             (OutsideTransaction
                 ? NumberContext.ForAmendments(true, true, true)
-                : NumberContext.ForAmendments(LargeNumbers, FixCleanup3_2_0, FixCleanup3_3_0)).WithRounding(AmbientRounding);
+                : NumberContext.ForAmendments(LargeNumbers,FixCleanup3_2_0, FixCleanup3_3_0)).WithRounding(AmbientRounding);
 
         /// <summary>
         /// Whether the code runs outside a transaction, as <c>ripple_path_find</c> does: rippled
@@ -159,21 +162,28 @@ namespace Xrpl.Sugar
                 .Typed()
                 .ConfigureAwait(false);
 
+            return FromFeatures(features);
+        }
+
+        /// <summary>The rules for the amendments a <c>feature</c> response reports enabled.</summary>
+        internal static LedgerRules FromFeatures(ServerFeatures features)
+        {
+            bool Enabled(string name) => features.GetByName(name)?.Value?.Enabled == true;
+
             return new LedgerRules
             {
-                FixCleanup3_1_3 = features.GetByName("fixCleanup3_1_3")?.Value?.Enabled == true,
-                FixCleanup3_2_0 = features.GetByName("fixCleanup3_2_0")?.Value?.Enabled == true,
-                FixCleanup3_3_0 = features.GetByName("fixCleanup3_3_0")?.Value?.Enabled == true,
-                FixCleanup3_4_0 = features.GetByName("fixCleanup3_4_0")?.Value?.Enabled == true,
-                LargeNumbers = features.GetByName("SingleAssetVault")?.Value?.Enabled == true
-                    || features.GetByName("LendingProtocol")?.Value?.Enabled == true,
-                FixAMMv1_1 = features.GetByName("fixAMMv1_1")?.Value?.Enabled == true,
-                FixAMMv1_2 = features.GetByName("fixAMMv1_2")?.Value?.Enabled == true,
-                FixAMMv1_3 = features.GetByName("fixAMMv1_3")?.Value?.Enabled == true,
-                MPTokensV2 = features.GetByName("MPTokensV2")?.Value?.Enabled == true,
-                FixReducedOffersV2 = features.GetByName("fixReducedOffersV2")?.Value?.Enabled == true,
-                FixFillOrKill = features.GetByName("fixFillOrKill")?.Value?.Enabled == true,
-                LendingProtocolV1_1 = features.GetByName("LendingProtocolV1_1")?.Value?.Enabled == true,
+                FixCleanup3_1_3 = Enabled("fixCleanup3_1_3"),
+                FixCleanup3_2_0 = Enabled("fixCleanup3_2_0"),
+                FixCleanup3_3_0 = Enabled("fixCleanup3_3_0"),
+                FixCleanup3_4_0 = Enabled("fixCleanup3_4_0"),
+                LargeNumbers = Enabled("SingleAssetVault") || Enabled("LendingProtocol") || Enabled("MPTokensV2"),
+                FixAMMv1_1 = Enabled("fixAMMv1_1"),
+                FixAMMv1_2 = Enabled("fixAMMv1_2"),
+                FixAMMv1_3 = Enabled("fixAMMv1_3"),
+                MPTokensV2 = Enabled("MPTokensV2"),
+                FixReducedOffersV2 = Enabled("fixReducedOffersV2"),
+                FixFillOrKill = Enabled("fixFillOrKill"),
+                LendingProtocolV1_1 = Enabled("LendingProtocolV1_1"),
             };
         }
     }
