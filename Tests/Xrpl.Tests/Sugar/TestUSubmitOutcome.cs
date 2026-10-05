@@ -212,6 +212,7 @@ public class TestUSubmitOutcome
         TransactionFailedException error = await Assert.ThrowsExactlyAsync<TransactionFailedException>(() => script.Run(submissionResult, failHard: true));
 
         Assert.AreEqual(submissionResult, error.EngineResult);
+        Assert.IsFalse(error.ReachedLedger, "Under fail_hard nothing was applied, a tec included: no fee was taken.");
         CollectionAssert.AreEqual(new[] { "lookup" }, script.Calls, "A refusal under fail_hard is decided by one lookup, without waiting.");
     }
 

@@ -64,12 +64,17 @@ namespace Xrpl.Client.Exceptions
         /// Read from the result code, so it holds for an exception built from a code alone: a
         /// <c>tec</c> means applied whether or not <see cref="Result"/> is here. Reliable submission
         /// reports a <c>tec</c> once validated, with its metadata, and the hash is present in every
-        /// case - the hash is what an explorer needs.
+        /// case - the hash is what an explorer needs. The exception is a <c>tec</c> refused under
+        /// <c>fail_hard</c>, which rippled discards without applying it or taking the fee; that one
+        /// is reported with this <c>false</c>.
         /// </para>
         /// </remarks>
         public bool ReachedLedger =>
-            Result is not null ||
-            (EngineResult is not null && EngineResult.StartsWith("tec", StringComparison.Ordinal));
+            _reachedLedger ??
+            (Result is not null ||
+             (EngineResult is not null && EngineResult.StartsWith("tec", StringComparison.Ordinal)));
+
+        private readonly bool? _reachedLedger;
 
         /// <param name="message">The message this exception has always carried, unchanged.</param>
         /// <param name="engineResult">The node's result code.</param>
@@ -81,6 +86,16 @@ namespace Xrpl.Client.Exceptions
             EngineResult = engineResult;
             Hash = hash;
             Result = result;
+        }
+
+        /// <param name="message">The message this exception has always carried, unchanged.</param>
+        /// <param name="engineResult">The node's result code.</param>
+        /// <param name="hash">The transaction's hash.</param>
+        /// <param name="reachedLedger">Whether the transaction was applied, when the code alone does not tell.</param>
+        public TransactionFailedException(string message, string engineResult, string hash, bool reachedLedger)
+            : this(message, engineResult, hash)
+        {
+            _reachedLedger = reachedLedger;
         }
     }
 }

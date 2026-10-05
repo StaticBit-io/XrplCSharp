@@ -32,9 +32,11 @@ public class ErrorResponse : BaseResponse
 
     /// <summary>
     /// On a <c>txnNotFound</c> from <c>tx</c> asked with <c>min_ledger</c> and <c>max_ledger</c>:
-    /// whether the server holds every ledger of that range. <c>true</c> means the transaction is in
-    /// none of them; <c>false</c> means part of the range is missing and the answer proves nothing.
-    /// Absent for any other error, and for a <c>tx</c> asked without a range.
+    /// <c>true</c> when the server searched every ledger of that range, so the transaction is in
+    /// none of them. <c>false</c> means the range was not proven complete, and proves nothing: the
+    /// server may lack a ledger, but rippled also counts only ledgers that hold a transaction, so
+    /// one empty ledger in the range is enough. Absent for any other error, and for a <c>tx</c>
+    /// asked without a range.
     /// </summary>
     [JsonPropertyName("searched_all")]
     public bool? SearchedAll { get; set; }

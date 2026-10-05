@@ -722,10 +722,12 @@ public static class SubmitSugar
             }
             else if (notHeld)
             {
+                // Neither applied nor held: under fail_hard rippled discards even a tec, fee and all.
                 throw new TransactionFailedException(
                     $"Final tx result is not success: {submissionResult}",
                     engineResult: submissionResult,
-                    hash: txHash);
+                    hash: txHash,
+                    reachedLedger: false);
             }
             else if (searchedAll == true)
             {
