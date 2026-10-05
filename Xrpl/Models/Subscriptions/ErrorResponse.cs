@@ -31,6 +31,17 @@ public class ErrorResponse : BaseResponse
     public string? ErrorException { get; set; }
 
     /// <summary>
+    /// On a <c>txnNotFound</c> from <c>tx</c> asked with <c>min_ledger</c> and <c>max_ledger</c>:
+    /// <c>true</c> when the server searched every ledger of that range, so the transaction is in
+    /// none of them. <c>false</c> means the range was not proven complete, and proves nothing: the
+    /// server may lack a ledger, but rippled also counts only ledgers that hold a transaction, so
+    /// one empty ledger in the range is enough. Absent for any other error, and for a <c>tx</c>
+    /// asked without a range.
+    /// </summary>
+    [JsonPropertyName("searched_all")]
+    public bool? SearchedAll { get; set; }
+
+    /// <summary>
     /// Where the <c>request</c> member sits inside the frame passed to
     /// <see cref="AttachFrame(byte[])"/>.
     /// </summary>

@@ -224,7 +224,7 @@ Recommendations for production use with this SDK:
 
 - Point the client at **your** node's public WS port; keep admin ports for operations only
 - Check `complete_ledgers` covers the range you query — `account_tx` beyond the retention window returns partial data; for deep history use a full-history provider or [Clio](https://github.com/XRPLF/clio)
-- `SubmitAndWait` relies on `LastLedgerSequence` — a healthy, synced node is what makes those guarantees real
+- `SubmitAndWait` relies on `LastLedgerSequence` — a healthy, synced node is what makes those guarantees real. It reports a transaction expired (`TransactionExpiredException`) only once the node holds every ledger from submission to `LastLedgerSequence`; a node with a gap in that range, or one restarted inside it, leaves the outcome unknown (`TransactionOutcomeUnknownException`) until `WaitForTransactionOutcome` is called against a node that has them
 
 ## Troubleshooting
 

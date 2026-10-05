@@ -699,6 +699,7 @@ namespace Xrpl.Client
         /// <param name="signersCount">The expected number of signers for this transaction. Only used for multisigned transactions.</param>
         /// <returns>The autofilled transaction.</returns>
         Task<T> Autofill<T>(T tx, int? signersCount = null, CancellationToken cancellationToken = default) where T : ITransactionRequest;
+        /// <summary>Returns the index of the most recently validated ledger.</summary>
         Task<uint> GetLedgerIndex(CancellationToken cancellationToken = default);
         Task<string> GetXrpBalance(string address, CancellationToken cancellationToken = default);
 

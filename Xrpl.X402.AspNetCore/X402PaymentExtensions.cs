@@ -59,7 +59,13 @@ public static class X402PaymentExtensions
             }
 
             if (!settle.Success)
+            {
+                // The payer's funds may have moved: hand back the receipt that reconciles it.
+                if (settle.ErrorReason == "settlement_unknown")
+                    http.Response.Headers[X402Headers.PaymentResponse] = X402Base64Json.Encode(settle);
+
                 return Challenge(http, requirement);
+            }
 
             http.Response.Headers[X402Headers.PaymentResponse] = X402Base64Json.Encode(settle);
             return await next(ctx);

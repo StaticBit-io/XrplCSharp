@@ -42,21 +42,18 @@ public sealed class XrplWalletX402Signer : IX402Signer
             && autofilled.TryGetValue("LastLedgerSequence", out object? llsObj))
         {
             uint autofilledLls = Convert.ToUInt32(llsObj);
-            uint current = await GetCurrentLedgerIndexAsync(cancellationToken);
+            // GetLedgerIndex is the validated ledger; a transaction submitted now goes into the
+            // open one after it.
+            uint open = await _client.GetLedgerIndex(cancellationToken) + 1;
             const double secondsPerLedger = 4.0;
             uint ledgersForTimeout = (uint)Math.Max(1, Math.Ceiling(seconds / secondsPerLedger));
-            uint desired = current + ledgersForTimeout;
+            uint desired = open + ledgersForTimeout;
             uint capped = Math.Min(autofilledLls, desired);
-            if (capped < current + 1) capped = current + 1; // keep at least one ledger of validity
+            if (capped < open + 1) capped = open + 1; // keep at least one ledger of validity
             autofilled["LastLedgerSequence"] = capped;
         }
 
         SignatureResult sig = _wallet.Sign(autofilled);
         return sig.TxBlob;
-    }
-
-    private Task<uint> GetCurrentLedgerIndexAsync(CancellationToken cancellationToken)
-    {
-        return _client.GetLedgerIndex(cancellationToken);
     }
 }

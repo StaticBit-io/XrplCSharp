@@ -224,7 +224,7 @@ Console.WriteLine(info.Info.CompleteLedgers);
 
 - Клиент — на **публичный** WS-порт своей ноды; admin-порты только для эксплуатации
 - Проверяйте, что `complete_ledgers` покрывает запрашиваемый диапазон — `account_tx` за пределами окна хранения вернёт неполные данные; за глубокой историей — full-history провайдер или [Clio](https://github.com/XRPLF/clio)
-- `SubmitAndWait` опирается на `LastLedgerSequence` — его гарантии реальны только на здоровой синхронизированной ноде
+- `SubmitAndWait` опирается на `LastLedgerSequence` — его гарантии реальны только на здоровой синхронизированной ноде. Истечение (`TransactionExpiredException`) он сообщает, только когда у ноды есть все леджеры от отправки до `LastLedgerSequence`; при дыре в этом диапазоне или перезапуске внутри него исход остаётся неизвестным (`TransactionOutcomeUnknownException`), пока `WaitForTransactionOutcome` не вызван на ноде, у которой они есть
 
 ## Диагностика
 

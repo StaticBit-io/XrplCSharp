@@ -11,6 +11,8 @@ using Xrpl.Client;
 using Xrpl.Client.Exceptions;
 using Xrpl.Client.Json;
 using Xrpl.Models;
+using Xrpl.Models.Common;
+using Xrpl.Models.Ledger;
 using Xrpl.Models.Methods;
 using Xrpl.Models.Transactions;
 using Xrpl.Utils.Hashes;
@@ -66,6 +68,9 @@ public static class SubmitSugar
     /// <param name="failHard">If true, and the transaction fails locally, do not retry or relay the transaction to other servers.</param>
     /// <param name="wallet">A wallet to sign a transaction. It must be provided when submitting an unsigned transaction.</param>
     /// <returns>A promise that contains TxResponse, that will return when the transaction has been validated.</returns>
+    /// <remarks>
+    /// The outcomes, and what each means for submitting again, are those of <see cref="SubmitRequestAndWait"/>.
+    /// </remarks>
     public static Task<TransactionSummary> SubmitAndWait(
         this IXrplClient client,
         ITransactionRequest transaction,
@@ -85,6 +90,9 @@ public static class SubmitSugar
     /// <param name="failHard">If true, and the transaction fails locally, do not retry or relay the transaction to other servers.</param>
     /// <param name="wallet">A wallet to sign a transaction. It must be provided when submitting an unsigned transaction.</param>
     /// <returns>A promise that contains TxResponse, that will return when the transaction has been validated.</returns>
+    /// <remarks>
+    /// The outcomes, and what each means for submitting again, are those of <see cref="SubmitRequestAndWait"/>.
+    /// </remarks>
     public static async Task<TransactionSummary> SubmitAndWait(
         this IXrplClient client,
         Dictionary<string, object> transaction,
@@ -101,16 +109,30 @@ public static class SubmitSugar
                 "Transaction must contain a LastLedgerSequence value for reliable submission.");
         }
 
-        var response = await client.SubmitRequest(signedTx, failHard, cancellationToken);
-        var txHash = HashLedger.HashSignedTx(signedTx);
-        return await WaitForFinalTransactionOutcome(
-            client,
-            txHash,
-            lastLedger,
-            response.EngineResult,
-            cancellationToken);
+        return await SubmitSignedAndWait(client, signedTx, lastLedger.Value, failHard, cancellationToken);
     }
 
+    /// <summary>
+    /// Submits a signed transaction and waits until it is in a validated ledger or will never be.
+    /// </summary>
+    /// <remarks>
+    /// Outcomes, and what each means for submitting again:
+    /// <list type="bullet">
+    /// <item><description>a <see cref="TransactionSummary"/>: validated with <c>tesSUCCESS</c>;</description></item>
+    /// <item><description><see cref="TransactionFailedException"/>: final failure, applied with a <c>tec</c>
+    /// (<see cref="TransactionFailedException.ReachedLedger"/>) or refused by the node;</description></item>
+    /// <item><description><see cref="TransactionExpiredException"/>: never applied, a replacement is safe;</description></item>
+    /// <item><description><see cref="TransactionOutcomeUnknownException"/>: possibly applied, find out with
+    /// <see cref="WaitForTransactionOutcome"/> before sending a replacement. Any failure of the submit
+    /// request other than an error answer from the node ends here, with the cause inside;</description></item>
+    /// <item><description>an error answer to the submit request (<see cref="RippledException"/>), or any
+    /// failure before it - autofill, signing, reading the validated ledger: nothing was submitted.</description></item>
+    /// </list>
+    /// A cancelled <paramref name="cancellationToken"/> raises <see cref="OperationCanceledException"/>.
+    /// Once the submit request is sent it is a <see cref="TransactionWaitCanceledException"/>, whose
+    /// <c>Hash</c>, <c>LastLedgerSequence</c> and <c>MinLedger</c> resume the wait with
+    /// <see cref="WaitForTransactionOutcome"/>.
+    /// </remarks>
     public static async Task<TransactionSummary> SubmitRequestAndWait(this IXrplClient client, object signedTransaction, bool failHard, CancellationToken cancellationToken = default)
     {
         var signedTx = GetTxBlob(signedTransaction);
@@ -123,15 +145,181 @@ public static class SubmitSugar
                 "Transaction must contain a LastLedgerSequence value for reliable submission.");
         }
 
-        var response = await client.SubmitRequest(signedTx, failHard, cancellationToken);
-        var txHash = HashLedger.HashSignedTx(signedTx);
-        return await WaitForFinalTransactionOutcome(
-            client,
+        return await SubmitSignedAndWait(client, signedTx, lastLedger.Value, failHard, cancellationToken);
+    }
+
+    /// <summary>
+    /// Waits for a transaction that was already submitted until it is in a validated ledger or will
+    /// never be, without submitting it again.
+    /// </summary>
+    /// <remarks>
+    /// For a transaction whose submission was interrupted - a crash, a timeout, a
+    /// <see cref="TransactionOutcomeUnknownException"/>. The outcomes are those of
+    /// <see cref="SubmitRequestAndWait"/>. A <see cref="TransactionExpiredException"/> needs a
+    /// server that holds every ledger from <paramref name="minLedger"/> to
+    /// <paramref name="lastLedgerSequence"/>.
+    /// </remarks>
+    /// <param name="client">A Client.</param>
+    /// <param name="txHash">The transaction's hash.</param>
+    /// <param name="lastLedgerSequence">The transaction's <c>LastLedgerSequence</c>.</param>
+    /// <param name="minLedger">The ledger validated before the transaction was first submitted.</param>
+    /// <param name="cancellationToken">Stops waiting.</param>
+    public static Task<TransactionSummary> WaitForTransactionOutcome(
+        this IXrplClient client,
+        string txHash,
+        uint lastLedgerSequence,
+        uint minLedger,
+        CancellationToken cancellationToken = default)
+    {
+        if (client == null)
+            throw new ArgumentNullException(nameof(client));
+        if (string.IsNullOrWhiteSpace(txHash))
+            throw new ArgumentException("A transaction hash is required.", nameof(txHash));
+
+        return WaitForFinalTransactionOutcome(
+            Lookup(client),
+            client.GetLedgerIndex,
+            LedgerHoldsTransaction(client, txHash),
             txHash,
-            lastLedger,
-            response.EngineResult,
+            lastLedgerSequence,
+            minLedger,
+            submissionResult: null,
+            failHard: false,
+            TimeSpan.FromMilliseconds(LEDGER_CLOSE_TIME),
             cancellationToken);
     }
+
+    private static async Task<TransactionSummary> SubmitSignedAndWait(
+        IXrplClient client,
+        string signedTx,
+        uint lastLedger,
+        bool failHard,
+        CancellationToken cancellationToken)
+    {
+        string txHash = HashLedger.HashSignedTx(signedTx);
+
+        // Read before anything is sent, so a failure here still means nothing was submitted. The
+        // transaction cannot be in this ledger or an earlier one, which bounds the search for it.
+        uint minLedger = await client.GetLedgerIndex(cancellationToken);
+
+        Submit response = await SubmitTracked(
+            token => client.SubmitRequest(signedTx, failHard, token),
+            txHash,
+            lastLedger,
+            minLedger,
+            cancellationToken);
+
+        return await WaitForFinalTransactionOutcome(
+            Lookup(client),
+            client.GetLedgerIndex,
+            LedgerHoldsTransaction(client, txHash),
+            txHash,
+            lastLedger,
+            minLedger,
+            response.EngineResult,
+            failHard,
+            TimeSpan.FromMilliseconds(LEDGER_CLOSE_TIME),
+            cancellationToken);
+    }
+
+    /// <summary>
+    /// Sends the submit request. A failure after which the transaction may be on the network
+    /// becomes <see cref="TransactionOutcomeUnknownException"/>, or
+    /// <see cref="TransactionWaitCanceledException"/> when the caller cancelled; the rest
+    /// propagates as it is.
+    /// </summary>
+    internal static async Task<Submit> SubmitTracked(
+        Func<CancellationToken, Task<Submit>> submit,
+        string txHash,
+        uint lastLedgerSequence,
+        uint minLedger,
+        CancellationToken cancellationToken)
+    {
+        try
+        {
+            return await submit(cancellationToken);
+        }
+        catch (OperationCanceledException ex) when (cancellationToken.IsCancellationRequested)
+        {
+            throw Canceled(ex, txHash, lastLedgerSequence, minLedger, preliminaryResult: null, cancellationToken);
+        }
+        catch (Exception ex) when (!WasNotSubmitted(ex))
+        {
+            throw new TransactionOutcomeUnknownException(
+                $"Submitting transaction {txHash} failed after it may have reached the network: {ex.Message}",
+                txHash,
+                lastLedgerSequence,
+                minLedger,
+                preliminaryResult: null,
+                ex);
+        }
+    }
+
+    private static TransactionWaitCanceledException Canceled(
+        OperationCanceledException cancellation,
+        string txHash,
+        uint lastLedgerSequence,
+        uint minLedger,
+        string preliminaryResult,
+        CancellationToken cancellationToken) =>
+        new TransactionWaitCanceledException(
+            $"Cancelled while transaction {txHash} may already be on the network.",
+            txHash,
+            lastLedgerSequence,
+            minLedger,
+            preliminaryResult,
+            cancellation,
+            cancellationToken);
+
+    /// <summary>
+    /// Whether a failed submit request certainly left nothing on the network.
+    /// </summary>
+    /// <remarks>
+    /// Only an error answer from the node is certain: it refused the request. The connection
+    /// rejects a request it already wrote to the socket with the same types it uses for one it
+    /// never sent - <see cref="DisconnectedException"/> on a close, the not-connected family when
+    /// a reconnect gives up - so none of those tells the two apart. Nor does an <c>internal</c>
+    /// error: rippled answers <c>internalSubmit</c> when processing the transaction throws, and
+    /// <c>internalJson</c> after it was processed.
+    /// </remarks>
+    internal static bool WasNotSubmitted(Exception exception) =>
+        exception is RippledException rippled
+        && !(rippled.Response?.Error?.StartsWith("internal", StringComparison.Ordinal) ?? false);
+
+    private static Func<TxRequest, CancellationToken, Task<TransactionSummary>> Lookup(IXrplClient client) =>
+        (request, cancellationToken) => client.TxV2(request, cancellationToken).Typed();
+
+    /// <summary>
+    /// Whether validated ledger <c>index</c> holds the transaction; <c>null</c> when the server
+    /// does not have that ledger validated.
+    /// </summary>
+    private static Func<uint, CancellationToken, Task<bool?>> LedgerHoldsTransaction(IXrplClient client, string txHash) =>
+        async (index, cancellationToken) =>
+        {
+            LOLedger response;
+            try
+            {
+                response = await client.Ledger(
+                    new LedgerRequest { LedgerIndex = new LedgerIndex(index), Transactions = true, Expand = false },
+                    cancellationToken).Typed();
+            }
+            catch (RippledException)
+            {
+                // lgrNotFound and its kin: the server does not hold this ledger.
+                return null;
+            }
+
+            if (!response.Validated || response.LedgerEntity is not LedgerEntity ledger || ledger.Transactions == null)
+                return null;
+
+            foreach (HashOrTransaction transaction in ledger.Transactions)
+            {
+                if (string.Equals(transaction?.TransactionHash, txHash, StringComparison.OrdinalIgnoreCase))
+                    return true;
+            }
+
+            return false;
+        };
     /// <summary>
     /// Encodes and submits a signed transaction.
     /// </summary>
@@ -408,108 +596,307 @@ public static class SubmitSugar
     }
 
     /// <summary>
-    /// The core logic of reliable submission.This polls the ledger until the result of the
-    /// transaction can be considered final, meaning it has either been included in a
-    /// validated ledger, or the transaction's lastLedgerSequence has been surpassed by the
-    /// latest ledger sequence (meaning it will never be included in a validated ledger).
+    /// The core of reliable submission: polls until the transaction is in a validated ledger, or
+    /// it is certain it never will be, or that cannot be told.
     /// </summary>
-    /// <param name="client"></param>
-    /// <param name="txHash"></param>
-    /// <param name="lastLedgerSequence"></param>
-    /// <param name="submissionResult"></param>
-    /// <returns></returns>
-    /// <exception cref="ValidationException"></exception>
-    private static async Task<TransactionSummary> WaitForFinalTransactionOutcome(
-        this IXrplClient client,
+    /// <remarks>
+    /// <para>
+    /// The provisional result of the submission is final only for a <c>tem</c>, which no ledger
+    /// accepts. Without <paramref name="failHard"/> rippled holds a locally submitted transaction
+    /// whatever its <c>ter</c>, <c>tef</c> or <c>tel</c>, retries it in later ledgers until its
+    /// <c>LastLedgerSequence</c>, and relays it when it is not in full mode; a <c>tec</c> was
+    /// applied to the open ledger. All of those are waited for. Under <paramref name="failHard"/>
+    /// a result other than <c>tesSUCCESS</c> or <c>terQUEUED</c> is neither applied, held nor
+    /// relayed, so the transaction can reach a ledger only through an earlier submission of the
+    /// same blob: it is looked up once and followed if found. <c>tefALREADY</c>,
+    /// <c>tefPAST_SEQ</c> and <c>tefNO_TICKET</c> are the exception, since that earlier
+    /// submission may be what they report, and are waited for as well.
+    /// </para>
+    /// <para>
+    /// The lookup asks for the range <paramref name="minLedger"/> to
+    /// <paramref name="lastLedgerSequence"/>. A <c>txnNotFound</c> with <c>searched_all</c> true
+    /// proves that the transaction is in none of those ledgers and that all of them are validated.
+    /// rippled counts only the ledgers that hold a transaction, though, so a range with an empty
+    /// ledger - common on a quiet network - never gets that answer. Once the validated ledger is
+    /// past <paramref name="lastLedgerSequence"/>, the ledgers of the range are then read one by
+    /// one: a validated ledger whose transactions do not include the hash proves the same for that
+    /// ledger, from whichever server answers.
+    /// </para>
+    /// <para>
+    /// Without either proof the wait goes on, and gives up as unknown once the validated ledger is
+    /// <see cref="LedgersPastExpiryBeforeUnknown"/> past the last one. A transaction applied
+    /// before <paramref name="minLedger"/> by an earlier submission is found by its hash only if the
+    /// server holds that ledger. A server whose validated ledger stops advancing keeps the wait
+    /// going until <paramref name="cancellationToken"/> ends it.
+    /// </para>
+    /// </remarks>
+    internal static async Task<TransactionSummary> WaitForFinalTransactionOutcome(
+        Func<TxRequest, CancellationToken, Task<TransactionSummary>> lookup,
+        Func<CancellationToken, Task<uint>> validatedLedgerIndex,
+        Func<uint, CancellationToken, Task<bool?>> ledgerHoldsTransaction,
         string txHash,
-        uint? lastLedgerSequence,
+        uint lastLedgerSequence,
+        uint minLedger,
         string submissionResult,
-        CancellationToken cancellationToken = default)
+        bool failHard,
+        TimeSpan pollInterval,
+        CancellationToken cancellationToken)
     {
+        try
+        {
+            return await PollForOutcome(
+                lookup, validatedLedgerIndex, ledgerHoldsTransaction, txHash, lastLedgerSequence, minLedger,
+                submissionResult, failHard, pollInterval, cancellationToken);
+        }
+        catch (OperationCanceledException ex) when (cancellationToken.IsCancellationRequested && ex is not TransactionWaitCanceledException)
+        {
+            // Everything the wait does follows the submission: the transaction may be on the network.
+            throw Canceled(ex, txHash, lastLedgerSequence, minLedger, submissionResult, cancellationToken);
+        }
+    }
+
+    private static async Task<TransactionSummary> PollForOutcome(
+        Func<TxRequest, CancellationToken, Task<TransactionSummary>> lookup,
+        Func<CancellationToken, Task<uint>> validatedLedgerIndex,
+        Func<uint, CancellationToken, Task<bool?>> ledgerHoldsTransaction,
+        string txHash,
+        uint lastLedgerSequence,
+        uint minLedger,
+        string submissionResult,
+        bool failHard,
+        TimeSpan pollInterval,
+        CancellationToken cancellationToken)
+    {
+        if (submissionResult != null && submissionResult.StartsWith("tem", StringComparison.Ordinal))
+        {
+            throw new TransactionFailedException(
+                $"Final tx result is not success: {submissionResult}",
+                engineResult: submissionResult,
+                hash: txHash);
+        }
+
+        bool notHeld = IsNeitherAppliedNorHeld(submissionResult, failHard);
+        bool rangeReadable = minLedger <= lastLedgerSequence && lastLedgerSequence - minLedger < MaxLedgersToRead;
+
+        // Ledgers below this one are proven not to hold the transaction; a validated ledger never
+        // changes, so none of them is read twice.
+        uint firstUnread = minLedger;
+
+        uint lastValidated = 0;
+        int stalledPolls = 0;
+
         while (true)
         {
             cancellationToken.ThrowIfCancellationRequested();
 
-            // Wait for the next ledger to close
-            await Task.Delay(LEDGER_CLOSE_TIME, cancellationToken);
+            // A transaction refused outright is looked up at once: waiting cannot bring it in.
+            if (!notHeld)
+                await Task.Delay(pollInterval, cancellationToken);
 
-            TransactionSummary txResponse;
-
+            TransactionSummary found = null;
+            bool? searchedAll = null;
             try
             {
-                txResponse = await client.TxV2(
-                    new TxRequest(txHash)
-                    {
-                        ApiVersion = 2,
-                    }, cancellationToken).Typed();
+                found = await lookup(LookupRequest(txHash, minLedger, lastLedgerSequence), cancellationToken);
             }
             catch (RippledException ex) when (ex.Response?.Error == XrplErrorCodes.TxnNotFound)
             {
-            	// With a LastLedgerSequence already stepped past, the transaction cannot reach a ledger
-                var latestLedger = await client.GetLedgerIndex(cancellationToken);
-                if (lastLedgerSequence.HasValue && latestLedger > lastLedgerSequence.Value)
-                {
-                    throw new ValidationException(
-                        $"Transaction {txHash} has expired. " +
-                        $"Latest ledger: {latestLedger}, LastLedgerSequence: {lastLedgerSequence}. " +
-                        $"Preliminary result: {submissionResult}");
-                }
-                continue;
+                searchedAll = ex.Response.SearchedAll;
             }
-            catch (RippledException)
+            catch (Exception ex) when (!IsCallerCancellation(ex, cancellationToken))
             {
-                throw;
-            }
-            catch (Exception ex)
-            {
-                throw new XrplException(
-                    $"Unexpected error while waiting for transaction {txHash}.\n" +
-                    $"Preliminary result: {submissionResult}.\n" +
-                    $"Details: {ex.Message}", ex);
+                throw Unknown($"Looking up transaction {txHash} failed: {ex.Message}", ex);
             }
 
-            if (txResponse.Validated == true)
+            if (found != null)
             {
-                string txResult = txResponse.Meta?.TransactionResult;
-                if (txResult != null && !txResult.StartsWith("tes") && txResult != "terQUEUED")
-                {
-                    // Applied to a ledger: the fee was taken and there is a transaction to look up,
-                    // so the summary travels with the failure. The message is unchanged - what a
-                    // caller needs in order to act sits beside it, not inside it.
-                    throw new TransactionFailedException(
-                        $"Final tx result is not success: {txResult}",
-                        engineResult: txResult,
-                        hash: txHash,
-                        result: txResponse);
-                }
-                return txResponse;
-            }
+                if (found.Validated == true)
+                    return Final(found, txHash);
 
-            if (submissionResult != "tesSUCCESS" && submissionResult != "terQUEUED")
+                if (notHeld)
+                {
+                    // In a ledger or the node's cache, whatever the submission said: follow it.
+                    notHeld = false;
+                    continue;
+                }
+            }
+            else if (notHeld)
             {
-                // Reached when the transaction is not validated yet and the node's provisional
-                // answer was already a failure. Final enough to stop waiting on - but not all the
-                // same kind of failure: a tem or a tef never reaches a ledger and costs nothing,
-                // while a tec was applied and the fee is gone, it simply has not been validated at
-                // the moment this is noticed. Hence no summary here for either, and hence
-                // ReachedLedger reading the code rather than the absence of one.
+                // Neither applied nor held: under fail_hard rippled discards even a tec, fee and all.
                 throw new TransactionFailedException(
                     $"Final tx result is not success: {submissionResult}",
                     engineResult: submissionResult,
-                    hash: txHash);
+                    hash: txHash,
+                    reachedLedger: false);
+            }
+            else if (searchedAll == true)
+            {
+                throw NeverApplied($"it is in none of ledgers {minLedger} to {lastLedgerSequence}, all of them validated (searched_all)", searchedAllProof: true);
             }
 
-            // Neither validated nor txnNotFound - keep waiting, after checking the current ledger
-            var currentLedger = await client.GetLedgerIndex(cancellationToken);
-            if (lastLedgerSequence.HasValue && currentLedger > lastLedgerSequence.Value)
+            uint validated;
+            try
             {
-                throw new ValidationException(
-                    $"Transaction {txHash} has expired. " +
-                    $"Latest ledger: {currentLedger}, LastLedgerSequence: {lastLedgerSequence}. " +
-                    $"Preliminary result: {submissionResult}");
+                validated = await validatedLedgerIndex(cancellationToken);
+            }
+            catch (Exception ex) when (!IsCallerCancellation(ex, cancellationToken))
+            {
+                throw Unknown($"Reading the validated ledger while waiting for transaction {txHash} failed: {ex.Message}", ex);
+            }
+
+            // A server that keeps answering while its validated ledger stands still - a lost
+            // validator quorum - would otherwise be polled for ever.
+            stalledPolls = validated == lastValidated ? stalledPolls + 1 : 0;
+            lastValidated = validated;
+            if (stalledPolls >= ValidatedStallPollsBeforeUnknown)
+            {
+                throw Unknown(
+                    $"The server's validated ledger has stayed at {validated} for {stalledPolls} polls while waiting for transaction {txHash}.",
+                    null);
+            }
+
+            if (validated <= lastLedgerSequence)
+                continue;
+
+            // A transaction found unvalidated counts too: a held one stays in the node's cache
+            // after its LastLedgerSequence, reported unvalidated, though no ledger can take it.
+            bool? holds = null;
+            if (rangeReadable)
+            {
+                try
+                {
+                    while (firstUnread <= lastLedgerSequence)
+                    {
+                        holds = await ledgerHoldsTransaction(firstUnread, cancellationToken);
+                        if (holds != false)
+                            break;
+                        firstUnread++;
+                    }
+                }
+                catch (Exception ex) when (!IsCallerCancellation(ex, cancellationToken))
+                {
+                    throw Unknown($"Reading ledger {firstUnread} while waiting for transaction {txHash} failed: {ex.Message}", ex);
+                }
+
+                if (firstUnread > lastLedgerSequence)
+                {
+                    throw NeverApplied(
+                        $"it is in none of ledgers {minLedger} to {lastLedgerSequence}, each read validated",
+                        searchedAllProof: false);
+                }
+            }
+
+            if (validated > lastLedgerSequence + LedgersPastExpiryBeforeUnknown)
+            {
+                throw Unknown(
+                    holds == true
+                        ? $"Validated ledger {firstUnread} holds transaction {txHash}, but looking it up does not return it."
+                        : rangeReadable
+                            ? $"Transaction {txHash} is not validated, and ledger {firstUnread}, between {minLedger} and its LastLedgerSequence {lastLedgerSequence}, is not available validated from the server."
+                            : $"Transaction {txHash} is not validated, and ledgers {minLedger} to {lastLedgerSequence} are too many to read one by one.",
+                    null);
             }
         }
+
+        // The range proves the transaction never applied only when it can hold every ledger the
+        // transaction could be in. A result saying the blob or its sequence was already used
+        // points at an earlier submission, possibly in a ledger before the range.
+        Exception NeverApplied(string reason, bool searchedAllProof) =>
+            MayReportAnEarlierCopy(submissionResult)
+                ? Unknown(
+                    $"Transaction {txHash} is in none of ledgers {minLedger} to {lastLedgerSequence}, but {submissionResult} says this blob or its sequence " +
+                    "was already used, possibly by an earlier submission applied before them.",
+                    null)
+                : new TransactionExpiredException(
+                    $"Transaction {txHash} has expired: {reason}. Preliminary result: {submissionResult ?? "none"}",
+                    txHash,
+                    lastLedgerSequence,
+                    minLedger,
+                    submissionResult,
+                    searchedAllProof);
+
+        TransactionOutcomeUnknownException Unknown(string message, Exception inner) =>
+            new TransactionOutcomeUnknownException(
+                message + $" Preliminary result: {submissionResult ?? "none"}.",
+                txHash,
+                lastLedgerSequence,
+                minLedger,
+                submissionResult,
+                inner);
     }
+
+    /// <summary>
+    /// How many ledgers past <c>LastLedgerSequence</c> the validated ledger may get while neither
+    /// proof is in: the server fills recent gaps on its own, a lasting one is reported as unknown.
+    /// </summary>
+    internal const uint LedgersPastExpiryBeforeUnknown = 5;
+
+    /// <summary>
+    /// How many polls in a row the validated ledger may stay where it is before the wait gives up
+    /// as unknown: about a minute, where a healthy network validates a ledger every few seconds.
+    /// </summary>
+    internal const int ValidatedStallPollsBeforeUnknown = 60;
+
+    /// <summary>
+    /// The most ledgers the range is read one by one for. Autofill leaves 20 between the ledger
+    /// validated at submission and <c>LastLedgerSequence</c>; a far wider window is left to
+    /// <c>searched_all</c>.
+    /// </summary>
+    internal const uint MaxLedgersToRead = 256;
+
+    /// <summary>The widest <c>min_ledger</c>..<c>max_ledger</c> range rippled searches (<c>kMaxRange</c>).</summary>
+    private const uint MaxLookupRange = 1000;
+
+    private static TxRequest LookupRequest(string txHash, uint minLedger, uint lastLedgerSequence)
+    {
+        TxRequest request = new TxRequest(txHash) { ApiVersion = 2 };
+        if (minLedger <= lastLedgerSequence && lastLedgerSequence - minLedger <= MaxLookupRange)
+        {
+            request.MinLedger = minLedger;
+            request.MaxLedger = lastLedgerSequence;
+        }
+
+        return request;
+    }
+
+    private static TransactionSummary Final(TransactionSummary validated, string txHash)
+    {
+        string txResult = validated.Meta?.TransactionResult;
+        if (txResult != null && txResult != "tesSUCCESS")
+        {
+            // Applied to a ledger: the fee was taken and there is a transaction to look up, so the
+            // summary travels with the failure.
+            throw new TransactionFailedException(
+                $"Final tx result is not success: {txResult}",
+                engineResult: txResult,
+                hash: txHash,
+                result: validated);
+        }
+
+        return validated;
+    }
+
+    /// <summary>
+    /// Whether, under <c>fail_hard</c>, the node neither applied, held nor relayed the transaction:
+    /// any result but <c>tesSUCCESS</c> and <c>terQUEUED</c>, except the ones an earlier submission
+    /// of the same blob can cause.
+    /// </summary>
+    private static bool IsNeitherAppliedNorHeld(string submissionResult, bool failHard) =>
+        failHard
+        && submissionResult != null
+        && submissionResult != "tesSUCCESS"
+        && submissionResult != "terQUEUED"
+        && !MayReportAnEarlierCopy(submissionResult);
+
+    /// <summary>
+    /// Whether the result says this blob, or the sequence or ticket it uses, was already consumed -
+    /// which an earlier submission of the same blob can have done.
+    /// </summary>
+    private static bool MayReportAnEarlierCopy(string submissionResult) =>
+        submissionResult is "tefALREADY" or "tefPAST_SEQ" or "tefNO_TICKET";
+
+    private static bool IsCallerCancellation(Exception exception, CancellationToken cancellationToken) =>
+        exception is OperationCanceledException && cancellationToken.IsCancellationRequested;
 
     /// <summary>
     /// Initializes a transaction for a submit request
