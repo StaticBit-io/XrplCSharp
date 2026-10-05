@@ -43,10 +43,6 @@ public class TestITypedSubmitFailure
     /// the node answers with <c>tecNO_DST_INSUF_XRP</c>: applied, fee taken, and there in the
     /// ledger to be looked up. That is exactly the case where the caller has something to show and
     /// used to have only a sentence to parse.
-    /// <para>
-    /// Which moment reports it is a race with ledger closing, and the assertions below are chosen
-    /// to be true at both: see the note beside them.
-    /// </para>
     /// </remarks>
     [TestMethod]
     public async Task TestIAFailureInALedgerArrivesTyped()
@@ -73,20 +69,13 @@ public class TestITypedSubmitFailure
             string.IsNullOrEmpty(error.Hash),
             "Without the hash there is no way to show the transaction that just cost a fee.");
 
-        // Result is deliberately not asserted to be present. The same failure is reported at one of
-        // two moments depending on whether the ledger closed before the first poll: after
-        // validation, with the metadata, or earlier from the node's provisional answer, when only
-        // the code and the hash exist. Requiring the summary here would make this test a race with
-        // ledger timing. What can be required is that it does not contradict the code when it is
-        // there - and that ReachedLedger says the same thing either way, which is why it is read
-        // from the code rather than from this.
-        if (error.Result is not null)
-        {
-            Assert.AreEqual(
-                "tecNO_DST_INSUF_XRP",
-                error.Result.Meta?.TransactionResult,
-                "The metadata that came with it must be the same outcome, not a second story.");
-        }
+        // A tec is reported once validated (issue #266), so the summary is always there. It used to
+        // race the first poll: a provisional tec was reported before the ledger closed, without it.
+        Assert.IsNotNull(error.Result, "A tec is reported from the validated ledger, with its metadata.");
+        Assert.AreEqual(
+            "tecNO_DST_INSUF_XRP",
+            error.Result.Meta?.TransactionResult,
+            "The metadata that came with it must be the same outcome, not a second story.");
     }
 
     /// <summary>

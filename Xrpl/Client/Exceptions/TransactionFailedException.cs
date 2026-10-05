@@ -44,10 +44,9 @@ namespace Xrpl.Client.Exceptions
         /// back yet.
         /// </summary>
         /// <remarks>
-        /// Absent for a failure the node refused before a ledger, which is what one would expect,
-        /// and absent as well when a <c>tec</c> was reported from the provisional answer before the
-        /// ledger closed. Use <see cref="ReachedLedger"/> to tell whether the fee was taken;
-        /// <see cref="Hash"/> is there in every case.
+        /// Absent for a failure the node refused before a ledger. A <c>tec</c> is reported once it
+        /// is validated, so it carries one. Use <see cref="ReachedLedger"/> to tell whether the fee
+        /// was taken; <see cref="Hash"/> is there in every case.
         /// </remarks>
         public TransactionSummary Result { get; }
 
@@ -62,15 +61,10 @@ namespace Xrpl.Client.Exceptions
         /// the same kind of failure and are not the same event.
         /// </para>
         /// <para>
-        /// Read from the result code rather than from whether <see cref="Result"/> happens to be
-        /// here, because the same failure can be reported at two moments: once the transaction is
-        /// validated, with its metadata, or earlier from the node's provisional answer, when only
-        /// the code and the hash exist yet. A <c>tec</c> means applied either way, and which of the
-        /// two moments won a race is not something a caller should have to think about.
-        /// </para>
-        /// <para>
-        /// So <see cref="Result"/> can be <c>null</c> while this is <c>true</c>. The hash is
-        /// present in both cases, and the hash is what an explorer needs.
+        /// Read from the result code, so it holds for an exception built from a code alone: a
+        /// <c>tec</c> means applied whether or not <see cref="Result"/> is here. Reliable submission
+        /// reports a <c>tec</c> once validated, with its metadata, and the hash is present in every
+        /// case - the hash is what an explorer needs.
         /// </para>
         /// </remarks>
         public bool ReachedLedger =>
