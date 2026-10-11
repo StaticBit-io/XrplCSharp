@@ -373,8 +373,8 @@ namespace XrplTests.Xrpl.Models
                 ""Account"": ""rME8MrCTc1eCn3cs2HhnzfgJWuJnRNWenK"",
                 ""OracleDocumentID"": 12345,
                 ""LastUpdateTime"": 1715097600,
-                ""Provider"": ""MultiProvider"",
-                ""AssetClass"": ""currency"",
+                ""Provider"": ""4D756C746950726F7669646572"",
+                ""AssetClass"": ""63757272656E6379"",
                 ""Fee"": ""12"",
                 ""Sequence"": 1,
                 ""PriceDataSeries"": [

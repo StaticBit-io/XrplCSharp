@@ -166,9 +166,9 @@ public class TestIOracle
         var oracle = response?.AccountObjectList?.OfType<LOOracle>().FirstOrDefault();
         Assert.IsNotNull(oracle, "the Oracle object must deserialize from the node response");
 
-        Assert.AreEqual("RoundTripProvider", oracle.Provider, "Provider must decode back to the original text");
-        Assert.AreEqual("currency", oracle.AssetClass, "AssetClass must decode back to the original text");
-        Assert.AreEqual("https://example.com/oracle", oracle.URI, "URI must decode back to the original text");
+        Assert.AreEqual(OracleBlob.FromText("RoundTripProvider"), oracle.Provider, "Provider must read back as the bytes written");
+        Assert.AreEqual(OracleBlob.FromText("currency"), oracle.AssetClass, "AssetClass must read back as the bytes written");
+        Assert.AreEqual(OracleBlob.FromText("https://example.com/oracle"), oracle.URI, "URI must read back as the bytes written");
 
         Assert.IsNotNull(oracle.PriceDataSeries);
         var quoteAssets = oracle.PriceDataSeries.Select(w => w.PriceData?.QuoteAsset).ToList();

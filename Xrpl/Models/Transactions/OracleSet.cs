@@ -36,23 +36,24 @@ namespace Xrpl.Models.Transactions
 
         /// <summary>
         /// An arbitrary value that identifies an oracle provider, such as Chainlink, Band,
-        /// or DIA. This field is a string, up to 256 ASCII hex encoded characters (0x20-0x7E).
+        /// or DIA: up to 256 bytes, conventionally printable ASCII text. A string assigned to it is
+        /// taken as text; bytes are given through <see cref="OracleBlob.FromHex"/>.
         /// This field is required when creating a new Oracle ledger entry, but is optional for updates.
         /// </summary>
-        string Provider { get; set; }
+        OracleBlob Provider { get; set; }
 
         /// <summary>
         /// An optional Universal Resource Identifier to reference price data off-chain.
         /// This field is limited to 256 bytes.
         /// </summary>
-        string URI { get; set; }
+        OracleBlob URI { get; set; }
 
         /// <summary>
         /// Describes the type of asset, such as "currency", "commodity", or "index".
-        /// This field is a string, up to 16 ASCII hex encoded characters (0x20-0x7E).
+        /// Up to 16 bytes, conventionally printable ASCII text.
         /// This field is required when creating a new Oracle ledger entry, but is optional for updates.
         /// </summary>
-        string AssetClass { get; set; }
+        OracleBlob AssetClass { get; set; }
     }
 
     /// <inheritdoc cref="IOracleSet" />
@@ -81,18 +82,15 @@ namespace Xrpl.Models.Transactions
 
         /// <inheritdoc />
         [JsonPropertyName("Provider")]
-        [JsonConverter(typeof(OracleHexStringConverter))]
-        public string Provider { get; set; }
+        public OracleBlob Provider { get; set; }
 
         /// <inheritdoc />
         [JsonPropertyName("URI")]
-        [JsonConverter(typeof(OracleHexStringConverter))]
-        public string URI { get; set; }
+        public OracleBlob URI { get; set; }
 
         /// <inheritdoc />
         [JsonPropertyName("AssetClass")]
-        [JsonConverter(typeof(OracleHexStringConverter))]
-        public string AssetClass { get; set; }
+        public OracleBlob AssetClass { get; set; }
     }
 
     /// <inheritdoc cref="IOracleSet" />
@@ -113,18 +111,15 @@ namespace Xrpl.Models.Transactions
 
         /// <inheritdoc />
         [JsonPropertyName("Provider")]
-        [JsonConverter(typeof(OracleHexStringConverter))]
-        public string Provider { get; set; }
+        public OracleBlob Provider { get; set; }
 
         /// <inheritdoc />
         [JsonPropertyName("URI")]
-        [JsonConverter(typeof(OracleHexStringConverter))]
-        public string URI { get; set; }
+        public OracleBlob URI { get; set; }
 
         /// <inheritdoc />
         [JsonPropertyName("AssetClass")]
-        [JsonConverter(typeof(OracleHexStringConverter))]
-        public string AssetClass { get; set; }
+        public OracleBlob AssetClass { get; set; }
     }
 
     public partial class Validation
