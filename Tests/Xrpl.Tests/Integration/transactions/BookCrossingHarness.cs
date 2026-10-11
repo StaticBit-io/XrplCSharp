@@ -71,7 +71,7 @@ internal sealed class BookCrossingHarness
         return result;
     }
 
-    /// <summary>A credential of <paramref name="type"/> for <paramref name="subject"/>, accepted by it unless told otherwise.</summary>
+    /// <summary>A credential of <paramref name="type"/> (text) for <paramref name="subject"/>, accepted by it unless told otherwise.</summary>
     internal async Task Credential(XrplWallet issuer, XrplWallet subject, string type, uint? expiration = null, bool accept = true)
     {
         await Submit(
@@ -79,12 +79,12 @@ internal sealed class BookCrossingHarness
             {
                 Account = issuer.ClassicAddress,
                 Subject = subject.ClassicAddress,
-                CredentialType = type,
+                CredentialType = HexType(type),
                 Expiration = expiration is { } seconds ? RippleEpoch.AddSeconds(seconds) : null,
             },
             issuer);
         if (accept)
-            await Submit(new CredentialAccept { Account = subject.ClassicAddress, Issuer = issuer.ClassicAddress, CredentialType = type }, subject);
+            await Submit(new CredentialAccept { Account = subject.ClassicAddress, Issuer = issuer.ClassicAddress, CredentialType = HexType(type) }, subject);
     }
 
     /// <summary>A permissioned domain owned by <paramref name="owner"/>, accepting the credentials given; returns its DomainID.</summary>
@@ -95,7 +95,7 @@ internal sealed class BookCrossingHarness
             {
                 Account = owner.ClassicAddress,
                 AcceptedCredentials = accepted
-                    .Select(a => new AcceptedCredentialWrapper { Credential = new AcceptedCredential { Issuer = a.Issuer.ClassicAddress, CredentialType = a.Type } })
+                    .Select(a => new AcceptedCredentialWrapper { Credential = new AcceptedCredential { Issuer = a.Issuer.ClassicAddress, CredentialType = HexType(a.Type) } })
                     .ToList(),
             },
             owner);
