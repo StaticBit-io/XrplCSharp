@@ -7,6 +7,7 @@ using System.Text.Json.Serialization;
 
 using Xrpl.Client.Json;
 using Xrpl.Client.Json.Converters;
+using Xrpl.Models.Common;
 
 using XrplTests;
 
@@ -164,21 +165,23 @@ public class TestUOracleCurrencyConverter
 }
 
 [TestClass]
-public class TestUOracleHexStringConverter
+public class TestUOracleBlobConverter
 {
     private class Model
     {
-        [JsonConverter(typeof(OracleHexStringConverter))]
-        public string Provider { get; set; }
+        public OracleBlob Provider { get; set; }
     }
 
+    private static Model Read(string json) => JsonSerializer.Deserialize<Model>(json, XrplJsonOptions.Default);
+
+    private static string Write(Model model) => JsonSerializer.Serialize(model, XrplJsonOptions.Default);
+
     [TestMethod]
-    public void Read_HexEncoded_DecodesToAscii()
+    public void Read_PrintableHex_IsText()
     {
-        // "test" in hex = 74657374
-        string json = "{\"Provider\": \"74657374\"}";
-        Model result = JsonSerializer.Deserialize<Model>(json, XrplJsonOptions.Default);
-        Assert.AreEqual("test", result.Provider);
+        Model result = Read("{\"Provider\": \"74657374\"}");
+        Assert.IsTrue(result.Provider.TryGetText(out string text));
+        Assert.AreEqual("test", text);
     }
 
     /// <summary>
@@ -188,69 +191,107 @@ public class TestUOracleHexStringConverter
     /// third-party oracle made a ledger_data page from devnet unreadable.
     /// </summary>
     [TestMethod]
-    public void Read_HexDecodedNonPrintable_ReturnsHexUnchanged()
+    public void Read_NonPrintableHex_KeepsBytes()
     {
-        string json = "{\"Provider\": \"01\"}";
-        Model result = JsonSerializer.Deserialize<Model>(json, XrplJsonOptions.Default);
-        Assert.AreEqual("01", result.Provider);
+        Model result = Read("{\"Provider\": \"C328FF\"}");
+        CollectionAssert.AreEqual(new byte[] { 0xC3, 0x28, 0xFF }, result.Provider.ToArray());
+        Assert.IsFalse(result.Provider.TryGetText(out string text));
+        Assert.IsNull(text);
+    }
+
+    /// <summary>
+    /// The text "C328FF" and the bytes C3 28 FF were one model value, and both were written as
+    /// the hex digits encoded as text (#272).
+    /// </summary>
+    [DataTestMethod]
+    [DataRow("70726F7669646572")]
+    [DataRow("C328FF")]
+    [DataRow("433332384646")]
+    [DataRow("01")]
+    [DataRow("")]
+    public void RoundTrip_WritesTheBytesRead(string hex)
+    {
+        string written = Write(Read($"{{\"Provider\": \"{hex}\"}}"));
+        Assert.AreEqual($"{{\"Provider\":\"{hex}\"}}", written);
     }
 
     [TestMethod]
-    public void Read_NonAsciiPlainText_ReturnsAsIs()
+    public void RoundTrip_LowercaseHex_WritesUppercase()
     {
-        string json = JsonSerializer.Serialize(new Dictionary<string, string> { ["Provider"] = "\u0001\u0002x" });
-        Model result = JsonSerializer.Deserialize<Model>(json, XrplJsonOptions.Default);
-        Assert.AreEqual("\u0001\u0002x", result.Provider);
+        Assert.AreEqual("{\"Provider\":\"C328FF\"}", Write(Read("{\"Provider\": \"c328ff\"}")));
+    }
+
+    [TestMethod]
+    public void Read_TextAndBytesWithSameDigits_AreDifferentValues()
+    {
+        Model text = Read("{\"Provider\": \"433332384646\"}");
+        Model bytes = Read("{\"Provider\": \"C328FF\"}");
+        Assert.AreNotEqual(text.Provider, bytes.Provider);
+        Assert.AreEqual("433332384646", text.Provider.ToString());
+        Assert.AreEqual("C328FF", bytes.Provider.ToString());
+    }
+
+    [DataTestMethod]
+    [DataRow("\"ABC\"")]
+    [DataRow("\"provider\"")]
+    [DataRow("\"0x01\"")]
+    [DataRow("12")]
+    public void Read_NotHexString_Throws(string value)
+    {
+        Helper.ThrowsException<JsonException>(() => Read($"{{\"Provider\": {value}}}"));
     }
 
     [TestMethod]
     public void Read_Null_ReturnsNull()
     {
-        string json = "{\"Provider\": null}";
-        Model result = JsonSerializer.Deserialize<Model>(json, XrplJsonOptions.Default);
-        Assert.IsNull(result.Provider);
+        Assert.IsNull(Read("{\"Provider\": null}").Provider);
     }
 
     [TestMethod]
-    public void Read_PlainText_ReturnsAsIs()
+    public void Write_Text_WritesItsAsciiBytes()
     {
-        // "abc" has odd length, not treated as hex
-        string json = "{\"Provider\": \"abc\"}";
-        Model result = JsonSerializer.Deserialize<Model>(json, XrplJsonOptions.Default);
-        Assert.AreEqual("abc", result.Provider);
+        Assert.AreEqual("{\"Provider\":\"74657374\"}", Write(new Model { Provider = "test" }));
+    }
+
+    /// <summary>
+    /// A string assigned to the field is text, whatever it looks like; bytes given as hex go
+    /// through FromHex.
+    /// </summary>
+    [TestMethod]
+    public void Write_HexLookingText_IsText_FromHexIsBytes()
+    {
+        Assert.AreEqual("{\"Provider\":\"3734363537333734\"}", Write(new Model { Provider = "74657374" }));
+        Assert.AreEqual("{\"Provider\":\"74657374\"}", Write(new Model { Provider = OracleBlob.FromHex("74657374") }));
     }
 
     [TestMethod]
-    public void Write_PlainText_WritesHex()
+    public void Text_NonAscii_Throws()
     {
-        Model model = new Model { Provider = "test" };
-        string json = JsonSerializer.Serialize(model, XrplJsonOptions.Default);
-        Assert.IsTrue(json.Contains("74657374"));
+        Helper.ThrowsException<ArgumentException>(() => { OracleBlob _ = "тест"; });
     }
 
     [TestMethod]
-    public void Write_HexLookingText_EncodesAsAscii()
+    public void FromHex_OddLengthOrNotHex_Throws()
     {
-        Model model = new Model { Provider = "74657374" };
-        string json = JsonSerializer.Serialize(model, XrplJsonOptions.Default);
-        // "74657374" is treated as plain ASCII text, each char encoded to hex
-        Assert.IsFalse(json.Contains("\"74657374\""));
-        Assert.IsTrue(json.Contains("3734363537333734"));
+        Helper.ThrowsException<FormatException>(() => OracleBlob.FromHex("ABC"));
+        Helper.ThrowsException<FormatException>(() => OracleBlob.FromHex("ZZ"));
     }
 
     [TestMethod]
-    public void Write_NonAsciiProvider_ThrowsJsonException()
+    public void Equality_ComparesBytes()
     {
-        Model model = new Model { Provider = "тест" };
-        Helper.ThrowsException<JsonException>(() => JsonSerializer.Serialize(model, XrplJsonOptions.Default));
+        OracleBlob a = OracleBlob.FromHex("74657374");
+        OracleBlob b = "test";
+        Assert.IsTrue(a == b);
+        Assert.AreEqual(a.GetHashCode(), b.GetHashCode());
+        Assert.IsTrue(a != OracleBlob.FromHex("7465737400"));
     }
 
     [TestMethod]
-    public void RoundTrip_PreservesValue()
+    public void RoundTrip_Text_PreservesValue()
     {
-        Model original = new Model { Provider = "oracle_provider" };
-        string json = JsonSerializer.Serialize(original, XrplJsonOptions.Default);
-        Model deserialized = JsonSerializer.Deserialize<Model>(json, XrplJsonOptions.Default);
-        Assert.AreEqual("oracle_provider", deserialized.Provider);
+        Model deserialized = Read(Write(new Model { Provider = "oracle_provider" }));
+        Assert.IsTrue(deserialized.Provider.TryGetText(out string text));
+        Assert.AreEqual("oracle_provider", text);
     }
 }

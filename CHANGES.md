@@ -1,5 +1,12 @@
 ﻿# Changes
 
+## 11.13.0.0 11/10/2026
+
+* **Breaking:** `Blob.FromJson` (`Xrpl.BinaryCodec` 11.13.0.0) refuses a value that is not an even-length hex string, as rippled and xrpl.js do; it encoded such a value as ASCII, with each non-ASCII character becoming `?`. This covers every Blob field - `MemoData`, `MemoType`, `MemoFormat`, `Domain`, `URI`, `Data`, `DIDDocument`, `MPTokenMetadata` and the rest. Signing raises `InvalidJsonException` naming the field. An empty string is still zero bytes. Migration: pass text through `ConvertStringToHex()`, or `Blob.FromAscii` / `Blob.FromString` when building a `Blob` directly (#271)
+* **Breaking:** the Oracle `Provider`, `AssetClass` and `URI` properties of `OracleSet`, `OracleSetResponse`, `IOracleSet` and `LOOracle` are `OracleBlob` instead of `string` (#272). `OracleBlob` holds the field's bytes and writes back exactly the bytes it read; the string form could not tell the text `C328FF` from the bytes C3 28 FF and signed the hex digits as text. Members: `FromText`, `FromHex`, `FromBytes`, `Bytes`, `Hex`, `IsText`, `TryGetText`, `ToArray`, byte equality, and `ToString()` returning `Hex`. Migration: assigning a string still compiles and is taken as text (`Provider = "chainlink"`); bytes given as hex go through `OracleBlob.FromHex`; reading text is `TryGetText(out string text)`, which declines bytes that are not printable ASCII
+* `OracleBlobConverter` replaces `OracleHexStringConverter`. Reading refuses a value that is not hex (`JsonException`) and keeps any bytes the node sends
+* Tests: `TestUBlobHexOnly`; `TestUOracleBlobConverter` replaces `TestUOracleHexStringConverter`; `TestVerify_OracleSet_Serialization_MultiplePriceData` feeds the codec hex; `TestIOracle` compares the read-back fields as bytes; `BookCrossingHarness` and `TestIPermissionedDex` give `CredentialType` as hex
+
 ## 11.12.0.0 05/10/2026
 
 * **The protocol schema follows the nightly stand's pin, rippled develop at `0229c29`** (`Xrpl.BinaryCodec` 11.12.0.0): the SmartEscrow fields `GasLimit`, `BytecodeSizeLimit`, `GasPrice`, `Gas`, `GasUsed` (UInt32 81-85), `Bytecode` (Blob 47) and `VMReturnCode` (Int32 3), and the results `temINVALID_BYTECODE`, `temTEMP_DISABLED`, `tefNO_BYTECODE`, `tefBYTECODE_NOT_INCLUDED`, `tecOUT_OF_GAS` and `tecBYTECODE_REJECTED`, taken from the node's `server_definitions`

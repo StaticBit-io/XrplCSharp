@@ -25,19 +25,18 @@ namespace Xrpl.Models.Ledger
 
         /// <summary>
         /// An arbitrary value that identifies an oracle provider, such as Chainlink, Band, or DIA.
-        /// This field is a string, up to 256 ASCII hex encoded characters (0x20-0x7E).
+        /// Up to 256 bytes, conventionally printable ASCII text; <see cref="OracleBlob.TryGetText"/>
+        /// reads it as text.
         /// </summary>
         [JsonPropertyName("Provider")]
-        [JsonConverter(typeof(OracleHexStringConverter))]
-        public string Provider { get; set; }
+        public OracleBlob Provider { get; set; }
 
         /// <summary>
         /// Describes the type of asset, such as "currency", "commodity", or "index".
-        /// Must be formatted as hexadecimal representing ASCII characters (0x20-0x7E), maximum 16 bytes.
+        /// Up to 16 bytes, conventionally printable ASCII text.
         /// </summary>
         [JsonPropertyName("AssetClass")]
-        [JsonConverter(typeof(OracleHexStringConverter))]
-        public string AssetClass { get; set; }
+        public OracleBlob AssetClass { get; set; }
 
         /// <summary>
         /// An array of up to 10 PriceData objects, each representing the price information for an asset pair.
@@ -59,8 +58,7 @@ namespace Xrpl.Models.Ledger
         /// This field is limited to 256 bytes.
         /// </summary>
         [JsonPropertyName("URI")]
-        [JsonConverter(typeof(OracleHexStringConverter))]
-        public string URI { get; set; }
+        public OracleBlob URI { get; set; }
 
         /// <summary>
         /// A hint indicating which page of the oracle owner's owner directory links to this entry,
