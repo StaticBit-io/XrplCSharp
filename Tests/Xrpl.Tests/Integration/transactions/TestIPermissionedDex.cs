@@ -189,7 +189,7 @@ public class TestIPermissionedDex
                 Account = receiver.ClassicAddress,
                 AuthorizeCredentials = new List<AuthorizeCredentialEntry>
                 {
-                    new AuthorizeCredentialEntry { Credential = new AuthorizeCredentialBody { Issuer = issuer.ClassicAddress, CredentialType = Kyc } },
+                    new AuthorizeCredentialEntry { Credential = new AuthorizeCredentialBody { Issuer = issuer.ClassicAddress, CredentialType = HexType(Kyc) } },
                 },
             },
             receiver);
@@ -204,7 +204,7 @@ public class TestIPermissionedDex
         PaymentFlowResult bad = await dex.PayAndCompare(sender, presenting);
         Assert.AreEqual("tecBAD_CREDENTIALS", bad.EngineResult);
 
-        await dex.Submit(new CredentialAccept { Account = sender.ClassicAddress, Issuer = issuer.ClassicAddress, CredentialType = Kyc }, sender);
+        await dex.Submit(new CredentialAccept { Account = sender.ClassicAddress, Issuer = issuer.ClassicAddress, CredentialType = HexType(Kyc) }, sender);
         Payment accepted = Pay(sender, receiver, Amount(usd, "1"));
         accepted.CredentialIDs = new List<string> { CredentialId(sender, issuer, Kyc) };
         PaymentFlowResult through = await dex.PayAndCompare(sender, accepted);

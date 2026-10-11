@@ -4,6 +4,7 @@ using System.Text.Json;
 using System.Text.Json.Serialization;
 
 using Xrpl.Client.Exceptions;
+using Xrpl.Models.Common;
 using Xrpl.Utils.Hashes;
 
 namespace Xrpl.Client.Json.Converters
@@ -224,14 +225,24 @@ namespace Xrpl.Client.Json.Converters
     }
 
     /// <summary>
-    /// Converts Oracle string fields (Provider, AssetClass, URI) to/from hexadecimal ASCII representation.
+    /// Converts an <see cref="OracleBlob"/> (Oracle <c>Provider</c>, <c>AssetClass</c>, <c>URI</c>)
+    /// to and from the hex string rippled uses for a Blob field.
     /// </summary>
-    public sealed class OracleHexStringConverter : JsonConverter<string>
+    /// <remarks>
+    /// Reading keeps the bytes whatever they are, so writing gives back exactly the bytes read.
+    /// Reading is also total for anything the node sends: these fields are not constrained by
+    /// rippled, and refusing one oracle's bytes threw out of the converter and took the whole
+    /// response with it - one third-party oracle in a <c>ledger_data</c> page from devnet made
+    /// the page unreadable. A value that is not hex is refused, as rippled refuses it, rather than
+    /// taken as text: taking it as text is what signed bytes other than the ones received.
+    /// </remarks>
+    public sealed class OracleBlobConverter : JsonConverter<OracleBlob>
     {
         /// <summary>
-        /// Reads an Oracle hex string from JSON, decoding from hex if necessary.
+        /// Reads the hex string of a Blob field.
         /// </summary>
-        public override string Read(ref Utf8JsonReader reader, Type typeToConvert, JsonSerializerOptions options)
+        /// <exception cref="JsonException">The value is not a string, or not an even-length hex string.</exception>
+        public override OracleBlob Read(ref Utf8JsonReader reader, Type typeToConvert, JsonSerializerOptions options)
         {
             if (reader.TokenType == JsonTokenType.Null)
                 return null;
@@ -239,60 +250,33 @@ namespace Xrpl.Client.Json.Converters
             if (reader.TokenType != JsonTokenType.String)
             {
                 throw new JsonException(
-                    $"Oracle hex string field must be a JSON string; got token type {reader.TokenType}.");
+                    $"An Oracle Blob field must be a JSON string; got token type {reader.TokenType}.");
             }
 
             string value = reader.GetString();
-            if (string.IsNullOrEmpty(value))
-                return value;
-
-            if (value.Length % 2 == 0 && OracleAsciiValidation.IsHexString(value.AsSpan()))
-                return DecodeHexString(value);
-
-            return value;
+            try
+            {
+                return OracleBlob.FromHex(value);
+            }
+            catch (FormatException ex)
+            {
+                throw new JsonException(
+                    "An Oracle Blob field must be an even-length hex string; text is encoded with OracleBlob.FromText.", ex);
+            }
         }
 
         /// <summary>
-        /// Writes an Oracle string to JSON as hexadecimal ASCII.
+        /// Writes the bytes as UPPERCASE hex, as rippled writes a Blob field (<c>strHex</c>).
         /// </summary>
-        public override void Write(Utf8JsonWriter writer, string value, JsonSerializerOptions options)
+        public override void Write(Utf8JsonWriter writer, OracleBlob value, JsonSerializerOptions options)
         {
-            if (value == null)
+            if (value is null)
             {
                 writer.WriteNullValue();
                 return;
             }
 
-            OracleAsciiValidation.ValidatePrintableAsciiChars(value.AsSpan(), "Oracle hex string");
-            byte[] bytes = Encoding.ASCII.GetBytes(value);
-            // UPPERCASE: Provider/AssetClass/URI are Blob fields — rippled
-            // serializes Blob JSON via strHex (uppercase)
-            writer.WriteStringValue(Convert.ToHexString(bytes));
-        }
-
-        /// <summary>
-        /// Decodes the hex to text when it is printable ASCII, and otherwise hands back the hex
-        /// the node sent.
-        /// </summary>
-        /// <remarks>
-        /// Reading is total on purpose. These are Blob fields whose bytes rippled does not
-        /// constrain, so an oracle published by anyone else may hold whatever it likes; refusing
-        /// such a value threw out of the converter and took the whole response with it, which is
-        /// how this was found - one third-party oracle in a <c>ledger_data</c> page from devnet
-        /// made the page unreadable. Writing still requires text, so a value that came back as
-        /// hex is not something to send straight back.
-        /// </remarks>
-        private static string DecodeHexString(string hex)
-        {
-            byte[] bytes = new byte[hex.Length / 2];
-            for (int i = 0; i < bytes.Length; i++)
-            {
-                bytes[i] = Convert.ToByte(hex.Substring(i * 2, 2), 16);
-            }
-
-            return OracleAsciiValidation.IsPrintableAscii(bytes)
-                ? Encoding.ASCII.GetString(bytes)
-                : hex;
+            writer.WriteStringValue(value.Hex);
         }
     }
 }

@@ -51,7 +51,7 @@ namespace Xrpl.Client.Json
             // Oracle converters (typically used via [JsonConverter] on properties)
             // options.Converters.Add(new AssetPriceConverter());
             // options.Converters.Add(new OracleCurrencyConverter());
-            // options.Converters.Add(new OracleHexStringConverter());
+            // OracleBlob carries [JsonConverter(typeof(OracleBlobConverter))] itself
 
             // Polymorphic converters
             options.Converters.Add(new LOConverter());

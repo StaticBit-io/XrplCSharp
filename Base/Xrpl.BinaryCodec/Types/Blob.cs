@@ -1,4 +1,5 @@
-﻿using System.Diagnostics;
+﻿using System;
+using System.Diagnostics;
 
 using System.Text.Json.Nodes;
 using Xrpl.BinaryCodec.Binary;
@@ -38,32 +39,36 @@ namespace Xrpl.BinaryCodec.Types
             return FromJson(token);
         }
         /// <summary>
-        /// Defines how to read a Blob from json.
-        /// Accepts both hex-encoded strings and ASCII strings.
-        /// If the string is valid hex (even length, all hex chars), it's decoded as hex.
-        /// Otherwise, it's treated as ASCII and converted to bytes.
+        /// Defines how to read a Blob from json: the value must be an even-length hex string,
+        /// an empty string being zero bytes.
         /// </summary>
+        /// <remarks>
+        /// A value that is not hex is refused rather than encoded as text, as rippled and xrpl.js
+        /// refuse it. Encoding it would sign bytes other than the value the caller was given and
+        /// showed, with no signal - and non-ASCII characters would become <c>?</c>. Text is
+        /// encoded explicitly, with <see cref="FromAscii"/> or <see cref="FromString"/>.
+        /// </remarks>
         /// <param name="token">json token</param>
         /// <returns>A Blob object</returns>
+        /// <exception cref="FormatException">The value is not an even-length hex string.</exception>
         public static Blob FromJson(JsonNode token)
         {
-            var str = token.GetValue<string>();
-            if (IsValidHexString(str))
+            string str = token.GetValue<string>();
+            if (!IsValidHexString(str))
             {
-                return FromHex(str);
+                throw new FormatException("A Blob value must be an even-length hex string.");
             }
-            // Treat as ASCII string
-            return FromAscii(str);
+            return FromHex(str);
         }
 
         /// <summary>
         /// Checks if a string is a valid hex-encoded string.
         /// </summary>
         /// <param name="str">The string to check.</param>
-        /// <returns>True if the string is valid hex (even length, all hex chars).</returns>
+        /// <returns>True if the string is valid hex (even length, all hex chars); an empty string is.</returns>
         private static bool IsValidHexString(string str)
         {
-            if (string.IsNullOrEmpty(str) || str.Length % 2 != 0)
+            if (str == null || str.Length % 2 != 0)
             {
                 return false;
             }
