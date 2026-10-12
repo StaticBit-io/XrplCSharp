@@ -8,13 +8,28 @@ using static Xrpl.Models.Common.Common;
 
 namespace Xrpl.Amounts
 {
-    /// <summary>Who holds what: an account and an asset, XRP keyed by an empty issuer.</summary>
-    internal readonly record struct HoldingKey(string Account, string Currency, string Issuer)
+    /// <summary>
+    /// Who holds what: an account and an asset, XRP keyed by an empty issuer, an MPT by its
+    /// issuance ID in <see cref="Currency"/> and its issuer.
+    /// </summary>
+    internal readonly record struct HoldingKey(string Account, string Currency, string Issuer, bool IsMpt = false)
     {
         internal static HoldingKey Of(string account, IssuedCurrency asset) =>
-            XrplAmount.KindOf(asset) == AmountKind.Xrp
-                ? new HoldingKey(account, "XRP", string.Empty)
-                : new HoldingKey(account, asset.Currency, asset.Issuer);
+            XrplAmount.KindOf(asset) switch
+            {
+                AmountKind.Xrp => new HoldingKey(account, "XRP", string.Empty),
+                AmountKind.Mpt => OfMpt(account, asset.MptIssuanceId),
+                _ => new HoldingKey(account, asset.Currency, asset.Issuer),
+            };
+
+        internal static HoldingKey OfMpt(string account, string mptIssuanceId) =>
+            new HoldingKey(account, DexAssets.MptKey(mptIssuanceId), DexAssets.MptIssuer(mptIssuanceId), true);
+
+        /// <summary>The asset held.</summary>
+        internal IssuedCurrency Asset =>
+            IsMpt ? DexAssets.Mpt(Currency)
+            : Issuer.Length == 0 ? new IssuedCurrency { Currency = "XRP" }
+            : new IssuedCurrency { Currency = Currency, Issuer = Issuer };
     }
 
     /// <summary>
@@ -155,12 +170,28 @@ namespace Xrpl.Amounts
                 };
             }
 
+            foreach (DexMptIssuance issuance in snapshot.MptIssuances ?? Array.Empty<DexMptIssuance>())
+            {
+                if (issuance?.MptIssuanceId != null)
+                    MptIssuances[DexAssets.MptKey(issuance.MptIssuanceId)] = issuance;
+            }
+
+            foreach (DexMptHolding holding in snapshot.MptHoldings ?? Array.Empty<DexMptHolding>())
+            {
+                if (holding?.Account == null || holding.MptIssuanceId == null)
+                    continue;
+
+                (string, string) key = (holding.Account, DexAssets.MptKey(holding.MptIssuanceId));
+                if (MptHoldings.ContainsKey(key))
+                    throw new ArgumentException($"The MPT holding of {holding.Account} in {holding.MptIssuanceId} is listed twice.");
+
+                MptHoldings[key] = holding;
+            }
+
             foreach (DexOffer offer in snapshot.Offers ?? Array.Empty<DexOffer>())
             {
                 if (offer == null)
                     continue;
-                if (offer.TakerPays.Kind == AmountKind.Mpt || offer.TakerGets.Kind == AmountKind.Mpt)
-                    throw new NotSupportedException("MPT order books are not supported.");
 
                 if (offer.Hybrid && string.IsNullOrEmpty(offer.DomainId))
                     throw new ArgumentException($"The hybrid offer {offer.Index} names no domain.");
@@ -183,8 +214,6 @@ namespace Xrpl.Amounts
             {
                 if (pool?.Account == null)
                     continue;
-                if (pool.Balance.Kind == AmountKind.Mpt || pool.Balance2.Kind == AmountKind.Mpt)
-                    throw new NotSupportedException("MPT pools are not supported.");
                 AmmOfferMath.RequireTradingFee(pool.TradingFee, nameof(snapshot));
                 AmmOfferMath.RequireTradingFee(pool.DiscountedFee, nameof(snapshot));
 
@@ -192,6 +221,22 @@ namespace Xrpl.Amounts
                 PoolAccounts.Add(pool.Account);
                 foreach (XrplAmount held in new[] { pool.Balance, pool.Balance2 })
                 {
+                    if (held.Kind == AmountKind.Mpt)
+                    {
+                        // The pool's balance is what its account's MPToken holds.
+                        (string, string) holdingKey = (pool.Account, DexAssets.MptKey(held.Asset.MptIssuanceId));
+                        MptHoldings.TryGetValue(holdingKey, out DexMptHolding listed);
+                        MptHoldings[holdingKey] = new DexMptHolding
+                        {
+                            Account = pool.Account,
+                            MptIssuanceId = holdingKey.Item2,
+                            Amount = held.StMantissa,
+                            Locked = listed?.Locked ?? false,
+                            Authorized = true,
+                        };
+                        continue;
+                    }
+
                     if (held.Kind != AmountKind.Iou)
                         continue;
 
@@ -254,6 +299,28 @@ namespace Xrpl.Amounts
         internal List<DexAmmPool> Pools { get; } = new List<DexAmmPool>();
 
         internal HashSet<string> PoolAccounts { get; } = new HashSet<string>(StringComparer.Ordinal);
+
+        /// <summary>The MPT issuances by upper-case issuance ID.</summary>
+        internal Dictionary<string, DexMptIssuance> MptIssuances { get; } = new Dictionary<string, DexMptIssuance>(StringComparer.Ordinal);
+
+        /// <summary>The MPTokens by holder and upper-case issuance ID, the pools' among them.</summary>
+        internal Dictionary<(string Account, string Id), DexMptHolding> MptHoldings { get; } = new Dictionary<(string Account, string Id), DexMptHolding>();
+
+        /// <summary>The issuance of an MPT; null when the snapshot does not hold it, as for one that does not exist.</summary>
+        internal DexMptIssuance Issuance(IssuedCurrency mpt) =>
+            MptIssuances.TryGetValue(DexAssets.MptKey(mpt.MptIssuanceId), out DexMptIssuance issuance) ? issuance : null;
+
+        /// <summary>
+        /// <c>transferRate(view, MPTID)</c>: 1,000,000,000 plus 10,000 per unit of the issuance's
+        /// <c>TransferFee</c>; <see cref="OfferCrossing.QualityOne"/> for none.
+        /// </summary>
+        internal uint MptTransferRate(IssuedCurrency mpt)
+        {
+            DexMptIssuance issuance = Issuance(mpt);
+            return issuance == null || issuance.TransferFee == 0
+                ? OfferCrossing.QualityOne
+                : OfferCrossing.QualityOne + 10_000u * issuance.TransferFee;
+        }
 
         internal Dictionary<string, DexDomain> Domains { get; } = new Dictionary<string, DexDomain>(StringComparer.Ordinal);
 
@@ -446,6 +513,50 @@ namespace Xrpl.Amounts
         internal OwnerCounts Copy() => new OwnerCounts { Actual = Actual, Max = Max };
     }
 
+    /// <summary>An MPToken while the transaction runs, and what its holder has sent since it began.</summary>
+    internal sealed class MptHoldingState
+    {
+        internal long Amount { get; set; }
+
+        /// <summary><c>DeferredCredits</c>' debits of the holder (<c>creditMPT</c>).</summary>
+        internal long Debits { get; set; }
+
+        internal bool Exists { get; set; }
+
+        /// <summary>Whether the transaction created the MPToken (<c>checkCreateMPT</c>).</summary>
+        internal bool Created { get; set; }
+
+        internal bool Locked { get; set; }
+
+        internal bool Authorized { get; set; }
+
+        internal MptHoldingState Copy() => (MptHoldingState)MemberwiseClone();
+    }
+
+    /// <summary>An MPT issuance while the transaction runs, and what its issuer has issued and given of its own since it began.</summary>
+    internal sealed class IssuanceState
+    {
+        internal ulong Outstanding { get; set; }
+
+        /// <summary><c>DeferredCredits</c>' issuer credit: what the issuer sent to holders.</summary>
+        internal long Credit { get; set; }
+
+        /// <summary>What the issuer's own offers gave (<c>issuerSelfDebitMPT</c>).</summary>
+        internal long SelfDebit { get; set; }
+
+        internal IssuanceState Copy() => (IssuanceState)MemberwiseClone();
+    }
+
+    /// <summary>What <c>requireAuth</c> asks of an MPToken (<c>AuthType</c>).</summary>
+    internal enum MptAuth
+    {
+        /// <summary>A holder needs an MPToken, as <c>Legacy</c> does for an MPT.</summary>
+        Strong,
+
+        /// <summary>A missing MPToken passes; it is created when the MPT arrives.</summary>
+        Weak,
+    }
+
     /// <summary>What is left of an offer while a crossing runs, and what was taken of it.</summary>
     internal sealed class OfferState
     {
@@ -489,6 +600,8 @@ namespace Xrpl.Amounts
         private readonly Dictionary<LineKey, LineState> _lines = new Dictionary<LineKey, LineState>();
         private readonly Dictionary<string, OfferState> _offers = new Dictionary<string, OfferState>(StringComparer.Ordinal);
         private readonly Dictionary<string, OwnerCounts> _counts = new Dictionary<string, OwnerCounts>(StringComparer.Ordinal);
+        private readonly Dictionary<(string Account, string Id), MptHoldingState> _mpts = new Dictionary<(string Account, string Id), MptHoldingState>();
+        private readonly Dictionary<string, IssuanceState> _issuances = new Dictionary<string, IssuanceState>(StringComparer.Ordinal);
         private readonly List<FillRecord> _fills = new List<FillRecord>();
         private readonly DexView _parent;
 
@@ -522,6 +635,10 @@ namespace Xrpl.Amounts
                 parent._offers[entry.Key] = entry.Value.Copy();
             foreach (KeyValuePair<string, OwnerCounts> entry in _counts)
                 parent._counts[entry.Key] = entry.Value.Copy();
+            foreach (KeyValuePair<(string Account, string Id), MptHoldingState> entry in _mpts)
+                parent._mpts[entry.Key] = entry.Value.Copy();
+            foreach (KeyValuePair<string, IssuanceState> entry in _issuances)
+                parent._issuances[entry.Key] = entry.Value.Copy();
 
             // Moved, not copied: a fill belongs to one view of a chain.
             parent._fills.AddRange(_fills);
@@ -561,9 +678,31 @@ namespace Xrpl.Amounts
                     keys.Add(new HoldingKey(line.First, line.Currency, line.Second));
                     keys.Add(new HoldingKey(line.Second, line.Currency, line.First));
                 }
+
+                // An issuer's "balance" of its own MPT is the negated OutstandingAmount.
+                foreach ((string account, string id) in view._mpts.Keys)
+                    keys.Add(HoldingKey.OfMpt(account, id));
+                foreach (string id in view._issuances.Keys)
+                    keys.Add(HoldingKey.OfMpt(DexAssets.MptIssuer(id), id));
             }
 
             return keys;
+        }
+
+        /// <summary>The MPTokens this view or a parent has created, as holder and issuance.</summary>
+        internal IEnumerable<(string Account, string Id)> CreatedMpTokens()
+        {
+            HashSet<(string, string)> created = new HashSet<(string, string)>();
+            for (DexView view = this; view != null; view = view._parent)
+            {
+                foreach (KeyValuePair<(string Account, string Id), MptHoldingState> entry in view._mpts)
+                {
+                    if (ReadMpt(entry.Key.Account, entry.Key.Id).Created)
+                        created.Add(entry.Key);
+                }
+            }
+
+            return created;
         }
 
         /// <summary>The holding as the snapshot has it, before the transaction's fee.</summary>
@@ -639,6 +778,9 @@ namespace Xrpl.Amounts
         /// <summary>What <see cref="HoldingKey.Account"/> holds: its XRP, or its side of the line to <see cref="HoldingKey.Issuer"/>.</summary>
         internal Holding Read(HoldingKey key)
         {
+            if (key.IsMpt)
+                return MptHoldingOf(key, ReadMpt(key.Account, key.Currency), ReadIssuance(key.Currency));
+
             if (key.Issuer.Length == 0)
                 return ReadXrp(key.Account);
 
@@ -654,6 +796,9 @@ namespace Xrpl.Amounts
 
         private Holding Initial(HoldingKey key)
         {
+            if (key.IsMpt)
+                return MptHoldingOf(key, InitialMpt(key.Account, key.Currency), InitialIssuance(key.Currency));
+
             if (key.Issuer.Length == 0)
                 return InitialXrp(key.Account);
 
@@ -782,6 +927,13 @@ namespace Xrpl.Amounts
             if (amount.IsZero || string.Equals(from, to, StringComparison.Ordinal))
                 return;
 
+            if (amount.Kind == AmountKind.Mpt)
+            {
+                if (SendMpt(from, to, amount) is { } failed)
+                    throw new FlowFailedException(failed, "MPT send failed.");
+                return;
+            }
+
             if (amount.Kind == AmountKind.Xrp)
             {
                 if (from.Length != 0)
@@ -896,10 +1048,278 @@ namespace Xrpl.Amounts
         internal XrplAmount PoolHolds(DexAmmPool pool, IssuedCurrency asset)
         {
             bool frozen = XrplAmount.SameAsset(pool.Balance.Asset, asset) ? pool.AssetFrozen : pool.Asset2Frozen;
-            if (frozen)
+            if (frozen || (DexAssets.IsMpt(asset) && IsFrozen(pool.Account, asset)))
                 return XrplAmount.Zero(asset);
 
             return Read(HoldingKey.Of(pool.Account, asset)).Current.WithAsset(asset);
+        }
+
+        // ---- MPTs ----
+
+        private static Holding MptHoldingOf(HoldingKey key, MptHoldingState holding, IssuanceState issuance)
+        {
+            IssuedCurrency asset = DexAssets.Mpt(key.Currency);
+            XrplAmount zero = XrplAmount.Zero(asset);
+            if (string.Equals(key.Account, key.Issuer, StringComparison.Ordinal))
+            {
+                // The issuer holds no MPToken; what it has issued is its debt.
+                return new Holding { Current = XrplAmount.FromUnits(asset, AmountKind.Mpt, -checked((long)issuance.Outstanding)), Debits = zero, Exists = true };
+            }
+
+            return new Holding
+            {
+                Current = XrplAmount.FromUnits(asset, AmountKind.Mpt, holding.Amount),
+                Debits = XrplAmount.FromUnits(asset, AmountKind.Mpt, holding.Debits),
+                Exists = holding.Exists,
+            };
+        }
+
+        private MptHoldingState ReadMpt(string account, string id)
+        {
+            for (DexView view = this; view != null; view = view._parent)
+            {
+                if (view._mpts.TryGetValue((account, id), out MptHoldingState state))
+                    return state;
+            }
+
+            return InitialMpt(account, id);
+        }
+
+        private MptHoldingState InitialMpt(string account, string id) =>
+            World.MptHoldings.TryGetValue((account, id), out DexMptHolding holding)
+                ? new MptHoldingState { Amount = checked((long)holding.Amount), Exists = true, Locked = holding.Locked, Authorized = holding.Authorized }
+                : new MptHoldingState();
+
+        private IssuanceState ReadIssuance(string id)
+        {
+            for (DexView view = this; view != null; view = view._parent)
+            {
+                if (view._issuances.TryGetValue(id, out IssuanceState state))
+                    return state;
+            }
+
+            return InitialIssuance(id);
+        }
+
+        private IssuanceState InitialIssuance(string id) =>
+            new IssuanceState { Outstanding = World.MptIssuances.TryGetValue(id, out DexMptIssuance issuance) ? issuance.OutstandingAmount : 0 };
+
+        private MptHoldingState MptForWrite(string account, string id)
+        {
+            if (!_mpts.TryGetValue((account, id), out MptHoldingState state))
+                _mpts[(account, id)] = state = ReadMpt(account, id).Copy();
+
+            return state;
+        }
+
+        private IssuanceState IssuanceForWrite(string id)
+        {
+            if (!_issuances.TryGetValue(id, out IssuanceState state))
+                _issuances[id] = state = ReadIssuance(id).Copy();
+
+            return state;
+        }
+
+        /// <summary><c>maxMPTAmount</c>: the issuance's <c>MaximumAmount</c>, or the protocol's maximum.</summary>
+        private static long MaxMptAmount(DexMptIssuance issuance) =>
+            checked((long)(issuance.MaximumAmount ?? XrplAmount.MaxMptAmount));
+
+        /// <summary><c>maxMPTAmount</c> of the MPT's issuance; zero when the snapshot does not hold it.</summary>
+        internal long MaxMptAmount(IssuedCurrency mpt) =>
+            World.Issuance(mpt) is { } issuance ? MaxMptAmount(issuance) : 0;
+
+        /// <summary><c>availableMPTAmount</c>: what the issuer may still issue now.</summary>
+        private long Available(DexMptIssuance issuance) =>
+            MaxMptAmount(issuance) - checked((long)ReadIssuance(DexAssets.MptKey(issuance.MptIssuanceId)).Outstanding);
+
+        /// <summary><c>availableMPTAmount</c> before the transaction.</summary>
+        private static long AvailableBefore(DexMptIssuance issuance) =>
+            MaxMptAmount(issuance) - checked((long)issuance.OutstandingAmount);
+
+        /// <summary><c>holdingExists</c>: the issuer always holds its own MPT; anyone else through an MPToken.</summary>
+        internal bool MptHoldingExists(string account, IssuedCurrency mpt)
+        {
+            string id = DexAssets.MptKey(mpt.MptIssuanceId);
+            return string.Equals(account, DexAssets.MptIssuer(id), StringComparison.Ordinal) || ReadMpt(account, id).Exists;
+        }
+
+        /// <summary>Whether the account has an MPToken of the MPT now; the issuer never has one.</summary>
+        internal bool MpTokenExists(string account, IssuedCurrency mpt) => ReadMpt(account, DexAssets.MptKey(mpt.MptIssuanceId)).Exists;
+
+        /// <summary><c>isGlobalFrozen</c> of an MPT: its issuance is locked.</summary>
+        internal bool IsMptGlobalLocked(IssuedCurrency mpt) => World.Issuance(mpt)?.Locked == true;
+
+        /// <summary><c>isIndividualFrozen</c> of an MPT: the account's MPToken is locked.</summary>
+        internal bool IsMptIndividualLocked(string account, IssuedCurrency mpt)
+        {
+            MptHoldingState holding = ReadMpt(account, DexAssets.MptKey(mpt.MptIssuanceId));
+            return holding.Exists && holding.Locked;
+        }
+
+        /// <summary>
+        /// <c>accountHolds</c> of an MPT. The issuer, asked for its full balance, has what it may
+        /// still issue; a holder what its MPToken holds - nothing when it is locked or unauthorized,
+        /// as asked - and under <c>MPTokensV2</c> less what it received during the transaction
+        /// (<c>balanceHookMPT</c>).
+        /// </summary>
+        internal XrplAmount AccountHoldsMpt(string account, IssuedCurrency mpt, bool zeroIfFrozen, bool zeroIfUnauthorized, bool fullBalance)
+        {
+            string id = DexAssets.MptKey(mpt.MptIssuanceId);
+            IssuedCurrency asset = DexAssets.Mpt(id);
+            DexMptIssuance issuance = World.Issuance(asset);
+            if (fullBalance && string.Equals(account, DexAssets.MptIssuer(id), StringComparison.Ordinal))
+            {
+                if (issuance == null)
+                    return XrplAmount.Zero(asset);
+
+                long available = Available(issuance);
+                if (!Rules.MPTokensV2)
+                    return XrplAmount.FromUnits(asset, AmountKind.Mpt, available);
+
+                // The issuer's orig balance is what it could issue before the transaction.
+                long issued = ReadIssuance(id).Credit;
+                return Hooked(asset, available, AvailableBefore(issuance), issued);
+            }
+
+            MptHoldingState holding = ReadMpt(account, id);
+            long amount = 0;
+            if (holding.Exists && !(zeroIfFrozen && IsFrozen(account, asset)))
+            {
+                amount = holding.Amount;
+                if (zeroIfUnauthorized)
+                {
+                    bool unauthorized = Rules.LargeNumbers
+                        ? RequireMptAuth(account, asset, MptAuth.Strong) != null
+                        : issuance != null && issuance.RequireAuth && !holding.Authorized;
+                    if (unauthorized)
+                        amount = 0;
+                }
+            }
+
+            if (!Rules.MPTokensV2)
+                return XrplAmount.FromUnits(asset, AmountKind.Mpt, amount);
+
+            return Hooked(asset, amount, InitialMpt(account, id).Amount, holding.Debits);
+        }
+
+        /// <summary><c>balanceHookMPT</c>: the balance less what was received during the transaction, never below zero.</summary>
+        private static XrplAmount Hooked(IssuedCurrency asset, long amount, long before, long debits)
+        {
+            long adjusted = Math.Min(amount, Math.Min(before - debits, before));
+            return adjusted > 0 ? XrplAmount.FromUnits(asset, AmountKind.Mpt, adjusted) : XrplAmount.Zero(asset);
+        }
+
+        /// <summary>
+        /// <c>issuerFundsToSelfIssue</c>: what an issuer's own offers may still give of its MPT -
+        /// what it could issue before the transaction less what those offers gave
+        /// (<c>balanceHookSelfIssueMPT</c>).
+        /// </summary>
+        internal XrplAmount IssuerFundsToSelfIssue(IssuedCurrency mpt)
+        {
+            string id = DexAssets.MptKey(mpt.MptIssuanceId);
+            IssuedCurrency asset = DexAssets.Mpt(id);
+            if (World.Issuance(asset) is not { } issuance)
+                return XrplAmount.Zero(asset);
+
+            long left = AvailableBefore(issuance) - ReadIssuance(id).SelfDebit;
+            return left > 0 ? XrplAmount.FromUnits(asset, AmountKind.Mpt, left) : XrplAmount.Zero(asset);
+        }
+
+        /// <summary><c>issuerSelfDebitHookMPT</c>: an issuer's own offer gave <paramref name="amount"/> of its MPT.</summary>
+        internal void IssuerSelfDebit(IssuedCurrency mpt, XrplAmount amount)
+        {
+            IssuanceState state = IssuanceForWrite(DexAssets.MptKey(mpt.MptIssuanceId));
+            state.SelfDebit = checked(state.SelfDebit + (long)amount.StMantissa);
+        }
+
+        /// <summary>
+        /// <c>checkCreateMPT</c>: the MPToken an account needs to receive the MPT, created with
+        /// its flags clear and one more object for its owner when it has none.
+        /// </summary>
+        internal void CreateMpToken(string account, IssuedCurrency mpt)
+        {
+            string id = DexAssets.MptKey(mpt.MptIssuanceId);
+            if (string.Equals(account, DexAssets.MptIssuer(id), StringComparison.Ordinal) || ReadMpt(account, id).Exists)
+                return;
+
+            MptHoldingState holding = MptForWrite(account, id);
+            holding.Exists = true;
+            holding.Created = true;
+            holding.Amount = 0;
+            holding.Locked = false;
+            holding.Authorized = false;
+            AdjustOwnerCount(account, 1);
+        }
+
+        /// <summary>
+        /// <c>directSendNoFeeMPT</c>: the MPT moves between the issuer and a holder, the issuance's
+        /// <c>OutstandingAmount</c> following it. Null on success, otherwise the failure:
+        /// <c>tecPATH_DRY</c> when issuing would overflow, <c>tecINSUFFICIENT_FUNDS</c> when the
+        /// holder holds too little, <c>tecNO_AUTH</c> when a holder has no MPToken.
+        /// </summary>
+        internal string SendMpt(string from, string to, XrplAmount amount)
+        {
+            string id = DexAssets.MptKey(amount.Asset.MptIssuanceId);
+            if (World.MptIssuances.TryGetValue(id, out DexMptIssuance issuance) == false)
+                return "tecOBJECT_NOT_FOUND";
+
+            string issuer = DexAssets.MptIssuer(id);
+            long amt = checked((long)amount.StMantissa);
+            long maximum = MaxMptAmount(issuance);
+            IssuanceState state = IssuanceForWrite(id);
+            ulong outstanding = state.Outstanding;
+
+            if (string.Equals(from, issuer, StringComparison.Ordinal))
+            {
+                // AllowMPTOverflow::Yes: OutstandingAmount may pass MaximumAmount for a while.
+                if (Rules.MPTokensV2 && (amt > maximum || outstanding > ulong.MaxValue - (ulong)amt))
+                    return "tecPATH_DRY";
+
+                state.Outstanding = outstanding + (ulong)amt;
+            }
+            else
+            {
+                MptHoldingState sender = MptForWrite(from, id);
+                if (!sender.Exists)
+                    return "tecNO_AUTH";
+                if (sender.Amount < amt)
+                    return "tecINSUFFICIENT_FUNDS";
+
+                CreditHook(from, issuer, id, amt, state);
+                sender.Amount -= amt;
+            }
+
+            if (string.Equals(to, issuer, StringComparison.Ordinal))
+            {
+                if (outstanding < (ulong)amt)
+                    return "tecINTERNAL";
+
+                state.Outstanding = outstanding - (ulong)amt;
+            }
+            else
+            {
+                MptHoldingState receiver = MptForWrite(to, id);
+                if (!receiver.Exists)
+                    return "tecNO_AUTH";
+
+                CreditHook(from, issuer, id, amt, state);
+                receiver.Amount = checked(receiver.Amount + amt);
+            }
+
+            return null;
+        }
+
+        /// <summary><c>creditHookMPT</c>: the issuer's issues add to its credit, a holder's sends to its debits.</summary>
+        private void CreditHook(string from, string issuer, string id, long amount, IssuanceState state)
+        {
+            if (string.Equals(from, issuer, StringComparison.Ordinal))
+            {
+                state.Credit = checked(state.Credit + amount);
+                return;
+            }
+
+            MptHoldingState sender = MptForWrite(from, id);
+            sender.Debits = checked(sender.Debits + amount);
         }
 
         // ---- owner counts ----
@@ -957,9 +1377,14 @@ namespace Xrpl.Amounts
             return XrplAmount.FromUnits(XrpAsset, AmountKind.Xrp, (long)(drops - reserve));
         }
 
-        /// <summary>Whether the issuer or the line freezes <paramref name="account"/>'s holding (<c>isFrozen</c>).</summary>
+        /// <summary>
+        /// Whether the issuer or the line freezes <paramref name="account"/>'s holding
+        /// (<c>isFrozen</c>); for an MPT, whether the issuance or the account's MPToken is locked.
+        /// </summary>
         internal bool IsFrozen(string account, IssuedCurrency asset)
         {
+            if (XrplAmount.KindOf(asset) == AmountKind.Mpt)
+                return IsMptGlobalLocked(asset) || IsMptIndividualLocked(account, asset);
             if (XrplAmount.KindOf(asset) != AmountKind.Iou)
                 return false;
             if (World.Accounts.TryGetValue(asset.Issuer, out DexAccount issuer) && issuer.GlobalFreeze)
@@ -971,9 +1396,11 @@ namespace Xrpl.Amounts
             return info != null && info.Side(asset.Issuer).Freeze;
         }
 
-        /// <summary><c>isDeepFrozen</c>.</summary>
+        /// <summary><c>isDeepFrozen</c>: for an MPT, which a lock stops both ways, the same as <see cref="IsFrozen"/>.</summary>
         internal bool IsDeepFrozen(string account, IssuedCurrency asset)
         {
+            if (XrplAmount.KindOf(asset) == AmountKind.Mpt)
+                return IsFrozen(account, asset);
             if (XrplAmount.KindOf(asset) != AmountKind.Iou || string.Equals(account, asset.Issuer, StringComparison.Ordinal))
                 return false;
 
@@ -986,8 +1413,10 @@ namespace Xrpl.Amounts
         /// may hold <paramref name="asset"/>, otherwise <c>tecNO_LINE</c> or <c>tecNO_AUTH</c>.
         /// An issuer without <c>lsfRequireAuth</c> lets anyone hold its currency.
         /// </summary>
-        internal string RequireAuth(string account, IssuedCurrency asset)
+        internal string RequireAuth(string account, IssuedCurrency asset, MptAuth mptAuth = MptAuth.Strong)
         {
+            if (XrplAmount.KindOf(asset) == AmountKind.Mpt)
+                return RequireMptAuth(account, asset, mptAuth);
             if (XrplAmount.KindOf(asset) != AmountKind.Iou || string.Equals(account, asset.Issuer, StringComparison.Ordinal))
                 return null;
             if (!World.Accounts.TryGetValue(asset.Issuer, out DexAccount issuer) || !issuer.RequireAuth)
@@ -1006,9 +1435,77 @@ namespace Xrpl.Amounts
             return "tecNO_AUTH";
         }
 
-        /// <summary><c>accountHolds</c> with <c>ZeroIfFrozen</c>.</summary>
+        /// <summary>
+        /// <c>requireAuth</c> of an MPT: null when <paramref name="account"/> may hold it, otherwise
+        /// <c>tecOBJECT_NOT_FOUND</c> for an unknown issuance or <c>tecNO_AUTH</c> (or a domain's
+        /// <c>tecEXPIRED</c>). The issuer is always authorized; a pseudo-account holds for its
+        /// object. <see cref="MptAuth.Weak"/> lets a missing MPToken through.
+        /// </summary>
+        /// <remarks>Vault shares, whose issuer is a vault, are not modelled: their underlying asset's authorization is not checked.</remarks>
+        internal string RequireMptAuth(string account, IssuedCurrency mpt, MptAuth authType)
+        {
+            DexMptIssuance issuance = World.Issuance(mpt);
+            if (issuance == null)
+                return "tecOBJECT_NOT_FOUND";
+
+            string id = DexAssets.MptKey(mpt.MptIssuanceId);
+            if (string.Equals(account, DexAssets.MptIssuer(id), StringComparison.Ordinal))
+                return null;
+
+            // SingleAssetVault or MPTokensV2 exempt a pseudo-account; fixCleanup3_3_0 does it first.
+            bool exempt = Rules.LargeNumbers && World.IsPseudoAccount(account);
+            if (Rules.FixCleanup3_3_0 && exempt)
+                return null;
+
+            MptHoldingState token = ReadMpt(account, id);
+            if (!token.Exists && authType == MptAuth.Strong)
+                return "tecNO_AUTH";
+
+            if (!string.IsNullOrEmpty(issuance.DomainId))
+            {
+                string domain = World.ValidDomain(issuance.DomainId, account);
+                if (domain == null || !token.Exists)
+                    return domain;
+            }
+
+            if (!Rules.FixCleanup3_3_0 && exempt)
+                return null;
+
+            return issuance.RequireAuth && (!token.Exists || !token.Authorized) ? "tecNO_AUTH" : null;
+        }
+
+        /// <summary><c>canTrade</c>: null for anything but an MPT whose issuance lets it trade on the DEX.</summary>
+        internal string CanTrade(IssuedCurrency asset)
+        {
+            if (!DexAssets.IsMpt(asset))
+                return null;
+
+            DexMptIssuance issuance = World.Issuance(asset);
+            if (issuance == null)
+                return "tecOBJECT_NOT_FOUND";
+
+            return issuance.CanTrade ? null : "tecNO_PERMISSION";
+        }
+
+        /// <summary><c>canTransfer</c>: an MPT moves between holders only when its issuance allows it; to or from the issuer always.</summary>
+        internal string CanTransfer(IssuedCurrency mpt, string from, string to)
+        {
+            DexMptIssuance issuance = World.Issuance(mpt);
+            if (issuance == null)
+                return "tecOBJECT_NOT_FOUND";
+
+            string issuer = DexAssets.MptIssuer(mpt.MptIssuanceId);
+            if (string.Equals(from, issuer, StringComparison.Ordinal) || string.Equals(to, issuer, StringComparison.Ordinal))
+                return null;
+
+            return issuance.CanTransfer ? null : "tecNO_AUTH";
+        }
+
+        /// <summary><c>accountHolds</c> with <c>ZeroIfFrozen</c> (and for an MPT <c>ZeroIfUnauthorized</c>).</summary>
         internal XrplAmount AccountHolds(string account, IssuedCurrency asset)
         {
+            if (XrplAmount.KindOf(asset) == AmountKind.Mpt)
+                return AccountHoldsMpt(account, asset, zeroIfFrozen: true, zeroIfUnauthorized: true, fullBalance: false);
             if (XrplAmount.KindOf(asset) == AmountKind.Xrp)
                 return XrpLiquid(account);
 
@@ -1019,9 +1516,14 @@ namespace Xrpl.Amounts
             return Spendable(key).WithAsset(asset);
         }
 
-        /// <summary><c>accountFunds</c>: <paramref name="whenIssuer"/> for the issuer of an issued currency, otherwise <see cref="AccountHolds"/>.</summary>
+        /// <summary>
+        /// <c>accountFunds</c>: <paramref name="whenIssuer"/> for the issuer of an issued currency,
+        /// what is left to issue for the issuer of an MPT, otherwise <see cref="AccountHolds"/>.
+        /// </summary>
         internal XrplAmount AccountFunds(string account, XrplAmount whenIssuer)
         {
+            if (whenIssuer.Kind == AmountKind.Mpt)
+                return AccountHoldsMpt(account, whenIssuer.Asset, zeroIfFrozen: true, zeroIfUnauthorized: true, fullBalance: true);
             if (whenIssuer.Kind == AmountKind.Iou && string.Equals(account, whenIssuer.Asset.Issuer, StringComparison.Ordinal))
                 return whenIssuer;
 

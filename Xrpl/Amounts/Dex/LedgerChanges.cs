@@ -14,6 +14,7 @@ namespace Xrpl.Amounts
             Array.Empty<AmmPoolChange>(),
             Array.Empty<BalanceChange>(),
             Array.Empty<TrustLineChange>(),
+            Array.Empty<MpTokenChange>(),
             false,
             Array.Empty<OfferFill>(),
             Array.Empty<FlowPass>());
@@ -23,6 +24,7 @@ namespace Xrpl.Amounts
             IReadOnlyList<AmmPoolChange> pools,
             IReadOnlyList<BalanceChange> balances,
             IReadOnlyList<TrustLineChange> trustLines,
+            IReadOnlyList<MpTokenChange> mpTokens,
             bool reachedPartialBook,
             IReadOnlyList<OfferFill> fills,
             IReadOnlyList<FlowPass> passes)
@@ -31,6 +33,7 @@ namespace Xrpl.Amounts
             Pools = pools;
             Balances = balances;
             TrustLines = trustLines;
+            MpTokens = mpTokens;
             ReachedPartialBook = reachedPartialBook;
             Fills = fills;
             Passes = passes;
@@ -47,6 +50,8 @@ namespace Xrpl.Amounts
         internal IReadOnlyList<BalanceChange> Balances { get; }
 
         internal IReadOnlyList<TrustLineChange> TrustLines { get; }
+
+        internal IReadOnlyList<MpTokenChange> MpTokens { get; }
 
         /// <summary>Whether the engine ran off the end of a book the snapshot holds only in part.</summary>
         internal bool ReachedPartialBook { get; }
@@ -98,9 +103,15 @@ namespace Xrpl.Amounts
                 if (byAccount != 0)
                     return byAccount;
 
-                int byCurrency = string.CompareOrdinal(a.Change.Asset?.Currency, b.Change.Asset?.Currency);
+                int byCurrency = string.CompareOrdinal(a.Change.Asset?.Currency ?? a.Change.Asset?.MptIssuanceId, b.Change.Asset?.Currency ?? b.Change.Asset?.MptIssuanceId);
                 return byCurrency != 0 ? byCurrency : string.CompareOrdinal(a.Change.Asset?.Issuer, b.Change.Asset?.Issuer);
             });
+
+            List<MpTokenChange> mpTokens = final.CreatedMpTokens()
+                .Select(token => new MpTokenChange(token.Account, token.Id))
+                .OrderBy(token => token.Account, StringComparer.Ordinal)
+                .ThenBy(token => token.MptIssuanceId, StringComparer.Ordinal)
+                .ToList();
 
             List<TrustLineChange> lines = new List<TrustLineChange>();
             foreach (LineKey line in final.TouchedLines())
@@ -130,7 +141,7 @@ namespace Xrpl.Amounts
                 .Select(entry => entry.fill.ToPublic())
                 .ToList();
 
-            return new LedgerChanges(offers, pools, balances, lines, world.ReachedPartialBook, fills, world.Passes.ToArray());
+            return new LedgerChanges(offers, pools, balances, lines, mpTokens, world.ReachedPartialBook, fills, world.Passes.ToArray());
         }
     }
 }

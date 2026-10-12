@@ -33,13 +33,21 @@ namespace Xrpl.Amounts
         internal string Result { get; }
     }
 
-    /// <summary>An asset as a strand's loop checks see it: a currency and its issuer, XRP with an empty one.</summary>
-    internal readonly record struct AssetKey(string Currency, string Issuer)
+    /// <summary>
+    /// An asset as a strand's loop checks see it: a currency and its issuer, XRP with an empty
+    /// one, an MPT by its issuance ID and its issuer.
+    /// </summary>
+    internal readonly record struct AssetKey(string Currency, string Issuer, bool IsMpt = false)
     {
         internal static readonly AssetKey Xrp = new AssetKey("XRP", string.Empty);
 
         internal static AssetKey Of(IssuedCurrency asset) =>
-            XrplAmount.KindOf(asset) == AmountKind.Xrp ? Xrp : new AssetKey(asset.Currency, asset.Issuer);
+            XrplAmount.KindOf(asset) switch
+            {
+                AmountKind.Xrp => Xrp,
+                AmountKind.Mpt => new AssetKey(DexAssets.MptKey(asset.MptIssuanceId), DexAssets.MptIssuer(asset.MptIssuanceId), true),
+                _ => new AssetKey(asset.Currency, asset.Issuer),
+            };
     }
 
     /// <summary>rippled's <c>StrandContext</c>: what a step sees of the strand while it is built.</summary>
@@ -517,6 +525,291 @@ namespace Xrpl.Amounts
 
             if (!context.SeenDirectAssets[_isLast ? 0 : 1].Add(AssetKey.Xrp))
                 return "temBAD_PATH_LOOP";
+
+            return null;
+        }
+    }
+
+    /// <summary>
+    /// rippled's <c>MPTEndpointStep</c>: an MPT moving between its issuer and a holder at either
+    /// end of a strand - a holder redeeming to the issuer at the start, the issuer issuing to a
+    /// holder at the end, or both, through the issuer, for a payment between holders. Issuing
+    /// after a step that redeemed charges the issuance's transfer fee; MPTs have no line
+    /// qualities. When offer crossing, the taker's MPToken is created as the MPT arrives.
+    /// </summary>
+    internal sealed class MptEndpointStep : FlowStep
+    {
+        private readonly string _source;
+        private readonly string _destination;
+        private readonly IssuedCurrency _mpt;
+        private readonly string _issuer;
+        private readonly FlowStep _previous;
+        private readonly bool _isLast;
+        private readonly bool _offerCrossing;
+        private readonly bool _directBetweenHolders;
+        private (XrplAmount In, XrplAmount SrcToDst, XrplAmount Out, DebtDirection SrcDebtDir)? _cache;
+
+        internal MptEndpointStep(StrandContext context, string source, string destination, string mptIssuanceId)
+        {
+            _source = source;
+            _destination = destination;
+            _mpt = DexAssets.Mpt(mptIssuanceId);
+            _issuer = DexAssets.MptIssuer(mptIssuanceId);
+            _previous = context.PreviousStep;
+            _isLast = context.IsLast;
+            _offerCrossing = context.OfferCrossing;
+            _directBetweenHolders = XrplAmount.SameAsset(_mpt, context.StrandDeliver) &&
+                                    !string.Equals(context.StrandSource, _issuer, StringComparison.Ordinal) &&
+                                    !string.Equals(context.StrandDestination, _issuer, StringComparison.Ordinal) &&
+                                    (context.IsFirst || (context.PreviousStep != null && !context.PreviousStep.IsBookStep));
+        }
+
+        internal override XrplAmount? CachedIn => _cache?.In;
+
+        internal override XrplAmount? CachedOut => _cache?.Out;
+
+        internal override string DirectStepSourceAccount => _source;
+
+        internal override (string Source, string Destination)? DirectStepAccounts => (_source, _destination);
+
+        /// <summary>The MPT the step moves.</summary>
+        internal IssuedCurrency Mpt => _mpt;
+
+        /// <summary>
+        /// <c>maxPaymentFlow</c>: what a holder holds, frozen or not; what the issuer can still
+        /// issue when the step stands alone; the issuance's maximum after another step, which
+        /// limits the flow itself.
+        /// </summary>
+        private (XrplAmount Max, DebtDirection Direction) MaxPaymentFlow(DexView sb)
+        {
+            XrplAmount funds = sb.AccountHoldsMpt(_source, _mpt, zeroIfFrozen: false, zeroIfUnauthorized: false, fullBalance: true);
+            if (!string.Equals(_source, _issuer, StringComparison.Ordinal))
+                return (funds, Amounts.DebtDirection.Redeems);
+
+            if (sb.World.Issuance(_mpt) == null)
+                return (XrplAmount.Zero(_mpt), Amounts.DebtDirection.Issues);
+
+            return _previous == null
+                ? (funds, Amounts.DebtDirection.Issues)
+                : (XrplAmount.FromUnits(_mpt, AmountKind.Mpt, sb.MaxMptAmount(_mpt)), Amounts.DebtDirection.Issues);
+        }
+
+        internal override DebtDirection DebtDirection(DexView sb, StrandDirection direction)
+        {
+            if (direction == StrandDirection.Forward && _cache != null)
+                return _cache.Value.SrcDebtDir;
+
+            return string.Equals(_source, _issuer, StringComparison.Ordinal) ? Amounts.DebtDirection.Issues : Amounts.DebtDirection.Redeems;
+        }
+
+        /// <summary><c>qualitiesSrcRedeems</c>: the previous step's quality in carries over.</summary>
+        private uint SourceQualityOutRedeems(DexView view) =>
+            _previous == null ? OfferCrossing.QualityOne : Math.Max(_previous.LineQualityIn(view), OfferCrossing.QualityOne);
+
+        /// <summary><c>qualitiesSrcIssues</c>: issuing after a step that redeemed charges the transfer fee.</summary>
+        private uint SourceQualityOutIssues(DexView view, DebtDirection previous) =>
+            previous == Amounts.DebtDirection.Redeems ? view.World.MptTransferRate(_mpt) : OfferCrossing.QualityOne;
+
+        private uint SourceQualityOut(DexView sb, DebtDirection sourceDirection, StrandDirection strandDirection)
+        {
+            if (sourceDirection == Amounts.DebtDirection.Redeems)
+                return SourceQualityOutRedeems(sb);
+
+            DebtDirection previous = _previous?.DebtDirection(sb, strandDirection) ?? Amounts.DebtDirection.Issues;
+            return SourceQualityOutIssues(sb, previous);
+        }
+
+        internal override (XrplQuality? Quality, DebtDirection Direction) QualityUpperBound(DexView view, DebtDirection previous)
+        {
+            DebtDirection direction = DebtDirection(view, StrandDirection.Forward);
+            uint srcQOut = direction == Amounts.DebtDirection.Redeems ? SourceQualityOutRedeems(view) : SourceQualityOutIssues(view, previous);
+            return (QualityOfRates(srcQOut, OfferCrossing.QualityOne, view.Rules), direction);
+        }
+
+        private void ResetCache(DebtDirection direction)
+        {
+            XrplAmount zero = XrplAmount.Zero(_mpt);
+            _cache = (zero, zero, zero, direction);
+        }
+
+        /// <summary><c>sendWithMPTCreate</c>: offer crossing creates the taker's MPToken at the end of the strand; then <c>directSendNoFee</c>.</summary>
+        private string Send(DexView sb, XrplAmount amount)
+        {
+            if (_offerCrossing && _isLast)
+                sb.CreateMpToken(_destination, _mpt);
+
+            return amount.IsZero ? null : sb.SendMpt(_source, _destination, amount);
+        }
+
+        internal override (XrplAmount In, XrplAmount Out) Rev(DexView sb, DexView afView, OfferRemovals offersToRemove, XrplAmount @out)
+        {
+            @out = @out.WithAsset(_mpt);
+            LedgerRules rules = sb.Rules;
+            _cache = null;
+            (XrplAmount maxSrcToDst, DebtDirection direction) = MaxPaymentFlow(sb);
+            uint srcQOut = SourceQualityOut(sb, direction, StrandDirection.Reverse);
+            if (StepMath.IsNotPositive(maxSrcToDst))
+            {
+                ResetCache(direction);
+                return (_cache.Value.In, _cache.Value.Out);
+            }
+
+            // Issuing after another step, the maximum is no real limit: cap what goes through at
+            // the most whose input, fee included, is still an amount.
+            XrplAmount maxRepresentable = OfferCrossing.MulRatio(
+                XrplAmount.FromUnits(_mpt, AmountKind.Mpt, (long)XrplAmount.MaxMptAmount), OfferCrossing.QualityOne, srcQOut, roundUp: false, rules);
+            XrplAmount srcToDst = StepMath.Min(@out, StepMath.Min(maxSrcToDst, maxRepresentable));
+            XrplAmount @in = OfferCrossing.MulRatio(srcToDst, srcQOut, OfferCrossing.QualityOne, roundUp: true, rules);
+            _cache = (@in, srcToDst, srcToDst, direction);
+            if (Send(sb, srcToDst) != null)
+            {
+                ResetCache(direction);
+                return (_cache.Value.In, _cache.Value.Out);
+            }
+
+            return (@in, srcToDst);
+        }
+
+        internal override (XrplAmount In, XrplAmount Out) Fwd(DexView sb, DexView afView, OfferRemovals offersToRemove, XrplAmount @in)
+        {
+            @in = @in.WithAsset(_mpt);
+            LedgerRules rules = sb.Rules;
+            (XrplAmount maxSrcToDst, DebtDirection direction) = MaxPaymentFlow(sb);
+            uint srcQOut = SourceQualityOut(sb, direction, StrandDirection.Forward);
+            if (StepMath.IsNotPositive(maxSrcToDst))
+            {
+                ResetCache(direction);
+                return (_cache.Value.In, _cache.Value.Out);
+            }
+
+            XrplAmount srcToDst;
+            try
+            {
+                srcToDst = OfferCrossing.MulRatio(@in, OfferCrossing.QualityOne, srcQOut, roundUp: false, rules);
+            }
+            catch (OverflowException)
+            {
+                ResetCache(direction);
+                return (_cache.Value.In, _cache.Value.Out);
+            }
+
+            if (srcToDst <= maxSrcToDst)
+            {
+                SetCacheLimiting(@in, srcToDst, srcToDst, direction);
+            }
+            else
+            {
+                XrplAmount actualIn = OfferCrossing.MulRatio(maxSrcToDst, srcQOut, OfferCrossing.QualityOne, roundUp: true, rules);
+                SetCacheLimiting(actualIn, maxSrcToDst, maxSrcToDst, direction);
+            }
+
+            if (Send(sb, _cache.Value.SrcToDst) != null)
+            {
+                ResetCache(direction);
+                return (_cache.Value.In, _cache.Value.Out);
+            }
+
+            return (_cache.Value.In, _cache.Value.Out);
+        }
+
+        /// <summary><c>setCacheLimiting</c>: the forward pass never delivers more than the reverse pass found.</summary>
+        private void SetCacheLimiting(XrplAmount fwdIn, XrplAmount fwdSrcToDst, XrplAmount fwdOut, DebtDirection direction)
+        {
+            var cache = _cache.Value;
+            if (cache.In < fwdIn)
+            {
+                long diff = checked((long)fwdIn.StMantissa - (long)cache.In.StMantissa);
+                if (diff > 1 && (cache.In.IsZero || (decimal)fwdIn.StMantissa / cache.In.StMantissa > 1.01m))
+                {
+                    _cache = (fwdIn, fwdSrcToDst, fwdOut, direction);
+                    return;
+                }
+            }
+
+            _cache = (
+                fwdIn,
+                fwdSrcToDst < cache.SrcToDst ? fwdSrcToDst : cache.SrcToDst,
+                fwdOut < cache.Out ? fwdOut : cache.Out,
+                direction);
+        }
+
+        /// <summary><c>MPTEndpointStep::check</c> and the payment's own checks.</summary>
+        internal string Check(StrandContext context)
+        {
+            DexView view = context.View;
+            if (string.IsNullOrEmpty(_source) || string.IsNullOrEmpty(_destination))
+                return "temBAD_PATH";
+            if (string.Equals(_source, _destination, StringComparison.Ordinal))
+                return "temBAD_PATH";
+            if (!view.World.AccountExists(_source))
+                return "terNO_ACCOUNT";
+
+            // A pure issue or redeem cannot be locked. The first step checks the issuance's lock
+            // and its source's; the last only its destination's MPToken.
+            if (!(context.IsLast && context.IsFirst))
+            {
+                string account = context.IsFirst ? _source : _destination;
+                if ((context.IsFirst && view.IsMptGlobalLocked(_mpt)) || view.IsMptIndividualLocked(account, _mpt))
+                    return "terLOCKED";
+            }
+
+            AssetKey key = AssetKey.Of(_mpt);
+            if (context.SeenBookOuts.Contains(key))
+            {
+                if (context.PreviousStep == null)
+                    return "temBAD_PATH_LOOP";
+                if (context.PreviousStep.BookStepBook is { } book && AssetKey.Of(book.Out) != key)
+                    return "temBAD_PATH_LOOP";
+            }
+
+            if ((context.IsFirst && !context.SeenDirectAssets[0].Add(key)) || (context.IsLast && !context.SeenDirectAssets[1].Add(key)))
+                return "temBAD_PATH_LOOP";
+
+            if (!context.IsLast && !context.IsFirst)
+                return "temBAD_PATH";
+
+            bool sourceIssues = string.Equals(_source, _issuer, StringComparison.Ordinal);
+            bool destinationRedeems = string.Equals(_destination, _issuer, StringComparison.Ordinal);
+            if (sourceIssues == destinationRedeems)
+                return "temBAD_PATH";
+
+            return _offerCrossing ? null : CheckPayment(context);
+        }
+
+        /// <summary><c>MPTEndpointPaymentStep::check</c>: both holders authorized, and the MPT free to move as the payment moves it.</summary>
+        private string CheckPayment(StrandContext context)
+        {
+            DexView view = context.View;
+            if (!string.Equals(_source, _issuer, StringComparison.Ordinal) && view.RequireMptAuth(_source, _mpt, MptAuth.Strong) is { } sourceAuth)
+                return sourceAuth;
+            if (!string.Equals(_destination, _issuer, StringComparison.Ordinal) && view.RequireMptAuth(_destination, _mpt, MptAuth.Strong) is { } destinationAuth)
+                return destinationAuth;
+
+            if (XrplAmount.SameAsset(_mpt, context.StrandDeliver) &&
+                (context.IsFirst || (context.PreviousStep != null && !context.PreviousStep.IsBookStep)))
+            {
+                // A payment of the MPT itself: between holders it must be unlocked and transferable.
+                if (_directBetweenHolders)
+                {
+                    string holder = context.IsFirst ? _source : _destination;
+                    if (view.IsFrozen(holder, _mpt))
+                        return "tecLOCKED";
+                    if (view.CanTransfer(_mpt, holder, context.StrandDestination) is { } refused)
+                        return refused;
+                }
+            }
+            else if (view.CanTrade(_mpt) is { } untradable)
+            {
+                return untradable;
+            }
+
+            // Only the first step knows its source's funds; later ones can shift balances between holders.
+            if (_previous == null)
+            {
+                XrplAmount owed = view.AccountHoldsMpt(_source, _mpt, zeroIfFrozen: false, zeroIfUnauthorized: false, fullBalance: true);
+                if (StepMath.IsNotPositive(owed))
+                    return "tecPATH_DRY";
+            }
 
             return null;
         }
