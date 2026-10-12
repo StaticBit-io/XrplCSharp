@@ -307,6 +307,17 @@ namespace Xrpl.Amounts
 
             LedgerIndex at = await PinAsync(client, ledger, cancellationToken).ConfigureAwait(false);
             List<IssuedCurrency> assets = new List<IssuedCurrency>();
+
+            // An issuance several accounts hold is read once.
+            Dictionary<string, DexMptIssuance> issuances = new Dictionary<string, DexMptIssuance>(StringComparer.Ordinal);
+            async Task<DexMptIssuance> IssuanceAsync(string mptIssuanceId, CancellationToken token)
+            {
+                string key = DexAssets.MptKey(mptIssuanceId);
+                if (!issuances.TryGetValue(key, out DexMptIssuance issuance))
+                    issuances[key] = issuance = await DexSnapshot.IssuanceAsync(client, key, at, token).ConfigureAwait(false);
+                return issuance;
+            }
+
             foreach (string account in accounts.Where(a => !string.IsNullOrEmpty(a)).Distinct(StringComparer.Ordinal))
             {
                 foreach (DexTrustLine line in await PathfindingSource.AccountLinesAsync(client, account, at, cancellationToken).ConfigureAwait(false))
@@ -319,7 +330,7 @@ namespace Xrpl.Amounts
                 }
 
                 // The MPTs the account issues or holds.
-                foreach (PathfindMpt mpt in await PathfindingSource.AccountMptsAsync(client, account, at, cancellationToken).ConfigureAwait(false))
+                foreach (PathfindMpt mpt in await PathfindingSource.AccountMptsAsync(client, account, at, IssuanceAsync, cancellationToken).ConfigureAwait(false))
                     assets.Add(DexAssets.Mpt(mpt.MptIssuanceId));
             }
 

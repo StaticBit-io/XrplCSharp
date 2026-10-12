@@ -118,8 +118,14 @@ namespace Xrpl.Amounts
         /// <summary>
         /// An account's MPTs from its owner directory (<c>account_objects</c>), in its order: the
         /// issuances it issues and the MPTokens it holds, each with whether the issuance is maxed out.
+        /// <paramref name="issuance"/> reads a held MPToken's issuance, so a caller can serve it from a cache.
         /// </summary>
-        internal static async Task<List<PathfindMpt>> AccountMptsAsync(IXrplClient client, string account, LedgerIndex at, CancellationToken cancellationToken)
+        internal static async Task<List<PathfindMpt>> AccountMptsAsync(
+            IXrplClient client,
+            string account,
+            LedgerIndex at,
+            Func<string, CancellationToken, Task<DexMptIssuance>> issuance,
+            CancellationToken cancellationToken)
         {
             List<PathfindMpt> result = new List<PathfindMpt>();
             object marker = null;
@@ -140,14 +146,14 @@ namespace Xrpl.Amounts
 
                 foreach (BaseLedgerEntry entry in page?.AccountObjectList ?? new List<BaseLedgerEntry>())
                 {
-                    if (entry is LOMPTokenIssuance issuance && issuance.MPTokenIssuanceID is { } issued)
+                    if (entry is LOMPTokenIssuance issued && issued.MPTokenIssuanceID is { } issuedId)
                     {
-                        bool maxedOut = (issuance.OutstandingAmount ?? 0) == (issuance.MaximumAmount ?? XrplAmount.MaxMptAmount);
-                        result.Add(new PathfindMpt(DexAssets.MptKey(issued), false, maxedOut));
+                        bool maxedOut = (issued.OutstandingAmount ?? 0) == (issued.MaximumAmount ?? XrplAmount.MaxMptAmount);
+                        result.Add(new PathfindMpt(DexAssets.MptKey(issuedId), false, maxedOut));
                     }
                     else if (entry is LOMPToken token && token.MPTokenIssuanceID != null)
                     {
-                        DexMptIssuance held = await DexSnapshot.IssuanceAsync(client, token.MPTokenIssuanceID, at, cancellationToken).ConfigureAwait(false);
+                        DexMptIssuance held = await issuance(token.MPTokenIssuanceID, cancellationToken).ConfigureAwait(false);
                         result.Add(new PathfindMpt(DexAssets.MptKey(token.MPTokenIssuanceID), (token.MPTAmount ?? 0) == 0, MaxedOut(held)));
                     }
                 }
@@ -399,7 +405,7 @@ namespace Xrpl.Amounts
             internal override async Task<IReadOnlyList<PathfindMpt>> MptsAsync(string account, CancellationToken cancellationToken)
             {
                 if (!_mpts.TryGetValue(account, out List<PathfindMpt> mpts))
-                    _mpts[account] = mpts = await AccountMptsAsync(_client, account, _at, cancellationToken).ConfigureAwait(false);
+                    _mpts[account] = mpts = await AccountMptsAsync(_client, account, _at, IssuanceAsync, cancellationToken).ConfigureAwait(false);
 
                 return mpts;
             }

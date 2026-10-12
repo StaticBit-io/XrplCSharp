@@ -537,20 +537,24 @@ namespace Xrpl.Amounts
             }
 
             List<string> approximated = new List<string>();
+            List<(string Owner, string Key, string Id)> ownerHoldings = new List<(string, string, string)>();
             foreach ((string owner, List<DexOffer> owned) in bookOwners)
             {
                 if (accountStates.Exists(state => state.Address == owner))
                 {
-                    // Read after all: its holdings too.
+                    // Read after all: its holdings too, each owner and MPT once.
                     foreach (DexOffer offer in owned)
                     {
                         foreach (IssuedCurrency asset in new[] { offer.TakerPays.Asset, offer.TakerGets.Asset })
                         {
-                            if (DexAssets.IsMpt(asset) && !string.Equals(owner, DexAssets.MptIssuer(asset.MptIssuanceId), StringComparison.Ordinal) &&
-                                !holdingStates.Exists(h => h.Account == owner && DexAssets.MptKey(h.MptIssuanceId) == DexAssets.MptKey(asset.MptIssuanceId)) &&
-                                await MpTokenAsync(client, owner, asset.MptIssuanceId, at, cancellationToken).ConfigureAwait(false) is { } holding)
+                            if (!DexAssets.IsMpt(asset) || string.Equals(owner, DexAssets.MptIssuer(asset.MptIssuanceId), StringComparison.Ordinal))
+                                continue;
+
+                            string key = DexAssets.MptKey(asset.MptIssuanceId);
+                            if (!holdingStates.Exists(h => h.Account == owner && DexAssets.MptKey(h.MptIssuanceId) == key) &&
+                                !ownerHoldings.Exists(p => p.Owner == owner && p.Key == key))
                             {
-                                holdingStates.Add(holding);
+                                ownerHoldings.Add((owner, key, asset.MptIssuanceId));
                             }
                         }
                     }
@@ -561,6 +565,11 @@ namespace Xrpl.Amounts
                 approximated.Add(owner);
                 AddBookOwner(owner, owned, ownerFunds, reserveBase, reserveIncrement, accountStates, lineStates, holdingStates);
             }
+
+            DexMptHolding[] ownerHoldingsRead = await Task.WhenAll(ownerHoldings
+                    .Select(p => Gated(() => MpTokenAsync(client, p.Owner, p.Id, at, cancellationToken))))
+                .ConfigureAwait(false);
+            holdingStates.AddRange(ownerHoldingsRead.Where(h => h != null));
 
             return new DexSnapshot
             {
