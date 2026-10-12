@@ -11,6 +11,7 @@
 #   cli         command-line wrapper, never dispatched as an RPC method
 #   deprecated  documented as deprecated on xrpl.org, or registered for API v1 only
 #   internal    public role but undocumented; reports node internals
+#   covered     public, but what it does the SDK already does another way
 #   gap         public and documented, not implemented yet. Listed so the check stays a
 #               signal for methods nobody has looked at; reported as GAP on every run
 #
@@ -52,9 +53,9 @@ ledger_header           # deprecated: minApiVer = maxApiVer = 1; xrpl.org says u
 owner_info              # deprecated: xrpl.org says use `account_objects`
 tx_history              # deprecated: minApiVer = maxApiVer = 1; removed in API v2
 
+submit_multisigned      # covered: the SDK serializes and combines signatures itself (Signer.Multisign, SubmitMulti) and sends the blob through `submit`; this method only takes tx_json for clients that cannot
 tx_reduce_relay         # internal: returns overlay relay metrics (TxReduceRelay.cpp), undocumented
 
 book_changes            # gap: public RPC method; the SDK only has the book_changes stream
 manifest                # gap: public server-info method
-submit_multisigned      # gap: public; multi-signed blobs can go through `submit` meanwhile
 version                 # gap: public server-info method (API versions)
