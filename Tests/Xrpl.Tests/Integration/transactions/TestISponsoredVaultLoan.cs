@@ -27,8 +27,8 @@ namespace XrplTests.Xrpl.ClientLib.Integration;
 /// The <c>Sponsor</c> field (XLS-68) on the Vault and Loan transaction types.
 /// </summary>
 /// <remarks>
-/// These are the types rippled forbids inside a Batch (<c>Batch::preflight</c>
-/// kDisabledTxTypes), so whether they take a sponsor at all is worth establishing rather
+/// These are the types rippled forbids inside a Batch until LendingProtocolV1_2
+/// (<c>Batch::preflight</c> kDisabledTxTypes), so whether they take a sponsor at all is worth establishing rather
 /// than assuming. They do: <c>preflight1Sponsor</c> in Transactor.cpp constrains only
 /// <c>spfSponsorReserve</c>, through the allow-list in <c>isReserveSponsorAllowed</c>, and
 /// no Vault or Loan type is on it. Fee sponsorship is unconstrained, which is what these

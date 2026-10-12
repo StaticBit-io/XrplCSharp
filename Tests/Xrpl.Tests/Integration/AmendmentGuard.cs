@@ -69,6 +69,13 @@ public static class AmendmentGuard
     /// <summary>Amendment id of LendingProtocolV1_1 (sha512half of the name): closed-ended vaults.</summary>
     public const string LendingProtocolV11 = "A360E2BFD775A5B0DCE1C36C16DF31B72735A57584FD163655D2F9564F8E7AC8";
 
+    /// <summary>
+    /// Amendment id of LendingProtocolV1_2 (sha512half of the name): Vault, LoanBroker and Loan
+    /// transactions become valid Batch inners. Supported::No on rippled develop as of October 2026,
+    /// so no stand enables it yet.
+    /// </summary>
+    public const string LendingProtocolV12 = "5AE2B8F0B54FFB81E7B27BD7005C8401D9555E4F399369CA22D041F22815C824";
+
     /// <summary>Amendment id of XChainBridge / XLS-38 (sha512half of the name).</summary>
     public const string XChainBridge = "C98D98EE9616ACD36E81FDEB8D41D349BF5F1B41DD64A0ABC1FE9AA5EA267E9C";
 
