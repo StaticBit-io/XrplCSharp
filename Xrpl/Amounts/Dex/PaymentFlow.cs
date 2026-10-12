@@ -12,7 +12,7 @@ namespace Xrpl.Amounts
 {
     /// <summary>
     /// A <c>Payment</c> computed locally against a <see cref="DexSnapshot"/>, the way rippled
-    /// 3.4.0 applies it: its paths turned into strands of trust lines, order books and AMM pools,
+    /// 3.4.1 applies it: its paths turned into strands of trust lines, order books and AMM pools,
     /// run by the payment engine with <c>SendMax</c>, <c>DeliverMin</c>, partial payment and the
     /// limit quality, and the result the node would return.
     /// </summary>

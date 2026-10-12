@@ -88,7 +88,7 @@ namespace Xrpl.Amounts
     }
 
     /// <summary>
-    /// Payment paths found locally, as rippled 3.4.0's <c>ripple_path_find</c> finds them: its
+    /// Payment paths found locally, as rippled 3.4.1's <c>ripple_path_find</c> finds them: its
     /// <c>PathRequest</c> and <c>Pathfinder</c> over a <see cref="PathfindingSource"/>, each
     /// path ranked with the payment engine, and the cost of the best ones computed.
     /// </summary>

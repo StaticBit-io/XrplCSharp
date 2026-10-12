@@ -40,6 +40,7 @@
 
 * `Xrpl.Amounts` ports the integer-arithmetic hardening of rippled 3.4.1 in the payment engine: an XRP or MPT total of a strand that leaves `int64` is a dry path (`tecPATH_DRY`) rather than an overflow. `StrandFlow.Run` returns `tecPATH_DRY` when the sum of the strands' ins or outs overflows (`checkedStepAddOpt`), and `BookCrossingStep` fails the strand when its sum does (`checkedStepAdd`), instead of removing the offer as `OfferRemovalReason.Overflow`. `StepMath.CheckedAdd` and `StepMath.TrySum` are new
 * CI: engine-watch's `baseline_ref` in `protocol-watch.yml` is `3.4.1`
+* Docs: the Amounts guide (`DocFx/Amounts-Guide.md`, `Amounts-Guide.ru.md`) and the summaries of `OfferCreateCrossing`, `PaymentFlow`, `Pathfinder` and `PathFinding` name rippled 3.4.1 as the release the engine follows
 * Tests: `TestUCheckedStepAdd` replays the `checkedAdd` assertions of `MathUtilities.h` on MPT and XRP amounts and checks the step and flow sums
 ## 11.13.0.0 11/10/2026
 
