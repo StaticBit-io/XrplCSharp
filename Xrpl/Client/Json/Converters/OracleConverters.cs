@@ -218,6 +218,11 @@ namespace Xrpl.Client.Json.Converters
                     return hex;
             }
 
+            // Three characters of text written back are a standard code, which the ledger stores at
+            // bytes 12-14; text at byte 0 is a different, nonstandard currency, so it stays hex.
+            if (length == 3)
+                return hex;
+
             return length > 0 && OracleAsciiValidation.IsPrintableAscii(bytes.AsSpan(0, length))
                 ? Encoding.ASCII.GetString(bytes, 0, length)
                 : hex;
