@@ -2,8 +2,10 @@
 using System.Collections.Generic;
 using System.Linq;
 using System.Text.Json.Nodes;
+using System.Text.Json.Serialization;
 
 using Xrpl.Client.Exceptions;
+using Xrpl.Client.Json.Converters;
 
 namespace Xrpl.Models.Transactions
 {
@@ -16,6 +18,13 @@ namespace Xrpl.Models.Transactions
     /// or multisig (a nested <see cref="Signers"/> array with an empty
     /// <see cref="SigningPubKey"/>).
     /// </summary>
+    /// <remarks>
+    /// Serialized through <see cref="SignatureObjectConverter"/> in the wire shape, with each
+    /// nested signer wrapped in a <c>Signer</c> object. Reading does not enforce either form, so
+    /// a Batch inner co-signature marker - an empty object, or one with an empty
+    /// <c>SigningPubKey</c> - reads and writes back unchanged.
+    /// </remarks>
+    [JsonConverter(typeof(SignatureObjectConverter))]
     public class SignatureObject
     {
         /// <summary>Signer account (present on BatchSigner entries; absent on Sponsor/Counterparty).</summary>
@@ -58,7 +67,19 @@ namespace Xrpl.Models.Transactions
         }
 
         /// <summary>Parses the wire-shape JsonObject produced by <see cref="ToJsonObject"/> / the binary codec.</summary>
+        /// <exception cref="ValidationException">When the object matches neither protocol shape (see <see cref="ValidateShape"/>).</exception>
         public static SignatureObject FromJsonObject(JsonObject json)
+        {
+            SignatureObject result = ReadJsonObject(json);
+            result.ValidateShape();
+            return result;
+        }
+
+        /// <summary>
+        /// Reads the wire-shape JsonObject without enforcing either protocol shape, so an unsigned
+        /// object such as a Batch inner co-signature marker survives.
+        /// </summary>
+        internal static SignatureObject ReadJsonObject(JsonObject json)
         {
             if (json is null)
                 throw new ValidationException("Signature object JSON must not be null.");
@@ -75,11 +96,9 @@ namespace Xrpl.Models.Transactions
                 result.Signers = signers
                     .Select(node => node?["Signer"]?.AsObject()
                         ?? throw new ValidationException("Signers entries must be wrapped in a Signer object."))
-                    .Select(FromJsonObject)
+                    .Select(ReadJsonObject)
                     .ToList();
             }
-
-            result.ValidateShape();
 
             return result;
         }
@@ -107,6 +126,8 @@ namespace Xrpl.Models.Transactions
                         throw new ValidationException("Each Signer entry requires the Account field.");
                     if (string.IsNullOrEmpty(signer.SigningPubKey) || string.IsNullOrEmpty(signer.TxnSignature))
                         throw new ValidationException("Each Signer entry requires SigningPubKey and TxnSignature.");
+                    if (signer.Signers is not null)
+                        throw new ValidationException("A Signer entry cannot nest Signers.");
                 }
                 return;
             }

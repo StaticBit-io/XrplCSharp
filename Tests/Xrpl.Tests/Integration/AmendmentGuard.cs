@@ -63,6 +63,9 @@ public static class AmendmentGuard
     /// </summary>
     public const string FixCleanup340 = "98433DD001A5737F773D74F8CA2A25A065089C73B2E611C760BAF369E4FECA76";
 
+    /// <summary>Amendment id of LendingProtocol / XLS-66 (sha512half of the name).</summary>
+    public const string LendingProtocol = "565B90CA1AB2B9D42208ED10884188C64F9E19083DECB9634AAF06EB03299509";
+
     /// <summary>Amendment id of LendingProtocolV1_1 (sha512half of the name): closed-ended vaults.</summary>
     public const string LendingProtocolV11 = "A360E2BFD775A5B0DCE1C36C16DF31B72735A57584FD163655D2F9564F8E7AC8";
 

@@ -356,6 +356,8 @@ await client.SubmitAndWait(manageTx, walletBroker, true);
 - `tfLoanImpair` — mark loan as impaired
 - `tfLoanUnimpair` — restore loan from impaired state
 
+A `LoanManage` with no action flag is valid and leaves the loan unchanged.
+
 ### 5. Delete the Loan Broker
 
 When the broker has no outstanding loans:
@@ -377,6 +379,13 @@ await client.SubmitAndWait(deletebrokerTx, walletBroker, true);
 `LoanSet` is unique among XRPL transactions — it requires **two signatures**. The broker signs the transaction as normal (`TxnSignature`), and the borrower provides a `CounterpartySignature` — an inner STObject containing the borrower's `SigningPubKey` and `TxnSignature`.
 
 The SDK provides `LoanSigningHelper` and `XrplWallet.SignAsLoanCounterparty()` with three signing patterns, analogous to Batch signing (V1/V2/V3).
+
+The two roles are the **submitter** (`Account`) and the **counterparty** (`Counterparty`, or the LoanBroker's owner when the field is omitted). One of them must be the broker owner and the other one is the borrower, so either party can submit:
+
+- the broker owner submits with `Counterparty` set to the borrower, and the borrower co-signs;
+- the borrower submits, `Counterparty` is the broker owner or omitted, and the broker owner co-signs.
+
+The examples below use the first arrangement. For the second, swap the wallets: the borrower prepares and submits, and the broker owner signs as counterparty. `LoanSigningHelper.SignLoanSet` accepts the two wallets in either order and assigns the roles by `Account`; its overload with a `brokerOwner` argument also checks the counterparty when `Counterparty` is omitted.
 
 ### Preparation (Common to All Patterns)
 
@@ -431,12 +440,12 @@ SignatureResult withCounterparty = borrowerWallet.SignAsLoanCounterparty(txDict)
 // withCounterparty.TxBlob is sent to the broker (e.g. via API, QR code, etc.)
 
 // Step 2: Broker receives the partially signed blob, adds TxnSignature
-SignatureResult fullySigned = LoanSigningHelper.BrokerSign(
+SignatureResult fullySigned = LoanSigningHelper.SubmitterSign(
     withCounterparty.TxBlob, brokerWallet);
 await client.SubmitRequest(fullySigned.TxBlob);
 ```
 
-> **Important:** Do not use `brokerWallet.Sign()` on a partially signed LoanSet blob — it does not handle `CounterpartySignature` correctly. Always use `LoanSigningHelper.BrokerSign()` for the V3 pattern.
+> **Important:** Do not use `brokerWallet.Sign()` on a partially signed LoanSet blob — it does not handle `CounterpartySignature` correctly. Always use `LoanSigningHelper.SubmitterSign()` for the V3 pattern.
 
 ### Multisig Borrower (Counterparty with a SignerList)
 
@@ -608,7 +617,7 @@ Fields read from the ledger arrive in the form rippled writes them, for example 
        throw new Exception($"Transaction failed: {result.Meta?.TransactionResult}");
    ```
 
-7. **LoanManage flags are mutually exclusive** — only set one of `tfLoanDefault`, `tfLoanImpair`, or `tfLoanUnimpair` per transaction.
+7. **LoanManage flags are mutually exclusive** — set at most one of `tfLoanDefault`, `tfLoanImpair`, or `tfLoanUnimpair` per transaction.
 
 8. **LoanPay flags are mutually exclusive** — `tfLoanOverpayment`, `tfLoanFullPayment`, and `tfLoanLatePayment` cannot be combined. Note that `tfLoanOverpayment` may require specific broker/loan configuration to be permitted.
 
