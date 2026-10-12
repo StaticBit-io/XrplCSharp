@@ -634,6 +634,16 @@ namespace Xrpl.Client
         Task<XrplResponse<DepositAuthorized>> DepositAuthorized(DepositAuthorizedRequest request, CancellationToken cancellationToken = default);
 
         /// <summary>
+        /// The <c>get_aggregate_price</c> method retrieves the aggregate price of the given <c>Oracle</c> objects:
+        /// the mean, the median and, when a trim is requested, the trimmed mean.
+        /// https://xrpl.org/docs/references/http-websocket-apis/public-api-methods/path-and-order-book-methods/get_aggregate_price
+        /// </summary>
+        /// <param name="request">A <see cref="GetAggregatePriceRequest"/>.</param>
+        /// <param name="cancellationToken">Cancellation token.</param>
+        /// <returns>A <see cref="GetAggregatePriceResponse"/> response.</returns>
+        Task<XrplResponse<GetAggregatePriceResponse>> GetAggregatePrice(GetAggregatePriceRequest request, CancellationToken cancellationToken = default);
+
+        /// <summary>
         /// The <c>path_find</c> create sub-command creates an ongoing request to find possible paths
         /// along which a payment transaction could be made.<br/>
         /// WebSocket API only.<br/>
@@ -1208,6 +1218,12 @@ namespace Xrpl.Client
         public Task<XrplResponse<DepositAuthorized>> DepositAuthorized(DepositAuthorizedRequest request, CancellationToken cancellationToken = default)
         {
             return this.GRequest<DepositAuthorized, DepositAuthorizedRequest>(request, cancellationToken);
+        }
+
+        /// <inheritdoc />
+        public Task<XrplResponse<GetAggregatePriceResponse>> GetAggregatePrice(GetAggregatePriceRequest request, CancellationToken cancellationToken = default)
+        {
+            return this.GRequest<GetAggregatePriceResponse, GetAggregatePriceRequest>(request, cancellationToken);
         }
 
         /// <inheritdoc />
