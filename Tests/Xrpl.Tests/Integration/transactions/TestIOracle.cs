@@ -3,6 +3,7 @@ using Microsoft.VisualStudio.TestTools.UnitTesting;
 
 using System;
 using System.Collections.Generic;
+using System.Globalization;
 using System.Linq;
 using System.Threading.Tasks;
 
@@ -518,6 +519,129 @@ public class TestIOracle
         Console.WriteLine($"Step 3: Deleted Oracle {oracleDocumentId}, verified removal from ledger");
 
         Console.WriteLine("Full lifecycle test completed successfully!");
+    }
+
+    #endregion
+
+    #region get_aggregate_price Tests
+
+    /// <summary>
+    /// Four oracles price XRP/USD at 0.740, 0.750, 0.760 and 0.900. The node aggregates them;
+    /// a 25% trim drops one price from each end (4 * 25 / 100 = 1).
+    /// </summary>
+    [TestMethod]
+    public async Task TestGetAggregatePrice_StatisticsAndTrim()
+    {
+        List<OracleIdentifier> oracles = new List<OracleIdentifier>();
+        foreach (ulong price in new ulong[] { 740, 750, 760, 900 })
+        {
+            oracles.Add(await CreatePriceOracleAsync("XRP", "USD", price, 3, await GetLedgerCloseTimeAsync()));
+        }
+
+        GetAggregatePriceResponse response = await client.GetAggregatePrice(
+            new GetAggregatePriceRequest("XRP", "USD", oracles) { Trim = 25 }).Typed();
+
+        Assert.AreEqual(4u, response.EntireSet.Size);
+        Assert.AreEqual(0.7875m, decimal.Parse(response.EntireSet.Mean, CultureInfo.InvariantCulture));
+        Assert.AreEqual(0.755m, decimal.Parse(response.Median, CultureInfo.InvariantCulture));
+        Assert.IsGreaterThan(0m, decimal.Parse(response.EntireSet.StandardDeviation, NumberStyles.Float, CultureInfo.InvariantCulture));
+
+        Assert.IsNotNull(response.TrimmedSet, "a trim was requested, so the node must send trimmed_set");
+        Assert.AreEqual(2u, response.TrimmedSet.Size);
+        Assert.AreEqual(0.755m, decimal.Parse(response.TrimmedSet.Mean, CultureInfo.InvariantCulture));
+
+        Assert.IsGreaterThan(0u, response.Time);
+    }
+
+    /// <summary>
+    /// A quote asset longer than three characters is stored as 40-character hex. The node compares the
+    /// request string with that hex, so the name given to OracleSet has to find the price here too.
+    /// </summary>
+    [TestMethod]
+    public async Task TestGetAggregatePrice_NonstandardCurrencyCode()
+    {
+        OracleIdentifier oracle = await CreatePriceOracleAsync("XRP", "RLUSD", 2345, 3, await GetLedgerCloseTimeAsync());
+
+        GetAggregatePriceResponse response = await client.GetAggregatePrice(
+            new GetAggregatePriceRequest("XRP", "RLUSD", new[] { oracle })).Typed();
+
+        Assert.AreEqual(1u, response.EntireSet.Size);
+        Assert.AreEqual(2.345m, decimal.Parse(response.Median, CultureInfo.InvariantCulture));
+        Assert.IsNull(response.TrimmedSet, "no trim was requested");
+    }
+
+    /// <summary>
+    /// <c>time_threshold</c> leaves out a price older than the newest by more than the threshold. Sent
+    /// under the name xrpl.org documents, <c>trim_threshold</c>, the node would ignore it and count both.
+    /// </summary>
+    [TestMethod]
+    public async Task TestGetAggregatePrice_TimeThresholdDropsOldPrices()
+    {
+        DateTime now = await GetLedgerCloseTimeAsync();
+        OracleIdentifier stale = await CreatePriceOracleAsync("XRP", "EUR", 600, 3, now.AddSeconds(-200));
+        OracleIdentifier fresh = await CreatePriceOracleAsync("XRP", "EUR", 700, 3, now);
+
+        GetAggregatePriceResponse all = await client.GetAggregatePrice(
+            new GetAggregatePriceRequest("XRP", "EUR", new[] { stale, fresh })).Typed();
+        Assert.AreEqual(2u, all.EntireSet.Size);
+
+        GetAggregatePriceResponse recent = await client.GetAggregatePrice(
+            new GetAggregatePriceRequest("XRP", "EUR", new[] { stale, fresh }) { TimeThreshold = 60 }).Typed();
+        Assert.AreEqual(1u, recent.EntireSet.Size);
+        Assert.AreEqual(0.7m, decimal.Parse(recent.Median, CultureInfo.InvariantCulture));
+    }
+
+    /// <summary>
+    /// A pair no listed oracle prices is answered with <c>objectNotFound</c>.
+    /// </summary>
+    [TestMethod]
+    public async Task TestGetAggregatePrice_UnpricedPairIsObjectNotFound()
+    {
+        OracleIdentifier oracle = await CreatePriceOracleAsync("XRP", "USD", 740, 3, await GetLedgerCloseTimeAsync());
+
+        RippledException error = await Helper.ThrowsExceptionAsync<RippledException>(
+            () => client.GetAggregatePrice(new GetAggregatePriceRequest("XRP", "GBP", new[] { oracle })));
+
+        Assert.AreEqual("objectNotFound", error.Response?.Error, error.Message);
+    }
+
+    /// <summary>
+    /// Creates an oracle owned by a new funded account with one price for the pair.
+    /// </summary>
+    private static async Task<OracleIdentifier> CreatePriceOracleAsync(
+        string baseAsset, string quoteAsset, ulong assetPrice, uint scale, DateTime lastUpdateTime)
+    {
+        XrplWallet owner = XrplWallet.Generate();
+        await IntegrationTestConfig.TryFundWalletAsync(client, owner, nodeType);
+
+        uint documentId = (uint)new Random().Next(1, 100000);
+        OracleSet oracleSet = new OracleSet
+        {
+            Account = owner.ClassicAddress,
+            OracleDocumentID = documentId,
+            LastUpdateTime = lastUpdateTime,
+            Provider = "AggregateProvider",
+            AssetClass = "currency",
+            PriceDataSeries = new List<PriceDataWrapper>
+            {
+                new PriceDataWrapper
+                {
+                    PriceData = new PriceData
+                    {
+                        BaseAsset = baseAsset,
+                        QuoteAsset = quoteAsset,
+                        AssetPrice = assetPrice,
+                        Scale = scale
+                    }
+                }
+            }
+        };
+
+        OracleSet autofilled = await client.Autofill(oracleSet);
+        TransactionSummary result = await client.SubmitAndWait(autofilled, owner, true);
+        ValidateSuccessResult(result, $"OracleSet {baseAsset}/{quoteAsset}");
+
+        return new OracleIdentifier(owner.ClassicAddress, documentId);
     }
 
     #endregion
