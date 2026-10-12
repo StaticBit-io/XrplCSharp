@@ -267,6 +267,62 @@ public class TestIPathFinding
         Assert.IsNotEmpty(inDomain.Alternatives);
     }
 
+    /// <summary>
+    /// The streaming path_find create searches the domain's books when given the domain, as
+    /// ripple_path_find does. The domain's offer is dearer than the open one (0.5 against 0.4 XRP
+    /// per USD), so a search that ignored the domain would quote the cheaper open book.
+    /// </summary>
+    [TestMethod]
+    public async Task PathFindCreateThroughADomainBook()
+    {
+        XrplWallet[] w = await dex.Wallets(6);
+        XrplWallet gw = w[0], issuer = w[1], alice = w[2], bob = w[3], maker = w[4], openMaker = w[5];
+        IssuedCurrency usd = Iou("USD", gw);
+        await dex.Issuer(gw);
+        string domain = await dex.Domain(issuer, (issuer, "KYC"));
+        foreach (XrplWallet member in new[] { alice, bob, maker })
+            await dex.Credential(issuer, member, "KYC");
+        await dex.Trusts((maker, usd), (openMaker, usd), (bob, usd));
+        await dex.Pays((gw, maker, Amount(usd, "100")), (gw, openMaker, Amount(usd, "100")));
+        await dex.Offer(openMaker, Amount(usd, "20"), Drops(8_000_000));
+        await dex.Offer(maker, Amount(usd, "20"), Drops(10_000_000), domainId: domain);
+
+        Currency deliver = Amount(usd, "5").ToCurrency();
+        RipplePathFindResponse expected = await client.RipplePathFind(new RipplePathFindRequest(alice.ClassicAddress, bob.ClassicAddress, deliver)
+        {
+            SourceCurrencies = new List<SourceCurrency> { new SourceCurrency { Currency = "XRP" } },
+            Domain = domain,
+        }).Typed();
+        XrplAmount inDomain = expected.Alternatives.Single().SourceAmount.ToXrplAmount();
+
+        PathFindResponse open = await FindStreaming(alice, bob, deliver, domain: null);
+        PathFindResponse domainSearch = await FindStreaming(alice, bob, deliver, domain);
+
+        Assert.IsNotEmpty(domainSearch.Alternatives, "the domain's book must be found");
+        Assert.AreEqual(inDomain, domainSearch.Alternatives.Single().SourceAmount.ToXrplAmount(), "path_find quotes what ripple_path_find quotes in the domain");
+        Assert.IsGreaterThan(open.Alternatives.Single().SourceAmount.ToXrplAmount(), inDomain, "the domain's book is dearer than the open one");
+    }
+
+    /// <summary>
+    /// One path_find create on its own connection, closed once the first answer is in.
+    /// </summary>
+    private static async Task<PathFindResponse> FindStreaming(XrplWallet from, XrplWallet to, Currency deliver, string domain)
+    {
+        IXrplClient streamClient = await IntegrationTestConfig.CreateClientAsync(nodeType);
+        try
+        {
+            return await streamClient.PathFind(new PathFindCreateRequest(from.ClassicAddress, to.ClassicAddress, deliver)
+            {
+                Domain = domain,
+            }).Typed();
+        }
+        finally
+        {
+            try { await streamClient.PathFindClose(new PathFindCloseRequest()); } catch { }
+            streamClient.Dispose();
+        }
+    }
+
     [TestMethod]
     public async Task FoundPathsPayAsFound()
     {
