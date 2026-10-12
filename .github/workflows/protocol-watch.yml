@@ -88,7 +88,7 @@ jobs:
             description: rippled develop payment engine tracking
             what: Payment engine sources
             # The release Xrpl.Amounts is ported from; bump it with the port.
-            baseline_ref: '3.4.0'
+            baseline_ref: '3.4.1'
             follow_up: 'port the change to `Xrpl/Amounts` (steps in `Dex/FlowSteps.cs`, `Dex/BookCrossingStep.cs`, `Dex/StrandBuilder.cs`, `Dex/StrandFlow.cs`; pools in `Dex/AmmSwap.cs`, `Dex/AmmBookLiquidity.cs`; the view in `Dex/DexView.cs`; the transactors in `Dex/OfferCreateCrossing.cs`, `Dex/PaymentFlow.cs`; the path finder in `Paths/Pathfinder.cs`, `Paths/PathFinding.cs`, `Paths/BookIndex.cs`; the rules read outside a transaction in `LedgerRules`; arithmetic in `XrplAmountMath.cs`, `XrplQuality.cs`, `XrplNumber`), gate it on its amendment in `LedgerRules`, extend the replayed rippled tests, and rerun `TestIBookCrossing*`, `TestIPaymentFlow`, `TestIOfferCreateChecks`, `TestIPermissionedDex`, `TestIDexQuotes`, `TestIMptDex` and `TestIPathFinding` against a stand on the new build.'
             watch: |
               src/libxrpl/tx/paths/AMMLiquidity.cpp
