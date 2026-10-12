@@ -26,15 +26,11 @@ namespace XrplTests.Xrpl.ClientLib.Integration;
 
 /// <summary>
 /// MPTs on the order book (MPTokensV2, XLS-82): offers pairing an MPT with XRP and with an issued
-/// currency that cross, <c>book_offers</c> reading an MPT book, and a cross-currency payment
-/// delivering an MPT through it.
+/// currency, crossed and paid through, each predicted by <see cref="OfferCreateCrossing"/> or
+/// <see cref="PaymentFlow"/> from a snapshot read just before and compared with what the node
+/// did - offers, balances, OutstandingAmount and the MPTokens created - to the last unit. Also
+/// <c>book_offers</c> reading an MPT book.
 /// </summary>
-/// <remarks>
-/// The outcomes are checked against amounts worked out by hand rather than against
-/// <see cref="OfferCreateCrossing"/> and <see cref="PaymentFlow"/>, which do not model MPT books
-/// and refuse them with <see cref="NotSupportedException"/>. Every crossing here is at the resting
-/// offer's own quality, so the amounts moved are exact.
-/// </remarks>
 [TestClass]
 [TestCategory("DEX")]
 public class TestIMptDex
@@ -50,11 +46,13 @@ public class TestIMptDex
     public static async Task ClassInitializeAsync(TestContext testContext)
     {
         client = await IntegrationTestConfig.CreateClientAsync(nodeType);
-        dex = new BookCrossingHarness(client, nodeType);
+        bool standalone = IntegrationTestConfig.IsStandalone(nodeType);
+
         // As TestIAMMMpt: on a standalone stand MPTokensV2 is a [features] Rules preset the
-        // on-ledger guard cannot see, so the tests run there and a missing preset fails loudly.
-        mptokensV2Usable = IntegrationTestConfig.IsStandalone(nodeType)
-            || await AmendmentGuard.IsEnabledAsync(client, AmendmentGuard.MPTokensV2);
+        // on-ledger guard and the feature command cannot see, so the tests run there, and the
+        // prediction is told the amendment is on.
+        dex = new BookCrossingHarness(client, nodeType) { AdjustRules = rules => standalone ? rules.WithMPTokensV2() : rules };
+        mptokensV2Usable = standalone || await AmendmentGuard.IsEnabledAsync(client, AmendmentGuard.MPTokensV2);
     }
 
     [TestInitialize]
@@ -69,28 +67,37 @@ public class TestIMptDex
 
     private static IssuedCurrency MptAsset(string issuanceId) => new IssuedCurrency { MptIssuanceId = issuanceId };
 
+    private static XrplAmount Units(string issuanceId, long units) => XrplAmount.Parse(MptAsset(issuanceId), units.ToString(CultureInfo.InvariantCulture));
+
     private static Currency Mpt(string issuanceId, string value) => new Currency { Value = value, MPTokenIssuanceID = issuanceId };
 
-    private static Currency Drops(long drops) => new Currency { Value = drops.ToString(CultureInfo.InvariantCulture) };
+    private static XrplAmount Drops(long drops) => BookCrossingHarness.Drops(drops);
 
-    private static Currency Iou(IssuedCurrency asset, string value) => new Currency { CurrencyCode = asset.Currency, Issuer = asset.Issuer, Value = value };
-
-    /// <summary>An MPT that can be traded and transferred; each holder is authorized and given <paramref name="units"/>.</summary>
-    private static async Task<string> IssueMpt(XrplWallet issuer, IEnumerable<XrplWallet> holders, string units)
+    /// <summary>
+    /// An MPT that can be traded and transferred - and locked, when asked - with its transfer fee
+    /// and maximum; each holder is authorized and given <paramref name="units"/>.
+    /// </summary>
+    private static async Task<string> IssueMpt(
+        XrplWallet issuer,
+        IEnumerable<XrplWallet> holders,
+        string units,
+        ushort? transferFee = null,
+        string maximum = null,
+        bool canLock = false)
     {
+        MPTokenIssuanceCreateFlags flags = MPTokenIssuanceCreateFlags.tfMPTCanTrade | MPTokenIssuanceCreateFlags.tfMPTCanTransfer;
+        if (canLock)
+            flags |= MPTokenIssuanceCreateFlags.tfMPTCanLock;
+
         TransactionSummary created = await dex.SubmitWithMeta(
-            new MPTokenIssuanceCreate
-            {
-                Account = issuer.ClassicAddress,
-                Flags = MPTokenIssuanceCreateFlags.tfMPTCanTrade | MPTokenIssuanceCreateFlags.tfMPTCanTransfer,
-            },
+            new MPTokenIssuanceCreate { Account = issuer.ClassicAddress, Flags = flags, TransferFee = transferFee, MaximumAmount = maximum },
             issuer);
         string issuanceId = created.Meta.MptIssuanceId;
         Assert.IsNotNull(issuanceId, "MPTokenIssuanceID in the metadata");
 
         foreach (XrplWallet holder in holders)
         {
-            await dex.Submit(new MPTokenAuthorize { Account = holder.ClassicAddress, MPTokenIssuanceID = issuanceId }, holder);
+            await Hold(holder, issuanceId);
             if (units != "0")
                 await dex.Submit(new Payment { Account = issuer.ClassicAddress, Destination = holder.ClassicAddress, Amount = Mpt(issuanceId, units) }, issuer);
         }
@@ -98,24 +105,13 @@ public class TestIMptDex
         return issuanceId;
     }
 
-    /// <summary>The account's MPT balance; zero when it holds none.</summary>
-    private static async Task<ulong> MptBalance(string account, string issuanceId)
-    {
-        AccountObjects objects = await client.AccountObjects(new AccountObjectsRequest(account) { Type = LedgerEntryType.MPToken }).Typed();
-        LOMPToken token = objects.AccountObjectList?.OfType<LOMPToken>()
-            .FirstOrDefault(t => string.Equals(t.MPTokenIssuanceID, issuanceId, StringComparison.OrdinalIgnoreCase));
-        return token?.MPTAmount ?? 0;
-    }
+    private static Task Hold(XrplWallet holder, string issuanceId) =>
+        dex.Submit(new MPTokenAuthorize { Account = holder.ClassicAddress, MPTokenIssuanceID = issuanceId }, holder);
 
-    private static async Task<long> XrpDrops(string account) =>
-        (long)(decimal.Parse(await client.GetXrpBalance(account), NumberStyles.Float, CultureInfo.InvariantCulture) * 1_000_000m);
+    private static Task Give(XrplWallet issuer, XrplWallet holder, string issuanceId, string units) =>
+        dex.Submit(new Payment { Account = issuer.ClassicAddress, Destination = holder.ClassicAddress, Amount = Mpt(issuanceId, units) }, issuer);
 
-    private static async Task<decimal> IouBalance(string account, IssuedCurrency asset)
-    {
-        AccountLines lines = await client.AccountLines(new AccountLinesRequest(account) { Peer = asset.Issuer }).Typed();
-        TrustLine line = lines.TrustLines.Single(l => l.Currency == asset.Currency);
-        return decimal.Parse(line.Balance, NumberStyles.Float, CultureInfo.InvariantCulture);
-    }
+    // ---- offer crossing ----
 
     [TestMethod]
     public async Task TestIOfferCreate_MptForXrp_CrossesTheRestingOffer()
@@ -123,30 +119,19 @@ public class TestIMptDex
         XrplWallet[] wallets = await dex.Wallets(3);
         (XrplWallet issuer, XrplWallet maker, XrplWallet taker) = (wallets[0], wallets[1], wallets[2]);
         string mpt = await IssueMpt(issuer, new[] { maker, taker }, "0");
-        await dex.Submit(new Payment { Account = issuer.ClassicAddress, Destination = maker.ClassicAddress, Amount = Mpt(mpt, "1000") }, issuer);
+        await Give(issuer, maker, mpt, "1000");
 
-        // The maker sells 100 units at 10 000 drops each.
-        await dex.Submit(new OfferCreate { Account = maker.ClassicAddress, TakerGets = Mpt(mpt, "100"), TakerPays = Drops(1_000_000) }, maker);
-        long makerXrpBefore = await XrpDrops(maker.ClassicAddress);
+        // The maker sells 100 units at 10 000 drops each; the taker buys 40 of them.
+        await dex.Offer(maker, Units(mpt, 100), Drops(1_000_000));
+        OfferCrossingResult result = await dex.CrossAndCompare(taker, Units(mpt, 40), Drops(400_000));
 
-        // The taker buys 40 of them at the same price.
-        TransactionSummary crossed = await dex.SubmitWithMeta(
-            new OfferCreate { Account = taker.ClassicAddress, TakerPays = Mpt(mpt, "40"), TakerGets = Drops(400_000) },
-            taker);
-
-        Assert.AreEqual(40ul, await MptBalance(taker.ClassicAddress, mpt), "the taker received 40 units");
-        Assert.AreEqual(960ul, await MptBalance(maker.ClassicAddress, mpt), "the maker gave 40 of its 1000 units");
-        Assert.AreEqual(makerXrpBefore + 400_000, await XrpDrops(maker.ClassicAddress), "the maker received 400 000 drops");
-
-        AffectedNode makerOffer = crossed.Meta.AffectedNodes.Single(n => n.ModifiedNode?.LedgerEntryType == LedgerEntryType.Offer);
-        Assert.IsTrue(makerOffer.ModifiedNode.TryGetFinal(out LOOffer remaining), "the maker's offer remains");
-        Assert.AreEqual(XrplAmount.Parse(MptAsset(mpt), "60"), remaining.TakerGets.ToXrplAmount(), "the maker's offer still gives 60 units");
-        Assert.AreEqual(XrplAmount.Parse(BookCrossingHarness.Xrp, "600000"), remaining.TakerPays.ToXrplAmount(), "the maker's offer still asks 600 000 drops");
-        Assert.IsFalse(crossed.Meta.AffectedNodes.Any(n => n.CreatedNode?.LedgerEntryType == LedgerEntryType.Offer), "the taker's offer is filled, nothing is placed");
+        Assert.AreEqual("tesSUCCESS", result.EngineResult);
+        Assert.AreEqual(Units(mpt, 40), result.Received);
+        Assert.IsNull(result.PlacedTakerPays, "the taker's offer is filled");
     }
 
     [TestMethod]
-    public async Task TestIOfferCreate_MptForIou_ConsumesTheRestingOffer()
+    public async Task TestIOfferCreate_MptForIou_ConsumesTheRestingOfferAndPlacesTheRest()
     {
         XrplWallet[] wallets = await dex.Wallets(3);
         (XrplWallet issuer, XrplWallet maker, XrplWallet taker) = (wallets[0], wallets[1], wallets[2]);
@@ -155,27 +140,119 @@ public class TestIMptDex
         await dex.Fund(issuer, taker, usd, "100");
         await dex.Trust(maker, usd);
         string mpt = await IssueMpt(issuer, new[] { maker, taker }, "0");
-        await dex.Submit(new Payment { Account = issuer.ClassicAddress, Destination = maker.ClassicAddress, Amount = Mpt(mpt, "50") }, issuer);
+        await Give(issuer, maker, mpt, "50");
 
-        // The maker sells all 50 units for 5 USD; the taker buys them, offering more than is on the book.
-        await dex.Submit(new OfferCreate { Account = maker.ClassicAddress, TakerGets = Mpt(mpt, "50"), TakerPays = Iou(usd, "5") }, maker);
-        TransactionSummary crossed = await dex.SubmitWithMeta(
-            new OfferCreate { Account = taker.ClassicAddress, TakerPays = Mpt(mpt, "80"), TakerGets = Iou(usd, "8") },
-            taker);
+        // The maker sells all 50 units for 5 USD; the taker offers more than is on the book.
+        await dex.Offer(maker, Units(mpt, 50), BookCrossingHarness.Amount(usd, "5"));
+        OfferCrossingResult result = await dex.CrossAndCompare(taker, Units(mpt, 80), BookCrossingHarness.Amount(usd, "8"));
 
-        Assert.AreEqual(50ul, await MptBalance(taker.ClassicAddress, mpt), "the taker received all 50 units");
-        Assert.AreEqual(0ul, await MptBalance(maker.ClassicAddress, mpt), "the maker gave all its units");
-        Assert.AreEqual(95m, await IouBalance(taker.ClassicAddress, usd), "the taker paid 5 USD");
-        Assert.AreEqual(5m, await IouBalance(maker.ClassicAddress, usd), "the maker received 5 USD");
-
-        Assert.IsTrue(
-            crossed.Meta.AffectedNodes.Any(n => n.DeletedNode?.LedgerEntryType == LedgerEntryType.Offer),
-            "the maker's offer is consumed");
-        AffectedNode placed = crossed.Meta.AffectedNodes.Single(n => n.CreatedNode?.LedgerEntryType == LedgerEntryType.Offer);
-        Assert.IsTrue(placed.CreatedNode.TryGetNew(out LOOffer rest), "the taker's remainder is placed");
-        Assert.AreEqual(XrplAmount.Parse(MptAsset(mpt), "30"), rest.TakerPays.ToXrplAmount(), "the remainder asks the 30 units left");
-        Assert.AreEqual(XrplAmount.Parse(usd, "3"), rest.TakerGets.ToXrplAmount(), "the remainder gives the 3 USD left");
+        Assert.AreEqual(Units(mpt, 30), result.PlacedTakerPays, "the remainder asks the 30 units left");
+        Assert.AreEqual(BookCrossingHarness.Amount(usd, "3"), result.PlacedTakerGets);
     }
+
+    /// <summary>A taker without an MPToken gets one as the MPT arrives; one more object it owns.</summary>
+    [TestMethod]
+    public async Task TestIOfferCreate_CreatesTheTakersMpToken()
+    {
+        XrplWallet[] wallets = await dex.Wallets(3);
+        (XrplWallet issuer, XrplWallet maker, XrplWallet taker) = (wallets[0], wallets[1], wallets[2]);
+        string mpt = await IssueMpt(issuer, new[] { maker }, "500");
+
+        await dex.Offer(maker, Units(mpt, 100), Drops(1_000_000));
+        OfferCrossingResult result = await dex.CrossAndCompare(taker, Units(mpt, 25), Drops(250_000));
+
+        Assert.HasCount(1, result.MpTokens, "the taker's MPToken");
+        Assert.AreEqual(taker.ClassicAddress, result.MpTokens[0].Account);
+    }
+
+    /// <summary>
+    /// A 1% transfer fee, paid by the offer's owner on what it gives and rounded up: the
+    /// issuer's OutstandingAmount drops by the fee.
+    /// </summary>
+    [TestMethod]
+    public async Task TestIOfferCreate_TransferFeeRoundsUpOnTheOwner()
+    {
+        XrplWallet[] wallets = await dex.Wallets(3);
+        (XrplWallet issuer, XrplWallet maker, XrplWallet taker) = (wallets[0], wallets[1], wallets[2]);
+        string mpt = await IssueMpt(issuer, new[] { maker, taker }, "0", transferFee: 1000);
+        await Give(issuer, maker, mpt, "1000");
+
+        await dex.Offer(maker, Units(mpt, 100), Drops(1_000_000));
+        OfferCrossingResult result = await dex.CrossAndCompare(taker, Units(mpt, 13), Drops(130_000));
+
+        XrplAmount makerGave = result.BalanceChanges.Single(c => c.Account == maker.ClassicAddress && c.Change.Kind == AmountKind.Mpt).Change;
+        Assert.AreEqual(Units(mpt, -14), makerGave, "13.13 units, rounded up");
+    }
+
+    /// <summary>The selling side read by walking the book's directories, which finds the MPT book's tagged key.</summary>
+    [TestMethod]
+    public async Task TestIOfferCreate_WalksTheMptBook()
+    {
+        XrplWallet[] wallets = await dex.Wallets(4);
+        (XrplWallet issuer, XrplWallet maker, XrplWallet other, XrplWallet taker) = (wallets[0], wallets[1], wallets[2], wallets[3]);
+        string mpt = await IssueMpt(issuer, new[] { maker, other, taker }, "0");
+        await Give(issuer, maker, mpt, "300");
+        await Give(issuer, other, mpt, "300");
+
+        await dex.Offer(maker, Units(mpt, 100), Drops(1_100_000));
+        await dex.Offer(other, Units(mpt, 100), Drops(1_000_000));
+        OfferCrossingResult result = await dex.CrossAndCompare(taker, Units(mpt, 150), Drops(1_650_000), options: new DexSnapshotOptions { BookDepth = 10 });
+
+        Assert.HasCount(2, result.Offers, "both offers are crossed, the cheaper first");
+    }
+
+    /// <summary>
+    /// The issuer's own offer gives no more than it may still issue: OutstandingAmount stops at
+    /// MaximumAmount, the offer is left unfunded and removed, and the rest of the taker's offer
+    /// is placed.
+    /// </summary>
+    [TestMethod]
+    public async Task TestIOfferCreate_IssuersOwnOfferStopsAtTheMaximum()
+    {
+        XrplWallet[] wallets = await dex.Wallets(3);
+        (XrplWallet issuer, XrplWallet holder, XrplWallet taker) = (wallets[0], wallets[1], wallets[2]);
+        string mpt = await IssueMpt(issuer, new[] { holder, taker }, "0", maximum: "1000");
+        await Give(issuer, holder, mpt, "950");
+
+        await dex.Offer(issuer, Units(mpt, 100), Drops(1_000_000));
+        OfferCrossingResult result = await dex.CrossAndCompare(taker, Units(mpt, 80), Drops(800_000));
+
+        Assert.AreEqual(Units(mpt, 50), result.Received, "the 50 left to issue");
+        Assert.AreEqual(Units(mpt, 30), result.PlacedTakerPays);
+    }
+
+    /// <summary>An MPT/XRP pool and a resting offer: the taker's crossing takes from both, the pool's MPToken moving with it.</summary>
+    [TestMethod]
+    public async Task TestIOfferCreate_AgainstAnMptPoolAndTheBook()
+    {
+        XrplWallet[] wallets = await dex.Wallets(4);
+        (XrplWallet issuer, XrplWallet creator, XrplWallet maker, XrplWallet taker) = (wallets[0], wallets[1], wallets[2], wallets[3]);
+        string mpt = await IssueMpt(issuer, new[] { creator, maker, taker }, "0", transferFee: 200);
+        await Give(issuer, creator, mpt, "10000");
+        await Give(issuer, maker, mpt, "1000");
+
+        await dex.CreateAmm(creator, Units(mpt, 5000), Drops(50_000_000), tradingFee: 300);
+        await dex.Offer(maker, Units(mpt, 200), Drops(2_100_000));
+        OfferCrossingResult result = await dex.CrossAndCompare(taker, Units(mpt, 300), Drops(3_300_000));
+
+        Assert.IsNotEmpty(result.Pools, "the pool is traded against");
+    }
+
+    [TestMethod]
+    public async Task TestIOfferCreate_LockedIssuanceIsRefused()
+    {
+        XrplWallet[] wallets = await dex.Wallets(3);
+        (XrplWallet issuer, XrplWallet maker, XrplWallet taker) = (wallets[0], wallets[1], wallets[2]);
+        string mpt = await IssueMpt(issuer, new[] { maker, taker }, "0", canLock: true);
+        await Give(issuer, maker, mpt, "100");
+        await dex.Offer(maker, Units(mpt, 100), Drops(1_000_000));
+        await dex.Submit(new MPTokenIssuanceSet { Account = issuer.ClassicAddress, MPTokenIssuanceID = mpt, Flags = MPTokenIssuanceSetFlags.tfMPTLock }, issuer);
+
+        OfferCrossingResult result = await dex.CrossAndCompare(taker, Units(mpt, 10), Drops(100_000));
+        Assert.AreEqual("tecLOCKED", result.EngineResult);
+    }
+
+    // ---- book_offers ----
 
     [TestMethod]
     public async Task TestIBookOffers_ReadsAnMptBook()
@@ -188,9 +265,9 @@ public class TestIMptDex
         string mpt = await IssueMpt(issuer, new[] { maker, other }, "500");
 
         // Two offers selling the MPT for XRP, the cheaper one placed second, and one buying it for USD.
-        await dex.Submit(new OfferCreate { Account = maker.ClassicAddress, TakerGets = Mpt(mpt, "100"), TakerPays = Drops(2_000_000) }, maker);
-        await dex.Submit(new OfferCreate { Account = other.ClassicAddress, TakerGets = Mpt(mpt, "100"), TakerPays = Drops(1_000_000) }, other);
-        await dex.Submit(new OfferCreate { Account = maker.ClassicAddress, TakerGets = Iou(usd, "10"), TakerPays = Mpt(mpt, "200") }, maker);
+        await dex.Offer(maker, Units(mpt, 100), Drops(2_000_000));
+        await dex.Offer(other, Units(mpt, 100), Drops(1_000_000));
+        await dex.Offer(maker, BookCrossingHarness.Amount(usd, "10"), Units(mpt, 200));
 
         BookOffers sell = await client.BookOffers(new BookOffersRequest
         {
@@ -261,35 +338,30 @@ public class TestIMptDex
         }
     }
 
+    // ---- payments ----
+
     [TestMethod]
     public async Task TestIPayment_XrpToMpt_DeliversThroughTheBook()
     {
         XrplWallet[] wallets = await dex.Wallets(4);
         (XrplWallet issuer, XrplWallet maker, XrplWallet sender, XrplWallet destination) = (wallets[0], wallets[1], wallets[2], wallets[3]);
         string mpt = await IssueMpt(issuer, new[] { maker, destination }, "0");
-        await dex.Submit(new Payment { Account = issuer.ClassicAddress, Destination = maker.ClassicAddress, Amount = Mpt(mpt, "1000") }, issuer);
-        await dex.Submit(new OfferCreate { Account = maker.ClassicAddress, TakerGets = Mpt(mpt, "100"), TakerPays = Drops(1_000_000) }, maker);
+        await Give(issuer, maker, mpt, "1000");
+        await dex.Offer(maker, Units(mpt, 100), Drops(1_000_000));
 
         Currency deliver = Mpt(mpt, "30");
-        List<List<PathStep>> paths = await FindPaths(sender, destination, deliver, BookCrossingHarness.Xrp);
-
-        TransactionSummary paid = await dex.SubmitWithMeta(
+        PaymentFlowResult result = await dex.PayAndCompare(
+            sender,
             new Payment
             {
                 Account = sender.ClassicAddress,
                 Destination = destination.ClassicAddress,
                 Amount = deliver,
-                SendMax = Drops(300_000),
-                Paths = paths,
-            },
-            sender);
+                SendMax = Drops(300_000).ToCurrency(),
+                Paths = await FindPaths(sender, destination, deliver, BookCrossingHarness.Xrp),
+            });
 
-        Assert.AreEqual(XrplAmount.Parse(MptAsset(mpt), "30"), paid.Meta.ActuallyDeliveredAmount.ToXrplAmount(), "delivered_amount");
-        Assert.AreEqual(30ul, await MptBalance(destination.ClassicAddress, mpt), "the destination holds the 30 units");
-        Assert.AreEqual(970ul, await MptBalance(maker.ClassicAddress, mpt), "the maker's offer gave them");
-        AffectedNode makerOffer = paid.Meta.AffectedNodes.Single(n => n.ModifiedNode?.LedgerEntryType == LedgerEntryType.Offer);
-        Assert.IsTrue(makerOffer.ModifiedNode.TryGetFinal(out LOOffer remaining));
-        Assert.AreEqual(XrplAmount.Parse(BookCrossingHarness.Xrp, "700000"), remaining.TakerPays.ToXrplAmount(), "the offer took 300 000 drops");
+        Assert.AreEqual(Units(mpt, 30), result.DeliveredAmount);
     }
 
     [TestMethod]
@@ -302,27 +374,82 @@ public class TestIMptDex
         await dex.Fund(issuer, sender, usd, "100");
         await dex.Trust(maker, usd);
         string mpt = await IssueMpt(issuer, new[] { maker, destination }, "0");
-        await dex.Submit(new Payment { Account = issuer.ClassicAddress, Destination = maker.ClassicAddress, Amount = Mpt(mpt, "500") }, issuer);
-        await dex.Submit(new OfferCreate { Account = maker.ClassicAddress, TakerGets = Mpt(mpt, "200"), TakerPays = Iou(usd, "20") }, maker);
+        await Give(issuer, maker, mpt, "500");
+        await dex.Offer(maker, Units(mpt, 200), BookCrossingHarness.Amount(usd, "20"));
 
         Currency deliver = Mpt(mpt, "50");
-        List<List<PathStep>> paths = await FindPaths(sender, destination, deliver, usd);
-
-        TransactionSummary paid = await dex.SubmitWithMeta(
+        PaymentFlowResult result = await dex.PayAndCompare(
+            sender,
             new Payment
             {
                 Account = sender.ClassicAddress,
                 Destination = destination.ClassicAddress,
                 Amount = deliver,
-                SendMax = Iou(usd, "5"),
-                Paths = paths,
-            },
-            sender);
+                SendMax = BookCrossingHarness.Amount(usd, "5").ToCurrency(),
+                Paths = await FindPaths(sender, destination, deliver, usd),
+            });
 
-        Assert.AreEqual(XrplAmount.Parse(MptAsset(mpt), "50"), paid.Meta.ActuallyDeliveredAmount.ToXrplAmount(), "delivered_amount");
-        Assert.AreEqual(50ul, await MptBalance(destination.ClassicAddress, mpt), "the destination holds the 50 units");
-        Assert.AreEqual(95m, await IouBalance(sender.ClassicAddress, usd), "the sender paid 5 USD");
-        Assert.AreEqual(5m, await IouBalance(maker.ClassicAddress, usd), "the maker received 5 USD");
+        Assert.AreEqual(Units(mpt, 50), result.DeliveredAmount);
+    }
+
+    /// <summary>XRP to an MPT with a 1% fee: the issuer issues the amount and takes it plus the fee, rounded up, from the book.</summary>
+    [TestMethod]
+    public async Task TestIPayment_XrpToMpt_TransferFee()
+    {
+        XrplWallet[] wallets = await dex.Wallets(4);
+        (XrplWallet issuer, XrplWallet maker, XrplWallet sender, XrplWallet destination) = (wallets[0], wallets[1], wallets[2], wallets[3]);
+        string mpt = await IssueMpt(issuer, new[] { maker, destination }, "0", transferFee: 1000);
+        await Give(issuer, maker, mpt, "1000");
+        await dex.Offer(maker, Units(mpt, 100), Drops(1_000_000));
+
+        PaymentFlowResult result = await dex.PayAndCompare(
+            sender,
+            new Payment
+            {
+                Account = sender.ClassicAddress,
+                Destination = destination.ClassicAddress,
+                Amount = Mpt(mpt, "30"),
+                SendMax = Drops(400_000).ToCurrency(),
+            });
+
+        Assert.AreEqual(Drops(310_000), result.Paid, "30.3 units rounded up to 31, at 10 000 drops each");
+    }
+
+    /// <summary>Between holders the engine charges the 1% fee on top: SendMax must allow it.</summary>
+    [TestMethod]
+    public async Task TestIPayment_BetweenHolders_TransferFee()
+    {
+        XrplWallet[] wallets = await dex.Wallets(3);
+        (XrplWallet issuer, XrplWallet sender, XrplWallet destination) = (wallets[0], wallets[1], wallets[2]);
+        string mpt = await IssueMpt(issuer, new[] { sender, destination }, "0", transferFee: 1000);
+        await Give(issuer, sender, mpt, "1000");
+
+        PaymentFlowResult paid = await dex.PayAndCompare(
+            sender,
+            new Payment { Account = sender.ClassicAddress, Destination = destination.ClassicAddress, Amount = Mpt(mpt, "100"), SendMax = Mpt(mpt, "101") });
+        Assert.AreEqual(Units(mpt, 101), paid.Paid);
+
+        PaymentFlowResult partial = await dex.PayAndCompare(
+            sender,
+            new Payment { Account = sender.ClassicAddress, Destination = destination.ClassicAddress, Amount = Mpt(mpt, "100") });
+        Assert.AreEqual("tecPATH_PARTIAL", partial.EngineResult, "SendMax is the amount when absent");
+    }
+
+    [TestMethod]
+    public async Task TestIPayment_LockedSender()
+    {
+        XrplWallet[] wallets = await dex.Wallets(3);
+        (XrplWallet issuer, XrplWallet sender, XrplWallet destination) = (wallets[0], wallets[1], wallets[2]);
+        string mpt = await IssueMpt(issuer, new[] { sender, destination }, "0", canLock: true);
+        await Give(issuer, sender, mpt, "100");
+        await dex.Submit(
+            new MPTokenIssuanceSet { Account = issuer.ClassicAddress, MPTokenIssuanceID = mpt, Holder = sender.ClassicAddress, Flags = MPTokenIssuanceSetFlags.tfMPTLock },
+            issuer);
+
+        PaymentFlowResult result = await dex.PayAndCompare(
+            sender,
+            new Payment { Account = sender.ClassicAddress, Destination = destination.ClassicAddress, Amount = Mpt(mpt, "10") });
+        Assert.AreEqual("tecPATH_DRY", result.EngineResult, "the strand's terLOCKED, charged");
     }
 
     /// <summary>
