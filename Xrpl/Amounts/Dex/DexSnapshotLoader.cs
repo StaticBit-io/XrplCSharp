@@ -171,7 +171,7 @@ namespace Xrpl.Amounts
                 throw new ArgumentException("A payment needs Account, Destination and Amount.", nameof(payment));
 
             XrplAmount amount = payment.Amount.ToXrplAmount();
-            IssuedCurrency sendMax = payment.SendMax?.ToXrplAmount().Asset ?? (amount.Kind == AmountKind.Xrp
+            IssuedCurrency sendMax = payment.SendMax?.ToXrplAmount().Asset ?? (amount.Kind != AmountKind.Iou
                 ? amount.Asset
                 : new IssuedCurrency { Currency = amount.Asset.Currency, Issuer = payment.Account });
 
@@ -189,14 +189,7 @@ namespace Xrpl.Amounts
                 Taker = payment.Account,
                 CredentialIds = payment.CredentialIDs,
             };
-            foreach (List<PathStep> path in payment.Paths ?? new List<List<PathStep>>())
-            {
-                List<PathElement> elements = new List<PathElement>();
-                foreach (PathStep step in path ?? new List<PathStep>())
-                    elements.Add(new PathElement(step.Account, step.CurrencyCode, step.Issuer));
-                plan.Paths.Add(elements);
-            }
-
+            plan.Paths.AddRange(PaymentFlow.Paths(payment.Paths));
             return LoadAsync(client, plan, options, cancellationToken);
         }
 
@@ -293,6 +286,22 @@ namespace Xrpl.Amounts
 
             HashSet<string> accounts = new HashSet<string>(StringComparer.Ordinal) { request.Source, request.Destination };
             HashSet<(string A, string B, string Currency)> lines = new HashSet<(string, string, string)>();
+            HashSet<string> issuances = new HashSet<string>(StringComparer.Ordinal);
+            HashSet<(string Account, string Id)> mpTokens = new HashSet<(string, string)>();
+            void AddHolding(string account, IssuedCurrency asset)
+            {
+                if (!DexAssets.IsMpt(asset))
+                    return;
+
+                string id = DexAssets.MptKey(asset.MptIssuanceId);
+                issuances.Add(id);
+                if (!string.IsNullOrEmpty(account) && !string.Equals(account, DexAssets.MptIssuer(id), StringComparison.Ordinal))
+                    mpTokens.Add((account, id));
+            }
+
+            // The transaction's own accounts' holdings of what it pays and receives.
+            AddHolding(request.Source, request.SendMax ?? request.Deliver);
+            AddHolding(request.Destination, request.Deliver);
             List<(IssuedCurrency In, IssuedCurrency Out)> books = new List<(IssuedCurrency, IssuedCurrency)>();
             HashSet<BookKey> seenBooks = new HashSet<BookKey>();
 
@@ -317,9 +326,21 @@ namespace Xrpl.Amounts
                         case StrandBuilder.HopKind.XrpEndpoint:
                             accounts.Add(hop.Source);
                             break;
+                        case StrandBuilder.HopKind.MptEndpoint:
+                            accounts.Add(hop.Source);
+                            accounts.Add(hop.Destination);
+                            AddHolding(hop.Source, DexAssets.Mpt(hop.Mpt));
+                            AddHolding(hop.Destination, DexAssets.Mpt(hop.Mpt));
+                            break;
                         default:
+                            // A book from an asset to itself fails its strand (temBAD_PATH): nothing to read.
+                            if (XrplAmount.SameAsset(hop.In, hop.Out))
+                                break;
+
                             AddIssuer(accounts, hop.In);
                             AddIssuer(accounts, hop.Out);
+                            AddHolding(null, hop.In);
+                            AddHolding(null, hop.Out);
                             if (seenBooks.Add(BookKey.Of(hop.In, hop.Out, domainId)))
                                 books.Add((hop.In, hop.Out));
                             break;
@@ -361,6 +382,8 @@ namespace Xrpl.Amounts
                         AddLine(lines, offer.Account, offer.TakerPays.Asset.Issuer, offer.TakerPays.Asset.Currency);
                     if (offer.TakerGets.Kind == AmountKind.Iou)
                         AddLine(lines, offer.Account, offer.TakerGets.Asset.Issuer, offer.TakerGets.Asset.Currency);
+                    AddHolding(offer.Account, offer.TakerPays.Asset);
+                    AddHolding(offer.Account, offer.TakerGets.Asset);
                 }
 
                 if (!string.IsNullOrEmpty(offer.DomainId))
@@ -387,7 +410,11 @@ namespace Xrpl.Amounts
 
                 // A pool serves the open book only.
                 if (domainId == null && await PoolAsync(client, @in, @out, at, cancellationToken).ConfigureAwait(false) is { } pool)
+                {
                     pools.Add(pool);
+                    AddHolding(pool.Account, pool.Balance.Asset);
+                    AddHolding(pool.Account, pool.Balance2.Asset);
+                }
             }
 
             if (plan.CancelSequence is { } cancelSequence &&
@@ -462,17 +489,77 @@ namespace Xrpl.Amounts
                 .ConfigureAwait(false);
             List<DexTrustLine> lineStates = lineReads.Where(line => line != null).ToList();
 
+            DexMptIssuance[] issuanceReads = await Task.WhenAll(issuances
+                    .Select(id => Gated(() => IssuanceAsync(client, id, at, cancellationToken))))
+                .ConfigureAwait(false);
+            List<DexMptIssuance> issuanceStates = issuanceReads.Where(issuance => issuance != null).ToList();
+
+            DexMptHolding[] holdingReads = await Task.WhenAll(mpTokens
+                    .Where(token => !(unlimited && token.Account == DexSnapshot.UnlimitedTaker))
+                    .Select(token => Gated(() => MpTokenAsync(client, token.Account, token.Id, at, cancellationToken))))
+                .ConfigureAwait(false);
+            List<DexMptHolding> holdingStates = holdingReads.Where(holding => holding != null).ToList();
+
+            // An issuance authorizing its holders through a permissioned domain: the domain and
+            // the credentials of each account whose MPToken was asked for decide who may hold it.
+            foreach (DexMptIssuance issuance in issuanceStates.Where(i => !string.IsNullOrEmpty(i.DomainId)))
+            {
+                DexDomain domain = domains.Find(d => string.Equals(d.DomainId, issuance.DomainId, StringComparison.OrdinalIgnoreCase));
+                if (domain == null)
+                {
+                    domain = await DomainAsync(client, issuance.DomainId, at, cancellationToken).ConfigureAwait(false);
+                    if (domain == null)
+                        continue;
+                    domains.Add(domain);
+                }
+
+                foreach ((string member, string id) in mpTokens)
+                {
+                    if (id != DexAssets.MptKey(issuance.MptIssuanceId))
+                        continue;
+
+                    foreach (DexCredentialType accepted in domain.AcceptedCredentials)
+                    {
+                        if (await CredentialAsync(client, new CredentialQuery { Subject = member, Issuer = accepted.Issuer, CredentialType = accepted.CredentialType }, at, cancellationToken)
+                                .ConfigureAwait(false) is { } credential &&
+                            !credentials.Exists(c => SameCredential(c, credential)))
+                        {
+                            credentials.Add(credential);
+                        }
+                    }
+                }
+            }
+
             if (unlimited)
+            {
                 AddUnlimitedTaker(request, takerLines, accountStates, lineStates);
+                AddUnlimitedTakerMpts(request, issuanceStates, holdingStates);
+            }
 
             List<string> approximated = new List<string>();
             foreach ((string owner, List<DexOffer> owned) in bookOwners)
             {
                 if (accountStates.Exists(state => state.Address == owner))
+                {
+                    // Read after all: its holdings too.
+                    foreach (DexOffer offer in owned)
+                    {
+                        foreach (IssuedCurrency asset in new[] { offer.TakerPays.Asset, offer.TakerGets.Asset })
+                        {
+                            if (DexAssets.IsMpt(asset) && !string.Equals(owner, DexAssets.MptIssuer(asset.MptIssuanceId), StringComparison.Ordinal) &&
+                                !holdingStates.Exists(h => h.Account == owner && DexAssets.MptKey(h.MptIssuanceId) == DexAssets.MptKey(asset.MptIssuanceId)) &&
+                                await MpTokenAsync(client, owner, asset.MptIssuanceId, at, cancellationToken).ConfigureAwait(false) is { } holding)
+                            {
+                                holdingStates.Add(holding);
+                            }
+                        }
+                    }
+
                     continue;
+                }
 
                 approximated.Add(owner);
-                AddBookOwner(owner, owned, ownerFunds, reserveBase, reserveIncrement, accountStates, lineStates);
+                AddBookOwner(owner, owned, ownerFunds, reserveBase, reserveIncrement, accountStates, lineStates, holdingStates);
             }
 
             return new DexSnapshot
@@ -486,6 +573,8 @@ namespace Xrpl.Amounts
                 TrustLines = lineStates,
                 Offers = offers,
                 Pools = pools,
+                MptIssuances = issuanceStates,
+                MptHoldings = holdingStates,
                 Domains = domains,
                 Credentials = credentials,
                 PartialBooks = partialBooks,
@@ -539,10 +628,56 @@ namespace Xrpl.Amounts
                 Line(request.Deliver.Issuer, request.Deliver.Currency);
         }
 
+        /// <summary>What the unlimited taker holds of an MPT it pays: plenty, and as much more outstanding, so redeeming it never runs the issuance dry.</summary>
+        private const ulong UnlimitedMpt = 100_000_000_000_000_000;
+
+        /// <summary>
+        /// <see cref="DexSnapshot.UnlimitedTaker"/>'s MPTs: an authorized holding of each MPT it
+        /// pays or receives, plenty of what it pays, with the issuance's outstanding amount raised
+        /// to match.
+        /// </summary>
+        private static void AddUnlimitedTakerMpts(StrandBuilder.Request request, List<DexMptIssuance> issuances, List<DexMptHolding> holdings)
+        {
+            void Holding(IssuedCurrency asset, bool pays)
+            {
+                if (!DexAssets.IsMpt(asset) || holdings.Exists(h => h.Account == DexSnapshot.UnlimitedTaker && DexAssets.MptKey(h.MptIssuanceId) == DexAssets.MptKey(asset.MptIssuanceId)))
+                    return;
+
+                int index = issuances.FindIndex(i => DexAssets.MptKey(i.MptIssuanceId) == DexAssets.MptKey(asset.MptIssuanceId));
+                ulong amount = 0;
+                if (pays && index >= 0)
+                {
+                    DexMptIssuance issuance = issuances[index];
+                    amount = Math.Min(UnlimitedMpt, XrplAmount.MaxMptAmount - issuance.OutstandingAmount);
+                    issuances[index] = new DexMptIssuance
+                    {
+                        MptIssuanceId = issuance.MptIssuanceId,
+                        Issuer = issuance.Issuer,
+                        OutstandingAmount = issuance.OutstandingAmount + amount,
+                        MaximumAmount = issuance.MaximumAmount,
+                        TransferFee = issuance.TransferFee,
+                        CanTrade = issuance.CanTrade,
+                        CanTransfer = issuance.CanTransfer,
+                        Locked = issuance.Locked,
+                        RequireAuth = issuance.RequireAuth,
+                        DomainId = issuance.DomainId,
+                    };
+                }
+
+                holdings.Add(new DexMptHolding { Account = DexSnapshot.UnlimitedTaker, MptIssuanceId = DexAssets.MptKey(asset.MptIssuanceId), Amount = amount, Authorized = true });
+            }
+
+            if (request.Source == DexSnapshot.UnlimitedTaker)
+                Holding(request.SendMax ?? request.Deliver, pays: true);
+            if (request.Destination == DexSnapshot.UnlimitedTaker)
+                Holding(request.Deliver, pays: false);
+        }
+
         /// <summary>
         /// An offer owner built from <c>owner_funds</c>: its XRP, if its offers give XRP, with the
         /// reserve of the offers it owns on top; a line with its funds of each issued currency its
-        /// offers give; and a line with room for each one they ask for.
+        /// offers give, and an authorized MPToken with its funds of each MPT; and a line with room
+        /// for each issued currency they ask for, and an authorized MPToken for each MPT.
         /// </summary>
         private static void AddBookOwner(
             string owner,
@@ -551,8 +686,25 @@ namespace Xrpl.Amounts
             ulong reserveBase,
             ulong reserveIncrement,
             List<DexAccount> accounts,
-            List<DexTrustLine> lines)
+            List<DexTrustLine> lines,
+            List<DexMptHolding> holdings)
         {
+            Dictionary<string, ulong> mpts = new Dictionary<string, ulong>(StringComparer.Ordinal);
+            foreach (DexOffer offer in owned)
+            {
+                if (offer.TakerGets.Kind == AmountKind.Mpt && DexAssets.MptIssuer(offer.TakerGets.Asset.MptIssuanceId) != owner)
+                {
+                    XrplAmount funds = ownerFunds.TryGetValue((owner, AssetKey.Of(offer.TakerGets.Asset)), out XrplAmount reported) ? reported : offer.TakerGets;
+                    mpts[DexAssets.MptKey(offer.TakerGets.Asset.MptIssuanceId)] = funds.IsNegative ? 0 : funds.StMantissa;
+                }
+
+                if (offer.TakerPays.Kind == AmountKind.Mpt && DexAssets.MptIssuer(offer.TakerPays.Asset.MptIssuanceId) != owner)
+                    mpts.TryAdd(DexAssets.MptKey(offer.TakerPays.Asset.MptIssuanceId), 0);
+            }
+
+            foreach ((string id, ulong amount) in mpts)
+                holdings.Add(new DexMptHolding { Account = owner, MptIssuanceId = id, Amount = amount, Authorized = true });
+
             uint ownerCount = (uint)owned.Count;
             ulong reserve = reserveBase + ownerCount * reserveIncrement;
             ulong xrp = reserve;
@@ -612,8 +764,8 @@ namespace Xrpl.Amounts
 
         private static void AddIssuer(HashSet<string> accounts, IssuedCurrency asset)
         {
-            if (XrplAmount.KindOf(asset) == AmountKind.Iou)
-                accounts.Add(asset.Issuer);
+            if (XrplAmount.KindOf(asset) != AmountKind.Xrp)
+                accounts.Add(DexAssets.Issuer(asset));
         }
 
         private static void AddLine(HashSet<(string, string, string)> lines, string a, string b, string currency)
@@ -688,10 +840,7 @@ namespace Xrpl.Amounts
             return (offers, offers.Count >= PublicBookLimit, ownerFunds);
         }
 
-        private static TakerAmount TakerAmountOf(IssuedCurrency asset) =>
-            XrplAmount.KindOf(asset) == AmountKind.Xrp
-                ? new TakerAmount { Currency = "XRP" }
-                : new TakerAmount { Currency = asset.Currency, Issuer = asset.Issuer };
+        private static TakerAmount TakerAmountOf(IssuedCurrency asset) => TakerAmount.FromAsset(asset);
 
         /// <summary>
         /// The book read the way <c>BookTip</c> walks it: its quality directories in key order,
@@ -805,9 +954,17 @@ namespace Xrpl.Amounts
         /// <summary><c>getBookBase</c>: the key of the book's quality-zero directory, every quality directory of the book following it.</summary>
         internal static string BookBase(IssuedCurrency @in, IssuedCurrency @out, string domainId)
         {
-            string preimage = LedgerSpace.BookDir.LedgerSpaceHex() +
-                              CurrencyHex(@in) + CurrencyHex(@out) +
-                              IssuerHex(@in) + IssuerHex(@out) +
+            // A book with an MPT side gets a one-byte tag, so no two kinds of book share a key.
+            bool inMpt = DexAssets.IsMpt(@in);
+            bool outMpt = DexAssets.IsMpt(@out);
+            string body = (inMpt, outMpt) switch
+            {
+                (false, false) => CurrencyHex(@in) + CurrencyHex(@out) + IssuerHex(@in) + IssuerHex(@out),
+                (false, true) => "01" + CurrencyHex(@in) + DexAssets.MptKey(@out.MptIssuanceId) + IssuerHex(@in),
+                (true, false) => "02" + DexAssets.MptKey(@in.MptIssuanceId) + CurrencyHex(@out) + IssuerHex(@out),
+                _ => "03" + DexAssets.MptKey(@in.MptIssuanceId) + DexAssets.MptKey(@out.MptIssuanceId),
+            };
+            string preimage = LedgerSpace.BookDir.LedgerSpaceHex() + body +
                               (string.IsNullOrEmpty(domainId) ? string.Empty : domainId.ToUpperInvariant());
             return preimage.Sha512Half().Substring(0, 48) + "0000000000000000";
         }
@@ -904,6 +1061,77 @@ namespace Xrpl.Amounts
                 SlotAccount = amm.AuctionSlot?.Account,
                 SlotAuthAccounts = authorized,
                 SlotExpiration = amm.AuctionSlot?.Expiration is { } expiration ? (uint)LendingMath.RippleSeconds(expiration) : null,
+            };
+        }
+
+        // ---- MPTs ----
+
+        /// <summary>An MPT issuance read by <c>ledger_entry</c>; null when it does not exist.</summary>
+        internal static async Task<DexMptIssuance> IssuanceAsync(IXrplClient client, string mptIssuanceId, LedgerIndex at, CancellationToken cancellationToken)
+        {
+            LOMPTokenIssuance issuance;
+            try
+            {
+                LedgerEntryResponse response = await client
+                    .LedgerEntry(new LedgerEntryRequest { MptIssuance = mptIssuanceId, LedgerIndex = at }, cancellationToken)
+                    .Typed()
+                    .ConfigureAwait(false);
+                issuance = response?.Node as LOMPTokenIssuance;
+            }
+            catch (RippledException exception) when (exception.Response?.Error == XrplErrorCodes.EntryNotFound)
+            {
+                return null;
+            }
+
+            if (issuance == null)
+                return null;
+
+            MPTokenIssuanceFlags flags = issuance.Flags ?? MPTokenIssuanceFlags.None;
+            return new DexMptIssuance
+            {
+                MptIssuanceId = DexAssets.MptKey(mptIssuanceId),
+                Issuer = issuance.Issuer,
+                OutstandingAmount = issuance.OutstandingAmount ?? 0,
+                MaximumAmount = issuance.MaximumAmount,
+                TransferFee = issuance.TransferFee ?? 0,
+                CanTrade = flags.HasFlag(MPTokenIssuanceFlags.MPTCanTrade),
+                CanTransfer = flags.HasFlag(MPTokenIssuanceFlags.MPTCanTransfer),
+                Locked = flags.HasFlag(MPTokenIssuanceFlags.MPTLocked),
+                RequireAuth = flags.HasFlag(MPTokenIssuanceFlags.MPTRequireAuth),
+                DomainId = string.IsNullOrEmpty(issuance.DomainID) ? null : issuance.DomainID,
+            };
+        }
+
+        /// <summary>An account's MPToken read by <c>ledger_entry</c>; null when it holds none.</summary>
+        internal static async Task<DexMptHolding> MpTokenAsync(IXrplClient client, string account, string mptIssuanceId, LedgerIndex at, CancellationToken cancellationToken)
+        {
+            LOMPToken token;
+            try
+            {
+                LedgerEntryResponse response = await client
+                    .LedgerEntry(
+                        new LedgerEntryRequest { MPToken = new MPTokenQuery { MPTokenIssuanceID = mptIssuanceId, Account = account }, LedgerIndex = at },
+                        cancellationToken)
+                    .Typed()
+                    .ConfigureAwait(false);
+                token = response?.Node as LOMPToken;
+            }
+            catch (RippledException exception) when (exception.Response?.Error == XrplErrorCodes.EntryNotFound)
+            {
+                return null;
+            }
+
+            if (token == null)
+                return null;
+
+            MPTokenFlags flags = token.Flags ?? 0;
+            return new DexMptHolding
+            {
+                Account = account,
+                MptIssuanceId = DexAssets.MptKey(mptIssuanceId),
+                Amount = token.MPTAmount ?? 0,
+                Locked = flags.HasFlag(MPTokenFlags.lsfMPTLocked),
+                Authorized = flags.HasFlag(MPTokenFlags.lsfMPTAuthorized),
             };
         }
 

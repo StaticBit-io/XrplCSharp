@@ -278,9 +278,9 @@ namespace Xrpl.Amounts
         }
 
         /// <summary>
-        /// The books between the assets the accounts' trust lines hold or issue, XRP included,
-        /// found as <see cref="FromAssetsAsync"/> finds them: a guess at the books a payment
-        /// between these accounts can use.
+        /// The books between the assets the accounts' trust lines hold or issue and the MPTs they
+        /// issue or hold, XRP included, found as <see cref="FromAssetsAsync"/> finds them: a guess
+        /// at the books a payment between these accounts can use.
         /// </summary>
         /// <remarks>
         /// A line gives the peer's currency when the account holds some or trusts the peer for
@@ -317,6 +317,10 @@ namespace Xrpl.Amounts
                     if (line.Balance.IsNegative || line.PeerLimit is { IsZero: false })
                         assets.Add(new IssuedCurrency { Currency = line.Balance.Asset.Currency, Issuer = account });
                 }
+
+                // The MPTs the account issues or holds.
+                foreach (PathfindMpt mpt in await PathfindingSource.AccountMptsAsync(client, account, at, cancellationToken).ConfigureAwait(false))
+                    assets.Add(DexAssets.Mpt(mpt.MptIssuanceId));
             }
 
             return await FromAssetsAsync(client, assets, domainId, at, cancellationToken).ConfigureAwait(false);
@@ -325,14 +329,20 @@ namespace Xrpl.Amounts
         /// <summary>A book directory's book, when the entry is the first page of one (<c>OrderBookDB::update</c>).</summary>
         private void AddDirectory(LODirectoryNode directory, string index)
         {
-            if (string.IsNullOrEmpty(directory.ExchangeRate) || directory.TakerPaysCurrency == null || directory.TakerGetsCurrency == null)
+            // A book side is a currency and issuer, or an MPT (TakerPaysMPT, TakerGetsMPT).
+            if (string.IsNullOrEmpty(directory.ExchangeRate) ||
+                (directory.TakerPaysCurrency == null && directory.TakerPaysMPT == null) ||
+                (directory.TakerGetsCurrency == null && directory.TakerGetsMPT == null))
+            {
                 return;
+            }
+
             if (directory.RootIndex != null && index != null && !string.Equals(directory.RootIndex, index, StringComparison.OrdinalIgnoreCase))
                 return;
 
             Add(
-                AssetFromHex(directory.TakerPaysCurrency, directory.TakerPaysIssuer),
-                AssetFromHex(directory.TakerGetsCurrency, directory.TakerGetsIssuer),
+                directory.TakerPaysMPT != null ? DexAssets.Mpt(directory.TakerPaysMPT) : AssetFromHex(directory.TakerPaysCurrency, directory.TakerPaysIssuer),
+                directory.TakerGetsMPT != null ? DexAssets.Mpt(directory.TakerGetsMPT) : AssetFromHex(directory.TakerGetsCurrency, directory.TakerGetsIssuer),
                 string.IsNullOrEmpty(directory.DomainID) ? null : directory.DomainID);
         }
 
@@ -430,40 +440,63 @@ namespace Xrpl.Amounts
             }
         }
 
-        private static TakerAmount TakerAmountOf(IssuedCurrency asset) =>
-            XrplAmount.KindOf(asset) == AmountKind.Xrp
-                ? new TakerAmount { Currency = "XRP" }
-                : new TakerAmount { Currency = asset.Currency, Issuer = asset.Issuer };
+        private static TakerAmount TakerAmountOf(IssuedCurrency asset) => TakerAmount.FromAsset(asset);
     }
 
-    /// <summary>An asset as a key: the normalized currency and the issuer, XRP with an empty one.</summary>
+    /// <summary>
+    /// An asset as a key: the normalized currency and the issuer, XRP with an empty one; an MPT
+    /// by its issuance ID in place of the currency and its issuer.
+    /// </summary>
     internal readonly record struct AssetId(string Currency, string Issuer)
     {
         internal static readonly AssetId Xrp = new AssetId("XRP", string.Empty);
 
         internal static AssetId Of(IssuedCurrency asset)
         {
+            if (DexAssets.IsMpt(asset))
+                return OfMpt(asset.MptIssuanceId);
+
             string currency = PathCurrency.Normalize(asset?.Currency);
             return currency == "XRP" ? Xrp : new AssetId(currency, asset.Issuer ?? string.Empty);
         }
 
+        internal static AssetId OfMpt(string mptIssuanceId) =>
+            new AssetId(DexAssets.MptKey(mptIssuanceId), DexAssets.MptIssuer(mptIssuanceId));
+
         internal bool IsXrp => Currency == "XRP";
 
+        internal bool IsMpt => PathCurrency.IsMpt(Currency);
+
         internal IssuedCurrency ToAsset() =>
-            IsXrp ? new IssuedCurrency { Currency = "XRP" } : new IssuedCurrency { Currency = Currency, Issuer = Issuer };
+            IsXrp ? new IssuedCurrency { Currency = "XRP" }
+            : IsMpt ? DexAssets.Mpt(Currency)
+            : new IssuedCurrency { Currency = Currency, Issuer = Issuer };
     }
 
-    /// <summary>Currency codes as the ledger compares them: a three-letter code and its 160-bit form are the same currency.</summary>
+    /// <summary>
+    /// Currency codes as the ledger compares them: a three-letter code and its 160-bit form are
+    /// the same currency. A path asset (<c>PathAsset</c>) is either a currency or an MPT, whose
+    /// 48-digit issuance ID no currency code can be.
+    /// </summary>
     internal static class PathCurrency
     {
+        /// <summary>Whether the key is an MPT's issuance ID rather than a currency.</summary>
+        internal static bool IsMpt(string key) => key != null && key.Length == 48;
+
+        /// <summary>The path asset of an asset: its normalized currency, or its MPT issuance ID.</summary>
+        internal static string Of(IssuedCurrency asset) =>
+            DexAssets.IsMpt(asset) ? DexAssets.MptKey(asset.MptIssuanceId) : Normalize(XrplAmount.KindOf(asset) == AmountKind.Xrp ? "XRP" : asset.Currency);
+
         /// <summary>
         /// The canonical form: <c>XRP</c> for XRP, the three-letter code for a standard currency
-        /// in either form, and the upper-case 40-digit hex otherwise.
+        /// in either form, the upper-case 40-digit hex otherwise, and an MPT's ID upper-case.
         /// </summary>
         internal static string Normalize(string code)
         {
             if (string.IsNullOrEmpty(code) || code == "XRP")
                 return "XRP";
+            if (IsMpt(code))
+                return code.ToUpperInvariant();
             if (code.Length != 40)
                 return code;
 

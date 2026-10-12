@@ -27,7 +27,10 @@ namespace Xrpl.Amounts
     /// state the amounts match the node's to the last digit.
     /// </para>
     /// <para>
-    /// Not covered: MPT books and sponsored reserves. A result is exact only against the state
+    /// MPT books (<c>MPTokensV2</c>) cross as the node crosses them: the issuances' transfer fees,
+    /// locks and trade permissions, the MPTokens a crossing creates, and an issuer's own offers
+    /// bounded by what it may still issue. Not covered: sponsored reserves, and vault shares,
+    /// whose underlying asset's permissions are not consulted. A result is exact only against the state
     /// it was given; <c>simulate</c> remains the reference for a transaction that is about to be
     /// submitted.
     /// </para>
@@ -48,7 +51,6 @@ namespace Xrpl.Amounts
         /// <param name="flags">The offer's flags: <c>tfPassive</c>, <c>tfImmediateOrCancel</c>, <c>tfFillOrKill</c>, <c>tfSell</c>.</param>
         /// <param name="rules">The amendments in force; the current rules when null.</param>
         /// <exception cref="ArgumentException">The account is not in the snapshot, the two sides are the same asset, or the snapshot lists a trust line twice.</exception>
-        /// <exception cref="NotSupportedException">A side is an MPT.</exception>
         public static OfferCrossingResult Cross(
             DexSnapshot snapshot,
             string account,
@@ -62,8 +64,6 @@ namespace Xrpl.Amounts
                 throw new ArgumentNullException(nameof(snapshot));
             if (account == null)
                 throw new ArgumentNullException(nameof(account));
-            if (takerPays.Kind == AmountKind.Mpt || takerGets.Kind == AmountKind.Mpt)
-                throw new NotSupportedException("MPT offers are not supported.");
             if (XrplAmount.SameAsset(takerPays.Asset, takerGets.Asset))
                 throw new ArgumentException("An offer cannot trade an asset for itself.");
 
@@ -88,15 +88,12 @@ namespace Xrpl.Amounts
         /// <param name="offer">The transaction, with its <c>Fee</c> set.</param>
         /// <param name="rules">The amendments in force; the current rules when null.</param>
         /// <exception cref="ArgumentException">The offer lacks its account or amounts, the account is not in the snapshot, or the snapshot lists a trust line twice.</exception>
-        /// <exception cref="NotSupportedException">A side is an MPT.</exception>
         public static OfferCrossingResult Cross(DexSnapshot snapshot, OfferCreate offer, LedgerRules rules = null)
         {
             if (snapshot == null)
                 throw new ArgumentNullException(nameof(snapshot));
             if (offer?.Account == null || offer.TakerPays == null || offer.TakerGets == null)
                 throw new ArgumentException("An offer needs Account, TakerPays and TakerGets.", nameof(offer));
-            if (offer.TakerPays.MPTokenIssuanceID != null || offer.TakerGets.MPTokenIssuanceID != null)
-                throw new NotSupportedException("MPT offers are not supported.");
 
             Order order = new Order
             {
@@ -142,6 +139,10 @@ namespace Xrpl.Amounts
         /// <summary><c>OfferCreate::preflight</c>: the malformed offers, refused before any fee.</summary>
         private static string Preflight(Order order, LedgerRules rules)
         {
+            // checkExtraFeatures: an MPT side needs MPTokensV2.
+            if (!rules.MPTokensV2 && (order.TakerPays.Kind == AmountKind.Mpt || order.TakerGets.Kind == AmountKind.Mpt))
+                return "temDISABLED";
+
             OfferCreateFlags flags = order.Flags;
             if (flags.HasFlag(OfferCreateFlags.tfHybrid) && string.IsNullOrEmpty(order.DomainId))
                 return "temINVALID_FLAG";
@@ -174,10 +175,13 @@ namespace Xrpl.Amounts
         {
             DexView view = new DexView(new DexWorld(snapshot) { RecordPasses = true }, rules);
             DexWorld world = view.World;
-            if (IsGloballyFrozen(world, order.TakerPays.Asset) || IsGloballyFrozen(world, order.TakerGets.Asset))
-                return "tecFROZEN";
+            if ((CheckGlobalFrozen(view, order.TakerPays.Asset) ?? CheckGlobalFrozen(view, order.TakerGets.Asset)) is { } frozen)
+                return frozen;
 
-            if (StepMath.IsNotPositive(view.AccountFunds(order.Account, order.TakerGets)))
+            // An MPT issuer may offer what it can no longer issue.
+            bool issuerOfMpt = order.TakerGets.Kind == AmountKind.Mpt &&
+                               string.Equals(DexAssets.MptIssuer(order.TakerGets.Asset.MptIssuanceId), order.Account, StringComparison.Ordinal);
+            if (!issuerOfMpt && StepMath.IsNotPositive(view.AccountFunds(order.Account, order.TakerGets)))
                 return "tecUNFUNDED_OFFER";
 
             uint accountSequence = creator.Sequence != 0 ? creator.Sequence : order.Sequence;
@@ -187,7 +191,7 @@ namespace Xrpl.Amounts
             if (Expired(snapshot, order.Expiration))
                 return "tecEXPIRED";
 
-            if (order.TakerPays.Kind == AmountKind.Iou && CheckAcceptAsset(view, order.Account, order.TakerPays.Asset) is { } refused)
+            if (order.TakerPays.Kind != AmountKind.Xrp && CheckAcceptAsset(view, order.Account, order.TakerPays.Asset) is { } refused)
                 return refused;
 
             if (!string.IsNullOrEmpty(order.DomainId))
@@ -205,11 +209,17 @@ namespace Xrpl.Amounts
                 }
             }
 
-            return null;
+            return view.CanTrade(order.TakerPays.Asset) ?? view.CanTrade(order.TakerGets.Asset);
         }
 
-        private static bool IsGloballyFrozen(DexWorld world, IssuedCurrency asset) =>
-            XrplAmount.KindOf(asset) == AmountKind.Iou && world.Accounts.TryGetValue(asset.Issuer, out DexAccount issuer) && issuer.GlobalFreeze;
+        /// <summary><c>checkGlobalFrozen</c>: an issuer's global freeze (<c>tecFROZEN</c>), or a locked MPT issuance (<c>tecLOCKED</c>).</summary>
+        private static string CheckGlobalFrozen(DexView view, IssuedCurrency asset) =>
+            XrplAmount.KindOf(asset) switch
+            {
+                AmountKind.Iou => view.World.Accounts.TryGetValue(asset.Issuer, out DexAccount issuer) && issuer.GlobalFreeze ? "tecFROZEN" : null,
+                AmountKind.Mpt => view.IsMptGlobalLocked(asset) ? "tecLOCKED" : null,
+                _ => null,
+            };
 
         /// <summary><c>hasExpired</c>: the parent ledger closed at or after the expiration.</summary>
         private static bool Expired(DexSnapshot snapshot, uint? expiration) =>
@@ -218,10 +228,15 @@ namespace Xrpl.Amounts
         /// <summary><c>checkAcceptAsset</c>: whether the account may receive what it asks for.</summary>
         private static string CheckAcceptAsset(DexView view, string account, IssuedCurrency asset)
         {
-            if (!view.World.Accounts.TryGetValue(asset.Issuer, out DexAccount issuer))
+            string issuerAccount = DexAssets.Issuer(asset);
+            if (!view.World.Accounts.TryGetValue(issuerAccount, out DexAccount issuer))
                 return "tecNO_ISSUER";
-            if (string.Equals(asset.Issuer, account, StringComparison.Ordinal))
+            if (string.Equals(issuerAccount, account, StringComparison.Ordinal))
                 return null;
+
+            // An MPT: authorized, its missing MPToken created when it arrives, and not locked.
+            if (DexAssets.IsMpt(asset))
+                return view.RequireMptAuth(account, asset, MptAuth.Weak) ?? (view.IsFrozen(account, asset) ? "tecLOCKED" : null);
 
             LineInfo line = view.LineInfo(account, asset.Issuer, asset.Currency);
             if (view.Rules.FixCleanup3_4_0 && issuer.DisallowIncomingTrustline && line == null)
@@ -310,6 +325,15 @@ namespace Xrpl.Amounts
                     : Result(world, cancel, "tecKILLED", XrplAmount.Zero(takerGets.Asset), XrplAmount.Zero(takerPays.Asset), null);
             }
 
+            // A quality too small to write would rest where no crossing can reach it: under
+            // MPTokensV2 the remainder is not placed.
+            if (rules.MPTokensV2 && XrplQuality.FromAmounts(takerPays, takerGets, rules).Value == 0)
+            {
+                return crossed
+                    ? Result(world, ledger, "tesSUCCESS", paid, got, null)
+                    : Result(world, cancel, "tecKILLED", XrplAmount.Zero(takerGets.Asset), XrplAmount.Zero(takerPays.Asset), null);
+            }
+
             // The reserve for one more object, against the balance before the fee. The owner
             // count is the ledger's after the crossing, trust lines it created or cleared included.
             decimal reserve = snapshot.ReserveBase + (decimal)snapshot.ReserveIncrement * (ledger.OwnerCount(account) + 1);
@@ -335,6 +359,10 @@ namespace Xrpl.Amounts
                 tickSize = Math.Min(tickSize, paysIssuer.TickSize);
             if (!takerGets.IsIntegral && world.Accounts.TryGetValue(takerGets.Asset.Issuer, out DexAccount getsIssuer) && getsIssuer.TickSize != 0)
                 tickSize = Math.Min(tickSize, getsIssuer.TickSize);
+
+            // Under MPTokensV2 an unrepresentable quality is not rounded; the offer still crosses.
+            if (rules.MPTokensV2 && XrplQuality.FromAmounts(takerPays, takerGets, rules).Value == 0)
+                return true;
 
             if (RoundToTickSize(takerPays, takerGets, tickSize, sell, rules) is not { } rounded)
                 return false;
@@ -375,10 +403,17 @@ namespace Xrpl.Amounts
 
             rules ??= new LedgerRules();
             XrplAmount rate = XrplQuality.FromAmounts(takerPays, takerGets, rules).Round(tickSize).RateAmount;
+
+            // An MPT side is exact and is never the one rounded.
             if (sell)
-                takerPays = XrplAmountMath.Multiply(takerGets, rate, takerPays.Asset, rules);
-            else
+            {
+                if (takerPays.Kind != AmountKind.Mpt)
+                    takerPays = XrplAmountMath.Multiply(takerGets, rate, takerPays.Asset, rules);
+            }
+            else if (takerGets.Kind != AmountKind.Mpt)
+            {
                 takerGets = XrplAmountMath.Divide(takerPays, rate, takerGets.Asset, rules);
+            }
 
             return takerPays.IsZero || takerGets.IsZero ? null : (takerPays, takerGets);
         }
@@ -396,14 +431,20 @@ namespace Xrpl.Amounts
             try
             {
                 XrplAmount inStartBalance = psb.AccountFunds(account, takerAmount.In);
-                if (StepMath.IsNotPositive(inStartBalance))
+
+                // An MPT issuer may cross with nothing left to issue.
+                bool disallowUnfunded = takerAmount.In.Kind != AmountKind.Mpt ||
+                                        !string.Equals(DexAssets.Issuer(takerAmount.In.Asset), account, StringComparison.Ordinal);
+                if (disallowUnfunded && StepMath.IsNotPositive(inStartBalance))
                     return ("tecUNFUNDED_OFFER", takerAmount, null);
 
                 uint gatewayRate = OfferCrossing.QualityOne;
                 XrplAmount sendMax = takerAmount.In;
-                if (takerAmount.In.Kind != AmountKind.Xrp && !string.Equals(account, takerAmount.In.Asset.Issuer, StringComparison.Ordinal))
+                if (takerAmount.In.Kind != AmountKind.Xrp && !string.Equals(account, DexAssets.Issuer(takerAmount.In.Asset), StringComparison.Ordinal))
                 {
-                    gatewayRate = psb.World.TransferRate(takerAmount.In.Asset.Issuer);
+                    gatewayRate = takerAmount.In.Kind == AmountKind.Mpt
+                        ? psb.World.MptTransferRate(takerAmount.In.Asset)
+                        : psb.World.TransferRate(takerAmount.In.Asset.Issuer);
                     if (gatewayRate != OfferCrossing.QualityOne)
                         sendMax = XrplAmountMath.MulRound(takerAmount.In, StepMath.RateAmount(gatewayRate), takerAmount.In.Asset, roundUp: true, rules);
                 }
@@ -421,9 +462,12 @@ namespace Xrpl.Amounts
                 if (sell)
                 {
                     // Selling, the account takes as much as it can get, so the output is unbounded.
-                    deliver = deliver.Kind == AmountKind.Xrp
-                        ? XrplAmount.FromUnits(deliver.Asset, AmountKind.Xrp, 9_000_000_000_000_000_000)
-                        : XrplAmount.Canonical(deliver.Asset, AmountKind.Iou, false, XrplAmount.MaxIouMantissa / 2, XrplAmount.MaxIouExponent, NumberRounding.ToNearest);
+                    deliver = deliver.Kind switch
+                    {
+                        AmountKind.Xrp => XrplAmount.FromUnits(deliver.Asset, AmountKind.Xrp, 9_000_000_000_000_000_000),
+                        AmountKind.Mpt => XrplAmount.FromUnits(deliver.Asset, AmountKind.Mpt, (long)(XrplAmount.MaxMptAmount / 2)),
+                        _ => XrplAmount.Canonical(deliver.Asset, AmountKind.Iou, false, XrplAmount.MaxIouMantissa / 2, XrplAmount.MaxIouExponent, NumberRounding.ToNearest),
+                    };
                 }
 
                 // The default path, and for two issued currencies a second one through XRP.
@@ -477,7 +521,7 @@ namespace Xrpl.Amounts
 
                 (XrplAmount In, XrplAmount Out) afterCross = takerAmount;
                 if (flow.Succeeded)
-                    afterCross = AfterCross(psb, account, takerAmount, flow, gatewayRate, sell, rules);
+                    afterCross = AfterCross(psb, account, takerAmount, flow, gatewayRate, sell, disallowUnfunded, rules);
 
                 return ("tesSUCCESS", afterCross, flow);
             }
@@ -495,10 +539,11 @@ namespace Xrpl.Amounts
             FlowResult flow,
             uint gatewayRate,
             bool sell,
+            bool disallowUnfunded,
             LedgerRules rules)
         {
             XrplAmount takerInBalance = psb.AccountFunds(account, takerAmount.In);
-            if (StepMath.IsNotPositive(takerInBalance))
+            if (disallowUnfunded && StepMath.IsNotPositive(takerInBalance))
                 return (XrplAmount.Zero(takerAmount.In.Asset), XrplAmount.Zero(takerAmount.Out.Asset));
 
             XrplAmount rate = XrplQuality.FromAmounts(takerAmount.In, takerAmount.Out, rules).RateAmount;
@@ -572,6 +617,7 @@ namespace Xrpl.Amounts
             Pools = changes.Pools;
             BalanceChanges = changes.Balances;
             TrustLines = changes.TrustLines;
+            MpTokens = changes.MpTokens;
             NeedsDeeperBooks = changes.ReachedPartialBook;
             Fills = changes.Fills;
             Passes = changes.Passes;
@@ -620,6 +666,9 @@ namespace Xrpl.Amounts
         /// <summary>The trust lines the transaction created or deleted.</summary>
         public IReadOnlyList<TrustLineChange> TrustLines { get; }
 
+        /// <summary>The MPTokens the transaction created: the taker's for an MPT it buys, an offer owner's for one it is paid.</summary>
+        public IReadOnlyList<MpTokenChange> MpTokens { get; }
+
         /// <summary>
         /// Whether the engine walked past the last offer the snapshot read of a book it holds
         /// only in part (<see cref="DexSnapshot.PartialBooks"/>): the node may cross offers the
@@ -666,6 +715,22 @@ namespace Xrpl.Amounts
 
         /// <summary>Whether the line was deleted.</summary>
         public bool Deleted => !Created;
+    }
+
+    /// <summary>An MPToken the transaction created: an account paid an MPT it held none of.</summary>
+    public sealed class MpTokenChange
+    {
+        internal MpTokenChange(string account, string mptIssuanceId)
+        {
+            Account = account;
+            MptIssuanceId = mptIssuanceId;
+        }
+
+        /// <summary>The holder.</summary>
+        public string Account { get; }
+
+        /// <summary>The MPT's issuance ID, upper-case.</summary>
+        public string MptIssuanceId { get; }
     }
 
     /// <summary>How one account's balance of one asset moved.</summary>

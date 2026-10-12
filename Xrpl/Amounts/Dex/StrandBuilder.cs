@@ -7,16 +7,17 @@ namespace Xrpl.Amounts
 {
     /// <summary>
     /// One element of a payment path (<c>STPathElement</c>): an account, or an offer book named by
-    /// its output currency, its issuer, or both. XRP is the currency <c>"XRP"</c>, and its issuer
-    /// or account is the empty string.
+    /// its output currency or MPT, its issuer, or both. XRP is the currency <c>"XRP"</c>, and its
+    /// issuer or account is the empty string.
     /// </summary>
     internal readonly struct PathElement
     {
-        internal PathElement(string account, string currency, string issuer)
+        internal PathElement(string account, string currency, string issuer, string mpt = null)
         {
             Account = account;
             Currency = currency;
             Issuer = issuer;
+            Mpt = mpt == null ? null : DexAssets.MptKey(mpt);
         }
 
         internal string Account { get; }
@@ -24,6 +25,9 @@ namespace Xrpl.Amounts
         internal string Currency { get; }
 
         internal string Issuer { get; }
+
+        /// <summary>The MPT issuance the element names (<c>TypeMpt</c>); null for none.</summary>
+        internal string Mpt { get; }
 
         internal bool IsAccount => Account != null;
 
@@ -33,9 +37,23 @@ namespace Xrpl.Amounts
 
         internal bool HasIssuer => Issuer != null;
 
-        internal bool IsEmpty => Account == null && Currency == null && Issuer == null;
+        internal bool HasMpt => Mpt != null;
+
+        /// <summary><c>TypeAsset</c>: a currency or an MPT.</summary>
+        internal bool HasAsset => HasCurrency || HasMpt;
+
+        internal bool IsEmpty => Account == null && Currency == null && Issuer == null && Mpt == null;
 
         internal static PathElement OfAccount(string account) => new PathElement(account, null, null);
+
+        /// <summary>An offer element for <paramref name="asset"/>, its issuer named.</summary>
+        internal static PathElement OfAsset(IssuedCurrency asset) =>
+            XrplAmount.KindOf(asset) switch
+            {
+                AmountKind.Xrp => new PathElement(null, "XRP", string.Empty),
+                AmountKind.Mpt => new PathElement(null, null, DexAssets.MptIssuer(asset.MptIssuanceId), asset.MptIssuanceId),
+                _ => new PathElement(null, asset.Currency, asset.Issuer),
+            };
 
         internal static bool IsXrpCurrency(string currency) => string.Equals(currency, "XRP", StringComparison.Ordinal);
     }
@@ -140,6 +158,7 @@ namespace Xrpl.Amounts
             Direct,
             Book,
             XrpEndpoint,
+            MptEndpoint,
         }
 
         /// <summary>A step as <c>toStrand</c> lays it out: the accounts and assets, and whether it ends the strand.</summary>
@@ -147,18 +166,53 @@ namespace Xrpl.Amounts
         {
             internal HopKind Kind { get; init; }
 
-            /// <summary>A direct step's source, or the account of an XRP step.</summary>
+            /// <summary>A direct or MPT step's source, or the account of an XRP step.</summary>
             internal string Source { get; init; }
 
             internal string Destination { get; init; }
 
             internal string Currency { get; init; }
 
+            /// <summary>The issuance an MPT step moves.</summary>
+            internal string Mpt { get; init; }
+
             internal IssuedCurrency In { get; init; }
 
             internal IssuedCurrency Out { get; init; }
 
             internal bool IsLast { get; init; }
+        }
+
+        /// <summary>
+        /// <c>curAsset</c> while <c>toStrand</c> walks the path: a currency and its issuer, XRP
+        /// with an empty issuer, or an MPT, whose issuer is fixed by its issuance.
+        /// </summary>
+        private struct PathAsset
+        {
+            internal string Currency;
+            internal string Issuer;
+            internal string Mpt;
+
+            internal bool IsMpt => Mpt != null;
+
+            internal bool IsXrp => !IsMpt && PathElement.IsXrpCurrency(Currency);
+
+            internal static PathAsset Of(IssuedCurrency asset, string source) =>
+                XrplAmount.KindOf(asset) switch
+                {
+                    AmountKind.Mpt => new PathAsset { Mpt = DexAssets.MptKey(asset.MptIssuanceId), Issuer = DexAssets.MptIssuer(asset.MptIssuanceId) },
+                    AmountKind.Xrp => new PathAsset { Currency = "XRP", Issuer = string.Empty },
+                    _ => new PathAsset { Currency = asset.Currency, Issuer = source },
+                };
+
+            internal IssuedCurrency ToAsset() =>
+                IsMpt ? DexAssets.Mpt(Mpt)
+                : IsXrp ? new IssuedCurrency { Currency = "XRP" }
+                : new IssuedCurrency { Currency = Currency, Issuer = Issuer };
+
+            /// <summary><c>PathAsset ==</c>: the same currency, or the same MPT, whoever issues the currency.</summary>
+            internal bool SameAsset(PathElement element) =>
+                IsMpt ? element.HasMpt && element.Mpt == Mpt : element.HasCurrency && string.Equals(element.Currency, Currency, StringComparison.Ordinal);
         }
 
         /// <summary>
@@ -175,28 +229,35 @@ namespace Xrpl.Amounts
             if (string.IsNullOrEmpty(source) || string.IsNullOrEmpty(destination))
                 return (hops, "temBAD_PATH", source, destination);
 
-            foreach (PathElement element in path)
+            for (int index = 0; index < path.Count; index++)
             {
+                PathElement element = path[index];
                 bool bad = element.IsEmpty ||
                            (element.IsAccount && (element.HasIssuer || element.HasCurrency)) ||
                            (element.HasIssuer && element.Issuer.Length == 0) ||
                            (element.IsAccount && element.Account.Length == 0) ||
-                           (element.HasCurrency && element.HasIssuer && PathElement.IsXrpCurrency(element.Currency) != (element.Issuer.Length == 0));
+                           (element.HasCurrency && element.HasIssuer && PathElement.IsXrpCurrency(element.Currency) != (element.Issuer.Length == 0)) ||
+                           (element.HasMpt && (element.HasCurrency || element.IsAccount)) ||
+                           (element.HasMpt && element.HasIssuer && !string.Equals(element.Issuer, DexAssets.MptIssuer(element.Mpt), StringComparison.Ordinal)) ||
+                           // An MPT does not ripple: nothing but another asset follows it.
+                           (index > 0 && path[index - 1].HasMpt && (element.IsAccount || (element.HasIssuer && !element.HasAsset)));
                 if (bad)
                     return (hops, "temBAD_PATH", source, destination);
             }
 
             IssuedCurrency start = request.SendMax ?? deliver;
-            (string Currency, string Issuer) current = XrplAmount.KindOf(start) == AmountKind.Xrp
-                ? ("XRP", string.Empty)
-                : (start.Currency, source);
+            PathAsset current = PathAsset.Of(start, source);
 
-            // The source first, as the transaction's Account, in the SendMax or the delivered asset.
-            List<PathElement> normalized = new List<PathElement> { new PathElement(source, current.Currency, current.Issuer) };
+            // The source first, as the transaction's Account, in the SendMax or the delivered
+            // asset; an MPT's issuer is its own, never the source.
+            List<PathElement> normalized = new List<PathElement>
+            {
+                current.IsMpt ? new PathElement(source, null, current.Issuer, current.Mpt) : new PathElement(source, current.Currency, current.Issuer),
+            };
 
             // SendMax's issuer, when it is not the source, is the implied second hop - unless the
             // path starts at it.
-            string sendMaxIssuer = request.SendMax == null ? null : IssuerOf(request.SendMax);
+            string sendMaxIssuer = request.SendMax == null ? null : DexAssets.Issuer(request.SendMax);
             if (sendMaxIssuer != null && !string.Equals(sendMaxIssuer, source, StringComparison.Ordinal) &&
                 (path.Count == 0 || !path[0].IsAccount || !string.Equals(path[0].Account, sendMaxIssuer, StringComparison.Ordinal)))
             {
@@ -210,23 +271,23 @@ namespace Xrpl.Amounts
             PathElement lastAsset = default;
             for (int i = normalized.Count - 1; i >= 0; i--)
             {
-                if (normalized[i].HasCurrency)
+                if (normalized[i].HasAsset)
                 {
                     lastAsset = normalized[i];
                     break;
                 }
             }
 
-            string deliverCurrency = XrplAmount.KindOf(deliver) == AmountKind.Xrp ? "XRP" : deliver.Currency;
-            string deliverIssuer = IssuerOf(deliver);
-            if (!string.Equals(lastAsset.Currency, deliverCurrency, StringComparison.Ordinal) ||
+            PathAsset deliverAsset = PathAsset.Of(deliver, null);
+            string deliverIssuer = DexAssets.Issuer(deliver);
+            if (!deliverAsset.SameAsset(lastAsset) ||
                 (request.OfferCrossing && !string.Equals(lastAsset.Issuer, deliverIssuer, StringComparison.Ordinal)))
             {
-                normalized.Add(new PathElement(null, deliverCurrency, deliverIssuer));
+                normalized.Add(PathElement.OfAsset(deliver));
             }
 
             // The delivered asset's issuer, when it is not the destination, is the implied
-            // second-to-last hop.
+            // second-to-last hop; after an offer that sells an MPT, that is the MPT's issuer.
             PathElement back = normalized[normalized.Count - 1];
             if (!((back.IsAccount && string.Equals(back.Account, deliverIssuer, StringComparison.Ordinal)) ||
                   string.Equals(destination, deliverIssuer, StringComparison.Ordinal)))
@@ -248,29 +309,47 @@ namespace Xrpl.Amounts
                 PathElement cur = normalized[i];
                 PathElement next = normalized[i + 1];
 
-                if (cur.IsAccount)
-                    current.Issuer = cur.Account;
-                else if (cur.HasIssuer)
-                    current.Issuer = cur.Issuer;
+                // From an MPT to a currency: the currency's issuer comes from this element.
+                if (current.IsMpt && cur.HasCurrency)
+                    current = new PathAsset { Currency = "XRP", Issuer = string.Empty };
+
+                // Only a currency's issuer moves; an MPT's is part of its issuance.
+                if (!current.IsMpt)
+                {
+                    if (cur.IsAccount)
+                        current.Issuer = cur.Account;
+                    else if (cur.HasIssuer)
+                        current.Issuer = cur.Issuer;
+                }
 
                 if (cur.HasCurrency)
                 {
-                    current.Currency = cur.Currency;
+                    current = new PathAsset { Currency = cur.Currency, Issuer = current.Issuer };
                     if (PathElement.IsXrpCurrency(current.Currency))
                         current.Issuer = string.Empty;
+                }
+                else if (cur.HasMpt)
+                {
+                    current = new PathAsset { Mpt = cur.Mpt, Issuer = DexAssets.MptIssuer(cur.Mpt) };
                 }
 
                 if (cur.IsOffer && next.IsAccount)
                 {
-                    // After an offer the book's issuer hands over to the next account, if it is another.
+                    // After an offer the book's issuer hands over to the next account, if it is
+                    // another. An offer selling an MPT is always followed by its issuer.
                     if (!string.Equals(current.Issuer, next.Account, StringComparison.Ordinal) && next.Account.Length != 0)
                     {
-                        if (PathElement.IsXrpCurrency(current.Currency))
+                        if (current.IsXrp)
                         {
                             if (i != normalized.Count - 2)
                                 return (hops, "temBAD_PATH", strandSource, strandDestination);
 
                             hops.Add(new Hop { Kind = HopKind.XrpEndpoint, Source = next.Account });
+                        }
+                        else if (current.IsMpt)
+                        {
+                            // An MPT does not ripple.
+                            return (hops, "temBAD_PATH", strandSource, strandDestination);
                         }
                         else
                         {
@@ -281,7 +360,7 @@ namespace Xrpl.Amounts
                     continue;
                 }
 
-                if (!next.IsOffer && next.HasCurrency && !string.Equals(next.Currency, current.Currency, StringComparison.Ordinal))
+                if (!next.IsOffer && next.HasAsset && !current.SameAsset(next))
                     return (hops, "temBAD_PATH", strandSource, strandDestination);
 
                 bool isFirst = hops.Count == 0;
@@ -296,7 +375,9 @@ namespace Xrpl.Amounts
                 }
                 else if (cur.IsAccount && next.IsAccount)
                 {
-                    hops.Add(new Hop { Kind = HopKind.Direct, Source = cur.Account, Destination = next.Account, Currency = current.Currency, IsLast = isLast });
+                    hops.Add(current.IsMpt
+                        ? new Hop { Kind = HopKind.MptEndpoint, Source = cur.Account, Destination = next.Account, Mpt = current.Mpt, IsLast = isLast }
+                        : new Hop { Kind = HopKind.Direct, Source = cur.Account, Destination = next.Account, Currency = current.Currency, IsLast = isLast });
                 }
                 else if (cur.IsOffer && next.IsAccount)
                 {
@@ -304,19 +385,21 @@ namespace Xrpl.Amounts
                 }
                 else
                 {
-                    string outCurrency = next.HasCurrency ? next.Currency : current.Currency;
-                    string outIssuer = next.HasIssuer ? next.Issuer : current.Issuer;
-                    bool currentXrp = PathElement.IsXrpCurrency(current.Currency);
-                    bool outXrp = PathElement.IsXrpCurrency(outCurrency);
-                    if (currentXrp && outXrp)
+                    PathAsset output = next.HasMpt
+                        ? new PathAsset { Mpt = next.Mpt, Issuer = DexAssets.MptIssuer(next.Mpt) }
+                        : next.HasCurrency
+                            ? new PathAsset { Currency = next.Currency, Issuer = next.HasIssuer ? next.Issuer : current.Issuer }
+                            : current.IsMpt
+                                ? current
+                                : new PathAsset { Currency = current.Currency, Issuer = next.HasIssuer ? next.Issuer : current.Issuer };
+                    if (current.IsXrp && output.IsXrp)
                         return (hops, "temBAD_PATH", strandSource, strandDestination);
 
-                    IssuedCurrency xrp = new IssuedCurrency { Currency = "XRP" };
                     hops.Add(new Hop
                     {
                         Kind = HopKind.Book,
-                        In = currentXrp ? xrp : new IssuedCurrency { Currency = current.Currency, Issuer = current.Issuer },
-                        Out = outXrp ? xrp : new IssuedCurrency { Currency = outCurrency, Issuer = outIssuer },
+                        In = current.ToAsset(),
+                        Out = output.ToAsset(),
                         IsLast = isLast,
                     });
                 }
@@ -359,6 +442,7 @@ namespace Xrpl.Amounts
                 {
                     HopKind.XrpEndpoint => XrpEndpoint(context, hop.Source),
                     HopKind.Direct => Direct(context, hop.Source, hop.Destination, hop.Currency),
+                    HopKind.MptEndpoint => MptEndpoint(context, hop.Source, hop.Destination, hop.Mpt),
                     _ => Book(context, hop.In, hop.Out),
                 };
                 if (result != null)
@@ -384,14 +468,28 @@ namespace Xrpl.Amounts
             return ter == null ? (null, step) : (ter, null);
         }
 
+        private static (string Result, FlowStep Step) MptEndpoint(StrandContext context, string source, string destination, string mpt)
+        {
+            MptEndpointStep step = new MptEndpointStep(context, source, destination, mpt);
+            string ter = step.Check(context);
+            return ter == null ? (null, step) : (ter, null);
+        }
+
         private static (string Result, FlowStep Step) XrpEndpoint(StrandContext context, string account)
         {
-            // Offer crossing leaves the reserve of the trust line the taker is about to get.
+            // Offer crossing leaves the reserve of the trust line or MPToken the taker is about to get.
             int reserveReduction = 0;
-            if (context.OfferCrossing && context.IsFirst && XrplAmount.KindOf(context.StrandDeliver) == AmountKind.Iou &&
-                !context.View.LineExists(account, context.StrandDeliver.Issuer, context.StrandDeliver.Currency))
+            if (context.OfferCrossing && context.IsFirst)
             {
-                reserveReduction = -1;
+                IssuedCurrency deliver = context.StrandDeliver;
+                bool holds = XrplAmount.KindOf(deliver) switch
+                {
+                    AmountKind.Iou => context.View.LineExists(account, deliver.Issuer, deliver.Currency),
+                    AmountKind.Mpt => context.View.MpTokenExists(account, deliver),
+                    _ => true,
+                };
+                if (!holds)
+                    reserveReduction = -1;
             }
 
             XrpEndpointStep step = new XrpEndpointStep(context, account, reserveReduction);
@@ -421,6 +519,8 @@ namespace Xrpl.Amounts
                 }
 
                 if (a[i] is DirectStep d1 && b[i] is DirectStep d2 && d1.Currency != d2.Currency)
+                    return false;
+                if (a[i] is MptEndpointStep m1 && b[i] is MptEndpointStep m2 && !XrplAmount.SameAsset(m1.Mpt, m2.Mpt))
                     return false;
             }
 

@@ -15,8 +15,9 @@ namespace Xrpl.Amounts
     /// <c>FromNodeAsync</c> reads everything from a node. A snapshot built by hand must list
     /// every offer of each book it covers, in book order - as <c>book_offers</c> returns them -
     /// and every account whose balance the crossing reads: the taker, each offer's owner, and
-    /// each issuer with a transfer rate or tick size. A book read only in part goes in
-    /// <see cref="PartialBooks"/>. For a transaction in a permissioned domain, the domain and the
+    /// each issuer with a transfer rate or tick size. An MPT the transaction trades or moves needs
+    /// its issuance in <see cref="MptIssuances"/>, and those accounts' MPTokens of it in
+    /// <see cref="MptHoldings"/>. A book read only in part goes in <see cref="PartialBooks"/>. For a transaction in a permissioned domain, the domain and the
     /// credentials that decide its members go in <see cref="Domains"/> and
     /// <see cref="Credentials"/>; where a hybrid offer shares a quality with domain offers, the
     /// offers are listed in the order they were placed.
@@ -55,6 +56,19 @@ namespace Xrpl.Amounts
 
         /// <summary>The AMM pools on those books.</summary>
         public IReadOnlyList<DexAmmPool> Pools { get; init; } = Array.Empty<DexAmmPool>();
+
+        /// <summary>
+        /// The MPT issuances the transaction trades or moves (<c>MPTokenIssuance</c>): how much is
+        /// outstanding, the most there may be, the transfer fee, and the flags that let it trade.
+        /// </summary>
+        public IReadOnlyList<DexMptIssuance> MptIssuances { get; init; } = Array.Empty<DexMptIssuance>();
+
+        /// <summary>
+        /// The MPT holdings (<c>MPToken</c>) the transaction reads: the taker's or sender's, the
+        /// destination's, each offer owner's of what its offer gives and asks for, and each pool's.
+        /// An account with no holding listed holds none, and gets one when an offer pays it the MPT.
+        /// </summary>
+        public IReadOnlyList<DexMptHolding> MptHoldings { get; init; } = Array.Empty<DexMptHolding>();
 
         /// <summary>The permissioned domains whose books the transaction walks, or whose membership it checks.</summary>
         public IReadOnlyList<DexDomain> Domains { get; init; } = Array.Empty<DexDomain>();
@@ -203,6 +217,59 @@ namespace Xrpl.Amounts
 
         /// <summary>Whether the line counts toward the peer's owner count.</summary>
         public bool PeerReserve { get; init; }
+    }
+
+    /// <summary>An MPT issuance (<c>MPTokenIssuance</c>) as the engine reads it.</summary>
+    public sealed class DexMptIssuance
+    {
+        /// <summary>The issuance's <c>MPTokenIssuanceID</c>, 48 hex digits.</summary>
+        public string MptIssuanceId { get; init; }
+
+        /// <summary>The issuer, which the issuance ID names too.</summary>
+        public string Issuer { get; init; }
+
+        /// <summary>What the holders hold between them (<c>OutstandingAmount</c>).</summary>
+        public ulong OutstandingAmount { get; init; }
+
+        /// <summary>The most there may be outstanding (<c>MaximumAmount</c>); null for the protocol's maximum, 2^63 - 1.</summary>
+        public ulong? MaximumAmount { get; init; }
+
+        /// <summary>The fee on a transfer between holders, in 1/100,000 (<c>TransferFee</c>): 0 to 50,000.</summary>
+        public ushort TransferFee { get; init; }
+
+        /// <summary>Whether the MPT may be traded on the DEX (<c>lsfMPTCanTrade</c>).</summary>
+        public bool CanTrade { get; init; }
+
+        /// <summary>Whether holders may transfer the MPT to one another (<c>lsfMPTCanTransfer</c>).</summary>
+        public bool CanTransfer { get; init; }
+
+        /// <summary>Whether every holding is locked (<c>lsfMPTLocked</c> on the issuance).</summary>
+        public bool Locked { get; init; }
+
+        /// <summary>Whether a holder needs the issuer's authorization (<c>lsfMPTRequireAuth</c>).</summary>
+        public bool RequireAuth { get; init; }
+
+        /// <summary>The permissioned domain whose members are authorized to hold it (<c>DomainID</c>); null for none.</summary>
+        public string DomainId { get; init; }
+    }
+
+    /// <summary>An account's holding of an MPT (<c>MPToken</c>).</summary>
+    public sealed class DexMptHolding
+    {
+        /// <summary>The holder.</summary>
+        public string Account { get; init; }
+
+        /// <summary>The issuance held.</summary>
+        public string MptIssuanceId { get; init; }
+
+        /// <summary>How much the account holds (<c>MPTAmount</c>).</summary>
+        public ulong Amount { get; init; }
+
+        /// <summary>Whether the issuer locked this holding (<c>lsfMPTLocked</c>).</summary>
+        public bool Locked { get; init; }
+
+        /// <summary>Whether the issuer authorized the holder (<c>lsfMPTAuthorized</c>), which an issuance requiring authorization needs.</summary>
+        public bool Authorized { get; init; }
     }
 
     /// <summary>An offer in a book.</summary>

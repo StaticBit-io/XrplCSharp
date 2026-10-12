@@ -27,7 +27,9 @@ namespace Xrpl.Amounts
     /// back at zero releases or deletes. A direct XRP payment is checked against the reserve.
     /// </para>
     /// <para>
-    /// Not covered: MPT payments and sponsored reserves. The paths come with the payment, as
+    /// An MPT moves through <c>MPTEndpointStep</c>s and MPT books under <c>MPTokensV2</c>, and
+    /// directly, with its transfer fee, before it. Not covered: sponsored reserves, and vault
+    /// shares' underlying permissions. The paths come with the payment, as
     /// <c>ripple_path_find</c> returns them or <see cref="PathFinding"/> finds them. A result is
     /// exact only against the state it was given.
     /// </para>
@@ -43,7 +45,6 @@ namespace Xrpl.Amounts
         /// <param name="payment">The payment, with its <c>Fee</c> set.</param>
         /// <param name="rules">The amendments in force; the current rules when null.</param>
         /// <exception cref="ArgumentException">The sender is not in the snapshot, or the snapshot lists a trust line twice.</exception>
-        /// <exception cref="NotSupportedException">The payment moves an MPT.</exception>
         public static PaymentFlowResult Evaluate(DexSnapshot snapshot, Payment payment, LedgerRules rules = null)
         {
             if (snapshot == null)
@@ -67,12 +68,12 @@ namespace Xrpl.Amounts
             bool hasPaths = paths.Count > 0;
             ulong fee = payment.Fee?.Value is { } feeText ? ulong.Parse(feeText, CultureInfo.InvariantCulture) : 0;
 
-            // getMaxSourceAmount: SendMax, or the amount as the sender's own issue.
-            XrplAmount maxSource = sendMax ?? (amount.Kind == AmountKind.Xrp
+            // getMaxSourceAmount: SendMax, or the amount - an issued currency as the sender's own issue.
+            XrplAmount maxSource = sendMax ?? (amount.Kind != AmountKind.Iou
                 ? amount
                 : amount.WithAsset(new IssuedCurrency { Currency = amount.Asset.Currency, Issuer = account }));
 
-            if (Preflight(account, destination, amount, sendMax, maxSource, deliverMin, hasPaths, partialPayment, limitQuality, defaultPaths) is { } malformed)
+            if (Preflight(account, destination, amount, sendMax, maxSource, deliverMin, hasPaths, partialPayment, limitQuality, defaultPaths, rules) is { } malformed)
                 return NotApplied(snapshot, malformed);
             if (PreflightExtras(payment, rules) is { } malformedExtras)
                 return NotApplied(snapshot, malformedExtras);
@@ -96,9 +97,12 @@ namespace Xrpl.Amounts
                 return Applied(world, new DexView(world, rules), "tecDST_TAG_NEEDED", null, null);
             }
 
-            bool ripple = hasPaths || sendMax != null || amount.Kind != AmountKind.Xrp;
-            if (ripple && (paths.Count > MaxPathSize || paths.Exists(p => p.Count > MaxPathLength)))
+            bool transitive = hasPaths || sendMax != null || amount.Kind != AmountKind.Xrp;
+            if (transitive && (paths.Count > MaxPathSize || paths.Exists(p => p.Count > MaxPathLength)))
                 return NotApplied(snapshot, "telBAD_PATH_COUNT");
+
+            // Before MPTokensV2 an MPT moves straight from the sender to the destination, not through the engine.
+            bool ripple = transitive && (amount.Kind != AmountKind.Mpt || rules.MPTokensV2);
 
             if (CheckCredentials(world, payment.CredentialIDs, account) is { } badCredentials)
                 return Applied(world, new DexView(world, rules), badCredentials, null, null);
@@ -117,9 +121,93 @@ namespace Xrpl.Amounts
                 world.Accounts[destination] = destinationAccount = new DexAccount { Address = destination };
 
             DexView view = new DexView(world, rules);
-            return ripple
-                ? Ripple(world, view, payment, account, destination, destinationAccount, amount, maxSource, deliverMin, paths, partialPayment, limitQuality, defaultPaths, rules)
+            if (ripple)
+                return Ripple(world, view, payment, account, destination, destinationAccount, amount, maxSource, deliverMin, paths, partialPayment, limitQuality, defaultPaths, rules);
+
+            return amount.Kind == AmountKind.Mpt
+                ? DirectMpt(world, view, payment, account, destination, destinationAccount, amount, maxSource, deliverMin, partialPayment)
                 : DirectXrp(world, view, payment, account, destination, destinationAccount, amount, fee);
+        }
+
+        /// <summary>
+        /// A direct MPT payment as <c>Payment::doApply</c> makes it before <c>MPTokensV2</c>: both
+        /// accounts authorized, the MPT transferable, unlocked between holders, and the issuance's
+        /// transfer fee charged on top of the amount between holders.
+        /// </summary>
+        private static PaymentFlowResult DirectMpt(
+            DexWorld world,
+            DexView view,
+            Payment payment,
+            string account,
+            string destination,
+            DexAccount destinationAccount,
+            XrplAmount amount,
+            XrplAmount maxSource,
+            XrplAmount? deliverMin,
+            bool partialPayment)
+        {
+            LedgerRules rules = view.Rules;
+            IssuedCurrency mpt = amount.Asset;
+            string refused = view.RequireMptAuth(account, mpt, MptAuth.Strong) ??
+                             view.RequireMptAuth(destination, mpt, MptAuth.Strong) ??
+                             view.CanTransfer(mpt, account, destination) ??
+                             VerifyDepositPreauth(world, payment.CredentialIDs, account, destination, destinationAccount);
+            if (refused != null)
+                return Applied(world, new DexView(world, rules), refused, null, null);
+
+            string issuer = DexAssets.MptIssuer(mpt.MptIssuanceId);
+            uint rate = OfferCrossing.QualityOne;
+            bool betweenHolders = !string.Equals(account, issuer, StringComparison.Ordinal) && !string.Equals(destination, issuer, StringComparison.Ordinal);
+            if (betweenHolders)
+            {
+                // Locked, an MPT moves only to or from its issuer.
+                if (view.IsFrozen(account, mpt) || view.IsFrozen(destination, mpt))
+                    return Applied(world, new DexView(world, rules), "tecLOCKED", null, null);
+
+                rate = world.MptTransferRate(mpt);
+            }
+
+            XrplAmount deliver = amount;
+            XrplAmount required = XrplAmountMath.Multiply(amount, StepMath.RateAmount(rate), mpt, rules);
+            if (partialPayment && required > maxSource)
+            {
+                required = maxSource;
+                deliver = XrplAmountMath.Divide(maxSource, StepMath.RateAmount(rate), mpt, rules);
+            }
+
+            if (required > maxSource || (deliverMin is { } min && deliver < min))
+                return Applied(world, new DexView(world, rules), "tecPATH_PARTIAL", null, null);
+
+            // accountSend: direct to or from the issuer, through it between holders with the fee.
+            string sent;
+            XrplAmount paid = deliver;
+            if (!betweenHolders)
+            {
+                sent = string.Equals(account, issuer, StringComparison.Ordinal) && IssueOverflows(view, mpt, deliver)
+                    ? "tecPATH_DRY"
+                    : view.SendMpt(account, destination, deliver);
+            }
+            else
+            {
+                paid = XrplAmountMath.Multiply(deliver, StepMath.RateAmount(rate), mpt, rules);
+                sent = view.SendMpt(issuer, destination, deliver) ?? view.SendMpt(account, issuer, paid);
+            }
+
+            if (sent is "tecINSUFFICIENT_FUNDS" or "tecPATH_DRY")
+                sent = "tecPATH_PARTIAL";
+            if (sent != null)
+                return Applied(world, new DexView(world, rules), sent, null, null);
+
+            return Applied(world, view, "tesSUCCESS", deliver, paid);
+        }
+
+        /// <summary><c>isMPTOverflow</c> without overflow allowed: issuing would take OutstandingAmount past MaximumAmount.</summary>
+        private static bool IssueOverflows(DexView view, IssuedCurrency mpt, XrplAmount amount)
+        {
+            DexMptIssuance issuance = view.World.Issuance(mpt);
+            long maximum = view.MaxMptAmount(mpt);
+            long send = checked((long)amount.StMantissa);
+            return issuance == null || send > maximum || (long)issuance.OutstandingAmount > maximum - send;
         }
 
         /// <summary>The credential and domain fields' own malformations (<c>credentials::checkFields</c>).</summary>
@@ -205,8 +293,23 @@ namespace Xrpl.Amounts
             bool hasPaths,
             bool partialPayment,
             bool limitQuality,
-            bool defaultPaths)
+            bool defaultPaths,
+            LedgerRules rules)
         {
+            // Before MPTokensV2 an MPT payment is direct: no paths, no other asset, and of the
+            // flags only tfPartialPayment.
+            bool directMpt = amount.Kind == AmountKind.Mpt && !rules.MPTokensV2;
+            if (directMpt && (limitQuality || !defaultPaths))
+                return "temINVALID_FLAG";
+            if (directMpt && hasPaths)
+                return "temMALFORMED";
+            if (!rules.MPTokensV2 &&
+                ((amount.Kind == AmountKind.Mpt && !XrplAmount.SameAsset(amount.Asset, maxSource.Asset)) ||
+                 (amount.Kind != AmountKind.Mpt && maxSource.Kind == AmountKind.Mpt)))
+            {
+                return "temMALFORMED";
+            }
+
             bool xrpDirect = maxSource.Kind == AmountKind.Xrp && amount.Kind == AmountKind.Xrp;
             if (sendMax != null && StepMath.IsNotPositive(maxSource))
                 return "temBAD_AMOUNT";
@@ -216,13 +319,13 @@ namespace Xrpl.Amounts
                 return "temREDUNDANT";
             if (xrpDirect && sendMax != null)
                 return "temBAD_SEND_XRP_MAX";
-            if (xrpDirect && hasPaths)
+            if ((xrpDirect || directMpt) && hasPaths)
                 return "temBAD_SEND_XRP_PATHS";
             if (xrpDirect && partialPayment)
                 return "temBAD_SEND_XRP_PARTIAL";
-            if (xrpDirect && limitQuality)
+            if ((xrpDirect || directMpt) && limitQuality)
                 return "temBAD_SEND_XRP_LIMIT";
-            if (xrpDirect && !defaultPaths)
+            if ((xrpDirect || directMpt) && !defaultPaths)
                 return "temBAD_SEND_XRP_NO_DIRECT";
 
             if (deliverMin is { } min)
@@ -234,14 +337,19 @@ namespace Xrpl.Amounts
             return null;
         }
 
-        /// <summary><c>equalTokens</c>: two assets of the same currency, whoever issued them.</summary>
+        /// <summary><c>equalTokens</c>: two assets of the same currency, whoever issued them, or the same MPT.</summary>
         private static bool SameToken(IssuedCurrency a, IssuedCurrency b)
         {
             AmountKind kind = XrplAmount.KindOf(a);
             if (kind != XrplAmount.KindOf(b))
                 return false;
 
-            return kind == AmountKind.Xrp || string.Equals(a.Currency, b.Currency, StringComparison.Ordinal);
+            return kind switch
+            {
+                AmountKind.Xrp => true,
+                AmountKind.Mpt => XrplAmount.SameAsset(a, b),
+                _ => string.Equals(a.Currency, b.Currency, StringComparison.Ordinal),
+            };
         }
 
         /// <summary>The payment engine: <c>RippleCalc::rippleCalculate</c> and what <c>Payment::doApply</c> makes of it.</summary>
@@ -421,28 +529,17 @@ namespace Xrpl.Amounts
         private static PaymentFlowResult NotApplied(DexSnapshot snapshot, string result) =>
             new PaymentFlowResult(result, false, null, null, LedgerChanges.None);
 
-        private static XrplAmount Read(Currency amount)
-        {
-            if (amount.MPTokenIssuanceID != null)
-                throw new NotSupportedException("MPT payments are not supported.");
-
-            return amount.ToXrplAmount();
-        }
+        private static XrplAmount Read(Currency amount) => amount.ToXrplAmount();
 
         /// <summary>The payment's paths as path elements; XRP is the currency "XRP" without an issuer.</summary>
-        private static List<IReadOnlyList<PathElement>> Paths(List<List<PathStep>> paths)
+        internal static List<IReadOnlyList<PathElement>> Paths(List<List<PathStep>> paths)
         {
             List<IReadOnlyList<PathElement>> result = new List<IReadOnlyList<PathElement>>();
             foreach (List<PathStep> path in paths ?? new List<List<PathStep>>())
             {
                 List<PathElement> elements = new List<PathElement>();
                 foreach (PathStep step in path ?? new List<PathStep>())
-                {
-                    if (step.MPTokenIssuanceID != null)
-                        throw new NotSupportedException("MPT paths are not supported.");
-
-                    elements.Add(new PathElement(step.Account, step.CurrencyCode, step.Issuer));
-                }
+                    elements.Add(new PathElement(step.Account, step.CurrencyCode, step.Issuer, step.MPTokenIssuanceID));
 
                 result.Add(elements);
             }
@@ -469,6 +566,7 @@ namespace Xrpl.Amounts
             Pools = changes.Pools;
             BalanceChanges = changes.Balances;
             TrustLines = changes.TrustLines;
+            MpTokens = changes.MpTokens;
             NeedsDeeperBooks = changes.ReachedPartialBook;
             Fills = changes.Fills;
             Passes = changes.Passes;
@@ -497,6 +595,9 @@ namespace Xrpl.Amounts
 
         /// <summary>The trust lines the payment created or deleted.</summary>
         public IReadOnlyList<TrustLineChange> TrustLines { get; }
+
+        /// <summary>The MPTokens the payment created: an offer owner's, paid an MPT it held none of.</summary>
+        public IReadOnlyList<MpTokenChange> MpTokens { get; }
 
         /// <summary>
         /// Whether the engine walked past the last offer the snapshot read of a book it holds

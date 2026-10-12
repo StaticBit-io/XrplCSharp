@@ -280,15 +280,6 @@ public class TestUOfferCreateCrossing
         Assert.AreEqual(Drops(-(long)Fee), Change(killed, Carol, Xrp), "only the fee");
     }
 
-    [TestMethod]
-    public void MptSidesAreNotSupported()
-    {
-        IssuedCurrency mpt = new IssuedCurrency { MptIssuanceId = "0000000000000000000000000000000000000000000000AA" };
-        DexSnapshot snapshot = Snapshot(new[] { Account(Carol) }, Array.Empty<DexTrustLine>());
-        Assert.ThrowsExactly<NotSupportedException>(() =>
-            OfferCreateCrossing.Cross(snapshot, Carol, XrplAmount.Parse(mpt, "10"), XrpOf(1), Fee));
-    }
-
     /// <summary>
     /// <c>Transactor::operator()</c> sets the current rules for every <c>doApply</c>, even when
     /// none of the amendments behind <c>useRulesGuards</c> is enabled; only code outside a

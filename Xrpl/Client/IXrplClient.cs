@@ -1262,6 +1262,7 @@ namespace Xrpl.Client
         /// <inheritdoc />
         public Task<XrplResponse<BookOffers>> BookOffers(BookOffersRequest request, CancellationToken cancellationToken = default)
         {
+            request?.Validate();
             return this.GRequest<BookOffers, BookOffersRequest>(request, cancellationToken);
         }
 
