@@ -133,6 +133,29 @@ namespace Xrpl.Sugar
         /// </summary>
         internal NumberRounding AmbientRounding { get; set; } = NumberRounding.ToNearest;
 
+        /// <summary>
+        /// These rules with <c>MPTokensV2</c> on, which also takes <c>Number</c> to its large
+        /// scale: a node that runs the amendment as a <c>[features]</c> preset.
+        /// </summary>
+        internal LedgerRules WithMPTokensV2() =>
+            new LedgerRules
+            {
+                FixCleanup3_1_3 = FixCleanup3_1_3,
+                FixCleanup3_2_0 = FixCleanup3_2_0,
+                FixCleanup3_3_0 = FixCleanup3_3_0,
+                FixCleanup3_4_0 = FixCleanup3_4_0,
+                LargeNumbers = true,
+                FixAMMv1_1 = FixAMMv1_1,
+                FixAMMv1_2 = FixAMMv1_2,
+                FixAMMv1_3 = FixAMMv1_3,
+                MPTokensV2 = true,
+                FixReducedOffersV2 = FixReducedOffersV2,
+                FixFillOrKill = FixFillOrKill,
+                LendingProtocolV1_1 = LendingProtocolV1_1,
+                OutsideTransaction = OutsideTransaction,
+                AmbientRounding = AmbientRounding,
+            };
+
         /// <summary>These rules with <paramref name="rounding"/> as the ambient mode, as a <c>Number::setround</c> scope sees them.</summary>
         internal LedgerRules WithRounding(NumberRounding rounding)
         {

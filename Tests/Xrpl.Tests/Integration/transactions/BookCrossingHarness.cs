@@ -44,6 +44,18 @@ internal sealed class BookCrossingHarness
 
     internal IXrplClient Client => _client;
 
+    /// <summary>
+    /// Adjusts the rules read from the node before the prediction: a standalone stand runs
+    /// MPTokensV2 as a <c>[features]</c> preset that <c>feature</c> reports as disabled.
+    /// </summary>
+    internal Func<LedgerRules, LedgerRules> AdjustRules { get; init; }
+
+    private async Task<LedgerRules> RulesAsync()
+    {
+        LedgerRules rules = await LedgerRules.FromNodeAsync(_client);
+        return AdjustRules?.Invoke(rules) ?? rules;
+    }
+
     internal async Task<XrplWallet[]> Wallets(int count)
     {
         XrplWallet[] wallets = Enumerable.Range(0, count).Select(_ => XrplWallet.Generate()).ToArray();
@@ -268,7 +280,7 @@ internal sealed class BookCrossingHarness
             Flags = flags,
         });
 
-        LedgerRules rules = await LedgerRules.FromNodeAsync(_client);
+        LedgerRules rules = await RulesAsync();
         DexSnapshot snapshot = await DexSnapshot.FromNodeAsync(_client, taker.ClassicAddress, takerPays.Asset, takerGets.Asset, options);
         ulong fee = ulong.Parse(transaction.Fee.Value, CultureInfo.InvariantCulture);
         OfferCrossingResult predicted = OfferCreateCrossing.Cross(snapshot, taker.ClassicAddress, takerPays, takerGets, fee, flags, rules);
@@ -283,7 +295,7 @@ internal sealed class BookCrossingHarness
     internal async Task<OfferCrossingResult> CrossAndCompare(XrplWallet taker, OfferCreate offer, DexSnapshotOptions options = null)
     {
         OfferCreate transaction = await _client.Autofill(offer);
-        LedgerRules rules = await LedgerRules.FromNodeAsync(_client);
+        LedgerRules rules = await RulesAsync();
         DexSnapshot snapshot = await DexSnapshot.FromNodeAsync(_client, transaction, options);
         OfferCrossingResult predicted = OfferCreateCrossing.Cross(snapshot, transaction, rules);
         return await SubmitAndCompare(taker, transaction, snapshot, predicted);
@@ -318,7 +330,25 @@ internal sealed class BookCrossingHarness
         AssertFills(snapshot, predicted.Fills, predicted.Offers, predicted.Pools);
         AssertBalances(result.Meta, predicted.BalanceChanges, snapshot.Pools.Select(p => p.Account));
         AssertTrustLines(result.Meta, predicted.TrustLines);
+        AssertMpTokens(result.Meta, predicted.MpTokens);
         return predicted;
+    }
+
+    /// <summary>The MPTokens the metadata created, against the prediction, both ways.</summary>
+    internal static void AssertMpTokens(Meta meta, IReadOnlyList<MpTokenChange> predicted)
+    {
+        HashSet<(string, string)> recorded = meta.AffectedNodes
+            .Where(n => n.CreatedNode != null && n.CreatedNode.TryGetNew(out LOMPToken _))
+            .Select(n =>
+            {
+                n.CreatedNode.TryGetNew(out LOMPToken created);
+                return (created.Account, created.MPTokenIssuanceID.ToUpperInvariant());
+            })
+            .ToHashSet();
+        HashSet<(string, string)> expected = predicted.Select(t => (t.Account, t.MptIssuanceId)).ToHashSet();
+        Assert.IsTrue(
+            recorded.SetEquals(expected),
+            $"MPTokens created: predicted [{string.Join(", ", expected)}], on the ledger [{string.Join(", ", recorded)}]");
     }
 
     private async Task<TransactionSummary> Validated(string hash)
@@ -349,7 +379,7 @@ internal sealed class BookCrossingHarness
     internal async Task<PaymentFlowResult> PayAndCompare(XrplWallet sender, Payment payment, DexSnapshotOptions options = null)
     {
         Payment transaction = await _client.Autofill(payment);
-        LedgerRules rules = await LedgerRules.FromNodeAsync(_client);
+        LedgerRules rules = await RulesAsync();
         DexSnapshot snapshot = await DexSnapshot.FromNodeAsync(_client, transaction, options);
         PaymentFlowResult predicted = PaymentFlow.Evaluate(snapshot, transaction, rules);
 
@@ -379,6 +409,7 @@ internal sealed class BookCrossingHarness
         AssertFills(snapshot, predicted.Fills, predicted.Offers, predicted.Pools);
         AssertBalances(result.Meta, predicted.BalanceChanges, snapshot.Pools.Select(p => p.Account));
         AssertTrustLines(result.Meta, predicted.TrustLines);
+        AssertMpTokens(result.Meta, predicted.MpTokens);
         return predicted;
     }
 

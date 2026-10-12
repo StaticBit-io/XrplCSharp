@@ -356,6 +356,8 @@ await client.SubmitAndWait(manageTx, walletBroker, true);
 - `tfLoanImpair` — отметить кредит как обесценённый
 - `tfLoanUnimpair` — восстановить кредит из обесценённого состояния
 
+`LoanManage` без флага действия допустима и не меняет кредит.
+
 ### 5. Удаление кредитного брокера
 
 Когда у брокера нет активных кредитов:
@@ -377,6 +379,13 @@ await client.SubmitAndWait(deleteBrokerTx, walletBroker, true);
 `LoanSet` уникальна среди транзакций XRPL — требует **двух подписей**. Брокер подписывает транзакцию обычным способом (`TxnSignature`), а заёмщик предоставляет `CounterpartySignature` — внутренний STObject, содержащий `SigningPubKey` и `TxnSignature` заёмщика.
 
 SDK предоставляет `LoanSigningHelper` и `XrplWallet.SignAsLoanCounterparty()` с тремя паттернами подписи, аналогичными Batch signing (V1/V2/V3).
+
+Роли две: **отправитель** (`Account`) и **контрагент** (`Counterparty`, а если поле не задано — владелец LoanBroker). Один из них должен быть владельцем брокера, другой — заёмщиком, поэтому отправить транзакцию может любая сторона:
+
+- владелец брокера отправляет с `Counterparty`, равным заёмщику, и заёмщик подписывает как контрагент;
+- заёмщик отправляет, `Counterparty` — владелец брокера или не задан, и владелец брокера подписывает как контрагент.
+
+Примеры ниже используют первый вариант. Для второго поменяйте кошельки местами: заёмщик готовит и отправляет транзакцию, владелец брокера подписывает как контрагент. `LoanSigningHelper.SignLoanSet` принимает два кошелька в любом порядке и назначает роли по `Account`; перегрузка с аргументом `brokerOwner` дополнительно проверяет контрагента, когда `Counterparty` не задан.
 
 ### Подготовка (общая для всех паттернов)
 
@@ -431,12 +440,12 @@ SignatureResult withCounterparty = borrowerWallet.SignAsLoanCounterparty(txDict)
 // withCounterparty.TxBlob передаётся брокеру (через API, QR-код и т.д.)
 
 // Шаг 2: Брокер получает частично подписанный blob, добавляет TxnSignature
-SignatureResult fullySigned = LoanSigningHelper.BrokerSign(
+SignatureResult fullySigned = LoanSigningHelper.SubmitterSign(
     withCounterparty.TxBlob, brokerWallet);
 await client.SubmitRequest(fullySigned.TxBlob);
 ```
 
-> **Важно:** Не используйте `brokerWallet.Sign()` для частично подписанного LoanSet blob — он не обрабатывает `CounterpartySignature` корректно. Всегда используйте `LoanSigningHelper.BrokerSign()` для паттерна V3.
+> **Важно:** Не используйте `brokerWallet.Sign()` для частично подписанного LoanSet blob — он не обрабатывает `CounterpartySignature` корректно. Всегда используйте `LoanSigningHelper.SubmitterSign()` для паттерна V3.
 
 ### Заёмщик с мультиподписью (Counterparty со SignerList)
 
@@ -608,7 +617,7 @@ foreach (var obj in response.AccountObjectList)
        throw new Exception($"Транзакция не удалась: {result.Meta?.TransactionResult}");
    ```
 
-7. **Флаги LoanManage взаимоисключающие** — устанавливайте только один из `tfLoanDefault`, `tfLoanImpair` или `tfLoanUnimpair`.
+7. **Флаги LoanManage взаимоисключающие** — устанавливайте не более одного из `tfLoanDefault`, `tfLoanImpair` или `tfLoanUnimpair`.
 
 8. **Флаги LoanPay взаимоисключающие** — `tfLoanOverpayment`, `tfLoanFullPayment` и `tfLoanLatePayment` нельзя комбинировать. `tfLoanOverpayment` может требовать специальной настройки брокера/кредита.
 

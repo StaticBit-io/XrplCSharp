@@ -142,4 +142,32 @@ public class TestURequestSerialization
         Assert.IsTrue(json.Contains("\"command\""), "Missing 'command' field");
         Assert.IsTrue(json.Contains("\"fee\""), "Missing command value");
     }
+
+    /// <summary>
+    /// path_find create searches a permissioned domain's books when <c>domain</c> is sent, as
+    /// ripple_path_find does; rippled's PathRequest reads it from the create request.
+    /// </summary>
+    [TestMethod]
+    public void Serialize_PathFindCreateRequest_WithDomain()
+    {
+        const string domain = "F10D0CC9A0F9A3CBF585B80BE09A186483668FDBDD39AA7E3370F3649CE134E5";
+        BaseRequest request = new PathFindCreateRequest("rSource", "rDestination", new Currency { Value = "1000000" })
+        {
+            Domain = domain,
+        };
+        string json = JsonSerializer.Serialize(request, request.GetType(), Options);
+
+        StringAssert.Contains(json, "\"command\":\"path_find\"");
+        StringAssert.Contains(json, "\"subcommand\":\"create\"");
+        StringAssert.Contains(json, "\"domain\":\"" + domain + "\"");
+    }
+
+    [TestMethod]
+    public void Serialize_PathFindCreateRequest_WithoutDomain_OmitsIt()
+    {
+        BaseRequest request = new PathFindCreateRequest("rSource", "rDestination", new Currency { Value = "1000000" });
+        string json = JsonSerializer.Serialize(request, request.GetType(), Options);
+
+        Assert.DoesNotContain("\"domain\"", json);
+    }
 }

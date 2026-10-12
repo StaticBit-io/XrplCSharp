@@ -44,6 +44,12 @@ namespace Xrpl.Amounts
 
         /// <summary>The <c>OfferCreate</c>'s <c>OfferSequence</c> cancelled it.</summary>
         Cancelled,
+
+        /// <summary>
+        /// Crossing it overflowed an MPT amount - its transfer fee or its reduction to what its
+        /// owner funds - which under <c>MPTokensV2</c> removes the offer.
+        /// </summary>
+        Overflow,
     }
 
     /// <summary>

@@ -149,7 +149,8 @@ namespace Xrpl.Models.Methods
 
         /// <summary>
         /// (Optional) Currency Amount — the maximum amount that would be spent.<br/>
-        /// Not compatible with source_currencies.
+        /// Not compatible with source_currencies. rippled accepts it only with a
+        /// <see cref="DestinationAmount"/> of -1 and answers <c>dstAmtMalformed</c> otherwise.
         /// </summary>
         [JsonPropertyName("send_max")]
         [JsonConverter(typeof(CurrencyConverter))]
@@ -162,6 +163,15 @@ namespace Xrpl.Models.Methods
         /// </summary>
         [JsonPropertyName("paths")]
         public List<List<PathStep>> Paths { get; set; }
+
+        /// <summary>
+        /// The permissioned domain whose books to search, as its 64-character ledger index;
+        /// omitted for the open books. Paths for a <c>Payment</c> with <c>DomainID</c> have to be
+        /// found in that domain: the payment can use only the domain's books.<br/>
+        /// rippled answers <c>domainMalformed</c> when the value is not 64 hex characters.
+        /// </summary>
+        [JsonPropertyName("domain")]
+        public string Domain { get; set; }
     }
 
     /// <summary>

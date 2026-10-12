@@ -238,7 +238,8 @@ Sponsorship composes with Batch (XLS-56), with rules mirrored from rippled `Batc
 
 - **Reserve-sponsored inner transaction**: set `Sponsor` + `spfSponsorReserve` on the inner and add an **empty** `SponsorSignature` object as a marker. The marker makes the sponsor a *required batch signer* — the sponsor then authorizes the whole batch through the standard `Sign`, either single-signed or **through its SignerList** (a nested-multisig `BatchSigner.Signers` entry). No signature material ever goes inside the inner marker.
 - **Fee-sponsored outer batch**: `Sponsor` + `spfSponsorFee` on the outer Batch; the sponsor co-signs the batch itself with a regular `SponsorSignature` via the standard `Sign`.
-- **Forbidden by protocol** (`ValidateBatch` rejects these client-side): `spfSponsorReserve` on the outer Batch, fee sponsorship on inner transactions, signature material inside inner co-signature markers, and **any Loan/Vault transaction as an inner** (rippled `kDisabledTxTypes` → `temINVALID_INNER_BATCH`) — so LoanSet counterparty co-signing cannot ride inside a Batch.
+- **Forbidden by protocol** (`ValidateBatch` rejects these client-side): `spfSponsorReserve` on the outer Batch, fee sponsorship on inner transactions, and signature material inside inner co-signature markers.
+- **Vault, LoanBroker and Loan inners** are refused by the node (rippled `kDisabledTxTypes` → `temINVALID_INNER_BATCH`) until the `LendingProtocolV1_2` amendment is enabled, and accepted after it. `ValidateBatch` does not check this: it has no ledger rules, so the node decides. Once the amendment is enabled, an inner `LoanSet` makes its `Counterparty` a required batch signer, like any other inner.
 
 ```csharp
 // Inner reserve-sponsored TrustSet inside a Batch; the sponsor signs via its

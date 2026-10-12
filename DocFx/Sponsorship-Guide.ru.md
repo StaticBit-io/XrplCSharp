@@ -238,7 +238,8 @@ await client.SubmitRequest(final.TxBlob, true);
 
 - **Спонсирование резерва внутренней транзакции**: на inner ставятся `Sponsor` + `spfSponsorReserve` и **пустой** объект `SponsorSignature` как маркер. Маркер делает спонсора *обязательным batch-подписантом* — спонсор авторизует весь батч через стандартный `Sign`: одиночной подписью или **через свой SignerList** (вложенный мультисиг `BatchSigner.Signers`). Подписные данные внутрь маркера не кладутся никогда.
 - **Спонсирование комиссии внешнего батча**: `Sponsor` + `spfSponsorFee` на внешнем Batch; спонсор со-подписывает сам батч обычной `SponsorSignature` через стандартный `Sign`.
-- **Запрещено протоколом** (`ValidateBatch` отсекает на клиенте): `spfSponsorReserve` на внешнем Batch, спонсирование комиссии на inner-транзакциях, подписные данные внутри маркеров и **любые Loan/Vault транзакции как inner** (rippled `kDisabledTxTypes` → `temINVALID_INNER_BATCH`) — со-подпись заёмщика LoanSet внутри Batch невозможна.
+- **Запрещено протоколом** (`ValidateBatch` отсекает на клиенте): `spfSponsorReserve` на внешнем Batch, спонсирование комиссии на inner-транзакциях, подписные данные внутри маркеров.
+- **Inner-транзакции Vault, LoanBroker и Loan** нода отклоняет (rippled `kDisabledTxTypes` → `temINVALID_INNER_BATCH`), пока не включён амендмент `LendingProtocolV1_2`, и принимает после его включения. `ValidateBatch` этого не проверяет: правил леджера у него нет, решает нода. После включения амендмента inner `LoanSet` делает свой `Counterparty` обязательным подписантом batch, как и любая другая inner-транзакция.
 
 ```csharp
 // Внутренний TrustSet со спонсированным резервом; спонсор подписывает через

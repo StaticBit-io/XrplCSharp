@@ -56,14 +56,11 @@ namespace Xrpl.Wallet
         /// </summary>
         /// <exception cref="ValidationException">
         /// The blob carries a top-level field no model property claims, so the returned object
-        /// would not represent it. Signing that object again produces a blob missing the field -
-        /// which is how a co-signature could be dropped: <c>CounterpartySignature</c> and
-        /// <c>SponsorSignature</c> exist in <c>definitions.json</c> and survive the codec, but no
-        /// request model declares them, so a round trip through here used to discard them
-        /// silently. Failing loudly is the point: the caller is told what would have been lost
-        /// rather than submitting a transaction the node will reject for a missing signature.
-        /// For those two flows use the blob-level helpers (<c>LoanSigningHelper.BrokerSign</c>,
-        /// <c>SponsorSigningHelper.SubmitterSign</c>), which never leave the blob.
+        /// would not represent it. Signing that object again produces a blob missing the field.
+        /// Failing loudly is the point: the caller is told what would have been lost rather than
+        /// submitting a transaction the node will reject or read differently. The co-signatures
+        /// <c>CounterpartySignature</c> (LoanSet) and <c>SponsorSignature</c> are modelled and
+        /// kept, so a partially signed blob decodes and its submitter can sign the result.
         /// </exception>
         public ITransactionRequest GetTx()
         {
@@ -1296,32 +1293,34 @@ namespace Xrpl.Wallet
         }
 
         /// <summary>
-        /// Signs a LoanSet transaction as the borrower (Counterparty).
+        /// Signs a LoanSet transaction as its counterparty: the <c>Counterparty</c> account, or the
+        /// LoanBroker's owner when that field is omitted. The counterparty is the borrower when the
+        /// broker owner submits, and the broker owner when the borrower submits.
         /// Computes the signing preimage and adds CounterpartySignature (inner STObject
         /// with this wallet's SigningPubKey and TxnSignature).
         ///
         /// Used in V2 (parallel) and V3 (sequential) signing flows:
         ///
-        /// <b>V3 (sequential) — borrower signs first, passes to broker:</b>
+        /// <b>V3 (sequential) — counterparty signs first, passes to the submitter:</b>
         /// <code>
-        /// var withCounterparty = borrowerWallet.SignAsLoanCounterparty(preparedTx);
-        /// var final = LoanSigningHelper.BrokerSign(withCounterparty.TxBlob, brokerWallet);
+        /// var withCounterparty = counterpartyWallet.SignAsLoanCounterparty(preparedTx);
+        /// var final = LoanSigningHelper.SubmitterSign(withCounterparty.TxBlob, submitterWallet);
         /// await client.SubmitRequest(final.TxBlob);
         /// </code>
-        /// Note the blob, not <c>GetTx()</c>: no request model declares
-        /// <c>CounterpartySignature</c>, so decoding into a typed transaction and signing that
-        /// would produce a blob without the co-signature. <c>BrokerSign</c> stays at the blob
-        /// level, stripping the co-signature to compute the preimage and restoring it afterwards.
-        /// <see cref="SignatureResult.GetTx"/> now refuses such a blob rather than losing it.
+        /// <c>SubmitterSign</c> stays at the blob level, stripping the co-signature to compute the
+        /// preimage and restoring it afterwards. Decoding the blob with
+        /// <see cref="SignatureResult.GetTx"/> keeps the co-signature in
+        /// <see cref="ILoanSet.CounterpartySignature"/>, and the submitter's <c>Sign</c> of that
+        /// typed transaction produces the same blob.
         ///
         /// <b>V2 (parallel) — both sign independently, then combine:</b>
         /// <code>
-        /// var counterpartySig = borrowerWallet.SignAsLoanCounterparty(preparedTx);
-        /// var brokerSig = brokerWallet.Sign(preparedTx);
-        /// var combined = LoanSigningHelper.CombineLoanSignatures(brokerSig.TxBlob, counterpartySig.TxBlob);
+        /// var counterpartySig = counterpartyWallet.SignAsLoanCounterparty(preparedTx);
+        /// var submitterSig = submitterWallet.Sign(preparedTx);
+        /// var combined = LoanSigningHelper.CombineLoanSignatures(submitterSig.TxBlob, counterpartySig.TxBlob);
         /// </code>
         /// </summary>
-        /// <param name="transaction">Prepared LoanSet transaction (must have SigningPubKey set to broker's key).</param>
+        /// <param name="transaction">Prepared LoanSet transaction (must have SigningPubKey set to the submitter's key).</param>
         /// <returns>SignatureResult with CounterpartySignature added (no TxnSignature yet).</returns>
         public SignatureResult SignAsLoanCounterparty(ITransactionRequest transaction)
         {
@@ -1331,7 +1330,7 @@ namespace Xrpl.Wallet
         }
 
         /// <summary>
-        /// Signs a LoanSet transaction as the borrower (Counterparty).
+        /// Signs a LoanSet transaction as its counterparty (<c>Counterparty</c>, or the broker owner when omitted).
         /// </summary>
         public SignatureResult SignAsLoanCounterparty(Dictionary<string, object> transaction)
         {
@@ -1344,16 +1343,16 @@ namespace Xrpl.Wallet
             if (!string.Equals(txType, "LoanSet", StringComparison.OrdinalIgnoreCase))
                 throw new ValidationException($"SignAsLoanCounterparty requires TransactionType=LoanSet, got: {txType}");
 
-            // Verify broker's SigningPubKey is present - it is part of what the counterparty signs
-            string brokerSigningPubKey = tx["SigningPubKey"]?.GetValue<string>();
-            if (string.IsNullOrWhiteSpace(brokerSigningPubKey))
-                throw new ValidationException("LoanSet must include broker SigningPubKey before counterparty signing.");
+            // The submitter's SigningPubKey is part of what the counterparty signs
+            string submitterSigningPubKey = tx["SigningPubKey"]?.GetValue<string>();
+            if (string.IsNullOrWhiteSpace(submitterSigningPubKey))
+                throw new ValidationException("LoanSet must include the submitter's SigningPubKey before counterparty signing.");
 
-            // Remove existing signatures but keep SigningPubKey (broker's)
+            // Remove existing signatures but keep the submitter's SigningPubKey
             tx.Remove("CounterpartySignature");
             tx.Remove("TxnSignature");
 
-            // The counterparty's preimage: the same transaction as the broker's, under its own prefix
+            // The counterparty's preimage: the same transaction as the submitter's, under its own prefix
             byte[] signingBytes = LoanSigningHelper.GetCounterpartyPreimage(tx);
 
             // Sign the preimage with this wallet's key
@@ -1362,7 +1361,7 @@ namespace Xrpl.Wallet
             // Add CounterpartySignature
             tx["CounterpartySignature"] = SignatureObject.Single(this.PublicKey, sig).ToJsonObject();
 
-            // Encode (without broker's TxnSignature — partially signed)
+            // Encode (without the submitter's TxnSignature — partially signed)
             string txBlob = XrplBinaryCodec.Encode(tx);
             string txHash = HashLedger.HashSignedTx(txBlob);
             return new SignatureResult(txBlob, txHash);

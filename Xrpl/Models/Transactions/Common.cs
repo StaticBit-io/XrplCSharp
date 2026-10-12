@@ -405,6 +405,9 @@ namespace Xrpl.Models.Transactions
         public SponsorCoverage? SponsorFlags { get; set; }
 
         /// <inheritdoc />
+        public SignatureObject SponsorSignature { get; set; }
+
+        /// <inheritdoc />
         public string Delegate { get; set; }
 
         /// <inheritdoc />
@@ -736,6 +739,15 @@ namespace Xrpl.Models.Transactions
         public SponsorCoverage? SponsorFlags { get; set; }
 
         /// <summary>
+        /// XLS-68: the sponsor's co-signature (sfSponsorSignature) - <c>SigningPubKey</c> and
+        /// <c>TxnSignature</c>, or <c>Signers</c> for a multisig sponsor. It is not part of what
+        /// any party signs. Inside a Batch it is an unsigned marker (an empty object) on an inner
+        /// transaction whose sponsor co-signs the batch through <c>BatchSigners</c>.
+        /// </summary>
+        /// <remarks>Produced by <c>SponsorSigningHelper</c> and <c>XrplWallet.SignAsSponsor</c>.</remarks>
+        public SignatureObject SponsorSignature { get; set; }
+
+        /// <summary>
         /// convert transaction to string json value
         /// </summary>
         /// <returns></returns>
@@ -832,6 +844,9 @@ namespace Xrpl.Models.Transactions
 
         /// <inheritdoc />
         public SponsorCoverage? SponsorFlags { get; set; }
+
+        /// <inheritdoc />
+        public SignatureObject SponsorSignature { get; set; }
 
         /// <inheritdoc />
         public string Delegate { get; set; }

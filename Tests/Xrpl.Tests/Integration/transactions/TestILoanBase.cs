@@ -322,8 +322,8 @@ public abstract class TestILoanBase
             prepared.ToJsonString(), XrplJsonOptions.Default);
         SignatureResult withCounterparty = borrowerWallet.SignAsLoanCounterparty(txDict);
 
-        // Step 2: Broker receives the partially signed blob, adds TxnSignature via BrokerSign
-        SignatureResult fullySigned = LoanSigningHelper.BrokerSign(withCounterparty.TxBlob, brokerWallet);
+        // Step 2: Broker receives the partially signed blob, adds TxnSignature via SubmitterSign
+        SignatureResult fullySigned = LoanSigningHelper.SubmitterSign(withCounterparty.TxBlob, brokerWallet);
 
         return await SubmitSignedLoanSet(client, fullySigned.TxBlob);
     }

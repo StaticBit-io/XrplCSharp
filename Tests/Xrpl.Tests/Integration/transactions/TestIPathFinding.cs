@@ -7,6 +7,7 @@ using Microsoft.VisualStudio.TestTools.UnitTesting;
 
 using Xrpl.Amounts;
 using Xrpl.Client;
+using Xrpl.Models;
 using Xrpl.Models.Common;
 using Xrpl.Models.Ledger;
 using Xrpl.Models.Methods;
@@ -27,8 +28,12 @@ namespace XrplTests.Xrpl.ClientLib.Integration;
 [TestClass]
 public class TestIPathFinding
 {
-    /// <summary>The stand's <c>[path_search]</c>, which <c>ripple_path_find</c> searches at.</summary>
-    private const int NodeSearchLevel = 2;
+    /// <summary>
+    /// The stand's <c>[path_search]</c> (<c>.ci-config/rippled.cfg</c>), which
+    /// <c>ripple_path_find</c> searches at: its first and only update runs at that level, not at
+    /// <c>[path_search_fast]</c>.
+    /// </summary>
+    private const int NodeSearchLevel = 7;
 
     private static IXrplClient client;
     private static BookCrossingHarness dex;
@@ -44,8 +49,12 @@ public class TestIPathFinding
     [ClassCleanup]
     public static void ClassCleanup() => client?.Dispose();
 
-    /// <summary>Runs the search both ways at one ledger and requires the same alternatives.</summary>
-    private static async Task<PathFindResult> FindAndCompare(PathFindRequest request)
+    /// <summary>
+    /// Runs the search both ways at one ledger and requires the same alternatives. With
+    /// <paramref name="mpt"/>, the rules have MPTokensV2 on, as a standalone stand runs it - a
+    /// <c>[features]</c> preset the <c>feature</c> command reports as disabled.
+    /// </summary>
+    private static async Task<PathFindResult> FindAndCompare(PathFindRequest request, bool mpt = false)
     {
         LOLedger header = await client.Ledger(new LedgerRequest { LedgerIndex = new LedgerIndex(LedgerIndexType.Validated) }).Typed();
         LedgerIndex at = new LedgerIndex(uint.Parse(((LedgerEntity)header.LedgerEntity).LedgerIndex, CultureInfo.InvariantCulture));
@@ -53,6 +62,8 @@ public class TestIPathFinding
         BookIndex books = await BookIndex.FromLedgerAsync(client, at);
         PathfindingSource source = await PathfindingSource.FromNodeAsync(client, books, at);
         LedgerRules rules = await LedgerRules.FromNodeAsync(client);
+        if (mpt && IntegrationTestConfig.IsStandalone(nodeType))
+            rules = rules.WithMPTokensV2();
         PathFindResult local = await PathFinding.FindAsync(source, request, rules);
 
         RipplePathFindRequest rpc = new RipplePathFindRequest(request.SourceAccount, request.DestinationAccount, request.DestinationAmount.ToCurrency())
@@ -60,7 +71,7 @@ public class TestIPathFinding
             SendMax = request.SendMax?.ToCurrency(),
             SourceCurrencies = request.SourceCurrencies.Count == 0
                 ? null
-                : request.SourceCurrencies.Select(c => new SourceCurrency { Currency = c.Currency, Issuer = c.Issuer }).ToList(),
+                : request.SourceCurrencies.Select(c => new SourceCurrency { Currency = c.Currency, Issuer = c.Issuer, MptIssuanceId = c.MptIssuanceId }).ToList(),
             Domain = request.DomainId,
             LedgerIndex = at,
         };
@@ -87,7 +98,7 @@ public class TestIPathFinding
 
     private static string Paths(List<List<PathStep>> paths) =>
         string.Join(" | ", (paths ?? new List<List<PathStep>>()).Select(path =>
-            string.Join(",", path.Select(step => step.Account ?? $"{step.CurrencyCode}/{step.Issuer}"))));
+            string.Join(",", path.Select(step => step.Account ?? $"{step.CurrencyCode ?? step.MPTokenIssuanceID}/{step.Issuer}"))));
 
     private static string Describe(IEnumerable<PathAlternative> alternatives) =>
         "[" + string.Join("; ", alternatives.Select(a => $"{a.SourceAmount.ToXrplAmount()} via {Paths(a.PathsComputed)}")) + "]";
@@ -267,6 +278,62 @@ public class TestIPathFinding
         Assert.IsNotEmpty(inDomain.Alternatives);
     }
 
+    /// <summary>
+    /// The streaming path_find create searches the domain's books when given the domain, as
+    /// ripple_path_find does. The domain's offer is dearer than the open one (0.5 against 0.4 XRP
+    /// per USD), so a search that ignored the domain would quote the cheaper open book.
+    /// </summary>
+    [TestMethod]
+    public async Task PathFindCreateThroughADomainBook()
+    {
+        XrplWallet[] w = await dex.Wallets(6);
+        XrplWallet gw = w[0], issuer = w[1], alice = w[2], bob = w[3], maker = w[4], openMaker = w[5];
+        IssuedCurrency usd = Iou("USD", gw);
+        await dex.Issuer(gw);
+        string domain = await dex.Domain(issuer, (issuer, "KYC"));
+        foreach (XrplWallet member in new[] { alice, bob, maker })
+            await dex.Credential(issuer, member, "KYC");
+        await dex.Trusts((maker, usd), (openMaker, usd), (bob, usd));
+        await dex.Pays((gw, maker, Amount(usd, "100")), (gw, openMaker, Amount(usd, "100")));
+        await dex.Offer(openMaker, Amount(usd, "20"), Drops(8_000_000));
+        await dex.Offer(maker, Amount(usd, "20"), Drops(10_000_000), domainId: domain);
+
+        Currency deliver = Amount(usd, "5").ToCurrency();
+        RipplePathFindResponse expected = await client.RipplePathFind(new RipplePathFindRequest(alice.ClassicAddress, bob.ClassicAddress, deliver)
+        {
+            SourceCurrencies = new List<SourceCurrency> { new SourceCurrency { Currency = "XRP" } },
+            Domain = domain,
+        }).Typed();
+        XrplAmount inDomain = expected.Alternatives.Single().SourceAmount.ToXrplAmount();
+
+        PathFindResponse open = await FindStreaming(alice, bob, deliver, domain: null);
+        PathFindResponse domainSearch = await FindStreaming(alice, bob, deliver, domain);
+
+        Assert.IsNotEmpty(domainSearch.Alternatives, "the domain's book must be found");
+        Assert.AreEqual(inDomain, domainSearch.Alternatives.Single().SourceAmount.ToXrplAmount(), "path_find quotes what ripple_path_find quotes in the domain");
+        Assert.IsGreaterThan(open.Alternatives.Single().SourceAmount.ToXrplAmount(), inDomain, "the domain's book is dearer than the open one");
+    }
+
+    /// <summary>
+    /// One path_find create on its own connection, closed once the first answer is in.
+    /// </summary>
+    private static async Task<PathFindResponse> FindStreaming(XrplWallet from, XrplWallet to, Currency deliver, string domain)
+    {
+        IXrplClient streamClient = await IntegrationTestConfig.CreateClientAsync(nodeType);
+        try
+        {
+            return await streamClient.PathFind(new PathFindCreateRequest(from.ClassicAddress, to.ClassicAddress, deliver)
+            {
+                Domain = domain,
+            }).Typed();
+        }
+        finally
+        {
+            try { await streamClient.PathFindClose(new PathFindCloseRequest()); } catch { }
+            streamClient.Dispose();
+        }
+    }
+
     [TestMethod]
     public async Task FoundPathsPayAsFound()
     {
@@ -293,5 +360,131 @@ public class TestIPathFinding
         PaymentFlowResult paid = await dex.PayAndCompare(alice, payment);
         Assert.AreEqual("tesSUCCESS", paid.EngineResult);
         Assert.AreEqual(xrp.SourceAmount, paid.Paid);
+    }
+
+    // ---- MPTs (MPTokensV2) ----
+
+    /// <summary>An MPT that can be traded and transferred, with its fee; each holder authorized and given <paramref name="units"/>.</summary>
+    private static async Task<IssuedCurrency> IssueMpt(XrplWallet issuer, IEnumerable<XrplWallet> holders, string units, ushort? transferFee = null)
+    {
+        TransactionSummary created = await dex.SubmitWithMeta(
+            new MPTokenIssuanceCreate
+            {
+                Account = issuer.ClassicAddress,
+                Flags = MPTokenIssuanceCreateFlags.tfMPTCanTrade | MPTokenIssuanceCreateFlags.tfMPTCanTransfer,
+                TransferFee = transferFee,
+            },
+            issuer);
+        IssuedCurrency mpt = new IssuedCurrency { MptIssuanceId = created.Meta.MptIssuanceId };
+        foreach (XrplWallet holder in holders)
+        {
+            await dex.Submit(new MPTokenAuthorize { Account = holder.ClassicAddress, MPTokenIssuanceID = mpt.MptIssuanceId }, holder);
+            if (units != "0")
+                await dex.Pay(issuer, holder.ClassicAddress, Amount(mpt, units));
+        }
+
+        return mpt;
+    }
+
+    /// <summary>XRP to an MPT through a book: found the node's way, then paid along the paths found.</summary>
+    [TestMethod]
+    public async Task XrpToMptThroughTheBook()
+    {
+        XrplWallet[] w = await dex.Wallets(4);
+        XrplWallet gw = w[0], maker = w[1], alice = w[2], bob = w[3];
+        IssuedCurrency mpt = await IssueMpt(gw, new[] { maker, bob }, "0", transferFee: 500);
+        await dex.Pay(gw, maker.ClassicAddress, Amount(mpt, "1000"));
+        await dex.Offer(maker, Amount(mpt, "200"), Drops(20_000_000));
+
+        PathFindResult found = await FindAndCompare(Request(alice, bob, Amount(mpt, "25"), sources: Xrp), mpt: true);
+        PathFindAlternative xrp = found.Alternatives.Single();
+
+        Payment payment = new Payment
+        {
+            Account = alice.ClassicAddress,
+            Destination = bob.ClassicAddress,
+            Amount = Amount(mpt, "25").ToCurrency(),
+            SendMax = xrp.SourceAmount.ToCurrency(),
+            Paths = xrp.PathsComputed.Count == 0 ? null : xrp.PathsComputed,
+        };
+        BookCrossingHarness mptDex = new BookCrossingHarness(client, nodeType) { AdjustRules = r => IntegrationTestConfig.IsStandalone(nodeType) ? r.WithMPTokensV2() : r };
+        PaymentFlowResult paid = await mptDex.PayAndCompare(alice, payment);
+        Assert.AreEqual("tesSUCCESS", paid.EngineResult);
+        Assert.AreEqual(xrp.SourceAmount, paid.Paid);
+    }
+
+    /// <summary>An MPT to XRP, the MPT named as the source currency: the holder redeems it into a book that buys it.</summary>
+    [TestMethod]
+    public async Task MptToXrpAsTheSourceCurrency()
+    {
+        XrplWallet[] w = await dex.Wallets(4);
+        XrplWallet gw = w[0], maker = w[1], alice = w[2], bob = w[3];
+        IssuedCurrency mpt = await IssueMpt(gw, new[] { maker, alice }, "0");
+        await dex.Pay(gw, alice.ClassicAddress, Amount(mpt, "300"));
+        await dex.Offer(maker, Drops(30_000_000), Amount(mpt, "300"));
+
+        PathFindResult found = await FindAndCompare(Request(alice, bob, Drops(5_000_000), sources: mpt), mpt: true);
+        Assert.IsNotEmpty(found.Alternatives);
+    }
+
+    /// <summary>
+    /// XRP to an issued currency with no book between them but one through an MPT: the path
+    /// found names the MPT book, and the payment along it - an MPT path step on the wire -
+    /// pays as found.
+    /// </summary>
+    [TestMethod]
+    public async Task XrpToIouBridgedThroughAnMpt()
+    {
+        XrplWallet[] w = await dex.Wallets(5);
+        XrplWallet gw = w[0], maker = w[1], maker2 = w[2], alice = w[3], bob = w[4];
+        IssuedCurrency usd = Iou("USD", gw);
+        await dex.Issuer(gw);
+        await dex.Trusts((maker2, usd), (bob, usd));
+        await dex.Pays((gw, maker2, Amount(usd, "100")));
+        IssuedCurrency mpt = await IssueMpt(gw, new[] { maker, maker2 }, "0");
+        await dex.Pay(gw, maker.ClassicAddress, Amount(mpt, "1000"));
+        await dex.Offer(maker, Amount(mpt, "500"), Drops(50_000_000));
+        await dex.Offer(maker2, Amount(usd, "50"), Amount(mpt, "500"));
+
+        PathFindResult found = await FindAndCompare(Request(alice, bob, Amount(usd, "10"), sources: Xrp), mpt: true);
+        PathFindAlternative xrp = found.Alternatives.Single();
+        Assert.IsTrue(
+            xrp.PathsComputed.Any(path => path.Any(step => step.MPTokenIssuanceID != null)),
+            "a path through the MPT book");
+
+        Payment payment = new Payment
+        {
+            Account = alice.ClassicAddress,
+            Destination = bob.ClassicAddress,
+            Amount = Amount(usd, "10").ToCurrency(),
+            SendMax = xrp.SourceAmount.ToCurrency(),
+            Paths = xrp.PathsComputed,
+        };
+        BookCrossingHarness mptDex = new BookCrossingHarness(client, nodeType) { AdjustRules = r => IntegrationTestConfig.IsStandalone(nodeType) ? r.WithMPTokensV2() : r };
+        PaymentFlowResult paid = await mptDex.PayAndCompare(alice, payment);
+        Assert.AreEqual("tesSUCCESS", paid.EngineResult);
+        Assert.AreEqual(xrp.SourceAmount, paid.Paid);
+    }
+
+    /// <summary>
+    /// No source currencies: the holder's MPT is tried with XRP and its issued currency, into
+    /// an issued currency through two books.
+    /// </summary>
+    [TestMethod]
+    public async Task EverySourceAssetIncludesTheHoldersMpt()
+    {
+        XrplWallet[] w = await dex.Wallets(5);
+        XrplWallet gw = w[0], maker = w[1], alice = w[2], bob = w[3], maker2 = w[4];
+        IssuedCurrency usd = Iou("USD", gw);
+        await dex.Issuer(gw);
+        await dex.Trusts((maker, usd), (bob, usd), (maker2, usd));
+        await dex.Pays((gw, maker, Amount(usd, "100")), (gw, maker2, Amount(usd, "100")));
+        IssuedCurrency mpt = await IssueMpt(gw, new[] { maker, alice }, "0");
+        await dex.Pay(gw, alice.ClassicAddress, Amount(mpt, "500"));
+        await dex.Offer(maker, Amount(usd, "40"), Amount(mpt, "400"));
+        await dex.Offer(maker2, Amount(usd, "30"), Drops(15_000_000));
+
+        PathFindResult found = await FindAndCompare(Request(alice, bob, Amount(usd, "12")), mpt: true);
+        Assert.IsTrue(found.Alternatives.Any(a => a.SourceAmount.Kind == AmountKind.Mpt), "the MPT is one of the ways to pay");
     }
 }

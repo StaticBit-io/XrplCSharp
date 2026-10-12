@@ -175,8 +175,8 @@ public class TestIBatchSponsorship
     /// (BatchSigner.Signers, per rippled Batch::checkBatchSign) — the
     /// sponsor-role counterpart of TestBatchMultiAccountsWithInnerMultiSign,
     /// routed by the marker instead of inner ownership. Loan/Vault inners are
-    /// protocol-forbidden (kDisabledTxTypes), so LoanSet co-signing stays a
-    /// standalone flow and cannot join a batch.
+    /// refused by the node (kDisabledTxTypes) until LendingProtocolV1_2 is
+    /// enabled, so LoanSet co-signing stays a standalone flow on today's stands.
     /// </summary>
     [TestMethod]
     public async Task Batch_SponsoredReserveInner_SponsorSignsViaSignerList()

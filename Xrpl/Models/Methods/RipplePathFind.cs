@@ -20,10 +20,18 @@ namespace Xrpl.Models.Methods
         public string Currency { get; set; }
 
         /// <summary>
-        /// (Optional) The issuer address for this currency.
+        /// (Optional) The issuer address for this currency. MUST NOT be combined with
+        /// <see cref="MptIssuanceId"/>.
         /// </summary>
         [JsonPropertyName("issuer")]
         public string Issuer { get; set; }
+
+        /// <summary>
+        /// The MPT to pay in, in place of <see cref="Currency"/> (MPTokensV2): its 48-hex
+        /// <c>MPTokenIssuanceID</c>, which names the issuer too.
+        /// </summary>
+        [JsonPropertyName("mpt_issuance_id")]
+        public string MptIssuanceId { get; set; }
     }
 
     /// <summary>

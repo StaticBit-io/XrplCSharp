@@ -6,6 +6,7 @@ using Microsoft.VisualStudio.TestTools.UnitTesting;
 
 using Xrpl.BinaryCodec;
 using Xrpl.Client.Json;
+using Xrpl.Models;
 using Xrpl.Models.Transactions;
 using Xrpl.Models.Utils;
 using Xrpl.Wallet;
@@ -194,23 +195,62 @@ namespace Xrpl.Tests.Wallet.Tests
         }
 
         [TestMethod]
-        public void TestUValidateBatch_LoanOrVaultInner_Throws()
+        [DataRow("VaultCreate")]
+        [DataRow("VaultSet")]
+        [DataRow("VaultDelete")]
+        [DataRow("VaultDeposit")]
+        [DataRow("VaultWithdraw")]
+        [DataRow("VaultClawback")]
+        [DataRow("LoanBrokerSet")]
+        [DataRow("LoanBrokerDelete")]
+        [DataRow("LoanBrokerCoverDeposit")]
+        [DataRow("LoanBrokerCoverWithdraw")]
+        [DataRow("LoanBrokerCoverClawback")]
+        [DataRow("LoanSet")]
+        [DataRow("LoanDelete")]
+        [DataRow("LoanManage")]
+        [DataRow("LoanPay")]
+        public void TestUValidateBatch_LendingInner_LeftToTheNode(string innerType)
         {
-            // rippled Batch::preflight kDisabledTxTypes: every Loan/Vault tx
-            // type is rejected as an inner (temINVALID_INNER_BATCH), so
-            // LoanSet co-signing can never ride inside a Batch
-            JsonObject loanInner = InnerPayment(Root.ClassicAddress, new JsonObject
+            // rippled Batch::preflight rejects these types (kDisabledTxTypes →
+            // temINVALID_INNER_BATCH) only while LendingProtocolV1_2 is not
+            // enabled; the offline check has no ledger rules, so it lets them through
+            JsonObject lendingInner = InnerPayment(Root.ClassicAddress, new JsonObject
             {
                 ["Counterparty"] = Counterparty.ClassicAddress,
             });
-            loanInner["RawTransaction"]["TransactionType"] = "LoanSet";
+            lendingInner["RawTransaction"]["TransactionType"] = innerType;
 
             Dictionary<string, object> batch = ToDict(OuterBatch(
-                loanInner,
+                lendingInner,
                 InnerPayment(Other.ClassicAddress)));
 
-            var ex = Assert.ThrowsExactly<System.ArgumentException>(() => Validation.ValidateBatch(batch));
-            StringAssert.Contains(ex.Message, "LoanSet");
+            Validation.ValidateBatch(batch);
+        }
+
+        [TestMethod]
+        public void TestUBuildBatch_TypedLoanSetAndVaultDeposit_Builds()
+        {
+            Batch batch = BatchUtils.Build(Root.ClassicAddress, new ITransactionRequest[]
+            {
+                new LoanSet
+                {
+                    Account = Root.ClassicAddress,
+                    LoanBrokerID = "DB303FC1C7611B22C09E773B51044F6BEA02EF917DF59A2E2860871E167066A5",
+                    Counterparty = Counterparty.ClassicAddress,
+                    PrincipalRequested = 10000000,
+                },
+                new VaultDeposit
+                {
+                    Account = Other.ClassicAddress,
+                    VaultID = "9C8342F8DDA1D8B3B4D2F1E0D5A6C7B8E9F0A1B2C3D4E5F60718293A4B5C6D7E",
+                    Amount = new Xrpl.Models.Common.Currency { ValueAsXrp = 1m },
+                },
+            }, BatchFlags.tfAllOrNothing);
+
+            Assert.AreEqual(2, batch.RawTransactions.Count);
+            Assert.AreEqual(TransactionType.LoanSet, batch.RawTransactions[0].RawTransaction.TransactionType);
+            Assert.AreEqual(TransactionType.VaultDeposit, batch.RawTransactions[1].RawTransaction.TransactionType);
         }
 
         [TestMethod]

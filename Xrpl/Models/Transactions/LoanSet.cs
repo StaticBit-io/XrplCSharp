@@ -31,8 +31,9 @@ namespace Xrpl.Models.Transactions
 
     /// <summary>
     /// The LoanSet transaction creates a new loan associated with a loan broker.
-    /// The borrower (Counterparty) must co-sign via CounterpartySignature unless
-    /// this transaction is part of a Batch.
+    /// Two parties sign it: the submitting <c>Account</c> and the counterparty, who co-signs via
+    /// CounterpartySignature unless this transaction is part of a Batch. One of them is the
+    /// LoanBroker's owner and the other is the borrower, in either role.
     /// </summary>
     /// <remarks>Requires the Loan amendment (XLS-66d). This feature is in draft and subject to change.</remarks>
     public interface ILoanSet : ITransactionCommon
@@ -48,9 +49,22 @@ namespace Xrpl.Models.Transactions
         string LoanBrokerID { get; set; }
 
         /// <summary>
-        /// The borrower account (counterparty to the loan).
+        /// The counterparty: the account that co-signs via CounterpartySignature. Optional; when
+        /// omitted the counterparty is the LoanBroker's owner. One of <c>Account</c> and the
+        /// counterparty must be the broker owner, and the other one is the borrower - so this is
+        /// the borrower when the broker owner submits, and the broker owner (or omitted) when the
+        /// borrower submits. Required on a LoanSet inside a Batch.
         /// </summary>
         string Counterparty { get; set; }
+
+        /// <summary>
+        /// The counterparty's co-signature (sfCounterpartySignature) - <c>SigningPubKey</c> and
+        /// <c>TxnSignature</c>, or <c>Signers</c> for a multisig counterparty. It is not part of
+        /// what either party signs. Absent on a LoanSet inside a Batch, where the counterparty
+        /// signs the batch through <c>BatchSigners</c> instead.
+        /// </summary>
+        /// <remarks>Produced by <c>LoanSigningHelper</c> and <c>XrplWallet.SignAsLoanCounterparty</c>.</remarks>
+        SignatureObject CounterpartySignature { get; set; }
 
         /// <summary>
         /// The principal amount requested for the loan (Number type).
@@ -148,6 +162,10 @@ namespace Xrpl.Models.Transactions
         public string Counterparty { get; set; }
 
         /// <inheritdoc />
+        [JsonPropertyName("CounterpartySignature")]
+        public SignatureObject CounterpartySignature { get; set; }
+
+        /// <inheritdoc />
         [JsonPropertyName("PrincipalRequested")]
         public XrplNumber? PrincipalRequested { get; set; }
 
@@ -221,6 +239,10 @@ namespace Xrpl.Models.Transactions
         /// <inheritdoc />
         [JsonPropertyName("Counterparty")]
         public string Counterparty { get; set; }
+
+        /// <inheritdoc />
+        [JsonPropertyName("CounterpartySignature")]
+        public SignatureObject CounterpartySignature { get; set; }
 
         /// <inheritdoc />
         [JsonPropertyName("PrincipalRequested")]
