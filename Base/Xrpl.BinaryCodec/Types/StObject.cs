@@ -63,7 +63,7 @@ namespace Xrpl.BinaryCodec.Types
             [FieldType.PathSet] = new BuildFrom(PathSet.FromJson, PathSet.FromParser),
             [FieldType.Vector256] = new BuildFrom(Vector256.FromJson, Vector256.FromParser),
             [FieldType.Issue] = new BuildFrom(Issue.FromJson, Issue.FromParser),
-            [FieldType.Currency] = new BuildFrom(Currency.FromOracleJson, Currency.FromParser),
+            [FieldType.Currency] = new BuildFrom(Currency.FromJson, Currency.FromParser),
             [FieldType.Number] = new BuildFrom(NumberType.FromJson, NumberType.FromParser),
             [FieldType.Int32] = new BuildFrom(Int32Type.FromJson, Int32Type.FromParser),
             [FieldType.Int64] = new BuildFrom(Int64Type.FromJson, Int64Type.FromParser),

@@ -218,9 +218,151 @@ namespace Xrpl.Client.Json.Converters
                     return hex;
             }
 
+            // Three characters of text written back are a standard code, which the ledger stores at
+            // bytes 12-14; text at byte 0 is a different, nonstandard currency, so it stays hex.
+            if (length == 3)
+                return hex;
+
             return length > 0 && OracleAsciiValidation.IsPrintableAscii(bytes.AsSpan(0, length))
                 ? Encoding.ASCII.GetString(bytes, 0, length)
                 : hex;
+        }
+    }
+
+    /// <summary>
+    /// Writes the <c>base_asset</c> / <c>quote_asset</c> of a <c>get_aggregate_price</c> request in the form
+    /// rippled displays the stored currency in (<c>to_string(Currency)</c>).
+    /// </summary>
+    /// <remarks>
+    /// rippled finds a price by comparing the request string with the display form of the stored
+    /// <c>PriceData.BaseAsset</c> / <c>QuoteAsset</c>, as text. Any other spelling of the same currency
+    /// parses, yet matches nothing, and the request fails with <c>objectNotFound</c>. The display form is:
+    /// <c>XRP</c> for the zero currency, the three characters for a code holding only an ISO-style code,
+    /// and uppercase hex for anything else. A longer name is encoded as <see cref="OracleCurrencyConverter"/>
+    /// encodes it for <c>OracleSet</c>, so the name written into an oracle finds that oracle's price.
+    /// </remarks>
+    public sealed class AggregatePriceAssetConverter : JsonConverter<string>
+    {
+        private const string IsoCharSet =
+            "abcdefghijklmnopqrstuvwxyzABCDEFGHIJKLMNOPQRSTUVWXYZ0123456789<>(){}[]|?!@#$%^&*";
+
+        private const int IsoCodeOffset = 12;
+        private const int IsoCodeLength = 3;
+
+        /// <summary>
+        /// Reads the code as the node gives it.
+        /// </summary>
+        public override string Read(ref Utf8JsonReader reader, Type typeToConvert, JsonSerializerOptions options)
+        {
+            if (reader.TokenType == JsonTokenType.Null)
+                return null;
+
+            if (reader.TokenType != JsonTokenType.String)
+            {
+                throw new JsonException(
+                    $"An aggregate price asset must be a JSON string; got token type {reader.TokenType}.");
+            }
+
+            return reader.GetString();
+        }
+
+        /// <summary>
+        /// Writes the code in rippled's display form.
+        /// </summary>
+        /// <exception cref="JsonException">The code is not printable ASCII or does not fit in 160 bits.</exception>
+        public override void Write(Utf8JsonWriter writer, string value, JsonSerializerOptions options)
+        {
+            if (value == null)
+            {
+                writer.WriteNullValue();
+                return;
+            }
+
+            writer.WriteStringValue(ToDisplayForm(value));
+        }
+
+        /// <summary>
+        /// The form rippled displays <paramref name="code"/> in once it is stored as a currency.
+        /// </summary>
+        /// <exception cref="JsonException">The code is not printable ASCII or does not fit in 160 bits.</exception>
+        public static string ToDisplayForm(string code)
+        {
+            OracleAsciiValidation.ValidatePrintableAsciiChars(code.AsSpan(), "Aggregate price asset");
+
+            string trimmed = code.Trim();
+            if (trimmed.Length == IsoCodeLength)
+                return trimmed;
+
+            string hex;
+            if (trimmed.Length == 40 && OracleAsciiValidation.IsHexString(trimmed.AsSpan()))
+            {
+                hex = trimmed;
+            }
+            else
+            {
+                try
+                {
+                    hex = trimmed.CurrencyToHex();
+                }
+                catch (XrplException ex)
+                {
+                    throw new JsonException(ex.Message, ex);
+                }
+            }
+
+            return DisplayFormOfHex(hex);
+        }
+
+        private static string DisplayFormOfHex(string hex)
+        {
+            byte[] bytes = new byte[20];
+            for (int i = 0; i < 20; i++)
+                bytes[i] = Convert.ToByte(hex.Substring(i * 2, 2), 16);
+
+            bool outsideIsoIsZero = true;
+            for (int i = 0; i < 20; i++)
+            {
+                if ((i < IsoCodeOffset || i >= IsoCodeOffset + IsoCodeLength) && bytes[i] != 0)
+                {
+                    outsideIsoIsZero = false;
+                    break;
+                }
+            }
+
+            if (outsideIsoIsZero)
+            {
+                if (bytes[IsoCodeOffset] == 0 && bytes[IsoCodeOffset + 1] == 0 && bytes[IsoCodeOffset + 2] == 0)
+                    return "XRP";
+
+                string iso = Encoding.ASCII.GetString(bytes, IsoCodeOffset, IsoCodeLength);
+                if (iso != "XRP" && IsIsoCode(iso))
+                    return iso;
+            }
+
+            if (IsNoCurrency(bytes))
+                return "1";
+
+            return hex.ToUpperInvariant();
+        }
+
+        private static bool IsIsoCode(string iso)
+        {
+            for (int i = 0; i < iso.Length; i++)
+            {
+                if (IsoCharSet.IndexOf(iso[i]) < 0)
+                    return false;
+            }
+            return true;
+        }
+
+        private static bool IsNoCurrency(byte[] bytes)
+        {
+            for (int i = 0; i < 19; i++)
+            {
+                if (bytes[i] != 0)
+                    return false;
+            }
+            return bytes[19] == 1;
         }
     }
 
