@@ -17,7 +17,7 @@ RUN install -m 0755 -d /etc/apt/keyrings \
 
 # deb-stable carries production releases. Pinned so a stand raised today and one raised in a
 # month are the same binary, and so release-watch decides when to move rather than apt.
-ARG XRPLD_VERSION=3.4.0-1
+ARG XRPLD_VERSION=3.4.1-2
 RUN echo "deb [signed-by=/etc/apt/keyrings/xrplf.asc] https://packages.xrplf.org/repository/deb-stable any main" > /etc/apt/sources.list.d/xrplf.list \
     && apt-get update \
     && apt-get install -y --no-install-recommends --allow-downgrades "xrpld=${XRPLD_VERSION}" \
