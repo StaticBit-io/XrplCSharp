@@ -688,10 +688,7 @@ namespace Xrpl.Amounts
             return (offers, offers.Count >= PublicBookLimit, ownerFunds);
         }
 
-        private static TakerAmount TakerAmountOf(IssuedCurrency asset) =>
-            XrplAmount.KindOf(asset) == AmountKind.Xrp
-                ? new TakerAmount { Currency = "XRP" }
-                : new TakerAmount { Currency = asset.Currency, Issuer = asset.Issuer };
+        private static TakerAmount TakerAmountOf(IssuedCurrency asset) => TakerAmount.FromAsset(asset);
 
         /// <summary>
         /// The book read the way <c>BookTip</c> walks it: its quality directories in key order,

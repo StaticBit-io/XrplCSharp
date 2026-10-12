@@ -430,10 +430,7 @@ namespace Xrpl.Amounts
             }
         }
 
-        private static TakerAmount TakerAmountOf(IssuedCurrency asset) =>
-            XrplAmount.KindOf(asset) == AmountKind.Xrp
-                ? new TakerAmount { Currency = "XRP" }
-                : new TakerAmount { Currency = asset.Currency, Issuer = asset.Issuer };
+        private static TakerAmount TakerAmountOf(IssuedCurrency asset) => TakerAmount.FromAsset(asset);
     }
 
     /// <summary>An asset as a key: the normalized currency and the issuer, XRP with an empty one.</summary>
