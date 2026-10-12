@@ -791,6 +791,9 @@ internal class FeeTestClient : IXrplClient
     public Task<XrplResponse<BookOffers>> BookOffers(BookOffersRequest request, CancellationToken cancellationToken = default) => throw new NotSupportedException();
     public Task<XrplResponse<DepositAuthorized>> DepositAuthorized(DepositAuthorizedRequest request, CancellationToken cancellationToken = default) => throw new NotSupportedException();
     public Task<XrplResponse<GetAggregatePriceResponse>> GetAggregatePrice(GetAggregatePriceRequest request, CancellationToken cancellationToken = default) => throw new NotSupportedException();
+    public Task<XrplResponse<BookChangesResponse>> BookChanges(BookChangesRequest request, CancellationToken cancellationToken = default) => throw new NotSupportedException();
+    public Task<XrplResponse<ManifestResponse>> Manifest(ManifestRequest request, CancellationToken cancellationToken = default) => throw new NotSupportedException();
+    public Task<XrplResponse<VersionResponse>> Version(CancellationToken cancellationToken = default) => throw new NotSupportedException();
     public Task<XrplResponse<NFTBuyOffers>> NFTBuyOffers(NFTBuyOffersRequest request, CancellationToken cancellationToken = default) => throw new NotSupportedException();
     public Task<XrplResponse<NFTSellOffers>> NFTSellOffers(NFTSellOffersRequest request, CancellationToken cancellationToken = default) => throw new NotSupportedException();
     public Task<XrplResponse<NFTInfo>> NFTInfo(NFTInfoRequest request, CancellationToken cancellationToken = default) => throw new NotSupportedException();

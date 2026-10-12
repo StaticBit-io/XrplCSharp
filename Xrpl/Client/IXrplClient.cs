@@ -644,6 +644,33 @@ namespace Xrpl.Client
         Task<XrplResponse<GetAggregatePriceResponse>> GetAggregatePrice(GetAggregatePriceRequest request, CancellationToken cancellationToken = default);
 
         /// <summary>
+        /// The <c>book_changes</c> method reports the changes to the DEX order books in one ledger version:
+        /// per order book, the volume traded and the high, low, open and close rates.
+        /// https://xrpl.org/docs/references/http-websocket-apis/public-api-methods/path-and-order-book-methods/book_changes
+        /// </summary>
+        /// <param name="request">A <see cref="BookChangesRequest"/>.</param>
+        /// <param name="cancellationToken">Cancellation token.</param>
+        /// <returns>A <see cref="BookChangesResponse"/> response.</returns>
+        Task<XrplResponse<BookChangesResponse>> BookChanges(BookChangesRequest request, CancellationToken cancellationToken = default);
+
+        /// <summary>
+        /// The <c>manifest</c> method reports the current manifest of a validator.
+        /// https://xrpl.org/docs/references/http-websocket-apis/public-api-methods/server-info-methods/manifest
+        /// </summary>
+        /// <param name="request">A <see cref="ManifestRequest"/>.</param>
+        /// <param name="cancellationToken">Cancellation token.</param>
+        /// <returns>A <see cref="ManifestResponse"/> response.</returns>
+        Task<XrplResponse<ManifestResponse>> Manifest(ManifestRequest request, CancellationToken cancellationToken = default);
+
+        /// <summary>
+        /// The <c>version</c> method reports the range of API versions the server supports.
+        /// https://xrpl.org/docs/references/http-websocket-apis/public-api-methods/server-info-methods/version
+        /// </summary>
+        /// <param name="cancellationToken">Cancellation token.</param>
+        /// <returns>A <see cref="VersionResponse"/> response.</returns>
+        Task<XrplResponse<VersionResponse>> Version(CancellationToken cancellationToken = default);
+
+        /// <summary>
         /// The <c>path_find</c> create sub-command creates an ongoing request to find possible paths
         /// along which a payment transaction could be made.<br/>
         /// WebSocket API only.<br/>
@@ -1224,6 +1251,24 @@ namespace Xrpl.Client
         public Task<XrplResponse<GetAggregatePriceResponse>> GetAggregatePrice(GetAggregatePriceRequest request, CancellationToken cancellationToken = default)
         {
             return this.GRequest<GetAggregatePriceResponse, GetAggregatePriceRequest>(request, cancellationToken);
+        }
+
+        /// <inheritdoc />
+        public Task<XrplResponse<BookChangesResponse>> BookChanges(BookChangesRequest request, CancellationToken cancellationToken = default)
+        {
+            return this.GRequest<BookChangesResponse, BookChangesRequest>(request, cancellationToken);
+        }
+
+        /// <inheritdoc />
+        public Task<XrplResponse<ManifestResponse>> Manifest(ManifestRequest request, CancellationToken cancellationToken = default)
+        {
+            return this.GRequest<ManifestResponse, ManifestRequest>(request, cancellationToken);
+        }
+
+        /// <inheritdoc />
+        public Task<XrplResponse<VersionResponse>> Version(CancellationToken cancellationToken = default)
+        {
+            return this.GRequest<VersionResponse, VersionRequest>(new VersionRequest(), cancellationToken);
         }
 
         /// <inheritdoc />
