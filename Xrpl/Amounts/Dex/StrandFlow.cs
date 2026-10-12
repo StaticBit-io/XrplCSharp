@@ -335,9 +335,17 @@ namespace Xrpl.Amounts
                 {
                     savedIns.Add(best.In);
                     savedOuts.Add(best.Out);
-                    remainingOut = StepMath.Subtract(outRequested, StepMath.Sum(savedOuts, outRequested.Asset, rules), rules);
+                    if (StepMath.TrySum(savedOuts, outRequested.Asset, rules) is not { } sumOut)
+                        return new FlowResult { Result = "tecPATH_DRY", RemovableOffers = offersToRemoveOnFail };
+
+                    remainingOut = StepMath.Subtract(outRequested, sumOut, rules);
                     if (sendMaxLimit is { } maxIn)
-                        remainingIn = StepMath.Subtract(maxIn, StepMath.Sum(savedIns, typedIn, rules), rules);
+                    {
+                        if (StepMath.TrySum(savedIns, typedIn, rules) is not { } sumIn)
+                            return new FlowResult { Result = "tecPATH_DRY", RemovableOffers = offersToRemoveOnFail };
+
+                        remainingIn = StepMath.Subtract(maxIn, sumIn, rules);
+                    }
 
                     foreach (FillRecord fill in best.Sandbox.OwnFills)
                     {
@@ -363,9 +371,13 @@ namespace Xrpl.Amounts
                     break;
             }
 
-            XrplAmount actualOutTyped = StepMath.Sum(savedOuts, outRequested.Asset, rules);
+            XrplAmount? actualOutSum = StepMath.TrySum(savedOuts, outRequested.Asset, rules);
+            XrplAmount? actualInSum = StepMath.TrySum(savedIns, typedIn, rules);
+            if (actualOutSum is not { } actualOutTyped || actualInSum is not { } actualInTyped)
+                return new FlowResult { Result = "tecPATH_DRY", RemovableOffers = offersToRemoveOnFail };
+
             XrplAmount actualOut = actualOutTyped.WithAsset(outAsset);
-            XrplAmount actualIn = StepMath.Sum(savedIns, typedIn, rules).WithAsset(inAsset);
+            XrplAmount actualIn = actualInTyped.WithAsset(inAsset);
 
             if (actualOutTyped != outRequested)
             {
