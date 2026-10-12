@@ -1,5 +1,6 @@
 using Microsoft.VisualStudio.TestTools.UnitTesting;
 
+using System;
 using System.Text.Json;
 
 using Xrpl.Client.Json;
@@ -137,8 +138,7 @@ namespace Xrpl.Tests.ClientLib
             Assert.AreEqual(2u, response.TrimmedSet.Size);
             Assert.AreEqual("0.01414213562373095", response.TrimmedSet.StandardDeviation);
             Assert.AreEqual("0.8", response.Median);
-            Assert.AreEqual(1724877762u, response.Time);
-            Assert.AreEqual(1724877762L, response.TimeUtc.ToUnixTimeSeconds());
+            Assert.AreEqual(new DateTime(2024, 8, 28, 20, 42, 42, DateTimeKind.Utc), response.Time);
             Assert.AreEqual(3677185u, response.LedgerCurrentIndex);
             Assert.IsFalse(response.Validated.Value);
         }

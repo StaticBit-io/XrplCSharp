@@ -162,16 +162,12 @@ public class GetAggregatePriceResponse : BaseMethodResult
     public string Median { get; set; }
 
     /// <summary>
-    /// The most recent <c>LastUpdateTime</c> among the prices collected, in seconds since the Unix epoch.
+    /// The most recent <c>LastUpdateTime</c> among the prices collected (UTC). The node sends it in
+    /// seconds since the Unix epoch, as the Oracle object holds it, not the Ripple epoch.
     /// </summary>
     [JsonPropertyName("time")]
-    public uint Time { get; set; }
-
-    /// <summary>
-    /// <see cref="Time"/> as a point in time.
-    /// </summary>
-    [JsonIgnore]
-    public DateTimeOffset TimeUtc => DateTimeOffset.FromUnixTimeSeconds(Time);
+    [JsonConverter(typeof(UnixDateTimeConverter))]
+    public DateTime? Time { get; set; }
 
     /// <summary>
     /// The ledger index of the open ledger used, when the request read the current ledger.

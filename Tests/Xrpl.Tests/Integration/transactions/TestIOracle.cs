@@ -550,7 +550,7 @@ public class TestIOracle
         Assert.AreEqual(2u, response.TrimmedSet.Size);
         Assert.AreEqual(0.755m, decimal.Parse(response.TrimmedSet.Mean, CultureInfo.InvariantCulture));
 
-        Assert.IsGreaterThan(0u, response.Time);
+        Assert.IsNotNull(response.Time);
     }
 
     /// <summary>
@@ -589,6 +589,7 @@ public class TestIOracle
             new GetAggregatePriceRequest("XRP", "EUR", new[] { stale, fresh }) { TimeThreshold = 60 }).Typed();
         Assert.AreEqual(1u, recent.EntireSet.Size);
         Assert.AreEqual(0.7m, decimal.Parse(recent.Median, CultureInfo.InvariantCulture));
+        Assert.AreEqual(now, recent.Time, "time is the newest LastUpdateTime, read from Unix seconds");
     }
 
     /// <summary>
