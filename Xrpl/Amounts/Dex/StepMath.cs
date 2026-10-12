@@ -30,11 +30,31 @@ namespace Xrpl.Amounts
         internal static XrplAmount Subtract(XrplAmount a, XrplAmount b, LedgerRules rules) => Add(a, -b, rules);
 
         /// <summary>
-        /// <c>std::accumulate</c> over a <c>flat_multiset</c>: the amounts added in ascending order,
-        /// starting from the smallest. An issued-currency sum rounds at every step, so the order
-        /// decides the low digits.
+        /// <c>checkedStepAddOpt</c>: <c>TAmount + TAmount</c>, or <see langword="null"/> when an XRP or
+        /// MPT sum leaves <c>int64</c>. An issued-currency sum goes through <c>Number</c>, which
+        /// throws on overflow instead.
         /// </summary>
-        internal static XrplAmount Sum(List<XrplAmount> amounts, IssuedCurrency asset, LedgerRules rules)
+        internal static XrplAmount? CheckedAdd(XrplAmount a, XrplAmount b, LedgerRules rules)
+        {
+            if (!a.IsIntegral)
+                return XrplAmountMath.Add(a, b, rules);
+
+            XrplAmount.RequireSameAsset(a, b);
+            long x = Signed(a);
+            long y = Signed(b);
+            if ((y > 0 && x > long.MaxValue - y) || (y < 0 && x < long.MinValue - y))
+                return null;
+
+            return XrplAmount.FromUnits(a.Asset, a.Kind, x + y);
+        }
+
+        /// <summary>
+        /// The <c>sum</c> of a strand's <c>flow</c>: <c>std::accumulate</c> over a
+        /// <c>flat_multiset</c>, the amounts added in ascending order, starting from the smallest.
+        /// An issued-currency sum rounds at every step, so the order decides the low digits.
+        /// <see langword="null"/> when an XRP or MPT total overflows, which the flow treats as a dry path.
+        /// </summary>
+        internal static XrplAmount? TrySum(List<XrplAmount> amounts, IssuedCurrency asset, LedgerRules rules)
         {
             if (amounts.Count == 0)
                 return XrplAmount.Zero(asset);
@@ -43,10 +63,22 @@ namespace Xrpl.Amounts
             sorted.Sort((x, y) => x.Value.CompareTo(y.Value));
             XrplAmount total = sorted[0];
             for (int i = 1; i < sorted.Count; i++)
-                total = Add(total, sorted[i], rules);
+            {
+                if (CheckedAdd(total, sorted[i], rules) is not { } next)
+                    return null;
+
+                total = next;
+            }
 
             return total;
         }
+
+        /// <summary>
+        /// The <c>sum</c> of <c>BookStep</c>: <see cref="TrySum"/>, with an overflowing XRP or MPT
+        /// total failing the strand as <c>tecPATH_DRY</c> (<c>checkedStepAdd</c>).
+        /// </summary>
+        internal static XrplAmount Sum(List<XrplAmount> amounts, IssuedCurrency asset, LedgerRules rules) =>
+            TrySum(amounts, asset, rules) ?? throw new FlowFailedException("tecPATH_DRY", "The step's total overflows.");
 
         internal static XrplAmount Min(XrplAmount a, XrplAmount b) => b < a ? b : a;
 

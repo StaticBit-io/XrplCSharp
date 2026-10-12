@@ -13,7 +13,7 @@ namespace Xrpl.Amounts
 {
     /// <summary>
     /// An <c>OfferCreate</c> crossed locally against a <see cref="DexSnapshot"/>, the way rippled
-    /// 3.4.0's payment engine crosses it: every offer of the book in quality order, the AMM pool
+    /// 3.4.1's payment engine crosses it: every offer of the book in quality order, the AMM pool
     /// interleaved with them, the auto-bridge through XRP when neither side is XRP, and the
     /// result the node would return.
     /// </summary>

@@ -232,7 +232,7 @@ namespace Xrpl.Amounts
     }
 
     /// <summary>
-    /// rippled 3.4.0's <c>Pathfinder</c>: the candidate paths of a payment, built from a table of
+    /// rippled 3.4.1's <c>Pathfinder</c>: the candidate paths of a payment, built from a table of
     /// path shapes for the kind of payment - accounts, books, the book to XRP, the book to the
     /// delivered currency, the destination - then ranked by running each through the payment
     /// engine, and the best ones picked.
