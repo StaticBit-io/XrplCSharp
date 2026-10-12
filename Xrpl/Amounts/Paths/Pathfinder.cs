@@ -14,14 +14,16 @@ namespace Xrpl.Amounts
 {
     /// <summary>
     /// A path element as the path finder builds it (<c>STPathElement</c>): its type bits, and an
-    /// account, a currency and an issuer that it keeps even where the type leaves them out of
-    /// the path. The empty account or issuer stands for XRP's.
+    /// account, a path asset - a currency, or an MPT's issuance ID - and an issuer that it keeps
+    /// even where the type leaves them out of the path. The empty account or issuer stands for
+    /// XRP's.
     /// </summary>
     internal readonly struct PfElement : IEquatable<PfElement>
     {
         internal const int TypeAccount = 0x01;
         internal const int TypeCurrency = 0x10;
         internal const int TypeIssuer = 0x20;
+        internal const int TypeMpt = 0x40;
 
         private PfElement(int type, string account, string currency, string issuer)
         {
@@ -35,6 +37,7 @@ namespace Xrpl.Amounts
 
         internal string Account { get; }
 
+        /// <summary>The path asset: a currency code, or an MPT's issuance ID (<see cref="PathCurrency.IsMpt"/>).</summary>
         internal string Currency { get; }
 
         internal string Issuer { get; }
@@ -45,11 +48,16 @@ namespace Xrpl.Amounts
 
         internal bool HasCurrency => (Type & TypeCurrency) != 0;
 
+        internal bool HasMpt => (Type & TypeMpt) != 0;
+
         internal bool HasIssuer => (Type & TypeIssuer) != 0;
 
-        /// <summary>The element with its type given (<c>STPathElement(uType, account, asset, issuer)</c>).</summary>
+        /// <summary>
+        /// The element with its type given (<c>STPathElement(uType, account, asset, issuer)</c>),
+        /// the asset bit that does not fit the asset dropped.
+        /// </summary>
         internal static PfElement Typed(int type, string account, string currency, string issuer) =>
-            new PfElement(type, account, currency, issuer);
+            new PfElement(PathCurrency.IsMpt(currency) ? type & ~TypeCurrency : type & ~TypeMpt, account, currency, issuer);
 
         /// <summary>The element whose type follows from its fields (<c>STPathElement(account, asset, issuer)</c>).</summary>
         internal static PfElement Of(string account, string currency, string issuer)
@@ -58,7 +66,7 @@ namespace Xrpl.Amounts
             if (!string.IsNullOrEmpty(account))
                 type |= TypeAccount;
             if (currency != "XRP")
-                type |= TypeCurrency;
+                type |= PathCurrency.IsMpt(currency) ? TypeMpt : TypeCurrency;
             if (!string.IsNullOrEmpty(issuer))
                 type |= TypeIssuer;
             return new PfElement(type, account, currency, issuer);
@@ -70,7 +78,7 @@ namespace Xrpl.Amounts
             if (IsAccount)
                 return PathElement.OfAccount(Account);
 
-            return new PathElement(null, HasCurrency ? Currency : null, HasIssuer ? Issuer : null);
+            return new PathElement(null, HasCurrency ? Currency : null, HasIssuer ? Issuer : null, HasMpt ? Currency : null);
         }
 
         internal PathStep ToPathStep()
@@ -81,6 +89,7 @@ namespace Xrpl.Amounts
             return new PathStep
             {
                 CurrencyCode = HasCurrency ? Currency : null,
+                MPTokenIssuanceID = HasMpt ? Currency : null,
                 Issuer = HasIssuer && Issuer.Length != 0 ? Issuer : null,
             };
         }
@@ -328,7 +337,7 @@ namespace Xrpl.Amounts
             _srcAccount = srcAccount;
             _dstAccount = dstAccount;
             _dstAmount = dstAmount;
-            _effectiveDst = dstAmount.Kind == AmountKind.Xrp ? dstAccount : dstAmount.Asset.Issuer;
+            _effectiveDst = dstAmount.Kind == AmountKind.Xrp ? dstAccount : DexAssets.Issuer(dstAmount.Asset);
             _srcCurrency = PathCurrency.Normalize(srcCurrency);
             _srcIssuer = srcIssuer;
             _srcAmount = srcAmount ?? MinusOne(_srcCurrency, srcIssuer ?? (_srcCurrency == "XRP" ? string.Empty : srcAccount));
@@ -339,24 +348,27 @@ namespace Xrpl.Amounts
         /// <summary>The complete paths found, in the order they were found.</summary>
         internal IReadOnlyList<PfPath> CompletePaths => _completePaths.Paths;
 
-        private string DstCurrency => PathCurrency.Normalize(_dstAmount.Kind == AmountKind.Xrp ? "XRP" : _dstAmount.Asset.Currency);
+        private string DstCurrency => PathCurrency.Of(_dstAmount.Asset);
 
         // ---- amounts ----
 
         /// <summary><c>STAmount(asset, 1, 0, true)</c>: minus one, "no limit" or "as much as possible".</summary>
         internal static XrplAmount MinusOne(string currency, string issuer)
         {
-            IssuedCurrency asset = currency == "XRP"
-                ? new IssuedCurrency { Currency = "XRP" }
+            IssuedCurrency asset = currency == "XRP" ? new IssuedCurrency { Currency = "XRP" }
+                : PathCurrency.IsMpt(currency) ? DexAssets.Mpt(currency)
                 : new IssuedCurrency { Currency = currency, Issuer = issuer };
             return XrplAmount.Parse(asset, "-1");
         }
 
-        /// <summary><c>largestAmount</c>: all the XRP there is, or the largest issued amount.</summary>
+        /// <summary><c>largestAmount</c>: all the XRP there is, the largest issued amount, or the most of an MPT.</summary>
         internal static XrplAmount LargestAmount(XrplAmount amount) =>
-            amount.Kind == AmountKind.Xrp
-                ? XrplAmount.FromUnits(amount.Asset, AmountKind.Xrp, (long)XrplAmount.MaxDrops)
-                : XrplAmount.Canonical(amount.Asset, AmountKind.Iou, false, XrplAmount.MaxIouMantissa, XrplAmount.MaxIouExponent, Xrpl.BinaryCodec.Numbers.NumberRounding.ToNearest);
+            amount.Kind switch
+            {
+                AmountKind.Xrp => XrplAmount.FromUnits(amount.Asset, AmountKind.Xrp, (long)XrplAmount.MaxDrops),
+                AmountKind.Mpt => XrplAmount.FromUnits(amount.Asset, AmountKind.Mpt, (long)XrplAmount.MaxMptAmount),
+                _ => XrplAmount.Canonical(amount.Asset, AmountKind.Iou, false, XrplAmount.MaxIouMantissa, XrplAmount.MaxIouExponent, Xrpl.BinaryCodec.Numbers.NumberRounding.ToNearest),
+            };
 
         internal static XrplAmount ConvertAmount(XrplAmount amount, bool all) => all ? LargestAmount(amount) : amount;
 
@@ -482,7 +494,7 @@ namespace Xrpl.Amounts
             }
         }
 
-        /// <summary><c>issueMatchesOrigin</c>: the source's own currency, from the source or its issuer.</summary>
+        /// <summary><c>issueMatchesOrigin</c>: the source's own currency or MPT, from the source or its issuer.</summary>
         private bool IssueMatchesOrigin(IssuedCurrency asset)
         {
             AssetId id = AssetId.Of(asset);
@@ -500,7 +512,9 @@ namespace Xrpl.Amounts
         /// </summary>
         private async Task<int> PathsOutAsync(string currency, string account, bool outgoing, bool isDstCurrency, string dstAccount, CancellationToken cancellationToken)
         {
-            AssetId asset = new AssetId(currency, account);
+            // An MPT's key is its issuance, whoever reaches it.
+            bool mpt = PathCurrency.IsMpt(currency);
+            AssetId asset = mpt ? AssetId.OfMpt(currency) : new AssetId(currency, account);
             if (_pathsOutCount.TryGetValue(asset, out int known))
                 return known;
 
@@ -508,6 +522,13 @@ namespace Xrpl.Amounts
             DexAccount sle = await _source.AccountAsync(account, cancellationToken).ConfigureAwait(false);
             if (sle == null)
                 return 0;
+
+            if (mpt)
+            {
+                int mptCount = await MptPathsOutAsync(currency, account, isDstCurrency, dstAccount, cancellationToken).ConfigureAwait(false);
+                _pathsOutCount[asset] = mptCount;
+                return mptCount;
+            }
 
             int count = 0;
             if (!sle.GlobalFreeze)
@@ -535,6 +556,55 @@ namespace Xrpl.Amounts
 
             _pathsOutCount[asset] = count;
             return count;
+        }
+
+        /// <summary>
+        /// <c>getPathsOut</c> for an MPT: none while the issuance is locked; otherwise its books,
+        /// and each of the account's MPTs of the issuance it can send and is not locked out of -
+        /// one that reaches the destination's issuer counting 10,000.
+        /// </summary>
+        private async Task<int> MptPathsOutAsync(string mptKey, string account, bool isDstAsset, string dstAccount, CancellationToken cancellationToken)
+        {
+            DexMptIssuance issuance = await _source.IssuanceAsync(mptKey, cancellationToken).ConfigureAwait(false);
+            bool authRequired = !await MptAuthorizedAsync(mptKey, issuance, account, cancellationToken).ConfigureAwait(false);
+            if (issuance?.Locked == true)
+                return 0;
+
+            int count = _source.Books.BooksFrom(DexAssets.Mpt(mptKey), _domain).Count;
+            foreach (PathfindMpt held in await _source.MptsAsync(account, cancellationToken).ConfigureAwait(false))
+            {
+                if (held.MptIssuanceId != mptKey || !held.CanSend(account) || authRequired)
+                    continue;
+
+                if (isDstAsset && dstAccount == DexAssets.MptIssuer(held.MptIssuanceId))
+                {
+                    count += 10000;
+                    continue;
+                }
+
+                DexMptHolding token = await _source.MpTokenAsync(account, mptKey, cancellationToken).ConfigureAwait(false);
+                if (token?.Locked == true)
+                    continue;
+
+                count++;
+            }
+
+            return count;
+        }
+
+        /// <summary>
+        /// <c>requireAuth</c> of an MPT for the path finder: the issuer always; a holder with an
+        /// MPToken the issuance does not require authorizing, or that is authorized.
+        /// </summary>
+        private async Task<bool> MptAuthorizedAsync(string mptKey, DexMptIssuance issuance, string account, CancellationToken cancellationToken)
+        {
+            if (issuance == null)
+                return false;
+            if (string.Equals(account, DexAssets.MptIssuer(mptKey), StringComparison.Ordinal))
+                return true;
+
+            DexMptHolding token = await _source.MpTokenAsync(account, mptKey, cancellationToken).ConfigureAwait(false);
+            return token != null && (!issuance.RequireAuth || token.Authorized);
         }
 
         /// <summary>A line the account holds nothing on and has no credit left on - or, needing authorization, is not authorized on.</summary>
@@ -600,12 +670,31 @@ namespace Xrpl.Amounts
                         bool destOnly = (addFlags & AcLast) != 0;
 
                         List<(int Priority, string Account)> candidates = new List<(int, string)>();
-                        List<DexTrustLine> lines = await _cache.RippleLinesAsync(endAccount, !isNoRippleOut, cancellationToken).ConfigureAwait(false);
-                        foreach (DexTrustLine line in lines ?? new List<DexTrustLine>())
+
+                        // A currency leaves along the account's lines; an MPT goes back to its
+                        // issuer, from the account's MPTs - it does not ripple.
+                        List<(string Account, bool PeerOutgoing, bool Correct, bool Blocked)> links = new List<(string, bool, bool, bool)>();
+                        if (PathCurrency.IsMpt(endCurrency))
+                        {
+                            foreach (PathfindMpt mpt in await _source.MptsAsync(endAccount, cancellationToken).ConfigureAwait(false))
+                                links.Add((DexAssets.MptIssuer(mpt.MptIssuanceId), false, mpt.MptIssuanceId == endCurrency, !mpt.CanSend(endAccount)));
+                        }
+                        else
+                        {
+                            List<DexTrustLine> lines = await _cache.RippleLinesAsync(endAccount, !isNoRippleOut, cancellationToken).ConfigureAwait(false);
+                            foreach (DexTrustLine line in lines ?? new List<DexTrustLine>())
+                            {
+                                links.Add((
+                                    line.Balance.Asset.Issuer,
+                                    !line.PeerNoRipple,
+                                    PathCurrency.Normalize(line.Balance.Asset.Currency) == endCurrency,
+                                    CannotCarry(line, requireAuth) || (isNoRippleOut && line.NoRipple)));
+                            }
+                        }
+
+                        foreach ((string account, bool peerOutgoing, bool correctAsset, bool blocked) in links)
                         {
                             cancellationToken.ThrowIfCancellationRequested();
-                            string account = line.Balance.Asset.Issuer;
-                            bool peerOutgoing = !line.PeerNoRipple;
 
                             if (hasEffectiveDestination && account == _dstAccount)
                                 continue;
@@ -614,11 +703,10 @@ namespace Xrpl.Amounts
                             if (destOnly && !toDestination)
                                 continue;
 
-                            bool correctAsset = PathCurrency.Normalize(line.Balance.Asset.Currency) == endCurrency;
                             if (!correctAsset || currentPath.HasSeen(account, endCurrency, account))
                                 continue;
 
-                            if (CannotCarry(line, requireAuth) || (isNoRippleOut && line.NoRipple))
+                            if (blocked)
                                 continue;
 
                             if (toDestination)
@@ -696,7 +784,8 @@ namespace Xrpl.Amounts
                         }
                         else if (!currentPath.HasSeen(@out.Issuer, @out.Currency, @out.Issuer))
                         {
-                            PfElement book = PfElement.Typed(PfElement.TypeCurrency | PfElement.TypeIssuer, string.Empty, @out.Currency, @out.Issuer);
+                            int assetType = @out.IsMpt ? PfElement.TypeMpt : PfElement.TypeCurrency;
+                            PfElement book = PfElement.Typed(assetType | PfElement.TypeIssuer, string.Empty, @out.Currency, @out.Issuer);
 
                             // book -> account -> book: the account is implied, the book replaces it.
                             if (newPath.Count >= 2 && newPath.Back.IsAccount && newPath[newPath.Count - 2].IsOffer)

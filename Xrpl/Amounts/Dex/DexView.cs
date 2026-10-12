@@ -378,11 +378,17 @@ namespace Xrpl.Amounts
         /// run it: null for a member, <c>tecEXPIRED</c> when only expired credentials match, and
         /// <c>tecNO_AUTH</c> or <c>tecOBJECT_NOT_FOUND</c> otherwise.
         /// </summary>
-        internal string ValidDomain(string domainId, string subject)
+        /// <param name="domainId">The domain.</param>
+        /// <param name="subject">The account checked.</param>
+        /// <param name="ownerIsMember">
+        /// Whether the owner passes without a credential, as the transactions' checks let it;
+        /// false for <c>credentials::validDomain</c> itself, as an MPT's <c>requireAuth</c> calls it.
+        /// </param>
+        internal string ValidDomain(string domainId, string subject, bool ownerIsMember = true)
         {
             if (!Domains.TryGetValue(BookKey.DomainKey(domainId), out DexDomain domain))
                 return "tecOBJECT_NOT_FOUND";
-            if (string.Equals(domain.Owner, subject, StringComparison.Ordinal))
+            if (ownerIsMember && string.Equals(domain.Owner, subject, StringComparison.Ordinal))
                 return null;
 
             bool foundExpired = false;
@@ -1463,7 +1469,7 @@ namespace Xrpl.Amounts
 
             if (!string.IsNullOrEmpty(issuance.DomainId))
             {
-                string domain = World.ValidDomain(issuance.DomainId, account);
+                string domain = World.ValidDomain(issuance.DomainId, account, ownerIsMember: false);
                 if (domain == null || !token.Exists)
                     return domain;
             }

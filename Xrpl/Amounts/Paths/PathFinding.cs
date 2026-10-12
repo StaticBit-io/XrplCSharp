@@ -31,7 +31,8 @@ namespace Xrpl.Amounts
 
         /// <summary>
         /// The assets the source may pay in, at most 18; an issued currency without an issuer
-        /// means any issuer the source holds. When empty, every asset the source can send is tried.
+        /// means any issuer the source holds, and an MPT is named by its issuance ID alone. When
+        /// empty, every asset the source can send is tried, the MPTs it issues or holds among them.
         /// </summary>
         public IReadOnlyList<IssuedCurrency> SourceCurrencies { get; init; } = Array.Empty<IssuedCurrency>();
 
@@ -128,7 +129,7 @@ namespace Xrpl.Amounts
             string dst = request.DestinationAccount;
             XrplAmount dstAmount = request.DestinationAmount;
             IssuedCurrency dstAsset = dstAmount.Asset;
-            string dstCurrency = PathCurrency.Normalize(dstAmount.Kind == AmountKind.Xrp ? "XRP" : dstAsset.Currency);
+            string dstCurrency = PathCurrency.Of(dstAsset);
             bool convertAll = dstAmount == Pathfinder.MinusOne(dstCurrency, dstAmount.Kind == AmountKind.Xrp ? string.Empty : dstAsset.Issuer);
 
             // parseJson
@@ -141,7 +142,7 @@ namespace Xrpl.Amounts
                 if (!convertAll)
                     return Error("dstAmtMalformed");
 
-                string maxCurrency = PathCurrency.Normalize(max.Kind == AmountKind.Xrp ? "XRP" : max.Asset.Currency);
+                string maxCurrency = PathCurrency.Of(max.Asset);
                 XrplAmount minusOne = Pathfinder.MinusOne(maxCurrency, max.Kind == AmountKind.Xrp ? string.Empty : max.Asset.Issuer);
                 if (StepMath.IsNotPositive(max) && max != minusOne)
                     return Error("sendMaxMalformed");
@@ -174,20 +175,29 @@ namespace Xrpl.Amounts
                     if (line.Balance < limit && !destinationCurrencies.Contains(currency))
                         destinationCurrencies.Add(currency);
                 }
+
+                // Every MPT it issues or holds an MPToken of, maxed out or not.
+                foreach (PathfindMpt mpt in await source.MptsAsync(dst, cancellationToken).ConfigureAwait(false))
+                {
+                    if (!destinationCurrencies.Contains(mpt.MptIssuanceId))
+                        destinationCurrencies.Add(mpt.MptIssuanceId);
+                }
             }
 
             // findPaths: the source's own assets when none are given.
             if (sourceAssets.Count == 0)
             {
                 bool sameAccount = src == dst;
-                foreach (string currency in await SourceCurrenciesAsync(cache, src, cancellationToken).ConfigureAwait(false))
+                foreach (string currency in await SourceCurrenciesAsync(source, cache, src, cancellationToken).ConfigureAwait(false))
                 {
                     if (sameAccount && currency == dstCurrency)
                         continue;
                     if (sourceAssets.Count >= MaxAutoSourceCurrencies)
                         return Error("internal");
 
-                    AssetId asset = currency == "XRP" ? AssetId.Xrp : new AssetId(currency, src);
+                    AssetId asset = currency == "XRP" ? AssetId.Xrp
+                        : PathCurrency.IsMpt(currency) ? AssetId.OfMpt(currency)
+                        : new AssetId(currency, src);
                     if (!sourceAssets.Contains(asset))
                         sourceAssets.Add(asset);
                 }
@@ -276,6 +286,20 @@ namespace Xrpl.Amounts
 
             foreach (IssuedCurrency entry in given)
             {
+                // An MPT is named by its issuance alone; an issuer with it is malformed.
+                if (entry != null && !string.IsNullOrEmpty(entry.MptIssuanceId))
+                {
+                    if (entry.Currency != null || entry.MptIssuanceId.Length != 48 || !entry.MptIssuanceId.All(Uri.IsHexDigit))
+                        return ("srcCurMalformed", assets);
+                    if (!string.IsNullOrEmpty(entry.Issuer))
+                        return ("srcIsrMalformed", assets);
+
+                    AssetId mpt = AssetId.OfMpt(entry.MptIssuanceId);
+                    if ((sendMax is not { } mptMax || AssetId.Of(mptMax.Asset) == mpt) && !assets.Contains(mpt))
+                        assets.Add(mpt);
+                    continue;
+                }
+
                 if (entry?.Currency == null)
                     return ("srcCurMalformed", assets);
 
@@ -329,8 +353,8 @@ namespace Xrpl.Amounts
             return (null, assets);
         }
 
-        /// <summary><c>accountSourceAssets</c>: XRP, and each currency the source holds or has credit left in.</summary>
-        private static async Task<List<string>> SourceCurrenciesAsync(LineCache cache, string account, CancellationToken cancellationToken)
+        /// <summary><c>accountSourceAssets</c>: XRP, each currency the source holds or has credit left in, and each MPT it can send.</summary>
+        private static async Task<List<string>> SourceCurrenciesAsync(PathfindingSource source, LineCache cache, string account, CancellationToken cancellationToken)
         {
             List<string> currencies = new List<string> { "XRP" };
             foreach (DexTrustLine line in await cache.RippleLinesAsync(account, outgoing: true, cancellationToken).ConfigureAwait(false) ?? new List<DexTrustLine>())
@@ -341,6 +365,12 @@ namespace Xrpl.Amounts
                 string currency = PathCurrency.Normalize(balance.Asset.Currency);
                 if (canSend && !currencies.Contains(currency))
                     currencies.Add(currency);
+            }
+
+            foreach (PathfindMpt mpt in await source.MptsAsync(account, cancellationToken).ConfigureAwait(false))
+            {
+                if (mpt.CanSend(account) && !currencies.Contains(mpt.MptIssuanceId))
+                    currencies.Add(mpt.MptIssuanceId);
             }
 
             return currencies;

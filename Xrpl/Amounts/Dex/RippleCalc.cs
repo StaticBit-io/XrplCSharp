@@ -51,15 +51,19 @@ namespace Xrpl.Amounts
                 : null;
 
             // A negative maximum of the delivered currency, issued by the source, is no maximum at all.
-            bool sameToken = XrplAmount.KindOf(maxAmount.Asset) == XrplAmount.KindOf(deliver.Asset) &&
-                             (XrplAmount.KindOf(maxAmount.Asset) == AmountKind.Xrp ||
-                              string.Equals(maxAmount.Asset.Currency, deliver.Asset.Currency, StringComparison.Ordinal));
+            AmountKind maxKind = XrplAmount.KindOf(maxAmount.Asset);
+            bool sameToken = maxKind == XrplAmount.KindOf(deliver.Asset) && maxKind switch
+            {
+                AmountKind.Xrp => true,
+                AmountKind.Mpt => XrplAmount.SameAsset(maxAmount.Asset, deliver.Asset),
+                _ => string.Equals(maxAmount.Asset.Currency, deliver.Asset.Currency, StringComparison.Ordinal),
+            };
             XrplAmount? sendMax = !maxAmount.IsNegative || !sameToken ||
-                                  !string.Equals(IssuerOf(maxAmount.Asset), source, StringComparison.Ordinal)
+                                  !string.Equals(DexAssets.Issuer(maxAmount.Asset), source, StringComparison.Ordinal)
                 ? maxAmount
                 : null;
 
-            IssuedCurrency sourceAsset = sendMax?.Asset ?? (deliver.Kind == AmountKind.Xrp
+            IssuedCurrency sourceAsset = sendMax?.Asset ?? (deliver.Kind != AmountKind.Iou
                 ? deliver.Asset
                 : new IssuedCurrency { Currency = deliver.Asset.Currency, Issuer = source });
 
@@ -102,8 +106,5 @@ namespace Xrpl.Amounts
 
         private static Output Failed(string result, IssuedCurrency sourceAsset, IssuedCurrency deliverAsset) =>
             new Output { Result = result, ActualIn = XrplAmount.Zero(sourceAsset), ActualOut = XrplAmount.Zero(deliverAsset) };
-
-        private static string IssuerOf(IssuedCurrency asset) =>
-            XrplAmount.KindOf(asset) == AmountKind.Xrp ? string.Empty : asset.Issuer;
     }
 }

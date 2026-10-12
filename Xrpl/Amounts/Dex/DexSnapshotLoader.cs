@@ -333,6 +333,10 @@ namespace Xrpl.Amounts
                             AddHolding(hop.Destination, DexAssets.Mpt(hop.Mpt));
                             break;
                         default:
+                            // A book from an asset to itself fails its strand (temBAD_PATH): nothing to read.
+                            if (XrplAmount.SameAsset(hop.In, hop.Out))
+                                break;
+
                             AddIssuer(accounts, hop.In);
                             AddIssuer(accounts, hop.Out);
                             AddHolding(null, hop.In);
@@ -495,6 +499,36 @@ namespace Xrpl.Amounts
                     .Select(token => Gated(() => MpTokenAsync(client, token.Account, token.Id, at, cancellationToken))))
                 .ConfigureAwait(false);
             List<DexMptHolding> holdingStates = holdingReads.Where(holding => holding != null).ToList();
+
+            // An issuance authorizing its holders through a permissioned domain: the domain and
+            // the credentials of each account whose MPToken was asked for decide who may hold it.
+            foreach (DexMptIssuance issuance in issuanceStates.Where(i => !string.IsNullOrEmpty(i.DomainId)))
+            {
+                DexDomain domain = domains.Find(d => string.Equals(d.DomainId, issuance.DomainId, StringComparison.OrdinalIgnoreCase));
+                if (domain == null)
+                {
+                    domain = await DomainAsync(client, issuance.DomainId, at, cancellationToken).ConfigureAwait(false);
+                    if (domain == null)
+                        continue;
+                    domains.Add(domain);
+                }
+
+                foreach ((string member, string id) in mpTokens)
+                {
+                    if (id != DexAssets.MptKey(issuance.MptIssuanceId))
+                        continue;
+
+                    foreach (DexCredentialType accepted in domain.AcceptedCredentials)
+                    {
+                        if (await CredentialAsync(client, new CredentialQuery { Subject = member, Issuer = accepted.Issuer, CredentialType = accepted.CredentialType }, at, cancellationToken)
+                                .ConfigureAwait(false) is { } credential &&
+                            !credentials.Exists(c => SameCredential(c, credential)))
+                        {
+                            credentials.Add(credential);
+                        }
+                    }
+                }
+            }
 
             if (unlimited)
             {

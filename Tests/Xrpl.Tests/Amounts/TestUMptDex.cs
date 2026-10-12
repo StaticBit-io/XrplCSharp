@@ -358,6 +358,51 @@ public class TestUMptDex
         }
     }
 
+    /// <summary>
+    /// An issuance authorizing through a permissioned domain: a holder whose MPToken the issuer
+    /// never authorized holds it by an accepted credential the domain takes, and not without one.
+    /// </summary>
+    [TestMethod]
+    public void Pay_DomainAuthorizesTheHolder()
+    {
+        string alice = XrplWallet.Generate().ClassicAddress, bob = XrplWallet.Generate().ClassicAddress, carol = XrplWallet.Generate().ClassicAddress;
+        const string domainId = "AAAA000000000000000000000000000000000000000000000000000000000001";
+        DexSnapshot Snapshot(bool bobHasCredential)
+        {
+            DexMptIssuance issuance = Issuance(UsdId, 1000, requireAuth: true);
+            List<DexCredential> credentials = new List<DexCredential>
+            {
+                new DexCredential { Subject = alice, Issuer = carol, CredentialType = "4B5943", Accepted = true },
+            };
+            if (bobHasCredential)
+                credentials.Add(new DexCredential { Subject = bob, Issuer = carol, CredentialType = "4B5943", Accepted = true });
+
+            return new DexSnapshot
+            {
+                ReserveBase = 10_000_000,
+                ReserveIncrement = 2_000_000,
+                Accounts = new[] { Account(alice), Account(bob), Account(carol), Account(Gw) },
+                MptIssuances = new[]
+                {
+                    new DexMptIssuance
+                    {
+                        MptIssuanceId = issuance.MptIssuanceId, Issuer = Gw, OutstandingAmount = 1000,
+                        CanTrade = true, CanTransfer = true, RequireAuth = true, DomainId = domainId,
+                    },
+                },
+                MptHoldings = new[] { Holding(alice, UsdId, 1000), Holding(bob, UsdId, 0) },
+                Domains = new[]
+                {
+                    new DexDomain { DomainId = domainId, Owner = Gw, AcceptedCredentials = new[] { new DexCredentialType { Issuer = carol, CredentialType = "4B5943" } } },
+                },
+                Credentials = credentials,
+            };
+        }
+
+        Assert.AreEqual("tesSUCCESS", PaymentFlow.Evaluate(Snapshot(true), Pay(alice, bob, Units(Usd, 10)), V2).EngineResult);
+        Assert.AreEqual("tecNO_AUTH", PaymentFlow.Evaluate(Snapshot(false), Pay(alice, bob, Units(Usd, 10)), V2).EngineResult);
+    }
+
     [TestMethod]
     public void Pay_LockedHolder()
     {
