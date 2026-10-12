@@ -641,7 +641,13 @@ namespace Xrpl.Client
         /// <param name="request">A <see cref="GetAggregatePriceRequest"/>.</param>
         /// <param name="cancellationToken">Cancellation token.</param>
         /// <returns>A <see cref="GetAggregatePriceResponse"/> response.</returns>
-        Task<XrplResponse<GetAggregatePriceResponse>> GetAggregatePrice(GetAggregatePriceRequest request, CancellationToken cancellationToken = default);
+        /// <remarks>
+        /// Defaulted, like <see cref="DroppedStreamMessages"/>: a request method added in a minor version
+        /// should not break external implementers of this interface, and <see cref="GRequest{T, R}"/> is
+        /// the whole implementation. <see cref="XrplClient"/> carries its own as well.
+        /// </remarks>
+        Task<XrplResponse<GetAggregatePriceResponse>> GetAggregatePrice(GetAggregatePriceRequest request, CancellationToken cancellationToken = default) =>
+            GRequest<GetAggregatePriceResponse, GetAggregatePriceRequest>(request, cancellationToken);
 
         /// <summary>
         /// The <c>book_changes</c> method reports the changes to the DEX order books in one ledger version:
@@ -651,7 +657,13 @@ namespace Xrpl.Client
         /// <param name="request">A <see cref="BookChangesRequest"/>.</param>
         /// <param name="cancellationToken">Cancellation token.</param>
         /// <returns>A <see cref="BookChangesResponse"/> response.</returns>
-        Task<XrplResponse<BookChangesResponse>> BookChanges(BookChangesRequest request, CancellationToken cancellationToken = default);
+        /// <remarks>
+        /// Defaulted, like <see cref="DroppedStreamMessages"/>: a request method added in a minor version
+        /// should not break external implementers of this interface, and <see cref="GRequest{T, R}"/> is
+        /// the whole implementation. <see cref="XrplClient"/> carries its own as well.
+        /// </remarks>
+        Task<XrplResponse<BookChangesResponse>> BookChanges(BookChangesRequest request, CancellationToken cancellationToken = default) =>
+            GRequest<BookChangesResponse, BookChangesRequest>(request, cancellationToken);
 
         /// <summary>
         /// The <c>manifest</c> method reports the current manifest of a validator.
@@ -660,7 +672,13 @@ namespace Xrpl.Client
         /// <param name="request">A <see cref="ManifestRequest"/>.</param>
         /// <param name="cancellationToken">Cancellation token.</param>
         /// <returns>A <see cref="ManifestResponse"/> response.</returns>
-        Task<XrplResponse<ManifestResponse>> Manifest(ManifestRequest request, CancellationToken cancellationToken = default);
+        /// <remarks>
+        /// Defaulted, like <see cref="DroppedStreamMessages"/>: a request method added in a minor version
+        /// should not break external implementers of this interface, and <see cref="GRequest{T, R}"/> is
+        /// the whole implementation. <see cref="XrplClient"/> carries its own as well.
+        /// </remarks>
+        Task<XrplResponse<ManifestResponse>> Manifest(ManifestRequest request, CancellationToken cancellationToken = default) =>
+            GRequest<ManifestResponse, ManifestRequest>(request, cancellationToken);
 
         /// <summary>
         /// The <c>version</c> method reports the range of API versions the server supports.
@@ -668,7 +686,13 @@ namespace Xrpl.Client
         /// </summary>
         /// <param name="cancellationToken">Cancellation token.</param>
         /// <returns>A <see cref="VersionResponse"/> response.</returns>
-        Task<XrplResponse<VersionResponse>> Version(CancellationToken cancellationToken = default);
+        /// <remarks>
+        /// Defaulted, like <see cref="DroppedStreamMessages"/>: a request method added in a minor version
+        /// should not break external implementers of this interface, and <see cref="GRequest{T, R}"/> is
+        /// the whole implementation. <see cref="XrplClient"/> carries its own as well.
+        /// </remarks>
+        Task<XrplResponse<VersionResponse>> Version(CancellationToken cancellationToken = default) =>
+            GRequest<VersionResponse, VersionRequest>(new VersionRequest(), cancellationToken);
 
         /// <summary>
         /// The <c>path_find</c> create sub-command creates an ongoing request to find possible paths
