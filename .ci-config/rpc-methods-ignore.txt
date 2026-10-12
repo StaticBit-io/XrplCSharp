@@ -56,6 +56,3 @@ tx_history              # deprecated: minApiVer = maxApiVer = 1; removed in API 
 submit_multisigned      # covered: the SDK serializes and combines signatures itself (Signer.Multisign, SubmitMulti) and sends the blob through `submit`; this method only takes tx_json for clients that cannot
 tx_reduce_relay         # internal: returns overlay relay metrics (TxReduceRelay.cpp), undocumented
 
-book_changes            # gap: public RPC method; the SDK only has the book_changes stream
-manifest                # gap: public server-info method
-version                 # gap: public server-info method (API versions)
