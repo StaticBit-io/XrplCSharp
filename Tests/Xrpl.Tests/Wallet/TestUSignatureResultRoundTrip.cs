@@ -14,9 +14,8 @@ namespace Xrpl.Tests.Wallet.Tests
     /// <summary>
     /// <see cref="SignatureResult.GetTx"/> decodes a signed blob back into a typed transaction,
     /// and anything the models do not declare disappears in that step. Signing the result then
-    /// produces a blob without it — which is how a co-signature got dropped: rippled and the
-    /// codec both carry <c>CounterpartySignature</c> and <c>SponsorSignature</c>, but no request
-    /// model declares either, and the co-signing docs recommended exactly this round trip.
+    /// produces a blob without it — which is how a co-signature got dropped before
+    /// <c>CounterpartySignature</c> and <c>SponsorSignature</c> were modelled.
     /// </summary>
     [TestClass]
     public class TestUSignatureResultRoundTrip
@@ -45,19 +44,35 @@ namespace Xrpl.Tests.Wallet.Tests
         }
 
         /// <summary>
-        /// The blob carries the co-signature, so the round trip must refuse rather than hand back
-        /// a transaction that silently lost it.
+        /// The blob carries a field the LoanSet model does not declare, so the round trip must
+        /// refuse rather than hand back a transaction that silently lost it.
         /// </summary>
         [TestMethod]
         public void TestUGetTxRefusesABlobCarryingAFieldNoModelDeclares()
         {
-            string blob = EncodeBlob(SignedLoanSetWithCounterpartySignature());
-            SignatureResult result = new SignatureResult(blob, new string('0', 64));
+            JsonObject tx = SignedLoanSetWithCounterpartySignature();
+            tx["Destination"] = "rBTwLga3i2gz3doX6Gva3MgEV8ZCD8jjah";
+            SignatureResult result = new SignatureResult(EncodeBlob(tx), new string('0', 64));
 
             ValidationException failure = Assert.ThrowsExactly<ValidationException>(() => result.GetTx());
 
-            StringAssert.Contains(failure.Message, "CounterpartySignature",
+            StringAssert.Contains(failure.Message, "Destination",
                 "the caller has to be told which member would have been lost, not merely that something was");
+            Assert.IsFalse(failure.Message.Contains("CounterpartySignature"), "the co-signature is modelled and is not lost");
+        }
+
+        /// <summary>
+        /// The co-signature is modelled, so a blob carrying it decodes and keeps it.
+        /// </summary>
+        [TestMethod]
+        public void TestUGetTxKeepsTheCounterpartySignature()
+        {
+            SignatureResult result = new SignatureResult(EncodeBlob(SignedLoanSetWithCounterpartySignature()), new string('0', 64));
+
+            LoanSet decoded = (LoanSet)result.GetTx();
+
+            Assert.AreEqual("AABBCC", decoded.CounterpartySignature.TxnSignature);
+            Assert.AreEqual(result.TxBlob, EncodeBlob(JsonNode.Parse(decoded.ToJson())!.AsObject()));
         }
 
         /// <summary>

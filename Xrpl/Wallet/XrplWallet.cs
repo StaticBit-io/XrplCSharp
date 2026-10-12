@@ -56,14 +56,11 @@ namespace Xrpl.Wallet
         /// </summary>
         /// <exception cref="ValidationException">
         /// The blob carries a top-level field no model property claims, so the returned object
-        /// would not represent it. Signing that object again produces a blob missing the field -
-        /// which is how a co-signature could be dropped: <c>CounterpartySignature</c> and
-        /// <c>SponsorSignature</c> exist in <c>definitions.json</c> and survive the codec, but no
-        /// request model declares them, so a round trip through here used to discard them
-        /// silently. Failing loudly is the point: the caller is told what would have been lost
-        /// rather than submitting a transaction the node will reject for a missing signature.
-        /// For those two flows use the blob-level helpers (<c>LoanSigningHelper.SubmitterSign</c>,
-        /// <c>SponsorSigningHelper.SubmitterSign</c>), which never leave the blob.
+        /// would not represent it. Signing that object again produces a blob missing the field.
+        /// Failing loudly is the point: the caller is told what would have been lost rather than
+        /// submitting a transaction the node will reject or read differently. The co-signatures
+        /// <c>CounterpartySignature</c> (LoanSet) and <c>SponsorSignature</c> are modelled and
+        /// kept, so a partially signed blob decodes and its submitter can sign the result.
         /// </exception>
         public ITransactionRequest GetTx()
         {
@@ -1310,11 +1307,11 @@ namespace Xrpl.Wallet
         /// var final = LoanSigningHelper.SubmitterSign(withCounterparty.TxBlob, submitterWallet);
         /// await client.SubmitRequest(final.TxBlob);
         /// </code>
-        /// Note the blob, not <c>GetTx()</c>: no request model declares
-        /// <c>CounterpartySignature</c>, so decoding into a typed transaction and signing that
-        /// would produce a blob without the co-signature. <c>SubmitterSign</c> stays at the blob
-        /// level, stripping the co-signature to compute the preimage and restoring it afterwards.
-        /// <see cref="SignatureResult.GetTx"/> now refuses such a blob rather than losing it.
+        /// <c>SubmitterSign</c> stays at the blob level, stripping the co-signature to compute the
+        /// preimage and restoring it afterwards. Decoding the blob with
+        /// <see cref="SignatureResult.GetTx"/> keeps the co-signature in
+        /// <see cref="ILoanSet.CounterpartySignature"/>, and the submitter's <c>Sign</c> of that
+        /// typed transaction produces the same blob.
         ///
         /// <b>V2 (parallel) — both sign independently, then combine:</b>
         /// <code>
