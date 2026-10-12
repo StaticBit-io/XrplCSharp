@@ -356,6 +356,8 @@ await client.SubmitAndWait(manageTx, walletBroker, true);
 - `tfLoanImpair` — mark loan as impaired
 - `tfLoanUnimpair` — restore loan from impaired state
 
+A `LoanManage` with no action flag is valid and leaves the loan unchanged.
+
 ### 5. Delete the Loan Broker
 
 When the broker has no outstanding loans:
@@ -615,7 +617,7 @@ Fields read from the ledger arrive in the form rippled writes them, for example 
        throw new Exception($"Transaction failed: {result.Meta?.TransactionResult}");
    ```
 
-7. **LoanManage flags are mutually exclusive** — only set one of `tfLoanDefault`, `tfLoanImpair`, or `tfLoanUnimpair` per transaction.
+7. **LoanManage flags are mutually exclusive** — set at most one of `tfLoanDefault`, `tfLoanImpair`, or `tfLoanUnimpair` per transaction.
 
 8. **LoanPay flags are mutually exclusive** — `tfLoanOverpayment`, `tfLoanFullPayment`, and `tfLoanLatePayment` cannot be combined. Note that `tfLoanOverpayment` may require specific broker/loan configuration to be permitted.
 

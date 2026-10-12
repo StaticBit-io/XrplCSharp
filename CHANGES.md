@@ -16,6 +16,8 @@
 * `LoanSigningHelper.SubmitterSign` replaces `BrokerSign`, which is `[Obsolete]` and forwards to it
 * Docs: `ILoanSet.Counterparty`, `LoanSet`, `LoanSigningHelper`, `XrplWallet.SignAsLoanCounterparty` and `LendingProtocol-Guide` (both languages) describe the two roles
 * Tests: `TestULoanSigningRoles`; `TestILoanBorrowerSubmits` submits a LoanSet from the borrower with `Counterparty` set to the broker owner, with it omitted, and with the broker owner signing first, gated on `AmendmentGuard.LendingProtocol`
+* `Validation.ValidateLoanManage` accepts a LoanManage with no action flag, as rippled's `LoanManage::preflight` does: it rejects only more than one of `tfLoanDefault`, `tfLoanImpair` and `tfLoanUnimpair` (`temINVALID_FLAG`), and `doApply` treats none as a no-op (#277). It refused a transaction with `Flags` absent, zero, or carrying only `tfInnerBatchTxn`. `LoanManage`, `LoanManageFlags` and `LendingProtocol-Guide` document the no-op
+* Tests: `TestULoanManage`
 
 ## 11.13.0.0 11/10/2026
 

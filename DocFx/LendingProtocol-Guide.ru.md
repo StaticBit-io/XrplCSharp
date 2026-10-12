@@ -356,6 +356,8 @@ await client.SubmitAndWait(manageTx, walletBroker, true);
 - `tfLoanImpair` — отметить кредит как обесценённый
 - `tfLoanUnimpair` — восстановить кредит из обесценённого состояния
 
+`LoanManage` без флага действия допустима и не меняет кредит.
+
 ### 5. Удаление кредитного брокера
 
 Когда у брокера нет активных кредитов:
@@ -615,7 +617,7 @@ foreach (var obj in response.AccountObjectList)
        throw new Exception($"Транзакция не удалась: {result.Meta?.TransactionResult}");
    ```
 
-7. **Флаги LoanManage взаимоисключающие** — устанавливайте только один из `tfLoanDefault`, `tfLoanImpair` или `tfLoanUnimpair`.
+7. **Флаги LoanManage взаимоисключающие** — устанавливайте не более одного из `tfLoanDefault`, `tfLoanImpair` или `tfLoanUnimpair`.
 
 8. **Флаги LoanPay взаимоисключающие** — `tfLoanOverpayment`, `tfLoanFullPayment` и `tfLoanLatePayment` нельзя комбинировать. `tfLoanOverpayment` может требовать специальной настройки брокера/кредита.
 
