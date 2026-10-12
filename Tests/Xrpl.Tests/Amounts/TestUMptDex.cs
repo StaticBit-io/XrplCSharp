@@ -236,6 +236,19 @@ public class TestUMptDex
         Assert.IsNull(result.PlacedTakerPays);
     }
 
+    /// <summary>
+    /// An MPT side needs MPTokensV2, in the amounts overload as in the transaction one: before it,
+    /// the node refuses the offer in preflight (temDISABLED) and nothing is crossed or charged.
+    /// </summary>
+    [TestMethod]
+    public void Cross_MptBeforeMPTokensV2_IsDisabled()
+    {
+        OfferCrossingResult result = OfferCreateCrossing.Cross(MakerBook(Issuance(UsdId, 1000)), Alice, Units(Usd, 40), Drops(400_000), Fee, rules: BeforeV2);
+
+        Assert.AreEqual("temDISABLED", result.EngineResult);
+        Assert.IsEmpty(result.BalanceChanges);
+    }
+
     [TestMethod]
     public void Cross_CreatesTheTakersMpToken()
     {

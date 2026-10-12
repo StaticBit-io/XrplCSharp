@@ -75,7 +75,13 @@ namespace Xrpl.Amounts
                 Fee = fee,
                 Flags = flags,
             };
-            return Apply(snapshot, order, rules ?? new LedgerRules());
+
+            // The same preflight as the transaction overload: without it an MPT side crossed while
+            // MPTokensV2 is off, where the node answers temDISABLED.
+            rules ??= new LedgerRules();
+            return Preflight(order, rules) is { } malformed
+                ? NotApplied(malformed, order)
+                : Apply(snapshot, order, rules);
         }
 
         /// <summary>What <paramref name="offer"/> would do against <paramref name="snapshot"/>.</summary>
