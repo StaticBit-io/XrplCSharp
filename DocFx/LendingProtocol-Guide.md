@@ -378,6 +378,13 @@ await client.SubmitAndWait(deletebrokerTx, walletBroker, true);
 
 The SDK provides `LoanSigningHelper` and `XrplWallet.SignAsLoanCounterparty()` with three signing patterns, analogous to Batch signing (V1/V2/V3).
 
+The two roles are the **submitter** (`Account`) and the **counterparty** (`Counterparty`, or the LoanBroker's owner when the field is omitted). One of them must be the broker owner and the other one is the borrower, so either party can submit:
+
+- the broker owner submits with `Counterparty` set to the borrower, and the borrower co-signs;
+- the borrower submits, `Counterparty` is the broker owner or omitted, and the broker owner co-signs.
+
+The examples below use the first arrangement. For the second, swap the wallets: the borrower prepares and submits, and the broker owner signs as counterparty. `LoanSigningHelper.SignLoanSet` accepts the two wallets in either order and assigns the roles by `Account`; its overload with a `brokerOwner` argument also checks the counterparty when `Counterparty` is omitted.
+
 ### Preparation (Common to All Patterns)
 
 ```csharp
@@ -431,12 +438,12 @@ SignatureResult withCounterparty = borrowerWallet.SignAsLoanCounterparty(txDict)
 // withCounterparty.TxBlob is sent to the broker (e.g. via API, QR code, etc.)
 
 // Step 2: Broker receives the partially signed blob, adds TxnSignature
-SignatureResult fullySigned = LoanSigningHelper.BrokerSign(
+SignatureResult fullySigned = LoanSigningHelper.SubmitterSign(
     withCounterparty.TxBlob, brokerWallet);
 await client.SubmitRequest(fullySigned.TxBlob);
 ```
 
-> **Important:** Do not use `brokerWallet.Sign()` on a partially signed LoanSet blob — it does not handle `CounterpartySignature` correctly. Always use `LoanSigningHelper.BrokerSign()` for the V3 pattern.
+> **Important:** Do not use `brokerWallet.Sign()` on a partially signed LoanSet blob — it does not handle `CounterpartySignature` correctly. Always use `LoanSigningHelper.SubmitterSign()` for the V3 pattern.
 
 ### Multisig Borrower (Counterparty with a SignerList)
 

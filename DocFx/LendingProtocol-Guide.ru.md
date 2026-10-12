@@ -378,6 +378,13 @@ await client.SubmitAndWait(deleteBrokerTx, walletBroker, true);
 
 SDK предоставляет `LoanSigningHelper` и `XrplWallet.SignAsLoanCounterparty()` с тремя паттернами подписи, аналогичными Batch signing (V1/V2/V3).
 
+Роли две: **отправитель** (`Account`) и **контрагент** (`Counterparty`, а если поле не задано — владелец LoanBroker). Один из них должен быть владельцем брокера, другой — заёмщиком, поэтому отправить транзакцию может любая сторона:
+
+- владелец брокера отправляет с `Counterparty`, равным заёмщику, и заёмщик подписывает как контрагент;
+- заёмщик отправляет, `Counterparty` — владелец брокера или не задан, и владелец брокера подписывает как контрагент.
+
+Примеры ниже используют первый вариант. Для второго поменяйте кошельки местами: заёмщик готовит и отправляет транзакцию, владелец брокера подписывает как контрагент. `LoanSigningHelper.SignLoanSet` принимает два кошелька в любом порядке и назначает роли по `Account`; перегрузка с аргументом `brokerOwner` дополнительно проверяет контрагента, когда `Counterparty` не задан.
+
 ### Подготовка (общая для всех паттернов)
 
 ```csharp
@@ -431,12 +438,12 @@ SignatureResult withCounterparty = borrowerWallet.SignAsLoanCounterparty(txDict)
 // withCounterparty.TxBlob передаётся брокеру (через API, QR-код и т.д.)
 
 // Шаг 2: Брокер получает частично подписанный blob, добавляет TxnSignature
-SignatureResult fullySigned = LoanSigningHelper.BrokerSign(
+SignatureResult fullySigned = LoanSigningHelper.SubmitterSign(
     withCounterparty.TxBlob, brokerWallet);
 await client.SubmitRequest(fullySigned.TxBlob);
 ```
 
-> **Важно:** Не используйте `brokerWallet.Sign()` для частично подписанного LoanSet blob — он не обрабатывает `CounterpartySignature` корректно. Всегда используйте `LoanSigningHelper.BrokerSign()` для паттерна V3.
+> **Важно:** Не используйте `brokerWallet.Sign()` для частично подписанного LoanSet blob — он не обрабатывает `CounterpartySignature` корректно. Всегда используйте `LoanSigningHelper.SubmitterSign()` для паттерна V3.
 
 ### Заёмщик с мультиподписью (Counterparty со SignerList)
 

@@ -31,8 +31,9 @@ namespace Xrpl.Models.Transactions
 
     /// <summary>
     /// The LoanSet transaction creates a new loan associated with a loan broker.
-    /// The borrower (Counterparty) must co-sign via CounterpartySignature unless
-    /// this transaction is part of a Batch.
+    /// Two parties sign it: the submitting <c>Account</c> and the counterparty, who co-signs via
+    /// CounterpartySignature unless this transaction is part of a Batch. One of them is the
+    /// LoanBroker's owner and the other is the borrower, in either role.
     /// </summary>
     /// <remarks>Requires the Loan amendment (XLS-66d). This feature is in draft and subject to change.</remarks>
     public interface ILoanSet : ITransactionCommon
@@ -48,7 +49,11 @@ namespace Xrpl.Models.Transactions
         string LoanBrokerID { get; set; }
 
         /// <summary>
-        /// The borrower account (counterparty to the loan).
+        /// The counterparty: the account that co-signs via CounterpartySignature. Optional; when
+        /// omitted the counterparty is the LoanBroker's owner. One of <c>Account</c> and the
+        /// counterparty must be the broker owner, and the other one is the borrower - so this is
+        /// the borrower when the broker owner submits, and the broker owner (or omitted) when the
+        /// borrower submits. Required on a LoanSet inside a Batch.
         /// </summary>
         string Counterparty { get; set; }
 
