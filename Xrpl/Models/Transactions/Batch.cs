@@ -123,21 +123,15 @@ public sealed class BatchResponse : TransactionResponse, IBatch
 public partial class Validation
 {
     /// <summary>
-    /// Transaction types rippled forbids inside a Batch
-    /// (Batch::preflight kDisabledTxTypes → temINVALID_INNER_BATCH).
-    /// </summary>
-    private static readonly HashSet<string> DisabledInnerTxTypes = new HashSet<string>(StringComparer.OrdinalIgnoreCase)
-    {
-        "VaultCreate", "VaultSet", "VaultDelete", "VaultDeposit", "VaultWithdraw", "VaultClawback",
-        "LoanBrokerSet", "LoanBrokerDelete", "LoanBrokerCoverDeposit", "LoanBrokerCoverWithdraw", "LoanBrokerCoverClawback",
-        "LoanSet", "LoanDelete", "LoanManage", "LoanPay",
-    };
-
-    /// <summary>
     /// Verify the form and type of a Batch at runtime, following rippled's Batch::preflight:
-    /// between 2 and 8 inner transactions, no nested Batch, no type from kDisabledTxTypes,
-    /// and every inner carrying tfInnerBatchTxn with Fee "0" and an empty SigningPubKey.
+    /// between 2 and 8 inner transactions, no nested Batch, and every inner carrying
+    /// tfInnerBatchTxn with Fee "0" and an empty SigningPubKey.
     /// </summary>
+    /// <remarks>
+    /// Vault, LoanBroker and Loan inners are not rejected. rippled refuses them
+    /// (kDisabledTxTypes → temINVALID_INNER_BATCH) only while LendingProtocolV1_2 is not
+    /// enabled, and this check has no ledger rules to tell; the node decides.
+    /// </remarks>
     /// <param name="tx">A Batch Transaction.</param>
     /// <exception cref="ArgumentException">When the Batch is malformed.</exception>
     public static void ValidateBatch(Dictionary<string, object> tx)
@@ -198,13 +192,6 @@ public partial class Validation
                 string.Equals(innerType, "Batch", StringComparison.OrdinalIgnoreCase))
             {
                 throw new ArgumentException($"Batch: RawTransactions[{i}] cannot be a Batch transaction (nesting is not allowed).");
-            }
-
-            // rippled Batch::preflight kDisabledTxTypes: every Vault and Loan
-            // transaction type is rejected as an inner tx (temINVALID_INNER_BATCH)
-            if (DisabledInnerTxTypes.Contains(innerType))
-            {
-                throw new ArgumentException($"Batch: RawTransactions[{i}] TransactionType '{innerType}' is not allowed inside Batch (rippled kDisabledTxTypes).");
             }
 
             if (!innerTx.TryGetValue("Flags", out var flagsObj) ||

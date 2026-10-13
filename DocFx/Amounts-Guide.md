@@ -2,7 +2,7 @@
 
 This guide covers the amount arithmetic of the XRP Ledger in the XrplCSharp SDK. `XrplAmount` holds an amount the way rippled's `STAmount` does. `XrplAmountMath` repeats the node's arithmetic on it, including the directed rounding used when offers cross. `XrplQuality` is the exchange rate of an offer, and `OfferCrossing` sizes what one offer contributes to a payment or an `OfferCreate`. `OfferCreateCrossing` crosses a whole `OfferCreate` against the order books and AMM pools it reaches, and `PaymentFlow` runs a `Payment` along its paths. `DexQuoteSugar` quotes both against a node's ledger, and `PathFinding` finds a payment's paths as `ripple_path_find` does.
 
-Every result matches rippled 3.4.0 bit for bit: mantissa, exponent and sign. The tests replay 8,808 vectors produced by rippled's own code, rebuild the offer crossings of rippled's `AMM_test.cpp`, and compare offer crossings with a live node.
+Every result matches rippled 3.4.1 bit for bit: mantissa, exponent and sign. The tests replay 8,808 vectors produced by rippled's own code, rebuild the offer crossings of rippled's `AMM_test.cpp`, and compare offer crossings with a live node.
 
 ## Table of Contents
 
@@ -164,7 +164,7 @@ The trading fee is in units of 1/100,000, so 1000 is 1%. On two strands the engi
 
 ## Crossing an OfferCreate
 
-`OfferCreateCrossing.Cross` runs an `OfferCreate` the way rippled 3.4.0's payment engine runs it, against a `DexSnapshot` of the ledger:
+`OfferCreateCrossing.Cross` runs an `OfferCreate` the way rippled 3.4.1's payment engine runs it, against a `DexSnapshot` of the ledger:
 
 - **Strands.** The engine crosses the direct book. When neither side is XRP, it also crosses a bridge through XRP - two books in a row - and on each pass takes the strand with the better quality.
 - **Book walk.** Each pass takes the offers of one quality level, in book order. On the way it removes offers that are expired, empty, deep-frozen, unfunded, or too small to keep their quality. Each owner pays from what it still holds after the transaction's earlier transfers, since funds received during a transaction cannot be spent in it.
@@ -235,11 +235,11 @@ Each pass takes the liquidity of one quality from the best strand. Within a pass
 
 `DexSnapshot.FromNodeAsync` reads everything at one ledger: the books the crossing can reach, the pools on them, the accounts and trust lines it reads, and the offer `OfferSequence` cancels. [Reading Books from a Node](#reading-books-from-a-node) explains how deep. A snapshot can also be built by hand, as the unit tests do.
 
-The result is exact against the snapshot. The transaction lands in a later ledger, whose state can differ, so `simulate` stays the reference before submitting. Not covered: MPT books and sponsored reserves. A payment is evaluated by [`PaymentFlow`](#evaluating-a-payment).
+The result is exact against the snapshot. The transaction lands in a later ledger, whose state can differ, so `simulate` stays the reference before submitting. MPT books are crossed as the node crosses them; see [MPTs on the DEX](#mpts-on-the-dex). Not covered: sponsored reserves. A payment is evaluated by [`PaymentFlow`](#evaluating-a-payment).
 
 ## Evaluating a Payment
 
-`PaymentFlow.Evaluate` runs a `Payment` against a `DexSnapshot` the way rippled 3.4.0 applies it. It takes the SDK's own `Payment` model, with its `Fee`, `SendMax`, `DeliverMin`, `Paths` and flags.
+`PaymentFlow.Evaluate` runs a `Payment` against a `DexSnapshot` the way rippled 3.4.1 applies it. It takes the SDK's own `Payment` model, with its `Fee`, `SendMax`, `DeliverMin`, `Paths` and flags.
 
 - **Checks.** The malformed payments of `preflight` (`temBAD_AMOUNT`, `temREDUNDANT`, the `temBAD_SEND_XRP_*` codes, `temMALFORMED` for a bad `CredentialIDs` or `DomainID`), the destination checks of `preclaim` (`tecNO_DST`, `tecNO_DST_INSUF_XRP`, `tecDST_TAG_NEEDED`), the credentials presented and the domain (see [Permissioned Domains and Credentials](#permissioned-domains-and-credentials)), then deposit authorization.
 - **Strands.** Each path, and the default path unless `tfNoDirectRipple` is set, becomes a strand: the source, SendMax's issuer, the path, a book to the delivered asset and its issuer, the destination. A malformed or looping path is refused with the node's `temBAD_PATH` or `temBAD_PATH_LOOP`.
@@ -266,7 +266,24 @@ PaymentFlowResult result = PaymentFlow.Evaluate(snapshot, payment, rules);
 // result.BalanceChanges, result.Offers, result.Pools: what the payment changed
 ```
 
-`DexSnapshot.FromNodeAsync(client, payment)` reads, at one ledger, the trust lines along every path the payment can take, the books and pools on them, the accounts, the destination's preauthorizations, the credentials the payment presents, and its domain. The paths come with the payment: from `ripple_path_find`, or from the local [path finder](#finding-paths). Not covered: MPT payments and sponsored reserves.
+`DexSnapshot.FromNodeAsync(client, payment)` reads, at one ledger, the trust lines along every path the payment can take, the books and pools on them, the accounts, the destination's preauthorizations, the credentials the payment presents, and its domain. The paths come with the payment: from `ripple_path_find`, or from the local [path finder](#finding-paths). Not covered: sponsored reserves.
+
+## MPTs on the DEX
+
+Under the `MPTokensV2` amendment (XLS-82) an MPT trades in order books and AMM pools, and a payment delivers it through them. `OfferCreateCrossing`, `PaymentFlow` and `PathFinding` follow rippled 3.4.1 here too:
+
+- **Strands.** An MPT moves only between its issuer and a holder, at an end of a strand (`MPTEndpointStep`). A payment between two holders goes through the issuer; a path element may name an MPT book, but no account follows it, since an MPT does not ripple.
+- **Transfer fee.** The issuance's `TransferFee` is charged when the MPT is issued after a step that redeemed it, rounded up: crossing an offer, its owner pays it on what it gives; paying, the sender does. A `SendMax` of the MPT itself must allow for it.
+- **Checks.** A book refuses an MPT without `lsfMPTCanTrade` (`tecNO_PERMISSION`); holders exchange one only with `lsfMPTCanTransfer`; a locked issuance or holding refuses (`tecLOCKED`, or `terLOCKED` in a strand, which a payment charges as `tecPATH_DRY`); an issuance with `lsfMPTRequireAuth` needs the holder authorized.
+- **Funds.** A holder spends what its MPToken holds, less what it received during the transaction. The issuer of an MPT can issue up to `MaximumAmount`: its own offers give no more than that, and a payment it starts issues no more.
+- **MPTokens.** An account that buys an MPT it holds none of gets an MPToken, one more object it owns; `MpTokens` in the result lists them.
+- **Balances.** `BalanceChanges` reports each holder's change and the issuer's as the negated change of `OutstandingAmount`, as `BalanceChanges.GetBalanceChanges` reads the metadata.
+
+Before `MPTokensV2`, an MPT payment is direct only: no paths, no other asset, and the fee charged on top between holders. `PaymentFlow` evaluates that form too.
+
+`DexSnapshot.FromNodeAsync` reads each issuance the transaction reaches into `MptIssuances` and the MPTokens of the accounts involved into `MptHoldings`. A snapshot built by hand lists them the same way.
+
+`LedgerRules.FromNodeAsync` reads the amendments the ledger records. A standalone node that runs `MPTokensV2` as a `[features]` preset applies it without recording it, so the rules for such a node set `MPTokensV2` by hand.
 
 ## Permissioned Domains and Credentials
 
@@ -339,7 +356,7 @@ A `PaymentQuote.Payment` is ready to autofill, sign and submit: against an uncha
 
 ## Finding Paths
 
-`PathFinding.FindAsync` finds a payment's paths the way rippled 3.4.0's `ripple_path_find` does: its `PathRequest` and `Pathfinder` - the table of path shapes for each kind of payment, accounts and books added link by link, candidate accounts ranked by the ways they lead on, every complete path run through the payment engine and ranked by quality, liquidity and length - then the cost of the best ones.
+`PathFinding.FindAsync` finds a payment's paths the way rippled 3.4.1's `ripple_path_find` does: its `PathRequest` and `Pathfinder` - the table of path shapes for each kind of payment, accounts and books added link by link, candidate accounts ranked by the ways they lead on, every complete path run through the payment engine and ranked by quality, liquidity and length - then the cost of the best ones.
 
 A search runs over a `PathfindingSource`: a `DexSnapshot`, or a node read at one ledger. It also needs the order books, which the node keeps in an index of its own and a client supplies as an `IBookIndex`:
 

@@ -1,0 +1,58 @@
+# rippled RPC methods the SDK deliberately has no request model for.
+#
+# Read by .ci-config/check-rpc-methods.sh, which compares the method names in rippled's
+# src/xrpld/rpc/MethodNames.h with the `Command = "..."` values under Xrpl/. A rippled method
+# that is neither implemented nor listed here fails the check.
+#
+# One method per line: `name  # category: reason`. The category is the first word after `#`:
+#
+#   admin       Role::ADMIN in the dispatch table (src/xrpld/rpc/detail/Handler.cpp)
+#   signing     admin-only unless the node enables public signing; the SDK signs locally
+#   cli         command-line wrapper, never dispatched as an RPC method
+#   deprecated  documented as deprecated on xrpl.org, or registered for API v1 only
+#   internal    public role but undocumented; reports node internals
+#   covered     public, but what it does the SDK already does another way
+#   gap         public and documented, not implemented yet. Listed so the check stays a
+#               signal for methods nobody has looked at; reported as GAP on every run
+#
+# An entry for a method that is now implemented or no longer exists upstream is reported as
+# STALE and fails the check, so the list cannot outlive what it describes.
+
+blacklist               # admin: Role::ADMIN
+can_delete              # admin: Role::ADMIN, online deletion control
+connect                 # admin: Role::ADMIN, peer management
+consensus_info          # admin: Role::ADMIN
+fetch_info              # admin: Role::ADMIN
+get_counts              # admin: Role::ADMIN
+ledger_accept           # admin: Role::ADMIN, standalone mode only
+ledger_cleaner          # admin: Role::ADMIN
+ledger_request          # admin: Role::ADMIN
+log_level               # admin: Role::ADMIN
+logrotate               # admin: Role::ADMIN
+peer_reservations_add   # admin: Role::ADMIN
+peer_reservations_del   # admin: Role::ADMIN
+peer_reservations_list  # admin: Role::ADMIN
+peers                   # admin: Role::ADMIN
+print                   # admin: Role::ADMIN
+stop                    # admin: Role::ADMIN
+unl_list                # admin: Role::ADMIN
+validation_create       # admin: Role::ADMIN
+validator_info          # admin: Role::ADMIN
+validator_list_sites    # admin: Role::ADMIN
+validators              # admin: Role::ADMIN
+wallet_propose          # admin: Role::ADMIN; key generation is XrplWallet
+
+sign                    # signing: admin-only by default (xrpl.org); XrplWallet signs locally
+sign_for                # signing: admin-only by default (xrpl.org); XrplWallet signs locally
+
+internal                # cli: command-line wrapper (MethodNames.h), not in the dispatch table
+json                    # cli: command-line wrapper, "exclusive to the Commandline client" (xrpl.org)
+json2                   # cli: command-line wrapper (MethodNames.h), not in the dispatch table
+
+ledger_header           # deprecated: minApiVer = maxApiVer = 1; xrpl.org says use `ledger`
+owner_info              # deprecated: xrpl.org says use `account_objects`
+tx_history              # deprecated: minApiVer = maxApiVer = 1; removed in API v2
+
+submit_multisigned      # covered: the SDK serializes and combines signatures itself (Signer.Multisign, SubmitMulti) and sends the blob through `submit`; this method only takes tx_json for clients that cannot
+tx_reduce_relay         # internal: returns overlay relay metrics (TxReduceRelay.cpp), undocumented
+

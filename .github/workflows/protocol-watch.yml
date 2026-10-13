@@ -11,16 +11,19 @@ name: Protocol Watch
 # TxFlags.h (transaction flags), TER.h (result codes) and LedgerFormats.h
 # (lsf ledger-object flags, vendored as a test fixture and diffed by
 # TestULedgerFlagsConformance, which compares against a pinned copy and so
-# cannot notice upstream moving on its own).
+# cannot notice upstream moving on its own) - and the two RPC method registries:
+# MethodNames.h (every method name) and handlers/Handlers.h (the handler
+# declarations), so a new or removed method lands as a diff too.
 #
 # State lives in the tracking issue body (labeled protocol-watch), not in the
 # repo and not in actions cache: no commits through branch protection, no
 # cache eviction. The baseline JSON is keyed by full path.
 #
 # A second watch runs the same comparison over the rippled sources the
-# Xrpl.Amounts payment engine is ported from (engine-watch): the steps, the
-# offer stream, the AMM helpers, STAmount / IOUAmount / Number arithmetic,
-# Quality, PaymentSandbox, and the OfferCreate and Payment transactors with the
+# Xrpl.Amounts payment engine is ported from (engine-watch): the steps - the
+# MPT endpoint among them - the offer stream, the AMM helpers, STAmount /
+# IOUAmount / MPTAmount / Number arithmetic, Quality, PaymentSandbox, the token
+# and MPToken helpers, and the OfferCreate and Payment transactors with the
 # helpers they call. The port is exact to the last digit only while these files
 # stay as they were at the ported release, so any change to them is a decision
 # the port has to follow. Its baseline starts from that release (BASELINE_REF)
@@ -31,6 +34,12 @@ name: Protocol Watch
 # node against develop's features.macro and goes red when one is retired or no
 # longer registered. A retired amendment is always on in the node while the
 # ledger, and so the `feature` command, may still report it disabled.
+#
+# Another job (rpc-methods) compares every method name in develop's
+# src/xrpld/rpc/MethodNames.h with the SDK's request models and goes red when one
+# is neither implemented nor listed in .ci-config/rpc-methods-ignore.txt. The
+# diffs above report only what moves after their baseline; this compares the full
+# lists, so a method added before the baseline cannot stay unnoticed.
 
 on:
   schedule:
@@ -61,7 +70,7 @@ jobs:
             description: rippled develop protocol tracking
             what: Protocol definitions
             baseline_ref: ''
-            follow_up: 'sync `definitions.json` (`server_definitions` diff), new amendments for the nightly stand config, new transaction/ledger-object fields, flags or result codes for the models.'
+            follow_up: 'sync `definitions.json` (`server_definitions` diff), new amendments for the nightly stand config, new transaction/ledger-object fields, flags or result codes for the models, new or removed RPC methods (request models in `Xrpl/Models/Methods`, `.ci-config/rpc-methods-ignore.txt`).'
             # Explicit watch list — full repo-relative paths, one per line
             watch: |
               include/xrpl/protocol/detail/features.macro
@@ -72,19 +81,22 @@ jobs:
               include/xrpl/protocol/TxFlags.h
               include/xrpl/protocol/TER.h
               include/xrpl/protocol/LedgerFormats.h
+              src/xrpld/rpc/MethodNames.h
+              src/xrpld/rpc/handlers/Handlers.h
           - label: engine-watch
             title: 'Engine watch: rippled develop payment engine'
             description: rippled develop payment engine tracking
             what: Payment engine sources
             # The release Xrpl.Amounts is ported from; bump it with the port.
-            baseline_ref: '3.4.0'
-            follow_up: 'port the change to `Xrpl/Amounts` (steps in `Dex/FlowSteps.cs`, `Dex/BookCrossingStep.cs`, `Dex/StrandBuilder.cs`, `Dex/StrandFlow.cs`; pools in `Dex/AmmSwap.cs`, `Dex/AmmBookLiquidity.cs`; the view in `Dex/DexView.cs`; the transactors in `Dex/OfferCreateCrossing.cs`, `Dex/PaymentFlow.cs`; the path finder in `Paths/Pathfinder.cs`, `Paths/PathFinding.cs`, `Paths/BookIndex.cs`; the rules read outside a transaction in `LedgerRules`; arithmetic in `XrplAmountMath.cs`, `XrplQuality.cs`, `XrplNumber`), gate it on its amendment in `LedgerRules`, extend the replayed rippled tests, and rerun `TestIBookCrossing*`, `TestIPaymentFlow`, `TestIOfferCreateChecks`, `TestIPermissionedDex`, `TestIDexQuotes` and `TestIPathFinding` against a stand on the new build.'
+            baseline_ref: '3.4.1'
+            follow_up: 'port the change to `Xrpl/Amounts` (steps in `Dex/FlowSteps.cs`, `Dex/BookCrossingStep.cs`, `Dex/StrandBuilder.cs`, `Dex/StrandFlow.cs`; pools in `Dex/AmmSwap.cs`, `Dex/AmmBookLiquidity.cs`; the view in `Dex/DexView.cs`; the transactors in `Dex/OfferCreateCrossing.cs`, `Dex/PaymentFlow.cs`; the path finder in `Paths/Pathfinder.cs`, `Paths/PathFinding.cs`, `Paths/BookIndex.cs`; the rules read outside a transaction in `LedgerRules`; arithmetic in `XrplAmountMath.cs`, `XrplQuality.cs`, `XrplNumber`), gate it on its amendment in `LedgerRules`, extend the replayed rippled tests, and rerun `TestIBookCrossing*`, `TestIPaymentFlow`, `TestIOfferCreateChecks`, `TestIPermissionedDex`, `TestIDexQuotes`, `TestIMptDex` and `TestIPathFinding` against a stand on the new build.'
             watch: |
               src/libxrpl/tx/paths/AMMLiquidity.cpp
               src/libxrpl/tx/paths/AMMOffer.cpp
               src/libxrpl/tx/paths/BookStep.cpp
               src/libxrpl/tx/paths/BookTip.cpp
               src/libxrpl/tx/paths/DirectStep.cpp
+              src/libxrpl/tx/paths/MPTEndpointStep.cpp
               src/libxrpl/tx/paths/Flow.cpp
               src/libxrpl/tx/paths/OfferStream.cpp
               src/libxrpl/tx/paths/PaySteps.cpp
@@ -115,7 +127,14 @@ jobs:
               include/xrpl/ledger/PaymentSandbox.h
               src/libxrpl/ledger/PaymentSandbox.cpp
               src/libxrpl/ledger/helpers/RippleStateHelpers.cpp
+              include/xrpl/ledger/helpers/TokenHelpers.h
               src/libxrpl/ledger/helpers/TokenHelpers.cpp
+              include/xrpl/ledger/helpers/MPTokenHelpers.h
+              src/libxrpl/ledger/helpers/MPTokenHelpers.cpp
+              include/xrpl/protocol/MPTAmount.h
+              src/libxrpl/protocol/MPTAmount.cpp
+              include/xrpl/protocol/PathAsset.h
+              src/libxrpl/protocol/Indexes.cpp
               src/libxrpl/ledger/helpers/OfferHelpers.cpp
               src/libxrpl/ledger/helpers/PermissionedDEXHelpers.cpp
               src/libxrpl/ledger/helpers/CredentialHelpers.cpp
@@ -126,6 +145,7 @@ jobs:
               src/xrpld/rpc/detail/PathfinderUtils.h
               src/xrpld/rpc/detail/PathRequest.cpp
               src/xrpld/rpc/detail/AssetCache.cpp
+              src/xrpld/rpc/detail/MPT.h
               src/xrpld/rpc/detail/TrustLine.cpp
               src/xrpld/rpc/detail/AccountAssets.cpp
               src/xrpld/app/ledger/OrderBookDBImpl.cpp
@@ -376,5 +396,39 @@ jobs:
           fi
           if grep -q '^UNKNOWN' /tmp/retired-rules.txt; then
             echo "::error::An amendment LedgerRules reads is no longer registered on $UPSTREAM_REF. Investigate before changing the port: it may have been dropped without ever being enabled, or renamed (Batch became BatchV1_1). Every node that does not know the name reports it disabled, so follow the replacement or remove the flag."
+          fi
+          exit "$rc"
+
+  rpc-methods:
+    name: rpc-methods
+    runs-on: ubuntu-latest
+    permissions:
+      contents: read
+    steps:
+      - uses: actions/checkout@v4
+        with:
+          persist-credentials: false
+
+      # Red while a rippled RPC method has neither a request model in the SDK nor an entry in
+      # .ci-config/rpc-methods-ignore.txt, and while an entry there is stale.
+      - name: Check RPC method coverage against develop's MethodNames.h
+        run: |
+          set -euo pipefail
+          rc=0
+          bash .ci-config/check-rpc-methods.sh "$UPSTREAM_REF" > /tmp/rpc-methods.txt || rc=$?
+          cat /tmp/rpc-methods.txt
+          {
+            echo "### RPC methods on \`$UPSTREAM\` \`$UPSTREAM_REF\`"
+            echo
+            echo '```'
+            grep -vE '^(ok|ignored) ' /tmp/rpc-methods.txt || true
+            echo '```'
+          } >> "$GITHUB_STEP_SUMMARY"
+
+          if grep -q '^MISSING' /tmp/rpc-methods.txt; then
+            echo "::error::rippled $UPSTREAM_REF has an RPC method the SDK neither implements nor excludes. Add a request model under Xrpl/Models/Methods, or list it in .ci-config/rpc-methods-ignore.txt with its category (admin, signing, cli, deprecated, internal, gap) and the evidence."
+          fi
+          if grep -q '^STALE' /tmp/rpc-methods.txt; then
+            echo "::error::An entry in .ci-config/rpc-methods-ignore.txt is stale: the method is implemented now or no longer exists on $UPSTREAM_REF. Drop the entry."
           fi
           exit "$rc"

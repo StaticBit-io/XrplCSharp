@@ -408,48 +408,40 @@ namespace XrplTests.Xrpl.Models
 
             Assert.IsTrue(hex.Length > 0, "Serialization should produce non-empty hex");
             
-            // Verify the hex contains BTC encoded in XLS-47 Oracle format (left-aligned bytes 0-2)
-            // BTC = 42 54 43 00 00 00 00 00 00 00 00 00 00 00 00 00 00 00 00 00 (20 bytes)
-            Assert.IsTrue(hex.Contains("4254430000000000000000000000000000000000"), 
-                "BTC should be encoded in XLS-47 Oracle format (left-aligned bytes 0-2)");
+            // Byte for byte what xrpl.js (ripple-binary-codec) encodes for the same transaction:
+            // a three-character BaseAsset / QuoteAsset sits at bytes 12-14 of the Currency field,
+            // as for any other currency (BTC = 0000000000000000000000004254430000000000).
+            const string expected =
+                "12003324000000012F663A500020330000303968400000000000000C701C0863757272656E6379" +
+                "701D0D4D756C746950726F76696465728114DE2E30F67B1FDE7B5A207148B7711BB83DACF6E0F018" +
+                "E0203017000000000000FDE8041000011A0000000000000000000000004254430000000000021A00" +
+                "00000000000000000000005553440000000000E1E020301700000000000002E4041003011A000000" +
+                "0000000000000000000000000000000000021A0000000000000000000000005553440000000000E1F1";
+            Assert.AreEqual(expected, hex);
         }
 
         /// <summary>
-        /// Tests that Currency.FromOracleString produces correct XLS-47 left-aligned encoding for Oracle BaseAsset/QuoteAsset.
-        /// 3-letter codes use bytes 0-2 (left-aligned), NOT bytes 12-14 like standard IOU currencies.
-        /// Non-standard codes (40-hex) use direct bytes.
+        /// A Currency field holds a standard code at bytes 12-14 and nothing else, in PriceData as
+        /// everywhere: rippled (<c>currencyFromJson</c>) and xrpl.js (<c>isoToBytes</c>) agree. A code
+        /// whose text starts at byte 0 is a different, nonstandard currency, and reads back as hex.
         /// </summary>
         [TestMethod]
-        public void TestVerify_CurrencyOracleEncoding()
+        public void TestVerify_CurrencyEncoding_StandardCodeAtIsoPosition()
         {
-            // Standard XRPL encoding: currency code at bytes 12-14
-            var btcStandard = BinaryCodecCurrency.FromString("BTC");
-            var btcStandardHex = BitConverter.ToString(btcStandard.Buffer).Replace("-", "");
-            Console.WriteLine($"BTC Standard (IOU): {btcStandardHex}");
-            Assert.AreEqual("0000000000000000000000004254430000000000", btcStandardHex, "Standard encoding should have BTC at bytes 12-14");
+            var btc = BinaryCodecCurrency.FromString("BTC");
+            Assert.AreEqual("0000000000000000000000004254430000000000", BitConverter.ToString(btc.Buffer).Replace("-", ""));
+            Assert.AreEqual("BTC", btc.IsoCode);
 
-            // XLS-47 Oracle encoding: currency code at bytes 0-2 (left-aligned)
-            var btcOracle = BinaryCodecCurrency.FromOracleString("BTC");
-            var btcOracleHex = BitConverter.ToString(btcOracle.Buffer).Replace("-", "");
-            Console.WriteLine($"BTC Oracle (XLS-47): {btcOracleHex}");
-            Assert.AreEqual("4254430000000000000000000000000000000000", btcOracleHex, "Oracle encoding should have BTC left-aligned at bytes 0-2");
+            var xrp = BinaryCodecCurrency.FromString("XRP");
+            Assert.AreEqual("0000000000000000000000000000000000000000", BitConverter.ToString(xrp.Buffer).Replace("-", ""));
+            Assert.AreEqual("XRP", xrp.IsoCode);
 
-            // XRP is all zeros in both cases
-            var xrpOracle = BinaryCodecCurrency.FromOracleString("XRP");
-            var xrpOracleHex = BitConverter.ToString(xrpOracle.Buffer).Replace("-", "");
-            Console.WriteLine($"XRP Oracle: {xrpOracleHex}");
-            Assert.AreEqual("0000000000000000000000000000000000000000", xrpOracleHex, "XRP should be all zeros");
+            var fdusd = BinaryCodecCurrency.FromString("4644555344000000000000000000000000000000");
+            Assert.AreEqual("4644555344000000000000000000000000000000", BitConverter.ToString(fdusd.Buffer).Replace("-", ""));
 
-            // Non-standard currencies (40-hex) use direct bytes
-            var fdusdOracle = BinaryCodecCurrency.FromOracleString("4644555344000000000000000000000000000000");
-            var fdusdOracleHex = BitConverter.ToString(fdusdOracle.Buffer).Replace("-", "");
-            Console.WriteLine($"FDUSD Oracle: {fdusdOracleHex}");
-            Assert.AreEqual("4644555344000000000000000000000000000000", fdusdOracleHex, "Non-standard currency should use direct hex bytes");
-
-            // Verify decoding works for both formats
-            Assert.AreEqual("BTC", btcStandard.IsoCode, "Standard BTC should decode to BTC");
-            Assert.AreEqual("BTC", btcOracle.IsoCode, "Oracle BTC should decode to BTC");
-            Assert.AreEqual("XRP", xrpOracle.IsoCode, "Oracle XRP should decode to XRP");
+            var btcAtByteZero = BinaryCodecCurrency.FromString("4254430000000000000000000000000000000000");
+            Assert.IsNull(btcAtByteZero.IsoCode, "text at byte 0 is not the standard code BTC");
+            Assert.AreEqual("4254430000000000000000000000000000000000", btcAtByteZero.ToString());
         }
 
         /// <summary>

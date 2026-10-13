@@ -26,6 +26,7 @@ namespace Xrpl.Amounts
         private readonly string _domain;
         private readonly string _strandSource;
         private readonly string _strandDestination;
+        private readonly IssuedCurrency _strandDeliver;
         private readonly FlowStep _previous;
         private readonly bool _defaultPath;
         private readonly bool _offerCrossing;
@@ -42,6 +43,7 @@ namespace Xrpl.Amounts
             _domain = BookKey.DomainKey(context.DomainId);
             _strandSource = context.StrandSource;
             _strandDestination = context.StrandDestination;
+            _strandDeliver = context.StrandDeliver;
             _previous = context.PreviousStep;
             _defaultPath = context.IsDefaultPath;
             _offerCrossing = context.OfferCrossing;
@@ -158,10 +160,59 @@ namespace Xrpl.Amounts
             if (_offerCrossing && (!view.Rules.FixAMMv1_1 || !isAmm || (_amm != null && _amm.MultiPath)))
                 return offerQuality;
 
-            uint rateIn = previous == Amounts.DebtDirection.Redeems ? view.Rate(_in, _strandDestination) : OfferCrossing.QualityOne;
+            uint rateIn = previous == Amounts.DebtDirection.Redeems ? Rate(view, _in) : OfferCrossing.QualityOne;
 
             // A payment's offer owner does not pay the fee on what it gives, and a pool never does.
             return Composed(QualityOfRates(rateIn, OfferCrossing.QualityOne, view.Rules), offerQuality, view.Rules);
+        }
+
+        /// <summary>
+        /// <c>BookStep::rate</c>: an issued currency's transfer rate, none for XRP or when its issuer
+        /// is the strand's destination; an MPT's, none only when it is what the strand delivers to
+        /// its own issuer.
+        /// </summary>
+        private uint Rate(DexView view, IssuedCurrency asset)
+        {
+            if (!DexAssets.IsMpt(asset))
+                return view.Rate(asset, _strandDestination);
+
+            if (XrplAmount.SameAsset(asset, _strandDeliver) &&
+                string.Equals(DexAssets.MptIssuer(asset.MptIssuanceId), _strandDestination, StringComparison.Ordinal))
+            {
+                return OfferCrossing.QualityOne;
+            }
+
+            return view.World.MptTransferRate(asset);
+        }
+
+        /// <summary>
+        /// <c>checkMPTDEX</c>: both sides may trade, and an MPT the owner receives from a holder,
+        /// or gives to anyone but its issuer, may be transferred.
+        /// </summary>
+        private bool CheckMptDex(DexView view, string owner)
+        {
+            if (view.CanTrade(_in) != null || view.CanTrade(_out) != null)
+                return false;
+
+            if (DexAssets.IsMpt(_in) && _previous != null &&
+                !string.Equals(DexAssets.MptIssuer(_in.MptIssuanceId), owner, StringComparison.Ordinal) &&
+                !_previous.IsBookStep && view.CanTransfer(_in, owner, owner) != null)
+            {
+                return false;
+            }
+
+            if (DexAssets.IsMpt(_out))
+            {
+                string issuer = DexAssets.MptIssuer(_out.MptIssuanceId);
+                if (XrplAmount.SameAsset(_strandDeliver, _out) && string.Equals(_strandDestination, issuer, StringComparison.Ordinal))
+                    return true;
+                if (string.Equals(issuer, owner, StringComparison.Ordinal))
+                    return true;
+
+                return view.CanTransfer(_out, owner, owner) == null;
+            }
+
+            return true;
         }
 
         /// <summary><c>composedQuality</c>: the product of two rates, rounded up.</summary>
@@ -198,8 +249,8 @@ namespace Xrpl.Amounts
         private (OfferRemovals ToRemove, int Count) ForEachOffer(DexView sb, DexView afView, DebtDirection previous, OfferCallback callback)
         {
             LedgerRules rules = sb.Rules;
-            uint rateIn = previous == Amounts.DebtDirection.Redeems ? sb.Rate(_in, _strandDestination) : OfferCrossing.QualityOne;
-            uint rateOut = _offerCrossing ? sb.Rate(_out, _strandDestination) : OfferCrossing.QualityOne;
+            uint rateIn = previous == Amounts.DebtDirection.Redeems ? Rate(sb, _in) : OfferCrossing.QualityOne;
+            uint rateOut = _offerCrossing ? Rate(sb, _out) : OfferCrossing.QualityOne;
 
             OfferStream offers = new OfferStream(sb, afView, Offers(sb.World), MaxOffersToConsume, _domain, IsPartial(sb.World));
             bool offerAttempted = false;
@@ -224,14 +275,20 @@ namespace Xrpl.Amounts
                     return true;
                 }
 
-                // An owner the issuer has not authorized to hold what it buys loses the offer.
-                DexView authView = rules.MPTokensV2 ? sb : afView;
-                if (authView.RequireAuth(offer.Owner, _in) != null)
+                void RemoveOffer(OfferRemovalReason reason)
                 {
                     if (offer.Key != null)
-                        offers.PermanentlyRemove(offer.Key, OfferRemovalReason.Unauthorized);
+                        offers.PermanentlyRemove(offer.Key, reason);
                     if (!offerAttempted)
                         offerQuality = null;
+                }
+
+                // An owner the issuer has not authorized to hold what it buys loses the offer, as
+                // does one whose MPT may not trade or move. A missing MPToken is created later.
+                DexView authView = rules.MPTokensV2 ? sb : afView;
+                if (authView.RequireAuth(offer.Owner, _in, MptAuth.Weak) != null || !CheckMptDex(sb, offer.Owner))
+                {
+                    RemoveOffer(OfferRemovalReason.Unauthorized);
                     return true;
                 }
 
@@ -249,24 +306,45 @@ namespace Xrpl.Amounts
                     : rateOut;
                 (offerRateIn, offerRateOut) = offer.AdjustRates(offerRateIn, offerRateOut);
 
-                (XrplAmount In, XrplAmount Out) offerAmount = (offer.In, offer.Out);
-                XrplAmount stepIn = OfferCrossing.MulRatio(offerAmount.In, offerRateIn, OfferCrossing.QualityOne, roundUp: true, rules);
-                XrplAmount stepOut = offerAmount.Out;
-                XrplAmount ownerGives = OfferCrossing.MulRatio(offerAmount.Out, offerRateOut, OfferCrossing.QualityOne, roundUp: offerAmount.Out.Kind == AmountKind.Mpt, rules);
-
-                XrplAmount funds = offer.IsFunded ? ownerGives : offers.OwnerFunds.Value;
-                if (funds < ownerGives)
+                try
                 {
-                    ownerGives = funds;
-                    stepOut = OfferCrossing.MulRatio(ownerGives, OfferCrossing.QualityOne, offerRateOut, roundUp: false, rules);
+                    (XrplAmount In, XrplAmount Out) offerAmount = (offer.In, offer.Out);
+                    XrplAmount stepIn = OfferCrossing.MulRatio(offerAmount.In, offerRateIn, OfferCrossing.QualityOne, roundUp: true, rules);
+                    XrplAmount stepOut = offerAmount.Out;
+                    XrplAmount ownerGives = OfferCrossing.MulRatio(offerAmount.Out, offerRateOut, OfferCrossing.QualityOne, roundUp: offerAmount.Out.Kind == AmountKind.Mpt, rules);
 
-                    // Rounded down, strictly, so what is left of the offer is no worse than its page.
-                    offerAmount = offer.LimitOut(offerAmount, stepOut, roundUp: false, rules);
-                    stepIn = OfferCrossing.MulRatio(offerAmount.In, offerRateIn, OfferCrossing.QualityOne, roundUp: true, rules);
+                    XrplAmount funds = offer.IsFunded ? ownerGives : offers.OwnerFunds.Value;
+                    if (funds < ownerGives)
+                    {
+                        ownerGives = funds;
+                        stepOut = OfferCrossing.MulRatio(ownerGives, OfferCrossing.QualityOne, offerRateOut, roundUp: false, rules);
+
+                        // Rounded down, strictly, so what is left of the offer is no worse than its page.
+                        offerAmount = offer.LimitOut(offerAmount, stepOut, roundUp: false, rules);
+                        stepIn = OfferCrossing.MulRatio(offerAmount.In, offerRateIn, OfferCrossing.QualityOne, roundUp: true, rules);
+                    }
+
+                    // An issuer paying in its own MPT at the start of the strand issues it: no more
+                    // than it may still issue, or OutstandingAmount would overflow.
+                    (XrplAmount In, XrplAmount Out) stepAmount = (stepIn, stepOut);
+                    if (DexAssets.IsMpt(_in) && _previous == null &&
+                        !string.Equals(offer.Owner, DexAssets.MptIssuer(_in.MptIssuanceId), StringComparison.Ordinal))
+                    {
+                        XrplAmount available = sb.AccountHoldsMpt(
+                            DexAssets.MptIssuer(_in.MptIssuanceId), _in, zeroIfFrozen: false, zeroIfUnauthorized: false, fullBalance: true);
+                        if (stepAmount.In > available)
+                            LimitStepIn(offer, ref offerAmount, ref stepAmount, ref ownerGives, offerRateIn, offerRateOut, available, rules);
+                    }
+
+                    offerAttempted = true;
+                    return callback(offer, offerAmount, stepAmount, ownerGives, offerRateIn, offerRateOut);
                 }
-
-                offerAttempted = true;
-                return callback(offer, offerAmount, (stepIn, stepOut), ownerGives, offerRateIn, offerRateOut);
+                catch (OverflowException) when (rules.MPTokensV2)
+                {
+                    // Only a crafted MPT offer overflows; it is removed rather than left to fail every crossing.
+                    RemoveOffer(OfferRemovalReason.Overflow);
+                    return true;
+                }
             }
 
             bool TryAmm(XrplQuality? lobQuality)
@@ -351,8 +429,18 @@ namespace Xrpl.Amounts
             if (!offer.CheckInvariant(offerAmount.In, offerAmount.Out, sb.Rules))
                 throw new FlowFailedException("tecINVARIANT_FAILED", "AMM pool product invariant failed.");
 
-            sb.Send(IssuerOf(_in), offer.Owner, offerAmount.In);
-            sb.Send(offer.Owner, IssuerOf(_out), ownerGives);
+            // An owner paid in an MPT needs an MPToken to receive it.
+            if (DexAssets.IsMpt(_in))
+                sb.CreateMpToken(offer.Owner, _in);
+
+            sb.Send(DexAssets.Issuer(_in), offer.Owner, offerAmount.In);
+            string outIssuer = DexAssets.Issuer(_out);
+            sb.Send(offer.Owner, outIssuer, ownerGives);
+
+            // An issuer's own offer gives MPT it issues: what it may still give shrinks by as much.
+            if (DexAssets.IsMpt(_out) && string.Equals(offer.Owner, outIssuer, StringComparison.Ordinal) && !offerAmount.Out.IsZero)
+                sb.IssuerSelfDebit(_out, offerAmount.Out);
+
             offer.Consume(sb, offerAmount.In, offerAmount.Out);
             sb.RecordFill(new FillRecord
             {
@@ -579,7 +667,8 @@ namespace Xrpl.Amounts
                 return "tecNO_ISSUER";
             }
 
-            if (context.PreviousStep?.DirectStepSourceAccount is { } previous && inKey.Issuer.Length != 0)
+            // The line into the book must ripple; an MPT has no line.
+            if (context.PreviousStep?.DirectStepSourceAccount is { } previous && inKey.Issuer.Length != 0 && !inKey.IsMpt)
             {
                 if (!view.LineExists(previous, inKey.Issuer, inKey.Currency))
                     return "terNO_LINE";
@@ -587,7 +676,7 @@ namespace Xrpl.Amounts
                     return "terNO_RIPPLE";
             }
 
-            return null;
+            return view.CanTrade(_in) ?? view.CanTrade(_out);
         }
 
         /// <summary>
@@ -715,7 +804,19 @@ namespace Xrpl.Amounts
                         continue;
                     }
 
-                    if (ShouldRemoveSmallIncreasedQualityOffer(offer, funds))
+                    bool tooSmall;
+                    try
+                    {
+                        tooSmall = ShouldRemoveSmallIncreasedQualityOffer(offer, funds);
+                    }
+                    catch (OverflowException) when (_view.Rules.MPTokensV2)
+                    {
+                        // A crafted MPT offer whose reduction overflows is removed, not left at the tip.
+                        PermanentlyRemove(entry.Index, OfferRemovalReason.Overflow);
+                        continue;
+                    }
+
+                    if (tooSmall)
                     {
                         _tipReason = OfferRemovalReason.TooSmall;
                         if (FundsOf(_cancelView, offer) == funds)
@@ -741,11 +842,16 @@ namespace Xrpl.Amounts
                 return null;
             }
 
-            /// <summary><c>accountFundsHelper</c>: an issued currency's issuer has what the offer gives.</summary>
+            /// <summary>
+            /// <c>accountFundsHelper</c>: an issued currency's issuer has what the offer gives; an
+            /// MPT's issuer what it may still issue less what its own offers already gave.
+            /// </summary>
             private static XrplAmount FundsOf(DexView view, ClobOffer offer)
             {
                 if (offer.Out.Kind == AmountKind.Iou && string.Equals(offer.Owner, offer.AssetOut.Issuer, StringComparison.Ordinal))
                     return offer.Out;
+                if (offer.Out.Kind == AmountKind.Mpt && string.Equals(offer.Owner, DexAssets.MptIssuer(offer.AssetOut.MptIssuanceId), StringComparison.Ordinal))
+                    return view.IssuerFundsToSelfIssue(offer.AssetOut);
 
                 return view.AccountHolds(offer.Owner, offer.AssetOut);
             }

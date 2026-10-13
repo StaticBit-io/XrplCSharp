@@ -92,10 +92,26 @@ public class TestUOracleCurrencyConverter
     [TestMethod]
     public void Read_HexCode40Chars_DecodesToString()
     {
-        string hex = "5553440000000000000000000000000000000000"; // "USD" padded to 40 chars
+        string hex = "426974636F696E00000000000000000000000000"; // "Bitcoin" padded to 40 chars
         string json = $"{{\"Currency\": \"{hex}\"}}";
         Model result = JsonSerializer.Deserialize<Model>(json, XrplJsonOptions.Default);
-        Assert.AreEqual("USD", result.Currency);
+        Assert.AreEqual("Bitcoin", result.Currency);
+    }
+
+    /// <summary>
+    /// Three characters at byte 0 are a nonstandard code. Read as "USD", they would be written back
+    /// as the standard code USD (bytes 12-14), a different currency, so they stay hex.
+    /// </summary>
+    [TestMethod]
+    public void Read_HexCode40Chars_ThreeCharsAtByteZero_StaysHex()
+    {
+        string hex = "5553440000000000000000000000000000000000";
+        string json = $"{{\"Currency\": \"{hex}\"}}";
+        Model result = JsonSerializer.Deserialize<Model>(json, XrplJsonOptions.Default);
+        Assert.AreEqual(hex, result.Currency);
+
+        string written = JsonSerializer.Serialize(result, XrplJsonOptions.Default);
+        StringAssert.Contains(written, hex);
     }
 
     /// <summary>

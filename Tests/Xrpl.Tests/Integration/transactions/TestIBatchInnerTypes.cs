@@ -574,4 +574,51 @@ public class TestIBatchInnerTypes
 
         AssertAllInnersSucceeded(await SubmitBatchAsync(batch, owner));
     }
+
+    /// <summary>
+    /// With LendingProtocolV1_2 enabled, rippled lets Vault and Loan transactions ride as
+    /// Batch inners (Batch::preflight skips kDisabledTxTypes).
+    /// </summary>
+    [TestMethod]
+    public async Task Batch_Inner_VaultCreate_WithLendingProtocolV12()
+    {
+        if (!await AmendmentGuard.IsEnabledAsync(client, AmendmentGuard.LendingProtocolV12))
+        {
+            Assert.Inconclusive("LendingProtocolV1_2 is not enabled on the test node; Vault and Loan inners are rejected there.");
+        }
+        (XrplWallet owner, _) = await FundPairAsync();
+
+        Batch batch = NewBatch(owner, BatchFlags.tfAllOrNothing,
+            new VaultCreate { Account = owner.ClassicAddress, Asset = new IssuedCurrency { Currency = "XRP" } }.ToBatchTx(),
+            Touch(owner));
+
+        List<InnerResult> inners = await SubmitBatchAsync(batch, owner);
+        AssertAllInnersSucceeded(inners);
+        CreatedIndex(inners[0].Meta, LedgerEntryType.Vault);
+    }
+
+    /// <summary>
+    /// Without LendingProtocolV1_2, rippled refuses a Vault inner with temINVALID_INNER_BATCH.
+    /// The SDK builds and signs such a Batch without objecting - it cannot know the ledger's
+    /// rules offline - so the refusal has to come from the node.
+    /// </summary>
+    [TestMethod]
+    public async Task Batch_Inner_VaultCreate_RejectedByNodeBeforeLendingProtocolV12()
+    {
+        if (await AmendmentGuard.IsEnabledAsync(client, AmendmentGuard.LendingProtocolV12))
+        {
+            Assert.Inconclusive("LendingProtocolV1_2 is enabled on the test node; Vault and Loan inners are accepted there.");
+        }
+        (XrplWallet owner, _) = await FundPairAsync();
+
+        Batch batch = NewBatch(owner, BatchFlags.tfAllOrNothing,
+            new VaultCreate { Account = owner.ClassicAddress, Asset = new IssuedCurrency { Currency = "XRP" } }.ToBatchTx(),
+            Touch(owner));
+
+        Batch autofilled = await client.Autofill(batch);
+        SignatureResult signed = owner.Sign(autofilled.ToDictionary());
+        Submit res = await client.SubmitRequest(signed.TxBlob, false);
+
+        Assert.AreEqual("temINVALID_INNER_BATCH", res.EngineResult);
+    }
 }

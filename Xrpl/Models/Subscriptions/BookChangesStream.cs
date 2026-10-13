@@ -66,31 +66,52 @@ namespace Xrpl.Models.Subscriptions
 
         /// <summary>
         /// Raw currency identifier for the first asset.
-        /// Format: "XRP_drops" for XRP, or "issuer/currency_hex" for tokens.
+        /// Format: "XRP_drops" for XRP, or "issuer/currency" for tokens, the currency as rippled
+        /// displays it (a three-character code, or 40-character hex). Absent when the asset is an MPT.
         /// </summary>
         [JsonPropertyName("currency_a")]
         public string CurrencyA { get; set; }
 
         /// <summary>
-        /// Raw currency identifier for the second asset.
-        /// Format: "XRP_drops" for XRP, or "issuer/currency_hex" for tokens.
+        /// Raw currency identifier for the second asset, in the format of <see cref="CurrencyA"/>.
+        /// Absent when the asset is an MPT.
         /// </summary>
         [JsonPropertyName("currency_b")]
         public string CurrencyB { get; set; }
 
         /// <summary>
+        /// The MPT issuance ID of the first asset, when it is an MPT; <see cref="CurrencyA"/> is then absent.
+        /// </summary>
+        [JsonPropertyName("mpt_issuance_id_a")]
+        public string MptIssuanceIdA { get; set; }
+
+        /// <summary>
+        /// The MPT issuance ID of the second asset, when it is an MPT; <see cref="CurrencyB"/> is then absent.
+        /// </summary>
+        [JsonPropertyName("mpt_issuance_id_b")]
+        public string MptIssuanceIdB { get; set; }
+
+        /// <summary>
+        /// The permissioned domain of the order book, for offers in a permissioned DEX.
+        /// </summary>
+        [JsonPropertyName("domain")]
+        public string Domain { get; set; }
+
+        /// <summary>
         /// Parsed currency for the first asset.
-        /// For XRP returns IssuedCurrency with Currency="XRP"; for tokens parses issuer and currency code.
+        /// For XRP returns IssuedCurrency with Currency="XRP"; for tokens parses issuer and currency code;
+        /// for an MPT carries <see cref="MptIssuanceIdA"/>.
         /// </summary>
         [JsonIgnore]
-        public Common.Common.IssuedCurrency AssetA => ParseBookChangeCurrency(CurrencyA);
+        public Common.Common.IssuedCurrency AssetA => ParseBookChangeAsset(CurrencyA, MptIssuanceIdA);
 
         /// <summary>
         /// Parsed currency for the second asset.
-        /// For XRP returns IssuedCurrency with Currency="XRP"; for tokens parses issuer and currency code.
+        /// For XRP returns IssuedCurrency with Currency="XRP"; for tokens parses issuer and currency code;
+        /// for an MPT carries <see cref="MptIssuanceIdB"/>.
         /// </summary>
         [JsonIgnore]
-        public Common.Common.IssuedCurrency AssetB => ParseBookChangeCurrency(CurrencyB);
+        public Common.Common.IssuedCurrency AssetB => ParseBookChangeAsset(CurrencyB, MptIssuanceIdB);
 
         /// <summary>
         /// True if the first asset is XRP (values for VolumeA and rates are in drops).
@@ -143,10 +164,14 @@ namespace Xrpl.Models.Subscriptions
         /// <summary>
         /// Parses a book_changes currency string into an
         /// <see cref="Xrpl.Models.Common.Common.IssuedCurrency"/>.
-        /// Handles "XRP_drops" and "issuer/currency_hex" formats.
+        /// Handles "XRP_drops", "issuer/currency" and an MPT issuance ID.
         /// </summary>
-        private static Common.Common.IssuedCurrency ParseBookChangeCurrency(string raw)
+        private static Common.Common.IssuedCurrency ParseBookChangeAsset(string raw, string mptIssuanceId)
         {
+            if (!string.IsNullOrEmpty(mptIssuanceId))
+                return new Common.Common.IssuedCurrency { MptIssuanceId = mptIssuanceId };
+
+
             if (string.IsNullOrEmpty(raw))
                 return null;
 

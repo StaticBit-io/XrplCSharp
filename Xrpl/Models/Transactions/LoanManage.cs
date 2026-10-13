@@ -9,7 +9,7 @@ using Xrpl.Models.Enums;
 namespace Xrpl.Models.Transactions
 {
     /// <summary>
-    /// Flags for the LoanManage transaction. Mutually exclusive.
+    /// Flags for the LoanManage transaction. At most one action flag may be set; none is a no-op.
     /// </summary>
     [Flags]
     public enum LoanManageFlags : uint
@@ -37,7 +37,8 @@ namespace Xrpl.Models.Transactions
 
     /// <summary>
     /// The LoanManage transaction manages a loan (e.g. default, impair, or unimpair).
-    /// Flags are mutually exclusive.
+    /// The action flags are mutually exclusive. A LoanManage with no action flag is valid and
+    /// changes nothing on the loan, as rippled's <c>LoanManage::doApply</c> treats it.
     /// </summary>
     /// <remarks>Requires the Loan amendment (XLS-66d). This feature is in draft and subject to change.</remarks>
     public interface ILoanManage : ITransactionCommon
@@ -105,19 +106,14 @@ namespace Xrpl.Models.Transactions
             if (!tx.TryGetValue("LoanID", out var id) || id is not string loanId || string.IsNullOrWhiteSpace(loanId))
                 throw new ValidationException("LoanManage: missing field LoanID");
 
-            // Exactly one action flag is required; they are mutually exclusive
+            // The action flags are mutually exclusive, but none is a valid no-op
+            // (rippled LoanManage::preflight rejects only more than one, temINVALID_FLAG)
             if (!tx.TryGetValue("Flags", out var flagsObj) || flagsObj is null)
-                throw new ValidationException("LoanManage: exactly one action flag required (tfLoanDefault, tfLoanImpair, or tfLoanUnimpair)");
+                return;
 
-            {
-                uint rawFlags = ParseFlags(flagsObj);
-                uint actionBits = rawFlags & LoanManageActionMask;
-
-                // Count set action bits — must be exactly 1
-                int actionCount = System.Numerics.BitOperations.PopCount(actionBits);
-                if (actionCount != 1)
-                    throw new ValidationException("LoanManage: exactly one action flag required (tfLoanDefault, tfLoanImpair, or tfLoanUnimpair)");
-            }
+            uint actionBits = ParseFlags(flagsObj) & LoanManageActionMask;
+            if (System.Numerics.BitOperations.PopCount(actionBits) > 1)
+                throw new ValidationException("LoanManage: at most one action flag may be set (tfLoanDefault, tfLoanImpair, or tfLoanUnimpair)");
         }
 
         private static uint ParseFlags(object flagsObj)

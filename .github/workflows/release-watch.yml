@@ -132,7 +132,8 @@ jobs:
           ver="${{ steps.detect.outputs.latest }}"
           old_names=$(sed -n -E 's/^[0-9A-F]{64} (.+)$/\1/p' .ci-config/rippled.cfg | LC_ALL=C sort)
           deb="${{ steps.detect.outputs.deb_version }}"
-          sed -i -E "s#^ARG XRPLD_VERSION=.+$#ARG XRPLD_VERSION=${deb}#" "$DOCKERFILE"
+          # \$ is the regex end anchor; a bare $# would expand to the shell's argument count.
+          sed -i -E "s#^ARG XRPLD_VERSION=.+\$#ARG XRPLD_VERSION=${deb}#" "$DOCKERFILE"
           written=$(sed -n -E 's/^ARG XRPLD_VERSION=(.+)$/\1/p' "$DOCKERFILE")
           [ "$written" = "$deb" ] || { echo "::error::rewriting the pin failed (file holds '$written')"; exit 1; }
           bash .ci-config/generate-amendments.sh "$ver"

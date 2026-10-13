@@ -34,8 +34,10 @@ namespace Xrpl.BinaryCodec.Types
             IsoCode = GetCurrencyCodeFromTlcBytes(buffer, out IsNative);
         }
         /// <summary>
-        /// get currency code from bytes. Supports both standard XRPL format (bytes 12-14)
-        /// and Oracle XLS-47 format (left-aligned bytes 0-2).
+        /// get currency code from bytes: <c>XRP</c> for the zero currency, the three characters of a
+        /// standard code (bytes 12-14, every other byte zero), and <c>null</c> for anything else, which
+        /// is then shown as hex. A code whose text starts at byte 0 is a nonstandard code, not the
+        /// standard code with the same letters, so it is not read as one.
         /// </summary>
         /// <param name="bytes">bytes</param>
         /// <param name="isNative">will true if currency is XRP</param>
@@ -62,22 +64,6 @@ namespace Xrpl.BinaryCodec.Types
             {
                 isNative = false;
                 return IsoCodeFromBytesAndOffset(bytes, 12);
-            }
-            // Oracle XLS-47 format: left-aligned currency code at bytes 0-2
-            // Check if bytes 3-19 are all zero and bytes 0-2 are valid ASCII
-            bool isOracleFormat = true;
-            for (i = 3; i < 20; i++)
-            {
-                if (bytes[i] != 0)
-                {
-                    isOracleFormat = false;
-                    break;
-                }
-            }
-            if (isOracleFormat && bytes[0] >= 0x20 && bytes[0] <= 0x7E)
-            {
-                isNative = false;
-                return IsoCodeFromBytesAndOffset(bytes, 0);
             }
             isNative = false;
             return null;
@@ -110,16 +96,6 @@ namespace Xrpl.BinaryCodec.Types
             return token == null ? null : FromString(token.GetValue<string>());
         }
         /// <summary>
-        /// Decode currency from JSON for Oracle fields (XLS-47 format).
-        /// Uses left-aligned ASCII encoding for 3-letter codes.
-        /// </summary>
-        /// <param name="token">JSON token containing currency code.</param>
-        /// <returns>Currency with Oracle encoding.</returns>
-        public static Currency FromOracleJson(JsonNode token)
-        {
-            return token == null ? null : FromOracleString(token.GetValue<string>());
-        }
-        /// <summary>
         /// decode currency from string
         /// </summary>
         /// <param name="str">string currency code</param>
@@ -147,52 +123,8 @@ namespace Xrpl.BinaryCodec.Types
         }
 
         /// <summary>
-        /// Create a Currency for Oracle PriceData fields (XLS-47 format).
-        /// Uses left-aligned ASCII encoding (bytes 0-2) for 3-letter codes,
-        /// or direct hex for 40-character non-standard currencies.
-        /// This differs from standard IOU currencies which use bytes 12-14.
-        /// </summary>
-        /// <param name="str">Currency code (XRP, 3-letter code, or 40-hex).</param>
-        /// <returns>Currency with XLS-47 Oracle encoding.</returns>
-        public static Currency FromOracleString(string str)
-        {
-            if (str == "XRP")
-            {
-                return Xrp;
-            }
-            switch (str.Length)
-            {
-                case 40:
-                    // Non-standard currency: use hex bytes directly
-                    return new Currency(B16.Decode(str));
-                case 3:
-                    // XLS-47 Oracle format: left-aligned at bytes 0-2
-                    return new Currency(EncodeOracleCurrency(str));
-            }
-            throw new InvalidOperationException(
-                "Currency must either be a 3 letter iso code " +
-                "or a 20 byte hash encoded in hexadecimal"
-            );
-        }
-
-        /// <summary>
-        /// Encode currency for Oracle XLS-47 format (left-aligned at bytes 0-2).
-        /// This format is used for BaseAsset and QuoteAsset in PriceData objects.
-        /// </summary>
-        /// <param name="currencyCode">3-letter currency code.</param>
-        /// <returns>20-byte array with currency at bytes 0-2.</returns>
-        public static byte[] EncodeOracleCurrency(string currencyCode)
-        {
-            byte[] currencyBytes = new byte[20];
-            currencyBytes[0] = (byte)char.ConvertToUtf32(currencyCode, 0);
-            currencyBytes[1] = (byte)char.ConvertToUtf32(currencyCode, 1);
-            currencyBytes[2] = (byte)char.ConvertToUtf32(currencyCode, 2);
-            return currencyBytes;
-        }
-
-        /// <summary>
-        /// Legacy method for standard XRPL currency encoding (bytes 12-14).
-        /// Used for issued currency tokens, not Oracle PriceData.
+        /// Encode a standard three-character currency code (bytes 12-14), as rippled and xrpl.js do
+        /// for every Currency field: issued currencies and Oracle <c>BaseAsset</c> / <c>QuoteAsset</c> alike.
         /// </summary>
         /// <param name="currencyCode">currency code</param>
         /// <returns></returns>
