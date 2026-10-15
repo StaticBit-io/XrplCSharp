@@ -30,7 +30,7 @@ namespace Xrpl.BinaryCodec.Types
         /// <summary> Deserialize Uint16 </summary>
         /// <param name="token">json token</param>
         /// <returns>Uint16 value</returns>
-        public static Uint16 FromJson(JsonNode token) => token.GetValue<ushort>();
+        public static Uint16 FromJson(JsonNode token) => (ushort)ParseJsonUnsigned(token, ushort.MaxValue);
 
         /// <summary>
         /// create instance of this value

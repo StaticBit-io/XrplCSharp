@@ -24,7 +24,7 @@ namespace Xrpl.BinaryCodec.Types
         /// <summary> Deserialize Uint8 </summary>
         /// <param name="token">json token</param>
         /// <returns>Uint8 value</returns>
-        public static Uint8 FromJson(JsonNode token) => token.GetValue<byte>();
+        public static Uint8 FromJson(JsonNode token) => (byte)ParseJsonUnsigned(token, byte.MaxValue);
 
         /// <summary>
         /// create instance of this value

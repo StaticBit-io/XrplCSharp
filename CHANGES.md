@@ -1,5 +1,11 @@
 # Changes
 
+## 11.14.1.0 15/10/2026
+
+* `AccountId.FromParser` honours the VL length of an AccountID field (#287). A zero-length value, which rippled writes for a defaulted AccountID such as the `Account` of a `UNLModify` pseudo-transaction, decodes to `""`; it read 20 bytes regardless and `XrplBinaryCodec.Decode` threw `ArgumentException` on such a blob. `AccountId.FromJson` reads `""` back as the zero-length value, so the field encodes as `81 00` again. A length other than 0 or 20 raises `FormatException`. `Hash160` gains a non-public constructor that admits the empty buffer
+* `Uint8.FromJson` and `Uint16.FromJson` read a number from a node built in memory from any CLR numeric type, and a base-10 string; they accepted only a node whose type matched exactly, so the `uint` that `XrplBinaryCodec.Decode` emits for a UInt8 or UInt16 field (`UNLModifyDisabling`, `TickSize`, `TransferFee`) did not encode back. A value out of range raises `OverflowException`
+* Tests: `TestUPseudoTransactions` decodes and round-trips mainnet `UNLModify`, `EnableAmendment` and `SetFee` blobs, the last two with the 20-byte zero account, and encodes the JSON rippled returns for the `UNLModify`; `TestUUintFromJson`
+
 ## 11.14.0.0 12/10/2026
 
 * **Breaking:** `BaseAsset` and `QuoteAsset` of `PriceData` (`Xrpl.BinaryCodec` 11.14.0.0) encode a three-character code at bytes 12-14, as rippled and xrpl.js encode every Currency field. The codec wrote it at bytes 0-2, which the ledger holds as a different, nonstandard currency: an oracle published by the SDK with `USD` was shown by the node as `5553440000000000000000000000000000000000`, was not found by `get_aggregate_price` for `USD`, and did not aggregate with oracles published by other SDKs. `Currency.FromOracleJson`, `Currency.FromOracleString` and `Currency.EncodeOracleCurrency` are removed; `Currency.GetCurrencyCodeFromTlcBytes` no longer reads text at bytes 0-2 as a standard code, and `OracleCurrencyConverter` reads such a value as hex instead of as the three characters. Migration: an oracle the SDK published with a three-character code holds the nonstandard code; send `OracleSet` again with the same codes to store the standard ones, and delete the old pairs if they are no longer wanted
