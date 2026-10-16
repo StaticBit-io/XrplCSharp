@@ -29,6 +29,26 @@ namespace Xrpl.BinaryCodec.Types
         /// <inheritdoc />
         public void ToBytes(IBytesSink sink) => sink.Put(ToBytes());
 
+        /// <summary>
+        /// Reads an unsigned integer from a JSON number or a base-10 string. Works for a node parsed
+        /// from text and for one built in memory from any CLR numeric type, such as the
+        /// <c>uint</c> that <see cref="ToJson"/> emits.
+        /// </summary>
+        /// <param name="token">json token</param>
+        /// <param name="maxValue">largest value the type can hold</param>
+        /// <exception cref="OverflowException">the value is negative or above <paramref name="maxValue"/></exception>
+        private protected static ulong ParseJsonUnsigned(JsonNode token, ulong maxValue)
+        {
+            string text = token.GetValueKind() == System.Text.Json.JsonValueKind.Number
+                ? token.ToJsonString()
+                : token.GetValue<string>();
+            if (!ulong.TryParse(text, NumberStyles.None, CultureInfo.InvariantCulture, out ulong value) || value > maxValue)
+            {
+                throw new OverflowException($"Value {text} is not an integer in the range of {typeof(T).Name} (0..{maxValue}).");
+            }
+            return value;
+        }
+
         /// <inheritdoc />
         public virtual JsonNode ToJson() => JsonValue.Create(Convert.ToUInt32(Value));
 
