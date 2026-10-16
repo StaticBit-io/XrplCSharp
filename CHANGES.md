@@ -2,8 +2,8 @@
 
 ## 11.14.1.0 15/10/2026
 
-* `AccountId.FromParser` honours the VL length of an AccountID field (#287). A zero-length value, which rippled writes for a defaulted AccountID such as the `Account` of a `UNLModify` pseudo-transaction, decodes to `""`; it read 20 bytes regardless and `XrplBinaryCodec.Decode` threw `ArgumentException` on such a blob. `AccountId.FromJson` reads `""` back as the zero-length value, so the field encodes as `81 00` again. A length other than 0 or 20 raises `FormatException`. `Hash160` gains a non-public constructor that admits the empty buffer
-* `Uint8.FromJson` and `Uint16.FromJson` read a number from a node built in memory from any CLR numeric type, and a base-10 string; they accepted only a node whose type matched exactly, so the `uint` that `XrplBinaryCodec.Decode` emits for a UInt8 or UInt16 field (`UNLModifyDisabling`, `TickSize`, `TransferFee`) did not encode back. A value out of range raises `OverflowException`
+* `AccountId.FromParser` honours the VL length of an AccountID field (#287). A zero-length value, which rippled writes for a defaulted AccountID such as the `Account` of a `UNLModify` pseudo-transaction, decodes to `""`. `AccountId.FromJson` reads `""` back as the zero-length value, so the field encodes back as `81 00`. A length other than 0 or 20 raises `FormatException`. `Hash160` gains a non-public constructor that admits the empty buffer
+* `Uint8.FromJson` and `Uint16.FromJson` read a number from a node built in memory from any CLR numeric type, including the `uint` that `XrplBinaryCodec.Decode` emits for a UInt8 or UInt16 field, and a base-10 string. A value out of range raises `OverflowException`
 * Tests: `TestUPseudoTransactions` decodes and round-trips mainnet `UNLModify`, `EnableAmendment` and `SetFee` blobs, the last two with the 20-byte zero account, and encodes the JSON rippled returns for the `UNLModify`; `TestUUintFromJson`
 
 ## 11.14.0.0 12/10/2026
