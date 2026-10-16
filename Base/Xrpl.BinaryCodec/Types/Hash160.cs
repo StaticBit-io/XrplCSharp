@@ -17,6 +17,15 @@ namespace Xrpl.BinaryCodec.Types
         {
             Contract.Assert(buffer.Length == 20, "buffer should be 20 bytes");
         }
+        /// <summary>
+        /// Constructs a value that may also be zero-length, for a defaulted AccountID field.
+        /// </summary>
+        /// <param name="buffer">20 bytes, or an empty buffer</param>
+        /// <param name="allowEmpty">accept an empty buffer</param>
+        private protected Hash160(byte[] buffer, bool allowEmpty) : base(buffer)
+        {
+            Contract.Assert(buffer.Length == 20 || (allowEmpty && buffer.Length == 0), "buffer should be 20 bytes");
+        }
         /// <summary> create instance from json object </summary>
         /// <param name="token">json object</param>
         public static Hash160 FromJson(JsonNode token)

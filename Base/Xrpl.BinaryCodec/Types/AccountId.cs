@@ -35,6 +35,10 @@ namespace Xrpl.BinaryCodec.Types
         {
             Encoded = encoded;
         }
+        private AccountId() : base(new byte[0], allowEmpty: true)
+        {
+            Encoded = string.Empty;
+        }
         /// <summary>
         /// Defines how to construct an AccountID
         /// </summary>
@@ -81,14 +85,29 @@ namespace Xrpl.BinaryCodec.Types
             return Encoded;
         }
         /// <summary> create instance from json object </summary>
-        /// <param name="json">json object</param>
+        /// <param name="json">json object; an empty string yields <see cref="Empty"/></param>
         public new static AccountId FromJson(JsonNode json)
         {
-            return json is null ? null : new AccountId(json.GetValue<string>());
+            if (json is null)
+            {
+                return null;
+            }
+            string value = json.GetValue<string>();
+            return value.Length == 0 ? Empty : new AccountId(value);
         }
 
         public static readonly AccountId Zero = 0;
         public static readonly AccountId Neutral = 1;
+
+        /// <summary>
+        /// A defaulted AccountID field, such as the Account of a <c>UNLModify</c> pseudo-transaction.
+        /// rippled serializes it as a zero-length VL and renders it as <c>""</c> in JSON. It differs from
+        /// <see cref="Zero"/>, the account of 20 zero bytes that <c>EnableAmendment</c> and <c>SetFee</c> carry.
+        /// </summary>
+        internal static readonly AccountId Empty = new AccountId();
+
+        /// <summary> true when this is the zero-length <see cref="Empty"/> value </summary>
+        internal bool IsEmpty => Buffer.Length == 0;
 
         /// <summary> create instance from an account id in hex, or from a classic address </summary>
         /// <param name="value">
@@ -108,10 +127,23 @@ namespace Xrpl.BinaryCodec.Types
 
         /// <summary> create instance from binary parser</summary>
         /// <param name="parser">parser</param>
-        /// <param name="hint"></param>
+        /// <param name="hint">
+        /// VL length of the field value, or <c>null</c> where the account is not VL-encoded
+        /// (amount issuer, path step). A zero length yields <see cref="Empty"/>.
+        /// </param>
+        /// <exception cref="FormatException">the VL length is neither 0 nor 20</exception>
         public new static AccountId FromParser(BinaryParser parser, int? hint=null)
         {
-            return new AccountId(parser.Read(20));
+            switch (hint)
+            {
+                case null:
+                case 20:
+                    return new AccountId(parser.Read(20));
+                case 0:
+                    return Empty;
+                default:
+                    throw new FormatException($"Invalid AccountID length: {hint}. Expected 0 or 20.");
+            }
         }
     }
 }
