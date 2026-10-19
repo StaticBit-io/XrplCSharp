@@ -252,6 +252,112 @@ namespace Xrpl.Sugar
     }
 
     /// <summary>
+    /// What a <c>LoanBrokerCoverDeposit</c>, <c>LoanBrokerCoverWithdraw</c> or
+    /// <c>LoanBrokerCoverClawback</c> did to the broker's first-loss cover, read from its metadata -
+    /// of a validated transaction, or of a <c>simulate</c> run
+    /// (<see cref="PreviewSugar.PreviewLoanBrokerCoverDeposit"/>,
+    /// <see cref="PreviewSugar.PreviewLoanBrokerCoverWithdraw"/>,
+    /// <see cref="PreviewSugar.PreviewLoanBrokerCoverClawback"/>).
+    /// </summary>
+    /// <remarks>
+    /// Amounts are in the vault asset's own unit - drops for XRP - as the <c>LoanBroker</c> fields
+    /// are. The vault is not in the metadata of these transactions, so the minimum cover takes it as
+    /// an argument.
+    /// </remarks>
+    public sealed class LoanBrokerCoverOutcome
+    {
+        /// <summary>The broker's ledger index.</summary>
+        public string LoanBrokerId { get; init; }
+
+        /// <summary>The vault asset.</summary>
+        public IssuedCurrency Asset { get; init; }
+
+        /// <summary>The broker's <c>CoverAvailable</c> before the transaction.</summary>
+        public decimal CoverBefore { get; init; }
+
+        /// <summary>The broker's <c>CoverAvailable</c> after the transaction.</summary>
+        public decimal CoverAfter { get; init; }
+
+        /// <summary>The minimum cover <c>LoanBrokerCoverWithdraw</c> requires after the transaction (<see cref="LoanBrokerCover.MinimumCover"/>).</summary>
+        public decimal MinimumCover { get; init; }
+
+        /// <summary>The most the owner can withdraw after the transaction (<see cref="LoanBrokerCover.MaxWithdrawable"/>).</summary>
+        public decimal MaxWithdrawable { get; init; }
+
+        /// <summary>The <c>LoanBroker</c> as the transaction left it.</summary>
+        public LOLoanBroker BrokerAfter { get; init; }
+
+        /// <summary>
+        /// Reads the outcome of <paramref name="transaction"/> from its metadata.
+        /// </summary>
+        /// <param name="transaction">The cover deposit, withdrawal or clawback.</param>
+        /// <param name="metadata">Its metadata.</param>
+        /// <param name="vault">The broker's <c>Vault</c> entry, for the minimum cover.</param>
+        /// <param name="rules">The amendments in force; the current rules when null.</param>
+        /// <exception cref="ArgumentException">
+        /// The transaction is not a cover deposit, withdrawal or clawback, the metadata does not
+        /// modify its broker, or the vault is not the broker's.
+        /// </exception>
+        public static LoanBrokerCoverOutcome FromMetadata(
+            ITransactionCommon transaction,
+            ITransactionMetadata metadata,
+            LOVault vault,
+            LedgerRules rules = null)
+        {
+            if (vault == null)
+                throw new ArgumentNullException(nameof(vault));
+
+            ModifiedNode brokerNode = BrokerNode(transaction, metadata);
+            LOLoanBroker before = brokerNode.PreviousFields as LOLoanBroker;
+            LOLoanBroker after = brokerNode.FinalFields as LOLoanBroker
+                ?? throw new ArgumentException("The LoanBroker node carries no final fields.", nameof(metadata));
+
+            LoanBrokerCover.CoverState state = LoanBrokerCover.CoverState.Of(after, vault, rules);
+            XrplNumber minimum = LoanBrokerCover.WithdrawMinimum(state);
+
+            // A cover transaction that applied changed CoverAvailable, so a value missing from
+            // PreviousFields is a field that was absent before: its default of zero.
+            XrplNumber coverAfter = after.CoverAvailable ?? XrplNumber.Zero;
+            XrplNumber coverBefore = before?.CoverAvailable ?? XrplNumber.Zero;
+
+            return new LoanBrokerCoverOutcome
+            {
+                LoanBrokerId = brokerNode.LedgerIndex,
+                Asset = vault.Asset,
+                CoverBefore = MetadataReader.ToDecimal(coverBefore),
+                CoverAfter = MetadataReader.ToDecimal(coverAfter),
+                MinimumCover = MetadataReader.ToDecimal(minimum),
+                MaxWithdrawable = MetadataReader.ToDecimal(LoanBrokerCover.MaxWithdrawableCore(state, minimum)),
+                BrokerAfter = after,
+            };
+        }
+
+        /// <summary>The <c>LoanBroker</c> node the transaction modified.</summary>
+        internal static ModifiedNode BrokerNode(ITransactionCommon transaction, ITransactionMetadata metadata)
+        {
+            if (transaction == null)
+                throw new ArgumentNullException(nameof(transaction));
+            if (metadata == null)
+                throw new ArgumentNullException(nameof(metadata));
+
+            // A clawback can name the broker through its pseudo-account in Amount instead of
+            // LoanBrokerID; it modifies exactly one broker either way.
+            string brokerId = transaction switch
+            {
+                ILoanBrokerCoverDeposit deposit => deposit.LoanBrokerID,
+                ILoanBrokerCoverWithdraw withdraw => withdraw.LoanBrokerID,
+                ILoanBrokerCoverClawback clawback => clawback.LoanBrokerID,
+                _ => throw new ArgumentException(
+                    $"{transaction.GetType().Name} is not a LoanBrokerCoverDeposit, LoanBrokerCoverWithdraw or LoanBrokerCoverClawback.",
+                    nameof(transaction)),
+            };
+
+            return MetadataReader.Modified(metadata, LedgerEntryType.LoanBroker, brokerId)
+                ?? throw new ArgumentException($"The metadata does not modify loan broker {brokerId}.", nameof(metadata));
+        }
+    }
+
+    /// <summary>
     /// What an <c>AMMDeposit</c> or <c>AMMWithdraw</c> did to the sending account, read from the
     /// metadata.
     /// </summary>

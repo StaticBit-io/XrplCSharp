@@ -179,6 +179,26 @@ coverTx = await client.Autofill(coverTx);
 await client.SubmitAndWait(coverTx, walletBroker, true);
 ```
 
+Владелец может вывести покрытие только до минимума: `CoverRateMinimum` от `DebtTotal` брокера с округлением вверх. `LoanBrokerCoverWithdraw`, который оставил бы меньше, завершается с `tecINSUFFICIENT_FUNDS`, а комиссия всё равно списывается. Округление минимума изменилось с `fixCleanup3_2_0`, поэтому рекомендуется рассчитывать его через `LoanBrokerCover`, а не вручную. `MaxWithdrawable` возвращает наибольший вывод, который примет нода, в единицах самого актива (drops для XRP):
+
+```csharp
+// broker and vault: the LoanBroker and Vault entries, read with ledger_entry
+LedgerRules rules = await LedgerRules.FromNodeAsync(client);
+decimal withdrawable = LoanBrokerCover.MaxWithdrawable(broker, vault, rules);
+decimal minimum = LoanBrokerCover.MinimumCover(broker, vault, rules);
+
+LoanBrokerCoverWithdraw withdrawTx = new LoanBrokerCoverWithdraw
+{
+    Account = walletBroker.ClassicAddress,
+    LoanBrokerID = brokerId,
+    Amount = new Currency { Value = withdrawable.ToString(CultureInfo.InvariantCulture), CurrencyCode = "XRP" },
+};
+TransactionPreview<LoanBrokerCoverOutcome> preview = await client.PreviewLoanBrokerCoverWithdraw(withdrawTx, rules);
+// preview.Outcome.CoverBefore, CoverAfter, MinimumCover, MaxWithdrawable
+```
+
+`LoanBrokerCover.CheckDeposit`, `CheckWithdraw` и `CheckClawback` возвращают `LoanBrokerCoverQuote` с суммой, которая переместится, покрытием до и после и отказом (`Refusal`), который вернёт нода. При `fixCleanup3_2_0` депозит округляется вниз до масштаба `CoverAvailable`, поэтому покрытие может увеличиться меньше, чем на отправленный `Amount`. `PreviewLoanBrokerCoverDeposit` и `PreviewLoanBrokerCoverClawback` дают превью двух других транзакций.
+
 ---
 
 ## Создание и управление кредитом

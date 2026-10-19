@@ -1,5 +1,13 @@
 # Changes
 
+## 11.15.0.0 18/10/2026
+
+* `LoanBrokerCover` (`Xrpl.Sugar`) computes a loan broker's first-loss cover offline from the `LoanBroker` and `Vault` entries, as rippled's `LoanBrokerCoverDeposit`, `LoanBrokerCoverWithdraw`, `LoanBrokerCoverClawback` and `minimumBrokerCover` do (#290). `MinimumCover` is the minimum `LoanBrokerCoverWithdraw` keeps: `CoverRateMinimum` of `DebtTotal` rounded up, to the scale of the vault's `AssetsTotal` under `fixCleanup3_2_0` and to the scale of `DebtTotal` before it. `MaxWithdrawable` is the largest withdrawal the node accepts. `CheckDeposit` rounds the deposit down to the scale of `CoverAvailable` under `fixCleanup3_2_0`; `CheckWithdraw` and `CheckClawback` check the amount against the minimum, which a pre-fix clawback does not round to the asset; `MaxClawback` is what a clawback without an amount takes. The checks return `LoanBrokerCoverQuote` (`Amount`, `CoverBefore`, `CoverAfter`, `MinimumCover`, `Refusal`, `RefusalReason`) with `temBAD_AMOUNT`, `tecPRECISION_LOSS`, `tecINSUFFICIENT_FUNDS` or `tecNO_PERMISSION`
+* `PreviewSugar.PreviewLoanBrokerCoverDeposit`, `PreviewLoanBrokerCoverWithdraw` and `PreviewLoanBrokerCoverClawback` return `LoanBrokerCoverOutcome` (`CoverBefore`, `CoverAfter`, `MinimumCover`, `MaxWithdrawable`, `BrokerAfter`). The preview reads the broker's vault with `ledger_entry`, and the rules with `LedgerRules.FromNodeAsync` unless they are passed. `LoanBrokerCoverOutcome.FromMetadata` reads the same from a validated transaction
+* `AssetRounding.ScaleInMode` (internal) takes `scale()` in the context's rounding mode, as `minimumBrokerCover` does inside its upward guard
+* Docs: withdrawing cover in `LendingProtocol-Guide` (both languages)
+* Tests: `TestULoanBrokerCover` covers XRP, IOU and MPT vaults on both sides of `fixCleanup3_2_0`, an IOU vault whose `AssetsTotal` scale differs from the `DebtTotal` scale, and a 17-digit `AssetsTotal` that the upward guard takes to the next exponent; `TestILoanBrokerCover` withdraws `MaxWithdrawable` from IOU, XRP and MPT brokers, gets `tecINSUFFICIENT_FUNDS` from the node for one unit more and for the pre-fix maximum as `CheckWithdraw` does, claws back what `CheckClawback` says, and compares each preview with the submitted transaction
+
 ## 11.14.1.0 15/10/2026
 
 * `AccountId.FromParser` honours the VL length of an AccountID field (#287). A zero-length value, which rippled writes for a defaulted AccountID such as the `Account` of a `UNLModify` pseudo-transaction, decodes to `""`. `AccountId.FromJson` reads `""` back as the zero-length value, so the field encodes back as `81 00`. A length other than 0 or 20 raises `FormatException`. `Hash160` gains a non-public constructor that admits the empty buffer

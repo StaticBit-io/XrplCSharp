@@ -6,6 +6,7 @@ using System.Threading.Tasks;
 using Xrpl.BinaryCodec;
 using Xrpl.Client;
 using Xrpl.Models.Common;
+using Xrpl.Models.Ledger;
 using Xrpl.Models.Methods;
 using Xrpl.Models.Transactions;
 using Xrpl.Utils;
@@ -114,6 +115,93 @@ namespace Xrpl.Sugar
             CancellationToken cancellationToken = default) =>
             Preview(client, transaction, (filled, metadata) => AmmOutcome.FromMetadata((IAMMWithdraw)filled, metadata), cancellationToken);
 
+        /// <summary>
+        /// Previews a <c>LoanBrokerCoverDeposit</c>: the broker's cover before and after it, and the
+        /// minimum cover the broker must keep.
+        /// </summary>
+        /// <param name="client">The client.</param>
+        /// <param name="transaction">The deposit.</param>
+        /// <param name="rules">
+        /// The amendments the minimum cover is computed under; read from the node with
+        /// <see cref="LedgerRules.FromNodeAsync"/> when null.
+        /// </param>
+        /// <param name="cancellationToken">Cancels the requests.</param>
+        public static Task<TransactionPreview<LoanBrokerCoverOutcome>> PreviewLoanBrokerCoverDeposit(
+            this IXrplClient client,
+            LoanBrokerCoverDeposit transaction,
+            LedgerRules rules = null,
+            CancellationToken cancellationToken = default) =>
+            PreviewCover(client, transaction, rules, cancellationToken);
+
+        /// <summary>
+        /// Previews a <c>LoanBrokerCoverWithdraw</c>: the broker's cover before and after it, and the
+        /// minimum cover the broker must keep. A withdrawal that would take the cover below the
+        /// minimum comes back as <c>tecINSUFFICIENT_FUNDS</c>; <see cref="LoanBrokerCover.MaxWithdrawable"/>
+        /// gives the largest one the node accepts.
+        /// </summary>
+        /// <param name="client">The client.</param>
+        /// <param name="transaction">The withdrawal.</param>
+        /// <param name="rules">
+        /// The amendments the minimum cover is computed under; read from the node with
+        /// <see cref="LedgerRules.FromNodeAsync"/> when null.
+        /// </param>
+        /// <param name="cancellationToken">Cancels the requests.</param>
+        public static Task<TransactionPreview<LoanBrokerCoverOutcome>> PreviewLoanBrokerCoverWithdraw(
+            this IXrplClient client,
+            LoanBrokerCoverWithdraw transaction,
+            LedgerRules rules = null,
+            CancellationToken cancellationToken = default) =>
+            PreviewCover(client, transaction, rules, cancellationToken);
+
+        /// <summary>
+        /// Previews a <c>LoanBrokerCoverClawback</c> by the asset's issuer: the broker's cover before
+        /// and after it, and the minimum cover the clawback leaves.
+        /// </summary>
+        /// <param name="client">The client.</param>
+        /// <param name="transaction">The clawback.</param>
+        /// <param name="rules">
+        /// The amendments the minimum cover is computed under; read from the node with
+        /// <see cref="LedgerRules.FromNodeAsync"/> when null.
+        /// </param>
+        /// <param name="cancellationToken">Cancels the requests.</param>
+        public static Task<TransactionPreview<LoanBrokerCoverOutcome>> PreviewLoanBrokerCoverClawback(
+            this IXrplClient client,
+            LoanBrokerCoverClawback transaction,
+            LedgerRules rules = null,
+            CancellationToken cancellationToken = default) =>
+            PreviewCover(client, transaction, rules, cancellationToken);
+
+        /// <summary>
+        /// A cover preview: the metadata names the broker, whose vault the minimum cover needs and
+        /// the metadata does not carry, so it is read from the same open ledger.
+        /// </summary>
+        private static Task<TransactionPreview<LoanBrokerCoverOutcome>> PreviewCover<TTransaction>(
+            IXrplClient client,
+            TTransaction transaction,
+            LedgerRules rules,
+            CancellationToken cancellationToken)
+            where TTransaction : ITransactionRequest, ITransactionCommon =>
+            PreviewAsync(
+                client,
+                transaction,
+                async (filled, metadata, token) =>
+                {
+                    ModifiedNode brokerNode = LoanBrokerCoverOutcome.BrokerNode(filled, metadata);
+                    string vaultId = (brokerNode.FinalFields as LOLoanBroker)?.VaultID
+                        ?? throw new InvalidOperationException("The simulated LoanBroker node carries no VaultID.");
+
+                    LedgerEntryResponse entry = await client
+                        .LedgerEntry(new LedgerEntryRequest { Index = vaultId }, token)
+                        .Typed()
+                        .ConfigureAwait(false);
+                    LOVault vault = entry.Node as LOVault
+                        ?? throw new InvalidOperationException($"Ledger entry {vaultId} is not a Vault.");
+
+                    LedgerRules applied = rules ?? await LedgerRules.FromNodeAsync(client, token).ConfigureAwait(false);
+                    return LoanBrokerCoverOutcome.FromMetadata(filled, metadata, vault, applied);
+                },
+                cancellationToken);
+
         private static string UnsignedLoanSetBlob(LoanSet transaction)
         {
             Dictionary<string, object> json = transaction.ToDictionary();
@@ -123,10 +211,25 @@ namespace Xrpl.Sugar
             return XrplBinaryCodec.Encode(json);
         }
 
-        private static async Task<TransactionPreview<TOutcome>> Preview<TTransaction, TOutcome>(
+        private static Task<TransactionPreview<TOutcome>> Preview<TTransaction, TOutcome>(
             IXrplClient client,
             TTransaction transaction,
             Func<TTransaction, ITransactionMetadata, TOutcome> read,
+            CancellationToken cancellationToken,
+            Func<TTransaction, SimulateRequest> buildRequest = null)
+            where TTransaction : ITransactionRequest
+            where TOutcome : class =>
+            PreviewAsync(
+                client,
+                transaction,
+                (filled, metadata, _) => Task.FromResult(read(filled, metadata)),
+                cancellationToken,
+                buildRequest);
+
+        private static async Task<TransactionPreview<TOutcome>> PreviewAsync<TTransaction, TOutcome>(
+            IXrplClient client,
+            TTransaction transaction,
+            Func<TTransaction, ITransactionMetadata, CancellationToken, Task<TOutcome>> read,
             CancellationToken cancellationToken,
             Func<TTransaction, SimulateRequest> buildRequest = null)
             where TTransaction : ITransactionRequest
@@ -151,7 +254,9 @@ namespace Xrpl.Sugar
                 EngineResult = response.EngineResult,
                 EngineResultMessage = response.EngineResultMessage,
                 Metadata = response.Meta,
-                Outcome = succeeded && response.Meta != null ? read(filled, response.Meta) : null,
+                Outcome = succeeded && response.Meta != null
+                    ? await read(filled, response.Meta, cancellationToken).ConfigureAwait(false)
+                    : null,
             };
         }
     }

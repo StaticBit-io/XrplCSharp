@@ -179,6 +179,26 @@ coverTx = await client.Autofill(coverTx);
 await client.SubmitAndWait(coverTx, walletBroker, true);
 ```
 
+The owner can withdraw cover only down to the minimum: `CoverRateMinimum` of the broker's `DebtTotal`, rounded up. A `LoanBrokerCoverWithdraw` that would leave less fails with `tecINSUFFICIENT_FUNDS`, and the fee is still charged. The rounding of the minimum changed with `fixCleanup3_2_0`, so compute it with `LoanBrokerCover` rather than by hand. `MaxWithdrawable` returns the largest withdrawal the node accepts, in the asset's own unit (drops for XRP):
+
+```csharp
+// broker and vault: the LoanBroker and Vault entries, read with ledger_entry
+LedgerRules rules = await LedgerRules.FromNodeAsync(client);
+decimal withdrawable = LoanBrokerCover.MaxWithdrawable(broker, vault, rules);
+decimal minimum = LoanBrokerCover.MinimumCover(broker, vault, rules);
+
+LoanBrokerCoverWithdraw withdrawTx = new LoanBrokerCoverWithdraw
+{
+    Account = walletBroker.ClassicAddress,
+    LoanBrokerID = brokerId,
+    Amount = new Currency { Value = withdrawable.ToString(CultureInfo.InvariantCulture), CurrencyCode = "XRP" },
+};
+TransactionPreview<LoanBrokerCoverOutcome> preview = await client.PreviewLoanBrokerCoverWithdraw(withdrawTx, rules);
+// preview.Outcome.CoverBefore, CoverAfter, MinimumCover, MaxWithdrawable
+```
+
+`LoanBrokerCover.CheckDeposit`, `CheckWithdraw` and `CheckClawback` return a `LoanBrokerCoverQuote` with the amount that moves, the cover before and after, and the `Refusal` the node would give. Under `fixCleanup3_2_0` a deposit is rounded down to the scale of `CoverAvailable`, so the cover can be credited less than the `Amount` sent. `PreviewLoanBrokerCoverDeposit` and `PreviewLoanBrokerCoverClawback` preview the other two transactions.
+
 ---
 
 ## Step-by-Step: Creating and Managing a Loan
