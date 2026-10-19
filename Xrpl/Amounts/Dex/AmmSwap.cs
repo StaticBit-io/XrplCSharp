@@ -227,7 +227,11 @@ namespace Xrpl.Amounts
             return amounts;
         }
 
-        /// <summary>The pre-<c>fixAMMv1_1</c> <c>changeSpotPriceQuality</c>, which throws where the newer one declines.</summary>
+        /// <summary>
+        /// The pre-<c>fixAMMv1_1</c> <c>changeSpotPriceQuality</c>, which throws where the newer one
+        /// declines. rippled deleted it when it retired the amendment; it is reached only through
+        /// rules built by hand with <see cref="LedgerRules.FixAMMv1_1"/> off.
+        /// </summary>
         private static (XrplAmount In, XrplAmount Out)? ChangeSpotPriceQualityLegacy(
             XrplAmount poolIn,
             XrplAmount poolOut,

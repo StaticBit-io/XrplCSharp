@@ -48,9 +48,16 @@ namespace Xrpl.Sugar
         public bool LargeNumbers { get; init; } = true;
 
         /// <summary>
-        /// Whether <c>fixAMMv1_1</c> is enabled: a withdrawal by the only liquidity provider first
-        /// aligns the pool's LP token balance with the provider's.
+        /// Whether <c>fixAMMv1_1</c> is enabled: AMM swaps round in the pool's favour, a pool offer
+        /// beside an order book is sized from its coarser side, a single-path AMM offer in offer
+        /// crossing accounts for the transfer fee, and a withdrawal by the only liquidity provider
+        /// first aligns the pool's LP token balance with the provider's.
         /// </summary>
+        /// <remarks>
+        /// rippled retired the amendment (<c>XRPL_RETIRE_FIX(AMMv1_1)</c>, rippled #8226): a node
+        /// runs it whatever the ledger records, so <see cref="FromNodeAsync"/> always sets it.
+        /// Set it to false by hand only to replay the behaviour before the amendment.
+        /// </remarks>
         public bool FixAMMv1_1 { get; init; } = true;
 
         /// <summary>
@@ -110,7 +117,11 @@ namespace Xrpl.Sugar
         /// </summary>
         private bool CurrentRulesSet => !OutsideTransaction;
 
-        /// <summary><c>fixAMMv1_1</c> as <c>swapAssetIn</c> and <c>swapAssetOut</c> read it: from the current transaction rules.</summary>
+        /// <summary>
+        /// <c>fixAMMv1_1</c> as <c>swapAssetIn</c> and <c>swapAssetOut</c> read it in rippled 3.4.1:
+        /// from the current transaction rules. rippled develop, which retired the amendment, swaps
+        /// with its rounding outside a transaction too.
+        /// </summary>
         internal bool CurrentFixAMMv1_1 => CurrentRulesSet && FixAMMv1_1;
 
         /// <summary><c>fixAMMv1_3</c> as an offer's <c>checkInvariant</c> reads it: from the current transaction rules.</summary>
@@ -188,7 +199,11 @@ namespace Xrpl.Sugar
             return FromFeatures(features);
         }
 
-        /// <summary>The rules for the amendments a <c>feature</c> response reports enabled.</summary>
+        /// <summary>
+        /// The rules for the amendments a <c>feature</c> response reports enabled. A retired
+        /// amendment is on whatever the response says: <c>feature</c> reports the ledger's state,
+        /// which a private or standalone ledger may never have changed.
+        /// </summary>
         internal static LedgerRules FromFeatures(ServerFeatures features)
         {
             bool Enabled(string name) => features.GetByName(name)?.Value?.Enabled == true;
@@ -200,7 +215,7 @@ namespace Xrpl.Sugar
                 FixCleanup3_3_0 = Enabled("fixCleanup3_3_0"),
                 FixCleanup3_4_0 = Enabled("fixCleanup3_4_0"),
                 LargeNumbers = Enabled("SingleAssetVault") || Enabled("LendingProtocol") || Enabled("MPTokensV2"),
-                FixAMMv1_1 = Enabled("fixAMMv1_1"),
+                FixAMMv1_1 = true,
                 FixAMMv1_2 = Enabled("fixAMMv1_2"),
                 FixAMMv1_3 = Enabled("fixAMMv1_3"),
                 MPTokensV2 = Enabled("MPTokensV2"),

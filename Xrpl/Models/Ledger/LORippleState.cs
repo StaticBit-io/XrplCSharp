@@ -16,7 +16,7 @@ namespace Xrpl.Models.Ledger
     /// Ledger flags have names that begin with lsf.
     /// </summary>
     [Flags]
-    public enum RippleStateFlags
+    public enum RippleStateFlags : uint
     {
         
         /// <summary> This RippleState object contributes to the low account's owner reserve. </summary>

@@ -176,32 +176,20 @@ namespace Xrpl.Client.Json.Converters
             {
                 return (ITransactionResponse)JsonSerializer.Deserialize(rawJson, transaction.GetType(), innerOptions);
             }
-            catch (JsonException)
+            catch (JsonException ex)
             {
-                // The failed pass never got to assign TransactionType, and no *Response class sets
-                // it in a constructor, so without this the object would carry the enum default -
-                // AccountSet, a real and common type - and report itself as a transaction it is not.
-                transaction.TransactionType = ParseTransactionType(transactionType);
-                return transaction;
+                // Fields, transaction types and ledger entry types this version does not know land
+                // in UnknownFields or Unknown and never get here; what does is a member the model
+                // declares with a type the node does not send. Returning the bare object instead
+                // dropped hash, date and meta without a trace, so the caller could not even tell
+                // which transaction was lost. The inner position refers to the nested document,
+                // not the caller's, and is left on the inner exception.
+                string hash = root.TryGetProperty("hash", out JsonElement hashEl) && hashEl.ValueKind == JsonValueKind.String
+                    ? hashEl.GetString()
+                    : null;
+                string subject = (transactionType ?? "transaction") + (hash == null ? string.Empty : " " + hash);
+                throw new JsonException($"Cannot read {subject}: {ex.Message}", ex);
             }
-        }
-
-        /// <summary>
-        /// Resolves the TransactionType discriminator to its enum member, or
-        /// <see cref="TransactionType.Unknown"/> when it names no member.
-        /// </summary>
-        private static TransactionType ParseTransactionType(string transactionType)
-        {
-            // Enum.TryParse also accepts the decimal form of a member's value, which would turn a
-            // discriminator that is not a name at all into whichever member holds that number.
-            // Comparing the round trip back to a name rejects those.
-            if (Enum.TryParse(transactionType, out TransactionType parsed)
-                && string.Equals(parsed.ToString(), transactionType, StringComparison.Ordinal))
-            {
-                return parsed;
-            }
-
-            return TransactionType.Unknown;
         }
 
         /// <inheritdoc />
