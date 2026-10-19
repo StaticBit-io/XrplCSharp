@@ -165,9 +165,11 @@ namespace Xrpl.Tests.Models.Tests
         }
 
         /// <summary>
-        /// The JSON value rippled sends for an integer field of each type, at the top of its range:
-        /// UInt8, UInt16, UInt32 and Int32 as numbers, UInt64 as a string. LedgerEntryType is a
-        /// UInt16 that rippled renders as its name, so it is not read as a number.
+        /// The JSON value rippled sends for an integer field of each type: UInt8, UInt16 and UInt32
+        /// as numbers at the top of their range, Int32 at the bottom of its range, UInt64 as a string.
+        /// The UInt64 sample is "1" because rippled renders most UInt64 fields in hex and the MPT
+        /// amounts in decimal, and "1" is the one value that reads the same in both. LedgerEntryType
+        /// is a UInt16 that rippled renders as its name, so it is not read as a number.
         /// </summary>
         private static string WireSample(CodecField field)
         {
