@@ -171,9 +171,9 @@ public class TestUPermissionValueConverter
 
         ITransactionResponse response = JsonSerializer.Deserialize<ITransactionResponse>(json, Options);
 
-        // TransactionResponseConverter swallows a JsonException and returns a bare object whose
-        // TransactionType stays at the enum default, so an unknown name used to turn a DelegateSet
-        // into an empty AccountSet without any error reaching the caller.
+        // An unknown name used to fail the read, and TransactionResponseConverter then returned a
+        // bare object whose TransactionType stayed at the enum default: a DelegateSet came back as
+        // an empty AccountSet without any error reaching the caller.
         Assert.IsInstanceOfType<DelegateSetResponse>(response);
         Assert.AreEqual(TransactionType.DelegateSet, response.TransactionType);
         Assert.AreEqual("r9cZA1mLK5R5Am25ArfXFmqgNwjZgnfk59", response.Account);

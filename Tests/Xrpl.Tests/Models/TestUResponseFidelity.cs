@@ -79,6 +79,9 @@ namespace Xrpl.Tests.Models.Tests
             // TransactionType, so a Payment here deserializes as PaymentResponse - the class this file
             // was captured to exercise (see the table below).
             ["tx_v1_raw.json"] = typeof(TransactionResponse),
+            // A CheckCash whose metadata deletes a Check carrying SourceTag, in both API versions.
+            ["tx_check_cash_raw.json"] = typeof(TransactionSummary),
+            ["tx_check_cash_v1_raw.json"] = typeof(TransactionResponse),
             ["account_tx_raw.json"] = typeof(AccountTransactions),
             ["account_info_raw.json"] = typeof(AccountInfo),
             ["account_objects_raw.json"] = typeof(AccountObjects),

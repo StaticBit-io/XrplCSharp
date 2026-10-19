@@ -3,11 +3,16 @@ using System.Collections.Generic;
 using System.Linq;
 using System.Reflection;
 using System.Text;
+using System.Text.Json;
 using System.Text.Json.Serialization;
 
 using Microsoft.VisualStudio.TestTools.UnitTesting;
 
+using Xrpl.Client.Json;
 using Xrpl.Models.Ledger;
+
+using CodecField = Xrpl.BinaryCodec.Enums.Field;
+using CodecFieldType = Xrpl.BinaryCodec.Enums.FieldType;
 
 using LONFTokenOffer = Xrpl.Models.Methods.LONFTokenOffer;
 using LONFTokenPage = Xrpl.Models.Methods.LONFTokenPage;
@@ -157,6 +162,69 @@ namespace Xrpl.Tests.Models.Tests
                 string.Empty,
                 report.ToString(),
                 $"Ledger-object models diverge from rippled ledger_entries.macro ({RippledLedgerEntryFormats.FixturePath}):\n" + report);
+        }
+
+        /// <summary>
+        /// The JSON value rippled sends for an integer field of each type, at the top of its range:
+        /// UInt8, UInt16, UInt32 and Int32 as numbers, UInt64 as a string. LedgerEntryType is a
+        /// UInt16 that rippled renders as its name, so it is not read as a number.
+        /// </summary>
+        private static string WireSample(CodecField field)
+        {
+            if (field.Name == nameof(CodecField.LedgerEntryType))
+                return null;
+            if (field.Type == CodecFieldType.Uint8)
+                return byte.MaxValue.ToString();
+            if (field.Type == CodecFieldType.Uint16)
+                return ushort.MaxValue.ToString();
+            if (field.Type == CodecFieldType.Uint32)
+                return uint.MaxValue.ToString();
+            if (field.Type == CodecFieldType.Int32)
+                return int.MinValue.ToString();
+            if (field.Type == CodecFieldType.Uint64)
+                return "\"1\"";
+            return null;
+        }
+
+        /// <summary>
+        /// An integer field declared with a type that cannot hold what the node sends - a string
+        /// for a number, an int for a UInt32 - throws on read, and the throw takes the containing
+        /// transaction with it. LOCheck.SourceTag was a string: a CheckCash deleting a Check with a
+        /// SourceTag came back from tx without hash, date or meta.
+        /// </summary>
+        [TestMethod]
+        public void TestULedgerEntryModels_ReadIntegerFieldsAsRippledSendsThem()
+        {
+            StringBuilder report = new StringBuilder();
+
+            foreach (KeyValuePair<string, Type> entry in Models.OrderBy(e => e.Key, StringComparer.Ordinal))
+            {
+                foreach (KeyValuePair<string, PropertyInfo> property in WireProperties(entry.Value)
+                             .OrderBy(p => p.Key, StringComparer.Ordinal))
+                {
+                    if (!CodecField.Values.Has(property.Key))
+                        continue;
+
+                    string sample = WireSample(CodecField.Values[property.Key]);
+                    if (sample == null)
+                        continue;
+
+                    string json = $"{{\"{property.Key}\":{sample}}}";
+                    try
+                    {
+                        object model = JsonSerializer.Deserialize(json, entry.Value, XrplJsonOptions.Default);
+                        if (property.Value.GetValue(model) == null)
+                            report.AppendLine($"{entry.Value.Name}.{property.Key}: {json} read as null");
+                    }
+                    catch (Exception ex) when (ex is JsonException or InvalidOperationException or FormatException or OverflowException)
+                    {
+                        report.AppendLine(
+                            $"{entry.Value.Name}.{property.Key} ({property.Value.PropertyType.Name}): {json} - {ex.GetType().Name}: {ex.Message}");
+                    }
+                }
+            }
+
+            Assert.AreEqual(string.Empty, report.ToString(), "Integer fields the models cannot read:\n" + report);
         }
 
         [TestMethod]
