@@ -78,6 +78,6 @@ namespace Xrpl.Models.Ledger
         /// An arbitrary tag to further specify the source for this Check,
         /// such as a hosted recipient at the sender's address.
         /// </summary>
-        public string SourceTag { get; set; }
+        public uint? SourceTag { get; set; }
     }
 }
