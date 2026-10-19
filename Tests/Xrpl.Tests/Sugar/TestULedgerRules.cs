@@ -54,4 +54,17 @@ public class TestULedgerRules
         Assert.IsTrue(rules.MPTokensV2);
         Assert.AreEqual(NumberMantissaScale.Large320, rules.Context.Scale);
     }
+
+    /// <summary>
+    /// rippled retired <c>fixAMMv1_1</c> (#8226): the node runs it whatever the ledger records,
+    /// and <c>feature</c> reports it disabled on a ledger that never enabled it.
+    /// </summary>
+    [TestMethod]
+    public void RetiredFixAMMv1_1IsOnWhateverTheNodeReports()
+    {
+        LedgerRules rules = LedgerRules.FromFeatures(Enabled("fixCleanup3_3_0"));
+
+        Assert.IsTrue(rules.FixAMMv1_1);
+        Assert.IsTrue(rules.CurrentFixAMMv1_1);
+    }
 }
