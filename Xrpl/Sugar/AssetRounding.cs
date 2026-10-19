@@ -90,7 +90,15 @@ namespace Xrpl.Sugar
 
         /// <summary><c>scale(value, asset)</c>: the exponent of the value as an amount of the asset, rounded to nearest.</summary>
         internal static int Scale(XrplNumber value, bool integral, NumberContext context) =>
-            AmountExponent(ToAmount(value, integral, context.WithRounding(NumberRounding.ToNearest)), integral);
+            ScaleInMode(value, integral, context.WithRounding(NumberRounding.ToNearest));
+
+        /// <summary>
+        /// <c>scale(value, asset)</c> in the context's rounding mode, as code inside a
+        /// <c>NumberRoundModeGuard</c> computes it: a value with more digits than the amount holds
+        /// can round up into the next exponent.
+        /// </summary>
+        internal static int ScaleInMode(XrplNumber value, bool integral, NumberContext context) =>
+            AmountExponent(ToAmount(value, integral, context), integral);
 
         /// <summary><c>STAmount{asset, value} == value</c>: whether an amount of the asset holds the value exactly.</summary>
         internal static bool IsRepresentable(XrplNumber value, bool integral, NumberContext context) =>
