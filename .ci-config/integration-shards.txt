@@ -10,7 +10,6 @@
 1 TestIPathFinding
 1 TestIPreviewLoanPayment
 1 TestIPreviewLoanVault
-1 TestIVault
 1 TestIVaultShares
 1 TestIXChainAttestation
 1 TestIXChainNegative
