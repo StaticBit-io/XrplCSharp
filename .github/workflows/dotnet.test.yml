@@ -78,7 +78,10 @@ jobs:
         source: .
         files: .ci-config/docker-compose.ci.yml
         targets: xrpld
+        # Bake resolves the compose build context from the repository root, not from the
+        # compose file's directory as docker compose does.
         set: |
+          xrpld.context=.ci-config
           xrpld.cache-from=type=gha,scope=xrpld-stand
           xrpld.cache-to=type=gha,scope=xrpld-stand,mode=max
           xrpld.output=type=cacheonly
@@ -118,7 +121,10 @@ jobs:
         files: .ci-config/docker-compose.ci.yml
         targets: xrpld
         load: true
+        # Bake resolves the compose build context from the repository root, not from the
+        # compose file's directory as docker compose does.
         set: |
+          xrpld.context=.ci-config
           xrpld.cache-from=type=gha,scope=xrpld-stand
           xrpld.cache-to=type=gha,scope=xrpld-stand,mode=max
 
