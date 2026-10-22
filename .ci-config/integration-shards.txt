@@ -13,8 +13,10 @@
 1 TestIVaultShares
 1 TestIXChainAttestation
 1 TestIXChainNegative
+2 TestIAMMMpt
 2 TestIEscrow
 2 TestILoan
+2 TestIMptDex
 2 TestIPaymentFlow
 2 TestIPermissionedDex
 2 TestIPreviewLoanDue
