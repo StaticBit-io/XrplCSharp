@@ -1,5 +1,10 @@
 # Changes
 
+## 11.17.0.0 21/10/2026
+
+* `VaultPhase` (`None`, `Subscription`, `Investment`, `Redemption`) and `VaultShares.PhaseAt(LOVault, DateTime?, LedgerRules)` are public (#298): the phase of a closed-ended vault as rippled's `getVaultPhase` decides it, with `SubscriptionDate` inside the subscription phase and `RedemptionDate` inside the redemption phase. A vault without `SubscriptionDate` stays in its subscription phase, one without `RedemptionDate` in its investment phase. `PhaseAt` returns `None` for a vault that is not closed-ended, without a time, and when `LendingProtocolV1_1` is not enabled; `Deposit`, `WithdrawAssets` and `RedeemShares` refuse by the phase it returns
+* Tests: `TestUVaultShares` checks `PhaseAt` on both sides of `SubscriptionDate` and `RedemptionDate`, with either date missing, with no time, with `LendingProtocolV1_1` off, for an open-ended vault and one without `VaultKind`, and with local and unspecified times
+
 ## 11.16.0.0 19/10/2026
 
 * **Breaking:** `LOCheck.SourceTag` is `uint?`, the number rippled sends for the UInt32; it was `string`, which no Check carrying a `SourceTag` could be read into (mainnet CheckCash `E14C0351A673C27F6A1F0795EB7D665339F6B8C7EDB84E812DCA795127F25E1F`). Migration: read the tag as a number

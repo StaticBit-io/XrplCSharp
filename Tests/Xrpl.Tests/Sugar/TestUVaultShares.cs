@@ -50,14 +50,15 @@ public class TestUVaultShares
     private static readonly DateTime Subscription = new DateTime(2026, 9, 1, 0, 0, 0, DateTimeKind.Utc);
     private static readonly DateTime Redemption = Subscription.AddDays(30);
 
-    private static LOVault ClosedEnded() => new LOVault
+    private static LOVault ClosedEnded(
+        uint? kind = (uint)VaultKind.ClosedEnded, bool withSubscriptionDate = true, bool withRedemptionDate = true) => new LOVault
     {
         Asset = new IssuedCurrency { Currency = "XRP" },
         AssetsTotal = 1_000_000,
         AssetsAvailable = 1_000_000,
-        VaultKind = (uint)VaultKind.ClosedEnded,
-        SubscriptionDate = Subscription,
-        RedemptionDate = Redemption,
+        VaultKind = kind,
+        SubscriptionDate = withSubscriptionDate ? Subscription : null,
+        RedemptionDate = withRedemptionDate ? Redemption : null,
     };
 
     [TestMethod]
@@ -95,5 +96,62 @@ public class TestUVaultShares
 
         Assert.IsNull(VaultShares.Deposit(ClosedEnded(), 1_000_000, 1_000).Refusal);
         Assert.IsNull(VaultShares.Deposit(ClosedEnded(), 1_000_000, 1_000, rules: new LedgerRules { LendingProtocolV1_1 = false }, parentCloseTime: investment).Refusal);
+    }
+
+    [TestMethod]
+    [DataRow(-1, VaultPhase.Subscription)]
+    [DataRow(0, VaultPhase.Subscription)]
+    [DataRow(1, VaultPhase.Investment)]
+    [DataRow(30 * 24 * 3600 - 1, VaultPhase.Investment)]
+    [DataRow(30 * 24 * 3600, VaultPhase.Redemption)]
+    [DataRow(60 * 24 * 3600, VaultPhase.Redemption)]
+    public void PhaseAt_ClosedEnded_FollowsGetVaultPhaseBoundaries(int secondsAfterSubscription, VaultPhase expected)
+    {
+        // SubscriptionDate still belongs to the subscription phase, RedemptionDate already to redemption.
+        DateTime at = Subscription.AddSeconds(secondsAfterSubscription);
+
+        Assert.AreEqual(expected, VaultShares.PhaseAt(ClosedEnded(), at));
+        Assert.AreEqual(expected, VaultShares.PhaseAt(ClosedEnded(), at, new LedgerRules { LendingProtocolV1_1 = true }));
+    }
+
+    [TestMethod]
+    public void PhaseAt_MissingDates_KeepTheVaultInItsPhase()
+    {
+        DateTime late = Redemption.AddYears(10);
+
+        LOVault noSubscription = ClosedEnded(withSubscriptionDate: false);
+        LOVault noRedemption = ClosedEnded(withRedemptionDate: false);
+
+        Assert.AreEqual(VaultPhase.Subscription, VaultShares.PhaseAt(noSubscription, late));
+        Assert.AreEqual(VaultPhase.Investment, VaultShares.PhaseAt(noRedemption, late));
+    }
+
+    [TestMethod]
+    public void PhaseAt_NoPhase_WithoutATimeTheAmendmentOrAClosedEndedVault()
+    {
+        DateTime investment = Subscription.AddDays(1);
+        LOVault noKind = ClosedEnded(kind: null);
+        LOVault openEnded = ClosedEnded(kind: (uint)VaultKind.OpenEnded);
+
+        Assert.AreEqual(VaultPhase.None, VaultShares.PhaseAt(ClosedEnded(), null));
+        Assert.AreEqual(VaultPhase.None, VaultShares.PhaseAt(ClosedEnded(), investment, new LedgerRules { LendingProtocolV1_1 = false }));
+        Assert.AreEqual(VaultPhase.None, VaultShares.PhaseAt(noKind, investment));
+        Assert.AreEqual(VaultPhase.None, VaultShares.PhaseAt(openEnded, investment));
+    }
+
+    [TestMethod]
+    public void PhaseAt_UnspecifiedTimeIsUtc_LocalTimeIsConverted()
+    {
+        DateTime unspecified = DateTime.SpecifyKind(Subscription, DateTimeKind.Unspecified);
+        DateTime local = Subscription.AddSeconds(1).ToLocalTime();
+
+        Assert.AreEqual(VaultPhase.Subscription, VaultShares.PhaseAt(ClosedEnded(), unspecified));
+        Assert.AreEqual(VaultPhase.Investment, VaultShares.PhaseAt(ClosedEnded(), local));
+    }
+
+    [TestMethod]
+    public void PhaseAt_NullVault_Throws()
+    {
+        Assert.Throws<ArgumentNullException>(() => VaultShares.PhaseAt(null, Subscription));
     }
 }
