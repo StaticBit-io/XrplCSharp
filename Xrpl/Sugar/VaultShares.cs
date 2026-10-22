@@ -35,6 +35,31 @@ namespace Xrpl.Sugar
     }
 
     /// <summary>
+    /// The phase of a closed-ended vault (XLS-65 under <c>LendingProtocolV1_1</c>), as
+    /// <see cref="VaultShares.PhaseAt"/> returns it.
+    /// </summary>
+    public enum VaultPhase
+    {
+        /// <summary>
+        /// No phase applies: the vault is not closed-ended, no time is given, or the amendment
+        /// that enforces the phases is not enabled.
+        /// </summary>
+        None,
+
+        /// <summary>Up to and including <c>SubscriptionDate</c>: deposits and withdrawals are taken.</summary>
+        Subscription,
+
+        /// <summary>
+        /// After <c>SubscriptionDate</c> and before <c>RedemptionDate</c>: deposits are refused with
+        /// <c>tecEXPIRED</c>, withdrawals with <c>tecTOO_SOON</c>.
+        /// </summary>
+        Investment,
+
+        /// <summary>From <c>RedemptionDate</c> on: withdrawals are taken, deposits refused with <c>tecEXPIRED</c>.</summary>
+        Redemption,
+    }
+
+    /// <summary>
     /// Vault deposits and withdrawals computed offline from the <c>Vault</c> entry and its share
     /// issuance, the way rippled's <c>VaultDeposit</c>, <c>VaultWithdraw</c> and
     /// <c>VaultHelpers.cpp</c> compute them.
@@ -45,8 +70,9 @@ namespace Xrpl.Sugar
     /// shares, the rounding to the vault's scale, and the refusals it leads to - a deposit or
     /// withdrawal too small to move a share or a representable amount (<c>tecPRECISION_LOSS</c>),
     /// the vault's available assets or the holder's shares (<c>tecINSUFFICIENT_FUNDS</c>), and
-    /// <c>AssetsMaximum</c> (<c>tecLIMIT_EXCEEDED</c>). Authorization, freezes, the vault's phase
-    /// and the account's own funds are not; <see cref="PreviewSugar.PreviewVaultDeposit"/> and
+    /// <c>AssetsMaximum</c> (<c>tecLIMIT_EXCEEDED</c>), and, given the parent close time, the phase
+    /// of a closed-ended vault (<see cref="PhaseAt"/>). Authorization, freezes and the account's own
+    /// funds are not; <see cref="PreviewSugar.PreviewVaultDeposit"/> and
     /// <see cref="PreviewSugar.PreviewVaultWithdraw"/> cover them.
     /// </para>
     /// <para>
@@ -169,7 +195,7 @@ namespace Xrpl.Sugar
             if (amount <= XrplNumber.Zero)
                 return Refused("temBAD_AMOUNT", "The amount is not positive.");
 
-            if (state.Rules.LendingProtocolV1_1 && PhaseAt(vault, parentCloseTime) is VaultPhase.Investment or VaultPhase.Redemption)
+            if (PhaseAt(vault, parentCloseTime, state.Rules) is VaultPhase.Investment or VaultPhase.Redemption)
                 return Refused("tecEXPIRED", "A closed-ended vault takes deposits only in its subscription phase.");
 
             XrplNumber assets = AssetRounding.ToAmount(amount, state.Integral, c);
@@ -239,19 +265,44 @@ namespace Xrpl.Sugar
         }
 
         private static Outcome InvestmentPhaseRefusal(VaultState state, LOVault vault, DateTime? parentCloseTime) =>
-            state.Rules.LendingProtocolV1_1 && PhaseAt(vault, parentCloseTime) == VaultPhase.Investment
+            PhaseAt(vault, parentCloseTime, state.Rules) == VaultPhase.Investment
                 ? Refused("tecTOO_SOON", "A closed-ended vault pays out nothing in its investment phase.")
                 : null;
 
         /// <summary>
-        /// <c>getVaultPhase</c>: subscription up to and including <c>SubscriptionDate</c>, investment
-        /// until <c>RedemptionDate</c>, redemption from it on. <see cref="VaultPhase.None"/> for an
-        /// open-ended vault, or when no time is given.
+        /// The phase of a closed-ended vault at <paramref name="parentCloseTime"/>, as rippled's
+        /// <c>getVaultPhase</c> decides it: subscription up to and including <c>SubscriptionDate</c>,
+        /// investment until <c>RedemptionDate</c>, redemption from it on. A vault without a
+        /// <c>SubscriptionDate</c> is always in its subscription phase, and one without a
+        /// <c>RedemptionDate</c> never leaves its investment phase.
         /// </summary>
-        private static VaultPhase PhaseAt(LOVault vault, DateTime? parentCloseTime)
+        /// <remarks>
+        /// <see cref="VaultPhase.None"/> means no phase restricts deposits or withdrawals: the vault
+        /// is not closed-ended, no time is given, or <c>LendingProtocolV1_1</c>, the amendment that
+        /// enforces the phases, is not enabled. These are the phases <see cref="Deposit"/>,
+        /// <see cref="WithdrawAssets"/> and <see cref="RedeemShares"/> refuse by: a deposit only in
+        /// <see cref="VaultPhase.Subscription"/>, a withdrawal not in
+        /// <see cref="VaultPhase.Investment"/>.
+        /// </remarks>
+        /// <param name="vault">The <c>Vault</c> entry.</param>
+        /// <param name="parentCloseTime">
+        /// The close time of the ledger before the one the transaction lands in. A local time is
+        /// converted to UTC; an unspecified one is taken as UTC.
+        /// </param>
+        /// <param name="rules">The amendments in force; the current rules when null.</param>
+        /// <exception cref="ArgumentNullException"><paramref name="vault"/> is null.</exception>
+        public static VaultPhase PhaseAt(LOVault vault, DateTime? parentCloseTime, LedgerRules rules = null)
         {
-            if (parentCloseTime is not { } time || vault.VaultKind != (uint)VaultKind.ClosedEnded)
+            if (vault == null)
+                throw new ArgumentNullException(nameof(vault));
+
+            rules ??= new LedgerRules();
+            if (!rules.LendingProtocolV1_1
+                || parentCloseTime is not { } time
+                || vault.VaultKind != (uint)VaultKind.ClosedEnded)
+            {
                 return VaultPhase.None;
+            }
 
             DateTime now = time.Kind switch
             {
@@ -264,14 +315,6 @@ namespace Xrpl.Sugar
             if (vault.RedemptionDate is not { } redemption || now < redemption)
                 return VaultPhase.Investment;
             return VaultPhase.Redemption;
-        }
-
-        private enum VaultPhase
-        {
-            None,
-            Subscription,
-            Investment,
-            Redemption,
         }
 
         /// <summary>The checks <c>VaultWithdraw::doApply</c> makes once shares and assets are known.</summary>
