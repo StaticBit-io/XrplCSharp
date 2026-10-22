@@ -296,7 +296,8 @@ namespace Xrpl.Sugar
             if (vault == null)
                 throw new ArgumentNullException(nameof(vault));
 
-            if (rules is { LendingProtocolV1_1: false }
+            rules ??= new LedgerRules();
+            if (!rules.LendingProtocolV1_1
                 || parentCloseTime is not { } time
                 || vault.VaultKind != (uint)VaultKind.ClosedEnded)
             {
