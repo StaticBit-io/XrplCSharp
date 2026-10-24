@@ -1,5 +1,11 @@
 # Changes
 
+## 11.19.0.0 24/10/2026
+
+* `DexSnapshot.WithoutOffer(string offerIndex)` returns the snapshot without one offer, its `DexIndex` derived from the snapshot's (`SnapshotRoll.WithoutOffer`, the `DexIndexDelta` the roll uses) instead of built at the next evaluation (#310). The index is matched in either case; a snapshot that does not hold the offer is returned as it is. Only `Offers` changes: owner counts, sequences and balances are left alone. `DexSnapshot.WithoutOffer(string offerIndex, bool releaseOwnerReserve)` also lowers the owner's `OwnerCount` by one, never below zero and only for an owner the snapshot lists, with the account patched into the derived index; `SnapshotRoll.PatchAccounts` takes the `DexIndex` instead of the `DexWorld`
+* Docs: `Amounts-Guide` (both languages) describes `WithoutOffer` and `releaseOwnerReserve` for an `OfferCancel` and for taking out a placed remainder
+* Tests: `TestUSnapshotRoll` takes out a placed remainder that was the only offer of its book, an offer mid-book, an offer named in lower case and a hybrid offer from both its books, comparing each derived index with one built afresh and the next result through it with one through a fresh index; an offer the snapshot does not hold returns the same instance. With `releaseOwnerReserve` it takes out a placed remainder and checks the owner's count is back to the one before the `OfferCreate`, the derived index and the next result, a count already at zero staying at zero, and an owner the snapshot does not list not being added
+
 ## 11.18.1.0 24/10/2026
 
 * `OfferCreateCrossing.Cross` finds the offer `OfferSequence` cancels in the snapshot's index instead of scanning every offer of the snapshot (#306). `DexIndex.Offers` compares ledger indexes ignoring case, as the scan did

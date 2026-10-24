@@ -51,7 +51,7 @@ namespace Xrpl.Amounts
                 LedgerSequence = before.LedgerSequence,
                 ReserveBase = before.ReserveBase,
                 ReserveIncrement = before.ReserveIncrement,
-                Accounts = PatchAccounts(world, before.Accounts, delta),
+                Accounts = PatchAccounts(world.Index, before.Accounts, delta),
                 TrustLines = PatchLines(world, before.TrustLines, delta),
                 Offers = PatchOffers(before.Offers, delta),
                 Pools = PatchPools(before.Pools, delta),
@@ -64,6 +64,54 @@ namespace Xrpl.Amounts
             };
 
             DexIndex.Register(after, new DexIndex(world.Index, after, delta));
+            return after;
+        }
+
+        /// <summary>
+        /// <paramref name="before"/> without the offer <paramref name="offerIndex"/>, its index
+        /// registered; <paramref name="before"/> itself when it does not hold the offer.
+        /// </summary>
+        /// <param name="before">The snapshot to take the offer out of.</param>
+        /// <param name="offerIndex">The offer's ledger index, in either case.</param>
+        /// <param name="releaseOwnerReserve">
+        /// Whether the owner's <c>OwnerCount</c> drops by one, as <c>offerDelete</c> releases the
+        /// offer's reserve; never below zero, and nothing when the snapshot does not list the owner.
+        /// </param>
+        /// <exception cref="ArgumentException">The snapshot lists a trust line or an MPT holding twice, or a hybrid offer names no domain.</exception>
+        internal static DexSnapshot WithoutOffer(DexSnapshot before, string offerIndex, bool releaseOwnerReserve)
+        {
+            DexIndex index = DexIndex.Of(before);
+            if (!index.Offers.TryGetValue(offerIndex, out DexOffer offer))
+                return before;
+
+            // Keyed by the snapshot's spelling of the index, which PatchOffers matches ordinally.
+            DexIndexDelta delta = new DexIndexDelta();
+            delta.Offers[offer.Index] = null;
+            if (releaseOwnerReserve && offer.Account != null &&
+                index.Accounts.TryGetValue(offer.Account, out DexAccount owner) && owner.OwnerCount > 0)
+            {
+                delta.Accounts[owner.Address] = WithState(owner, owner.Balance, owner.OwnerCount - 1, owner.Sequence);
+            }
+
+            DexSnapshot after = new DexSnapshot
+            {
+                ParentCloseTime = before.ParentCloseTime,
+                LedgerSequence = before.LedgerSequence,
+                ReserveBase = before.ReserveBase,
+                ReserveIncrement = before.ReserveIncrement,
+                Accounts = PatchAccounts(index, before.Accounts, delta),
+                TrustLines = before.TrustLines,
+                Offers = PatchOffers(before.Offers, delta),
+                Pools = before.Pools,
+                MptIssuances = before.MptIssuances,
+                MptHoldings = before.MptHoldings,
+                Domains = before.Domains,
+                Credentials = before.Credentials,
+                PartialBooks = before.PartialBooks,
+                ApproximatedOwners = before.ApproximatedOwners,
+            };
+
+            DexIndex.Register(after, new DexIndex(index, after, delta));
             return after;
         }
 
@@ -383,7 +431,7 @@ namespace Xrpl.Amounts
                 DepositPreauthorizedCredentials = account.DepositPreauthorizedCredentials,
             };
 
-        private static IReadOnlyList<DexAccount> PatchAccounts(DexWorld world, IReadOnlyList<DexAccount> accounts, DexIndexDelta delta)
+        private static IReadOnlyList<DexAccount> PatchAccounts(DexIndex index, IReadOnlyList<DexAccount> accounts, DexIndexDelta delta)
         {
             if (delta.Accounts.Count == 0)
                 return accounts;
@@ -394,7 +442,7 @@ namespace Xrpl.Amounts
 
             foreach (DexAccount account in delta.Accounts.Values)
             {
-                if (!world.Index.Accounts.ContainsKey(account.Address))
+                if (!index.Accounts.ContainsKey(account.Address))
                     patched.Add(account);
             }
 
