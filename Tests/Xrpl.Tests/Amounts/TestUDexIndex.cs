@@ -135,6 +135,16 @@ public class TestUDexIndex
     }
 
     [TestMethod]
+    public void ANullListIsAnEmptyOne()
+    {
+        DexSnapshot snapshot = new DexSnapshot { TrustLines = null, Offers = null, MptHoldings = null };
+
+        Assert.AreEqual(0, snapshot.TrustLines.Count);
+        Assert.AreEqual(0, snapshot.Offers.Count);
+        Assert.AreEqual(0, snapshot.MptHoldings.Count);
+    }
+
+    [TestMethod]
     public void ASnapshotThatFailsToIndexFailsEveryTime()
     {
         DexSnapshot snapshot = new DexSnapshot

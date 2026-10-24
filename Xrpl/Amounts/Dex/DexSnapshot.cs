@@ -128,9 +128,9 @@ namespace Xrpl.Amounts
         /// </summary>
         public const string UnlimitedTaker = "rrrrrrrrrrrrrrrrrrrrBZbvji";
 
-        /// <summary>A copy of <paramref name="list"/> no one else holds, so the snapshot cannot change after it is built.</summary>
+        /// <summary>A copy of <paramref name="list"/> no one else holds, so the snapshot cannot change after it is built; empty for null.</summary>
         private static IReadOnlyList<T> Own<T>(IReadOnlyList<T> list) =>
-            list == null ? null : Array.AsReadOnly(list.ToArray());
+            list == null ? Array.Empty<T>() : Array.AsReadOnly(list.ToArray());
     }
 
     /// <summary>An account as the crossing reads it: its XRP, its reserve and, for an issuer, its settings.</summary>

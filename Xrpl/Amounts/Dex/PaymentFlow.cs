@@ -594,6 +594,8 @@ namespace Xrpl.Amounts
         /// back. rippled gives a created account the sequence of the ledger it lands in, which is not known
         /// offline: it is taken to be the ledger after <see cref="DexSnapshot.LedgerSequence"/>, the earliest
         /// a transaction submitted after the read can land in.
+        /// The transaction's <c>Sequence</c> is taken as given: the engine does not check it
+        /// against the account's, as the node does with <c>tefPAST_SEQ</c> and <c>terPRE_SEQ</c>.
         /// </remarks>
         public DexSnapshot SnapshotAfter => _after.Value;
 

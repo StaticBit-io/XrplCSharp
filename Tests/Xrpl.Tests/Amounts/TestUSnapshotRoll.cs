@@ -289,16 +289,28 @@ public class TestUSnapshotRoll
     }
 
     [TestMethod]
-    public void APoolsListedAccountFollowsItsXrp()
+    public void APoolsListedEntriesFollowItsBalances()
     {
         DexSnapshot built = Build(gateways: 1, owners: 10, offersPerBook: 5, withPool: true);
-        DexSnapshot snapshot = With(built, accounts: built.Accounts.Append(new DexAccount { Address = Pool, Balance = 10_000_000_000 }).ToList());
+        DexSnapshot listed = With(built, accounts: built.Accounts.Append(new DexAccount { Address = Pool, Balance = 10_000_000_000 }).ToList());
+        DexSnapshot snapshot = new DexSnapshot
+        {
+            ParentCloseTime = listed.ParentCloseTime,
+            LedgerSequence = listed.LedgerSequence,
+            ReserveBase = listed.ReserveBase,
+            ReserveIncrement = listed.ReserveIncrement,
+            Accounts = listed.Accounts,
+            TrustLines = listed.TrustLines.Append(new DexTrustLine { Account = Pool, Balance = Iou(Gateway(0), "20000") }).ToList(),
+            Offers = listed.Offers,
+            Pools = listed.Pools,
+        };
 
         PaymentFlowResult result = PaymentFlow.Evaluate(snapshot, Pay(Alice, Bob, Iou(Gateway(0), "250"), Drops(1_000_000_000_000)));
 
         DexSnapshot after = result.SnapshotAfter;
         Assert.IsTrue(result.Pools.Count > 0, "the payment moves the pool");
         Assert.AreEqual(after.Pools.Single().Balance.StMantissa, AccountOf(after, Pool).Balance);
+        Assert.AreEqual(after.Pools.Single().Balance2, BalanceOf(after, Pool, Usd(Gateway(0))), "the pool's listed line follows its USD");
         AssertSameIndex(new DexIndex(after), DexIndex.Of(after), "pool account");
     }
 

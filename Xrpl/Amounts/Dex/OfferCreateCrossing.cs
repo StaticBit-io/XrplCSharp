@@ -661,6 +661,8 @@ namespace Xrpl.Amounts
         /// is only as complete as that snapshot: what it does not hold, the offer cannot write
         /// back. The placed offer's ledger index is made from the transaction's <c>TicketSequence</c>,
         /// or else its <c>Sequence</c>, or else the account's in the snapshot.
+        /// The transaction's <c>Sequence</c> is taken as given: the engine does not check it
+        /// against the account's, as the node does with <c>tefPAST_SEQ</c> and <c>terPRE_SEQ</c>.
         /// </remarks>
         /// <exception cref="InvalidOperationException">An offer is placed, and neither the snapshot's account nor the transaction gives a sequence.</exception>
         public DexSnapshot SnapshotAfter => _after.Value;

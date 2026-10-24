@@ -230,6 +230,10 @@ namespace Xrpl.Amounts
                 if (xrp is { } drops && world.Index.Accounts.TryGetValue(pool.Account, out DexAccount poolAccount))
                     delta.Accounts[pool.Account] = WithState(poolAccount, drops.StMantissa, poolAccount.OwnerCount, poolAccount.Sequence);
 
+                // Its lines and MPTokens, when the snapshot lists them, hold the other balances.
+                WritePoolHolding(world, pool.Account, balance, delta);
+                WritePoolHolding(world, pool.Account, balance2, delta);
+
                 delta.Pools[pool.Account] = new DexAmmPool
                 {
                     Account = pool.Account,
@@ -243,6 +247,68 @@ namespace Xrpl.Amounts
                     SlotAuthAccounts = pool.SlotAuthAccounts,
                     SlotExpiration = pool.SlotExpiration,
                 };
+            }
+        }
+
+        /// <summary>The snapshot's own entry for what a pool holds of one asset, at the pool's new balance; nothing when it lists none.</summary>
+        private static void WritePoolHolding(DexWorld world, string pool, XrplAmount held, DexIndexDelta delta)
+        {
+            if (held.Kind == AmountKind.Iou)
+            {
+                LineKey key = LineKey.Of(pool, held.Asset.Issuer, held.Asset.Currency);
+                foreach (DexTrustLine line in world.Snapshot.TrustLines)
+                {
+                    if (line?.Account == null || LineKey.Of(line.Account, line.Balance.Asset.Issuer, line.Balance.Asset.Currency) != key)
+                        continue;
+
+                    bool fromPool = string.Equals(line.Account, pool, StringComparison.Ordinal);
+                    delta.Lines[key] = new DexTrustLine
+                    {
+                        Account = line.Account,
+                        Balance = fromPool ? held.WithAsset(line.Balance.Asset) : (-held).WithAsset(line.Balance.Asset),
+                        Limit = line.Limit,
+                        PeerLimit = line.PeerLimit,
+                        QualityIn = line.QualityIn,
+                        QualityOut = line.QualityOut,
+                        PeerQualityIn = line.PeerQualityIn,
+                        PeerQualityOut = line.PeerQualityOut,
+                        NoRipple = line.NoRipple,
+                        PeerNoRipple = line.PeerNoRipple,
+                        Frozen = line.Frozen,
+                        FrozenByAccount = line.FrozenByAccount,
+                        DeepFrozen = line.DeepFrozen,
+                        Authorized = line.Authorized,
+                        PeerAuthorized = line.PeerAuthorized,
+                        Reserve = line.Reserve,
+                        PeerReserve = line.PeerReserve,
+                    };
+                    return;
+                }
+
+                return;
+            }
+
+            if (held.Kind != AmountKind.Mpt)
+                return;
+
+            string id = DexAssets.MptKey(held.Asset.MptIssuanceId);
+            foreach (DexMptHolding holding in world.Snapshot.MptHoldings)
+            {
+                if (holding?.Account == null || holding.MptIssuanceId == null || !string.Equals(holding.Account, pool, StringComparison.Ordinal) ||
+                    !string.Equals(DexAssets.MptKey(holding.MptIssuanceId), id, StringComparison.Ordinal))
+                {
+                    continue;
+                }
+
+                delta.MptHoldings[(pool, id)] = new DexMptHolding
+                {
+                    Account = pool,
+                    MptIssuanceId = holding.MptIssuanceId,
+                    Amount = held.StMantissa,
+                    Locked = holding.Locked,
+                    Authorized = holding.Authorized,
+                };
+                return;
             }
         }
 
