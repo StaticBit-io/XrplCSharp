@@ -54,8 +54,15 @@ packages=$(curl -sf --max-time 60 "$PACKAGES_URL") || {
   exit 1
 }
 
-# Version strings look like 3.5.0~b0-1187.20260921git0229c29: upstream version, a build
-# number, the build date and the short develop commit it was built from. Two things follow.
+# Version strings look like 0.0.0~dev-1329.20261023git1f46f75: upstream version, a build
+# number, the build date and the short develop commit it was built from. Three things follow.
+#
+# The upstream part carries no information on develop. Since XRPLF/rippled#8457 (merged
+# 2026-10-01, first build 0.0.0~dev-1221) the version comes from a git tag only, and an
+# untagged develop commit is always 0.0.0-dev. Builds before that read 3.5.0~b0-1187..., so
+# dpkg ordering ranks every newer build BELOW the older ones: an unpinned
+# `apt-get install xrpld` picks the September build, and the sort below keys on the build
+# number instead.
 #
 # The build number is monotonic, so it sorts the channel correctly on its own - unlike the
 # old repos.ripple.com scheme, where the timestamp shrank from 14 digits to 12 mid-2026 and
