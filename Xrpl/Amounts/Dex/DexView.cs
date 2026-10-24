@@ -322,9 +322,6 @@ namespace Xrpl.Amounts
                             list[at] = change.Value;
                         else
                             list.RemoveAt(at);
-
-                        if (list.Count == 0)
-                            _books.Remove(book);
                     }
 
                     if (change.Value != null)
@@ -347,6 +344,14 @@ namespace Xrpl.Amounts
                     }
 
                     _offers[placed.Index] = placed;
+                }
+
+                // Only after the placement, which may refill a book a removal emptied: indexing
+                // afresh holds no book without offers.
+                foreach (BookKey book in copied)
+                {
+                    if (_books[book].Count == 0)
+                        _books.Remove(book);
                 }
             }
 

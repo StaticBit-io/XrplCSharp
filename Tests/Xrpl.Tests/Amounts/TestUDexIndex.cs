@@ -109,6 +109,32 @@ public class TestUDexIndex
     }
 
     [TestMethod]
+    public void AListChangedAfterTheSnapshotIsBuiltDoesNotChangeIt()
+    {
+        DexSnapshot built = Build(gateways: 1, owners: 10, offersPerBook: 5);
+        List<DexAccount> accounts = built.Accounts.ToList();
+        List<DexOffer> offers = built.Offers.ToList();
+        DexSnapshot snapshot = new DexSnapshot
+        {
+            ParentCloseTime = built.ParentCloseTime,
+            ReserveBase = built.ReserveBase,
+            ReserveIncrement = built.ReserveIncrement,
+            Accounts = accounts,
+            TrustLines = built.TrustLines,
+            Offers = offers,
+        };
+        Payment payment = Pay(Alice, Bob, Iou(Gateway(0), "250"), Drops(1_000_000_000_000));
+        string before = DexResultText.Describe(PaymentFlow.Evaluate(snapshot, payment));
+
+        // Emptying the books and dropping the sender would change the result, if the snapshot followed.
+        offers.Clear();
+        accounts.RemoveAll(a => a.Address == Alice);
+
+        Assert.AreEqual(built.Offers.Count, snapshot.Offers.Count);
+        Assert.AreEqual(before, DexResultText.Describe(PaymentFlow.Evaluate(snapshot, payment)));
+    }
+
+    [TestMethod]
     public void ASnapshotThatFailsToIndexFailsEveryTime()
     {
         DexSnapshot snapshot = new DexSnapshot

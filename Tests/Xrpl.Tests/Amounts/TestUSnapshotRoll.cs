@@ -230,6 +230,53 @@ public class TestUSnapshotRoll
     }
 
     [TestMethod]
+    public void AnOfferReplacingTheOnlyOfferOfItsBook()
+    {
+        string gw = Gateway(0);
+        XrplAmount pays = Iou(gw, "10");
+        DexSnapshot snapshot = new DexSnapshot
+        {
+            ParentCloseTime = 800_000_000,
+            LedgerSequence = 100,
+            ReserveBase = 10_000_000,
+            ReserveIncrement = 2_000_000,
+            Accounts = new[]
+            {
+                new DexAccount { Address = gw, Balance = 100_000_000_000, Sequence = 1 },
+                new DexAccount { Address = Alice, Balance = 100_000_000_000, OwnerCount = 1, Sequence = 10 },
+            },
+            Offers = new[]
+            {
+                new DexOffer
+                {
+                    Index = Hashes.HashOfferId(Alice, 5u),
+                    Account = Alice,
+                    TakerPays = pays,
+                    TakerGets = Drops(5_000_000),
+                    Quality = XrplQuality.FromAmounts(pays, Drops(5_000_000)),
+                },
+            },
+        };
+
+        // OfferSequence cancels the book's only offer, and the new one rests in the same book.
+        OfferCrossingResult result = OfferCreateCrossing.Cross(snapshot, new OfferCreate
+        {
+            Account = Alice,
+            TakerPays = pays.ToCurrency(),
+            TakerGets = Drops(6_000_000).ToCurrency(),
+            Fee = new Currency { Value = "10" },
+            Sequence = 10,
+            OfferSequence = 5,
+        });
+
+        Assert.AreEqual("tesSUCCESS", result.EngineResult);
+        DexSnapshot after = result.SnapshotAfter;
+        CollectionAssert.AreEqual(new[] { Hashes.HashOfferId(Alice, 10u) }, after.Offers.Select(o => o.Index).ToArray());
+        Assert.AreEqual(1u, AccountOf(after, Alice).OwnerCount, "one offer cancelled, one placed");
+        AssertSameIndex(new DexIndex(after), DexIndex.Of(after), "replaced");
+    }
+
+    [TestMethod]
     public void AnAccountAFailedPaymentWouldHaveCreatedIsNotWrittenBack()
     {
         DexSnapshot snapshot = Build(gateways: 1, owners: 10, offersPerBook: 5);
