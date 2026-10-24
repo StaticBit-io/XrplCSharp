@@ -142,13 +142,34 @@ namespace Xrpl.Amounts
         /// </returns>
         /// <remarks>
         /// Only the offer is removed, whoever owns it. Nothing else changes: not the owner's
-        /// <c>OwnerCount</c>, not its <c>Sequence</c>, and no fee is charged, which an
-        /// <c>OfferCancel</c> on the ledger would also do.
+        /// <c>OwnerCount</c>, which deleting the offer on the ledger lowers by one (see the
+        /// overload with <c>releaseOwnerReserve</c>), not the <c>Sequence</c> of the account that
+        /// cancels it, and no fee is charged.
         /// </remarks>
         /// <exception cref="ArgumentNullException"><paramref name="offerIndex"/> is null.</exception>
         /// <exception cref="ArgumentException">This snapshot lists a trust line or an MPT holding twice, or a hybrid offer names no domain.</exception>
-        public DexSnapshot WithoutOffer(string offerIndex) =>
-            SnapshotRoll.WithoutOffer(this, offerIndex ?? throw new ArgumentNullException(nameof(offerIndex)));
+        public DexSnapshot WithoutOffer(string offerIndex) => WithoutOffer(offerIndex, false);
+
+        /// <summary>
+        /// The snapshot without the offer <paramref name="offerIndex"/>, as
+        /// <see cref="WithoutOffer(string)"/>, and with the offer's reserve released when
+        /// <paramref name="releaseOwnerReserve"/> is set: the owner's <c>OwnerCount</c> one lower,
+        /// as <c>offerDelete</c> leaves it. Set it for an <c>OfferCancel</c>, and for the remainder
+        /// a <c>SnapshotAfter</c> counted in the owner's <c>OwnerCount</c> when it placed it.
+        /// </summary>
+        /// <param name="offerIndex">The offer's ledger index, in either case.</param>
+        /// <param name="releaseOwnerReserve">
+        /// Whether the owner's <c>OwnerCount</c> drops by one. It never goes below zero, and
+        /// nothing else of the owner changes; an owner the snapshot does not list is left out.
+        /// </param>
+        /// <returns>
+        /// A new snapshot whose index is derived from this one's, the owner's account included;
+        /// this snapshot itself when it holds no such offer.
+        /// </returns>
+        /// <exception cref="ArgumentNullException"><paramref name="offerIndex"/> is null.</exception>
+        /// <exception cref="ArgumentException">This snapshot lists a trust line or an MPT holding twice, or a hybrid offer names no domain.</exception>
+        public DexSnapshot WithoutOffer(string offerIndex, bool releaseOwnerReserve) =>
+            SnapshotRoll.WithoutOffer(this, offerIndex ?? throw new ArgumentNullException(nameof(offerIndex)), releaseOwnerReserve);
 
         /// <summary>A copy of <paramref name="list"/> no one else holds, so the snapshot cannot change after it is built; empty for null.</summary>
         private static IReadOnlyList<T> Own<T>(IReadOnlyList<T> list) =>

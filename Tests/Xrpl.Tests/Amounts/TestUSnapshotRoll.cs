@@ -340,6 +340,77 @@ public class TestUSnapshotRoll
         Assert.AreEqual(DexResultText.Describe(next(Fresh(without))), DexResultText.Describe(next(without)));
     }
 
+    /// <summary>
+    /// With <c>releaseOwnerReserve</c> the remainder's reserve goes with it: the owner's count is
+    /// the one before the <c>OfferCreate</c> placed it, and the index follows the account.
+    /// </summary>
+    [TestMethod]
+    public void ThePlacedRemainderTakenOutReleasesItsReserve()
+    {
+        DexSnapshot snapshot = Build(gateways: 3, owners: 10, offersPerBook: 5);
+        DexAccount before = AccountOf(snapshot, Alice);
+        DexSnapshot after = OfferCreateCrossing.Cross(snapshot, Alice, XrplAmount.Parse(Eur(Gateway(2)), "10"), Drops(200_000_000), 10).SnapshotAfter;
+        DexAccount placing = AccountOf(after, Alice);
+        Assert.AreEqual(before.OwnerCount + 1, placing.OwnerCount, "the placed offer is counted");
+
+        DexSnapshot without = after.WithoutOffer(Hashes.HashOfferId(Alice, before.Sequence), releaseOwnerReserve: true);
+
+        DexAccount alice = AccountOf(without, Alice);
+        Assert.AreEqual(before.OwnerCount, alice.OwnerCount, "the reserve released");
+        Assert.AreEqual(placing.Sequence, alice.Sequence);
+        Assert.AreEqual(placing.Balance, alice.Balance);
+        Assert.AreEqual(after.Accounts.Count, without.Accounts.Count);
+        CollectionAssert.AreEqual(after.Accounts.Where(a => a.Address != Alice).ToArray(), without.Accounts.Where(a => a.Address != Alice).ToArray(), "the other accounts as they were");
+        Assert.AreSame(alice, DexIndex.Of(without).Accounts[Alice], "the index holds the patched account");
+        AssertSameIndex(new DexIndex(without), DexIndex.Of(without), "reserve released");
+        Assert.AreSame(DexIndex.Of(after).Lines, DexIndex.Of(without).Lines, "derived from the rolled index, not built afresh");
+
+        // A count one too high would cost Alice the reserve of an offer she no longer has.
+        Func<DexSnapshot, object> next = s => Cross(s, Alice, XrplAmount.Parse(Eur(Gateway(2)), "10"), Drops(200_000_000));
+        Assert.AreEqual(DexResultText.Describe(next(Fresh(without))), DexResultText.Describe(next(without)));
+    }
+
+    [TestMethod]
+    public void AReleasedReserveNeverGoesBelowZero()
+    {
+        string gw = Gateway(0);
+        XrplAmount pays = Iou(gw, "10");
+        DexOffer Offer(string index, string account) =>
+            new DexOffer
+            {
+                Index = index,
+                Account = account,
+                TakerPays = pays,
+                TakerGets = Drops(5_000_000),
+                Quality = XrplQuality.FromAmounts(pays, Drops(5_000_000)),
+            };
+
+        DexSnapshot snapshot = new DexSnapshot
+        {
+            ParentCloseTime = 800_000_000,
+            LedgerSequence = 100,
+            ReserveBase = 10_000_000,
+            ReserveIncrement = 2_000_000,
+            Accounts = new[]
+            {
+                new DexAccount { Address = gw, Balance = 100_000_000_000, Sequence = 1 },
+                new DexAccount { Address = Alice, Balance = 100_000_000_000, OwnerCount = 0, Sequence = 10 },
+            },
+            Offers = new[] { Offer(new string('A', 64), Alice), Offer(new string('B', 64), Bob) },
+        };
+
+        DexSnapshot zero = snapshot.WithoutOffer(new string('A', 64), releaseOwnerReserve: true);
+        Assert.AreEqual(0u, AccountOf(zero, Alice).OwnerCount, "never below zero");
+        AssertSameIndex(new DexIndex(zero), DexIndex.Of(zero), "count at zero");
+
+        DexSnapshot unlisted = snapshot.WithoutOffer(new string('B', 64), releaseOwnerReserve: true);
+        CollectionAssert.AreEqual(snapshot.Accounts.ToArray(), unlisted.Accounts.ToArray(), "an owner the snapshot does not list is not added");
+        Assert.AreEqual(1, unlisted.Offers.Count);
+        AssertSameIndex(new DexIndex(unlisted), DexIndex.Of(unlisted), "owner not listed");
+
+        Assert.AreSame(snapshot, snapshot.WithoutOffer(new string('F', 64), releaseOwnerReserve: true), "an offer not held");
+    }
+
     [TestMethod]
     public void AnOfferTakenOutMidBookLeavesTheRestInOrder()
     {
