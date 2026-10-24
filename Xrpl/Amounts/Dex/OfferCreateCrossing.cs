@@ -292,15 +292,10 @@ namespace Xrpl.Amounts
             // The offer named by OfferSequence goes first; not finding it is no error.
             if (order.OfferSequence is { } cancelSequence)
             {
-                string cancelled = Hashes.HashOfferId(account, cancelSequence);
-                foreach (DexOffer existing in snapshot.Offers)
+                if (world.Offers.TryGetValue(Hashes.HashOfferId(account, cancelSequence), out DexOffer existing) &&
+                    string.Equals(existing.Account, account, StringComparison.Ordinal))
                 {
-                    if (existing != null && string.Equals(existing.Index, cancelled, StringComparison.OrdinalIgnoreCase) &&
-                        string.Equals(existing.Account, account, StringComparison.Ordinal))
-                    {
-                        ledger.DeleteOffer(existing.Index, OfferRemovalReason.Cancelled);
-                        break;
-                    }
+                    ledger.DeleteOffer(existing.Index, OfferRemovalReason.Cancelled);
                 }
             }
 
