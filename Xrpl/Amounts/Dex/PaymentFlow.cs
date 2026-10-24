@@ -78,7 +78,12 @@ namespace Xrpl.Amounts
             if (PreflightExtras(payment, rules) is { } malformedExtras)
                 return NotApplied(snapshot, malformedExtras);
 
-            DexWorld world = new DexWorld(snapshot, account, fee) { RecordPasses = true };
+            DexWorld world = new DexWorld(snapshot, account, fee)
+            {
+                RecordPasses = true,
+                Sequence = payment.Sequence,
+                TicketSequence = payment.TicketSequence,
+            };
             if (!world.Accounts.ContainsKey(account))
                 throw new ArgumentException("The sender is not in the snapshot.", nameof(payment));
 
@@ -118,7 +123,7 @@ namespace Xrpl.Amounts
 
             // The destination account is created before any funds move.
             if (!destinationExists)
-                world.Accounts[destination] = destinationAccount = new DexAccount { Address = destination };
+                world.Accounts.Create(destinationAccount = new DexAccount { Address = destination });
 
             DexView view = new DexView(world, rules);
             if (ripple)
@@ -527,7 +532,7 @@ namespace Xrpl.Amounts
             new PaymentFlowResult(result, true, delivered, paid, LedgerChanges.Collect(world, final));
 
         private static PaymentFlowResult NotApplied(DexSnapshot snapshot, string result) =>
-            new PaymentFlowResult(result, false, null, null, LedgerChanges.None);
+            new PaymentFlowResult(result, false, null, null, LedgerChanges.Unchanged(snapshot));
 
         private static XrplAmount Read(Currency amount) => amount.ToXrplAmount();
 
@@ -570,7 +575,29 @@ namespace Xrpl.Amounts
             NeedsDeeperBooks = changes.ReachedPartialBook;
             Fills = changes.Fills;
             Passes = changes.Passes;
+            _after = changes.After;
         }
+
+        private readonly Lazy<DexSnapshot> _after;
+
+        /// <summary>
+        /// The snapshot as the payment leaves it, to evaluate the next transaction against: the
+        /// balances after the fee and the payment, the sender's <c>Sequence</c> moved on (or its
+        /// ticket consumed), owner counts, trust lines created and deleted, offers crossed or
+        /// removed, the pools' and MPTs' balances, and the destination account when the payment
+        /// creates it. The evaluated snapshot itself when the payment is not <see cref="Applied"/>.
+        /// </summary>
+        /// <remarks>
+        /// Built on first read. Its index is derived from the evaluated snapshot's, so evaluating
+        /// against it costs little more than evaluating against the evaluated snapshot again. It
+        /// is only as complete as that snapshot: what it does not hold, the payment cannot write
+        /// back. rippled gives a created account the sequence of the ledger it lands in, which is not known
+        /// offline: it is taken to be the ledger after <see cref="DexSnapshot.LedgerSequence"/>, the earliest
+        /// a transaction submitted after the read can land in.
+        /// The transaction's <c>Sequence</c> is taken as given: the engine does not check it
+        /// against the account's, as the node does with <c>tefPAST_SEQ</c> and <c>terPRE_SEQ</c>.
+        /// </remarks>
+        public DexSnapshot SnapshotAfter => _after.Value;
 
         /// <summary>The node's result, such as <c>tesSUCCESS</c>, <c>tecPATH_PARTIAL</c>, <c>tecPATH_DRY</c> or a <c>tem</c> code.</summary>
         public string EngineResult { get; }

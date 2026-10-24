@@ -14,6 +14,7 @@ Every result matches rippled 3.4.1 bit for bit: mantissa, exponent and sign. The
 - [AMM Pool Offers](#amm-pool-offers)
 - [Crossing an OfferCreate](#crossing-an-offercreate)
 - [Evaluating a Payment](#evaluating-a-payment)
+- [Evaluating Transactions in Sequence](#evaluating-transactions-in-sequence)
 - [Permissioned Domains and Credentials](#permissioned-domains-and-credentials)
 - [Reading Books from a Node](#reading-books-from-a-node)
 - [Quotes](#quotes)
@@ -267,6 +268,32 @@ PaymentFlowResult result = PaymentFlow.Evaluate(snapshot, payment, rules);
 ```
 
 `DexSnapshot.FromNodeAsync(client, payment)` reads, at one ledger, the trust lines along every path the payment can take, the books and pools on them, the accounts, the destination's preauthorizations, the credentials the payment presents, and its domain. The paths come with the payment: from `ripple_path_find`, or from the local [path finder](#finding-paths). Not covered: sponsored reserves.
+
+## Evaluating Transactions in Sequence
+
+Each result carries `SnapshotAfter`, the snapshot as the transaction leaves it. Evaluating the next transaction against it previews a sequence of transactions, such as the open ledger's pending ones or another ordering of them.
+
+```csharp
+DexSnapshot snapshot = await DexSnapshot.FromNodeAsync(client, payment);
+PaymentFlowResult paid = PaymentFlow.Evaluate(snapshot, payment, rules);
+OfferCrossingResult crossed = OfferCreateCrossing.Cross(paid.SnapshotAfter, offer, rules);
+
+DexSnapshot after = crossed.SnapshotAfter;   // the state both leave
+```
+
+`SnapshotAfter` writes back what the result reports, and the entries the engine keeps besides:
+
+- XRP balances after the fee, trust line balances, and the trust lines created and deleted.
+- Owner counts, and the sender's `Sequence` moved on. With `TicketSequence` the sequence stays and the ticket's object is gone from the owner count.
+- The offers crossed, at what remains, and those removed. The offer an `OfferCreate` places rests after the offers already at its quality, under the ledger index its sequence or ticket gives it.
+- The pools' balances, the MPTokens, and each issuance's `OutstandingAmount`.
+- The destination account a payment creates. rippled gives it the sequence of the ledger it lands in, which is not known offline: `SnapshotAfter` takes the ledger after `LedgerSequence`, the earliest a transaction submitted after the read can land in.
+
+A result that is not `Applied` returns the evaluated snapshot itself.
+
+The engine indexes a snapshot once per instance, and the index of `SnapshotAfter` is derived from the evaluated snapshot's rather than built again. A chain of 15 transactions over 4,000 offers and 5,000 trust lines therefore runs about four times as fast as when each step indexes a snapshot afresh.
+
+The snapshot after is only as complete as the one evaluated. A later transaction that reaches books or accounts the first read did not cover needs a snapshot that holds them. An offer placed by an account whose `Sequence` the snapshot does not give, from a transaction without `Sequence` or `TicketSequence`, has no ledger index; reading `SnapshotAfter` then raises `InvalidOperationException`. A snapshot is not changed once evaluated: build a new one for a different state.
 
 ## MPTs on the DEX
 

@@ -1,5 +1,6 @@
 using System;
 using System.Collections.Generic;
+using System.Linq;
 
 using static Xrpl.Models.Common.Common;
 
@@ -21,6 +22,11 @@ namespace Xrpl.Amounts
     /// credentials that decide its members go in <see cref="Domains"/> and
     /// <see cref="Credentials"/>; where a hybrid offer shares a quality with domain offers, the
     /// offers are listed in the order they were placed.
+    /// <para>
+    /// A snapshot keeps its own copy of each list it is given, so changing a list afterwards does
+    /// not change the snapshot. The engine indexes a snapshot on its first evaluation and reuses
+    /// that index for every later one against the same instance.
+    /// </para>
     /// </remarks>
     public sealed partial class DexSnapshot
     {
@@ -43,48 +49,66 @@ namespace Xrpl.Amounts
         public ulong ReserveIncrement { get; init; }
 
         /// <summary>The accounts the crossing reads.</summary>
-        public IReadOnlyList<DexAccount> Accounts { get; init; } = Array.Empty<DexAccount>();
+        public IReadOnlyList<DexAccount> Accounts { get => _accounts; init => _accounts = Own(value); }
+
+        private readonly IReadOnlyList<DexAccount> _accounts = Array.Empty<DexAccount>();
 
         /// <summary>
         /// The trust lines the transaction reads, each listed once from one of its two accounts,
         /// with the other account's settings in the <c>Peer</c> properties.
         /// </summary>
-        public IReadOnlyList<DexTrustLine> TrustLines { get; init; } = Array.Empty<DexTrustLine>();
+        public IReadOnlyList<DexTrustLine> TrustLines { get => _trustLines; init => _trustLines = Own(value); }
+
+        private readonly IReadOnlyList<DexTrustLine> _trustLines = Array.Empty<DexTrustLine>();
 
         /// <summary>The offers of the books the crossing can reach, each book in book order.</summary>
-        public IReadOnlyList<DexOffer> Offers { get; init; } = Array.Empty<DexOffer>();
+        public IReadOnlyList<DexOffer> Offers { get => _offers; init => _offers = Own(value); }
+
+        private readonly IReadOnlyList<DexOffer> _offers = Array.Empty<DexOffer>();
 
         /// <summary>The AMM pools on those books.</summary>
-        public IReadOnlyList<DexAmmPool> Pools { get; init; } = Array.Empty<DexAmmPool>();
+        public IReadOnlyList<DexAmmPool> Pools { get => _pools; init => _pools = Own(value); }
+
+        private readonly IReadOnlyList<DexAmmPool> _pools = Array.Empty<DexAmmPool>();
 
         /// <summary>
         /// The MPT issuances the transaction trades or moves (<c>MPTokenIssuance</c>): how much is
         /// outstanding, the most there may be, the transfer fee, and the flags that let it trade.
         /// </summary>
-        public IReadOnlyList<DexMptIssuance> MptIssuances { get; init; } = Array.Empty<DexMptIssuance>();
+        public IReadOnlyList<DexMptIssuance> MptIssuances { get => _mptIssuances; init => _mptIssuances = Own(value); }
+
+        private readonly IReadOnlyList<DexMptIssuance> _mptIssuances = Array.Empty<DexMptIssuance>();
 
         /// <summary>
         /// The MPT holdings (<c>MPToken</c>) the transaction reads: the taker's or sender's, the
         /// destination's, each offer owner's of what its offer gives and asks for, and each pool's.
         /// An account with no holding listed holds none, and gets one when an offer pays it the MPT.
         /// </summary>
-        public IReadOnlyList<DexMptHolding> MptHoldings { get; init; } = Array.Empty<DexMptHolding>();
+        public IReadOnlyList<DexMptHolding> MptHoldings { get => _mptHoldings; init => _mptHoldings = Own(value); }
+
+        private readonly IReadOnlyList<DexMptHolding> _mptHoldings = Array.Empty<DexMptHolding>();
 
         /// <summary>The permissioned domains whose books the transaction walks, or whose membership it checks.</summary>
-        public IReadOnlyList<DexDomain> Domains { get; init; } = Array.Empty<DexDomain>();
+        public IReadOnlyList<DexDomain> Domains { get => _domains; init => _domains = Own(value); }
+
+        private readonly IReadOnlyList<DexDomain> _domains = Array.Empty<DexDomain>();
 
         /// <summary>
         /// The credentials the transaction reads: those a domain accepts, held by the accounts
         /// whose membership is checked, and those a payment names in <c>CredentialIDs</c>.
         /// </summary>
-        public IReadOnlyList<DexCredential> Credentials { get; init; } = Array.Empty<DexCredential>();
+        public IReadOnlyList<DexCredential> Credentials { get => _credentials; init => _credentials = Own(value); }
+
+        private readonly IReadOnlyList<DexCredential> _credentials = Array.Empty<DexCredential>();
 
         /// <summary>
         /// The books whose offers the snapshot holds only in part: their first offers, the rest
         /// left unread. A result that walked past the last of them says so in its
         /// <c>NeedsDeeperBooks</c>.
         /// </summary>
-        public IReadOnlyList<DexBook> PartialBooks { get; init; } = Array.Empty<DexBook>();
+        public IReadOnlyList<DexBook> PartialBooks { get => _partialBooks; init => _partialBooks = Own(value); }
+
+        private readonly IReadOnlyList<DexBook> _partialBooks = Array.Empty<DexBook>();
 
         /// <summary>
         /// The offer owners whose account and trust lines were not read but built from what
@@ -92,7 +116,9 @@ namespace Xrpl.Amounts
         /// A result that crosses their offers is exact as far as their funds go; see the option
         /// for what it leaves out.
         /// </summary>
-        public IReadOnlyList<string> ApproximatedOwners { get; init; } = Array.Empty<string>();
+        public IReadOnlyList<string> ApproximatedOwners { get => _approximatedOwners; init => _approximatedOwners = Own(value); }
+
+        private readonly IReadOnlyList<string> _approximatedOwners = Array.Empty<string>();
 
         /// <summary>
         /// An address to quote with before a wallet is connected: as the account of an
@@ -101,6 +127,10 @@ namespace Xrpl.Amounts
         /// It is <c>ACCOUNT_ONE</c>, which no key controls, so no real account ever has it.
         /// </summary>
         public const string UnlimitedTaker = "rrrrrrrrrrrrrrrrrrrrBZbvji";
+
+        /// <summary>A copy of <paramref name="list"/> no one else holds, so the snapshot cannot change after it is built; empty for null.</summary>
+        private static IReadOnlyList<T> Own<T>(IReadOnlyList<T> list) =>
+            list == null ? Array.Empty<T>() : Array.AsReadOnly(list.ToArray());
     }
 
     /// <summary>An account as the crossing reads it: its XRP, its reserve and, for an issuer, its settings.</summary>

@@ -9,15 +9,18 @@ namespace Xrpl.Amounts
     /// <summary>What a transaction changed against its snapshot: offers, pools, balances and trust lines.</summary>
     internal sealed class LedgerChanges
     {
-        internal static readonly LedgerChanges None = new LedgerChanges(
-            Array.Empty<OfferChange>(),
-            Array.Empty<AmmPoolChange>(),
-            Array.Empty<BalanceChange>(),
-            Array.Empty<TrustLineChange>(),
-            Array.Empty<MpTokenChange>(),
-            false,
-            Array.Empty<OfferFill>(),
-            Array.Empty<FlowPass>());
+        /// <summary>No change: a transaction that never reaches a ledger leaves <paramref name="snapshot"/> as it was.</summary>
+        internal static LedgerChanges Unchanged(DexSnapshot snapshot) =>
+            new LedgerChanges(
+                Array.Empty<OfferChange>(),
+                Array.Empty<AmmPoolChange>(),
+                Array.Empty<BalanceChange>(),
+                Array.Empty<TrustLineChange>(),
+                Array.Empty<MpTokenChange>(),
+                false,
+                Array.Empty<OfferFill>(),
+                Array.Empty<FlowPass>(),
+                new Lazy<DexSnapshot>(() => snapshot));
 
         private LedgerChanges(
             IReadOnlyList<OfferChange> offers,
@@ -27,7 +30,8 @@ namespace Xrpl.Amounts
             IReadOnlyList<MpTokenChange> mpTokens,
             bool reachedPartialBook,
             IReadOnlyList<OfferFill> fills,
-            IReadOnlyList<FlowPass> passes)
+            IReadOnlyList<FlowPass> passes,
+            Lazy<DexSnapshot> after)
         {
             Offers = offers;
             Pools = pools;
@@ -37,7 +41,11 @@ namespace Xrpl.Amounts
             ReachedPartialBook = reachedPartialBook;
             Fills = fills;
             Passes = passes;
+            After = after;
         }
+
+        /// <summary>The snapshot as the transaction leaves it, built on first read.</summary>
+        internal Lazy<DexSnapshot> After { get; }
 
         internal IReadOnlyList<OfferFill> Fills { get; }
 
@@ -56,7 +64,10 @@ namespace Xrpl.Amounts
         /// <summary>Whether the engine ran off the end of a book the snapshot holds only in part.</summary>
         internal bool ReachedPartialBook { get; }
 
-        internal static LedgerChanges Collect(DexWorld world, DexView final)
+        /// <param name="world">The world the transaction was evaluated in.</param>
+        /// <param name="final">The view the transaction leaves.</param>
+        /// <param name="placed">The offer an <c>OfferCreate</c> placed; null for none.</param>
+        internal static LedgerChanges Collect(DexWorld world, DexView final, PlacedOffer placed = null)
         {
             List<OfferChange> offers = new List<OfferChange>();
             foreach (DexOffer offer in world.Snapshot.Offers)
@@ -141,7 +152,9 @@ namespace Xrpl.Amounts
                 .Select(entry => entry.fill.ToPublic())
                 .ToList();
 
-            return new LedgerChanges(offers, pools, balances, lines, mpTokens, world.ReachedPartialBook, fills, world.Passes.ToArray());
+            return new LedgerChanges(
+                offers, pools, balances, lines, mpTokens, world.ReachedPartialBook, fills, world.Passes.ToArray(),
+                new Lazy<DexSnapshot>(() => SnapshotRoll.After(world, final, placed)));
         }
     }
 }
