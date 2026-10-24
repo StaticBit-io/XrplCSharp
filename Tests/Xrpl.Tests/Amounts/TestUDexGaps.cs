@@ -241,6 +241,39 @@ public class TestUDexGaps
         Assert.AreEqual(Dollars("1"), taken.FilledTakerGets);
     }
 
+    /// <summary>
+    /// What OfferSequence 5 cancels, given a snapshot holding: alice's offer under the index in
+    /// lower case, no such offer, or an offer under that index that bob owns.
+    /// </summary>
+    private static IEnumerable<OfferChange> CancelledBy5(params DexOffer[] offers)
+    {
+        DexSnapshot snapshot = Snapshot(
+            new[] { Account(Gw), Account(Alice, 2), Account(Bob, 2) },
+            new[] { Line(Alice, "10"), Line(Bob, "10") },
+            offers.Append(Offer("B1", Bob, Drops(1_000_000), Dollars("1"))).ToArray());
+
+        OfferCreate replacing = Create(Alice, Dollars("1"), Drops(1_000_000));
+        replacing.OfferSequence = 5;
+        OfferCrossingResult result = OfferCreateCrossing.Cross(snapshot, replacing);
+        Assert.AreEqual("tesSUCCESS", result.EngineResult);
+        return result.Offers.Where(o => o.Reason == OfferRemovalReason.Cancelled);
+    }
+
+    [TestMethod]
+    public void OfferSequenceFindsItsOfferInAnyCase()
+    {
+        string cancelled = Hashes.HashOfferId(Alice, 5).ToLowerInvariant();
+        Assert.AreEqual(cancelled, CancelledBy5(Offer(cancelled, Alice, Drops(9_000_000), Dollars("9"))).Single().Index);
+    }
+
+    [TestMethod]
+    public void OfferSequenceNotInTheSnapshotCancelsNothing() =>
+        Assert.AreEqual(0, CancelledBy5().Count());
+
+    [TestMethod]
+    public void OfferSequenceCancelsOnlyTheAccountsOwnOffer() =>
+        Assert.AreEqual(0, CancelledBy5(Offer(Hashes.HashOfferId(Alice, 5), Bob, Drops(9_000_000), Dollars("9"))).Count());
+
     [TestMethod]
     public void RemovedOffersSayWhyAndFillsRunInOrder()
     {

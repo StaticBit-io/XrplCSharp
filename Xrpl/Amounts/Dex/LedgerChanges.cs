@@ -69,10 +69,13 @@ namespace Xrpl.Amounts
         /// <param name="placed">The offer an <c>OfferCreate</c> placed; null for none.</param>
         internal static LedgerChanges Collect(DexWorld world, DexView final, PlacedOffer placed = null)
         {
+            // In the snapshot's order, reading only the offers the transaction wrote: an untouched
+            // offer is as the snapshot has it, and reading it would cost an allocation per offer.
+            IReadOnlySet<string> touched = final.TouchedOffers();
             List<OfferChange> offers = new List<OfferChange>();
             foreach (DexOffer offer in world.Snapshot.Offers)
             {
-                if (offer == null)
+                if (offer == null || !touched.Contains(offer.Index))
                     continue;
 
                 OfferState state = final.Offer(offer.Index);

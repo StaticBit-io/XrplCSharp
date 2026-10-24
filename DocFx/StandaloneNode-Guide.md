@@ -63,7 +63,7 @@ This is not a bug in your transaction — the node simply does not have the feat
 
 ```bash
 # status of one amendment (admin RPC)
-curl -s -X POST http://localhost:5005/ -d '{"method":"feature","params":[{"feature":"AMM"}]}'
+curl -s -X POST http://localhost:5005/ -d '{"method":"feature","params":[{"feature":"AMMClawback"}]}'
 # => { "...": { "enabled": true|false, "supported": true, ... } }
 
 # full list of enabled amendments straight from the ledger
@@ -72,12 +72,14 @@ curl -s -X POST http://localhost:5005/ -d '{"method":"ledger_entry","params":[{"
 
 `7DB0788C…D6EF4` is the well-known index of the `Amendments` ledger object. If your amendment's id is not in its `Amendments` array — you will get `temDISABLED`.
 
+A **retired** amendment is the exception. rippled retires an amendment two years after mainnet enables it (`XRPL_RETIRE_FEATURE` / `XRPL_RETIRE_FIX` in `features.macro`) and deletes the code that ran without it, so the node always behaves as if it were enabled. `feature` still lists the name, but on a ledger that never enabled it reports `"enabled": false, "vetoed": "Obsolete"`. On `develop` this applies to `AMM`, `XRPFees`, `fixFillOrKill` and `fixAMMv1_1` since October 2026: an `AMMCreate` succeeds there although `feature` says `AMM` is off. The same report also covers amendments whose code was removed instead, such as `XChainBridge`: their transaction types are gone from `server_definitions`, and the node rejects them as an unknown field.
+
 An amendment id is `sha512half` of its name:
 
 ```python
 import hashlib
-hashlib.sha512(b"AMM").digest()[:32].hex().upper()
-# 8CC0774A3BF66D1D22E76BBDA8E8A232E6B6313834301B3B23E8601196AE6455
+hashlib.sha512(b"AMMClawback").digest()[:32].hex().upper()
+# 726F944886BCDF7433203787E93DD9AA87FAB74DFE3AF4785BA03BEFC97ADA1F
 ```
 
 ## Activating amendments at genesis
@@ -90,7 +92,7 @@ Plain amendment names, one per line. See `.ci-config/rippled.cfg` for a full wor
 
 ```ini
 [features]
-AMM
+AMMClawback
 Clawback
 MPTokensV1
 NFTokenMintOffer
@@ -109,7 +111,7 @@ On the `develop` branch the `[features]` config section **no longer registers ge
 
 ```ini
 [amendments]
-8CC0774A3BF66D1D22E76BBDA8E8A232E6B6313834301B3B23E8601196AE6455 AMM
+726F944886BCDF7433203787E93DD9AA87FAB74DFE3AF4785BA03BEFC97ADA1F AMMClawback
 9F287AED3CDB50A7BD1ACEC24296A30C9B5230CCD136219317AC790E3B884377 BatchV1_1
 ...
 ```

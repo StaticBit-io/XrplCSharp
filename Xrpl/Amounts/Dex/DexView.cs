@@ -150,7 +150,8 @@ namespace Xrpl.Amounts
             _accounts = new Dictionary<string, DexAccount>(StringComparer.Ordinal);
             _lines = new Dictionary<LineKey, LineInfo>();
             _books = new Dictionary<BookKey, List<DexOffer>>();
-            _offers = new Dictionary<string, DexOffer>(StringComparer.Ordinal);
+            // Ledger indexes are hex, whose case means nothing: an OfferSequence finds its offer however the snapshot spells it.
+            _offers = new Dictionary<string, DexOffer>(StringComparer.OrdinalIgnoreCase);
             _pools = new List<DexAmmPool>();
             _poolAccounts = new HashSet<string>(StringComparer.Ordinal);
             _mptIssuances = new Dictionary<string, DexMptIssuance>(StringComparer.Ordinal);
@@ -478,6 +479,7 @@ namespace Xrpl.Amounts
 
         internal IReadOnlyDictionary<LineKey, LineInfo> Lines => _lines;
 
+        /// <summary>The snapshot's offers by ledger index, in any case.</summary>
         internal IReadOnlyDictionary<string, DexOffer> Offers => _offers;
 
         internal IReadOnlyList<DexAmmPool> Pools => _pools;
@@ -1247,7 +1249,7 @@ namespace Xrpl.Amounts
         }
 
         /// <summary>The offers this view or a parent has written, by ledger index.</summary>
-        internal IEnumerable<string> TouchedOffers()
+        internal IReadOnlySet<string> TouchedOffers()
         {
             HashSet<string> offers = new HashSet<string>(StringComparer.Ordinal);
             for (DexView view = this; view != null; view = view._parent)

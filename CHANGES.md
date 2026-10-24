@@ -1,5 +1,14 @@
 # Changes
 
+## 11.18.1.0 24/10/2026
+
+* `OfferCreateCrossing.Cross` finds the offer `OfferSequence` cancels in the snapshot's index instead of scanning every offer of the snapshot (#306). `DexIndex.Offers` compares ledger indexes ignoring case, as the scan did
+* `LedgerChanges.Collect` reads only the offers the transaction wrote (`DexView.TouchedOffers`), still in the snapshot's order, instead of reading every offer of the snapshot, which allocated an offer state for each. On a snapshot of 4,000 offers a cancel-and-replace `OfferCreate` takes 0.13 ms instead of 0.46 ms and allocates 35 KiB instead of 658 KiB (p50)
+* Tests: `TestUDexGaps` cancels an offer whose index the snapshot spells in lower case, and cancels nothing when the snapshot does not hold the offer or another account owns an offer under its index; `BenchmarkDexWorld` measures a cancel-and-replace
+* `LedgerRules.FromNodeAsync` sets `FixFillOrKill` whatever the `feature` command reports: rippled develop retired the amendment (`XRPL_RETIRE_FIX(FillOrKill)`, XRPLF/rippled#7366). Docs: `Amounts-Guide` (both languages) says so; `StandaloneNode-Guide` (both languages) explains how `feature` reports a retired or removed amendment and uses `AMMClawback` as its example
+* Tests: `TestULedgerRules.RetiredFixFillOrKillIsOnWhateverTheNodeReports`. `AmendmentGuard` reads AMM, XRPFees, fixFillOrKill, fixAMMOverflowOffer and fixAMMv1_1 as active when `feature` reports them vetoed as obsolete, and `AmendmentGuard.RequireXChainBridgeAsync` skips `TestIBatchInnerTypes.Batch_Inner_XChain_CreateBridge_Modify_ClaimID_Commit_AccountCreateCommit` and `TestISponsoredTypes.Sponsored_XChain_CreateBridge_Modify_ClaimID_Commit_AccountCreateCommit` where the bridge is gone (XRPLF/rippled#8255)
+* CI: `.ci-config/wait-genesis-amendments.sh` waits until any `[amendments]` entry of a stand's config is enabled; `dotnet.test.yml`, `release-watch.yml` and `nightly-pin-watch.yml` use it instead of polling the AMM amendment, which a retired AMM never reports enabled
+
 ## 11.18.0.0 24/10/2026
 
 * `PaymentFlow.Evaluate` and `OfferCreateCrossing.Cross` index a `DexSnapshot` once per instance and reuse the index for every later evaluation against it (#301); `Cross` indexed it twice per call. The internal `DexWorld` is split into `DexIndex`, the read-only accounts, lines, books, pools, MPTs, domains and credentials, cached per snapshot in a `ConditionalWeakTable`, and `DexWorld`, which keeps what belongs to one evaluation: the fee, the passes, `ReachedPartialBook`, and the accounts a payment creates (`DexAccounts`). `DexSnapshot` keeps its own read-only copy of each list it is given, so changing a list after building the snapshot does not change it; a null list is an empty one

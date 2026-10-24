@@ -1,5 +1,6 @@
 using System;
 using System.Diagnostics;
+using System.Linq;
 
 using Microsoft.VisualStudio.TestTools.UnitTesting;
 
@@ -101,6 +102,32 @@ public class BenchmarkDexWorld
             () => OfferCreateCrossing.Cross(snapshot, Alice, Iou(Gateway(1), "250"), Drops(100_000_000_000), 10));
         Measure("OfferCreate, rolled snapshot", iterations,
             () => OfferCreateCrossing.Cross(Rolled(snapshot), Alice, Iou(Gateway(1), "250"), Drops(100_000_000_000), 10));
+
+        // A market maker's re-quote: an offer resting in a book, then cancelled and replaced at a new price.
+        OfferCreate quote = new OfferCreate
+        {
+            Account = Alice,
+            TakerPays = Iou(Gateway(2), "100").ToCurrency(),
+            TakerGets = Drops(50_000_000).ToCurrency(),
+            Fee = new global::Xrpl.Models.Common.Currency { Value = "10" },
+            Sequence = 1,
+        };
+        OfferCrossingResult rested = OfferCreateCrossing.Cross(snapshot, quote);
+        Assert.IsNotNull(rested.PlacedTakerPays, "the quote must rest");
+        DexSnapshot quoted = rested.SnapshotAfter;
+        OfferCreate requote = new OfferCreate
+        {
+            Account = Alice,
+            TakerPays = Iou(Gateway(2), "100").ToCurrency(),
+            TakerGets = Drops(51_000_000).ToCurrency(),
+            Fee = new global::Xrpl.Models.Common.Currency { Value = "10" },
+            Sequence = 2,
+            OfferSequence = 1,
+        };
+        OfferCrossingResult replaced = OfferCreateCrossing.Cross(quoted, requote);
+        Assert.IsTrue(replaced.Offers.Any(o => o.Deleted && o.Account == Alice), "the re-quote must cancel the quote");
+        Measure("OfferCreate, cancel and replace", iterations, () => OfferCreateCrossing.Cross(quoted, requote));
+        Measure("OfferCreate, place without cancel", iterations, () => OfferCreateCrossing.Cross(quoted, quote));
 
         int chains = Math.Max(20, iterations / 10);
         Measure("15 tx, index rebuilt each step", chains, () => RunChain(snapshot, gateways, rebuildIndex: true));
