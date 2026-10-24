@@ -45,7 +45,7 @@ Accounts are generated per run, never derived from a fixed phrase. A phrase is t
 
 A public faucet hands out a fixed 100 XRP per call, less than a single account needs in some flows (a lending broker funds a 100 XRP vault and a 50 XRP cover). `IntegrationTestConfig.EnsureBalanceAsync` tops an account up to a stated minimum by calling the faucet again; on the standalone stand the master payment covers any realistic minimum and it returns after the first check.
 
-Amendment-gated classes check the network through `AmendmentGuard` and mark themselves inconclusive when the amendment is not active there, so a broad filter is safe on any profile. The GitHub workflow `devnet-coverage.yml` (manual dispatch) runs the coverage-oriented classes against devnet this way.
+Amendment-gated classes check the network through `AmendmentGuard` and mark themselves inconclusive when the amendment is not active there, so a broad filter is safe on any profile. A retired amendment (AMM, XRPFees and fixFillOrKill on rippled develop) counts as active, because the node runs it although `feature` reports it disabled; `AmendmentGuard` keeps the list of those. XChain tests skip where the node has no bridge, as on develop since XRPLF/rippled#8255. The GitHub workflow `devnet-coverage.yml` (manual dispatch) runs the coverage-oriented classes against devnet this way.
 
 ## Coverage matrices
 

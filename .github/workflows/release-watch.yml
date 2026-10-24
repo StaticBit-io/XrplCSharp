@@ -155,16 +155,9 @@ jobs:
         run: |
           set -euo pipefail
           docker compose -f "$COMPOSE" up -d --build
-          # AMM amendment id — same sentinel as the main CI readiness wait.
-          SENTINEL="8CC0774A3BF66D1D22E76BBDA8E8A232E6B6313834301B3B23E8601196AE6455"
+          # The same genesis-amendment wait as the main CI readiness step.
           ok=false
-          for _ in $(seq 1 30); do
-            enabled=$(curl -sf --max-time 5 http://localhost:5005/ \
-              -d "{\"method\":\"feature\",\"params\":[{\"feature\":\"$SENTINEL\"}]}" \
-              | jq -r ".result.\"$SENTINEL\".enabled" 2>/dev/null || true)
-            if [ "$enabled" = "true" ]; then ok=true; break; fi
-            sleep 2
-          done
+          if bash .ci-config/wait-genesis-amendments.sh .ci-config/rippled.cfg 30; then ok=true; fi
           if [ "$ok" != "true" ]; then
             docker compose -f "$COMPOSE" logs --no-color xrpld | tail -80 || true
           fi
@@ -196,7 +189,7 @@ jobs:
             printf 'Added:\n```\n%s\n```\n\n' "${{ steps.regen.outputs.added }}"
             printf 'Removed:\n```\n%s\n```\n\n' "${{ steps.regen.outputs.removed }}"
             printf '## Verification\n\n'
-            printf 'Smoke test passed on the runner: fresh stand from the new image, AMM sentinel amendment enabled at genesis.\n'
+            printf 'Smoke test passed on the runner: fresh stand from the new image, genesis amendments enabled.\n'
             printf 'The merge queue runs the full integration suite against this stand before the merge lands.\n\n'
             printf 'Review checklist: new amendments above may wake up AmendmentGuard-gated tests; release notes: https://github.com/%s/releases/tag/%s\n' "$UPSTREAM" "$ver"
           } > "$body_file"

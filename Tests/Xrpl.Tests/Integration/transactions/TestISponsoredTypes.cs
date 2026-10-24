@@ -486,6 +486,7 @@ public class TestISponsoredTypes
     [TestMethod]
     public async Task Sponsored_XChain_CreateBridge_Modify_ClaimID_Commit_AccountCreateCommit()
     {
+        await AmendmentGuard.RequireXChainBridgeAsync(client);
         (XrplWallet sponsor, XrplWallet sponsee) = await SetupSponsorshipAsync();
 
         // The sponsee is the door of its own bridge for the bridge-owner transactions...

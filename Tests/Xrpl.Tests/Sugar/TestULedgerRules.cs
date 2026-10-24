@@ -67,4 +67,21 @@ public class TestULedgerRules
         Assert.IsTrue(rules.FixAMMv1_1);
         Assert.IsTrue(rules.CurrentFixAMMv1_1);
     }
+
+    /// <summary>
+    /// rippled retired <c>fixFillOrKill</c> (#7366): the node runs it whatever the ledger records,
+    /// and <c>feature</c> reports it disabled, vetoed as obsolete, on a ledger that never enabled it.
+    /// </summary>
+    [TestMethod]
+    public void RetiredFixFillOrKillIsOnWhateverTheNodeReports()
+    {
+        Dictionary<string, FeatureInfo> features = new Dictionary<string, FeatureInfo>
+        {
+            [0.ToString("X64")] = new FeatureInfo { Name = "fixFillOrKill", Enabled = false },
+        };
+
+        LedgerRules rules = LedgerRules.FromFeatures(new ServerFeatures { Features = features });
+
+        Assert.IsTrue(rules.FixFillOrKill);
+    }
 }

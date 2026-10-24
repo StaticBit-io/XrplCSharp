@@ -63,7 +63,7 @@ docker compose -f .ci-config/docker-compose.batchv11.yml down
 
 ```bash
 # статус одного амендмента (admin RPC)
-curl -s -X POST http://localhost:5005/ -d '{"method":"feature","params":[{"feature":"AMM"}]}'
+curl -s -X POST http://localhost:5005/ -d '{"method":"feature","params":[{"feature":"AMMClawback"}]}'
 # => { "...": { "enabled": true|false, "supported": true, ... } }
 
 # полный список включённых амендментов прямо из леджера
@@ -72,12 +72,14 @@ curl -s -X POST http://localhost:5005/ -d '{"method":"ledger_entry","params":[{"
 
 `7DB0788C…D6EF4` — well-known индекс леджер-объекта `Amendments`. Если id вашего амендмента нет в его массиве `Amendments` — будет `temDISABLED`.
 
+Исключение — **retired**-амендменты. rippled выводит амендмент из оборота через два года после включения в mainnet (`XRPL_RETIRE_FEATURE` / `XRPL_RETIRE_FIX` в `features.macro`) и удаляет код, работавший без него, поэтому нода всегда ведёт себя так, будто он включён. `feature` по-прежнему перечисляет это имя, но на леджере, где амендмент не включали, отвечает `"enabled": false, "vetoed": "Obsolete"`. В `develop` с октября 2026 так ведут себя `AMM`, `XRPFees`, `fixFillOrKill` и `fixAMMv1_1`: `AMMCreate` там проходит, хотя `feature` сообщает, что `AMM` выключен. Тот же ответ получают и амендменты, чей код, наоборот, удалён, например `XChainBridge`: их типов транзакций нет в `server_definitions`, и нода отвергает их как неизвестное поле.
+
 Id амендмента — это `sha512half` от его имени:
 
 ```python
 import hashlib
-hashlib.sha512(b"AMM").digest()[:32].hex().upper()
-# 8CC0774A3BF66D1D22E76BBDA8E8A232E6B6313834301B3B23E8601196AE6455
+hashlib.sha512(b"AMMClawback").digest()[:32].hex().upper()
+# 726F944886BCDF7433203787E93DD9AA87FAB74DFE3AF4785BA03BEFC97ADA1F
 ```
 
 ## Активация амендментов в genesis
@@ -90,7 +92,7 @@ hashlib.sha512(b"AMM").digest()[:32].hex().upper()
 
 ```ini
 [features]
-AMM
+AMMClawback
 Clawback
 MPTokensV1
 NFTokenMintOffer
@@ -109,7 +111,7 @@ NFTokenMintOffer
 
 ```ini
 [amendments]
-8CC0774A3BF66D1D22E76BBDA8E8A232E6B6313834301B3B23E8601196AE6455 AMM
+726F944886BCDF7433203787E93DD9AA87FAB74DFE3AF4785BA03BEFC97ADA1F AMMClawback
 9F287AED3CDB50A7BD1ACEC24296A30C9B5230CCD136219317AC790E3B884377 BatchV1_1
 ...
 ```
