@@ -1,4 +1,5 @@
 using System;
+using System.Collections.Generic;
 using System.Text.Json.Nodes;
 using System.Threading.Tasks;
 
@@ -76,8 +77,33 @@ public static class AmendmentGuard
     /// </summary>
     public const string LendingProtocolV12 = "5AE2B8F0B54FFB81E7B27BD7005C8401D9555E4F399369CA22D041F22815C824";
 
-    /// <summary>Amendment id of XChainBridge / XLS-38 (sha512half of the name).</summary>
+    /// <summary>
+    /// Amendment id of XChainBridge / XLS-38 (sha512half of the name). rippled develop removed the
+    /// bridge in October 2026 (XRPLF/rippled#8255): the amendment is <c>VoteBehavior::Obsolete</c>,
+    /// never enables, and the node rejects every XChain transaction as an unknown field.
+    /// </summary>
     public const string XChainBridge = "C98D98EE9616ACD36E81FDEB8D41D349BF5F1B41DD64A0ABC1FE9AA5EA267E9C";
+
+    /// <summary>
+    /// Amendments rippled develop has retired (<c>XRPL_RETIRE_FEATURE</c> / <c>XRPL_RETIRE_FIX</c>):
+    /// AMM and fixAMMOverflowOffer (XRPLF/rippled#7357), XRPFees (#7349), fixFillOrKill (#7366)
+    /// and fixAMMv1_1 (#8226).
+    /// </summary>
+    /// <remarks>
+    /// The node runs a retired amendment whatever the ledger records, and <c>feature</c> reports it
+    /// <c>"enabled": false, "vetoed": "Obsolete"</c> on a ledger that never enabled it. An amendment
+    /// whose code was removed instead, such as <see cref="XChainBridge"/>, gets the same report and
+    /// is never on, so the report alone cannot tell the two apart: only the names on this list are
+    /// read as active. A retirement missing here leaves its tests inconclusive, not failed.
+    /// </remarks>
+    private static readonly HashSet<string> Retired = new HashSet<string>(StringComparer.OrdinalIgnoreCase)
+    {
+        AMM,
+        "93E516234E35E08CA689FA33A6D38E103881F8DCB53023F728C307AA89D515A7", // XRPFees
+        "3318EA0CF0755AF15DAC19F2B5C5BCBFF4B78BDD57609ACCAABE2C41309B051A", // fixFillOrKill
+        "12523DF04B553A0B1AD74F42DDB741DE8DC06A03FC089A0EF197E2A87F1D8107", // fixAMMOverflowOffer
+        "35291ADD2D79EB6991343BDA0912269C817D0F094B02226C1C14AD2858962ED4", // fixAMMv1_1
+    };
 
     private static bool? roleSignatures;
 
@@ -102,6 +128,13 @@ public static class AmendmentGuard
 
         if (roleSignatures != true)
             Assert.Inconclusive("The node verifies a role signature the pre-fixCleanup3_4_0 way, over the transaction's own prefix; the SDK signs under the role prefix the amendment introduced. Run these on a stand carrying fixCleanup3_4_0 (.ci-config/docker-compose.batchv11.yml) or on devnet.");
+    }
+
+    /// <summary>Skips the test when the node has no XChain bridge to submit to.</summary>
+    public static async Task RequireXChainBridgeAsync(IXrplClient client)
+    {
+        if (!await IsEnabledAsync(client, XChainBridge))
+            Assert.Inconclusive("XChainBridge is not enabled on the test node; rippled develop removed the bridge and its transaction types (XRPLF/rippled#8255).");
     }
 
     public static async Task<bool> IsEnabledAsync(IXrplClient client, string amendmentId)
@@ -142,7 +175,13 @@ public static class AmendmentGuard
             FeatureRequest request = new FeatureRequest { Feature = amendmentId };
             JsonNode node = await client.GRequest<JsonNode, FeatureRequest>(request).Typed();
             JsonNode entry = node?[amendmentId];
-            return entry?["enabled"]?.GetValue<bool>() == true;
+            if (entry?["enabled"]?.GetValue<bool>() == true)
+                return true;
+
+            return Retired.Contains(amendmentId)
+                && entry?["vetoed"] is JsonValue vetoed
+                && vetoed.TryGetValue(out string reason)
+                && string.Equals(reason, "Obsolete", StringComparison.Ordinal);
         }
         catch (RippledException)
         {

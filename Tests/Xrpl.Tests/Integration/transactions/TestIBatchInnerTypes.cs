@@ -519,6 +519,7 @@ public class TestIBatchInnerTypes
     [TestMethod]
     public async Task Batch_Inner_XChain_CreateBridge_Modify_ClaimID_Commit_AccountCreateCommit()
     {
+        await AmendmentGuard.RequireXChainBridgeAsync(client);
         (XrplWallet door, XrplWallet user) = await FundPairAsync();
         XChainBridgeModel bridge = new XChainBridgeModel
         {

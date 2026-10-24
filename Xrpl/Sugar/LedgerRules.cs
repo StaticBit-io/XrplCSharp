@@ -89,6 +89,11 @@ namespace Xrpl.Sugar
         /// Whether <c>fixFillOrKill</c> is enabled: a fill-or-kill offer without <c>tfSell</c> must
         /// receive all of its <c>TakerPays</c>, not spend all of its <c>TakerGets</c>.
         /// </summary>
+        /// <remarks>
+        /// rippled retired the amendment (<c>XRPL_RETIRE_FIX(FillOrKill)</c>, rippled #7366): a node
+        /// runs it whatever the ledger records, so <see cref="FromNodeAsync"/> always sets it.
+        /// Set it to false by hand only to replay the behaviour before the amendment.
+        /// </remarks>
         public bool FixFillOrKill { get; init; } = true;
 
         /// <summary>
@@ -220,7 +225,7 @@ namespace Xrpl.Sugar
                 FixAMMv1_3 = Enabled("fixAMMv1_3"),
                 MPTokensV2 = Enabled("MPTokensV2"),
                 FixReducedOffersV2 = Enabled("fixReducedOffersV2"),
-                FixFillOrKill = Enabled("fixFillOrKill"),
+                FixFillOrKill = true,
                 LendingProtocolV1_1 = Enabled("LendingProtocolV1_1"),
             };
         }
