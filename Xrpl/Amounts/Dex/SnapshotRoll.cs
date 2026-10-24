@@ -67,6 +67,43 @@ namespace Xrpl.Amounts
             return after;
         }
 
+        /// <summary>
+        /// <paramref name="before"/> without the offer <paramref name="offerIndex"/>, its index
+        /// registered; <paramref name="before"/> itself when it does not hold the offer.
+        /// </summary>
+        /// <exception cref="ArgumentException">The snapshot lists a trust line or an MPT holding twice, or a hybrid offer names no domain.</exception>
+        internal static DexSnapshot WithoutOffer(DexSnapshot before, string offerIndex)
+        {
+            DexIndex index = DexIndex.Of(before);
+            if (!index.Offers.TryGetValue(offerIndex, out DexOffer offer))
+                return before;
+
+            // Keyed by the snapshot's spelling of the index, which PatchOffers matches ordinally.
+            DexIndexDelta delta = new DexIndexDelta();
+            delta.Offers[offer.Index] = null;
+
+            DexSnapshot after = new DexSnapshot
+            {
+                ParentCloseTime = before.ParentCloseTime,
+                LedgerSequence = before.LedgerSequence,
+                ReserveBase = before.ReserveBase,
+                ReserveIncrement = before.ReserveIncrement,
+                Accounts = before.Accounts,
+                TrustLines = before.TrustLines,
+                Offers = PatchOffers(before.Offers, delta),
+                Pools = before.Pools,
+                MptIssuances = before.MptIssuances,
+                MptHoldings = before.MptHoldings,
+                Domains = before.Domains,
+                Credentials = before.Credentials,
+                PartialBooks = before.PartialBooks,
+                ApproximatedOwners = before.ApproximatedOwners,
+            };
+
+            DexIndex.Register(after, new DexIndex(index, after, delta));
+            return after;
+        }
+
         private static void CollectAccounts(DexWorld world, DexView final, PlacedOffer placed, DexIndexDelta delta)
         {
             // An account the payment created is written back only when the final view funded it:

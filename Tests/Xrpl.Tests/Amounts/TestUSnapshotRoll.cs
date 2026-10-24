@@ -315,6 +315,117 @@ public class TestUSnapshotRoll
     }
 
     /// <summary>
+    /// <c>WithoutOffer</c> (issue 310) takes out the remainder an <c>OfferCreate</c> placed, the
+    /// only offer of its book, with the index derived from the rolled snapshot's.
+    /// </summary>
+    [TestMethod]
+    public void ThePlacedRemainderIsTakenOutAsByHand()
+    {
+        DexSnapshot snapshot = Build(gateways: 3, owners: 10, offersPerBook: 5);
+        uint sequence = AccountOf(snapshot, Alice).Sequence;
+        DexSnapshot after = OfferCreateCrossing.Cross(snapshot, Alice, XrplAmount.Parse(Eur(Gateway(2)), "10"), Drops(200_000_000), 10).SnapshotAfter;
+        string placed = Hashes.HashOfferId(Alice, sequence);
+
+        DexSnapshot without = after.WithoutOffer(placed);
+
+        CollectionAssert.AreEqual(after.Offers.Where(o => o.Index != placed).ToArray(), without.Offers.ToArray());
+        CollectionAssert.AreEqual(snapshot.Offers.ToArray(), without.Offers.ToArray(), "the placed offer was the only one added");
+        CollectionAssert.AreEqual(after.Accounts.ToArray(), without.Accounts.ToArray(), "the owner's entries are left as they are");
+        AssertSameIndex(new DexIndex(without), DexIndex.Of(without), "remainder taken out");
+        Assert.IsTrue(DexIndex.Of(after).BookKeys.Contains(BookKey.Of(Eur(Gateway(2)), Xrp)), "the remainder rests in its own book");
+        Assert.IsFalse(DexIndex.Of(without).BookKeys.Contains(BookKey.Of(Eur(Gateway(2)), Xrp)), "the emptied book is gone");
+        Assert.AreSame(DexIndex.Of(after).Lines, DexIndex.Of(without).Lines, "derived from the rolled index, not built afresh");
+
+        Func<DexSnapshot, object> next = s => Cross(s, Gateway(2), Drops(100_000_000), XrplAmount.Parse(Eur(Gateway(2)), "5"));
+        Assert.AreEqual(DexResultText.Describe(next(Fresh(without))), DexResultText.Describe(next(without)));
+    }
+
+    [TestMethod]
+    public void AnOfferTakenOutMidBookLeavesTheRestInOrder()
+    {
+        DexSnapshot snapshot = Build(gateways: 2, owners: 20, offersPerBook: 10);
+        BookKey key = BookKey.Of(Usd(Gateway(1)), Xrp);
+        DexOffer[] book = DexIndex.Of(snapshot).Book(key).ToArray();
+        DexOffer removed = book[3];
+
+        DexSnapshot without = snapshot.WithoutOffer(removed.Index);
+
+        CollectionAssert.AreEqual(book.Where(o => o != removed).ToArray(), DexIndex.Of(without).Book(key).ToArray());
+        AssertSameIndex(new DexIndex(without), DexIndex.Of(without), "mid-book");
+
+        Func<DexSnapshot, object> sale = s => Cross(s, Gateway(1), Drops(1), Iou(Gateway(1), "2500"), OfferCreateFlags.tfSell);
+        Assert.AreEqual(DexResultText.Describe(sale(Fresh(without))), DexResultText.Describe(sale(without)));
+        Assert.IsFalse(((OfferCrossingResult)sale(without)).Offers.Any(o => o.Index == removed.Index), "the sale does not reach it");
+    }
+
+    [TestMethod]
+    public void AnOfferIndexInLowerCaseIsTakenOut()
+    {
+        DexSnapshot snapshot = Build(gateways: 1, owners: 10, offersPerBook: 5);
+        DexOffer offer = snapshot.Offers[2];
+
+        DexSnapshot without = snapshot.WithoutOffer(offer.Index.ToLowerInvariant());
+
+        Assert.AreEqual(snapshot.Offers.Count - 1, without.Offers.Count);
+        Assert.IsFalse(without.Offers.Contains(offer));
+        AssertSameIndex(new DexIndex(without), DexIndex.Of(without), "lower case");
+    }
+
+    [TestMethod]
+    public void AnOfferTheSnapshotDoesNotHoldRemovesNothing()
+    {
+        DexSnapshot snapshot = Build(gateways: 1, owners: 10, offersPerBook: 5);
+
+        Assert.AreSame(snapshot, snapshot.WithoutOffer(new string('F', 64)));
+        Assert.ThrowsExactly<ArgumentNullException>(() => snapshot.WithoutOffer(null));
+    }
+
+    [TestMethod]
+    public void AHybridOfferLeavesBothItsBooks()
+    {
+        string gw = Gateway(0);
+        string domain = new string('D', 64);
+        XrplAmount pays = Iou(gw, "10");
+        DexOffer Offer(string index, string account, ulong drops, string domainId = null, bool hybrid = false) =>
+            new DexOffer
+            {
+                Index = index,
+                Account = account,
+                TakerPays = pays,
+                TakerGets = Drops(drops),
+                Quality = XrplQuality.FromAmounts(pays, Drops(drops)),
+                DomainId = domainId,
+                Hybrid = hybrid,
+            };
+
+        DexSnapshot snapshot = new DexSnapshot
+        {
+            ParentCloseTime = 800_000_000,
+            LedgerSequence = 100,
+            ReserveBase = 10_000_000,
+            ReserveIncrement = 2_000_000,
+            Accounts = new[]
+            {
+                new DexAccount { Address = gw, Balance = 100_000_000_000, Sequence = 1 },
+                new DexAccount { Address = Alice, Balance = 100_000_000_000, OwnerCount = 3, Sequence = 10 },
+            },
+            Offers = new[]
+            {
+                Offer(new string('A', 64), Alice, 6_000_000),
+                Offer(new string('B', 64), Alice, 5_000_000, domain, hybrid: true),
+                Offer(new string('C', 64), Alice, 4_000_000, domain),
+            },
+        };
+
+        DexSnapshot without = snapshot.WithoutOffer(new string('B', 64));
+
+        DexIndex index = DexIndex.Of(without);
+        CollectionAssert.AreEqual(new[] { new string('A', 64) }, index.Book(BookKey.Of(pays.Asset, Xrp)).Select(o => o.Index).ToArray());
+        CollectionAssert.AreEqual(new[] { new string('C', 64) }, index.Book(BookKey.Of(pays.Asset, Xrp, domain)).Select(o => o.Index).ToArray());
+        AssertSameIndex(new DexIndex(without), index, "hybrid");
+    }
+
+    /// <summary>
     /// The roll copies these types property by property; one added to them must be copied there
     /// too, which this names so it cannot be forgotten.
     /// </summary>

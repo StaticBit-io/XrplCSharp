@@ -128,6 +128,28 @@ namespace Xrpl.Amounts
         /// </summary>
         public const string UnlimitedTaker = "rrrrrrrrrrrrrrrrrrrrBZbvji";
 
+        /// <summary>
+        /// The snapshot without the offer <paramref name="offerIndex"/>: the same entries with
+        /// that offer left out of <see cref="Offers"/>, as building the snapshot by hand without
+        /// it would give. Use it for an <c>OfferCancel</c>, which the engine does not evaluate, or
+        /// to take out the offer an <c>OfferCreate</c> placed (its index is
+        /// <c>Hashes.HashOfferId</c> of the account and the sequence or ticket it used).
+        /// </summary>
+        /// <param name="offerIndex">The offer's ledger index, in either case.</param>
+        /// <returns>
+        /// A new snapshot whose index is derived from this one's, so evaluating against it costs
+        /// no index build; this snapshot itself when it holds no such offer.
+        /// </returns>
+        /// <remarks>
+        /// Only the offer is removed, whoever owns it. Nothing else changes: not the owner's
+        /// <c>OwnerCount</c>, not its <c>Sequence</c>, and no fee is charged, which an
+        /// <c>OfferCancel</c> on the ledger would also do.
+        /// </remarks>
+        /// <exception cref="ArgumentNullException"><paramref name="offerIndex"/> is null.</exception>
+        /// <exception cref="ArgumentException">This snapshot lists a trust line or an MPT holding twice, or a hybrid offer names no domain.</exception>
+        public DexSnapshot WithoutOffer(string offerIndex) =>
+            SnapshotRoll.WithoutOffer(this, offerIndex ?? throw new ArgumentNullException(nameof(offerIndex)));
+
         /// <summary>A copy of <paramref name="list"/> no one else holds, so the snapshot cannot change after it is built; empty for null.</summary>
         private static IReadOnlyList<T> Own<T>(IReadOnlyList<T> list) =>
             list == null ? Array.Empty<T>() : Array.AsReadOnly(list.ToArray());
