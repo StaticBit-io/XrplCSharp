@@ -118,7 +118,7 @@ namespace Xrpl.Amounts
 
             // The destination account is created before any funds move.
             if (!destinationExists)
-                world.Accounts[destination] = destinationAccount = new DexAccount { Address = destination };
+                world.Accounts.Create(destinationAccount = new DexAccount { Address = destination });
 
             DexView view = new DexView(world, rules);
             if (ripple)

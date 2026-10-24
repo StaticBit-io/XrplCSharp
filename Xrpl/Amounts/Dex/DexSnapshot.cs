@@ -21,6 +21,12 @@ namespace Xrpl.Amounts
     /// credentials that decide its members go in <see cref="Domains"/> and
     /// <see cref="Credentials"/>; where a hybrid offer shares a quality with domain offers, the
     /// offers are listed in the order they were placed.
+    /// <para>
+    /// The engine indexes a snapshot on its first evaluation and reuses that index for every later
+    /// one against the same instance, so a snapshot must not change once it has been evaluated:
+    /// to evaluate against a different state, build a new snapshot, not new contents in the
+    /// lists of an old one.
+    /// </para>
     /// </remarks>
     public sealed partial class DexSnapshot
     {
