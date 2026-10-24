@@ -1,5 +1,11 @@
 # Changes
 
+## 11.18.1.0 24/10/2026
+
+* `OfferCreateCrossing.Cross` finds the offer `OfferSequence` cancels in the snapshot's index instead of scanning every offer of the snapshot (#306). `DexIndex.Offers` compares ledger indexes ignoring case, as the scan did
+* `LedgerChanges.Collect` reads only the offers the transaction wrote (`DexView.TouchedOffers`), still in the snapshot's order, instead of reading every offer of the snapshot, which allocated an offer state for each. On a snapshot of 4,000 offers a cancel-and-replace `OfferCreate` takes 0.13 ms instead of 0.46 ms and allocates 35 KiB instead of 658 KiB (p50)
+* Tests: `TestUDexGaps` cancels an offer whose index the snapshot spells in lower case, and cancels nothing when the snapshot does not hold the offer or another account owns an offer under its index; `BenchmarkDexWorld` measures a cancel-and-replace
+
 ## 11.18.0.0 24/10/2026
 
 * `PaymentFlow.Evaluate` and `OfferCreateCrossing.Cross` index a `DexSnapshot` once per instance and reuse the index for every later evaluation against it (#301); `Cross` indexed it twice per call. The internal `DexWorld` is split into `DexIndex`, the read-only accounts, lines, books, pools, MPTs, domains and credentials, cached per snapshot in a `ConditionalWeakTable`, and `DexWorld`, which keeps what belongs to one evaluation: the fee, the passes, `ReachedPartialBook`, and the accounts a payment creates (`DexAccounts`). `DexSnapshot` keeps its own read-only copy of each list it is given, so changing a list after building the snapshot does not change it; a null list is an empty one
