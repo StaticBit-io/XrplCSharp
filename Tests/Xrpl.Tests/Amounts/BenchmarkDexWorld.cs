@@ -30,12 +30,40 @@ public class BenchmarkDexWorld
         new DexSnapshot
         {
             ParentCloseTime = snapshot.ParentCloseTime,
+            LedgerSequence = snapshot.LedgerSequence,
             ReserveBase = snapshot.ReserveBase,
             ReserveIncrement = snapshot.ReserveIncrement,
             Accounts = snapshot.Accounts,
             TrustLines = snapshot.TrustLines,
             Offers = snapshot.Offers,
         };
+
+    /// <summary>
+    /// The issue's workload: pending transactions evaluated one after another, each against the
+    /// snapshot the last one left - payments and offers across the gateways' books.
+    /// </summary>
+    private static DexSnapshot RunChain(DexSnapshot snapshot, int gateways, bool rebuildIndex)
+    {
+        for (int i = 0; i < 15; i++)
+        {
+            string gateway = Gateway(i % gateways);
+            DexSnapshot after = i % 3 == 2
+                ? OfferCreateCrossing.Cross(snapshot, Alice, Iou(gateway, "150"), Drops(100_000_000_000), 10).SnapshotAfter
+                : PaymentFlow.Evaluate(snapshot, new Payment
+                {
+                    Account = Alice,
+                    Destination = Bob,
+                    Amount = Iou(gateway, "120").ToCurrency(),
+                    SendMax = Drops(1_000_000_000_000).ToCurrency(),
+                    Fee = new global::Xrpl.Models.Common.Currency { Value = "10" },
+                }).SnapshotAfter;
+
+            // A new instance gets an index of its own, as a snapshot rolled forward by hand does.
+            snapshot = rebuildIndex ? Rolled(after) : after;
+        }
+
+        return snapshot;
+    }
 
     [TestMethod]
     public void BenchmarkIndexAndEvaluate()
@@ -73,6 +101,10 @@ public class BenchmarkDexWorld
             () => OfferCreateCrossing.Cross(snapshot, Alice, Iou(Gateway(1), "250"), Drops(100_000_000_000), 10));
         Measure("OfferCreate, rolled snapshot", iterations,
             () => OfferCreateCrossing.Cross(Rolled(snapshot), Alice, Iou(Gateway(1), "250"), Drops(100_000_000_000), 10));
+
+        int chains = Math.Max(20, iterations / 10);
+        Measure("15 tx, index rebuilt each step", chains, () => RunChain(snapshot, gateways, rebuildIndex: true));
+        Measure("15 tx, rolled with SnapshotAfter", chains, () => RunChain(snapshot, gateways, rebuildIndex: false));
     }
 
     private static void Measure(string name, int iterations, Func<object> run)

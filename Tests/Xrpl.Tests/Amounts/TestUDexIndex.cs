@@ -1,9 +1,6 @@
 using System;
-using System.Collections;
 using System.Collections.Generic;
 using System.Linq;
-using System.Reflection;
-using System.Text;
 using System.Threading.Tasks;
 
 using Microsoft.VisualStudio.TestTools.UnitTesting;
@@ -25,7 +22,7 @@ namespace XrplTests.Xrpl.Amounts;
 [TestClass]
 public class TestUDexIndex
 {
-    private const string Carol = "carol";
+    private static readonly string Carol = Address("carol");
 
     private static Payment Pay(string from, string to, XrplAmount amount, XrplAmount? sendMax = null) =>
         new Payment
@@ -45,7 +42,7 @@ public class TestUDexIndex
         new (string, Func<DexSnapshot, object>)[]
         {
             ("XRP for USD through the book", s => PaymentFlow.Evaluate(s, Pay(Alice, Bob, Iou(Gateway(0), "250"), Drops(1_000_000_000_000)))),
-            ("USD for XRP through the book", s => PaymentFlow.Evaluate(s, Pay("owner00001", Bob, Drops(5_000_000_000), Iou(Gateway(1), "1000")))),
+            ("USD for XRP through the book", s => PaymentFlow.Evaluate(s, Pay(Owner(1), Bob, Drops(500_000_000), Iou(Gateway(1), "1000")))),
             ("XRP creating carol", s => PaymentFlow.Evaluate(s, Pay(Alice, Carol, Drops(50_000_000)))),
             ("USD to carol", s => PaymentFlow.Evaluate(s, Pay(Alice, Carol, Iou(Gateway(0), "10"), Drops(1_000_000_000)))),
             ("offer crossing", s => OfferCreateCrossing.Cross(s, Alice, Iou(Gateway(1), "250"), Drops(100_000_000_000), 10)),
@@ -84,7 +81,7 @@ public class TestUDexIndex
         for (int round = 0; round < 2; round++)
         {
             foreach ((string name, Func<DexSnapshot, object> evaluate) in Transactions)
-                Assert.AreEqual(Describe(evaluate(Fresh(shared))), Describe(evaluate(shared)), $"{name}, round {round}");
+                Assert.AreEqual(DexResultText.Describe(evaluate(Fresh(shared))), DexResultText.Describe(evaluate(shared)), $"{name}, round {round}");
         }
     }
 
@@ -102,10 +99,10 @@ public class TestUDexIndex
     public void ConcurrentEvaluationsDoNotSeeEachOther()
     {
         DexSnapshot snapshot = Build(gateways: 3, owners: 50, offersPerBook: 40);
-        string[] expected = Transactions.Select(t => Describe(t.Evaluate(Fresh(snapshot)))).ToArray();
+        string[] expected = Transactions.Select(t => DexResultText.Describe(t.Evaluate(Fresh(snapshot)))).ToArray();
 
         string[] actual = new string[Transactions.Count * 16];
-        Parallel.For(0, actual.Length, i => actual[i] = Describe(Transactions[i % Transactions.Count].Evaluate(snapshot)));
+        Parallel.For(0, actual.Length, i => actual[i] = DexResultText.Describe(Transactions[i % Transactions.Count].Evaluate(snapshot)));
 
         for (int i = 0; i < actual.Length; i++)
             Assert.AreEqual(expected[i % Transactions.Count], actual[i], Transactions[i % Transactions.Count].Name);
@@ -126,53 +123,5 @@ public class TestUDexIndex
 
         Assert.ThrowsExactly<ArgumentException>(() => DexIndex.Of(snapshot));
         Assert.ThrowsExactly<ArgumentException>(() => DexIndex.Of(snapshot));
-    }
-
-    /// <summary>Every public property of a result, nested, as text: two results are the same when their texts are.</summary>
-    private static string Describe(object value)
-    {
-        StringBuilder text = new StringBuilder();
-        Describe(value, text, 0);
-        return text.ToString();
-    }
-
-    private static void Describe(object value, StringBuilder text, int depth)
-    {
-        if (value == null)
-        {
-            text.Append("null");
-            return;
-        }
-
-        Type type = value.GetType();
-        if (type.IsPrimitive || type.IsEnum || value is string || value is decimal || depth > 6 ||
-            type.GetMethod(nameof(ToString), Type.EmptyTypes)?.DeclaringType == type)
-        {
-            text.Append(value);
-            return;
-        }
-
-        if (value is IEnumerable items)
-        {
-            text.Append('[');
-            foreach (object item in items)
-            {
-                Describe(item, text, depth + 1);
-                text.Append(", ");
-            }
-
-            text.Append(']');
-            return;
-        }
-
-        text.Append('{');
-        foreach (PropertyInfo property in type.GetProperties(BindingFlags.Public | BindingFlags.Instance).Where(p => p.GetIndexParameters().Length == 0))
-        {
-            text.Append(property.Name).Append('=');
-            Describe(property.GetValue(value), text, depth + 1);
-            text.Append("; ");
-        }
-
-        text.Append('}');
     }
 }

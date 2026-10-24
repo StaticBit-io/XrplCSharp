@@ -122,29 +122,44 @@ namespace Xrpl.Amounts
         // rolling a snapshot forward builds a new instance, which gets an index of its own.
         private static readonly ConditionalWeakTable<DexSnapshot, DexIndex> Cache = new ConditionalWeakTable<DexSnapshot, DexIndex>();
 
-        private readonly Dictionary<string, DexAccount> _accounts = new Dictionary<string, DexAccount>(StringComparer.Ordinal);
-        private readonly Dictionary<LineKey, LineInfo> _lines = new Dictionary<LineKey, LineInfo>();
-        private readonly Dictionary<BookKey, List<DexOffer>> _books = new Dictionary<BookKey, List<DexOffer>>();
-        private readonly Dictionary<string, DexOffer> _offers = new Dictionary<string, DexOffer>(StringComparer.Ordinal);
-        private readonly List<DexAmmPool> _pools = new List<DexAmmPool>();
-        private readonly HashSet<string> _poolAccounts = new HashSet<string>(StringComparer.Ordinal);
-        private readonly Dictionary<string, DexMptIssuance> _mptIssuances = new Dictionary<string, DexMptIssuance>(StringComparer.Ordinal);
-        private readonly Dictionary<(string Account, string Id), DexMptHolding> _mptHoldings = new Dictionary<(string Account, string Id), DexMptHolding>();
-        private readonly Dictionary<string, DexDomain> _domains = new Dictionary<string, DexDomain>(StringComparer.Ordinal);
-        private readonly Dictionary<(string Subject, string Issuer, string Type), DexCredential> _credentials =
-            new Dictionary<(string Subject, string Issuer, string Type), DexCredential>();
-        private readonly Dictionary<string, DexCredential> _credentialsById = new Dictionary<string, DexCredential>(StringComparer.OrdinalIgnoreCase);
-        private readonly HashSet<BookKey> _partialBooks = new HashSet<BookKey>();
+        private readonly Dictionary<string, DexAccount> _accounts;
+        private readonly Dictionary<LineKey, LineInfo> _lines;
+        private readonly Dictionary<BookKey, List<DexOffer>> _books;
+        private readonly Dictionary<string, DexOffer> _offers;
+        private readonly List<DexAmmPool> _pools;
+        private readonly HashSet<string> _poolAccounts;
+        private readonly Dictionary<string, DexMptIssuance> _mptIssuances;
+        private readonly Dictionary<(string Account, string Id), DexMptHolding> _mptHoldings;
+        private readonly Dictionary<string, DexDomain> _domains;
+        private readonly Dictionary<(string Subject, string Issuer, string Type), DexCredential> _credentials;
+        private readonly Dictionary<string, DexCredential> _credentialsById;
+        private readonly HashSet<BookKey> _partialBooks;
 
         /// <summary>The index of <paramref name="snapshot"/>, built on its first use and shared after.</summary>
         /// <exception cref="ArgumentException">The snapshot lists a trust line or an MPT holding twice, or a hybrid offer names no domain.</exception>
         internal static DexIndex Of(DexSnapshot snapshot) =>
             Cache.GetValue(snapshot ?? throw new ArgumentNullException(nameof(snapshot)), static s => new DexIndex(s));
 
+        /// <summary>Makes <paramref name="index"/> the one <see cref="Of"/> returns for <paramref name="snapshot"/>.</summary>
+        internal static void Register(DexSnapshot snapshot, DexIndex index) => Cache.AddOrUpdate(snapshot, index);
+
         /// <summary>Indexes <paramref name="snapshot"/> afresh, bypassing the cache.</summary>
         internal DexIndex(DexSnapshot snapshot)
         {
             Snapshot = snapshot ?? throw new ArgumentNullException(nameof(snapshot));
+            _accounts = new Dictionary<string, DexAccount>(StringComparer.Ordinal);
+            _lines = new Dictionary<LineKey, LineInfo>();
+            _books = new Dictionary<BookKey, List<DexOffer>>();
+            _offers = new Dictionary<string, DexOffer>(StringComparer.Ordinal);
+            _pools = new List<DexAmmPool>();
+            _poolAccounts = new HashSet<string>(StringComparer.Ordinal);
+            _mptIssuances = new Dictionary<string, DexMptIssuance>(StringComparer.Ordinal);
+            _mptHoldings = new Dictionary<(string Account, string Id), DexMptHolding>();
+            _domains = new Dictionary<string, DexDomain>(StringComparer.Ordinal);
+            _credentials = new Dictionary<(string Subject, string Issuer, string Type), DexCredential>();
+            _credentialsById = new Dictionary<string, DexCredential>(StringComparer.OrdinalIgnoreCase);
+            _partialBooks = new HashSet<BookKey>();
+
             foreach (DexAccount account in snapshot.Accounts ?? Array.Empty<DexAccount>())
             {
                 if (account?.Address != null)
@@ -153,48 +168,8 @@ namespace Xrpl.Amounts
 
             foreach (DexTrustLine line in snapshot.TrustLines ?? Array.Empty<DexTrustLine>())
             {
-                if (line?.Account == null)
-                    continue;
-                if (XrplAmount.KindOf(line.Balance.Asset) != AmountKind.Iou)
-                    throw new NotSupportedException("A trust line holds an issued currency.");
-
-                string peer = line.Balance.Asset.Issuer;
-                LineKey key = LineKey.Of(line.Account, peer, line.Balance.Asset.Currency);
-                LineSide side = new LineSide
-                {
-                    Limit = line.Limit,
-                    QualityIn = line.QualityIn,
-                    QualityOut = line.QualityOut,
-                    NoRipple = line.NoRipple,
-                    Freeze = line.FrozenByAccount,
-                    Auth = line.Authorized,
-                    Reserve = line.Reserve,
-                };
-                LineSide peerSide = new LineSide
-                {
-                    Limit = line.PeerLimit,
-                    QualityIn = line.PeerQualityIn,
-                    QualityOut = line.PeerQualityOut,
-                    NoRipple = line.PeerNoRipple,
-                    Freeze = line.Frozen,
-                    Auth = line.PeerAuthorized,
-                    Reserve = line.PeerReserve,
-                };
-                bool accountFirst = key.IsFirst(line.Account);
-                if (_lines.ContainsKey(key))
-                {
-                    throw new ArgumentException(
-                        $"The trust line {key.First}/{key.Second} {key.Currency} is listed twice; describe it once, with the other side in its Peer properties.");
-                }
-
-                _lines[key] = new LineInfo
-                {
-                    Key = key,
-                    First = accountFirst ? side : peerSide,
-                    Second = accountFirst ? peerSide : side,
-                    DeepFrozen = line.DeepFrozen,
-                    Balance = FirstView(key, line.Account, line.Balance),
-                };
+                if (line?.Account != null)
+                    AddLine(line);
             }
 
             foreach (DexMptIssuance issuance in snapshot.MptIssuances ?? Array.Empty<DexMptIssuance>())
@@ -205,14 +180,8 @@ namespace Xrpl.Amounts
 
             foreach (DexMptHolding holding in snapshot.MptHoldings ?? Array.Empty<DexMptHolding>())
             {
-                if (holding?.Account == null || holding.MptIssuanceId == null)
-                    continue;
-
-                (string, string) key = (holding.Account, DexAssets.MptKey(holding.MptIssuanceId));
-                if (_mptHoldings.ContainsKey(key))
-                    throw new ArgumentException($"The MPT holding of {holding.Account} in {holding.MptIssuanceId} is listed twice.");
-
-                _mptHoldings[key] = holding;
+                if (holding?.Account != null && holding.MptIssuanceId != null)
+                    AddMptHolding(holding);
             }
 
             foreach (DexOffer offer in snapshot.Offers ?? Array.Empty<DexOffer>())
@@ -223,12 +192,13 @@ namespace Xrpl.Amounts
                 if (offer.Hybrid && string.IsNullOrEmpty(offer.DomainId))
                     throw new ArgumentException($"The hybrid offer {offer.Index} names no domain.");
 
-                // Crossing, the taker pays what the offer asks for and gets what it gives. A domain
-                // offer sits in its domain's book; a hybrid one in the open book too.
-                if (string.IsNullOrEmpty(offer.DomainId) || offer.Hybrid)
-                    AddToBook(BookKey.Of(offer.TakerPays.Asset, offer.TakerGets.Asset), offer);
-                if (!string.IsNullOrEmpty(offer.DomainId))
-                    AddToBook(BookKey.Of(offer.TakerPays.Asset, offer.TakerGets.Asset, offer.DomainId), offer);
+                foreach (BookKey book in BooksOf(offer))
+                {
+                    if (!_books.TryGetValue(book, out List<DexOffer> list))
+                        _books[book] = list = new List<DexOffer>();
+
+                    list.Add(offer);
+                }
 
                 _offers[offer.Index] = offer;
             }
@@ -246,31 +216,7 @@ namespace Xrpl.Amounts
 
                 _pools.Add(pool);
                 _poolAccounts.Add(pool.Account);
-                foreach (XrplAmount held in new[] { pool.Balance, pool.Balance2 })
-                {
-                    if (held.Kind == AmountKind.Mpt)
-                    {
-                        // The pool's balance is what its account's MPToken holds.
-                        (string, string) holdingKey = (pool.Account, DexAssets.MptKey(held.Asset.MptIssuanceId));
-                        _mptHoldings.TryGetValue(holdingKey, out DexMptHolding listed);
-                        _mptHoldings[holdingKey] = new DexMptHolding
-                        {
-                            Account = pool.Account,
-                            MptIssuanceId = holdingKey.Item2,
-                            Amount = held.StMantissa,
-                            Locked = listed?.Locked ?? false,
-                            Authorized = true,
-                        };
-                        continue;
-                    }
-
-                    if (held.Kind != AmountKind.Iou)
-                        continue;
-
-                    // The pool's balance is what its account holds on the line to the issuer.
-                    LineKey key = LineKey.Of(pool.Account, held.Asset.Issuer, held.Asset.Currency);
-                    _lines[key] = new LineInfo { Key = key, Balance = FirstView(key, pool.Account, held) };
-                }
+                AddPoolHoldings(pool);
             }
 
             foreach (DexDomain domain in snapshot.Domains ?? Array.Empty<DexDomain>())
@@ -296,12 +242,225 @@ namespace Xrpl.Amounts
             }
         }
 
-        private void AddToBook(BookKey book, DexOffer offer)
+        /// <summary>
+        /// The index of <paramref name="snapshot"/>, which is <paramref name="parent"/>'s snapshot
+        /// with <paramref name="delta"/> written into it: what the delta leaves alone is shared
+        /// with the parent, and the result is what indexing the snapshot afresh would give.
+        /// </summary>
+        internal DexIndex(DexIndex parent, DexSnapshot snapshot, DexIndexDelta delta)
         {
-            if (!_books.TryGetValue(book, out List<DexOffer> list))
-                _books[book] = list = new List<DexOffer>();
+            Snapshot = snapshot;
 
-            list.Add(offer);
+            _accounts = parent._accounts;
+            if (delta.Accounts.Count > 0)
+            {
+                _accounts = new Dictionary<string, DexAccount>(parent._accounts, parent._accounts.Comparer);
+                foreach (DexAccount account in delta.Accounts.Values)
+                    _accounts[account.Address] = account;
+            }
+
+            _pools = parent._pools;
+            if (delta.Pools.Count > 0)
+            {
+                _pools = new List<DexAmmPool>(parent._pools.Count);
+                foreach (DexAmmPool pool in parent._pools)
+                    _pools.Add(delta.Pools.TryGetValue(pool.Account, out DexAmmPool changed) ? changed : pool);
+            }
+
+            _lines = parent._lines;
+            if (delta.Lines.Count > 0 || delta.Pools.Count > 0)
+            {
+                _lines = new Dictionary<LineKey, LineInfo>(parent._lines, parent._lines.Comparer);
+                foreach (KeyValuePair<LineKey, DexTrustLine> change in delta.Lines)
+                {
+                    _lines.Remove(change.Key);
+                    if (change.Value != null)
+                        AddLine(change.Value);
+                }
+            }
+
+            _mptIssuances = parent._mptIssuances;
+            if (delta.MptIssuances.Count > 0)
+            {
+                _mptIssuances = new Dictionary<string, DexMptIssuance>(parent._mptIssuances, parent._mptIssuances.Comparer);
+                foreach (KeyValuePair<string, DexMptIssuance> change in delta.MptIssuances)
+                    _mptIssuances[change.Key] = change.Value;
+            }
+
+            _mptHoldings = parent._mptHoldings;
+            if (delta.MptHoldings.Count > 0 || delta.Pools.Count > 0)
+            {
+                _mptHoldings = new Dictionary<(string Account, string Id), DexMptHolding>(parent._mptHoldings, parent._mptHoldings.Comparer);
+                foreach (KeyValuePair<(string Account, string Id), DexMptHolding> change in delta.MptHoldings)
+                {
+                    _mptHoldings.Remove(change.Key);
+                    if (change.Value != null)
+                        AddMptHolding(change.Value);
+                }
+            }
+
+            // A pool's lines and MPToken are its balances; they follow the pool, as they do when indexing afresh.
+            foreach (DexAmmPool pool in delta.Pools.Values)
+                AddPoolHoldings(pool);
+
+            _offers = parent._offers;
+            _books = parent._books;
+            if (delta.Offers.Count > 0 || delta.Placed != null)
+            {
+                _offers = new Dictionary<string, DexOffer>(parent._offers, parent._offers.Comparer);
+                _books = new Dictionary<BookKey, List<DexOffer>>(parent._books, parent._books.Comparer);
+                HashSet<BookKey> copied = new HashSet<BookKey>();
+                foreach (KeyValuePair<string, DexOffer> change in delta.Offers)
+                {
+                    DexOffer old = parent._offers[change.Key];
+                    foreach (BookKey book in BooksOf(old))
+                    {
+                        // An offer whose remainder stays keeps its place: its quality is its directory's.
+                        List<DexOffer> list = BookForWrite(book, copied);
+                        int at = list.IndexOf(old);
+                        if (change.Value != null)
+                            list[at] = change.Value;
+                        else
+                            list.RemoveAt(at);
+
+                        if (list.Count == 0)
+                            _books.Remove(book);
+                    }
+
+                    if (change.Value != null)
+                        _offers[change.Key] = change.Value;
+                    else
+                        _offers.Remove(change.Key);
+                }
+
+                if (delta.Placed is { } placed)
+                {
+                    // Last of its quality, as an offer appended to the snapshot sorts.
+                    foreach (BookKey book in BooksOf(placed))
+                    {
+                        List<DexOffer> list = BookForWrite(book, copied);
+                        int at = list.Count;
+                        while (at > 0 && list[at - 1].Quality.Value > placed.Quality.Value)
+                            at--;
+
+                        list.Insert(at, placed);
+                    }
+
+                    _offers[placed.Index] = placed;
+                }
+            }
+
+            _poolAccounts = parent._poolAccounts;
+            _domains = parent._domains;
+            _credentials = parent._credentials;
+            _credentialsById = parent._credentialsById;
+            _partialBooks = parent._partialBooks;
+        }
+
+        /// <summary>
+        /// The books an offer sits in. Crossing, the taker pays what the offer asks for and gets
+        /// what it gives. A domain offer sits in its domain's book; a hybrid one in the open book too.
+        /// </summary>
+        private static IEnumerable<BookKey> BooksOf(DexOffer offer)
+        {
+            if (string.IsNullOrEmpty(offer.DomainId) || offer.Hybrid)
+                yield return BookKey.Of(offer.TakerPays.Asset, offer.TakerGets.Asset);
+            if (!string.IsNullOrEmpty(offer.DomainId))
+                yield return BookKey.Of(offer.TakerPays.Asset, offer.TakerGets.Asset, offer.DomainId);
+        }
+
+        /// <summary>A book's list this index owns, copied from the parent's on its first write.</summary>
+        private List<DexOffer> BookForWrite(BookKey book, HashSet<BookKey> copied)
+        {
+            if (copied.Add(book))
+            {
+                List<DexOffer> list = _books.TryGetValue(book, out List<DexOffer> shared) ? new List<DexOffer>(shared) : new List<DexOffer>();
+                _books[book] = list;
+                return list;
+            }
+
+            return _books[book];
+        }
+
+        private void AddLine(DexTrustLine line)
+        {
+            if (XrplAmount.KindOf(line.Balance.Asset) != AmountKind.Iou)
+                throw new NotSupportedException("A trust line holds an issued currency.");
+
+            string peer = line.Balance.Asset.Issuer;
+            LineKey key = LineKey.Of(line.Account, peer, line.Balance.Asset.Currency);
+            LineSide side = new LineSide
+            {
+                Limit = line.Limit,
+                QualityIn = line.QualityIn,
+                QualityOut = line.QualityOut,
+                NoRipple = line.NoRipple,
+                Freeze = line.FrozenByAccount,
+                Auth = line.Authorized,
+                Reserve = line.Reserve,
+            };
+            LineSide peerSide = new LineSide
+            {
+                Limit = line.PeerLimit,
+                QualityIn = line.PeerQualityIn,
+                QualityOut = line.PeerQualityOut,
+                NoRipple = line.PeerNoRipple,
+                Freeze = line.Frozen,
+                Auth = line.PeerAuthorized,
+                Reserve = line.PeerReserve,
+            };
+            bool accountFirst = key.IsFirst(line.Account);
+            if (_lines.ContainsKey(key))
+            {
+                throw new ArgumentException(
+                    $"The trust line {key.First}/{key.Second} {key.Currency} is listed twice; describe it once, with the other side in its Peer properties.");
+            }
+
+            _lines[key] = new LineInfo
+            {
+                Key = key,
+                First = accountFirst ? side : peerSide,
+                Second = accountFirst ? peerSide : side,
+                DeepFrozen = line.DeepFrozen,
+                Balance = FirstView(key, line.Account, line.Balance),
+            };
+        }
+
+        private void AddMptHolding(DexMptHolding holding)
+        {
+            (string, string) key = (holding.Account, DexAssets.MptKey(holding.MptIssuanceId));
+            if (_mptHoldings.ContainsKey(key))
+                throw new ArgumentException($"The MPT holding of {holding.Account} in {holding.MptIssuanceId} is listed twice.");
+
+            _mptHoldings[key] = holding;
+        }
+
+        /// <summary>A pool's balances as what its account holds: its MPTokens and its lines to the issuers.</summary>
+        private void AddPoolHoldings(DexAmmPool pool)
+        {
+            foreach (XrplAmount held in new[] { pool.Balance, pool.Balance2 })
+            {
+                if (held.Kind == AmountKind.Mpt)
+                {
+                    (string, string) holdingKey = (pool.Account, DexAssets.MptKey(held.Asset.MptIssuanceId));
+                    _mptHoldings.TryGetValue(holdingKey, out DexMptHolding listed);
+                    _mptHoldings[holdingKey] = new DexMptHolding
+                    {
+                        Account = pool.Account,
+                        MptIssuanceId = holdingKey.Item2,
+                        Amount = held.StMantissa,
+                        Locked = listed?.Locked ?? false,
+                        Authorized = true,
+                    };
+                    continue;
+                }
+
+                if (held.Kind != AmountKind.Iou)
+                    continue;
+
+                LineKey key = LineKey.Of(pool.Account, held.Asset.Issuer, held.Asset.Currency);
+                _lines[key] = new LineInfo { Key = key, Balance = FirstView(key, pool.Account, held) };
+            }
         }
 
         internal static (string Subject, string Issuer, string Type) CredentialKey(string subject, string issuer, string type) =>
@@ -335,6 +494,9 @@ namespace Xrpl.Amounts
 
         internal IReadOnlySet<BookKey> PartialBooks => _partialBooks;
 
+        /// <summary>The books that hold at least one offer.</summary>
+        internal IEnumerable<BookKey> BookKeys => _books.Keys;
+
         /// <summary>A book's offers, better quality first; empty for a book the snapshot does not hold.</summary>
         internal IReadOnlyList<DexOffer> Book(BookKey book) =>
             _books.TryGetValue(book, out List<DexOffer> list) ? list : Array.Empty<DexOffer>();
@@ -362,6 +524,33 @@ namespace Xrpl.Amounts
                 offers[j + 1] = current;
             }
         }
+    }
+
+    /// <summary>
+    /// What a transaction wrote into a snapshot, entry by entry, for <see cref="DexIndex"/> to
+    /// derive the next snapshot's index from the last one's. A null value removes the entry.
+    /// </summary>
+    internal sealed class DexIndexDelta
+    {
+        /// <summary>The accounts changed or created, by address.</summary>
+        internal Dictionary<string, DexAccount> Accounts { get; } = new Dictionary<string, DexAccount>(StringComparer.Ordinal);
+
+        internal Dictionary<LineKey, DexTrustLine> Lines { get; } = new Dictionary<LineKey, DexTrustLine>();
+
+        /// <summary>The snapshot's offers that were crossed or removed, by ledger index.</summary>
+        internal Dictionary<string, DexOffer> Offers { get; } = new Dictionary<string, DexOffer>(StringComparer.Ordinal);
+
+        /// <summary>The offer the transaction placed; null for none.</summary>
+        internal DexOffer Placed { get; set; }
+
+        /// <summary>The pools whose balances moved, by pool account.</summary>
+        internal Dictionary<string, DexAmmPool> Pools { get; } = new Dictionary<string, DexAmmPool>(StringComparer.Ordinal);
+
+        /// <summary>The issuances whose outstanding amount moved, by upper-case issuance ID.</summary>
+        internal Dictionary<string, DexMptIssuance> MptIssuances { get; } = new Dictionary<string, DexMptIssuance>(StringComparer.Ordinal);
+
+        /// <summary>The MPTokens changed, created or deleted, by holder and upper-case issuance ID.</summary>
+        internal Dictionary<(string Account, string Id), DexMptHolding> MptHoldings { get; } = new Dictionary<(string Account, string Id), DexMptHolding>();
     }
 
     /// <summary>
@@ -420,6 +609,12 @@ namespace Xrpl.Amounts
 
         /// <summary>The fee, in drops.</summary>
         internal ulong Fee { get; }
+
+        /// <summary>The transaction's <c>Sequence</c>; null when it gave none.</summary>
+        internal uint? Sequence { get; init; }
+
+        /// <summary>The transaction's <c>TicketSequence</c>; null when it uses its sequence instead.</summary>
+        internal uint? TicketSequence { get; init; }
 
         internal DexAccounts Accounts { get; }
 
@@ -1029,6 +1224,58 @@ namespace Xrpl.Amounts
 
         /// <summary>Whether the line exists now.</summary>
         internal bool LineExistsNow(LineKey key) => ReadLine(key).Exists;
+
+        /// <summary>The line as it stands now, settings and balance.</summary>
+        internal LineState LineNow(LineKey key) => ReadLine(key);
+
+        /// <summary>The accounts whose XRP or owner count this view or a parent has written.</summary>
+        internal IEnumerable<string> TouchedAccounts()
+        {
+            HashSet<string> accounts = new HashSet<string>(StringComparer.Ordinal);
+            for (DexView view = this; view != null; view = view._parent)
+            {
+                accounts.UnionWith(view._xrp.Keys);
+                accounts.UnionWith(view._counts.Keys);
+            }
+
+            return accounts;
+        }
+
+        /// <summary>The offers this view or a parent has written, by ledger index.</summary>
+        internal IEnumerable<string> TouchedOffers()
+        {
+            HashSet<string> offers = new HashSet<string>(StringComparer.Ordinal);
+            for (DexView view = this; view != null; view = view._parent)
+                offers.UnionWith(view._offers.Keys);
+
+            return offers;
+        }
+
+        /// <summary>The MPTokens this view or a parent has written, by holder and upper-case issuance ID.</summary>
+        internal IEnumerable<(string Account, string Id)> TouchedMpTokens()
+        {
+            HashSet<(string, string)> tokens = new HashSet<(string, string)>();
+            for (DexView view = this; view != null; view = view._parent)
+                tokens.UnionWith(view._mpts.Keys);
+
+            return tokens;
+        }
+
+        /// <summary>The issuances this view or a parent has written, by upper-case issuance ID.</summary>
+        internal IEnumerable<string> TouchedIssuances()
+        {
+            HashSet<string> issuances = new HashSet<string>(StringComparer.Ordinal);
+            for (DexView view = this; view != null; view = view._parent)
+                issuances.UnionWith(view._issuances.Keys);
+
+            return issuances;
+        }
+
+        /// <summary>The MPToken as it stands now.</summary>
+        internal MptHoldingState MpTokenNow(string account, string id) => ReadMpt(account, id);
+
+        /// <summary>The issuance's <c>OutstandingAmount</c> now.</summary>
+        internal ulong OutstandingNow(string id) => ReadIssuance(id).Outstanding;
 
         /// <summary>
         /// <c>accountSend</c> without a transfer fee: <c>rippleCredit</c> on the trust line between

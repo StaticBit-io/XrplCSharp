@@ -80,7 +80,7 @@ namespace Xrpl.Amounts
             // MPTokensV2 is off, where the node answers temDISABLED.
             rules ??= new LedgerRules();
             return Preflight(order, rules) is { } malformed
-                ? NotApplied(malformed, order)
+                ? NotApplied(snapshot, malformed, order)
                 : Apply(snapshot, order, rules);
         }
 
@@ -110,13 +110,14 @@ namespace Xrpl.Amounts
                 Flags = offer.Flags ?? 0,
                 Sequence = offer.Sequence ?? 0,
                 OfferSequence = offer.OfferSequence,
+                TicketSequence = offer.TicketSequence,
                 Expiration = offer.Expiration is { } expiration ? (uint)LendingMath.RippleSeconds(expiration) : null,
                 DomainId = offer.DomainID,
             };
 
             rules ??= new LedgerRules();
             return Preflight(order, rules) is { } malformed
-                ? NotApplied(malformed, order)
+                ? NotApplied(snapshot, malformed, order)
                 : Apply(snapshot, order, rules);
         }
 
@@ -136,6 +137,8 @@ namespace Xrpl.Amounts
             internal uint Sequence { get; init; }
 
             internal uint? OfferSequence { get; init; }
+
+            internal uint? TicketSequence { get; init; }
 
             internal uint? Expiration { get; init; }
 
@@ -267,12 +270,17 @@ namespace Xrpl.Amounts
             XrplAmount takerGets = order.TakerGets;
             OfferCreateFlags flags = order.Flags;
 
-            DexWorld world = new DexWorld(snapshot, account, order.Fee) { RecordPasses = true };
+            DexWorld world = new DexWorld(snapshot, account, order.Fee)
+            {
+                RecordPasses = true,
+                Sequence = order.Sequence == 0 ? null : order.Sequence,
+                TicketSequence = order.TicketSequence,
+            };
             if (!world.Accounts.TryGetValue(account, out DexAccount creator))
                 throw new ArgumentException("The account is not in the snapshot.", nameof(order));
 
             if (Preclaim(snapshot, order, creator, rules) is { } refused)
-                return refused.StartsWith("tec", StringComparison.Ordinal) ? FeeOnly(world, rules, refused, order) : NotApplied(refused, order);
+                return refused.StartsWith("tec", StringComparison.Ordinal) ? FeeOnly(world, rules, refused, order) : NotApplied(snapshot, refused, order);
 
             // A member whose only matching credentials have expired is refused here, with the fee.
             if (!string.IsNullOrEmpty(order.DomainId) && rules.FixCleanup3_4_0 && world.ValidDomain(order.DomainId, account) is { } domain)
@@ -350,7 +358,14 @@ namespace Xrpl.Amounts
                     : FeeOnly(world, rules, "tecINSUF_RESERVE_OFFER", order);
             }
 
-            return Result(world, ledger, "tesSUCCESS", paid, got, (placeOffer.Out, placeOffer.In));
+            PlacedOffer placed = new PlacedOffer(
+                placeOffer.Out,
+                placeOffer.In,
+                XrplQuality.FromAmounts(takerPays, takerGets, rules),
+                order.Expiration,
+                order.DomainId,
+                flags.HasFlag(OfferCreateFlags.tfHybrid));
+            return Result(world, ledger, "tesSUCCESS", paid, got, placed);
         }
 
         /// <summary>
@@ -581,9 +596,9 @@ namespace Xrpl.Amounts
             string engineResult,
             XrplAmount paid,
             XrplAmount got,
-            (XrplAmount TakerPays, XrplAmount TakerGets)? placed)
+            PlacedOffer placed)
         {
-            LedgerChanges changes = LedgerChanges.Collect(world, final);
+            LedgerChanges changes = LedgerChanges.Collect(world, final, placed);
             return new OfferCrossingResult(engineResult, true, paid, got, placed?.TakerPays, placed?.TakerGets, changes);
         }
 
@@ -596,9 +611,9 @@ namespace Xrpl.Amounts
         }
 
         /// <summary>A result that never reaches a ledger: nothing changes, not even the fee.</summary>
-        private static OfferCrossingResult NotApplied(string engineResult, Order order) =>
+        private static OfferCrossingResult NotApplied(DexSnapshot snapshot, string engineResult, Order order) =>
             new OfferCrossingResult(
-                engineResult, false, XrplAmount.Zero(order.TakerGets.Asset), XrplAmount.Zero(order.TakerPays.Asset), null, null, LedgerChanges.None);
+                engineResult, false, XrplAmount.Zero(order.TakerGets.Asset), XrplAmount.Zero(order.TakerPays.Asset), null, null, LedgerChanges.Unchanged(snapshot));
     }
 
     /// <summary>What an <c>OfferCreate</c> would do, as <see cref="OfferCreateCrossing"/> computes it.</summary>
@@ -627,7 +642,28 @@ namespace Xrpl.Amounts
             NeedsDeeperBooks = changes.ReachedPartialBook;
             Fills = changes.Fills;
             Passes = changes.Passes;
+            _after = changes.After;
         }
+
+        private readonly Lazy<DexSnapshot> _after;
+
+        /// <summary>
+        /// The snapshot as the offer leaves it, to evaluate the next transaction against: the
+        /// balances after the fee and the crossing, the account's <c>Sequence</c> moved on (or its
+        /// ticket consumed), owner counts, trust lines created and deleted, offers crossed or
+        /// removed, the pools' and MPTs' balances, and the offer placed with what remains, at the
+        /// end of its quality in its book. The evaluated snapshot itself when the offer is not
+        /// <see cref="Applied"/>.
+        /// </summary>
+        /// <remarks>
+        /// Built on first read. Its index is derived from the evaluated snapshot's, so evaluating
+        /// against it costs little more than evaluating against the evaluated snapshot again. It
+        /// is only as complete as that snapshot: what it does not hold, the offer cannot write
+        /// back. The placed offer's ledger index is made from the transaction's <c>TicketSequence</c>,
+        /// or else its <c>Sequence</c>, or else the account's in the snapshot.
+        /// </remarks>
+        /// <exception cref="InvalidOperationException">An offer is placed, and neither the snapshot's account nor the transaction gives a sequence.</exception>
+        public DexSnapshot SnapshotAfter => _after.Value;
 
         /// <summary>
         /// The node's result: <c>tesSUCCESS</c>, <c>tecKILLED</c>, <c>tecUNFUNDED_OFFER</c>,
