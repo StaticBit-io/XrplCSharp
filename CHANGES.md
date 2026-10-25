@@ -11,7 +11,8 @@
 * `Currency.Equals` compares `MPTokenIssuanceID` (ignoring case), so different MPTs are no longer equal; `Currency.GetHashCode` is overridden consistently with it. `CurrencyExtensions.ToIssued` keeps the MPT issuance ID
 * `OrderBookStream.TxJson` holds the API v2 `tx_json` envelope; `OrderBookStream.Transaction` reads it, else `TransactionJson`, and is null when neither is present instead of throwing
 * `ShaMap.InnerNode.GetNode` returns null for an empty slot, so `SHAMap.AddItem` and `InnerNode.Hash` work
-* Tests: `TestULedgerInnerObjectArrays` (AMM entry from `ledger_entry` and from a metadata `ModifiedNode`, Amendments, NegativeUNL, flat elements, round trip), `TestUTimeConversionLocalZone` and `TestURippleDateTimeConverterLocalZone` under substituted local zones (`LocalTimeZoneScope`), `TestUResponseWarnings`, `TestUHashLedger`, `TestUCurrencyIdentity`, `TestUOrderBookStreamEnvelope`, `TestUSHAMap` (the xrpl.js vector) and numeric-string cases in `TestULedgerIndexConverter`
+* `Hashes.HashTX` is `[Obsolete]`: it duplicates `Hashes.HashTx`, the single-signing hash xrpl.js `hashTx` also returns, not the transaction ID; `HashTx` documents that and points to `HashLedger.HashSignedTx`. `InnerObjectListConverter<T>` throws `JsonException` when writing a null element
+* Tests: `TestULedgerInnerObjectArrays` (AMM entry from `ledger_entry` and from a metadata `ModifiedNode`, Amendments, NegativeUNL, flat elements, round trip), `TestUTimeConversionLocalZone` and `TestURippleDateTimeConverterLocalZone` under substituted local zones (`LocalTimeZoneScope`), `TestUResponseWarnings`, `TestUHashLedger`, `TestUCurrencyIdentity`, `TestUOrderBookStreamEnvelope`, `TestUSHAMap` (the xrpl.js vector), `TestUHashTx` (the xrpl.js `offerCreateSell` transaction ID) and numeric-string cases in `TestULedgerIndexConverter`
 
 ## 11.19.0.0 24/10/2026
 

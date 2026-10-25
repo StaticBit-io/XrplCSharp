@@ -55,11 +55,15 @@ namespace Xrpl.Models.Ledger
         }
 
         /// <inheritdoc />
+        /// <exception cref="JsonException">The list holds a null element, which no STArray can carry.</exception>
         public override void Write(Utf8JsonWriter writer, List<T> value, JsonSerializerOptions options)
         {
             writer.WriteStartArray();
             foreach (T item in value)
             {
+                if (item is null)
+                    throw new JsonException($"A {_wrapperName} list cannot hold a null element.");
+
                 writer.WriteStartObject();
                 writer.WritePropertyName(_wrapperName);
                 JsonSerializer.Serialize(writer, item, options);
