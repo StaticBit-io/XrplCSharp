@@ -125,12 +125,13 @@ public class TestILoanManagement : TestILoanBase
             Flags = flag,
         });
         Assert.IsTrue(preview.WouldSucceed, $"{flag}: {preview.EngineResult}");
-        AssertMatches(quote, preview.Outcome, flag.ToString());
+        bool wasImpaired = ((loan.Flags ?? 0) & LoanFlags.lsfLoanImpaired) != 0;
+        AssertMatches(quote, preview.Outcome, wasImpaired, flag.ToString());
 
         TransactionSummary result = await client.SubmitAndWait(preview.Transaction, owner, false);
         ValidateResult(result);
         LoanManageOutcome actual = LoanManageOutcome.FromMetadata((ILoanManage)preview.Transaction, result.Meta);
-        AssertMatches(quote, actual, $"{flag} submitted");
+        AssertMatches(quote, actual, wasImpaired, $"{flag} submitted");
 
         LoanManageCheck check = flag switch
         {
@@ -141,7 +142,7 @@ public class TestILoanManagement : TestILoanBase
         Assert.IsTrue(check.IsAllowed, $"{flag}: {check.Refusal} ({check.RefusalReason})");
     }
 
-    private static void AssertMatches(LoanManageQuote quote, LoanManageOutcome outcome, string at)
+    private static void AssertMatches(LoanManageQuote quote, LoanManageOutcome outcome, bool wasImpaired, string at)
     {
         Assert.AreEqual(quote.AssetsTotalAfter - quote.AssetsTotalBefore, outcome.AssetsTotalChange, $"{at}: AssetsTotal");
         Assert.AreEqual(quote.AssetsAvailableAfter - quote.AssetsAvailableBefore, outcome.AssetsAvailableChange, $"{at}: AssetsAvailable");
@@ -149,7 +150,9 @@ public class TestILoanManagement : TestILoanBase
         Assert.AreEqual((quote.DebtTotalAfter ?? 0) - (quote.DebtTotalBefore ?? 0), outcome.DebtTotalChange, $"{at}: DebtTotal");
         Assert.AreEqual((quote.CoverAvailableAfter ?? 0) - (quote.CoverAvailableBefore ?? 0), outcome.CoverAvailableChange, $"{at}: CoverAvailable");
         Assert.AreEqual(quote.Action, outcome.Action, $"{at}: action");
-        Assert.AreEqual(quote.Action == LoanManageAction.Impair, outcome.IsImpaired, $"{at}: impaired");
+        // A default sets lsfLoanDefault and leaves lsfLoanImpaired as it was; only an unimpairment clears it.
+        bool impairedAfter = quote.Action == LoanManageAction.Impair || (quote.Action == LoanManageAction.Default && wasImpaired);
+        Assert.AreEqual(impairedAfter, outcome.IsImpaired, $"{at}: impaired");
         Assert.AreEqual(quote.Action == LoanManageAction.Default, outcome.IsDefaulted, $"{at}: defaulted");
         Assert.AreEqual(quote.NextPaymentDueDateAfter, outcome.LoanAfter?.NextPaymentDueDate, $"{at}: NextPaymentDueDate");
     }

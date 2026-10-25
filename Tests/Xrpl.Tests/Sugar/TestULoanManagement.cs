@@ -362,6 +362,51 @@ public class TestULoanManagement
     }
 
     [TestMethod]
+    public void Default_Iou_DustAboveTheTotalRaisesTheTotalToTheAvailableAssets()
+    {
+        // The loss 100.0000000000004 - 4e-13 = 100 comes off AssetsTotal (900), and the cover 4e-13
+        // goes on AssetsAvailable (900.0000000000004). The 4e-13 excess is 15 orders of magnitude
+        // below the available assets: dust, so the node sets the total to the available assets.
+        LOLoan loan = Loan(totalValue: "100.0000000000004", managementFee: "0", principal: "100", loanScale: -13);
+        LOLoanBroker broker = Broker("1000", 100_000, 100_000, "0.0000000000004");
+
+        LoanManageQuote quote = LoanManagement.Default(loan, broker, Vault(Usd, "1000", "900"), Fixed);
+
+        Assert.IsTrue(quote.IsAccepted, quote.RefusalReason);
+        Assert.AreEqual(0.0000000000004m, quote.DefaultCovered);
+        Assert.AreEqual(100m, quote.VaultLoss);
+        Assert.AreEqual(900.0000000000004m, quote.AssetsAvailableAfter);
+        Assert.AreEqual(900.0000000000004m, quote.AssetsTotalAfter);
+    }
+
+    [TestMethod]
+    public void Default_AvailableAboveTheTotalBeyondDustIsRefused()
+    {
+        // A vault whose available assets leave less lent out than the exposure: after the default
+        // AssetsAvailable (950) is above AssetsTotal (900) by far more than dust.
+        LoanManageQuote quote = LoanManagement.Default(
+            Loan(totalValue: "100", managementFee: "0", principal: "100"),
+            Broker("1000", 0, 0, "0"),
+            Vault(Usd, "1000", "950"),
+            Fixed);
+
+        Assert.AreEqual("tecINTERNAL", quote.Refusal);
+        Assert.AreEqual(1000m, quote.AssetsTotalAfter);
+    }
+
+    [TestMethod]
+    public void AFixedPrecisionVaultIsNotSupported()
+    {
+        LOVault fixedPrecision = new LOVault { Index = VaultId, Asset = Xrp, AssetsTotal = 100, AssetsAvailable = 40, LEVersion = 2 };
+        LOLoanBroker broker = Broker("20000001", 10_000, 33_333, "5000000");
+
+        Assert.ThrowsExactly<NotSupportedException>(() => LoanManagement.Exposure(Loan(), fixedPrecision));
+        Assert.ThrowsExactly<NotSupportedException>(() => LoanManagement.Impair(Loan(), fixedPrecision, Due.AddSeconds(1), Fixed));
+        Assert.ThrowsExactly<NotSupportedException>(() => LoanManagement.Unimpair(Loan(flags: LoanFlags.lsfLoanImpaired), fixedPrecision, Due, Fixed));
+        Assert.ThrowsExactly<NotSupportedException>(() => LoanManagement.Default(Loan(), broker, fixedPrecision, Fixed));
+    }
+
+    [TestMethod]
     public void Default_ChecksTheGracePeriodOnlyWhenATimeIsGiven()
     {
         LOLoanBroker broker = Broker("20000001", 10_000, 33_333, "5000000");
@@ -422,6 +467,25 @@ public class TestULoanManagement
         Assert.AreEqual(-10_450_000m, outcome.DebtTotalChange);
         Assert.AreEqual(-666_661m, outcome.CoverAvailableChange);
         Assert.IsNotNull(outcome.BrokerAfter);
+    }
+
+    [TestMethod]
+    public void Outcome_DefaultOfAnImpairedLoan_KeepsTheImpairedFlag()
+    {
+        // defaultLoan sets lsfLoanDefault and leaves lsfLoanImpaired; only unimpairLoan clears it.
+        Meta meta = Metadata(string.Join(",",
+            LoanNode((uint)LoanFlags.lsfLoanImpaired, (uint)(LoanFlags.lsfLoanImpaired | LoanFlags.lsfLoanDefault)),
+            VaultNode("\"AssetsTotal\":\"90216661\",\"AssetsAvailable\":\"40666661\"",
+                "\"AssetsTotal\":\"100000000\",\"AssetsAvailable\":\"40000000\",\"LossUnrealized\":\"10450000\""),
+            BrokerNode("\"DebtTotal\":\"9550001\",\"CoverAvailable\":\"4333339\"", "\"DebtTotal\":\"20000001\",\"CoverAvailable\":\"5000000\"")));
+
+        LoanManageOutcome outcome = LoanManageOutcome.FromMetadata(Manage(LoanManageFlags.tfLoanDefault), meta);
+
+        Assert.AreEqual(LoanManageAction.Default, outcome.Action);
+        Assert.IsTrue(outcome.IsDefaulted);
+        Assert.IsTrue(outcome.IsImpaired);
+        Assert.AreEqual(-10_450_000m, outcome.LossUnrealizedChange);
+        Assert.AreEqual(-9_783_339m, outcome.AssetsTotalChange);
     }
 
     [TestMethod]

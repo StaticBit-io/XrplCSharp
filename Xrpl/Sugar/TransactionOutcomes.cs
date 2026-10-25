@@ -366,8 +366,10 @@ namespace Xrpl.Sugar
     /// Amounts are in the vault asset's own unit - drops for XRP - as the <c>Vault</c> and
     /// <c>LoanBroker</c> fields are. A change is final less previous, so a default makes
     /// <see cref="AssetsTotalChange"/> negative and <see cref="AssetsAvailableChange"/> positive. An
-    /// entry the transaction did not modify - the broker on an impairment, everything on a
-    /// <c>LoanManage</c> without an action flag - changes by zero and has no "after" entry.
+    /// entry the transaction did not modify - the broker on an impairment - changes by zero and has
+    /// no "after" entry. A <c>LoanManage</c> without an action flag changes no balance, but under
+    /// <c>fixCleanup3_1_3</c> it still associates the loan, broker and vault with the vault asset,
+    /// which rounds their amount fields to it; a field that rounding moves shows up as a small change.
     /// </remarks>
     public sealed class LoanManageOutcome
     {

@@ -10,7 +10,10 @@ namespace Xrpl.Sugar
     /// <summary>What a <c>LoanManage</c> does to the loan, by the flag it carries.</summary>
     public enum LoanManageAction
     {
-        /// <summary>No action flag: the node accepts the transaction and changes nothing.</summary>
+        /// <summary>
+        /// No action flag: the node accepts the transaction and moves no amount; under
+        /// <c>fixCleanup3_1_3</c> it only rounds the entries' amount fields to the vault asset.
+        /// </summary>
         None,
 
         /// <summary><c>tfLoanImpair</c>: books the loan's exposure as the vault's unrealized loss.</summary>
@@ -202,7 +205,8 @@ namespace Xrpl.Sugar
     /// Repeated here is everything that depends on the entries and the time: the state transitions,
     /// the owner check, the time conditions, the amounts and their rounding, and the refusals they lead
     /// to. Signatures, fees, the transfer of the cover between the pseudo-accounts and the
-    /// <c>FixedPrecision</c> vault version of rippled develop (not in any release yet) are not;
+    /// <c>FixedPrecision</c> vault version of rippled develop (<c>LEVersion</c> 2, not in any release
+    /// yet) are not: a vault of that version throws <see cref="NotSupportedException"/>.
     /// <see cref="PreviewSugar.PreviewLoanManage"/> runs the transaction through the node.
     /// </para>
     /// </remarks>
@@ -219,6 +223,7 @@ namespace Xrpl.Sugar
         /// <param name="vault">The vault of the loan's broker.</param>
         /// <param name="rules">The amendments in force, for the <c>Number</c> arithmetic; the current rules when null.</param>
         /// <exception cref="ArgumentException">The vault carries no asset.</exception>
+        /// <exception cref="NotSupportedException">The vault's <c>LEVersion</c> is above 1: the <c>FixedPrecision</c> vault of rippled develop, which this port does not cover.</exception>
         /// <exception cref="OverflowException">The exposure is beyond <see cref="decimal"/>.</exception>
         public static decimal Exposure(LOLoan loan, LOVault vault, LedgerRules rules = null)
         {
@@ -293,6 +298,7 @@ namespace Xrpl.Sugar
         /// <param name="rules">The amendments in force; the current rules when null.</param>
         /// <param name="sharesOutstanding">The vault share issuance's <c>OutstandingAmount</c>, for the share value; null leaves it out.</param>
         /// <exception cref="ArgumentException">The vault carries no asset.</exception>
+        /// <exception cref="NotSupportedException">The vault's <c>LEVersion</c> is above 1: the <c>FixedPrecision</c> vault of rippled develop, which this port does not cover.</exception>
         /// <exception cref="OverflowException">An amount is beyond <see cref="decimal"/>.</exception>
         public static LoanManageQuote Impair(
             LOLoan loan,
@@ -346,6 +352,7 @@ namespace Xrpl.Sugar
         /// <param name="rules">The amendments in force; the current rules when null.</param>
         /// <param name="sharesOutstanding">The vault share issuance's <c>OutstandingAmount</c>, for the share value; null leaves it out.</param>
         /// <exception cref="ArgumentException">The vault carries no asset.</exception>
+        /// <exception cref="NotSupportedException">The vault's <c>LEVersion</c> is above 1: the <c>FixedPrecision</c> vault of rippled develop, which this port does not cover.</exception>
         /// <exception cref="OverflowException">An amount is beyond <see cref="decimal"/>.</exception>
         public static LoanManageQuote Unimpair(
             LOLoan loan,
@@ -411,6 +418,7 @@ namespace Xrpl.Sugar
         /// </param>
         /// <param name="sharesOutstanding">The vault share issuance's <c>OutstandingAmount</c>, for the share value; null leaves it out.</param>
         /// <exception cref="ArgumentException">The vault carries no asset, or the entries do not belong together.</exception>
+        /// <exception cref="NotSupportedException">The vault's <c>LEVersion</c> is above 1: the <c>FixedPrecision</c> vault of rippled develop, which this port does not cover.</exception>
         /// <exception cref="OverflowException">An amount is beyond <see cref="decimal"/>.</exception>
         public static LoanManageQuote Default(
             LOLoan loan,
@@ -747,6 +755,12 @@ namespace Xrpl.Sugar
                     throw new ArgumentNullException(nameof(vault));
                 if (vault.Asset is not IssuedCurrency asset)
                     throw new ArgumentException("The vault carries no Asset.", nameof(vault));
+
+                // rippled develop's FixedPrecision vault (LEVersion 2) defaults and impairs through
+                // adjustVaultBalances with a cover taken from PrincipalOutstanding; the accrual
+                // formulas below would give wrong numbers for it.
+                if (vault.LEVersion > (uint)VaultVersion.CashBasis)
+                    throw new NotSupportedException($"Vault version {vault.LEVersion} is not supported; only legacy (0) and cash-basis (1) vaults are.");
 
                 if (broker != null)
                 {
