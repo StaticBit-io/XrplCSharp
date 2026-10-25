@@ -46,7 +46,8 @@ namespace Xrpl.BinaryCodec.ShaMapTree
                 // We want to make a uniformly accessed array of the inners
                 _dirtied = new ShaMapInner[_inners.Count];
                 IEnumerator<ShaMapInner> it = _inners.GetEnumerator();
-                var top = it.Current;
+                it.MoveNext();
+                ShaMapInner top = it.Current;
                 _dirtied[ix++] = top;
                 top.Invalidate();
 
@@ -113,9 +114,12 @@ namespace Xrpl.BinaryCodec.ShaMapTree
             }
         }
 
+        // ShaMap.Copy marks the roots of both maps, not their inners: the root decides whether shared nodes
+        // must be copied. The Java original pushes onto the front of its stack, so its peekLast() is the root;
+        // MakeStack here appends, which puts the root first.
         private bool MaybeCopyOnWrite()
         {
-            return _inners.Last().DoCoW;
+            return _inners.First.Value.DoCoW;
         }
 
         public PathToIndex(ShaMapInner root, Hash256 index)

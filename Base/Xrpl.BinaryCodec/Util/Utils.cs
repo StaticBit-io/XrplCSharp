@@ -510,11 +510,8 @@ namespace Xrpl.BinaryCodec.Util
         ///</summary>
         public static string ToString(byte[] value)
         {
-            if (IsLittleEndian)
-            {
-                return BitConverter.ToString(value);
-            }
-            return BitConverter.ToString(value.Reverse().ToArray());
+            // A byte array has no byte order to convert: reversing it would print the bytes backwards.
+            return BitConverter.ToString(value);
         }
 
         ///
@@ -543,11 +540,8 @@ namespace Xrpl.BinaryCodec.Util
         ///</summary>
         public static string ToString(byte[] value, int startIndex)
         {
-            if (IsLittleEndian)
-            {
-                return BitConverter.ToString(value, startIndex);
-            }
-            return BitConverter.ToString(value.Reverse().ToArray(), startIndex);
+            // A byte array has no byte order to convert: reversing it would print the bytes backwards.
+            return BitConverter.ToString(value, startIndex);
         }
 
         ///
@@ -585,11 +579,8 @@ namespace Xrpl.BinaryCodec.Util
         ///</summary>
         public static string ToString(byte[] value, int startIndex, int length)
         {
-            if (IsLittleEndian)
-            {
-                return BitConverter.ToString(value, startIndex, length);
-            }
-            return BitConverter.ToString(value.Reverse().ToArray(), startIndex, length);
+            // A byte array has no byte order to convert: reversing it would print the bytes backwards.
+            return BitConverter.ToString(value, startIndex, length);
         }
 
         ///

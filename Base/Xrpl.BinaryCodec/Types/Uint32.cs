@@ -75,7 +75,15 @@ namespace Xrpl.BinaryCodec.Types
         /// create instance of this value
         /// </summary>
         /// <param name="v">int value</param>
-        public static Uint32 FromValue(int v) => new Uint32((byte)v);
+        /// <exception cref="BinaryCodecException"><paramref name="v"/> is negative</exception>
+        public static Uint32 FromValue(int v)
+        {
+            if (v < 0)
+            {
+                throw new BinaryCodecException($"Invalid UInt32: {v} must be >= 0");
+            }
+            return new Uint32((uint)v);
+        }
 
         /// <summary>
         /// Construct a Uint16 from a BinaryParser

@@ -421,7 +421,7 @@ namespace System.Security.Cryptography
                     if(bytesRemaining >= (UnhashedBuffer.Length))
                     {
                         for (var i = 0; i < 16; i++)
-                            X[i] = Readuint(array, index + (i * 4));
+                            X[i] = Readuint(array, ibStart + index + (i * 4));
                         index += UnhashedBuffer.Length;
 
                         compress(ref MDbuf, X);

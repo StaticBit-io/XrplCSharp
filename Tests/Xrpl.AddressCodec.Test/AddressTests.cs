@@ -1,5 +1,7 @@
 using Microsoft.VisualStudio.TestTools.UnitTesting;
 
+using System.Linq;
+using System.Security.Cryptography;
 using System.Text.Json.Nodes;
 
 using XrplTests;
@@ -92,5 +94,70 @@ namespace Xrpl.AddressCodec.Tests
             // Notice that converting an X-address to a classic address has `result.tag === false` (not undefined)
             Assert.IsNull(myClassicAddress.Tag);
         }
+
+        // Vector from xrpl.js ripple-address-codec: the valid address ends in "QXb".
+        [TestMethod]
+        public void InvalidXAddressBadChecksum()
+        {
+            const string valid = "XVLhHMPHU98es4dbozjVtdWzVrDjtV5fdx1mHp98tDMoQXb";
+            const string typo = "XVLhHMPHU98es4dbozjVtdWzVrDjtV5fdx1mHp98tDMoQXa";
+            Assert.IsTrue(IsValidXAddress(valid));
+            Assert.IsFalse(IsValidXAddress(typo));
+            AddressCodecException ex = Helper.Throws<AddressCodecException>(() => XAddressToClassicAddress(typo),
+                "Invalid X-address: Checksum does not validate");
+            Assert.IsInstanceOfType<EncodingFormatException>(ex.InnerException);
+        }
+
+        [TestMethod]
+        public void InvalidXAddressIllegalCharacter()
+        {
+            AddressCodecException ex = Helper.Throws<AddressCodecException>(() =>
+                DecodeXAddress("XVLhHMPHU98es4dbozjVtdWzVrDjtV5fdx1mHp98tDMoQX0"));
+            Assert.IsInstanceOfType<EncodingFormatException>(ex.InnerException);
+        }
+
+        [TestMethod]
+        public void InvalidXAddressOneCharTypoInBody()
+        {
+            // Character 15 carries the account-ID bytes; prefix, flags and tag stay well formed,
+            // so without the checksum this decodes to a different account.
+            const string typo = "XVLhHMPHU98es4dcozjVtdWzVrDjtV5fdx1mHp98tDMoQXb";
+            Assert.IsFalse(IsValidXAddress(typo));
+            Helper.Throws<AddressCodecException>(() => XAddressToClassicAddress(typo),
+                "Invalid X-address: Checksum does not validate");
+        }
+
+        [TestMethod]
+        public void InvalidXAddressBadPrefix()
+        {
+            Helper.Throws<AddressCodecException>(() =>
+                XAddressToClassicAddress("dGzKGt8CVpWoa8aWL1k18tAdy9Won3PxynvbbpkAqp3V47g"), "Invalid X-address: bad prefix");
+        }
+
+        [TestMethod]
+        public void InvalidXAddressWrongLength()
+        {
+            B58 b58 = new B58(Alphabet);
+            byte[] accountId = new byte[20];
+            byte[] tooShort = Combine(new byte[] { 0x05, 0x44 }, accountId, new byte[8]);
+            byte[] tooLong = Combine(new byte[] { 0x05, 0x44 }, accountId, new byte[10]);
+
+            foreach (byte[] payload in new[] { tooShort, tooLong })
+            {
+                string xAddress = b58.EncodeToString(WithChecksum(payload));
+                Assert.IsFalse(IsValidXAddress(xAddress));
+                Helper.Throws<AddressCodecException>(() => DecodeXAddress(xAddress),
+                    "Invalid X-address: decoded length must be 35 bytes");
+            }
+        }
+
+        private static byte[] WithChecksum(byte[] payload)
+        {
+            using SHA256 sha = SHA256.Create();
+            byte[] hash = sha.ComputeHash(sha.ComputeHash(payload));
+            return Combine(payload, hash.Take(4).ToArray());
+        }
+
+        private static byte[] Combine(params byte[][] parts) => parts.SelectMany(p => p).ToArray();
     }
 }
