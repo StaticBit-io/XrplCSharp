@@ -93,7 +93,7 @@ app.MapGet("/paid", () => "premium content")
    });
 ```
 
-Without a `PAYMENT-SIGNATURE` the endpoint returns **402** + `PAYMENT-REQUIRED`. With a valid signature, `LedgerSettlingFacilitator` verifies the destination, settles the transaction (`SubmitRequestAndWait`, waits for `tesSUCCESS`), sets `PAYMENT-RESPONSE`, and runs your handler.
+Without a `PAYMENT-SIGNATURE` the endpoint returns **402** + `PAYMENT-REQUIRED`. With a valid signature, `LedgerSettlingFacilitator` checks that the blob is a non-partial `Payment` of exactly the required amount and asset to `payTo`, refuses a blob it already settled, settles the transaction (`SubmitRequestAndWait`, waits for `tesSUCCESS`), checks `delivered_amount`, sets `PAYMENT-RESPONSE`, and runs your handler.
 
 Two `IX402Facilitator` implementations ship:
 
