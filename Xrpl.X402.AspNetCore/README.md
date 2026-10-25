@@ -24,6 +24,8 @@ using Xrpl.X402.AspNetCore;
 using Xrpl.X402.Wire;
 
 IXrplClient xrpl = /* your connected IXrplClient */;
+// One facilitator for every endpoint: its record of settled payments is what stops a replay.
+// Separate instances keep separate records, so a blob paid on one endpoint would pass another.
 IX402Facilitator facilitator = new LedgerSettlingFacilitator(xrpl);
 // or: IX402Facilitator facilitator = new T54Facilitator(new HttpClient());
 
@@ -51,20 +53,24 @@ Without a `PAYMENT-SIGNATURE` the endpoint returns **402** + the `PAYMENT-REQUIR
 | `errorReason` | When |
 |---|---|
 | `invalid_transaction_type` | The blob is not a `Payment` (a `CheckCreate` or `EscrowCreate` has a `Destination` too). |
-| `invalid_destination` | `Destination` is not `payTo`. |
+| `invalid_destination` | `Destination` is not `payTo`, or `DestinationTag` is not the tag of an X-address `payTo` or `extra.destinationTag`. |
 | `invalid_partial_payment` | `tfPartialPayment` is set: such a payment can deliver any fraction of `Amount`. |
 | `invalid_asset` | `Amount` is not the required asset: XRP drops for `XRP`, otherwise the currency (as text or 40 hex digits) issued by `extra.issuer`. |
 | `invalid_amount` | `Amount` is not exactly the required amount. |
-| `invalid_last_ledger_sequence` | No `LastLedgerSequence`: the blob would stay valid forever. |
+| `invalid_invoice_id` | `extra.invoiceId` is set and the transaction carries neither `InvoiceID` = SHA-256 of it nor a memo whose `MemoData` is it in hex. |
+| `invalid_last_ledger_sequence` | No `LastLedgerSequence`, which leaves the blob valid forever, or one further than `maxTimeoutSeconds` allows (at 3 seconds a ledger, at least 20 ledgers). |
 | `payment_expired` | `LastLedgerSequence` is already validated, so only a replay of an earlier settlement could succeed. |
 | `duplicate_payment` | The transaction hash is already settled, or is being settled. |
 | `delivered_amount_mismatch` | The payment validated, but the metadata's `delivered_amount` is short of the requirement or in another asset. |
+
+The payment is checked against the endpoint's own requirement: `RequirePayment` compares the client's `accepted` with it (including `extra.issuer`, `extra.invoiceId` and `extra.destinationTag`) and then hands the facilitator the server's copy. A caller that invokes a facilitator directly must do the same.
 
 Resubmitting a validated blob makes the node report the original `tesSUCCESS`, so the facilitator keeps the hash of every payment it settled until the payment's window has passed. Keep one facilitator for the application, or register it through `AddLedgerSettlingFacilitator()`:
 
 ```csharp
 builder.Services.AddSingleton<IXrplClient>(xrpl);
 // Several instances behind a load balancer: register a shared ISettledPaymentStore here first.
+// A store serves one network; mainnet and testnet need separate ones.
 builder.Services.AddLedgerSettlingFacilitator();
 
 IX402Facilitator facilitator = app.Services.GetRequiredService<IX402Facilitator>();

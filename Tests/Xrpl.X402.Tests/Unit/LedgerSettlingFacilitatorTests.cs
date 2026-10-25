@@ -1,10 +1,13 @@
 using System;
 using System.Collections.Generic;
+using System.Security.Cryptography;
+using System.Text;
 using System.Text.Json;
 using System.Threading;
 using System.Threading.Tasks;
 using Microsoft.Extensions.DependencyInjection;
 using Microsoft.VisualStudio.TestTools.UnitTesting;
+using Xrpl.AddressCodec;
 using Xrpl.Client;
 using Xrpl.Client.Exceptions;
 using Xrpl.Models.Common;
@@ -415,6 +418,180 @@ public class LedgerSettlingFacilitatorTests
         Assert.AreEqual("settlement_error", error.ErrorReason);
         Assert.IsTrue(retried.Success);
         Assert.AreEqual(1, store.Count);
+    }
+
+    private static PaymentRequirement WithExtra(PaymentRequirement requirement, string key, object value)
+    {
+        requirement.Extra[key] = JsonSerializer.SerializeToElement(value);
+        return requirement;
+    }
+
+    private static string InvoiceHash(string invoiceId) => Convert.ToHexString(SHA256.HashData(Encoding.UTF8.GetBytes(invoiceId)));
+
+    private static Dictionary<string, object> WithMemo(Dictionary<string, object> tx, string invoiceId)
+    {
+        tx["Memos"] = new List<object>
+        {
+            new Dictionary<string, object> { { "Memo", new Dictionary<string, object> { { "MemoData", Convert.ToHexString(Encoding.UTF8.GetBytes(invoiceId)) } } } }
+        };
+        return tx;
+    }
+
+    /// <summary>
+    /// The t54 payer binds the invoice as the InvoiceID hash, as a memo, or both; a blob paid under
+    /// one invoice must not settle another of the same price and payee.
+    /// </summary>
+    [TestMethod]
+    public async Task AnInvoiceIdMustBeBoundIntoTheTransaction()
+    {
+        PaymentRequirement Invoiced() => WithExtra(XrpRequirement(), "invoiceId", "inv-1");
+        Dictionary<string, object> byField = XrpPayment();
+        byField["InvoiceID"] = InvoiceHash("inv-1");
+        Dictionary<string, object> otherInvoice = XrpPayment();
+        otherInvoice["InvoiceID"] = InvoiceHash("inv-2");
+
+        PaymentResponseEnvelope field = await Facilitator(() => Validated("tesSUCCESS")).VerifyAndSettleAsync(Envelope(byField, Invoiced()));
+        PaymentResponseEnvelope memo = await Facilitator(() => Validated("tesSUCCESS")).VerifyAndSettleAsync(Envelope(WithMemo(XrpPayment(), "inv-1"), Invoiced()));
+        PaymentResponseEnvelope unbound = await Facilitator(NotSubmitted).VerifyAndSettleAsync(Envelope(XrpPayment(), Invoiced()));
+        PaymentResponseEnvelope other = await Facilitator(NotSubmitted).VerifyAndSettleAsync(Envelope(otherInvoice, Invoiced()));
+        PaymentResponseEnvelope otherMemo = await Facilitator(NotSubmitted).VerifyAndSettleAsync(Envelope(WithMemo(XrpPayment(), "inv-2"), Invoiced()));
+
+        Assert.IsTrue(field.Success, field.ErrorReason);
+        Assert.IsTrue(memo.Success, memo.ErrorReason);
+        Assert.AreEqual("invalid_invoice_id", unbound.ErrorReason);
+        Assert.AreEqual("invalid_invoice_id", other.ErrorReason);
+        Assert.AreEqual("invalid_invoice_id", otherMemo.ErrorReason);
+    }
+
+    /// <summary>An exchange credits by the tag, so the tag an X-address or extra.destinationTag names is required.</summary>
+    [TestMethod]
+    public async Task ADestinationTagThePayeeNamesIsRequired()
+    {
+        PaymentRequirement ToXAddress()
+        {
+            PaymentRequirement requirement = XrpRequirement();
+            requirement.PayTo = XrplAddressCodec.ClassicAddressToXAddress(PayTo, 7, isTest: false);
+            return requirement;
+        }
+
+        Dictionary<string, object> Tagged(uint tag)
+        {
+            Dictionary<string, object> tx = XrpPayment();
+            tx["DestinationTag"] = tag;
+            return tx;
+        }
+
+        PaymentResponseEnvelope xAddress = await Facilitator(() => Validated("tesSUCCESS")).VerifyAndSettleAsync(Envelope(Tagged(7), ToXAddress()));
+        PaymentResponseEnvelope xAddressOtherTag = await Facilitator(NotSubmitted).VerifyAndSettleAsync(Envelope(Tagged(8), ToXAddress()));
+        PaymentResponseEnvelope xAddressNoTag = await Facilitator(NotSubmitted).VerifyAndSettleAsync(Envelope(XrpPayment(), ToXAddress()));
+        PaymentResponseEnvelope extraTag = await Facilitator(() => Validated("tesSUCCESS"))
+            .VerifyAndSettleAsync(Envelope(Tagged(5), WithExtra(XrpRequirement(), "destinationTag", 5)));
+        PaymentResponseEnvelope extraOtherTag = await Facilitator(NotSubmitted)
+            .VerifyAndSettleAsync(Envelope(Tagged(6), WithExtra(XrpRequirement(), "destinationTag", 5)));
+        PaymentResponseEnvelope conflicting = await Facilitator(NotSubmitted)
+            .VerifyAndSettleAsync(Envelope(Tagged(7), WithExtra(ToXAddress(), "destinationTag", 5)));
+        PaymentResponseEnvelope untaggedPayee = await Facilitator(() => Validated("tesSUCCESS")).VerifyAndSettleAsync(Envelope(Tagged(9)));
+
+        Assert.IsTrue(xAddress.Success, xAddress.ErrorReason);
+        Assert.AreEqual("invalid_destination", xAddressOtherTag.ErrorReason);
+        Assert.AreEqual("invalid_destination", xAddressNoTag.ErrorReason);
+        Assert.IsTrue(extraTag.Success, extraTag.ErrorReason);
+        Assert.AreEqual("invalid_destination", extraOtherTag.ErrorReason);
+        Assert.AreEqual("invalid_destination", conflicting.ErrorReason);
+        Assert.IsTrue(untaggedPayee.Success, "A payee that names no tag accepts any.");
+    }
+
+    /// <summary>The window bounds how long a settled hash is kept; a blob valid for ever would be kept for ever.</summary>
+    [TestMethod]
+    public async Task AWindowLongerThanTheTimeoutAllowsIsRefused()
+    {
+        Dictionary<string, object> Until(uint lastLedger)
+        {
+            Dictionary<string, object> tx = XrpPayment();
+            tx["LastLedgerSequence"] = lastLedger;
+            return tx;
+        }
+
+        PaymentRequirement TenMinutes()
+        {
+            PaymentRequirement requirement = XrpRequirement();
+            requirement.MaxTimeoutSeconds = 600;
+            return requirement;
+        }
+
+        PaymentResponseEnvelope forever = await Facilitator(NotSubmitted).VerifyAndSettleAsync(Envelope(Until(uint.MaxValue)));
+        PaymentResponseEnvelope autofillWindow = await Facilitator(() => Validated("tesSUCCESS")).VerifyAndSettleAsync(Envelope(Until(ValidatedLedger + 21)));
+        PaymentResponseEnvelope pastAutofillWindow = await Facilitator(NotSubmitted).VerifyAndSettleAsync(Envelope(Until(ValidatedLedger + 22)));
+        PaymentResponseEnvelope signerWindow = await Facilitator(() => Validated("tesSUCCESS")).VerifyAndSettleAsync(Envelope(Until(ValidatedLedger + 151), TenMinutes()));
+        PaymentResponseEnvelope pastTimeout = await Facilitator(NotSubmitted).VerifyAndSettleAsync(Envelope(Until(ValidatedLedger + 202), TenMinutes()));
+
+        Assert.AreEqual("invalid_last_ledger_sequence", forever.ErrorReason);
+        Assert.IsTrue(autofillWindow.Success, autofillWindow.ErrorReason);
+        Assert.AreEqual("invalid_last_ledger_sequence", pastAutofillWindow.ErrorReason);
+        Assert.IsTrue(signerWindow.Success, "XrplWalletX402Signer's window for 600 s: the open ledger plus 150.");
+        Assert.AreEqual("invalid_last_ledger_sequence", pastTimeout.ErrorReason);
+    }
+
+    [TestMethod]
+    public async Task AWindowEndingInTheNextLedgerIsStillOpen()
+    {
+        Dictionary<string, object> tx = XrpPayment();
+        tx["LastLedgerSequence"] = ValidatedLedger + 1;
+
+        PaymentResponseEnvelope response = await Facilitator(() => Validated("tesSUCCESS")).VerifyAndSettleAsync(Envelope(tx));
+
+        Assert.IsTrue(response.Success, response.ErrorReason);
+    }
+
+    /// <summary>The ledger writes a token value in any equal form: trailing zeros, an exponent.</summary>
+    [TestMethod]
+    public async Task ATokenAmountIsComparedAsANumber()
+    {
+        PaymentRequirement OneRlusd()
+        {
+            PaymentRequirement requirement = TokenRequirement();
+            requirement.Amount = "1";
+            return requirement;
+        }
+
+        foreach (string written in new[] { "1", "1.0", "1e0", "0.1e1" })
+        {
+            Currency delivered = new() { CurrencyCode = RlusdHex, Issuer = Issuer, Value = written };
+            PaymentResponseEnvelope response = await Facilitator(() => Validated("tesSUCCESS", delivered))
+                .VerifyAndSettleAsync(Envelope(TokenPayment(RlusdHex, Issuer, written), OneRlusd()));
+
+            Assert.IsTrue(response.Success, $"{written}: {response.ErrorReason}");
+        }
+    }
+
+    /// <summary>
+    /// rippled writes "unavailable" for a delivery it cannot tell (ledgers before 2014); an MPT
+    /// delivery is not the XRP or issued currency the requirement names.
+    /// </summary>
+    [TestMethod]
+    public async Task ADeliveryThatCannotBeReadIsRefused()
+    {
+        PaymentResponseEnvelope unavailable = await Facilitator(
+            () => Validated("tesSUCCESS", new Currency { CurrencyCode = "XRP", Value = "unavailable" })).VerifyAndSettleAsync(Envelope());
+        PaymentResponseEnvelope mpt = await Facilitator(
+            () => Validated("tesSUCCESS", new Currency { MPTokenIssuanceID = "0000000100000000000000000000000000000000000000AB", Value = "1000000" }))
+            .VerifyAndSettleAsync(Envelope());
+        PaymentResponseEnvelope noMeta = await Facilitator(() => new TransactionSummary { Validated = true }).VerifyAndSettleAsync(Envelope());
+
+        Assert.AreEqual("delivered_amount_mismatch", unavailable.ErrorReason);
+        Assert.AreEqual("delivered_amount_mismatch", mpt.ErrorReason);
+        Assert.AreEqual("settlement_failed", noMeta.ErrorReason, "Without metadata there is no result to call a success.");
+    }
+
+    [TestMethod]
+    public async Task AnMptAmountIsRefused()
+    {
+        Dictionary<string, object> tx = XrpPayment();
+        tx["Amount"] = new Dictionary<string, object> { { "mpt_issuance_id", "0000000100000000000000000000000000000000000000AB" }, { "value", "2" } };
+
+        PaymentResponseEnvelope response = await Facilitator(NotSubmitted).VerifyAndSettleAsync(Envelope(tx, TokenRequirement()));
+
+        Assert.AreEqual("invalid_asset", response.ErrorReason);
     }
 
     [TestMethod]

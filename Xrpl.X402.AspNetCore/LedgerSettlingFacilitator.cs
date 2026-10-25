@@ -1,9 +1,11 @@
 using System;
 using System.Globalization;
+using System.Security.Cryptography;
 using System.Text;
 using System.Text.Json;
 using System.Threading;
 using System.Threading.Tasks;
+using Xrpl.AddressCodec;
 using Xrpl.BinaryCodec;
 using Xrpl.Client;
 using Xrpl.Client.Exceptions;
@@ -24,14 +26,20 @@ namespace Xrpl.X402.AspNetCore;
 /// <remarks>
 /// <para>
 /// Before submitting, the blob must be a <c>Payment</c> to <see cref="PaymentRequirement.PayTo"/>
-/// of exactly <see cref="PaymentRequirement.Amount"/> in <see cref="PaymentRequirement.Asset"/>
-/// (and <c>extra.issuer</c> for an issued currency), without <c>tfPartialPayment</c>, with a
-/// <c>LastLedgerSequence</c> that has not passed. After validation, the metadata's
-/// <c>delivered_amount</c> must cover the requirement. Each refusal has its own
+/// (with the destination tag an X-address or <c>extra.destinationTag</c> names) of exactly
+/// <see cref="PaymentRequirement.Amount"/> in <see cref="PaymentRequirement.Asset"/> (and
+/// <c>extra.issuer</c> for an issued currency), without <c>tfPartialPayment</c>, bound to
+/// <c>extra.invoiceId</c> when there is one, with a <c>LastLedgerSequence</c> that has not passed
+/// and does not reach further than the requirement's timeout allows. After validation, the
+/// metadata's <c>delivered_amount</c> must cover the requirement. Each refusal has its own
 /// <see cref="PaymentResponseEnvelope.ErrorReason"/>: <c>invalid_transaction_type</c>,
 /// <c>invalid_destination</c>, <c>invalid_partial_payment</c>, <c>invalid_asset</c>,
-/// <c>invalid_amount</c>, <c>invalid_last_ledger_sequence</c>, <c>payment_expired</c>,
-/// <c>duplicate_payment</c> and <c>delivered_amount_mismatch</c>.
+/// <c>invalid_amount</c>, <c>invalid_invoice_id</c>, <c>invalid_last_ledger_sequence</c>,
+/// <c>payment_expired</c>, <c>duplicate_payment</c> and <c>delivered_amount_mismatch</c>.
+/// </para>
+/// <para>
+/// Everything is checked against <see cref="PaymentSignatureEnvelope.Accepted"/>, which must be the
+/// server's requirement; <c>RequirePayment</c> puts it there.
 /// </para>
 /// <para>
 /// Each settled hash is recorded in an <see cref="ISettledPaymentStore"/>, and a blob already
@@ -53,6 +61,11 @@ public sealed class LedgerSettlingFacilitator : IX402Facilitator
     private const uint PartialPaymentFlag = (uint)PaymentFlags.tfPartialPayment;
 
     private const NumberStyles DropsStyle = NumberStyles.None;
+
+    // Faster than any network closes ledgers, so a payer that assumed a slower close still fits.
+    private const double MinSecondsPerLedger = 3.0;
+
+    private const uint AutofillWindowLedgers = 20;
 
     // The ledger's amount strings: a decimal point and an exponent, never a sign in a payment.
     private const NumberStyles TokenValueStyle = NumberStyles.AllowDecimalPoint | NumberStyles.AllowExponent;
@@ -138,6 +151,9 @@ public sealed class LedgerSettlingFacilitator : IX402Facilitator
             uint validatedLedgerIndex = await _validatedLedgerIndex(cancellationToken);
             if (lastLedgerSequence <= validatedLedgerIndex)
                 return Refused("payment_expired");
+
+            if ((ulong)lastLedgerSequence > (ulong)validatedLedgerIndex + MaxWindowLedgers(accepted))
+                return Refused("invalid_last_ledger_sequence");
 
             string hash = HashLedger.HashSignedTx(signedBlob);
             if (!await _settled.TryReserveAsync(hash, lastLedgerSequence, validatedLedgerIndex, cancellationToken))
@@ -249,7 +265,7 @@ public sealed class LedgerSettlingFacilitator : IX402Facilitator
         if (!string.Equals(GetString(tx, "TransactionType"), "Payment", StringComparison.Ordinal))
             return "invalid_transaction_type";
 
-        if (!string.Equals(GetString(tx, "Destination"), accepted.PayTo, StringComparison.Ordinal))
+        if (!DestinationMatches(tx, accepted))
             return "invalid_destination";
 
         // A partial payment may deliver any fraction of Amount and still succeed.
@@ -266,6 +282,10 @@ public sealed class LedgerSettlingFacilitator : IX402Facilitator
         if (amountRejection != null)
             return amountRejection;
 
+        // Without this a blob paid under one invoice settles another of the same price and payee.
+        if (!InvoiceBound(tx, accepted))
+            return "invalid_invoice_id";
+
         // Without a LastLedgerSequence the blob stays valid forever, and no store could hold its
         // hash for that long.
         if (!tx.TryGetProperty("LastLedgerSequence", out JsonElement llsEl)
@@ -277,6 +297,95 @@ public sealed class LedgerSettlingFacilitator : IX402Facilitator
 
         return null;
     }
+
+    /// <summary>
+    /// Whether the transaction pays <see cref="PaymentRequirement.PayTo"/>. An X-address there carries
+    /// a destination tag, as does <c>extra.destinationTag</c>; either must then be the transaction's
+    /// <c>DestinationTag</c>, since an exchange or custodian credits by the tag.
+    /// </summary>
+    private static bool DestinationMatches(JsonElement tx, PaymentRequirement accepted)
+    {
+        string payTo = accepted.PayTo;
+        uint? requiredTag = null;
+
+        // The binary codec stores a classic address and a separate tag, so an X-address never
+        // appears in a decoded blob.
+        if (!payTo.StartsWith('r') && XrplAddressCodec.IsValidXAddress(payTo))
+        {
+            XrplAddressCodec.CodecAddress decoded = XrplAddressCodec.XAddressToClassicAddress(payTo);
+            payTo = decoded.ClassicAddress;
+            requiredTag = decoded.Tag;
+        }
+
+        if (accepted.Extra.TryGetValue("destinationTag", out JsonElement tagEl))
+        {
+            if (tagEl.ValueKind != JsonValueKind.Number
+                || !tagEl.TryGetUInt32(out uint extraTag)
+                || (requiredTag.HasValue && requiredTag.Value != extraTag))
+            {
+                return false;
+            }
+
+            requiredTag = extraTag;
+        }
+
+        if (!string.Equals(GetString(tx, "Destination"), payTo, StringComparison.Ordinal))
+            return false;
+
+        return requiredTag is not uint tag
+            || (tx.TryGetProperty("DestinationTag", out JsonElement txTag)
+                && txTag.ValueKind == JsonValueKind.Number
+                && txTag.TryGetUInt32(out uint paidTag)
+                && paidTag == tag);
+    }
+
+    /// <summary>
+    /// Whether a requirement's <c>extra.invoiceId</c> is bound into the transaction the way the t54
+    /// reference payer binds it: <c>InvoiceID</c> = SHA-256 of its UTF-8 bytes, or a memo whose
+    /// <c>MemoData</c> is those bytes in hex. Either is enough, since the client chooses the binding
+    /// (<c>X402IntentBinding</c>). A requirement without an invoice id binds nothing.
+    /// </summary>
+    private static bool InvoiceBound(JsonElement tx, PaymentRequirement accepted)
+    {
+        if (!accepted.Extra.TryGetValue("invoiceId", out JsonElement invoiceEl))
+            return true;
+
+        string? invoiceId = invoiceEl.ValueKind == JsonValueKind.String ? invoiceEl.GetString() : null;
+        if (string.IsNullOrEmpty(invoiceId))
+            return false;
+
+        byte[] invoiceBytes = Encoding.UTF8.GetBytes(invoiceId);
+        if (string.Equals(GetString(tx, "InvoiceID"), Convert.ToHexString(SHA256.HashData(invoiceBytes)), StringComparison.OrdinalIgnoreCase))
+            return true;
+
+        if (!tx.TryGetProperty("Memos", out JsonElement memos) || memos.ValueKind != JsonValueKind.Array)
+            return false;
+
+        string memoData = Convert.ToHexString(invoiceBytes);
+        foreach (JsonElement wrapper in memos.EnumerateArray())
+        {
+            if (wrapper.ValueKind == JsonValueKind.Object
+                && wrapper.TryGetProperty("Memo", out JsonElement memo)
+                && memo.ValueKind == JsonValueKind.Object
+                && string.Equals(GetString(memo, "MemoData"), memoData, StringComparison.OrdinalIgnoreCase))
+            {
+                return true;
+            }
+        }
+
+        return false;
+    }
+
+    /// <summary>
+    /// The furthest <c>LastLedgerSequence</c> accepted past the validated ledger. It bounds how long a
+    /// settled hash has to be kept, and is wide enough for any honest payer: <c>XrplWalletX402Signer</c>
+    /// sets the open ledger plus <c>MaxTimeoutSeconds</c> at 4 seconds a ledger, and autofill without a
+    /// timeout sets the validated ledger plus 20.
+    /// </summary>
+    private static uint MaxWindowLedgers(PaymentRequirement accepted) =>
+        accepted.MaxTimeoutSeconds > 0
+            ? (uint)Math.Max(Math.Ceiling(accepted.MaxTimeoutSeconds / MinSecondsPerLedger), AutofillWindowLedgers) + 1
+            : AutofillWindowLedgers + 1;
 
     private static string? CheckAmount(JsonElement amount, PaymentRequirement accepted)
     {

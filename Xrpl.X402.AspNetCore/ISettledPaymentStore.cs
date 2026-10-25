@@ -25,6 +25,14 @@ namespace Xrpl.X402.AspNetCore;
 /// a distributed cache with an atomic insert-if-absent), or a payment settled by one instance can be
 /// replayed against another.
 /// </para>
+/// <para>
+/// A store is keyed by ledger index, so it serves one network: instances settling on mainnet and
+/// on testnet need separate stores, or the higher ledger indexes of one network prune the claims of
+/// the other while their windows are open. Instances sharing a store should read the validated
+/// ledger from nodes in step: an <see cref="InMemorySettledPaymentStore"/>-style pruning by
+/// <c>validatedLedgerIndex</c> can drop a claim while an instance on a node lagging by more than
+/// the retention margin still accepts the blob as unexpired.
+/// </para>
 /// </remarks>
 public interface ISettledPaymentStore
 {
