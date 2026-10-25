@@ -67,6 +67,9 @@ public sealed class LedgerSettlingFacilitator : IX402Facilitator
 
     private const uint AutofillWindowLedgers = 20;
 
+    // The payer's node may be ahead of the facilitator's; its validated ledger is where autofill counts from.
+    private const uint NodeSkewLedgers = 10;
+
     // The ledger's amount strings: a decimal point and an exponent, never a sign in a payment.
     private const NumberStyles TokenValueStyle = NumberStyles.AllowDecimalPoint | NumberStyles.AllowExponent;
 
@@ -172,7 +175,7 @@ public sealed class LedgerSettlingFacilitator : IX402Facilitator
             finally
             {
                 if (!keepClaim)
-                    await _settled.ReleaseAsync(hash, CancellationToken.None);
+                    await TryReleaseAsync(hash);
             }
         }
         catch (OperationCanceledException) when (cancellationToken.IsCancellationRequested)
@@ -384,8 +387,21 @@ public sealed class LedgerSettlingFacilitator : IX402Facilitator
     /// </summary>
     private static uint MaxWindowLedgers(PaymentRequirement accepted) =>
         accepted.MaxTimeoutSeconds > 0
-            ? (uint)Math.Max(Math.Ceiling(accepted.MaxTimeoutSeconds / MinSecondsPerLedger), AutofillWindowLedgers) + 1
-            : AutofillWindowLedgers + 1;
+            ? (uint)Math.Max(Math.Ceiling(accepted.MaxTimeoutSeconds / MinSecondsPerLedger), AutofillWindowLedgers) + 1 + NodeSkewLedgers
+            : AutofillWindowLedgers + 1 + NodeSkewLedgers;
+
+    // A store that cannot drop the claim must not cost the payer the response already built: a
+    // settlement_unknown carries the hash they reconcile against. The claim then lapses with the window.
+    private async ValueTask TryReleaseAsync(string hash)
+    {
+        try
+        {
+            await _settled.ReleaseAsync(hash, CancellationToken.None);
+        }
+        catch
+        {
+        }
+    }
 
     private static string? CheckAmount(JsonElement amount, PaymentRequirement accepted)
     {

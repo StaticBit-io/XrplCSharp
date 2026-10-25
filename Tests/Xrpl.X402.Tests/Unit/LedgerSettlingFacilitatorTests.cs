@@ -149,6 +149,30 @@ public class LedgerSettlingFacilitatorTests
         Assert.AreEqual(Payer.ClassicAddress, response.Payer);
     }
 
+    /// <summary>A store that fails to drop the claim does not take the hash out of the response.</summary>
+    [TestMethod]
+    public async Task AStoreThatCannotReleaseKeepsTheUnknownOutcome()
+    {
+        PaymentResponseEnvelope response = await Facilitator(
+            () => throw Unknown(),
+            () => throw Unknown(),
+            store: new UnreleasableStore()).VerifyAndSettleAsync(Envelope());
+
+        Assert.AreEqual("settlement_unknown", response.ErrorReason);
+        Assert.AreEqual(Hash, response.Transaction);
+    }
+
+    private sealed class UnreleasableStore : ISettledPaymentStore
+    {
+        private readonly InMemorySettledPaymentStore _inner = new();
+
+        public ValueTask<bool> TryReserveAsync(string transactionHash, uint lastLedgerSequence, uint validatedLedgerIndex, CancellationToken cancellationToken = default) =>
+            _inner.TryReserveAsync(transactionHash, lastLedgerSequence, validatedLedgerIndex, cancellationToken);
+
+        public ValueTask ReleaseAsync(string transactionHash, CancellationToken cancellationToken = default) =>
+            throw new System.TimeoutException("store unavailable");
+    }
+
     [TestMethod]
     public async Task AnUnknownOutcomeThatTurnsOutExpiredFails()
     {
@@ -521,12 +545,14 @@ public class LedgerSettlingFacilitatorTests
 
         PaymentResponseEnvelope forever = await Facilitator(NotSubmitted).VerifyAndSettleAsync(Envelope(Until(uint.MaxValue)));
         PaymentResponseEnvelope autofillWindow = await Facilitator(() => Validated("tesSUCCESS")).VerifyAndSettleAsync(Envelope(Until(ValidatedLedger + 21)));
-        PaymentResponseEnvelope pastAutofillWindow = await Facilitator(NotSubmitted).VerifyAndSettleAsync(Envelope(Until(ValidatedLedger + 22)));
+        PaymentResponseEnvelope autofillOnANodeAhead = await Facilitator(() => Validated("tesSUCCESS")).VerifyAndSettleAsync(Envelope(Until(ValidatedLedger + 31)));
+        PaymentResponseEnvelope pastAutofillWindow = await Facilitator(NotSubmitted).VerifyAndSettleAsync(Envelope(Until(ValidatedLedger + 32)));
         PaymentResponseEnvelope signerWindow = await Facilitator(() => Validated("tesSUCCESS")).VerifyAndSettleAsync(Envelope(Until(ValidatedLedger + 151), TenMinutes()));
-        PaymentResponseEnvelope pastTimeout = await Facilitator(NotSubmitted).VerifyAndSettleAsync(Envelope(Until(ValidatedLedger + 202), TenMinutes()));
+        PaymentResponseEnvelope pastTimeout = await Facilitator(NotSubmitted).VerifyAndSettleAsync(Envelope(Until(ValidatedLedger + 212), TenMinutes()));
 
         Assert.AreEqual("invalid_last_ledger_sequence", forever.ErrorReason);
         Assert.IsTrue(autofillWindow.Success, autofillWindow.ErrorReason);
+        Assert.IsTrue(autofillOnANodeAhead.Success, "Autofill on a payer's node 10 validated ledgers ahead of the facilitator's.");
         Assert.AreEqual("invalid_last_ledger_sequence", pastAutofillWindow.ErrorReason);
         Assert.IsTrue(signerWindow.Success, "XrplWalletX402Signer's window for 600 s: the open ledger plus 150.");
         Assert.AreEqual("invalid_last_ledger_sequence", pastTimeout.ErrorReason);

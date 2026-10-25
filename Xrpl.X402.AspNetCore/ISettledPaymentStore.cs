@@ -53,6 +53,12 @@ public interface ISettledPaymentStore
     /// <c>true</c> when the hash was not claimed and now is; <c>false</c> when it is already claimed,
     /// whether settled or still being settled.
     /// </returns>
+    /// <remarks>
+    /// An implementation that throws must leave the hash unclaimed. The facilitator cannot release a
+    /// claim it was not told it holds - releasing it could drop a concurrent caller's claim and admit
+    /// the blob twice - so a claim written before an exception (a cancelled request, a reply that
+    /// timed out) refuses the blob as <c>duplicate_payment</c> until the store prunes it.
+    /// </remarks>
     ValueTask<bool> TryReserveAsync(
         string transactionHash,
         uint lastLedgerSequence,

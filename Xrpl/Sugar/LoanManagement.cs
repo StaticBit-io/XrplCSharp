@@ -314,7 +314,7 @@ namespace Xrpl.Sugar
             if (StateRefusal(action, loan) is { } refusal)
                 return Refused(action, state, sharesOutstanding, refusal);
 
-            bool late = LoanPayments.IsPaymentLate(loan, parentCloseTime, dueTimeIsLate: !state.Rules.FixCleanup3_4_0);
+            bool late = LoanPayments.IsPaymentLate(loan, CloseTime(parentCloseTime), dueTimeIsLate: !state.Rules.FixCleanup3_4_0);
             if (state.Rules.FixCleanup3_4_0 && !late)
                 return Refused(action, state, sharesOutstanding, ("tecTOO_SOON", "Only a loan whose payment is late can be impaired."));
 
@@ -539,11 +539,13 @@ namespace Xrpl.Sugar
         private static (string Result, string Reason)? TimeRefusal(LoanManageAction action, LOLoan loan, DateTime parentCloseTime, LedgerRules rules)
         {
             bool fix = rules.FixCleanup3_4_0;
+            // A close time is whole seconds: a fraction past an exclusive boundary is not past it for the node.
+            DateTime closeTime = CloseTime(parentCloseTime);
             switch (action)
             {
-                case LoanManageAction.Impair when fix && !LoanPayments.IsPaymentLate(loan, parentCloseTime, dueTimeIsLate: false):
+                case LoanManageAction.Impair when fix && !LoanPayments.IsPaymentLate(loan, closeTime, dueTimeIsLate: false):
                     return ("tecTOO_SOON", "Only a loan whose payment is late can be impaired.");
-                case LoanManageAction.Default when !LoanPayments.IsPastGracePeriod(loan, parentCloseTime, boundaryIsPast: !fix):
+                case LoanManageAction.Default when !LoanPayments.IsPastGracePeriod(loan, closeTime, boundaryIsPast: !fix):
                     return ("tecTOO_SOON", "A loan can be defaulted only after its grace period.");
                 default:
                     return null;

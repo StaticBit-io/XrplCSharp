@@ -219,7 +219,7 @@ Before submitting, the signed transaction must pass every check below; after val
 | `invalid_asset` | `Amount` is not the required asset: drops for `XRP`, otherwise the currency (as text or 40 hex digits) issued by `extra.issuer`. An MPT amount is refused. |
 | `invalid_amount` | `Amount` is not exactly the required amount. Token values are compared as numbers, so `1.0` equals `1`. |
 | `invalid_invoice_id` | `extra.invoiceId` is set and the transaction carries neither `InvoiceID` = SHA-256 of it nor a memo whose `MemoData` is it in hex. |
-| `invalid_last_ledger_sequence` | No `LastLedgerSequence`, or one further past the validated ledger than `maxTimeoutSeconds` allows (at 3 seconds a ledger, at least 20 ledgers). |
+| `invalid_last_ledger_sequence` | No `LastLedgerSequence`, or one further past the validated ledger than `maxTimeoutSeconds` allows (at 3 seconds a ledger, at least 20 ledgers, plus 10 for a payer whose node is ahead of the facilitator's). |
 | `payment_expired` | `LastLedgerSequence` is already validated: the blob can no longer enter a new ledger, so a success could only be an earlier settlement replayed. |
 | `duplicate_payment` | The transaction hash is already settled, or is being settled. |
 | `delivered_amount_mismatch` | The payment validated, but the metadata's `delivered_amount` is short of the requirement or in another asset. The response carries the transaction hash. |

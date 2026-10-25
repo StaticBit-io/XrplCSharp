@@ -105,6 +105,21 @@ public class TestULoanManagement
         Assert.IsTrue(LoanManagement.Availability(Loan(), broker, Owner, Due.AddSeconds(Grace + 1), Fixed).Default.IsAllowed);
     }
 
+    /// <summary>A close time is whole seconds: a fraction inside the boundary second is still the boundary.</summary>
+    [TestMethod]
+    public void UnderTheFix_AFractionPastAnExclusiveBoundaryIsNotPastIt()
+    {
+        LOLoanBroker broker = Broker("20000001", 10_000, 10_000, "5000000");
+
+        LoanManageAvailability insideDueSecond = LoanManagement.Availability(Loan(), broker, Owner, Due.AddMilliseconds(400), Fixed);
+        Assert.AreEqual("tecTOO_SOON", insideDueSecond.Impair.Refusal);
+
+        LoanManageAvailability insideGraceSecond = LoanManagement.Availability(Loan(), broker, Owner, Due.AddSeconds(Grace).AddMilliseconds(400), Fixed);
+        Assert.AreEqual("tecTOO_SOON", insideGraceSecond.Default.Refusal);
+
+        Assert.AreEqual("tecTOO_SOON", LoanManagement.Impair(Loan(), XrpVault(), Due.AddMilliseconds(400), Fixed).Refusal);
+    }
+
     [TestMethod]
     public void Availability_BeforeTheFix_ImpairHasNoTimeConditionAndTheDefaultBoundaryIsInclusive()
     {

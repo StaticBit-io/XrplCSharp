@@ -58,7 +58,7 @@ Without a `PAYMENT-SIGNATURE` the endpoint returns **402** + the `PAYMENT-REQUIR
 | `invalid_asset` | `Amount` is not the required asset: XRP drops for `XRP`, otherwise the currency (as text or 40 hex digits) issued by `extra.issuer`. |
 | `invalid_amount` | `Amount` is not exactly the required amount. |
 | `invalid_invoice_id` | `extra.invoiceId` is set and the transaction carries neither `InvoiceID` = SHA-256 of it nor a memo whose `MemoData` is it in hex. |
-| `invalid_last_ledger_sequence` | No `LastLedgerSequence`, which leaves the blob valid forever, or one further than `maxTimeoutSeconds` allows (at 3 seconds a ledger, at least 20 ledgers). |
+| `invalid_last_ledger_sequence` | No `LastLedgerSequence`, which leaves the blob valid forever, or one further than `maxTimeoutSeconds` allows (at 3 seconds a ledger, at least 20 ledgers, plus 10 for a payer whose node is ahead of the facilitator's). |
 | `payment_expired` | `LastLedgerSequence` is already validated, so only a replay of an earlier settlement could succeed. |
 | `duplicate_payment` | The transaction hash is already settled, or is being settled. |
 | `delivered_amount_mismatch` | The payment validated, but the metadata's `delivered_amount` is short of the requirement or in another asset. |
