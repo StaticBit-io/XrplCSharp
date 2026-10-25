@@ -23,7 +23,7 @@ namespace XrplTests.Xrpl.Sugar;
 public class TestUAutofillFees
 {
     private const string MAINNET_BASE_FEE = "0.000012"; // 12 drops, 8 chars (mainnet/testnet)
-    private const string DEVNET_BASE_FEE = "0.0000012"; // 1.2 drops → 1 drop * 12 = 12 drops (devnet with correction)
+    private const string DEVNET_BASE_FEE = "0.0000012"; // 1.2 drops → rounded up to 2 drops * 12 = 24 drops (devnet with correction)
     private const uint RESERVE_INC = 2000000; // 2 XRP in drops
 
     #region BaseFee Tests
@@ -52,9 +52,9 @@ public class TestUAutofillFees
         await client.CalculateFeePerTransactionType(tx);
 
         Assert.IsTrue(tx.ContainsKey("Fee"));
-        // DEVNET_BASE_FEE "0.0000012" → 0.0000012 XRP = 1.2 drops → truncated to 1 drop
-        // String length is 9, so devnet multiplier (12x) IS applied: 1 * 12 = 12 drops
-        Assert.AreEqual("12", tx["Fee"]);
+        // DEVNET_BASE_FEE "0.0000012" → 1.2 drops → GetFeeXrp rounds up to 2 drops
+        // Below 10 drops, so devnet multiplier (12x) IS applied: 2 * 12 = 24 drops
+        Assert.AreEqual("24", tx["Fee"]);
     }
 
     #endregion
@@ -691,13 +691,19 @@ internal class FeeTestClient : IXrplClient
     public AccountInfoRequest? LastAccountInfoRequest { get; private set; }
     public LedgerEntryRequest? LastLedgerEntryRequest { get; private set; }
 
+    /// <summary>load_factor reported by <see cref="ServerInfo"/>.</summary>
+    public double LoadFactor { get; set; } = 1;
+
+    /// <summary>AccountRoot returned by <see cref="AccountInfo"/> as account_data, if any.</summary>
+    public LOAccountRoot? AccountRoot { get; set; }
+
     public Task<XrplResponse<ServerInfo>> ServerInfo(ServerInfoRequest request, CancellationToken cancellationToken = default)
     {
         var info = new ServerInfo
         {
             Info = new Info()
             {
-                LoadFactor = 1,
+                LoadFactor = LoadFactor,
                 ValidatedLedger = new ValidatedLedger()
                 {
                     BaseFeeXrp = decimal.Parse(_feeXrp, System.Globalization.CultureInfo.InvariantCulture)
@@ -755,7 +761,7 @@ internal class FeeTestClient : IXrplClient
         cancellationToken.ThrowIfCancellationRequested();
         AccountInfoCalls++;
         LastAccountInfoRequest = request;
-        AccountInfo info = new AccountInfo { SignerLists = CounterpartySignerLists };
+        AccountInfo info = new AccountInfo { SignerLists = CounterpartySignerLists, AccountData = AccountRoot };
         return Task.FromResult(new XrplResponse<AccountInfo>(info, default, null, null, null, null, false));
     }
 

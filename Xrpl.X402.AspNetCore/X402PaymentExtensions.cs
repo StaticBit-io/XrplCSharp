@@ -1,4 +1,5 @@
 using System;
+using System.Text.Json;
 using System.Threading.Tasks;
 using Microsoft.AspNetCore.Builder;
 using Microsoft.AspNetCore.Http;
@@ -51,6 +52,9 @@ public static class X402PaymentExtensions
                 if (!RequirementMatches(env.Accepted, requirement))
                     return Challenge(http, requirement);
 
+                // Settle against the endpoint's own requirement, not the echo: the facilitator reads
+                // extra fields (issuer, invoiceId, destinationTag) the comparison above does not cover.
+                env.Accepted = requirement;
                 settle = await facilitator.VerifyAndSettleAsync(env, http.RequestAborted);
             }
             catch
@@ -82,11 +86,26 @@ public static class X402PaymentExtensions
     }
 
     // The client-submitted "accepted" requirement must match what this endpoint actually charges.
+    // Currency codes are case-sensitive on the ledger, so the asset is compared exactly.
     private static bool RequirementMatches(PaymentRequirement submitted, PaymentRequirement required) =>
         submitted is not null &&
         string.Equals(submitted.Scheme, required.Scheme, StringComparison.OrdinalIgnoreCase) &&
         string.Equals(submitted.Network, required.Network, StringComparison.OrdinalIgnoreCase) &&
-        string.Equals(submitted.Asset, required.Asset, StringComparison.OrdinalIgnoreCase) &&
+        string.Equals(submitted.Asset, required.Asset, StringComparison.Ordinal) &&
         string.Equals(submitted.PayTo, required.PayTo, StringComparison.Ordinal) &&
-        string.Equals(submitted.Amount, required.Amount, StringComparison.Ordinal);
+        string.Equals(submitted.Amount, required.Amount, StringComparison.Ordinal) &&
+        ExtraMatches(submitted, required, "issuer") &&
+        ExtraMatches(submitted, required, "invoiceId") &&
+        ExtraMatches(submitted, required, "destinationTag");
+
+    private static bool ExtraMatches(PaymentRequirement submitted, PaymentRequirement required, string key)
+    {
+        bool submittedHas = submitted.Extra.TryGetValue(key, out JsonElement submittedValue);
+        bool requiredHas = required.Extra.TryGetValue(key, out JsonElement requiredValue);
+        if (!submittedHas || !requiredHas)
+            return submittedHas == requiredHas;
+
+        return submittedValue.ValueKind == requiredValue.ValueKind
+            && string.Equals(submittedValue.GetRawText(), requiredValue.GetRawText(), StringComparison.Ordinal);
+    }
 }

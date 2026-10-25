@@ -29,7 +29,8 @@ namespace XrplTests.BinaryCodecLib.Types
         public void TestFromValue64()
         {
             Uint64 value1 = Uint64.FromValue("10000000");
-            Assert.AreEqual("1000000000000000", value1.ToJson().GetValue<string>());
+            // Hex is padded on the left like xrpl.js padStart: "10000000" is 0x10000000, not 0x1000000000000000.
+            Assert.AreEqual("0000000010000000", value1.ToJson().GetValue<string>());
         }
 
         [TestMethod]

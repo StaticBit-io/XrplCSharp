@@ -30,7 +30,13 @@ namespace Xrpl.Models.Ledger
         /// <summary>
         /// Details of the current owner of the auction slot.
         /// </summary>
-        public AuctionSlot AuctionSlot { get; set; }
+        /// <remarks>
+        /// The ledger entry's own shape, not <see cref="Ledger.AuctionSlot"/>: <c>amm_info</c> reports
+        /// the slot in snake_case with an ISO expiration, while the entry uses the field names of the
+        /// binary format and Ripple-epoch seconds.
+        /// </remarks>
+        [JsonPropertyName("AuctionSlot")]
+        public AMMAuctionSlot AuctionSlot { get; set; }
         /// <summary>
         /// The total outstanding balance of liquidity provider tokens from this AMM instance.<br/>
         /// The holders of these tokens can vote on the AMM's trading fee in proportion to their holdings,
@@ -49,9 +55,11 @@ namespace Xrpl.Models.Ledger
         /// </summary>
         public uint? TradingFee { get; set; }
         /// <summary>
-        /// A list of vote objects, representing votes on the pool's trading fee..
+        /// A list of vote objects, representing votes on the pool's trading fee.
         /// </summary>
-        public List<VoteEntry> VoteSlots { get; set; }
+        [JsonPropertyName("VoteSlots")]
+        [JsonConverter(typeof(AMMVoteEntryListConverter))]
+        public List<AMMVoteEntry> VoteSlots { get; set; }
 
         /// <summary>Owner directory page hint (hex UInt64).</summary>
         [JsonPropertyName("OwnerNode")]
@@ -163,4 +171,72 @@ namespace Xrpl.Models.Ledger
         public uint TimeInterval { get; set; }
     }
 
+    /// <summary>
+    /// The <c>AuctionSlot</c> inner object of an AMM ledger entry.
+    /// </summary>
+    public class AMMAuctionSlot
+    {
+        /// <summary>
+        /// Members the node sent that no declared property here claims. Mirrors
+        /// <see cref="BaseLedgerEntry.UnknownFields"/>.
+        /// </summary>
+        [JsonExtensionData]
+        public Dictionary<string, JsonElement> UnknownFields { get; set; }
+
+        /// <summary>
+        /// The current owner of this auction slot.
+        /// </summary>
+        [JsonPropertyName("Account")]
+        public string Account { get; set; }
+        /// <summary>
+        /// At most 4 additional accounts that are authorized to trade at the discounted fee for this AMM instance.
+        /// </summary>
+        [JsonPropertyName("AuthAccounts")]
+        [JsonConverter(typeof(AuthAccountEntryListConverter))]
+        public List<Xrpl.Models.Transactions.AuthAccountEntry> AuthAccounts { get; set; }
+        /// <summary>
+        /// The trading fee charged to the auction owner and the authorized accounts, in units of 1/100,000.
+        /// </summary>
+        /// <remarks>
+        /// rippled declares the field <c>soeDEFAULT</c> in the inner object, so it is left out of the
+        /// entry when it is zero; zero is then what it means.
+        /// </remarks>
+        [JsonPropertyName("DiscountedFee")]
+        public uint DiscountedFee { get; set; }
+        /// <summary>
+        /// The time when this slot expires; stored as seconds since the Ripple Epoch.
+        /// </summary>
+        [JsonPropertyName("Expiration")]
+        [JsonConverter(typeof(RippleDateTimeConverter))]
+        public DateTime? Expiration { get; set; }
+        /// <summary>
+        /// The amount the auction owner paid to win this slot, in LPTokens.
+        /// </summary>
+        [JsonPropertyName("Price")]
+        [JsonConverter(typeof(CurrencyConverter))]
+        public Currency Price { get; set; }
+    }
+
+    /// <summary>
+    /// The <c>VoteEntry</c> inner object of an AMM ledger entry's <see cref="LOAmm.VoteSlots"/>.
+    /// </summary>
+    public class AMMVoteEntry
+    {
+        /// <summary>
+        /// Members the node sent that no declared property here claims. Mirrors
+        /// <see cref="BaseLedgerEntry.UnknownFields"/>.
+        /// </summary>
+        [JsonExtensionData]
+        public Dictionary<string, JsonElement> UnknownFields { get; set; }
+
+        /// <summary>The account that cast the vote.</summary>
+        [JsonPropertyName("Account")]
+        public string Account { get; set; }
+        /// <summary>The proposed trading fee, in units of 1/100,000; left out of the entry when zero (<c>soeDEFAULT</c>).</summary>
+        [JsonPropertyName("TradingFee")]
+        public uint TradingFee { get; set; }
+        /// <summary>The weight of the vote, in units of 1/100,000 of the LPTokens outstanding.</summary>
+        [JsonPropertyName("VoteWeight")]
+        public uint VoteWeight { get; set; }
+    }
 }

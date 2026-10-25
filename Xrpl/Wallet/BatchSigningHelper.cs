@@ -83,46 +83,78 @@ public static class BatchSigningHelper
         {
             if (targetSigners == null)
             {
+                // Same rule as the single-signature branch below: one account cannot be both
+                // single-signed and multi-signed, and keeping either would drop the other input.
+                if (!string.IsNullOrEmpty(target["TxnSignature"]?.GetValue<string>()))
+                    throw new InvalidOperationException($"BatchSigner '{target["Account"]}' is single-signed in one input and multi-signed in another.");
+
                 target.Remove("SigningPubKey");
                 target.Remove("TxnSignature");
                 targetSigners = new JsonArray();
                 target["Signers"] = targetSigners;
             }
 
-            var seen = new HashSet<string>(StringComparer.Ordinal);
+            // Keyed by signer account: rippled rejects a Signers list naming one account twice
+            // (temBAD_SIGNER), so two different signatures from the same signer are a conflict, not
+            // two entries to keep.
+            var byAccount = new Dictionary<string, string>(StringComparer.Ordinal);
             foreach (var s in targetSigners)
             {
                 if (s is not JsonObject sObj) continue;
                 var so = sObj["Signer"]?.AsObject() ?? sObj;
-                var key = $"{so["Account"]?.GetValue<string>()}|{so["SigningPubKey"]?.GetValue<string>()}|{so["TxnSignature"]?.GetValue<string>()}";
-                seen.Add(key);
+                byAccount[so["Account"]?.GetValue<string>() ?? ""] = SignatureKey(so);
             }
 
             foreach (var s in incomingSigners)
             {
                 if (s is not JsonObject sObj) continue;
                 var so = sObj["Signer"]?.AsObject() ?? sObj;
-                var key = $"{so["Account"]?.GetValue<string>()}|{so["SigningPubKey"]?.GetValue<string>()}|{so["TxnSignature"]?.GetValue<string>()}";
-                if (seen.Add(key))
-                    targetSigners.Add(sObj.DeepClone());
+                var account = so["Account"]?.GetValue<string>() ?? "";
+                var key = SignatureKey(so);
+                if (byAccount.TryGetValue(account, out var existingKey))
+                {
+                    if (!string.Equals(existingKey, key, StringComparison.Ordinal))
+                        throw new InvalidOperationException($"Conflicting signatures from signer '{account}' for BatchSigner '{target["Account"]}'.");
+                    continue;
+                }
+
+                byAccount[account] = key;
+                targetSigners.Add(sObj.DeepClone());
             }
             return;
         }
 
-        if (targetSigners != null)
+        var iPub = incoming["SigningPubKey"]?.GetValue<string>();
+        var iSig = incoming["TxnSignature"]?.GetValue<string>();
+        if (string.IsNullOrEmpty(iSig))
             return;
+
+        // A BatchSigner carries either one signature or a Signers list; rippled rejects one that has
+        // both, so a single signature arriving for an account already multi-signed is a conflict.
+        if (targetSigners != null)
+            throw new InvalidOperationException($"BatchSigner '{target["Account"]}' is multi-signed in one input and single-signed in another.");
 
         var tPub = target["SigningPubKey"]?.GetValue<string>();
         var tSig = target["TxnSignature"]?.GetValue<string>();
-        var iPub = incoming["SigningPubKey"]?.GetValue<string>();
-        var iSig = incoming["TxnSignature"]?.GetValue<string>();
 
-        if (string.Equals(tPub, iPub, StringComparison.Ordinal)
-            && string.Equals(tSig, iSig, StringComparison.Ordinal))
+        if (string.IsNullOrEmpty(tSig))
         {
+            target["SigningPubKey"] = iPub;
+            target["TxnSignature"] = iSig;
             return;
         }
+
+        // Two different signatures for one account cannot both be kept, and silently picking one
+        // would hand back a Batch whose signer is not the one the other input was signed by.
+        if (!string.Equals(tPub, iPub, StringComparison.Ordinal)
+            || !string.Equals(tSig, iSig, StringComparison.Ordinal))
+        {
+            throw new InvalidOperationException($"Conflicting signatures for BatchSigner '{target["Account"]}'.");
+        }
     }
+
+    private static string SignatureKey(JsonObject signer)
+        => $"{signer["SigningPubKey"]?.GetValue<string>()}|{signer["TxnSignature"]?.GetValue<string>()}";
 
     /// <summary>
     /// Picks wallets from a dictionary that satisfy the quorum of a SignerList.

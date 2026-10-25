@@ -78,6 +78,7 @@ using Xrpl.X402.AspNetCore;
 using Xrpl.X402.Wire;
 
 IXrplClient xrpl = /* your connected IXrplClient */;
+// One facilitator for every endpoint: its record of settled payments is what stops a replay.
 IX402Facilitator facilitator = new LedgerSettlingFacilitator(xrpl);
 
 app.MapGet("/paid", () => "premium content")
@@ -93,7 +94,7 @@ app.MapGet("/paid", () => "premium content")
    });
 ```
 
-Without a `PAYMENT-SIGNATURE` the endpoint returns **402** + `PAYMENT-REQUIRED`. With a valid signature, `LedgerSettlingFacilitator` verifies the destination, settles the transaction (`SubmitRequestAndWait`, waits for `tesSUCCESS`), sets `PAYMENT-RESPONSE`, and runs your handler.
+Without a `PAYMENT-SIGNATURE` the endpoint returns **402** + `PAYMENT-REQUIRED`. With a valid signature, `LedgerSettlingFacilitator` checks the blob against the endpoint's own requirement - a non-partial `Payment` of exactly the required amount and asset to `payTo`, bound to `extra.invoiceId` - refuses a blob it already settled, settles the transaction (`SubmitRequestAndWait`, waits for `tesSUCCESS`), checks `delivered_amount`, sets `PAYMENT-RESPONSE`, and runs your handler.
 
 Two `IX402Facilitator` implementations ship:
 

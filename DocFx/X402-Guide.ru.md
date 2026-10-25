@@ -109,7 +109,7 @@ GET /paid
 
 ### 3. Сервер сеттлит — возвращает ресурс + квитанцию
 
-Фасилитатор верифицирует подписанный платёж и сеттлит его в леджере (ждёт `tesSUCCESS`), затем отдаёт ресурс с квитанцией `PAYMENT-RESPONSE`:
+Фасилитатор сверяет подписанный платёж с требованием сервера, сеттлит его в леджере (ждёт `tesSUCCESS`), проверяет, что леджер доставил, затем отдаёт ресурс с квитанцией `PAYMENT-RESPONSE`:
 
 ```http
 200 OK
@@ -179,6 +179,7 @@ using Xrpl.X402.AspNetCore;
 using Xrpl.X402.Wire;
 
 IXrplClient xrpl = /* ваш подключённый IXrplClient */;
+// Один фасилитатор на все эндпоинты: именно его учёт засеттленных платежей останавливает повторы.
 IX402Facilitator facilitator = new LedgerSettlingFacilitator(xrpl);
 // либо: new T54Facilitator(new HttpClient());  // делегировать фасилитатору t54
 
@@ -197,12 +198,49 @@ app.MapGet("/paid", () => "premium content")
    });
 ```
 
-Без `PAYMENT-SIGNATURE` эндпоинт возвращает **402** + `PAYMENT-REQUIRED`. С валидной подписью фасилитатор проверяет получателя, сеттлит транзакцию (ждёт `tesSUCCESS`), выставляет `PAYMENT-RESPONSE` и выполняет ваш handler.
+Без `PAYMENT-SIGNATURE` эндпоинт возвращает **402** + `PAYMENT-REQUIRED`. С валидной подписью фасилитатор проверяет платёж (см. ниже), сеттлит транзакцию (ждёт `tesSUCCESS`), проверяет `delivered_amount`, выставляет `PAYMENT-RESPONSE` и выполняет ваш handler.
 
 Поставляются две реализации [`IX402Facilitator`](reference/Xrpl.X402.AspNetCore.IX402Facilitator.html):
 
 - [`LedgerSettlingFacilitator`](reference/Xrpl.X402.AspNetCore.LedgerSettlingFacilitator.html) — сеттлит **локально** через ваш подключённый узел. Сеттлмент с неизвестным исходом он дожидается ещё раз, а затем отклоняет как `settlement_unknown` с хешем транзакции в `PAYMENT-RESPONSE`: средства плательщика могли уйти, поэтому такой платёж нужно сверить, а не отбросить.
 - [`T54Facilitator`](reference/Xrpl.X402.AspNetCore.T54Facilitator.html) — делегирует verify + settle **внешнему фасилитатору t54** по HTTP.
+
+### Что проверяет `LedgerSettlingFacilitator`
+
+Сначала `RequirePayment` сравнивает присланный клиентом `accepted` с собственным требованием эндпоинта - схема, сеть, актив (с учётом регистра: коды валют в леджере регистрозависимы), `payTo`, сумма, а также `extra.issuer`, `extra.invoiceId` и `extra.destinationTag` - и затем передаёт фасилитатору серверную копию, так что ничего из проверяемого фасилитатором не берётся от клиента. Если фасилитатор вызывается напрямую, в `Accepted` необходимо так же передавать требование сервера.
+
+До отправки подписанная транзакция должна пройти все проверки ниже; после валидации проверяется `delivered_amount`. Каждый отказ - это 402 со своим `errorReason`:
+
+| `errorReason` | Когда |
+|---|---|
+| `invalid_transaction_type` | Blob - не `Payment`. У `CheckCreate` или `EscrowCreate` тоже есть `Destination`, и они завершаются `tesSUCCESS`, ничего не заплатив. |
+| `invalid_destination` | `Destination` не равен `payTo`, либо `DestinationTag` не совпадает с тегом X-адреса в `payTo` или с `extra.destinationTag`. |
+| `invalid_partial_payment` | Установлен `tfPartialPayment`: такой платёж может доставить любую долю `Amount`. |
+| `invalid_asset` | `Amount` не в требуемом активе: drops для `XRP`, иначе валюта (текстом или 40 hex-цифрами), выпущенная `extra.issuer`. Сумма в MPT отклоняется. |
+| `invalid_amount` | `Amount` не равен требуемой сумме в точности. Значения токенов сравниваются как числа, поэтому `1.0` равно `1`. |
+| `invalid_invoice_id` | `extra.invoiceId` задан, а в транзакции нет ни `InvoiceID` = SHA-256 от него, ни memo, у которого `MemoData` - он же в hex. |
+| `invalid_last_ledger_sequence` | Нет `LastLedgerSequence`, либо он отстоит от валидированного леджера дальше, чем позволяет `maxTimeoutSeconds` (3 секунды на леджер, но не меньше 20 леджеров, плюс 10 на случай, если узел плательщика опережает узел фасилитатора). |
+| `payment_expired` | `LastLedgerSequence` уже валидирован: blob больше не может попасть в новый леджер, и успех мог бы означать только повтор прежнего сеттлмента. |
+| `duplicate_payment` | Хеш транзакции уже засеттлен или сеттлится прямо сейчас. |
+| `delivered_amount_mismatch` | Платёж валидирован, но `delivered_amount` в метаданных меньше требуемого или в другом активе. Ответ содержит хеш транзакции. |
+
+### Повторы и хранилище засеттленных платежей
+
+Валидированный blob можно отправить повторно: узел отвечает `tefPAST_SEQ` или `tefALREADY`, а ожидание по хешу находит исходный `tesSUCCESS`. Чтобы один `PAYMENT-SIGNATURE` не открывал ресурс дважды, фасилитатор до отправки занимает хеш в [`ISettledPaymentStore`](reference/Xrpl.X402.AspNetCore.ISettledPaymentStore.html), оставляет его за собой после успешного сеттлмента и освобождает, если сеттлмент не удался или его исход остался неизвестен, - тогда плательщик может предъявить тот же blob ещё раз. [`InMemorySettledPaymentStore`](reference/Xrpl.X402.AspNetCore.InMemorySettledPaymentStore.html) по умолчанию хранит хеш, пока валидированный леджер не обгонит `LastLedgerSequence` платежа на 256 леджеров; после окна blob и так отклоняется как `payment_expired`.
+
+- Используйте **один фасилитатор для всех эндпоинтов**: у каждого `new LedgerSettlingFacilitator(xrpl)` своё хранилище, и blob, оплаченный на одном эндпоинте, прошёл бы на другом с той же ценой и получателем.
+- Несколько инстансов за балансировщиком должны **делить одно хранилище** (база данных или распределённый кэш с атомарной вставкой «если нет»): хранилище в памяти видит только свой процесс.
+- Хранилище обслуживает **одну сеть**: для mainnet и testnet нужны разные хранилища.
+
+С внедрением зависимостей `AddLedgerSettlingFacilitator()` регистрирует фасилитатор как singleton `IX402Facilitator` поверх зарегистрированного `IXrplClient`, с хранилищем в памяти, если `ISettledPaymentStore` не зарегистрирован раньше:
+
+```csharp
+builder.Services.AddSingleton<IXrplClient>(xrpl);
+// Несколько инстансов: сначала зарегистрируйте здесь общий ISettledPaymentStore.
+builder.Services.AddLedgerSettlingFacilitator();
+
+IX402Facilitator facilitator = app.Services.GetRequiredService<IX402Facilitator>();
+```
 
 ## Verifiable Intent
 

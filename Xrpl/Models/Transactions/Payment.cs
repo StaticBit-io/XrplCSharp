@@ -413,11 +413,13 @@ namespace Xrpl.Models.Transactions
                     throw new ValidationException("PaymentTransaction: tfPartialPayment flag required with DeliverMin");
             }
 
-            bool isTfPartialPayment = flags is uint uFlag
-                ? ModelUtils.IsFlagEnabled(uFlag, (uint)PaymentFlags.tfPartialPayment)
-                : flags is PaymentFlags pf 
-                    ? pf == PaymentFlags.tfPartialPayment 
-                    : flags is Dictionary<string, object> flagDict && CheckFlag<PaymentFlags>(flagDict, "tfPartialPayment");
+            bool isTfPartialPayment = flags switch
+            {
+                PaymentFlags pf => (pf & PaymentFlags.tfPartialPayment) != 0,
+                Dictionary<string, object> flagDict => CheckFlag<PaymentFlags>(flagDict, "tfPartialPayment"),
+                // Dictionary values carry JSON numbers as int/long/ulong, not uint.
+                _ => Common.TryGetUInt32(flags, out uint uFlag) && ModelUtils.IsFlagEnabled(uFlag, (uint)PaymentFlags.tfPartialPayment),
+            };
             if (!isTfPartialPayment)
                 throw new ValidationException("PaymentTransaction: tfPartialPayment flag required with DeliverMin");
             if (!Common.IsAmount(DeliverMin))

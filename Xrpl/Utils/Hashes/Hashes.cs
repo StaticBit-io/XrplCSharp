@@ -70,10 +70,14 @@ namespace Xrpl.Utils.Hashes
 
         }
         /// <summary>
-        ///  Hash the given binary transaction data with the single-signing prefix.<br/>
+        /// Hash the given binary transaction data with the single-signing prefix (<c>STX\0</c>).<br/>
         /// See [Serialization Format](https://xrpl.org/serialization.html).
         /// </summary>
-        /// <param name="txBlobHex">The binary transaction blob as a hexadecimal string.</param>
+        /// <remarks>
+        /// This is the hash a single signer signs, as xrpl.js <c>hashTx</c> computes it - not the
+        /// transaction ID. The ID of a signed transaction is <see cref="HashLedger.HashSignedTx(string)"/>.
+        /// </remarks>
+        /// <param name="txBlobHex">The transaction blob for signing, as a hexadecimal string.</param>
         /// <returns>The hash to sign.</returns>
         public static string HashTx(this string txBlobHex)
         {
@@ -89,6 +93,10 @@ namespace Xrpl.Utils.Hashes
                     sequence.ToString("X").PadLeft(BYTE_LENGTH * 2, '0')).Sha512Half();
         }
 
+        /// <summary>
+        /// Duplicate of <see cref="HashTx(string)"/>: the single-signing hash, not the transaction ID.
+        /// </summary>
+        [Obsolete("Use HashTx for the single-signing hash, or HashLedger.HashSignedTx for the transaction ID.")]
         public static string HashTX(this string txBlobHex)
         {
             string prefix = ((int)HashPrefix.TRANSACTION_SIGN).ToString("X").ToUpper();
