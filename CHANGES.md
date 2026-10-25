@@ -1,5 +1,14 @@
 # Changes
 
+## 11.20.0.0 25/10/2026
+
+* `XrpConversion.XrpToDrops` accepts at most 6 fractional digits (was 7) and throws `ValidationException` for an amount that is not a whole number of drops instead of truncating it. **Breaking:** `"1.0000005"` used to convert to `"1000000"`; it now throws, and so does `SignPaymentChannelClaim` / `VerifyPaymentChannelClaim` with such an amount. Round the amount to 6 decimals before converting
+* `XrpConversion.XrpToDrops(double)` formats the value with `InvariantCulture`, so it no longer throws `FormatException` under a culture with a decimal comma; `XrpConversion.DropsToXrp(string)` returns an invariant string (`"1.5"`, not `"1,5"`)
+* `GetFeeXrpSugar.GetFeeXrp` rounds the fee up to whole drops (xrpl.js rounds half-up to 6 decimals) and floors `maxFeeXRP` to whole drops before capping; `maxFeeXRP` is parsed with `InvariantCulture`. A fractional `load_factor` (e.g. 1.03515625) no longer makes `Autofill` throw `ValidationException` from `XrpToDrops`
+* `AutofillSugar.Autofill` fetches Sequence, Fee and LastLedgerSequence concurrently without writing to the transaction, and writes the results after `Task.WhenAll`; the helpers used to add their field to the same `Dictionary` from concurrent continuations. Batch normalization (`BatchNormalizer.NormalizeBatchTransaction`) runs before the fetches instead of alongside them. `SetNextValidSequenceNumber`, `CalculateFeePerTransactionType` and `SetLatestValidatedLedgerSequence` keep their signatures and behaviour
+* `BalancesSugar.GetXrpBalance` formats the balance with `InvariantCulture`
+* Tests: `TestUFeeRoundingAndCulture` covers `GetFeeXrp` and `CalculateFeePerTransactionType` with load factor 1.03515625, a sub-drop `maxFeeXRP`, `Autofill` filling all three fields and dropping a `LastLedgerSequence` of 0, 7-digit rejection in `XrpToDrops`, and `XrpToDrops(double)`, `DropsToXrp`, `GetXrpBalance` and `GetFeeXrp` under a decimal-comma culture. `FeeTestClient` takes `LoadFactor` and `AccountRoot`; `TestUAutofillFees.TestUCalculateFee_DevnetMultiplier_AppliesCorrection` expects 24 drops (1.2 drops rounded up to 2, times 12)
+
 ## 11.19.0.0 24/10/2026
 
 * `DexSnapshot.WithoutOffer(string offerIndex)` returns the snapshot without one offer, its `DexIndex` derived from the snapshot's (`SnapshotRoll.WithoutOffer`, the `DexIndexDelta` the roll uses) instead of built at the next evaluation (#310). The index is matched in either case; a snapshot that does not hold the offer is returned as it is. Only `Offers` changes: owner counts, sequences and balances are left alone. `DexSnapshot.WithoutOffer(string offerIndex, bool releaseOwnerReserve)` also lowers the owner's `OwnerCount` by one, never below zero and only for an owner the snapshot lists, with the account patched into the derived index; `SnapshotRoll.PatchAccounts` takes the `DexIndex` instead of the `DexWorld`

@@ -1,4 +1,5 @@
 using System.Collections.Generic;
+using System.Globalization;
 using System.Linq;
 using System.Threading;
 using System.Threading.Tasks;
@@ -68,7 +69,9 @@ namespace Xrpl.Sugar
                 throw new ValidationException($"account_info response for '{address}' did not include account_data.");
             }
 
-            return accountInfo.AccountData.Balance.ValueAsXrp.ToString();
+            // Invariant: the result is a protocol amount that callers parse back, and "1,5" under
+            // ru-RU or de-DE is not one.
+            return accountInfo.AccountData.Balance.ValueAsXrp?.ToString(CultureInfo.InvariantCulture) ?? string.Empty;
         }
 
         /// <summary>
