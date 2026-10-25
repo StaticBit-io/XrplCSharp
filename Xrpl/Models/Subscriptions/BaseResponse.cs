@@ -210,7 +210,8 @@ namespace Xrpl.Models.Subscriptions
 
     /// <summary>
     /// Reads <see cref="RippleResponseWarning.Details"/>: string values as they are, any other value
-    /// as its raw JSON text.
+    /// as its raw JSON text. Writes a value read as raw JSON back as the same JSON token, so a
+    /// numeric <c>expected_date</c> stays a number through a round trip.
     /// </summary>
     internal sealed class WarningDetailsConverter : JsonConverter<Dictionary<string, string>>
     {
@@ -223,15 +224,21 @@ namespace Xrpl.Models.Subscriptions
                 throw new JsonException($"Expected an object for warning details, got {reader.TokenType}.");
 
             using JsonDocument document = JsonDocument.ParseValue(ref reader);
-            Dictionary<string, string> details = new Dictionary<string, string>(StringComparer.Ordinal);
+            WarningDetails details = new WarningDetails();
             foreach (JsonProperty property in document.RootElement.EnumerateObject())
             {
-                details[property.Name] = property.Value.ValueKind switch
+                switch (property.Value.ValueKind)
                 {
-                    JsonValueKind.String => property.Value.GetString(),
-                    JsonValueKind.Null => null,
-                    _ => property.Value.GetRawText(),
-                };
+                    case JsonValueKind.String:
+                        details[property.Name] = property.Value.GetString();
+                        break;
+                    case JsonValueKind.Null:
+                        details[property.Name] = null;
+                        break;
+                    default:
+                        details.SetRawJson(property.Name, property.Value.GetRawText());
+                        break;
+                }
             }
 
             return details;
@@ -239,12 +246,46 @@ namespace Xrpl.Models.Subscriptions
 
         public override void Write(Utf8JsonWriter writer, Dictionary<string, string> value, JsonSerializerOptions options)
         {
+            WarningDetails read = value as WarningDetails;
             writer.WriteStartObject();
             foreach (KeyValuePair<string, string> pair in value)
             {
-                writer.WriteString(pair.Key, pair.Value);
+                if (read != null && read.IsRawJson(pair.Key, pair.Value))
+                {
+                    writer.WritePropertyName(pair.Key);
+                    writer.WriteRawValue(pair.Value);
+                }
+                else
+                {
+                    writer.WriteString(pair.Key, pair.Value);
+                }
             }
             writer.WriteEndObject();
+        }
+
+        /// <summary>
+        /// The dictionary <see cref="Read"/> returns, remembering which values were raw JSON.
+        /// </summary>
+        /// <remarks>
+        /// A value counts as raw JSON only while it still holds the text that was read: a caller who
+        /// replaces it gets a JSON string back, never unvalidated text written as a raw token.
+        /// </remarks>
+        private sealed class WarningDetails : Dictionary<string, string>
+        {
+            private readonly Dictionary<string, string> _rawJson = new Dictionary<string, string>(StringComparer.Ordinal);
+
+            public WarningDetails() : base(StringComparer.Ordinal)
+            {
+            }
+
+            public void SetRawJson(string key, string rawJson)
+            {
+                this[key] = rawJson;
+                _rawJson[key] = rawJson;
+            }
+
+            public bool IsRawJson(string key, string value) =>
+                value != null && _rawJson.TryGetValue(key, out string raw) && string.Equals(raw, value, StringComparison.Ordinal);
         }
     }
 }
