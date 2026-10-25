@@ -85,7 +85,7 @@ namespace Xrpl.Models.Transactions
                 throw new ValidationException("AMMDelete: missing field Asset");
             }
 
-            if (!Xrpl.Models.Transactions.Common.IsAmount(Asset))
+            if (!Xrpl.Models.Transactions.Common.IsIssue(Asset))
             {
                 throw new ValidationException("AMMDelete: Asset must be a Currency");
             }
@@ -94,7 +94,7 @@ namespace Xrpl.Models.Transactions
                 throw new ValidationException("AMMDelete: missing field Asset2");
             }
 
-            if (!Xrpl.Models.Transactions.Common.IsAmount(Asset2))
+            if (!Xrpl.Models.Transactions.Common.IsIssue(Asset2))
             {
                 throw new ValidationException("AMMDelete: Asset2 must be a Currency");
             }

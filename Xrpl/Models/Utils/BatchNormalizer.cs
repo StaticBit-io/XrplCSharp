@@ -80,8 +80,13 @@ public static class BatchNormalizer
     }
 
     /// <summary>
-    /// Normalises an inner transaction (object -> JsonObject).
+    /// Normalises every inner transaction of a Batch and fills the sequence numbers the caller left out.
+    /// An outer or inner transaction with a <c>TicketSequence</c> gets <c>Sequence</c> 0 and consumes no
+    /// account sequence; a non-zero inner <c>Sequence</c> the caller set is kept, and later inner
+    /// transactions of that account continue after it.
     /// </summary>
+    /// <exception cref="ValidationException">When RawTransactions is missing or malformed, or an inner
+    /// transaction has no Account.</exception>
     public static async Task NormalizeBatchTransaction(
         this IXrplClient client,
         Dictionary<string, object> tx,
@@ -129,7 +134,16 @@ public static class BatchNormalizer
         }
 
         var rootAccount = $"{tx["Account"]}";
-        if (!tx.ContainsKey("Sequence") || tx["Sequence"] is null)
+        if (HasValue(tx, "TicketSequence"))
+        {
+            // A ticketed transaction consumes no sequence number, and rippled rejects a non-zero
+            // Sequence next to a TicketSequence (temSEQ_AND_TICKET). Sequence itself is a required
+            // field, so it is written as 0, and the account's inner transactions start from the
+            // ledger's Sequence rather than one past it.
+            if (!HasValue(tx, "Sequence"))
+                tx["Sequence"] = 0u;
+        }
+        else if (!HasValue(tx, "Sequence"))
         {
             var seq = await GetNextSeqAsync(rootAccount);
             tx["Sequence"] = seq;
@@ -157,11 +171,31 @@ public static class BatchNormalizer
             if (string.IsNullOrWhiteSpace(account))
                 throw new ValidationException("Each RawTransaction must have an 'Account' field.");
 
+            // Batch preflight requires each inner transaction to carry exactly one of a non-zero
+            // Sequence and a TicketSequence (temSEQ_AND_TICKET otherwise), so a ticketed inner gets
+            // Sequence 0 and a caller-chosen Sequence is kept. A Sequence of 0 without a ticket can
+            // never pass and is filled like an absent one.
+            if (HasValue(rawTx, "TicketSequence"))
+            {
+                if (!HasValue(rawTx, "Sequence"))
+                    rawTx["Sequence"] = 0u;
+                continue;
+            }
+
+            if (HasValue(rawTx, "Sequence") && ToUInt(rawTx["Sequence"]) is uint callerSeq and not 0)
+            {
+                nextSeqByAccount[account] = checked(callerSeq + 1);
+                continue;
+            }
+
             var next = await GetNextSeqAsync(account);
             rawTx["Sequence"] = next;
             Bump(account);
         }
     }
+
+    private static bool HasValue(Dictionary<string, object> tx, string field)
+        => tx.TryGetValue(field, out object? value) && value is not null;
 
     public static List<Dictionary<string, object>> ToRawList(object rawTransactions)
     {

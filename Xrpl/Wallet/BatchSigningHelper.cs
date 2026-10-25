@@ -109,18 +109,32 @@ public static class BatchSigningHelper
             return;
         }
 
-        if (targetSigners != null)
+        var iPub = incoming["SigningPubKey"]?.GetValue<string>();
+        var iSig = incoming["TxnSignature"]?.GetValue<string>();
+        if (string.IsNullOrEmpty(iSig))
             return;
+
+        // A BatchSigner carries either one signature or a Signers list; rippled rejects one that has
+        // both, so a single signature arriving for an account already multi-signed is a conflict.
+        if (targetSigners != null)
+            throw new InvalidOperationException($"BatchSigner '{target["Account"]}' is multi-signed in one input and single-signed in another.");
 
         var tPub = target["SigningPubKey"]?.GetValue<string>();
         var tSig = target["TxnSignature"]?.GetValue<string>();
-        var iPub = incoming["SigningPubKey"]?.GetValue<string>();
-        var iSig = incoming["TxnSignature"]?.GetValue<string>();
 
-        if (string.Equals(tPub, iPub, StringComparison.Ordinal)
-            && string.Equals(tSig, iSig, StringComparison.Ordinal))
+        if (string.IsNullOrEmpty(tSig))
         {
+            target["SigningPubKey"] = iPub;
+            target["TxnSignature"] = iSig;
             return;
+        }
+
+        // Two different signatures for one account cannot both be kept, and silently picking one
+        // would hand back a Batch whose signer is not the one the other input was signed by.
+        if (!string.Equals(tPub, iPub, StringComparison.Ordinal)
+            || !string.Equals(tSig, iSig, StringComparison.Ordinal))
+        {
+            throw new InvalidOperationException($"Conflicting signatures for BatchSigner '{target["Account"]}'.");
         }
     }
 
