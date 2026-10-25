@@ -7,6 +7,7 @@ using System.Threading.Tasks;
 using Microsoft.VisualStudio.TestTools.UnitTesting;
 
 using Xrpl.Client;
+using Xrpl.Client.Exceptions;
 using Xrpl.Models.Ledger;
 using Xrpl.Models.Methods;
 using Xrpl.Models.Utils;
@@ -135,6 +136,50 @@ namespace XrplTests.Xrpl.Models
 
             Assert.AreEqual(42u, SequenceOf(RawAt(tx, 0)));
             Assert.AreEqual(43u, SequenceOf(RawAt(tx, 1)));
+        }
+
+        [TestMethod]
+        public async Task TestUNormalizeBatch_CallerSequenceBelowTheCounter_DoesNotMoveItBack()
+        {
+            IXrplClient client = SequenceClient.Create(LedgerSequences);
+            Dictionary<string, object> tx = Outer(
+                null,
+                Inner(Bob),
+                Inner(Bob, new Dictionary<string, object> { ["Sequence"] = 3u }),
+                Inner(Bob));
+
+            await client.NormalizeBatchTransaction(tx);
+
+            Assert.AreEqual(20u, SequenceOf(RawAt(tx, 0)));
+            Assert.AreEqual(3u, SequenceOf(RawAt(tx, 1)));
+            Assert.AreEqual(21u, SequenceOf(RawAt(tx, 2)));
+        }
+
+        [TestMethod]
+        public async Task TestUNormalizeBatch_CallerSequenceBelowTheLedger_StillReadsTheLedger()
+        {
+            IXrplClient client = SequenceClient.Create(LedgerSequences);
+            Dictionary<string, object> tx = Outer(
+                null,
+                Inner(Bob, new Dictionary<string, object> { ["Sequence"] = 3u }),
+                Inner(Bob));
+
+            await client.NormalizeBatchTransaction(tx);
+
+            Assert.AreEqual(3u, SequenceOf(RawAt(tx, 0)));
+            Assert.AreEqual(20u, SequenceOf(RawAt(tx, 1)));
+        }
+
+        [TestMethod]
+        public async Task TestUNormalizeBatch_CallerSequenceAtUInt32Max_RaisesValidationException()
+        {
+            IXrplClient client = SequenceClient.Create(LedgerSequences);
+            Dictionary<string, object> tx = Outer(
+                null,
+                Inner(Bob, new Dictionary<string, object> { ["Sequence"] = uint.MaxValue }),
+                Inner(Bob));
+
+            await Assert.ThrowsExactlyAsync<ValidationException>(() => client.NormalizeBatchTransaction(tx));
         }
 
         /// <summary>

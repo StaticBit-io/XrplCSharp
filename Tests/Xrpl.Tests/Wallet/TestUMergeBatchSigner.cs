@@ -55,6 +55,53 @@ namespace XrplTests.Xrpl.Wallet
             Assert.AreEqual("AABB", target["TxnSignature"]?.GetValue<string>());
         }
 
+        private const string InnerSigner = "rMFMJsQaKEMEwwMRBHCoNXkFswJrWyNYLp";
+
+        private static JsonObject MultiSigned(params string[] signatures)
+        {
+            JsonArray signers = new JsonArray();
+            foreach (string signature in signatures)
+            {
+                signers.Add(new JsonObject
+                {
+                    ["Signer"] = new JsonObject { ["Account"] = InnerSigner, ["SigningPubKey"] = PubKey, ["TxnSignature"] = signature },
+                });
+            }
+            return new JsonObject { ["Account"] = Account, ["Signers"] = signers };
+        }
+
+        [TestMethod]
+        public void TestUMergeBatchSigner_MultiSignatureForASingleSignedTarget_Throws()
+        {
+            JsonObject target = Signed("AABB");
+
+            Helper.ThrowsException<InvalidOperationException>(
+                () => BatchSigningHelper.MergeBatchSigner(target, MultiSigned("EEFF")));
+            Assert.AreEqual("AABB", target["TxnSignature"]?.GetValue<string>());
+        }
+
+        [TestMethod]
+        public void TestUMergeBatchSigner_MultiSignedTarget_DedupesTheSameSignerAndRefusesADifferentSignature()
+        {
+            JsonObject target = MultiSigned("EEFF");
+
+            BatchSigningHelper.MergeBatchSigner(target, MultiSigned("EEFF"));
+            Assert.AreEqual(1, ((JsonArray)target["Signers"]!).Count);
+
+            Helper.ThrowsException<InvalidOperationException>(
+                () => BatchSigningHelper.MergeBatchSigner(target, MultiSigned("1122")));
+        }
+
+        [TestMethod]
+        public void TestUMergeBatchSigner_UnsignedTarget_TakesTheIncomingSigners()
+        {
+            JsonObject target = new JsonObject { ["Account"] = Account };
+
+            BatchSigningHelper.MergeBatchSigner(target, MultiSigned("EEFF"));
+
+            Assert.AreEqual(1, ((JsonArray)target["Signers"]!).Count);
+        }
+
         [TestMethod]
         public void TestUMergeBatchSigner_SingleSignatureForAMultiSignedTarget_Throws()
         {

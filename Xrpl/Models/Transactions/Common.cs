@@ -54,7 +54,7 @@ namespace Xrpl.Models.Transactions
         /// <returns>Whether the Amount is malformed.</returns>
         public static bool IsAmount(object amount)
         {
-            return amount is string || IsIssuedCurrency(amount);
+            return amount is string || IsIssuedCurrency(amount) || IsMPTAmount(amount);
         }
 
 
@@ -159,8 +159,17 @@ namespace Xrpl.Models.Transactions
             int length = issue.Count;
             issue.TryGetValue("currency", out object currency);
             issue.TryGetValue("issuer", out object issuer);
-            return (length == 1 && currency is string c && c == "XRP") || (length == 2 && currency is string && issuer is string);
+            return (length == 1 && currency is string c && c == "XRP")
+                   || (length == 2 && currency is string && issuer is string)
+                   || (length == 1 && IsMPTIssuanceId(issue.TryGetValue("mpt_issuance_id", out object id) ? id : null));
         }
+
+        /// <summary>
+        /// rippled's <c>mptIssueFromJson</c> parses the id as a 192-bit hex value, so anything other
+        /// than 48 hex characters is refused by the node.
+        /// </summary>
+        private static bool IsMPTIssuanceId(object value)
+            => value is string { Length: 48 } s && s.IsHex();
         /// <summary>
         /// True when the value is an integral number representable as UInt32.
         /// DictionaryObjectConverter materializes JSON numbers as int/long/ulong,

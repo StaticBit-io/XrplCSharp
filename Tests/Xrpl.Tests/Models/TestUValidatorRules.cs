@@ -205,6 +205,51 @@ namespace XrplTests.Xrpl.Models
             Helper.ThrowsException<ValidationException>(() => Validation.ValidateAMMDelete(tx));
         }
 
+        private static Dictionary<string, object> MptIssue(string id) => new Dictionary<string, object> { ["mpt_issuance_id"] = id };
+
+        [TestMethod]
+        public void TestUIsIssue_MptIssueNeedsExactlyOneKeyWithA48HexId()
+        {
+            Assert.IsTrue(Common.IsIssue(MptIssue(MptIssuanceId)));
+            Assert.IsFalse(Common.IsIssue(MptIssue("ABCD")));
+            Assert.IsFalse(Common.IsIssue(MptIssue(new string('Z', 48))));
+            Assert.IsFalse(Common.IsIssue(new Dictionary<string, object> { ["mpt_issuance_id"] = MptIssuanceId, ["issuer"] = Destination }));
+        }
+
+        [TestMethod]
+        public void TestUValidateAMMCreate_MptAmount_Passes()
+        {
+            Dictionary<string, object> tx = Base("AMMCreate");
+            tx["Amount"] = new Dictionary<string, object> { ["value"] = "100", ["mpt_issuance_id"] = MptIssuanceId };
+            tx["Amount2"] = "1000000";
+            tx["TradingFee"] = 10;
+
+            Validation.Validate(tx);
+        }
+
+        [TestMethod]
+        public void TestUValidateAMMDeposit_MptAsset_Passes()
+        {
+            Dictionary<string, object> tx = Base("AMMDeposit");
+            tx["Asset"] = new Dictionary<string, object> { ["currency"] = "XRP" };
+            tx["Asset2"] = MptIssue(MptIssuanceId);
+            tx["Amount"] = new Dictionary<string, object> { ["value"] = "5", ["mpt_issuance_id"] = MptIssuanceId };
+
+            Validation.Validate(tx);
+        }
+
+        [TestMethod]
+        public void TestUValidateAMMDelete_MptAsset_Passes()
+        {
+            Dictionary<string, object> tx = Base("AMMDelete");
+            tx["Asset"] = MptIssue(MptIssuanceId);
+            tx["Asset2"] = new Dictionary<string, object> { ["currency"] = "USD", ["issuer"] = Destination };
+            Validation.Validate(tx);
+
+            tx["Asset"] = MptIssue("not-an-id");
+            Helper.ThrowsException<ValidationException>(() => Validation.Validate(tx), "AMMDelete: Asset must be a Currency");
+        }
+
         [TestMethod]
         public void TestUValidateClawBack_MptAmountRequiresAHolderOtherThanTheIssuer()
         {

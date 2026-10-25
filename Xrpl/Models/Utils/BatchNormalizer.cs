@@ -99,6 +99,7 @@ public static class BatchNormalizer
         tx["RawTransactions"] = raws;
 
         var nextSeqByAccount = new Dictionary<string, uint>(StringComparer.OrdinalIgnoreCase);
+        var minNextByAccount = new Dictionary<string, uint>(StringComparer.OrdinalIgnoreCase);
 
         async Task<uint> GetNextSeqAsync(string account)
         {
@@ -123,14 +124,29 @@ public static class BatchNormalizer
             {
                 throw new ValidationException($"account_info response for '{account}' did not include the account's Sequence.");
             }
-            nextSeqByAccount[account] = start.Value;
-            return start.Value;
+            // A caller-set inner Sequence seen before this account's first lookup still has to be
+            // stepped over, whichever of the two is further ahead.
+            uint next = minNextByAccount.TryGetValue(account, out uint floor) ? Math.Max(start.Value, floor) : start.Value;
+            nextSeqByAccount[account] = next;
+            return next;
+        }
+
+        // Advances the account past a Sequence the caller chose, never backwards: an inner
+        // transaction numbered below one already assigned must not make the next filled-in inner
+        // reuse a number.
+        void StepOver(string account, uint callerSeq)
+        {
+            uint after = SequenceAfter(account, callerSeq);
+            if (nextSeqByAccount.TryGetValue(account, out uint current))
+                nextSeqByAccount[account] = Math.Max(current, after);
+            else
+                minNextByAccount[account] = minNextByAccount.TryGetValue(account, out uint floor) ? Math.Max(floor, after) : after;
         }
 
         void Bump(string account)
         {
             if (nextSeqByAccount.TryGetValue(account, out var val))
-                nextSeqByAccount[account] = checked(val + 1);
+                nextSeqByAccount[account] = SequenceAfter(account, val);
         }
 
         var rootAccount = $"{tx["Account"]}";
@@ -147,12 +163,12 @@ public static class BatchNormalizer
         {
             var seq = await GetNextSeqAsync(rootAccount);
             tx["Sequence"] = seq;
-            nextSeqByAccount[rootAccount] = checked(seq + 1);
+            nextSeqByAccount[rootAccount] = SequenceAfter(rootAccount, seq);
         }
         else
         {
             var seq = ToUInt(tx["Sequence"]);
-            nextSeqByAccount[rootAccount] = checked(seq + 1);
+            nextSeqByAccount[rootAccount] = SequenceAfter(rootAccount, seq);
         }
 
         foreach (var wrapper in raws)
@@ -184,7 +200,7 @@ public static class BatchNormalizer
 
             if (HasValue(rawTx, "Sequence") && ToUInt(rawTx["Sequence"]) is uint callerSeq and not 0)
             {
-                nextSeqByAccount[account] = checked(callerSeq + 1);
+                StepOver(account, callerSeq);
                 continue;
             }
 
@@ -192,6 +208,13 @@ public static class BatchNormalizer
             rawTx["Sequence"] = next;
             Bump(account);
         }
+    }
+
+    private static uint SequenceAfter(string account, uint sequence)
+    {
+        if (sequence == uint.MaxValue)
+            throw new ValidationException($"Sequence {sequence} of '{account}' is the last UInt32; no transaction can follow it.");
+        return sequence + 1;
     }
 
     private static bool HasValue(Dictionary<string, object> tx, string field)
