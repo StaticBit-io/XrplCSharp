@@ -67,7 +67,8 @@ namespace Xrpl.Utils
     {
 
         private static double DROPS_PER_XRP = 1000000.0;
-        private static int MAX_FRACTION_LENGTH = 7; //7 for dev and 6 for other
+        // One drop is 0.000001 XRP on every network; a seventh digit is a fraction of a drop.
+        private static int MAX_FRACTION_LENGTH = 6;
         private static int BASE_TEN = 10;
         private static string SANITY_CHECK = "/ ^-?[0 - 9.] +$/u";
 
@@ -133,7 +134,7 @@ namespace Xrpl.Utils
                                                               | (NumberStyles.AllowLeadingSign & NumberStyles.AllowExponent & NumberStyles.AllowDecimalPoint)
                                                               | (NumberStyles.AllowExponent & NumberStyles.AllowDecimalPoint)
                                                               | NumberStyles.AllowExponent
-                                                              | NumberStyles.AllowDecimalPoint, CultureInfo.InvariantCulture) / (decimal)new BigInteger(DROPS_PER_XRP)).ToString();
+                                                              | NumberStyles.AllowDecimalPoint, CultureInfo.InvariantCulture) / (decimal)new BigInteger(DROPS_PER_XRP)).ToString(CultureInfo.InvariantCulture);
             //return ((decimal)BigInteger.Parse(dropsToConvert, NumberStyles.AllowDecimalPoint, CultureInfo.InvariantCulture) / (decimal)new BigInteger(DROPS_PER_XRP)).ToString("F"+BASE_TEN).TrimEnd('0');
         }
 
@@ -144,7 +145,9 @@ namespace Xrpl.Utils
         /// <returns>Amount in drops.</returns>
         public static string XrpToDrops(double xrpToConvert)
         {
-            return XrpToDrops(xrpToConvert.ToString());
+            // Invariant: the string overload parses with InvariantCulture, so a current-culture
+            // "1,5" would be rejected as malformed.
+            return XrpToDrops(xrpToConvert.ToString(CultureInfo.InvariantCulture));
         }
 
         /// <summary>
@@ -156,13 +159,14 @@ namespace Xrpl.Utils
         {
             // Important: specify base BASE_TEN to avoid exponential notation, e.g. '1e-7'.
             // TODO: SHOULD BE BASE 10
-            string xrp = decimal.Parse(xrpToConvert, NumberStyles.AllowLeadingSign
+            decimal xrpValue = decimal.Parse(xrpToConvert, NumberStyles.AllowLeadingSign
                                                      | (NumberStyles.AllowLeadingSign & NumberStyles.AllowDecimalPoint)
                                                      | (NumberStyles.AllowLeadingSign & NumberStyles.AllowExponent)
                                                      | (NumberStyles.AllowLeadingSign & NumberStyles.AllowExponent & NumberStyles.AllowDecimalPoint)
                                                      | (NumberStyles.AllowExponent & NumberStyles.AllowDecimalPoint)
                                                      | NumberStyles.AllowExponent
-                                                     | NumberStyles.AllowDecimalPoint, CultureInfo.InvariantCulture).ToString(CultureInfo.InvariantCulture);
+                                                     | NumberStyles.AllowDecimalPoint, CultureInfo.InvariantCulture);
+            string xrp = xrpValue.ToString(CultureInfo.InvariantCulture);
             // check that the value is valid and actually a number
             if (!(xrpToConvert is string) && xrp != null)
             {
@@ -181,14 +185,15 @@ namespace Xrpl.Utils
             {
                 throw new ValidationException($"xrpToDrops: value '{xrp}' has too many decimal places.");
             }
-            // TODO: SHOULD BE BASE 10
-            return new BigInteger(decimal.Parse(xrpToConvert, NumberStyles.AllowLeadingSign
-                                                              | (NumberStyles.AllowLeadingSign & NumberStyles.AllowDecimalPoint)
-                                                              | (NumberStyles.AllowLeadingSign & NumberStyles.AllowExponent)
-                                                              | (NumberStyles.AllowLeadingSign & NumberStyles.AllowExponent & NumberStyles.AllowDecimalPoint)
-                                                              | (NumberStyles.AllowExponent & NumberStyles.AllowDecimalPoint)
-                                                              | NumberStyles.AllowExponent
-                                                              | NumberStyles.AllowDecimalPoint, CultureInfo.InvariantCulture) * (decimal)new BigInteger(DROPS_PER_XRP)).ToString();
+            decimal drops = xrpValue * (decimal)new BigInteger(DROPS_PER_XRP);
+            // new BigInteger(decimal) truncates. The digit check above already rules out a
+            // fractional drop, so this only guards against that check being loosened again: a
+            // payment channel claim signed for less than the caller asked for is the failure.
+            if (drops != decimal.Truncate(drops))
+            {
+                throw new ValidationException($"xrpToDrops: value '{xrp}' is not a whole number of drops.");
+            }
+            return new BigInteger(drops).ToString(CultureInfo.InvariantCulture);
         }
     }
 }

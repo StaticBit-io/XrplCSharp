@@ -67,6 +67,14 @@ namespace Xrpl.Models.Transactions
             if (!Common.IsUInt32(SignerQuorum))
                 throw new ValidationException("SignerListSet: invalid SignerQuorum");
 
+            // SignerQuorum 0 deletes the signer list. rippled accepts that only without SignerEntries;
+            // a zero quorum next to entries is neither a set nor a delete and fails with temMALFORMED.
+            if (Common.TryGetUInt32(SignerQuorum, out uint quorum) && quorum == 0)
+            {
+                if (tx.TryGetValue("SignerEntries", out var entriesOnDelete) && entriesOnDelete is not null)
+                    throw new ValidationException("SignerListSet: SignerEntries must be omitted when SignerQuorum is 0");
+                return;
+            }
 
             if (!tx.TryGetValue("SignerEntries", out var SignerEntries) || SignerEntries is null)
                 throw new ValidationException("SignerListSet: missing field SignerEntries");

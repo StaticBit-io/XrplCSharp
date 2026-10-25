@@ -87,6 +87,22 @@ namespace Xrpl.Sugar
                 cancellationToken,
                 filled => new SimulateRequest { TxBlob = UnsignedLoanSetBlob(filled) });
 
+        /// <summary>
+        /// Previews a <c>LoanManage</c>: what impairing, unimpairing or defaulting the loan would do
+        /// to its vault and broker. Compare <see cref="TransactionPreview{TOutcome}.Outcome"/> with the
+        /// <see cref="LoanManageQuote"/> from <see cref="LoanManagement"/> before signing; a refusal
+        /// comes back in <see cref="TransactionPreview{TOutcome}.EngineResult"/>, for example
+        /// <c>tecTOO_SOON</c> or <c>tecLIMIT_EXCEEDED</c>.
+        /// </summary>
+        /// <param name="client">The client.</param>
+        /// <param name="transaction">The loan management transaction, sent by the broker's owner.</param>
+        /// <param name="cancellationToken">Cancels the requests.</param>
+        public static Task<TransactionPreview<LoanManageOutcome>> PreviewLoanManage(
+            this IXrplClient client,
+            LoanManage transaction,
+            CancellationToken cancellationToken = default) =>
+            Preview(client, transaction, (filled, metadata) => LoanManageOutcome.FromMetadata(filled, metadata), cancellationToken);
+
         /// <summary>Previews a <c>VaultDeposit</c>: the shares it would mint.</summary>
         public static Task<TransactionPreview<VaultOutcome>> PreviewVaultDeposit(
             this IXrplClient client,

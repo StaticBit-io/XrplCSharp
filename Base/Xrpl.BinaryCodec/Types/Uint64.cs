@@ -114,12 +114,16 @@ namespace Xrpl.BinaryCodec.Types
         public static implicit operator Uint64(byte v) => new Uint64(v);
 
         /// <summary>
-        /// create instance of this value from string
+        /// create instance of this value from a non-negative int
         /// </summary>
+        /// <exception cref="BinaryCodecException"><paramref name="v"/> is negative</exception>
         public static Uint64 FromValue(int v)
         {
-            byte[] valueBytes = Bits.GetBytes(v);
-            return new Uint64(Bits.ToUInt32(valueBytes, 0));
+            if (v < 0)
+            {
+                throw new BinaryCodecException($"Invalid UInt64: {v} must be >= 0");
+            }
+            return new Uint64((ulong)v);
         }
 
         /// <summary>
@@ -133,7 +137,7 @@ namespace Xrpl.BinaryCodec.Types
                 throw new BinaryCodecException($"{v} is not a valid hex string");
             }
 
-            string strBuf = v.PadRight(16, '0');
+            string strBuf = v.PadLeft(16, '0');
             return new Uint64(Bits.ToUInt64(strBuf.FromHex(), 0));
         }
 

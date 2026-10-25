@@ -273,7 +273,25 @@ public class Currency
         }
     }
 
-    public override bool Equals(object o) { return o is Currency model && model.Issuer == Issuer && model.CurrencyCode == CurrencyCode; }
+    /// <summary>
+    /// Two amounts are equal when they name the same asset: the same currency code and issuer, or
+    /// the same MPT issuance. <see cref="Value"/> is not compared.
+    /// </summary>
+    /// <remarks>
+    /// The MPT issuance ID is compared ignoring case because it is hex, and nodes and callers do not
+    /// agree on the case they write it in.
+    /// </remarks>
+    public override bool Equals(object o) =>
+        o is Currency model
+        && model.Issuer == Issuer
+        && model.CurrencyCode == CurrencyCode
+        && string.Equals(model.MPTokenIssuanceID, MPTokenIssuanceID, StringComparison.OrdinalIgnoreCase);
+
+    /// <inheritdoc />
+    public override int GetHashCode() => HashCode.Combine(
+        Issuer,
+        CurrencyCode,
+        MPTokenIssuanceID is null ? 0 : StringComparer.OrdinalIgnoreCase.GetHashCode(MPTokenIssuanceID));
 
     public static bool operator ==(Currency? left, Currency? right)
     {
@@ -356,11 +374,15 @@ public static class CurrencyExtensions
     public static bool IsXrp(this Currency currency)
         => currency is not null && currency.CurrencyCode?.ToUpper() is "XRP" && currency.Issuer == null;
 
+    /// <summary>
+    /// The asset of this amount, without its value: currency code and issuer, or the MPT issuance ID.
+    /// </summary>
     public static Common.IssuedCurrency ToIssued(this Currency currency) =>
         new Common.IssuedCurrency()
         {
             Currency = currency.CurrencyCode,
             Issuer = currency.Issuer,
+            MptIssuanceId = currency.MPTokenIssuanceID,
         };
     /// <summary>
     /// check that currency is NFT XLS14D

@@ -2,6 +2,7 @@ using System;
 using Xrpl.AddressCodec;
 using System.Collections.Generic;
 using System.Diagnostics;
+using System.Globalization;
 using System.Linq;
 using System.Text.Json;
 using System.Text.Json.Nodes;
@@ -122,12 +123,33 @@ namespace Xrpl.BinaryCodec
             JsonNode channelNode = json["channel"] ?? throw new ArgumentException("Missing 'channel' property");
             JsonNode amountNode = json["amount"] ?? throw new ArgumentException("Missing 'amount' property");
             byte[] channel = Hash256.FromHex(channelNode.GetValue<string>()).Buffer;
-            byte[] amount = Uint64.FromValue(int.Parse(amountNode.GetValue<string>())).ToBytes();
+            Uint64 amountValue = ParseClaimDrops(amountNode);
+            byte[] amount = amountValue.ToBytes();
             byte[] rv = new byte[prefix.Length + channel.Length + amount.Length];
             System.Buffer.BlockCopy(prefix, 0, rv, 0, prefix.Length);
             System.Buffer.BlockCopy(channel, 0, rv, prefix.Length, channel.Length);
             System.Buffer.BlockCopy(amount, 0, rv, prefix.Length + channel.Length, amount.Length);
             return rv.ToHex();
+        }
+
+        // Drops are a UInt64 on the wire; claims above int.MaxValue drops (~2147 XRP) are ordinary.
+        // Digits only: a sign, whitespace, a fraction or an exponent is not a drops amount.
+        private static ulong ParseClaimDrops(JsonNode amountNode)
+        {
+            if (amountNode is JsonValue value)
+            {
+                JsonValueKind kind = value.GetValueKind();
+                string text = kind == JsonValueKind.String
+                    ? value.GetValue<string>()
+                    : kind == JsonValueKind.Number ? value.ToJsonString() : null;
+                if (text != null
+                    && ulong.TryParse(text, NumberStyles.None, CultureInfo.InvariantCulture, out ulong drops))
+                {
+                    return drops;
+                }
+            }
+            throw new ArgumentException(
+                $"'amount' must be a non-negative integer number of drops, as a string or a number: {amountNode?.ToJsonString()}");
         }
 
         /// <summary>

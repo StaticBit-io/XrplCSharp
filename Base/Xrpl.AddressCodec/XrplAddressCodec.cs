@@ -34,6 +34,7 @@ namespace Xrpl.AddressCodec
         private static uint MAX_32_BIT_UNSIGNED_INT = 4294967295;
         private static byte[] PREFIX_BYTES_MAIN = { 0x05, 0x44 };
         private static byte[] PREFIX_BYTES_TEST = { 0x04, 0x93 };
+        private const int X_ADDRESS_DECODED_LENGTH = 35;
 
         private static readonly B58 B58;
         public const string Alphabet = "rpshnaf39wBUDNEGHJKLM4PQRST7VWXYZ2bcdeCg65jkm8oFqi1tuvAxyz";
@@ -113,9 +114,24 @@ namespace Xrpl.AddressCodec
         /// </summary>
         /// <param name="xAddress"></param>
         /// <returns></returns>
+        /// <exception cref="AddressCodecException">The string is not valid Base58, the checksum does not match,
+        /// the decoded length is not 35 bytes, or the prefix or tag flags are invalid.</exception>
         public static CodecAccountID DecodeXAddress(string xAddress)
         {
-            byte[] decoded = B58.Decode(xAddress);
+            byte[] decoded;
+            try
+            {
+                decoded = B58.DecodeAndCheck(xAddress);
+            }
+            catch (EncodingFormatException ex)
+            {
+                throw new AddressCodecException($"Invalid X-address: {ex.Message}", ex);
+            }
+            // prefix (2) + account ID (20) + flags (1) + tag (8) + checksum (4)
+            if (decoded.Length != X_ADDRESS_DECODED_LENGTH)
+            {
+                throw new AddressCodecException("Invalid X-address: decoded length must be 35 bytes");
+            }
             bool isTest = IsTestAddress(decoded);
             byte[] accountId = CopyOfRange(decoded, 2, 22);
             uint? tag = TagFromBuffer(decoded);

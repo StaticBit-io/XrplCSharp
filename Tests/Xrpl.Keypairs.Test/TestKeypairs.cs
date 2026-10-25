@@ -49,6 +49,34 @@ namespace Xrpl.Keypairs.Tests
             Assert.HasCount(16, decodedSeed.Bytes);
         }
 
+        // Vectors from xrpl.js packages/xrpl/test/wallet/index.test.ts: one secp256k1-prefixed seed derived both ways.
+        private const string KnownSecret = "sh1HiK7SwjS1VxFdXi7qeMHRedrYX";
+
+        [TestMethod]
+        public void TestDeriveKPExplicitEd25519OverridesSeedPrefix()
+        {
+            IXrplKeyPair keypair = XrplKeypairs.DeriveKeypair(KnownSecret, "ed25519");
+            Assert.AreEqual("ED8079E575450E256C496578480020A33E19B579D58A2DB8FF13FC6B05B9229DE3", keypair.Id());
+            Assert.AreEqual("EDD2AF6288A903DED9860FC62E778600A985BDF804E40BD8266505553E3222C3DA", keypair.Pk());
+        }
+
+        [TestMethod]
+        public void TestDeriveKPExplicitSecp256k1MatchesSeedPrefix()
+        {
+            IXrplKeyPair explicitKeypair = XrplKeypairs.DeriveKeypair(KnownSecret, "secp256k1");
+            IXrplKeyPair inferredKeypair = XrplKeypairs.DeriveKeypair(KnownSecret);
+            Assert.AreEqual("03BFC2F7AE242C3493187FA0B72BE97B2DF71194FB772E507FF9DEA0AD13CA1625", explicitKeypair.Id());
+            Assert.AreEqual(inferredKeypair.Id(), explicitKeypair.Id());
+        }
+
+        [TestMethod]
+        public void TestDeriveKPExplicitSecp256k1OverridesEd25519Seed()
+        {
+            string edSeed = apiJson["ed25519"]!["seed"]!.GetValue<string>();
+            IXrplKeyPair keypair = XrplKeypairs.DeriveKeypair(edSeed, "secp256k1");
+            Assert.DoesNotStartWith("ED", keypair.Id());
+        }
+
         [TestMethod]
         public void TestDeriveKPSECP()
         {

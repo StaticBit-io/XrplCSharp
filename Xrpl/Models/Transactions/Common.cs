@@ -54,18 +54,20 @@ namespace Xrpl.Models.Transactions
         /// <returns>Whether the Amount is malformed.</returns>
         public static bool IsAmount(object amount)
         {
-            return amount is string || IsIssuedCurrency(amount);
+            return amount is string || IsIssuedCurrency(amount) || IsMPTAmount(amount);
         }
 
 
         /// <summary>
-        /// Verify the form and type of Signer at runtime.
+        /// Verify the form and type of a Signers array element at runtime.
         /// </summary>
-        /// <param name="signer">The object to check the form and type of.</param>
-        /// <returns>Whether the Signer is malformed.</returns>
+        /// <param name="signer">A Signers element, in its STArray form <c>{"Signer": {...}}</c>.</param>
+        /// <returns>Whether the element is a well-formed Signer with Account, TxnSignature and SigningPubKey.</returns>
         public static bool IsSigner(object signer)
         {
-            if (signer is not Dictionary<string, object> { Count: SIGNER_SIZE } value)
+            if (signer is not Dictionary<string, object> wrapper
+                || !wrapper.TryGetValue("Signer", out object inner)
+                || inner is not Dictionary<string, object> { Count: SIGNER_SIZE } value)
                 return false;
 
             return (value.TryGetValue("Account", out object account) && account is string { }) &&
@@ -73,22 +75,40 @@ namespace Xrpl.Models.Transactions
                    (value.TryGetValue("SigningPubKey", out object SigningPubKey) && SigningPubKey is string { });
         }
         /// <summary>
-        /// Verify the form and type of Memo at runtime.
+        /// Verify the form and type of a Memos array element at runtime.
         /// </summary>
-        /// <param name="memo">The object to check the form and type of.</param>
-        /// <returns>Whether the Memo is malformed.</returns>
+        /// <param name="memo">A Memos element, in its STArray form <c>{"Memo": {...}}</c>.</param>
+        /// <returns>Whether the element is a well-formed Memo: one to three of MemoType, MemoData and
+        /// MemoFormat, each optional and each a hex string when present.</returns>
         public static bool IsMemo(object memo)
         {
-            if (memo is not Dictionary<string, object> { } value)
+            if (memo is not Dictionary<string, object> wrapper
+                || !wrapper.TryGetValue("Memo", out object inner)
+                || inner is not Dictionary<string, object> value)
                 return false;
 
             int size = value.Count;
 
-            bool valid_data = value.TryGetValue("MemoData", out object MemoData) || MemoData is string;
-            bool valid_format = value.TryGetValue("MemoFormat", out object MemoFormat) || MemoFormat is string;
-            bool valid_type = value.TryGetValue("MemoType", out object MemoType) || MemoType is string;
-            return size is >= 1 and <= MEMO_SIZE && valid_data && valid_format && valid_type
+            return size is >= 1 and <= MEMO_SIZE
+                   && IsOptionalHex(value, "MemoData")
+                   && IsOptionalHex(value, "MemoFormat")
+                   && IsOptionalHex(value, "MemoType")
                    && value.OnlyHasFields(new[] { "MemoFormat", "MemoData", "MemoType" });
+        }
+
+        private static bool IsOptionalHex(Dictionary<string, object> value, string field)
+            => !value.TryGetValue(field, out object fieldValue) || fieldValue is null || fieldValue is string s && s.IsHex();
+
+        /// <summary>
+        /// Verify the form and type of an MPT amount (<c>{"value", "mpt_issuance_id"}</c>) at runtime.
+        /// </summary>
+        /// <param name="input">The object to check the form and type of.</param>
+        /// <returns>Whether the input is a well-formed MPT amount.</returns>
+        public static bool IsMPTAmount(object input)
+        {
+            return input is Dictionary<string, object> { Count: 2 } dict
+                   && dict.TryGetValue("value", out object val) && val is string
+                   && dict.TryGetValue("mpt_issuance_id", out object id) && id is string;
         }
 
 
@@ -139,8 +159,17 @@ namespace Xrpl.Models.Transactions
             int length = issue.Count;
             issue.TryGetValue("currency", out object currency);
             issue.TryGetValue("issuer", out object issuer);
-            return (length == 1 && currency is string c && c == "XRP") || (length == 2 && currency is string && issuer is string);
+            return (length == 1 && currency is string c && c == "XRP")
+                   || (length == 2 && currency is string && issuer is string)
+                   || (length == 1 && IsMPTIssuanceId(issue.TryGetValue("mpt_issuance_id", out object id) ? id : null));
         }
+
+        /// <summary>
+        /// rippled's <c>mptIssueFromJson</c> parses the id as a 192-bit hex value, so anything other
+        /// than 48 hex characters is refused by the node.
+        /// </summary>
+        private static bool IsMPTIssuanceId(object value)
+            => value is string { Length: 48 } s && s.IsHex();
         /// <summary>
         /// True when the value is an integral number representable as UInt32.
         /// DictionaryObjectConverter materializes JSON numbers as int/long/ulong,

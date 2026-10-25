@@ -86,32 +86,63 @@ namespace Xrpl.Sugar
 
             tx.SetValidAddresses();
 
-            //Flags.SetTransactionFlagsToNumber(tx);
-            List<Task> promises = new List<Task>();
             bool hasTT = tx.TryGetValue("TransactionType", out var tt);
             string txType = $"{tt}";
-            if (!tx.ContainsKey("Sequence") && txType != "Batch")
-            {
-                promises.Add(client.SetNextValidSequenceNumber(tx, cancellationToken));
-            }
-            if (!tx.ContainsKey("Fee"))
-            {
-                promises.Add(client.CalculateFeePerTransactionType(tx, signersCount ?? 0, cancellationToken));
-            }
-            if (!tx.ContainsKey("LastLedgerSequence"))
-            {
-                promises.Add(client.SetLatestValidatedLedgerSequence(tx, cancellationToken));
-            }
-            else if(tx.TryGetValue("LastLedgerSequence", out var lastLedgerValue) && lastLedgerValue is 0u or 0UL or 0L or 0)
+
+            // An explicit 0 opts out of an expiry: the field is dropped and not filled in.
+            bool needsLastLedgerSequence = !tx.TryGetValue("LastLedgerSequence", out var lastLedgerValue);
+            if (lastLedgerValue is 0u or 0UL or 0L or 0)
             {
                 tx.Remove("LastLedgerSequence");
             }
+
+            // Batch normalisation rewrites RawTransactions and Sequence, and the Batch fee is
+            // counted from RawTransactions, so it runs on its own before anything reads tx.
             if (txType == "Batch")
             {
-                promises.Add(client.NormalizeBatchTransaction(tx, cancellationToken));
+                await client.NormalizeBatchTransaction(tx, cancellationToken);
             }
-            await Task.WhenAll(promises);
-            //string jsonData = JsonConvert.SerializeObject(tx);
+
+            // The fetches below run concurrently and only read tx; the results are written after
+            // WhenAll. Writing from each continuation, as this used to, mutated one Dictionary from
+            // several thread-pool threads at once (no synchronization context in a console or
+            // ASP.NET Core host), which can lose a field or corrupt the dictionary.
+            // A transaction that consumes a Ticket must carry Sequence 0 (rippled rejects a non-zero
+            // Sequence next to TicketSequence with temSEQ_AND_TICKET), so the account sequence is
+            // not fetched. xrpl.js fills the account sequence here regardless; its Batch-inner path
+            // skips instead, which would leave the required Sequence field out.
+            bool usesTicket = tx.TryGetValue("TicketSequence", out var ticketSequence) && ticketSequence != null;
+            if (usesTicket && !tx.ContainsKey("Sequence") && txType != "Batch")
+            {
+                tx["Sequence"] = 0u;
+            }
+            Task<uint> sequenceTask = !tx.ContainsKey("Sequence") && txType != "Batch"
+                ? client.FetchNextValidSequenceNumber((string)tx["Account"], cancellationToken)
+                : null;
+            Task<string> feeTask = !tx.ContainsKey("Fee")
+                ? client.ComputeFeePerTransactionType(tx, signersCount ?? 0, cancellationToken)
+                : null;
+            Task<uint> lastLedgerSequenceTask = needsLastLedgerSequence
+                ? client.FetchLastLedgerSequence(cancellationToken)
+                : null;
+
+            Task[] pending = new Task[] { sequenceTask, feeTask, lastLedgerSequenceTask }
+                .Where(task => task != null)
+                .ToArray();
+            await Task.WhenAll(pending);
+
+            if (sequenceTask != null)
+            {
+                tx.TryAdd("Sequence", sequenceTask.Result);
+            }
+            if (feeTask != null)
+            {
+                tx.TryAdd("Fee", feeTask.Result);
+            }
+            if (lastLedgerSequenceTask != null)
+            {
+                tx.TryAdd("LastLedgerSequence", lastLedgerSequenceTask.Result);
+            }
             return tx;
         }
 
@@ -184,8 +215,15 @@ namespace Xrpl.Sugar
 
         public static async Task<uint> SetNextValidSequenceNumber(this IXrplClient client, Dictionary<string, object> tx, CancellationToken cancellationToken = default)
         {
+            uint sequence = await client.FetchNextValidSequenceNumber((string)tx["Account"], cancellationToken);
+            tx.TryAdd("Sequence", sequence);
+            return sequence;
+        }
+
+        private static async Task<uint> FetchNextValidSequenceNumber(this IXrplClient client, string account, CancellationToken cancellationToken)
+        {
             LedgerIndex index = new LedgerIndex(LedgerIndexType.Current);
-            AccountInfoRequest request = new AccountInfoRequest((string)tx["Account"]) { LedgerIndex = index };
+            AccountInfoRequest request = new AccountInfoRequest(account) { LedgerIndex = index };
             AccountInfo data = await client.AccountInfo(request, cancellationToken).Typed();
             // account_info returns the full AccountRoot for a live "current" ledger request, so
             // AccountData (and its Sequence) is always present; a missing AccountData or Sequence
@@ -201,7 +239,6 @@ namespace Xrpl.Sugar
             {
                 throw new XrplException("account_info response did not include the account's Sequence.");
             }
-            tx.TryAdd("Sequence", sequence.Value);
             return sequence.Value;
         }
 
@@ -228,6 +265,18 @@ namespace Xrpl.Sugar
         }
 
         public static async Task CalculateFeePerTransactionType(this IXrplClient client, Dictionary<string, object> tx, int signersCount = 0, CancellationToken cancellationToken = default)
+        {
+            string fee = await client.ComputeFeePerTransactionType(tx, signersCount, cancellationToken);
+            tx.TryAdd("Fee", fee);
+        }
+
+        /// <summary>
+        /// Computes the Fee in drops without writing it. Reads TransactionType and the fields the
+        /// per-type rules depend on (RawTransactions, Fulfillment, CounterpartySignature,
+        /// Counterparty, SponsorSignature, Flags, LoanID, Amount) — never Sequence, Fee or
+        /// LastLedgerSequence, which Autofill fetches concurrently.
+        /// </summary>
+        private static async Task<string> ComputeFeePerTransactionType(this IXrplClient client, Dictionary<string, object> tx, int signersCount, CancellationToken cancellationToken)
         {
             var netFeeXRP = await client.GetFeeXrp(cancellationToken: cancellationToken);
             var netFeeDrops = XrpConversion.XrpToDrops(netFeeXRP);
@@ -260,8 +309,7 @@ namespace Xrpl.Sugar
             BigInteger totalFee;
             if (!string.IsNullOrWhiteSpace(client.maxFeeXRP))
             {
-                var maxFeeDrops = XrpConversion.XrpToDrops(client.maxFeeXRP);
-                var maxFeeBI = new BigInteger(Math.Floor(decimal.Parse(maxFeeDrops, NumberStyles.AllowDecimalPoint | NumberStyles.AllowLeadingSign | NumberStyles.AllowExponent, CultureInfo.InvariantCulture)));
+                var maxFeeBI = new BigInteger(GetFeeXrpSugar.MaxFeeDrops(client.maxFeeXRP));
                 totalFee = IsReserveFeeTxNeed(tx)
                     ? calculatedFee
                     : BigInteger.Min(calculatedFee, maxFeeBI);
@@ -270,7 +318,7 @@ namespace Xrpl.Sugar
             {
                 totalFee = calculatedFee;
             }
-            tx.TryAdd("Fee", Math.Ceiling((decimal)totalFee).ToString());
+            return totalFee.ToString(CultureInfo.InvariantCulture);
         }
 
         private static async Task<BigInteger> CalculateBaseFeeForType(
@@ -651,8 +699,14 @@ namespace Xrpl.Sugar
 
         public static async Task SetLatestValidatedLedgerSequence(this IXrplClient client, Dictionary<string, object> tx, CancellationToken cancellationToken = default)
         {
+            uint lastLedgerSequence = await client.FetchLastLedgerSequence(cancellationToken);
+            tx.TryAdd("LastLedgerSequence", lastLedgerSequence);
+        }
+
+        private static async Task<uint> FetchLastLedgerSequence(this IXrplClient client, CancellationToken cancellationToken)
+        {
             uint ledgerSequence = await client.GetLedgerIndex(cancellationToken);
-            tx.TryAdd("LastLedgerSequence", ledgerSequence + LEDGER_OFFSET);
+            return ledgerSequence + LEDGER_OFFSET;
         }
 
         public static async Task CheckAccountDeleteBlockers(this IXrplClient client, Dictionary<string, object> tx, CancellationToken cancellationToken = default)

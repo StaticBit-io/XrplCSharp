@@ -8,5 +8,10 @@ namespace Xrpl.X402.AspNetCore;
 public interface IX402Facilitator
 {
     /// <summary>Verify the signed payment matches the accepted requirement and settle it on-ledger.</summary>
+    /// <remarks>
+    /// <see cref="PaymentSignatureEnvelope.Accepted"/> is what the payment is checked against, so it must
+    /// be the server's own requirement, not the copy the client sent. <c>RequirePayment</c> replaces it
+    /// before calling; a caller that invokes a facilitator directly must do the same.
+    /// </remarks>
     Task<PaymentResponseEnvelope> VerifyAndSettleAsync(PaymentSignatureEnvelope envelope, CancellationToken cancellationToken = default);
 }

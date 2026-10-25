@@ -80,8 +80,13 @@ public static class BatchNormalizer
     }
 
     /// <summary>
-    /// Normalises an inner transaction (object -> JsonObject).
+    /// Normalises every inner transaction of a Batch and fills the sequence numbers the caller left out.
+    /// An outer or inner transaction with a <c>TicketSequence</c> gets <c>Sequence</c> 0 and consumes no
+    /// account sequence; a non-zero inner <c>Sequence</c> the caller set is kept, and later inner
+    /// transactions of that account continue after it.
     /// </summary>
+    /// <exception cref="ValidationException">When RawTransactions is missing or malformed, or an inner
+    /// transaction has no Account.</exception>
     public static async Task NormalizeBatchTransaction(
         this IXrplClient client,
         Dictionary<string, object> tx,
@@ -94,6 +99,7 @@ public static class BatchNormalizer
         tx["RawTransactions"] = raws;
 
         var nextSeqByAccount = new Dictionary<string, uint>(StringComparer.OrdinalIgnoreCase);
+        var minNextByAccount = new Dictionary<string, uint>(StringComparer.OrdinalIgnoreCase);
 
         async Task<uint> GetNextSeqAsync(string account)
         {
@@ -118,27 +124,51 @@ public static class BatchNormalizer
             {
                 throw new ValidationException($"account_info response for '{account}' did not include the account's Sequence.");
             }
-            nextSeqByAccount[account] = start.Value;
-            return start.Value;
+            // A caller-set inner Sequence seen before this account's first lookup still has to be
+            // stepped over, whichever of the two is further ahead.
+            uint next = minNextByAccount.TryGetValue(account, out uint floor) ? Math.Max(start.Value, floor) : start.Value;
+            nextSeqByAccount[account] = next;
+            return next;
+        }
+
+        // Advances the account past a Sequence the caller chose, never backwards: an inner
+        // transaction numbered below one already assigned must not make the next filled-in inner
+        // reuse a number.
+        void StepOver(string account, uint callerSeq)
+        {
+            uint after = SequenceAfter(account, callerSeq);
+            if (nextSeqByAccount.TryGetValue(account, out uint current))
+                nextSeqByAccount[account] = Math.Max(current, after);
+            else
+                minNextByAccount[account] = minNextByAccount.TryGetValue(account, out uint floor) ? Math.Max(floor, after) : after;
         }
 
         void Bump(string account)
         {
             if (nextSeqByAccount.TryGetValue(account, out var val))
-                nextSeqByAccount[account] = checked(val + 1);
+                nextSeqByAccount[account] = SequenceAfter(account, val);
         }
 
         var rootAccount = $"{tx["Account"]}";
-        if (!tx.ContainsKey("Sequence") || tx["Sequence"] is null)
+        if (HasValue(tx, "TicketSequence"))
+        {
+            // A ticketed transaction consumes no sequence number, and rippled rejects a non-zero
+            // Sequence next to a TicketSequence (temSEQ_AND_TICKET). Sequence itself is a required
+            // field, so it is written as 0, and the account's inner transactions start from the
+            // ledger's Sequence rather than one past it.
+            if (!HasValue(tx, "Sequence"))
+                tx["Sequence"] = 0u;
+        }
+        else if (!HasValue(tx, "Sequence"))
         {
             var seq = await GetNextSeqAsync(rootAccount);
             tx["Sequence"] = seq;
-            nextSeqByAccount[rootAccount] = checked(seq + 1);
+            nextSeqByAccount[rootAccount] = SequenceAfter(rootAccount, seq);
         }
         else
         {
             var seq = ToUInt(tx["Sequence"]);
-            nextSeqByAccount[rootAccount] = checked(seq + 1);
+            nextSeqByAccount[rootAccount] = SequenceAfter(rootAccount, seq);
         }
 
         foreach (var wrapper in raws)
@@ -157,11 +187,38 @@ public static class BatchNormalizer
             if (string.IsNullOrWhiteSpace(account))
                 throw new ValidationException("Each RawTransaction must have an 'Account' field.");
 
+            // Batch preflight requires each inner transaction to carry exactly one of a non-zero
+            // Sequence and a TicketSequence (temSEQ_AND_TICKET otherwise), so a ticketed inner gets
+            // Sequence 0 and a caller-chosen Sequence is kept. A Sequence of 0 without a ticket can
+            // never pass and is filled like an absent one.
+            if (HasValue(rawTx, "TicketSequence"))
+            {
+                if (!HasValue(rawTx, "Sequence"))
+                    rawTx["Sequence"] = 0u;
+                continue;
+            }
+
+            if (HasValue(rawTx, "Sequence") && ToUInt(rawTx["Sequence"]) is uint callerSeq and not 0)
+            {
+                StepOver(account, callerSeq);
+                continue;
+            }
+
             var next = await GetNextSeqAsync(account);
             rawTx["Sequence"] = next;
             Bump(account);
         }
     }
+
+    private static uint SequenceAfter(string account, uint sequence)
+    {
+        if (sequence == uint.MaxValue)
+            throw new ValidationException($"Sequence {sequence} of '{account}' is the last UInt32; no transaction can follow it.");
+        return sequence + 1;
+    }
+
+    private static bool HasValue(Dictionary<string, object> tx, string field)
+        => tx.TryGetValue(field, out object? value) && value is not null;
 
     public static List<Dictionary<string, object>> ToRawList(object rawTransactions)
     {

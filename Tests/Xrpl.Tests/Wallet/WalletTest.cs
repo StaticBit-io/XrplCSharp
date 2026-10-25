@@ -125,10 +125,11 @@ namespace Xrpl.Tests.Wallet.Tests.Seed
         [TestMethod]
         public void TestEDAlgorithmSeed()
         {
-            XrplWallet wallet = XrplWallet.FromSeed(seed, null, "ed25519");
+            // An explicit algorithm overrides the seed prefix, as in xrpl.js (vector from its wallet tests).
+            XrplWallet wallet = XrplWallet.FromSeed("sh1HiK7SwjS1VxFdXi7qeMHRedrYX", null, "ed25519");
 
-            Assert.AreEqual(wallet.PublicKey, publicKey);
-            Assert.AreEqual(wallet.PrivateKey, privateKey);
+            Assert.AreEqual("ED8079E575450E256C496578480020A33E19B579D58A2DB8FF13FC6B05B9229DE3", wallet.PublicKey);
+            Assert.AreEqual("EDD2AF6288A903DED9860FC62E778600A985BDF804E40BD8266505553E3222C3DA", wallet.PrivateKey);
         }
 
         [TestMethod]
