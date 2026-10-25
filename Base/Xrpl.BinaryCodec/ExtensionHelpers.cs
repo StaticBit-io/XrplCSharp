@@ -48,7 +48,7 @@ namespace Xrpl.BinaryCodec
             return new NumFunc()
             {
                 Precision = trimmed.Length,
-                Exponent = mantissaString.Length - trimmed.Length,
+                Exponent = mantissaString == "0" ? 0 : exponent + mantissaString.Length - trimmed.Length,
                 Mantissa = ulong.Parse(trimmed)
             };
         }
@@ -79,9 +79,10 @@ namespace Xrpl.BinaryCodec
             var trimmed = mantissaString.TrimEnd('0');
             if (trimmed.Length == 0)
             {
-                trimmed = "0";
+                return 0;
             }
-            return mantissaString.Length - trimmed.Length;
+            // The value is trimmed * 10^(exponent + trailing zeros): the written exponent and the fraction shift it too.
+            return exponent + mantissaString.Length - trimmed.Length;
         }
 
         public static int Precision(this string input)

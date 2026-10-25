@@ -52,7 +52,9 @@ namespace Xrpl.Keypairs
         public static IXrplKeyPair DeriveKeypair(string seed, string? algorithm = null, bool validator = false, int index = 0)
         {
             DecodedSeed decoded = XrplCodec.DecodeSeed(seed);
-            if (decoded.Type == "ed25519")
+            // As in xrpl.js: an explicit algorithm overrides the seed's own prefix, and anything but ed25519 is secp256k1.
+            string proposedAlgorithm = algorithm ?? decoded.Type;
+            if (proposedAlgorithm == "ed25519")
             {
                 IXrplKeyPair edkp = EdKeyPair.From128Seed(decoded.Bytes);
                 byte[] edMsg = Hash("This test message should verify.");

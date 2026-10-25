@@ -367,7 +367,7 @@ namespace Xrpl.AddressCodec
             }
         }
 
-        private byte[] DecodeAndCheck(string input)
+        internal byte[] DecodeAndCheck(string input)
         {
             byte[] buffer = Decode(input);
             if (buffer.Length < 4)

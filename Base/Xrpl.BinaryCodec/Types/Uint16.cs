@@ -45,7 +45,15 @@ namespace Xrpl.BinaryCodec.Types
         /// create instance of this value
         /// </summary>
         /// <param name="v">int value</param>
-        public static Uint16 FromValue(int v) => new Uint16((byte)v);
+        /// <exception cref="BinaryCodecException"><paramref name="v"/> is outside 0..65535</exception>
+        public static Uint16 FromValue(int v)
+        {
+            if (v < 0 || v > ushort.MaxValue)
+            {
+                throw new BinaryCodecException($"Invalid UInt16: {v} must be >= 0 and <= {ushort.MaxValue}");
+            }
+            return new Uint16((ushort)v);
+        }
 
         /// <summary>
         /// Construct a Uint16 from a BinaryParser

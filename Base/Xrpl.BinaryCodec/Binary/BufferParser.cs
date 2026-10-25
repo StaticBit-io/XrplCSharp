@@ -47,7 +47,8 @@ namespace Xrpl.BinaryCodec.Binary
 
         public override byte ReadOne() => Bytes[Cursor++];
 
-        public byte ReadUIntN(int n)
+        /// <summary> Read an n-byte big-endian unsigned integer (n from 0 to 4). </summary>
+        public uint ReadUIntN(int n)
         {
             if (n < 0 || n > 4)
             {
@@ -55,18 +56,18 @@ namespace Xrpl.BinaryCodec.Binary
             }
 
             var bytes = Read(n);
-            var result = 0;
-            for (var i = 0; i < n; i++)
+            uint result = 0;
+            for (int i = 0; i < n; i++)
             {
                 result = (result << 8) | bytes[i];
             }
 
-            return (byte)result;
+            return result;
         }
 
         public override byte ReadUInt8()
         {
-            return this.ReadUIntN(1);
+            return (byte)this.ReadUIntN(1);
         }
     }
 }

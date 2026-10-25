@@ -133,7 +133,7 @@ namespace Xrpl.BinaryCodec.Types
                 throw new BinaryCodecException($"{v} is not a valid hex string");
             }
 
-            string strBuf = v.PadRight(16, '0');
+            string strBuf = v.PadLeft(16, '0');
             return new Uint64(Bits.ToUInt64(strBuf.FromHex(), 0));
         }
 
