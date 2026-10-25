@@ -1,8 +1,10 @@
 ﻿using System;
 using System.Collections.Generic;
+using System.Globalization;
 using System.Linq;
 
 using Xrpl.Client.Exceptions;
+using Xrpl.Models.Enums;
 using Xrpl.Models.Transactions;
 
 // https://github.com/XRPLF/xrpl.js/blob/main/packages/xrpl/src/models/utils/flags.ts
@@ -31,6 +33,15 @@ namespace Xrpl.Models.Utils
                     tx["Flags"] = 0u;
                     return;
                 case uint:
+                    return;
+                // Dictionaries built by DictionaryObjectConverter hold JSON numbers as int/long/ulong;
+                // they are numeric flags already and must not fall through to the map lookup below,
+                // which returns 0 for anything that is not a flag dictionary.
+                case int or long or ulong or short or ushort or byte or sbyte:
+                    object widened = Flags is ulong ? Flags : Convert.ToInt64(Flags, CultureInfo.InvariantCulture);
+                    if (!Transactions.Common.TryGetUInt32(widened, out uint numeric))
+                        throw new ValidationException($"Flags value {Flags} is not a valid UInt32");
+                    tx["Flags"] = numeric;
                     return;
                 default:
                     tx["Flags"] = tx["TransactionType"] switch
@@ -78,11 +89,27 @@ namespace Xrpl.Models.Utils
                 return 0;
             return ReduceFlags(flag, Enum.GetValues<AMMWithdrawFlags>().ToDictionary(c => c.ToString(), c => (uint)c));
         }
+        /// <summary>
+        /// AccountSet transaction flags (tf*), as xrpl.js <c>AccountSetTfFlags</c>. The asf values of
+        /// <see cref="AccountSetAsfFlags"/> are small integers that belong in SetFlag/ClearFlag, not in
+        /// Flags: OR-ing them into Flags would set unrelated bits.
+        /// </summary>
+        private static readonly Dictionary<string, uint> AccountSetTfFlags = new Dictionary<string, uint>(StringComparer.Ordinal)
+        {
+            ["tfRequireDestTag"] = 0x00010000,
+            ["tfOptionalDestTag"] = 0x00020000,
+            ["tfRequireAuth"] = 0x00040000,
+            ["tfOptionalAuth"] = 0x00080000,
+            ["tfDisallowXRP"] = 0x00100000,
+            ["tfAllowXRP"] = 0x00200000,
+            ["tfInnerBatchTxn"] = (uint)XrplGlobalFlags.tfInnerBatchTxn,
+        };
+
         public static uint ConvertAccountSetFlagsToNumber(object flags)
         {
             if (flags is not Dictionary<string, object> flag)
                 return 0;
-            return ReduceFlags(flag, Enum.GetValues<AccountSetAsfFlags>().ToDictionary(c => c.ToString(), c => (uint)c));
+            return ReduceFlags(flag, AccountSetTfFlags);
         }
 
         public static uint ConvertOfferCreateFlagsToNumber(object flags)

@@ -74,6 +74,11 @@ namespace XrplTests.Xrpl.Models
         public void TestValidWithHolderForMPT()
         {
             var tx = new Dictionary<string, object>(clawback);
+            tx["Amount"] = new Dictionary<string, object>()
+            {
+                {"mpt_issuance_id","000004C463C52827307480341125DA0577DEFC38405B0E3E"},
+                {"value","10"},
+            };
             tx["Holder"] = "rsA2LpzuawewSBQXkiju3YQTMzW13pAAdW";
             Validation.Validate(tx);
         }

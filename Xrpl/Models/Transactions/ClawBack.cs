@@ -87,18 +87,41 @@ namespace Xrpl.Models.Transactions
                 throw new ValidationException("ClawBack: missing field Amount");
             }
 
-            if (!Xrpl.Models.Transactions.Common.IsIssuedCurrency(Amount))
+            bool isIssued = Xrpl.Models.Transactions.Common.IsIssuedCurrency(Amount);
+            bool isMpt = Xrpl.Models.Transactions.Common.IsMPTAmount(Amount);
+            if (!isIssued && !isMpt)
             {
                 throw new ValidationException("ClawBack: invalid Amount");
             }
 
             if (!tx.TryGetValue("Account", out var acc) || acc is null)
                 throw new ValidationException("ClawBack: invalid Account");
-            var amountJson = JsonSerializer.Serialize(Amount, XrplJsonOptions.Default);
-            var amount = JsonSerializer.Deserialize<Currency>(amountJson, XrplJsonOptions.Default);
-            if (amount.Issuer == (string)acc)
+
+            tx.TryGetValue("Holder", out object holder);
+            if (holder is not null and not string)
+                throw new ValidationException("ClawBack: invalid Holder");
+
+            // rippled Clawback preflight: a trust-line clawback names the holder in Amount.issuer and
+            // must not carry Holder; an MPT clawback has no such slot, so Holder is required. Either
+            // way the holder cannot be the issuer itself (temBAD_AMOUNT / temMALFORMED).
+            if (isIssued)
             {
-                throw new ValidationException("ClawBack: invalid holder Account");
+                if (holder is not null)
+                    throw new ValidationException("ClawBack: cannot have Holder for currency");
+
+                var amountJson = JsonSerializer.Serialize(Amount, XrplJsonOptions.Default);
+                var amount = JsonSerializer.Deserialize<Currency>(amountJson, XrplJsonOptions.Default);
+                if (amount.Issuer == (string)acc)
+                {
+                    throw new ValidationException("ClawBack: invalid holder Account");
+                }
+            }
+            else
+            {
+                if (holder is null)
+                    throw new ValidationException("ClawBack: missing Holder");
+                if ((string)holder == (string)acc)
+                    throw new ValidationException("ClawBack: invalid holder Account");
             }
         }
     }
