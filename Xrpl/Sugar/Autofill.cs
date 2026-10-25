@@ -107,6 +107,15 @@ namespace Xrpl.Sugar
             // WhenAll. Writing from each continuation, as this used to, mutated one Dictionary from
             // several thread-pool threads at once (no synchronization context in a console or
             // ASP.NET Core host), which can lose a field or corrupt the dictionary.
+            // A transaction that consumes a Ticket must carry Sequence 0 (rippled rejects a non-zero
+            // Sequence next to TicketSequence with temSEQ_AND_TICKET), so the account sequence is
+            // not fetched. xrpl.js fills the account sequence here regardless; its Batch-inner path
+            // skips instead, which would leave the required Sequence field out.
+            bool usesTicket = tx.TryGetValue("TicketSequence", out var ticketSequence) && ticketSequence != null;
+            if (usesTicket && !tx.ContainsKey("Sequence") && txType != "Batch")
+            {
+                tx["Sequence"] = 0u;
+            }
             Task<uint> sequenceTask = !tx.ContainsKey("Sequence") && txType != "Batch"
                 ? client.FetchNextValidSequenceNumber((string)tx["Account"], cancellationToken)
                 : null;
@@ -300,8 +309,7 @@ namespace Xrpl.Sugar
             BigInteger totalFee;
             if (!string.IsNullOrWhiteSpace(client.maxFeeXRP))
             {
-                var maxFeeDrops = XrpConversion.XrpToDrops(client.maxFeeXRP);
-                var maxFeeBI = new BigInteger(Math.Floor(decimal.Parse(maxFeeDrops, NumberStyles.AllowDecimalPoint | NumberStyles.AllowLeadingSign | NumberStyles.AllowExponent, CultureInfo.InvariantCulture)));
+                var maxFeeBI = new BigInteger(GetFeeXrpSugar.MaxFeeDrops(client.maxFeeXRP));
                 totalFee = IsReserveFeeTxNeed(tx)
                     ? calculatedFee
                     : BigInteger.Min(calculatedFee, maxFeeBI);

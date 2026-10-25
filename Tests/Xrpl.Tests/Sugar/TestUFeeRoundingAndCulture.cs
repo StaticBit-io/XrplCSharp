@@ -57,6 +57,77 @@ public class TestUFeeRoundingAndCulture
     }
 
     [TestMethod]
+    public async Task TestUCalculateFee_SubDropCap_IsFlooredLikeGetFeeXrp()
+    {
+        // 10.3515625 drops rounds up to 11; the cap 10.5 drops floors to 10 on both paths.
+        FeeTestClient client = new FeeTestClient(BASE_FEE_XRP, RESERVE_INC, maxFeeXRP: "0.0000105")
+        {
+            LoadFactor = FRACTIONAL_LOAD_FACTOR
+        };
+        Dictionary<string, object> tx = CreatePaymentTx();
+
+        await client.CalculateFeePerTransactionType(tx);
+
+        Assert.AreEqual("10", tx["Fee"]);
+        Assert.AreEqual("0.00001", await client.GetFeeXrp());
+    }
+
+    [TestMethod]
+    public async Task TestUAutofill_SubDropCap_IsFloored()
+    {
+        FeeTestClient client = new FeeTestClient(BASE_FEE_XRP, RESERVE_INC, maxFeeXRP: "0.0000105")
+        {
+            LoadFactor = FRACTIONAL_LOAD_FACTOR,
+            AccountRoot = new LOAccountRoot { Sequence = 7 }
+        };
+        Dictionary<string, object> tx = CreatePaymentTx();
+
+        await AutofillSugar.Autofill(client, tx, null);
+
+        Assert.AreEqual("10", tx["Fee"]);
+    }
+
+    [TestMethod]
+    public async Task TestUCapBelowOneDrop_IsRefused()
+    {
+        FeeTestClient client = new FeeTestClient(BASE_FEE_XRP, RESERVE_INC, maxFeeXRP: "0.0000005");
+
+        await Assert.ThrowsExactlyAsync<ValidationException>(() => client.GetFeeXrp());
+        await Assert.ThrowsExactlyAsync<ValidationException>(() => client.CalculateFeePerTransactionType(CreatePaymentTx()));
+    }
+
+    [TestMethod]
+    public async Task TestUAutofill_TicketSequence_SetsSequenceZeroWithoutFetching()
+    {
+        FeeTestClient client = new FeeTestClient(BASE_FEE_XRP, RESERVE_INC)
+        {
+            AccountRoot = new LOAccountRoot { Sequence = 7 }
+        };
+        Dictionary<string, object> tx = CreatePaymentTx();
+        tx["TicketSequence"] = 5u;
+
+        await AutofillSugar.Autofill(client, tx, null);
+
+        Assert.AreEqual(0u, tx["Sequence"]);
+        Assert.AreEqual(0, client.AccountInfoCalls);
+    }
+
+    [TestMethod]
+    public async Task TestUAutofill_WithoutTicketSequence_FetchesSequence()
+    {
+        FeeTestClient client = new FeeTestClient(BASE_FEE_XRP, RESERVE_INC)
+        {
+            AccountRoot = new LOAccountRoot { Sequence = 7 }
+        };
+        Dictionary<string, object> tx = CreatePaymentTx();
+
+        await AutofillSugar.Autofill(client, tx, null);
+
+        Assert.AreEqual(7u, tx["Sequence"]);
+        Assert.AreEqual(1, client.AccountInfoCalls);
+    }
+
+    [TestMethod]
     public async Task TestUCalculateFee_FractionalLoadFactor_DoesNotThrow()
     {
         FeeTestClient client = new FeeTestClient(BASE_FEE_XRP, RESERVE_INC) { LoadFactor = FRACTIONAL_LOAD_FACTOR };

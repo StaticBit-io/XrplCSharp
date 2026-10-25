@@ -51,17 +51,36 @@ namespace Xrpl.Sugar
             // Cap fee to `client.maxFeeXRP`
             if (!string.IsNullOrWhiteSpace(client.maxFeeXRP))
             {
-                // Floored so the rounded-up fee can never exceed the cap the caller set.
-                decimal maxFee = decimal.Parse(client.maxFeeXRP, NumberStyles.Float, CultureInfo.InvariantCulture);
-                fee = Math.Min(fee, FloorToDrops(maxFee));
+                fee = Math.Min(fee, MaxFeeDrops(client.maxFeeXRP) / DROPS_PER_XRP);
             }
 
             return fee.ToString(CultureInfo.InvariantCulture);
         }
 
-        private static decimal CeilingToDrops(decimal xrp) => Math.Ceiling(xrp * DROPS_PER_XRP) / DROPS_PER_XRP;
+        /// <summary>
+        /// Reads <c>maxFeeXRP</c> as a whole number of drops, floored so a fee rounded up to whole
+        /// drops can never exceed the cap the caller set. Shared by <see cref="GetFeeXrp"/> and
+        /// Autofill so both treat the same cap the same way.
+        /// </summary>
+        /// <exception cref="ValidationException">The value is not a number, or is below one drop.</exception>
+        internal static decimal MaxFeeDrops(string maxFeeXRP)
+        {
+            if (!decimal.TryParse(maxFeeXRP, NumberStyles.Float, CultureInfo.InvariantCulture, out decimal maxFee))
+            {
+                throw new ValidationException($"maxFeeXRP '{maxFeeXRP}' is not a number.");
+            }
 
-        private static decimal FloorToDrops(decimal xrp) => Math.Floor(xrp * DROPS_PER_XRP) / DROPS_PER_XRP;
+            decimal drops = Math.Floor(maxFee * DROPS_PER_XRP);
+            // A cap below one drop would floor to a zero fee: the transaction could never be
+            // applied, and a signed zero-fee blob reports the misconfiguration nowhere.
+            if (drops < 1)
+            {
+                throw new ValidationException($"maxFeeXRP '{maxFeeXRP}' is below one drop (0.000001 XRP).");
+            }
+            return drops;
+        }
+
+        private static decimal CeilingToDrops(decimal xrp) => Math.Ceiling(xrp * DROPS_PER_XRP) / DROPS_PER_XRP;
     }
 }
 
