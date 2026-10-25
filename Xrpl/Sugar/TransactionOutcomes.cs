@@ -358,6 +358,133 @@ namespace Xrpl.Sugar
     }
 
     /// <summary>
+    /// What a <c>LoanManage</c> did to the loan, its vault and its broker, read from its metadata - of
+    /// a validated transaction, or of a <c>simulate</c> run (<see cref="PreviewSugar.PreviewLoanManage"/>).
+    /// Compare it with the <see cref="LoanManageQuote"/> shown before signing.
+    /// </summary>
+    /// <remarks>
+    /// Amounts are in the vault asset's own unit - drops for XRP - as the <c>Vault</c> and
+    /// <c>LoanBroker</c> fields are. A change is final less previous, so a default makes
+    /// <see cref="AssetsTotalChange"/> negative and <see cref="AssetsAvailableChange"/> positive. An
+    /// entry the transaction did not modify - the broker on an impairment, everything on a
+    /// <c>LoanManage</c> without an action flag - changes by zero and has no "after" entry.
+    /// </remarks>
+    public sealed class LoanManageOutcome
+    {
+        /// <summary>The managed loan's ledger index.</summary>
+        public string LoanId { get; init; }
+
+        /// <summary>The action the transaction's flags select.</summary>
+        public LoanManageAction Action { get; init; }
+
+        /// <summary>The loan's flags after the transaction; null when the metadata does not modify the loan.</summary>
+        public LoanFlags? LoanFlagsAfter { get; init; }
+
+        /// <summary>Whether the loan is impaired after the transaction.</summary>
+        public bool IsImpaired => ((LoanFlagsAfter ?? 0) & LoanFlags.lsfLoanImpaired) != 0;
+
+        /// <summary>Whether the loan is in default after the transaction.</summary>
+        public bool IsDefaulted => ((LoanFlagsAfter ?? 0) & LoanFlags.lsfLoanDefault) != 0;
+
+        /// <summary>The change in the vault's <c>AssetsTotal</c>: minus the loss a default realizes.</summary>
+        public decimal AssetsTotalChange { get; init; }
+
+        /// <summary>The change in the vault's <c>AssetsAvailable</c>: the cover a default pays in.</summary>
+        public decimal AssetsAvailableChange { get; init; }
+
+        /// <summary>The change in the vault's <c>LossUnrealized</c>: the exposure an impairment books or an unimpairment or a default of an impaired loan takes back.</summary>
+        public decimal LossUnrealizedChange { get; init; }
+
+        /// <summary>The change in the broker's <c>DebtTotal</c>: minus the exposure on a default.</summary>
+        public decimal DebtTotalChange { get; init; }
+
+        /// <summary>The change in the broker's <c>CoverAvailable</c>: minus the cover a default pays to the vault.</summary>
+        public decimal CoverAvailableChange { get; init; }
+
+        /// <summary>The <c>Loan</c> as the transaction left it; null when the metadata does not modify it.</summary>
+        public LOLoan LoanAfter { get; init; }
+
+        /// <summary>The <c>Vault</c> as the transaction left it; null when the metadata does not modify it.</summary>
+        public LOVault VaultAfter { get; init; }
+
+        /// <summary>The <c>LoanBroker</c> as the transaction left it; null when the metadata does not modify it.</summary>
+        public LOLoanBroker BrokerAfter { get; init; }
+
+        /// <summary>
+        /// Reads the outcome of <paramref name="transaction"/> from its metadata.
+        /// </summary>
+        /// <exception cref="ArgumentException">
+        /// The transaction impairs, unimpairs or defaults the loan, and the metadata does not modify
+        /// it: the transaction did not apply, or the metadata belongs to another transaction.
+        /// </exception>
+        public static LoanManageOutcome FromMetadata(ILoanManage transaction, ITransactionMetadata metadata)
+        {
+            if (transaction == null)
+                throw new ArgumentNullException(nameof(transaction));
+            if (metadata == null)
+                throw new ArgumentNullException(nameof(metadata));
+
+            LoanManageAction action = ActionOf(transaction.Flags);
+            ModifiedNode loanNode = MetadataReader.Modified(metadata, LedgerEntryType.Loan, transaction.LoanID);
+            if (loanNode == null && action != LoanManageAction.None)
+                throw new ArgumentException($"The metadata does not modify loan {transaction.LoanID}.", nameof(metadata));
+
+            LOLoan loanAfter = loanNode?.FinalFields as LOLoan;
+            ModifiedNode vaultNode = MetadataReader.Modified(metadata, LedgerEntryType.Vault, null);
+            ModifiedNode brokerNode = MetadataReader.Modified(metadata, LedgerEntryType.LoanBroker, loanAfter?.LoanBrokerID);
+            LOVault vaultBefore = vaultNode?.PreviousFields as LOVault;
+            LOVault vaultAfter = vaultNode?.FinalFields as LOVault;
+            LOLoanBroker brokerBefore = brokerNode?.PreviousFields as LOLoanBroker;
+            LOLoanBroker brokerAfter = brokerNode?.FinalFields as LOLoanBroker;
+
+            // The amounts fall only, except two that rise: AssetsAvailable by the cover a default
+            // pays in, and LossUnrealized on an impairment.
+            decimal coverChange = MetadataReader.Change(brokerBefore?.CoverAvailable, brokerAfter?.CoverAvailable);
+            return new LoanManageOutcome
+            {
+                LoanId = loanNode?.LedgerIndex ?? transaction.LoanID,
+                Action = action,
+                LoanFlagsAfter = loanAfter == null ? null : loanAfter.Flags ?? 0,
+                AssetsTotalChange = MetadataReader.Change(vaultBefore?.AssetsTotal, vaultAfter?.AssetsTotal),
+                AssetsAvailableChange = Rise(vaultBefore?.AssetsAvailable, vaultAfter?.AssetsAvailable, rose: coverChange < 0),
+                LossUnrealizedChange = Rise(vaultBefore?.LossUnrealized, vaultAfter?.LossUnrealized, rose: action == LoanManageAction.Impair),
+                DebtTotalChange = MetadataReader.Change(brokerBefore?.DebtTotal, brokerAfter?.DebtTotal),
+                CoverAvailableChange = coverChange,
+                LoanAfter = loanAfter,
+                VaultAfter = vaultAfter,
+                BrokerAfter = brokerAfter,
+            };
+        }
+
+        /// <summary>
+        /// The change in a field that <paramref name="rose"/> or stayed. The <c>Vault</c> amounts are
+        /// left out at zero, and a field that was absent is not in <c>PreviousFields</c>, exactly like
+        /// a field that did not change; the side that moved tells the two apart. An impairment whose
+        /// exposure rounds away at the vault's scale is the one case read wrongly: it reads as the
+        /// whole <c>LossUnrealized</c> added.
+        /// </summary>
+        private static decimal Rise(XrplNumber? previous, XrplNumber? final, bool rose)
+        {
+            if (previous != null)
+                return MetadataReader.Change(previous, final);
+
+            return rose && final is { } added ? MetadataReader.ToDecimal(added) : 0;
+        }
+
+        private static LoanManageAction ActionOf(LoanManageFlags? flags)
+        {
+            LoanManageFlags value = flags ?? 0;
+            if ((value & LoanManageFlags.tfLoanDefault) != 0)
+                return LoanManageAction.Default;
+            if ((value & LoanManageFlags.tfLoanImpair) != 0)
+                return LoanManageAction.Impair;
+            if ((value & LoanManageFlags.tfLoanUnimpair) != 0)
+                return LoanManageAction.Unimpair;
+            return LoanManageAction.None;
+        }
+    }
+
+    /// <summary>
     /// What an <c>AMMDeposit</c> or <c>AMMWithdraw</c> did to the sending account, read from the
     /// metadata.
     /// </summary>
