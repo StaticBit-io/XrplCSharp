@@ -6,6 +6,7 @@ using System.Text.Json.Serialization;
 
 using Xrpl.Client.Json;
 using Xrpl.Client.Json.Converters;
+using XrplTests.Xrpl.Utils;
 
 namespace XrplTests.Client.Json.Converters;
 
@@ -231,5 +232,54 @@ public class TestUUnixDateTimeConverter
     {
         [JsonConverter(typeof(RippleDateTimeConverter))]
         public DateTime? Timestamp { get; set; }
+    }
+}
+
+/// <summary>
+/// Writing a <see cref="DateTimeKind.Local"/> value under a local zone other than UTC. Not parallel:
+/// the zone is process-wide.
+/// </summary>
+[TestClass]
+[DoNotParallelize]
+public class TestURippleDateTimeConverterLocalZone
+{
+    private class Model
+    {
+        [JsonConverter(typeof(RippleDateTimeConverter))]
+        public DateTime? Timestamp { get; set; }
+    }
+
+    [TestMethod]
+    public void Serialize_LocalDateTime_IsConvertedToUtcFirst()
+    {
+        using LocalTimeZoneScope zone = LocalTimeZoneScope.Use(LocalTimeZoneScope.PlusFiveThirty);
+
+        Model model = new Model { Timestamp = new DateTime(2000, 1, 1, 5, 30, 10, DateTimeKind.Local) };
+
+        Assert.AreEqual("{\"Timestamp\":10}", JsonSerializer.Serialize(model, XrplJsonOptions.Default));
+    }
+
+    [TestMethod]
+    public void Serialize_Now_EqualsUtcNow()
+    {
+        using LocalTimeZoneScope zone = LocalTimeZoneScope.Use(LocalTimeZoneScope.PlusFiveThirty);
+
+        DateTime utcNow = DateTime.UtcNow;
+        DateTime now = utcNow.ToLocalTime();
+
+        string local = JsonSerializer.Serialize(new Model { Timestamp = now }, XrplJsonOptions.Default);
+        string utc = JsonSerializer.Serialize(new Model { Timestamp = utcNow }, XrplJsonOptions.Default);
+
+        Assert.AreEqual(utc, local);
+    }
+
+    [TestMethod]
+    public void Serialize_UnspecifiedDateTime_IsTakenAsUtc()
+    {
+        using LocalTimeZoneScope zone = LocalTimeZoneScope.Use(LocalTimeZoneScope.PlusFiveThirty);
+
+        Model model = new Model { Timestamp = new DateTime(2000, 1, 1, 0, 0, 10, DateTimeKind.Unspecified) };
+
+        Assert.AreEqual("{\"Timestamp\":10}", JsonSerializer.Serialize(model, XrplJsonOptions.Default));
     }
 }

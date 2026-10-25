@@ -1,4 +1,5 @@
 ﻿using System.ComponentModel;
+using System.Text.Json;
 using System.Text.Json.Serialization;
 
 using System;
@@ -197,7 +198,94 @@ namespace Xrpl.Models.Subscriptions
         /// (May be omitted) Additional information about this warning.<br/>
         /// The contents vary depending on the type of warning.
         /// </summary>
+        /// <remarks>
+        /// Values that are not JSON strings are kept as their raw JSON text: warning 1001 (amendment
+        /// blocked soon) carries a numeric <c>expected_date</c>, and a string-only binding failed the
+        /// whole response, so the request it answered never completed.
+        /// </remarks>
         [JsonPropertyName("details")]
+        [JsonConverter(typeof(WarningDetailsConverter))]
         public Dictionary<string, string>? Details { get; set; }
+    }
+
+    /// <summary>
+    /// Reads <see cref="RippleResponseWarning.Details"/>: string values as they are, any other value
+    /// as its raw JSON text. Writes a value read as raw JSON back as the same JSON token, so a
+    /// numeric <c>expected_date</c> stays a number through a round trip.
+    /// </summary>
+    internal sealed class WarningDetailsConverter : JsonConverter<Dictionary<string, string>>
+    {
+        public override Dictionary<string, string> Read(ref Utf8JsonReader reader, Type typeToConvert, JsonSerializerOptions options)
+        {
+            if (reader.TokenType == JsonTokenType.Null)
+                return null;
+
+            if (reader.TokenType != JsonTokenType.StartObject)
+                throw new JsonException($"Expected an object for warning details, got {reader.TokenType}.");
+
+            using JsonDocument document = JsonDocument.ParseValue(ref reader);
+            WarningDetails details = new WarningDetails();
+            foreach (JsonProperty property in document.RootElement.EnumerateObject())
+            {
+                switch (property.Value.ValueKind)
+                {
+                    case JsonValueKind.String:
+                        details[property.Name] = property.Value.GetString();
+                        break;
+                    case JsonValueKind.Null:
+                        details[property.Name] = null;
+                        break;
+                    default:
+                        details.SetRawJson(property.Name, property.Value.GetRawText());
+                        break;
+                }
+            }
+
+            return details;
+        }
+
+        public override void Write(Utf8JsonWriter writer, Dictionary<string, string> value, JsonSerializerOptions options)
+        {
+            WarningDetails read = value as WarningDetails;
+            writer.WriteStartObject();
+            foreach (KeyValuePair<string, string> pair in value)
+            {
+                if (read != null && read.IsRawJson(pair.Key, pair.Value))
+                {
+                    writer.WritePropertyName(pair.Key);
+                    writer.WriteRawValue(pair.Value);
+                }
+                else
+                {
+                    writer.WriteString(pair.Key, pair.Value);
+                }
+            }
+            writer.WriteEndObject();
+        }
+
+        /// <summary>
+        /// The dictionary <see cref="Read"/> returns, remembering which values were raw JSON.
+        /// </summary>
+        /// <remarks>
+        /// A value counts as raw JSON only while it still holds the text that was read: a caller who
+        /// replaces it gets a JSON string back, never unvalidated text written as a raw token.
+        /// </remarks>
+        private sealed class WarningDetails : Dictionary<string, string>
+        {
+            private readonly Dictionary<string, string> _rawJson = new Dictionary<string, string>(StringComparer.Ordinal);
+
+            public WarningDetails() : base(StringComparer.Ordinal)
+            {
+            }
+
+            public void SetRawJson(string key, string rawJson)
+            {
+                this[key] = rawJson;
+                _rawJson[key] = rawJson;
+            }
+
+            public bool IsRawJson(string key, string value) =>
+                value != null && _rawJson.TryGetValue(key, out string raw) && string.Equals(raw, value, StringComparison.Ordinal);
+        }
     }
 }

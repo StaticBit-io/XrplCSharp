@@ -42,13 +42,30 @@ namespace Xrpl.Models.Subscriptions
         [JsonPropertyName("status")]
         public string Status { get; set; }
         /// <summary>
-        /// The definition of the transaction in JSON format
+        /// The definition of the transaction in JSON format, as API v1 sends it.
         /// </summary>
         [JsonPropertyName("transaction")]
         public object TransactionJson { get; set; }
 
+        /// <summary>
+        /// The definition of the transaction in JSON format, as API v2 sends it.
+        /// </summary>
+        [JsonPropertyName("tx_json")]
+        public object TxJson { get; set; }
+
+        /// <summary>
+        /// The transaction from <see cref="TxJson"/> (API v2), else from <see cref="TransactionJson"/>
+        /// (API v1); null when the event carries neither.
+        /// </summary>
+        /// <remarks>
+        /// rippled moves the transaction from <c>transaction</c> to <c>tx_json</c> under API v2
+        /// (NetworkOPs.cpp <c>transJson</c>), so reading only the v1 member threw
+        /// <see cref="System.NullReferenceException"/> for every v2 event.
+        /// </remarks>
         [JsonIgnore]
-        public ITransactionResponse Transaction => JsonSerializer.Deserialize<TransactionResponse>(TransactionJson.ToString(), XrplJsonOptions.Default);
+        public ITransactionResponse Transaction => (TxJson ?? TransactionJson) is { } json
+            ? JsonSerializer.Deserialize<TransactionResponse>(json.ToString(), XrplJsonOptions.Default)
+            : null;
         /// <summary>
         /// If true, this transaction is included in a validated ledger and its outcome is final.<br/>
         /// Responses from the transaction stream should always be validated.

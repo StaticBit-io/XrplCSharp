@@ -13,6 +13,7 @@ namespace Xrpl.Models.Ledger
         /// <summary>
         /// A list of trusted validators that are currently disabled.
         /// </summary>
+        [JsonConverter(typeof(DisabledValidatorListConverter))]
         public List<DisabledValidator> DisabledValidators { get; set; }
         /// <summary>
         /// The public key of a trusted validator that is scheduled to be disabled in the next flag ledger.
