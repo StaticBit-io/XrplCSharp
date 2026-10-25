@@ -125,7 +125,7 @@ namespace Xrpl.AddressCodec
             }
             catch (EncodingFormatException ex)
             {
-                throw new AddressCodecException($"Invalid X-address: {ex.Message}");
+                throw new AddressCodecException($"Invalid X-address: {ex.Message}", ex);
             }
             // prefix (2) + account ID (20) + flags (1) + tag (8) + checksum (4)
             if (decoded.Length != X_ADDRESS_DECODED_LENGTH)

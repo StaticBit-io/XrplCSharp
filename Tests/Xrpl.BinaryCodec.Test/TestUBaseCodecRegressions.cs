@@ -1,6 +1,7 @@
 using System;
 using System.Collections.Generic;
 using System.IO;
+using System.Text.Json.Nodes;
 
 using Microsoft.VisualStudio.TestTools.UnitTesting;
 
@@ -45,14 +46,48 @@ namespace Xrpl.BinaryCodec.Tests
         [TestMethod]
         public void EncodeForSigningClaim_SignedOrFractionalAmount_Throws()
         {
-            foreach (string amount in new[] { "-1", "+1", "1.5", "1e3", " 1" })
+            // int.Parse accepted "+1" and " 1"; a drops amount is digits only.
+            foreach (string amount in new[] { "-1", "+1", "1.5", "1e3", " 1", "" })
             {
                 Dictionary<string, object> claim = new Dictionary<string, object>
                 {
                     { "amount", amount },
                     { "channel", Channel },
                 };
-                Assert.ThrowsExactly<FormatException>(() => XrplBinaryCodec.EncodeForSigningClaim(claim), amount);
+                Assert.ThrowsExactly<ArgumentException>(() => XrplBinaryCodec.EncodeForSigningClaim(claim), amount);
+            }
+        }
+
+        [TestMethod]
+        public void EncodeForSigningClaim_NumericAmount_Encodes()
+        {
+            string expected = "434C4D00" + Channel + "00000000B2D05E00";
+            Dictionary<string, object> claim = new Dictionary<string, object>
+            {
+                { "amount", 3000000000UL },
+                { "channel", Channel },
+            };
+            Assert.AreEqual(expected, XrplBinaryCodec.EncodeForSigningClaim(claim));
+
+            JsonObject node = new JsonObject
+            {
+                ["amount"] = JsonValue.Create(3000000000L),
+                ["channel"] = Channel,
+            };
+            Assert.AreEqual(expected, XrplBinaryCodec.EncodeForSigningClaim(node));
+        }
+
+        [TestMethod]
+        public void EncodeForSigningClaim_NegativeFractionalOrNonScalarNumber_Throws()
+        {
+            foreach (JsonNode amount in new JsonNode[] { JsonValue.Create(-1), JsonValue.Create(1.5), JsonValue.Create(true), new JsonObject() })
+            {
+                JsonObject node = new JsonObject
+                {
+                    ["amount"] = amount,
+                    ["channel"] = Channel,
+                };
+                Assert.ThrowsExactly<ArgumentException>(() => XrplBinaryCodec.EncodeForSigningClaim(node), amount.ToJsonString());
             }
         }
 
@@ -81,7 +116,17 @@ namespace Xrpl.BinaryCodec.Tests
             Assert.AreEqual(0, parser.Pos());
             Assert.AreEqual((byte)0x0A, parser.ReadOne());
             Assert.AreEqual((byte)0x0B, parser.ReadOne());
-            Assert.ThrowsExactly<InvalidOperationException>(() => parser.Peek());
+            InvalidOperationException ex = Assert.ThrowsExactly<InvalidOperationException>(() => parser.Peek());
+            Assert.AreEqual("Cannot peek past the end of the parser (position 2, size 2)", ex.Message);
+        }
+
+        [TestMethod]
+        public void BufferParser_PeekAtEnd_ThrowsTheSameMessage()
+        {
+            BufferParser parser = new BufferParser("0A0B");
+            parser.Skip(2);
+            InvalidOperationException ex = Assert.ThrowsExactly<InvalidOperationException>(() => parser.Peek());
+            Assert.AreEqual("Cannot peek past the end of the parser (position 2, size 2)", ex.Message);
         }
 
         [TestMethod]
@@ -127,6 +172,15 @@ namespace Xrpl.BinaryCodec.Tests
         {
             Assert.AreEqual("00000000000000FF", Uint64.FromValue("FF").ToHex());
             Assert.AreEqual("0123456789ABCDEF", Uint64.FromValue("0123456789ABCDEF").ToHex());
+            Assert.ThrowsExactly<BinaryCodecException>(() => Uint64.FromValue("10123456789ABCDEF"));
+            Assert.ThrowsExactly<BinaryCodecException>(() => Uint64.FromValue(""));
+        }
+
+        [TestMethod]
+        public void Uint64_FromValueInt_RejectsNegative()
+        {
+            Assert.AreEqual("000000007FFFFFFF", Uint64.FromValue(int.MaxValue).ToHex());
+            Assert.ThrowsExactly<BinaryCodecException>(() => Uint64.FromValue(-1));
         }
 
         [TestMethod]

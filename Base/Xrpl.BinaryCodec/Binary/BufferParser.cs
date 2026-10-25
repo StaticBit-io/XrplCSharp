@@ -31,7 +31,14 @@ namespace Xrpl.BinaryCodec.Binary
         public byte[] ToBytes() => Bytes;
 
         /// <inheritdoc />
-        public override byte Peek() => Bytes[Cursor];
+        public override byte Peek()
+        {
+            if (Cursor >= Size)
+            {
+                throw new InvalidOperationException($"Cannot peek past the end of the parser (position {Cursor}, size {Size})");
+            }
+            return Bytes[Cursor];
+        }
 
         /// <inheritdoc />
         public override void Skip(int n) => Cursor += n;

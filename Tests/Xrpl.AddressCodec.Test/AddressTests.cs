@@ -103,8 +103,17 @@ namespace Xrpl.AddressCodec.Tests
             const string typo = "XVLhHMPHU98es4dbozjVtdWzVrDjtV5fdx1mHp98tDMoQXa";
             Assert.IsTrue(IsValidXAddress(valid));
             Assert.IsFalse(IsValidXAddress(typo));
-            Helper.Throws<AddressCodecException>(() => XAddressToClassicAddress(typo),
+            AddressCodecException ex = Helper.Throws<AddressCodecException>(() => XAddressToClassicAddress(typo),
                 "Invalid X-address: Checksum does not validate");
+            Assert.IsInstanceOfType<EncodingFormatException>(ex.InnerException);
+        }
+
+        [TestMethod]
+        public void InvalidXAddressIllegalCharacter()
+        {
+            AddressCodecException ex = Helper.Throws<AddressCodecException>(() =>
+                DecodeXAddress("XVLhHMPHU98es4dbozjVtdWzVrDjtV5fdx1mHp98tDMoQX0"));
+            Assert.IsInstanceOfType<EncodingFormatException>(ex.InnerException);
         }
 
         [TestMethod]

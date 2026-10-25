@@ -67,7 +67,7 @@ namespace Xrpl.BinaryCodec.Binary
             _stream.Position = position;
             if (value < 0)
             {
-                throw new InvalidOperationException();
+                throw new InvalidOperationException($"Cannot peek past the end of the parser (position {Cursor}, size {Size})");
             }
             return (byte)value;
         }
