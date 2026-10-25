@@ -61,4 +61,35 @@ public class TestULedgerIndexConverter
         Assert.IsNotNull(result.Ledger);
         Assert.AreEqual(12345u, result.Ledger.Index);
     }
+
+    /// <summary>
+    /// A ledger index sent as a string - some nodes and proxies quote it - is the index, not an
+    /// enum value: Enum.TryParse accepts integer strings, so it used to come back as an undefined
+    /// <see cref="LedgerIndexType"/> with no index.
+    /// </summary>
+    [TestMethod]
+    public void Read_NumericString_ReturnsLedgerIndex()
+    {
+        Model result = JsonSerializer.Deserialize<Model>("{\"Ledger\": \"12345\"}", XrplJsonOptions.Default);
+        Assert.AreEqual(12345u, result.Ledger.Index);
+    }
+
+    [TestMethod]
+    public void Read_ShortcutString_ReturnsLedgerIndexType()
+    {
+        Model result = JsonSerializer.Deserialize<Model>("{\"Ledger\": \"Validated\"}", XrplJsonOptions.Default);
+        Assert.IsNull(result.Ledger.Index);
+        Assert.AreEqual(LedgerIndexType.Validated, result.Ledger.LedgerIndexType);
+    }
+
+    [DataTestMethod]
+    [DataRow("-1")]
+    [DataRow("99999999999")]
+    [DataRow(" 12")]
+    [DataRow("latest")]
+    public void Read_InvalidString_Throws(string value)
+    {
+        string json = "{\"Ledger\": \"" + value + "\"}";
+        Assert.ThrowsExactly<JsonException>(() => JsonSerializer.Deserialize<Model>(json, XrplJsonOptions.Default));
+    }
 }

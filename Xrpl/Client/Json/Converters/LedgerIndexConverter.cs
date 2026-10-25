@@ -1,4 +1,5 @@
 ﻿using System;
+using System.Globalization;
 using System.Text.Json;
 using System.Text.Json.Serialization;
 using Xrpl.Models.Common;
@@ -46,14 +47,19 @@ namespace Xrpl.Client.Json.Converters
             if (reader.TokenType == JsonTokenType.String)
             {
                 string str = reader.GetString();
-                if (Enum.TryParse<LedgerIndexType>(str, ignoreCase: true, out LedgerIndexType indexType))
-                {
-                    return new LedgerIndex(indexType);
-                }
 
-                if (uint.TryParse(str, out uint index))
+                // The number goes first: Enum.TryParse also accepts any integer string and returns
+                // it cast to the enum, so "12345" became an undefined LedgerIndexType instead of a
+                // ledger index.
+                if (uint.TryParse(str, NumberStyles.None, CultureInfo.InvariantCulture, out uint index))
                 {
                     return new LedgerIndex(index);
+                }
+
+                if (Enum.TryParse<LedgerIndexType>(str, ignoreCase: true, out LedgerIndexType indexType)
+                    && Enum.IsDefined(typeof(LedgerIndexType), indexType))
+                {
+                    return new LedgerIndex(indexType);
                 }
             }
 

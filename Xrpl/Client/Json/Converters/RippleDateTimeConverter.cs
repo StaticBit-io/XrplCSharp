@@ -22,7 +22,11 @@ namespace Xrpl.Client.Json.Converters
         {
             if (value is DateTime dateTime)
             {
-                long totalSeconds = (long)(dateTime - RippleStartTime).TotalSeconds;
+                // DateTime subtraction compares ticks and ignores Kind, so a Local value
+                // (DateTime.Now) must be moved to UTC first or the result is off by the UTC offset.
+                // Unspecified stays as it is and is read as UTC, as it always was.
+                DateTime utc = dateTime.Kind == DateTimeKind.Local ? dateTime.ToUniversalTime() : dateTime;
+                long totalSeconds = (long)(utc - RippleStartTime).TotalSeconds;
                 writer.WriteNumberValue(totalSeconds);
             }
             else

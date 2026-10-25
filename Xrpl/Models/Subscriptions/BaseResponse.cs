@@ -1,4 +1,5 @@
 ﻿using System.ComponentModel;
+using System.Text.Json;
 using System.Text.Json.Serialization;
 
 using System;
@@ -197,7 +198,53 @@ namespace Xrpl.Models.Subscriptions
         /// (May be omitted) Additional information about this warning.<br/>
         /// The contents vary depending on the type of warning.
         /// </summary>
+        /// <remarks>
+        /// Values that are not JSON strings are kept as their raw JSON text: warning 1001 (amendment
+        /// blocked soon) carries a numeric <c>expected_date</c>, and a string-only binding failed the
+        /// whole response, so the request it answered never completed.
+        /// </remarks>
         [JsonPropertyName("details")]
+        [JsonConverter(typeof(WarningDetailsConverter))]
         public Dictionary<string, string>? Details { get; set; }
+    }
+
+    /// <summary>
+    /// Reads <see cref="RippleResponseWarning.Details"/>: string values as they are, any other value
+    /// as its raw JSON text.
+    /// </summary>
+    internal sealed class WarningDetailsConverter : JsonConverter<Dictionary<string, string>>
+    {
+        public override Dictionary<string, string> Read(ref Utf8JsonReader reader, Type typeToConvert, JsonSerializerOptions options)
+        {
+            if (reader.TokenType == JsonTokenType.Null)
+                return null;
+
+            if (reader.TokenType != JsonTokenType.StartObject)
+                throw new JsonException($"Expected an object for warning details, got {reader.TokenType}.");
+
+            using JsonDocument document = JsonDocument.ParseValue(ref reader);
+            Dictionary<string, string> details = new Dictionary<string, string>(StringComparer.Ordinal);
+            foreach (JsonProperty property in document.RootElement.EnumerateObject())
+            {
+                details[property.Name] = property.Value.ValueKind switch
+                {
+                    JsonValueKind.String => property.Value.GetString(),
+                    JsonValueKind.Null => null,
+                    _ => property.Value.GetRawText(),
+                };
+            }
+
+            return details;
+        }
+
+        public override void Write(Utf8JsonWriter writer, Dictionary<string, string> value, JsonSerializerOptions options)
+        {
+            writer.WriteStartObject();
+            foreach (KeyValuePair<string, string> pair in value)
+            {
+                writer.WriteString(pair.Key, pair.Value);
+            }
+            writer.WriteEndObject();
+        }
     }
 }

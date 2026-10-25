@@ -77,7 +77,7 @@ namespace Xrpl.Utils.Hashes.ShaMap
         /// Get the node that is currently in a given slot.
         /// </summary>
         /// <param name="slot">A number 0-15.</param>
-        /// <returns>Node currently in a slot.</returns>
+        /// <returns>Node currently in a slot, or null when the slot is empty.</returns>
         /// <exception cref="XrplException">If slot is out of range.</exception>
         public Node GetNode(int slot)
         {
@@ -85,7 +85,9 @@ namespace Xrpl.Utils.Hashes.ShaMap
             {
                 throw new XrplException("Invalid slot: slot must be between 0-15.");
             }
-            return Leaves[slot];
+            // The xrpl.js original indexes a sparse array, where a missing slot reads as undefined;
+            // a Dictionary indexer throws instead, which made every first insert into a slot fail.
+            return Leaves.TryGetValue(slot, out Node node) ? node : null;
         }
 
         /// <inheritdoc />
@@ -101,7 +103,7 @@ namespace Xrpl.Utils.Hashes.ShaMap
                 string hex = "";
                 for (var iter = 0; iter <= SLOT_MAX; iter++)
                 {
-                    Node child = Leaves[iter];
+                    Node child = GetNode(iter);
                     string hash = child == null ? HEX_ZERO : child.Hash;
                     hex += hash;
                 }

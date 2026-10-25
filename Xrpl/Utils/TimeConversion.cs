@@ -29,14 +29,22 @@ namespace Xrpl.Utils
 
         public static long ISOTimeToRippleTime(string iso8601)
         {
-            var date = DateTime.ParseExact(iso8601, "yyyy-MM-ddTHH:mm:ss.fffZ", CultureInfo.InvariantCulture).ToUniversalTime();
-            var milliseconds = (long)date.Subtract(new DateTime(1970, 1, 1)).TotalMilliseconds;
-            return UnixTimeToRippleTime(milliseconds);
+            // Parsed straight to UTC instead of into the machine's zone and back, so the result
+            // never passes through local time.
+            DateTime date = DateTime.ParseExact(iso8601, "yyyy-MM-ddTHH:mm:ss.fffZ", CultureInfo.InvariantCulture,
+                DateTimeStyles.AdjustToUniversal | DateTimeStyles.AssumeUniversal);
+            return ISOTimeToRippleTime(date);
         }
 
+        /// <summary>
+        /// Ripple-epoch seconds of <paramref name="date"/>.
+        /// </summary>
+        /// <param name="date">A <see cref="DateTimeKind.Local"/> value is converted to UTC first;
+        /// an <see cref="DateTimeKind.Unspecified"/> one is taken as UTC.</param>
         public static long ISOTimeToRippleTime(DateTime date)
         {
-            var milliseconds = (long)date.Subtract(new DateTime(1970, 1, 1)).TotalMilliseconds;
+            DateTime utc = date.Kind == DateTimeKind.Local ? date.ToUniversalTime() : date;
+            long milliseconds = (long)utc.Subtract(new DateTime(1970, 1, 1, 0, 0, 0, DateTimeKind.Utc)).TotalMilliseconds;
             return UnixTimeToRippleTime(milliseconds);
         }
     }

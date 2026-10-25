@@ -28,6 +28,7 @@ namespace Xrpl.Models.Ledger
         /// Array of objects describing the status of amendments that have majority support but are not yet enabled.<br/>
         /// If omitted, there are no pending amendments with majority support.
         /// </summary>
+        [JsonConverter(typeof(MajorityListConverter))]
         public List<Majority> Majorities { get; set; }
         /// <summary>
         /// Array of 256-bit amendment IDs for all currently-enabled amendments.<br/>
