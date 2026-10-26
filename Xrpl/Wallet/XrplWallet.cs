@@ -2,6 +2,7 @@ using NBitcoin;
 
 using System;
 using System.Collections.Generic;
+using System.Globalization;
 using System.Linq;
 using System.Security.Cryptography;
 using System.Text;
@@ -1020,22 +1021,29 @@ namespace Xrpl.Wallet
             if (string.IsNullOrWhiteSpace(outerAccount))
                 throw new ValidationException("Batch transaction must have Account.");
 
+            uint? sequence = ReadUInt32(outer["Sequence"]);
+            uint? ticketSequence = ReadUInt32(outer["TicketSequence"]);
+            if (sequence == null && outer["Sequence"] != null)
+                throw new ValidationException("Batch Sequence must be an unsigned 32-bit integer.");
+            if (ticketSequence == null && outer["TicketSequence"] != null)
+                throw new ValidationException("Batch TicketSequence must be an unsigned 32-bit integer.");
+
             uint outerSequence;
-            var seqTok = outer["Sequence"];
-            if (seqTok is JsonValue seqVal && seqVal.TryGetValue<long>(out var seqLong))
+            if (sequence is > 0)
             {
-                outerSequence = (uint)seqLong;
+                outerSequence = sequence.Value;
             }
-            else if (seqTok is JsonValue seqStr && seqStr.TryGetValue<string>(out var seqStrVal) && uint.TryParse(seqStrVal, out var s))
+            else if (ticketSequence != null)
             {
-                outerSequence = s;
-            }
-            else if (seqTok == null && outer["TicketSequence"] != null)
-            {
-                // With tickets, Sequence is required and equals 0 - in the preimage and in the
-                // serialised blob alike, or the resulting transaction is malformed.
-                outerSequence = 0;
+                // rippled builds the preimage from STTx::getSeqProxy().value(), which is the
+                // ticket number when Sequence is 0. The serialised blob still carries Sequence 0,
+                // which a ticketed transaction requires.
+                outerSequence = ticketSequence.Value;
                 outer["Sequence"] = 0u;
+            }
+            else if (sequence != null)
+            {
+                outerSequence = sequence.Value;
             }
             else
             {
@@ -1608,6 +1616,26 @@ namespace Xrpl.Wallet
         {
             JsonNode dec = XrplBinaryCodec.Decode(blobHex);
             return dec.AsObject();
+        }
+
+        /// <summary>
+        /// Reads a UInt32 field written as a JSON number or a decimal string. Returns null when the
+        /// field is absent or holds anything else, including a number outside the UInt32 range.
+        /// </summary>
+        private static uint? ReadUInt32(JsonNode node)
+        {
+            if (node is not JsonValue value)
+                return null;
+            // A node built in code holds its CLR type and converts to no other, so uint is tried
+            // before long; a parsed node converts to either.
+            if (value.TryGetValue<uint>(out uint unsigned))
+                return unsigned;
+            if (value.TryGetValue<long>(out long number))
+                return number is >= 0 and <= uint.MaxValue ? (uint)number : null;
+            if (value.TryGetValue<string>(out string text)
+                && uint.TryParse(text, NumberStyles.None, CultureInfo.InvariantCulture, out uint parsed))
+                return parsed;
+            return null;
         }
     }
 }
