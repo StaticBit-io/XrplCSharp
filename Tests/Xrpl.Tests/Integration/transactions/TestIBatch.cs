@@ -3,11 +3,13 @@
 
 using System;
 using System.Collections.Generic;
+using System.Linq;
 using System.Threading.Tasks;
 
 using Xrpl.BinaryCodec;
 using Xrpl.Client.Exceptions;
 using Xrpl.Models.Common;
+using Xrpl.Models;
 using Xrpl.Models.Ledger;
 using Xrpl.Models.Methods;
 using Xrpl.Models.Transactions;
@@ -598,6 +600,142 @@ public class TestIBatch
     }
 
 
+
+    #region Issue316
+
+    // PREIMAGE-SHA-256 condition over the empty preimage and its 4-byte fulfillment.
+    private const string EmptyPreimageCondition = "A0258020E3B0C44298FC1C149AFBF4C8996FB92427AE41E4649B934CA495991B7852B855810100";
+    private const string EmptyPreimageFulfillment = "A0028000";
+
+    /// <summary>
+    /// rippled builds the batch preimage from getSeqProxy().value(): the ticket number when the
+    /// outer Sequence is 0. A BatchSigner signature made over 0 instead fails with
+    /// "invalidTransaction — Invalid signature".
+    /// </summary>
+    [TestMethod]
+    public async Task TestBatchMultiAccounts_OuterOnTicket()
+    {
+        uint ticket = await CreateTicketAsync(walletPrimary);
+
+        var batch = new Batch
+        {
+            Account = walletPrimary.ClassicAddress,
+            TicketSequence = ticket,
+            Flags = BatchFlags.tfAllOrNothing,
+            RawTransactions = new List<RawTransactionWrapper>
+            {
+                new Payment
+                {
+                    Account = walletPrimary.ClassicAddress,
+                    Destination = walletSecondary_1.ClassicAddress,
+                    Amount = new Currency { ValueAsXrp = 1.1m },
+                }.ToBatchTx(),
+                new Payment
+                {
+                    Account = walletSecondary_1.ClassicAddress,
+                    Destination = walletPrimary.ClassicAddress,
+                    Amount = new Currency { ValueAsXrp = 1.2m },
+                }.ToBatchTx(),
+            },
+        };
+        batch = await runner.client.Autofill(batch);
+        Assert.AreEqual(0u, batch.Sequence, "A ticketed outer carries Sequence 0.");
+
+        var cosigned = walletSecondary_1.Sign(batch);
+        var signed = walletPrimary.Sign(cosigned.GetTx());
+        var res = await runner.client.SubmitRequest(signed.TxBlob, true);
+        await ValidateResultAsync(res);
+    }
+
+    /// <summary>
+    /// Each inner is priced by its own transactor: an EscrowFinish with a fulfillment costs
+    /// 33 base fees on its own, which the old flat one-base-fee-per-inner rule underpriced.
+    /// </summary>
+    [TestMethod]
+    public async Task TestBatchIndependent_EscrowFinishWithFulfillment_AutofilledFeeSuffices()
+    {
+        const int InnerCount = 8;
+        var owner = walletSecondary_2;
+
+        var info = await runner.client.AccountInfo(new AccountInfoRequest(owner.ClassicAddress)
+        {
+            LedgerIndex = new LedgerIndex(LedgerIndexType.Current)
+        }).Typed();
+        uint outerSequence = info.AccountData.Sequence.Value;
+
+        var creates = new List<RawTransactionWrapper>();
+        for (uint i = 1; i <= InnerCount; i++)
+        {
+            creates.Add(new EscrowCreate
+            {
+                Account = owner.ClassicAddress,
+                Sequence = outerSequence + i,
+                Destination = walletPrimary.ClassicAddress,
+                Amount = new Currency { ValueAsXrp = 0.1m },
+                Condition = EmptyPreimageCondition,
+                CancelAfter = DateTime.UtcNow.AddDays(1),
+            }.ToBatchTx());
+        }
+        var createBatch = await runner.client.Autofill(new Batch
+        {
+            Account = owner.ClassicAddress,
+            Sequence = outerSequence,
+            Flags = BatchFlags.tfAllOrNothing,
+            RawTransactions = creates,
+        });
+        await ValidateResultAsync(await runner.client.SubmitRequest(owner.Sign(createBatch).TxBlob, true));
+        Assert.AreEqual(InnerCount, await CountEscrowsAsync(owner));
+
+        var finishes = new List<RawTransactionWrapper>();
+        for (uint i = 1; i <= InnerCount; i++)
+        {
+            finishes.Add(new EscrowFinish
+            {
+                Account = owner.ClassicAddress,
+                Owner = owner.ClassicAddress,
+                OfferSequence = outerSequence + i,
+                Condition = EmptyPreimageCondition,
+                Fulfillment = EmptyPreimageFulfillment,
+            }.ToBatchTx());
+        }
+        var finishBatch = await runner.client.Autofill(new Batch
+        {
+            Account = owner.ClassicAddress,
+            Flags = BatchFlags.tfIndependent,
+            RawTransactions = finishes,
+        });
+        await ValidateResultAsync(await runner.client.SubmitRequest(owner.Sign(finishBatch).TxBlob, true));
+
+        // tfIndependent leaves the outer tesSUCCESS whatever its inners did, so the effect is
+        // what tells whether every EscrowFinish ran.
+        Assert.AreEqual(0, await CountEscrowsAsync(owner), "Every EscrowFinish inner must have finished its escrow.");
+    }
+
+    private static async Task<uint> CreateTicketAsync(XrplWallet wallet)
+    {
+        var res = await runner.client.SubmitAndWait(new TicketCreate { Account = wallet.ClassicAddress, TicketCount = 1 }, wallet, true, true);
+        Assert.AreEqual("tesSUCCESS", res.Meta.TransactionResult);
+
+        var objects = await runner.client.AccountObjects(new AccountObjectsRequest(wallet.ClassicAddress)
+        {
+            Type = LedgerEntryType.Ticket,
+            LedgerIndex = new LedgerIndex(LedgerIndexType.Validated)
+        }).Typed();
+        uint? ticket = objects.AccountObjectList.OfType<LOTicket>().Select(t => t.TicketSequence).Max();
+        return ticket ?? throw new AssertFailedException("TicketCreate left no Ticket.");
+    }
+
+    private static async Task<int> CountEscrowsAsync(XrplWallet wallet)
+    {
+        var objects = await runner.client.AccountObjects(new AccountObjectsRequest(wallet.ClassicAddress)
+        {
+            Type = LedgerEntryType.Escrow,
+            LedgerIndex = new LedgerIndex(LedgerIndexType.Validated)
+        }).Typed();
+        return objects.AccountObjectList.Count;
+    }
+
+    #endregion
 
     #region Signer
 

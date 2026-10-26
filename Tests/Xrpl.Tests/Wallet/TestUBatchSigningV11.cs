@@ -201,12 +201,42 @@ namespace Xrpl.Tests.Wallet.Tests
                 "Serialized Batch must contain Sequence = 0 when TicketSequence is used.");
             Assert.AreEqual(15u, decoded["TicketSequence"]?.GetValue<uint>());
 
-            // Signature must verify over the preimage built with outerSequence = 0
+            // rippled builds the preimage from getSeqProxy().value(): the ticket number, not the 0 in Sequence
             JsonObject signer = decoded["BatchSigners"]!.AsArray()[0]!["BatchSigner"]!.AsObject();
             string signature = signer["TxnSignature"]!.GetValue<string>();
-            byte[] basePreimage = ComputeBasePreimage(submitter.ClassicAddress, 0, TfAllOrNothing, inner1, inner2);
             byte[] signerAccountId = XrplCodec.DecodeAccountID(participant.ClassicAddress);
-            Assert.IsTrue(XrplKeypairs.Verify(Concat(basePreimage, signerAccountId), signature, participant.PublicKey));
+            byte[] ticketPreimage = ComputeBasePreimage(submitter.ClassicAddress, 15, TfAllOrNothing, inner1, inner2);
+            Assert.IsTrue(XrplKeypairs.Verify(Concat(ticketPreimage, signerAccountId), signature, participant.PublicKey),
+                "Signature must verify over the preimage built with the ticket number.");
+
+            byte[] zeroPreimage = ComputeBasePreimage(submitter.ClassicAddress, 0, TfAllOrNothing, inner1, inner2);
+            Assert.IsFalse(XrplKeypairs.Verify(Concat(zeroPreimage, signerAccountId), signature, participant.PublicKey),
+                "Signature must NOT verify over a preimage built with Sequence 0.");
+        }
+
+        [TestMethod]
+        public void TestUSignAsBatchPart_SequenceZeroAndTicket_SignsOverTicketNumber()
+        {
+            XrplWallet submitter = XrplWallet.Generate();
+            XrplWallet participant = XrplWallet.Generate();
+            XrplWallet destination = XrplWallet.Generate();
+
+            // Autofill writes Sequence 0 next to TicketSequence, so this is the shape a ticketed batch arrives in.
+            JsonObject inner = InnerPayment(participant.ClassicAddress, destination.ClassicAddress, 20);
+            JsonObject outer = BuildOuterBatch(submitter.ClassicAddress, 0, inner);
+            outer["TicketSequence"] = 42;
+
+            SignatureResult result = participant.SignAsBatchPart(BuildBatchDictionary(outer), multisign: false, signingFor: participant.ClassicAddress);
+
+            JsonNode decoded = XrplBinaryCodec.Decode(result.TxBlob);
+            Assert.AreEqual(0u, decoded["Sequence"]?.GetValue<uint>());
+
+            JsonObject signer = decoded["BatchSigners"]!.AsArray()[0]!["BatchSigner"]!.AsObject();
+            string signature = signer["TxnSignature"]!.GetValue<string>();
+            byte[] preimage = ComputeBasePreimage(submitter.ClassicAddress, 42, TfAllOrNothing, inner);
+            byte[] signerAccountId = XrplCodec.DecodeAccountID(participant.ClassicAddress);
+            Assert.IsTrue(XrplKeypairs.Verify(Concat(preimage, signerAccountId), signature, participant.PublicKey),
+                "Signature must verify over the preimage built with the ticket number.");
         }
 
         [TestMethod]
