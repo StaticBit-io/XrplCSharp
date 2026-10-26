@@ -44,11 +44,6 @@ namespace Xrpl.Sugar
         const int DEVNET_FEE_CORRECTION_MULTIPLIER = 12;
         
         /// <summary>
-        /// Batch transactions have a base fee multiplier of 3.
-        /// </summary>
-        const int BATCH_BASE_FEE_MULTIPLIER = 3;
-
-        /// <summary>
         /// rippled kConfidentialFeeMultiplier: extra base fee units charged to confidential MPT transactions.
         /// </summary>
         const int CONFIDENTIAL_FEE_MULTIPLIER = 9;
@@ -289,6 +284,37 @@ namespace Xrpl.Sugar
             }
 
             var transactionType = (string)tx["TransactionType"];
+            var calculatedFee = await CalculateTransactorFee(client, tx, transactionType, baseFee, netFeeDrops, signersCount, cancellationToken);
+
+            BigInteger totalFee;
+            if (!string.IsNullOrWhiteSpace(client.maxFeeXRP))
+            {
+                var maxFeeBI = new BigInteger(GetFeeXrpSugar.MaxFeeDrops(client.maxFeeXRP));
+                totalFee = IsReserveFeeTxNeed(tx)
+                    ? calculatedFee
+                    : BigInteger.Min(calculatedFee, maxFeeBI);
+            }
+            else
+            {
+                totalFee = calculatedFee;
+            }
+            return totalFee.ToString(CultureInfo.InvariantCulture);
+        }
+
+        /// <summary>
+        /// The fee one transaction's own transactor charges, before the maxFeeXRP cap. Batch
+        /// prices each inner transaction through this too, so an inner costs what it would cost
+        /// on its own.
+        /// </summary>
+        private static async Task<BigInteger> CalculateTransactorFee(
+            IXrplClient client,
+            Dictionary<string, object> tx,
+            string transactionType,
+            BigInteger baseFee,
+            string netFeeDrops,
+            int signersCount,
+            CancellationToken cancellationToken)
+        {
             var calculatedFee = await CalculateBaseFeeForType(client, tx, transactionType, baseFee, netFeeDrops, cancellationToken);
             // rippled Transactor::calculateBaseFee: one baseFee per outer multisig signer
             // plus one per signer nested in SponsorSignature.Signers (XLS-68 sponsor
@@ -306,19 +332,7 @@ namespace Xrpl.Sugar
                 calculatedFee *= await GetLoanPayFeeIncrements(client, tx, cancellationToken);
             }
 
-            BigInteger totalFee;
-            if (!string.IsNullOrWhiteSpace(client.maxFeeXRP))
-            {
-                var maxFeeBI = new BigInteger(GetFeeXrpSugar.MaxFeeDrops(client.maxFeeXRP));
-                totalFee = IsReserveFeeTxNeed(tx)
-                    ? calculatedFee
-                    : BigInteger.Min(calculatedFee, maxFeeBI);
-            }
-            else
-            {
-                totalFee = calculatedFee;
-            }
-            return totalFee.ToString(CultureInfo.InvariantCulture);
+            return calculatedFee;
         }
 
         private static async Task<BigInteger> CalculateBaseFeeForType(
@@ -332,7 +346,7 @@ namespace Xrpl.Sugar
             return transactionType switch
             {
                 "EscrowFinish" when tx.TryGetValue("Fulfillment", out _) => CalculateEscrowFinishFee(tx, netFeeDrops),
-                "Batch" => await CalculateBatchFee(client, tx, baseFee, cancellationToken),
+                "Batch" => await CalculateBatchFee(client, tx, baseFee, netFeeDrops, cancellationToken),
                 nameof(TransactionType.LoanSet) => await CalculateLoanSetFee(client, tx, baseFee, cancellationToken),
                 _ when IsConfidentialMPTTx(transactionType) => baseFee * (1 + CONFIDENTIAL_FEE_MULTIPLIER),
                 _ when IsReserveFeeTxNeed(tx) => await FetchReserveFee(client, cancellationToken),
@@ -608,20 +622,30 @@ namespace Xrpl.Sugar
         /// </summary>
         private static BigInteger CalculateEscrowFinishFee(Dictionary<string, object> tx, string netFeeDrops)
         {
-            decimal fulfillmentBytesSize = Math.Ceiling((decimal)((string)tx["Fulfillment"]).Length / 2);
+            // ToString rather than a cast: an inner transaction of a Batch reaches here
+            // deserialized from JSON, not as the string a caller wrote.
+            decimal fulfillmentBytesSize = Math.Ceiling((decimal)$"{tx["Fulfillment"]}".Length / 2);
             decimal multiplier = 33 + (fulfillmentBytesSize / 16);
             var scaled = ScaleValueDecimal(netFeeDrops, multiplier);
             return new BigInteger(Math.Ceiling(scaled));
         }
 
         /// <summary>
-        /// Calculates fee for Batch transactions.
-        /// Base fee is multiplied by BATCH_BASE_FEE_MULTIPLIER plus fee for each inner transaction.
+        /// Calculates fee for Batch transactions, following rippled Batch::calculateBaseFeeImpl:
+        /// one base fee for batch processing, one for the outer transaction itself, each inner
+        /// transaction priced by its own transactor, and one base fee per BatchSigners signature.
+        /// The outer's own multisig signers are added by the caller, as for any transaction.
         /// </summary>
-        private static async Task<BigInteger> CalculateBatchFee(IXrplClient client, Dictionary<string, object> tx, BigInteger baseFee, CancellationToken cancellationToken = default)
+        /// <remarks>
+        /// BatchSigners are usually collected after autofill. Each signature already present is
+        /// counted as rippled counts it (one, or every nested Signers entry); each required
+        /// account that has not signed yet is counted as one signature. A participant that will
+        /// multi-sign its BatchSigner needs a Fee set by hand.
+        /// </remarks>
+        private static async Task<BigInteger> CalculateBatchFee(IXrplClient client, Dictionary<string, object> tx, BigInteger baseFee, string netFeeDrops, CancellationToken cancellationToken = default)
         {
-            var calculatedFee = baseFee * BATCH_BASE_FEE_MULTIPLIER;
-            
+            var calculatedFee = baseFee * 2;
+
             if (!tx.TryGetValue("RawTransactions", out var rawTransactions) || rawTransactions == null)
             {
                 throw new ValidationException("Batch transaction must have RawTransactions field.");
@@ -639,12 +663,57 @@ namespace Xrpl.Sugar
                 if (!TryGetInnerFieldsAsDict(inner, out var innerTx))
                     throw new ArgumentNullException(nameof(inner), "RawTransaction not found or invalid.");
 
-                calculatedFee += IsReserveFeeTxNeed(innerTx) 
-                    ? await FetchReserveFee(client, cancellationToken) 
-                    : baseFee;
+                string innerType = innerTx.TryGetValue("TransactionType", out var innerTypeValue) ? $"{innerTypeValue}" : null;
+                if (string.IsNullOrWhiteSpace(innerType))
+                    throw new ValidationException("Each RawTransaction must contain TransactionType.");
+                // rippled refuses a Batch nested in a Batch; refusing it here also keeps the
+                // pricing from recursing.
+                if (innerType == "Batch")
+                    throw new ValidationException("A Batch transaction cannot contain an inner Batch.");
+
+                // Inner transactions carry no signatures of their own: their signers sign the
+                // outer batch as BatchSigners, which are counted below.
+                calculatedFee += await CalculateTransactorFee(client, innerTx, innerType, baseFee, netFeeDrops, 0, cancellationToken);
             }
 
+            calculatedFee += baseFee * CountBatchSignatures(tx);
+
             return calculatedFee;
+        }
+
+        /// <summary>
+        /// Number of BatchSigners signatures the batch will carry: every signature already present
+        /// (rippled counts a TxnSignature as one and a nested Signers array entry by entry), plus
+        /// one for each required account that has no BatchSigner yet.
+        /// </summary>
+        private static int CountBatchSignatures(Dictionary<string, object> tx)
+        {
+            var signedAccounts = new HashSet<string>(StringComparer.Ordinal);
+            int signatures = 0;
+
+            if (tx.TryGetValue("BatchSigners", out var batchSigners) && batchSigners != null)
+            {
+                JsonArray signersArray = batchSigners as JsonArray
+                    ?? JsonNode.Parse(JsonSerializer.Serialize(batchSigners, XrplJsonOptions.Default)) as JsonArray;
+                foreach (JsonNode entry in signersArray ?? new JsonArray())
+                {
+                    if (entry?["BatchSigner"] is not JsonObject signer)
+                        continue;
+
+                    if (signer["TxnSignature"] != null)
+                        signatures += 1;
+                    else if (signer["Signers"] is JsonArray nested)
+                        signatures += nested.Count;
+                    else
+                        continue;
+
+                    if (signer["Account"]?.GetValueKind() == JsonValueKind.String)
+                        signedAccounts.Add(signer["Account"].GetValue<string>());
+                }
+            }
+
+            signatures += tx.GetBatchSignerAccounts().Raw.Count(account => !signedAccounts.Contains(account));
+            return signatures;
         }
 
         /// <summary>

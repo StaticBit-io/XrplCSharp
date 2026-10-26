@@ -191,8 +191,8 @@ public class TestUAutofillFees
         await client.CalculateFeePerTransactionType(tx);
 
         Assert.IsTrue(tx.ContainsKey("Fee"));
-        // Base * 3 + 2 inner payments = 12*3 + 12 + 12 = 60
-        Assert.AreEqual("60", tx["Fee"]);
+        // 2 base + 2 inner payments + 2 BatchSigners (rAccount1, rAccount2) = 24 + 24 + 24
+        Assert.AreEqual("72", tx["Fee"]);
     }
 
     [TestMethod]
@@ -227,8 +227,90 @@ public class TestUAutofillFees
         await client.CalculateFeePerTransactionType(tx);
 
         Assert.IsTrue(tx.ContainsKey("Fee"));
-        // Base * 3 + Payment + AMMCreate = 12*3 + 12 + 2000000 = 2000048
-        Assert.AreEqual("2000048", tx["Fee"]);
+        // 2 base + Payment + AMMCreate + 2 BatchSigners = 24 + 12 + 2000000 + 24
+        Assert.AreEqual("2000060", tx["Fee"]);
+    }
+
+    [TestMethod]
+    public async Task TestUCalculateFee_Batch_InnerEscrowFinishWithFulfillment_UsesItsOwnFormula()
+    {
+        var client = new FeeTestClient(MAINNET_BASE_FEE, RESERVE_INC);
+        var tx = BatchOf("rTestAccount", Inner("EscrowFinish", "rTestAccount", ("Fulfillment", new string('A', 72))));
+
+        await client.CalculateFeePerTransactionType(tx);
+
+        // 2 base + EscrowFinish priced alone: 12 × (33 + 36 bytes / 16) = 423; the inner is
+        // the outer account's own, so no BatchSigner is expected.
+        Assert.AreEqual("447", tx["Fee"]);
+    }
+
+    [TestMethod]
+    public async Task TestUCalculateFee_Batch_CountsBatchSignersLikeRippled()
+    {
+        var client = new FeeTestClient(MAINNET_BASE_FEE, RESERVE_INC);
+        var tx = BatchOf("rRoot",
+            Inner("Payment", "rA"),
+            Inner("Payment", "rB"),
+            Inner("Payment", "rC"));
+        tx["BatchSigners"] = new JsonArray
+        {
+            new JsonObject { ["BatchSigner"] = new JsonObject { ["Account"] = "rA", ["SigningPubKey"] = "02AB", ["TxnSignature"] = "30" } },
+            new JsonObject
+            {
+                ["BatchSigner"] = new JsonObject
+                {
+                    ["Account"] = "rB",
+                    ["Signers"] = new JsonArray
+                    {
+                        new JsonObject { ["Signer"] = new JsonObject { ["Account"] = "rB1" } },
+                        new JsonObject { ["Signer"] = new JsonObject { ["Account"] = "rB2" } }
+                    }
+                }
+            }
+        };
+
+        await client.CalculateFeePerTransactionType(tx);
+
+        // rippled Batch::calculateBaseFeeImpl: 2 base + 3 inners + signatures (rA 1, rB's 2
+        // nested signers, rC not signed yet counted as 1) = 24 + 36 + 48
+        Assert.AreEqual("108", tx["Fee"]);
+    }
+
+    [TestMethod]
+    public async Task TestUCalculateFee_Batch_NestedBatch_ThrowsValidation()
+    {
+        var client = new FeeTestClient(MAINNET_BASE_FEE, RESERVE_INC);
+        var tx = BatchOf("rTestAccount", Inner("Batch", "rTestAccount"));
+
+        await Helper.ThrowsExceptionAsync<ValidationException>(async () =>
+        {
+            await client.CalculateFeePerTransactionType(tx);
+        });
+    }
+
+    private static JsonObject Inner(string transactionType, string account, params (string Name, string Value)[] fields)
+    {
+        var raw = new JsonObject
+        {
+            ["TransactionType"] = transactionType,
+            ["Account"] = account
+        };
+        foreach (var (name, value) in fields)
+            raw[name] = value;
+        return new JsonObject { ["RawTransaction"] = raw };
+    }
+
+    private static Dictionary<string, object> BatchOf(string account, params JsonObject[] inners)
+    {
+        var raw = new JsonArray();
+        foreach (JsonObject inner in inners)
+            raw.Add(inner);
+        return new Dictionary<string, object>
+        {
+            ["TransactionType"] = "Batch",
+            ["Account"] = account,
+            ["RawTransactions"] = raw
+        };
     }
 
     [TestMethod]
