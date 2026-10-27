@@ -235,7 +235,9 @@ namespace Xrpl.Tests.ClientLib
             runner.mockedRippled.AddResponse("server_info", serverInfoData);
 
             Dictionary<string, object> txResult = await runner.client.Autofill(tx);
-            Assert.AreEqual("399", (string)txResult["Fee"]);
+            // 12 drops x (33 + 4 bytes / 16) with rippled's integer division; xrpl.js expects 399
+            // here because it divides the size fractionally.
+            Assert.AreEqual("396", (string)txResult["Fee"]);
         }
 
         [TestMethod]
