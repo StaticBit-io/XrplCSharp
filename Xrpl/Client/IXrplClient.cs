@@ -796,11 +796,25 @@ namespace Xrpl.Client
 
     public class XrplClient : IXrplClient
     {
+        /// <summary>
+        /// The fee cap applied when <see cref="ClientOptions.maxFeeXRP"/> is not set, matching
+        /// xrpl.js <c>DEFAULT_MAX_FEE_XRP</c>. Without it a node reporting a load factor of
+        /// several hundred sets the autofilled fee with no upper bound.
+        /// </summary>
+        public const string DefaultMaxFeeXRP = "2";
 
         public class ClientOptions : ConnectionOptions
         {
             public uint? NetworkID { get; set; }
             public double? feeCushion { get; set; }
+
+            /// <summary>
+            /// Upper bound, in XRP, on the fee <c>GetFeeXrp</c> and <c>Autofill</c> fill in.
+            /// Defaults to <see cref="DefaultMaxFeeXRP"/> ("2", as in xrpl.js) when not set. Types
+            /// priced at the owner reserve (AccountDelete, AMMCreate, LedgerStateFix) are not
+            /// capped. To lift the cap, set a larger value, or clear <see cref="IXrplClient.maxFeeXRP"/>
+            /// on the client.
+            /// </summary>
             public string? maxFeeXRP { get; set; }
 
             /// <summary>
@@ -980,7 +994,7 @@ namespace Xrpl.Client
             }
 
             feeCushion = options?.feeCushion ?? 1.2;
-            maxFeeXRP = options?.maxFeeXRP;
+            maxFeeXRP = options?.maxFeeXRP ?? DefaultMaxFeeXRP;
             networkID = options?.NetworkID;
             ApiVersion = options?.ApiVersion ?? 2;
         }

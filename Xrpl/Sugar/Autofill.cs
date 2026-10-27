@@ -15,6 +15,7 @@ using Xrpl.Client.Exceptions;
 using Xrpl.Client.Json;
 using Xrpl.Models;
 using Xrpl.Models.Common;
+using Xrpl.Models.Enums;
 using Xrpl.Models.Ledger;
 using Xrpl.Models.Methods;
 using Xrpl.Models.Transactions;
@@ -284,15 +285,21 @@ namespace Xrpl.Sugar
             }
 
             var transactionType = (string)tx["TransactionType"];
-            var calculatedFee = await CalculateTransactorFee(client, tx, transactionType, baseFee, netFeeDrops, signersCount, cancellationToken);
+            var calculatedFee = await CalculateTransactorFee(client, tx, transactionType, baseFee, netFeeDrops, signersCount, IsInnerBatchTxn(tx), cancellationToken);
 
             BigInteger totalFee;
-            if (!string.IsNullOrWhiteSpace(client.maxFeeXRP))
+            if (!string.IsNullOrWhiteSpace(client.maxFeeXRP) && !IsReserveFeeTxNeed(tx))
             {
                 var maxFeeBI = new BigInteger(GetFeeXrpSugar.MaxFeeDrops(client.maxFeeXRP));
-                totalFee = IsReserveFeeTxNeed(tx)
-                    ? calculatedFee
-                    : BigInteger.Min(calculatedFee, maxFeeBI);
+                // The cap guards against a high load factor, and the owner reserve does not scale
+                // with it. A Batch carrying an AMMCreate pays that reserve on top: on a network
+                // whose increment is at or above the cap (a standalone genesis charges 2 XRP),
+                // capping it would leave the Batch below what rippled requires.
+                int reservePricedInners = transactionType == "Batch" ? CountReservePricedInners(tx) : 0;
+                BigInteger reserveCharges = reservePricedInners > 0
+                    ? reservePricedInners * await FetchReserveFee(client, cancellationToken)
+                    : BigInteger.Zero;
+                totalFee = BigInteger.Min(calculatedFee, maxFeeBI + reserveCharges);
             }
             else
             {
@@ -306,6 +313,10 @@ namespace Xrpl.Sugar
         /// prices each inner transaction through this too, so an inner costs what it would cost
         /// on its own.
         /// </summary>
+        /// <param name="isInner">
+        /// The transaction is a Batch inner: it will never carry signatures of its own, so a
+        /// lookup that guesses signatures still to come must not run for it.
+        /// </param>
         private static async Task<BigInteger> CalculateTransactorFee(
             IXrplClient client,
             Dictionary<string, object> tx,
@@ -313,9 +324,10 @@ namespace Xrpl.Sugar
             BigInteger baseFee,
             string netFeeDrops,
             int signersCount,
+            bool isInner,
             CancellationToken cancellationToken)
         {
-            var calculatedFee = await CalculateBaseFeeForType(client, tx, transactionType, baseFee, netFeeDrops, cancellationToken);
+            var calculatedFee = await CalculateBaseFeeForType(client, tx, transactionType, baseFee, netFeeDrops, isInner, cancellationToken);
             // rippled Transactor::calculateBaseFee: one baseFee per outer multisig signer
             // plus one per signer nested in SponsorSignature.Signers (XLS-68 sponsor
             // multisig; a single-signed SponsorSignature adds nothing). Scaled from the
@@ -341,13 +353,14 @@ namespace Xrpl.Sugar
             string transactionType, 
             BigInteger baseFee, 
             string netFeeDrops,
+            bool isInner,
             CancellationToken cancellationToken = default)
         {
             return transactionType switch
             {
                 "EscrowFinish" when tx.TryGetValue("Fulfillment", out _) => CalculateEscrowFinishFee(tx, netFeeDrops),
                 "Batch" => await CalculateBatchFee(client, tx, baseFee, netFeeDrops, cancellationToken),
-                nameof(TransactionType.LoanSet) => await CalculateLoanSetFee(client, tx, baseFee, cancellationToken),
+                nameof(TransactionType.LoanSet) => await CalculateLoanSetFee(client, tx, baseFee, isInner, cancellationToken),
                 _ when IsConfidentialMPTTx(transactionType) => baseFee * (1 + CONFIDENTIAL_FEE_MULTIPLIER),
                 _ when IsReserveFeeTxNeed(tx) => await FetchReserveFee(client, cancellationToken),
                 _ => baseFee
@@ -378,11 +391,14 @@ namespace Xrpl.Sugar
         /// <remarks>
         /// When the counterparty has not signed yet — the usual case during autofill — the signature
         /// count is unknown, so the counterparty's signer list size is used to avoid underpaying.
+        /// A Batch inner is the exception: its CounterpartySignature stays absent, since the
+        /// counterparty authorises through its BatchSigner, which the Batch already charges for.
+        /// rippled then counts zero signatures, and so does this.
         /// </remarks>
-        private static async Task<BigInteger> CalculateLoanSetFee(IXrplClient client, Dictionary<string, object> tx, BigInteger baseFee, CancellationToken cancellationToken = default)
+        private static async Task<BigInteger> CalculateLoanSetFee(IXrplClient client, Dictionary<string, object> tx, BigInteger baseFee, bool isInner, CancellationToken cancellationToken = default)
         {
             int counterpartySigners = GetCounterpartySignerCount(tx);
-            if (counterpartySigners == 0)
+            if (counterpartySigners == 0 && !isInner)
             {
                 counterpartySigners = await FetchCounterpartySignerCount(client, tx, cancellationToken);
             }
@@ -553,6 +569,11 @@ namespace Xrpl.Sugar
             return TryParseNumber(ToPlainValue(value), out amount);
         }
 
+        private static bool IsInnerBatchTxn(Dictionary<string, object> tx)
+        {
+            return (ParseTransactionFlags(tx) & (uint)XrplGlobalFlags.tfInnerBatchTxn) != 0;
+        }
+
         private static uint ParseTransactionFlags(Dictionary<string, object> tx)
         {
             if (!tx.TryGetValue("Flags", out var flags) || flags == null)
@@ -619,14 +640,16 @@ namespace Xrpl.Sugar
         }
 
         /// <summary>
-        /// Calculates fee for EscrowFinish with Fulfillment.
-        /// Formula: 10 drops × (33 + (Fulfillment size in bytes / 16))
+        /// Calculates fee for EscrowFinish with Fulfillment, following rippled
+        /// EscrowFinish::calculateBaseFee: fee × (33 + floor(Fulfillment size in bytes / 16)).
         /// </summary>
         private static BigInteger CalculateEscrowFinishFee(Dictionary<string, object> tx, string netFeeDrops)
         {
             // ToString rather than a cast: an inner transaction of a Batch reaches here
             // deserialized from JSON, not as the string a caller wrote.
-            decimal fulfillmentBytesSize = Math.Ceiling((decimal)$"{tx["Fulfillment"]}".Length / 2);
+            int fulfillmentBytesSize = ($"{tx["Fulfillment"]}".Length + 1) / 2;
+            // Integer division, as rippled does: a decimal quotient charged up to one base fee
+            // more than the node requires whenever the size was not a multiple of 16.
             decimal multiplier = 33 + (fulfillmentBytesSize / 16);
             var scaled = ScaleValueDecimal(netFeeDrops, multiplier);
             return new BigInteger(Math.Ceiling(scaled));
@@ -653,14 +676,7 @@ namespace Xrpl.Sugar
                 throw new ValidationException("Batch transaction must have RawTransactions field.");
             }
 
-            IEnumerable<object> items = rawTransactions switch
-            {
-                JsonArray ja => JsonSerializer.Deserialize<List<object>>(ja.ToJsonString(), XrplJsonOptions.Default)!,
-                IEnumerable<object> ie => ie,
-                _ => new List<object> { rawTransactions }
-            };
-
-            foreach (var inner in items)
+            foreach (var inner in RawTransactionItems(rawTransactions))
             {
                 if (!TryGetInnerFieldsAsDict(inner, out var innerTx))
                     throw new ArgumentNullException(nameof(inner), "RawTransaction not found or invalid.");
@@ -675,12 +691,44 @@ namespace Xrpl.Sugar
 
                 // Inner transactions carry no signatures of their own: their signers sign the
                 // outer batch as BatchSigners, which are counted below.
-                calculatedFee += await CalculateTransactorFee(client, innerTx, innerType, baseFee, netFeeDrops, 0, cancellationToken);
+                calculatedFee += await CalculateTransactorFee(client, innerTx, innerType, baseFee, netFeeDrops, 0, isInner: true, cancellationToken);
             }
 
             calculatedFee += baseFee * CountBatchSignatures(tx);
 
             return calculatedFee;
+        }
+
+        private static IEnumerable<object> RawTransactionItems(object rawTransactions)
+        {
+            return rawTransactions switch
+            {
+                JsonArray ja => JsonSerializer.Deserialize<List<object>>(ja.ToJsonString(), XrplJsonOptions.Default)!,
+                IEnumerable<object> ie => ie,
+                _ => new List<object> { rawTransactions }
+            };
+        }
+
+        /// <summary>
+        /// Number of inner transactions of a Batch priced at the owner reserve. Called after
+        /// <see cref="CalculateBatchFee"/> has validated RawTransactions.
+        /// </summary>
+        private static int CountReservePricedInners(Dictionary<string, object> tx)
+        {
+            if (!tx.TryGetValue("RawTransactions", out var rawTransactions) || rawTransactions == null)
+                return 0;
+
+            int count = 0;
+            foreach (var inner in RawTransactionItems(rawTransactions))
+            {
+                if (TryGetInnerFieldsAsDict(inner, out var innerTx)
+                    && innerTx.ContainsKey("TransactionType")
+                    && IsReserveFeeTxNeed(innerTx))
+                {
+                    count++;
+                }
+            }
+            return count;
         }
 
         /// <summary>

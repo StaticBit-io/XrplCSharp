@@ -5,6 +5,7 @@ using System.Collections.Generic;
 using System.Globalization;
 using System.Threading.Tasks;
 
+using Xrpl.Client;
 using Xrpl.Client.Exceptions;
 using Xrpl.Models.Common;
 using Xrpl.Models.Ledger;
@@ -94,6 +95,34 @@ public class TestUFeeRoundingAndCulture
 
         await Assert.ThrowsExactlyAsync<ValidationException>(() => client.GetFeeXrp());
         await Assert.ThrowsExactlyAsync<ValidationException>(() => client.CalculateFeePerTransactionType(CreatePaymentTx()));
+    }
+
+    [TestMethod]
+    public void TestUXrplClient_MaxFeeNotSet_DefaultsToTwoXrp()
+    {
+        using XrplClient noOptions = new XrplClient("ws://127.0.0.1:1");
+        using XrplClient otherOptions = new XrplClient("ws://127.0.0.1:1", new XrplClient.ClientOptions { NetworkID = 1 });
+        using XrplClient explicitCap = new XrplClient("ws://127.0.0.1:1", new XrplClient.ClientOptions { maxFeeXRP = "10" });
+
+        Assert.AreEqual("2", noOptions.maxFeeXRP);
+        Assert.AreEqual("2", otherOptions.maxFeeXRP);
+        Assert.AreEqual("10", explicitCap.maxFeeXRP);
+    }
+
+    [TestMethod]
+    public async Task TestUDefaultCap_HighLoadFactor_HoldsTheFeeAtTwoXrp()
+    {
+        // 10 drops × 1,000,000 = 10 XRP before the cap.
+        FeeTestClient client = new FeeTestClient(BASE_FEE_XRP, RESERVE_INC, maxFeeXRP: XrplClient.DefaultMaxFeeXRP)
+        {
+            LoadFactor = 1_000_000
+        };
+        Dictionary<string, object> tx = CreatePaymentTx();
+
+        await client.CalculateFeePerTransactionType(tx);
+
+        Assert.AreEqual("2", await client.GetFeeXrp());
+        Assert.AreEqual("2000000", tx["Fee"]);
     }
 
     [TestMethod]

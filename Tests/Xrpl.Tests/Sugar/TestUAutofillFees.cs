@@ -11,6 +11,7 @@ using System.Threading.Tasks;
 using Xrpl.BinaryCodec.Numbers;
 using Xrpl.Client;
 using Xrpl.Client.Exceptions;
+using Xrpl.Models.Enums;
 using Xrpl.Models.Ledger;
 using Xrpl.Models.Methods;
 using Xrpl.Models.Transactions;
@@ -106,13 +107,35 @@ public class TestUAutofillFees
         await client.CalculateFeePerTransactionType(tx);
 
         Assert.IsTrue(tx.ContainsKey("Fee"));
-        // Formula: ScaleValue(netFeeDrops, 33 + (fulfillmentBytes / 16))
-        // fulfillmentBytes = ceiling(8/2) = 4 bytes
-        // multiplier = 33 + (4/16) = 33.25
-        // netFeeDrops = "12" (from 0.000012 XRP)
-        // ScaleValue("12", 33.25) = "399"
-        // Math.Ceiling(399) = 399
-        Assert.AreEqual("399", tx["Fee"]);
+        // rippled EscrowFinish::calculateBaseFee: 12 × (33 + 4 bytes / 16), integer division = 396
+        Assert.AreEqual("396", tx["Fee"]);
+    }
+
+    /// <summary>
+    /// rippled divides the fulfillment size by 16 in integers; a decimal quotient charged up to
+    /// one base fee more whenever the size was not a multiple of 16 bytes.
+    /// </summary>
+    [TestMethod]
+    [DataRow(15, "396")]
+    [DataRow(16, "408")]
+    [DataRow(17, "408")]
+    [DataRow(32, "420")]
+    public async Task TestUCalculateFee_EscrowFinishWithFulfillment_DividesSizeLikeRippled(int bytes, string expectedFee)
+    {
+        var client = new FeeTestClient(MAINNET_BASE_FEE, RESERVE_INC);
+        var tx = new Dictionary<string, object>
+        {
+            ["TransactionType"] = "EscrowFinish",
+            ["Account"] = "rTestAccount",
+            ["Owner"] = "rOwner",
+            ["OfferSequence"] = 1,
+            ["Fulfillment"] = new string('A', bytes * 2)
+        };
+
+        await client.CalculateFeePerTransactionType(tx);
+
+        // 12 × (33 + floor(bytes / 16))
+        Assert.AreEqual(expectedFee, tx["Fee"]);
     }
 
     #endregion
@@ -239,9 +262,84 @@ public class TestUAutofillFees
 
         await client.CalculateFeePerTransactionType(tx);
 
-        // 2 base + EscrowFinish priced alone: 12 × (33 + 36 bytes / 16) = 423; the inner is
+        // 2 base + EscrowFinish priced alone: 12 × (33 + 36 bytes / 16) = 420; the inner is
         // the outer account's own, so no BatchSigner is expected.
-        Assert.AreEqual("447", tx["Fee"]);
+        Assert.AreEqual("444", tx["Fee"]);
+    }
+
+    [TestMethod]
+    public async Task TestUCalculateFee_Batch_WithReserveInner_ReserveIsNotCapped()
+    {
+        // A cap at the owner reserve itself, as on a standalone genesis: capping the Batch whole
+        // would leave it below the reserve its AMMCreate inner has to pay.
+        var client = new FeeTestClient(MAINNET_BASE_FEE, RESERVE_INC, maxFeeXRP: "2");
+        var tx = BatchOf("rTestAccount", Inner("Payment", "rAccount1"), Inner("AMMCreate", "rAccount2"));
+
+        await client.CalculateFeePerTransactionType(tx);
+
+        // 2 base + Payment + AMMCreate + 2 BatchSigners = 24 + 12 + 2000000 + 24
+        Assert.AreEqual("2000060", tx["Fee"]);
+    }
+
+    [TestMethod]
+    public async Task TestUCalculateFee_Batch_WithReserveInner_CapsTheLoadScaledPart()
+    {
+        // 50 drops of cap; the load-scaled part (24 + 12 + 24 = 60 drops) is held to it, and the
+        // reserve is added on top.
+        var client = new FeeTestClient(MAINNET_BASE_FEE, RESERVE_INC, maxFeeXRP: "0.000050");
+        var tx = BatchOf("rTestAccount", Inner("Payment", "rAccount1"), Inner("AMMCreate", "rAccount2"));
+
+        await client.CalculateFeePerTransactionType(tx);
+
+        Assert.AreEqual("2000050", tx["Fee"]);
+    }
+
+    /// <summary>
+    /// rippled LoanSet::calculateBaseFee charges for the signatures present in
+    /// CounterpartySignature, which a Batch inner never carries: the counterparty signs its
+    /// BatchSigner instead, and Batch::calculateBaseFeeImpl already charges for that.
+    /// </summary>
+    [TestMethod]
+    [DataRow(0)]
+    [DataRow(3)]
+    public async Task TestUCalculateFee_Batch_InnerLoanSet_CostsBaseFee(int counterpartySignerEntries)
+    {
+        var client = new FeeTestClient(MAINNET_BASE_FEE, RESERVE_INC)
+        {
+            CounterpartySignerLists = counterpartySignerEntries > 0 ? CreateSignerList(counterpartySignerEntries) : null
+        };
+        var tx = BatchOf("rRoot", InnerLoanSet("rRoot", "rBorrower"));
+
+        await client.CalculateFeePerTransactionType(tx);
+
+        // 2 base + LoanSet at base + rBorrower's BatchSigner = 24 + 12 + 12
+        Assert.AreEqual("48", tx["Fee"]);
+        Assert.AreEqual(0, client.AccountInfoCalls);
+    }
+
+    [TestMethod]
+    public async Task TestUCalculateFee_Batch_TwoInnerLoanSets_EachCostsBaseFee()
+    {
+        var client = new FeeTestClient(MAINNET_BASE_FEE, RESERVE_INC)
+        {
+            CounterpartySignerLists = CreateSignerList(2)
+        };
+        var tx = BatchOf("rRoot", InnerLoanSet("rRoot", "rBorrower1"), InnerLoanSet("rRoot", "rBorrower2"));
+
+        await client.CalculateFeePerTransactionType(tx);
+
+        // 2 base + 2 LoanSets at base + 2 BatchSigners = 24 + 24 + 24
+        Assert.AreEqual("72", tx["Fee"]);
+        Assert.AreEqual(0, client.AccountInfoCalls);
+    }
+
+    private static JsonObject InnerLoanSet(string account, string counterparty)
+    {
+        JsonObject inner = Inner("LoanSet", account,
+            ("LoanBrokerID", "0000000000000000000000000000000000000000000000000000000000000001"),
+            ("Counterparty", counterparty));
+        inner["RawTransaction"]!["Flags"] = (uint)XrplGlobalFlags.tfInnerBatchTxn;
+        return inner;
     }
 
     [TestMethod]
@@ -437,6 +535,23 @@ public class TestUAutofillFees
         // Signature already present: count it instead of querying the counterparty.
         // base * (1 + 2 signers) = 36
         Assert.AreEqual("36", tx["Fee"]);
+        Assert.AreEqual(0, client.AccountInfoCalls);
+    }
+
+    [TestMethod]
+    public async Task TestUCalculateFee_LoanSet_InnerBatchFlag_SkipsTheSignerListLookup()
+    {
+        // A LoanSet autofilled on its own before it goes into a Batch.
+        var client = new FeeTestClient(MAINNET_BASE_FEE, RESERVE_INC)
+        {
+            CounterpartySignerLists = CreateSignerList(3)
+        };
+        var tx = CreateLoanSetTx();
+        tx["Flags"] = (uint)XrplGlobalFlags.tfInnerBatchTxn;
+
+        await client.CalculateFeePerTransactionType(tx);
+
+        Assert.AreEqual("12", tx["Fee"]);
         Assert.AreEqual(0, client.AccountInfoCalls);
     }
 
