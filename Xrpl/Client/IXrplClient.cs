@@ -812,8 +812,9 @@ namespace Xrpl.Client
             /// Upper bound, in XRP, on the fee <c>GetFeeXrp</c> and <c>Autofill</c> fill in.
             /// Defaults to <see cref="DefaultMaxFeeXRP"/> ("2", as in xrpl.js) when not set. Types
             /// priced at the owner reserve (AccountDelete, AMMCreate, LedgerStateFix) are not
-            /// capped. To lift the cap, set a larger value, or clear <see cref="IXrplClient.maxFeeXRP"/>
-            /// on the client.
+            /// capped. To lift the cap, set a larger value, or an empty string for no cap at all.
+            /// <c>ChangeServer</c> with options applies these settings again, so a cap cleared on the
+            /// client returns to the default unless the new options carry the empty string too.
             /// </summary>
             public string? maxFeeXRP { get; set; }
 

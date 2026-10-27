@@ -555,6 +555,22 @@ public class TestUAutofillFees
         Assert.AreEqual(0, client.AccountInfoCalls);
     }
 
+    [TestMethod]
+    public async Task TestUCalculateFee_LoanSet_InnerBatchFlagAsEnum_SkipsTheSignerListLookup()
+    {
+        var client = new FeeTestClient(MAINNET_BASE_FEE, RESERVE_INC)
+        {
+            CounterpartySignerLists = CreateSignerList(3)
+        };
+        var tx = CreateLoanSetTx();
+        tx["Flags"] = LoanSetFlags.tfInnerBatchTxn;
+
+        await client.CalculateFeePerTransactionType(tx);
+
+        Assert.AreEqual("12", tx["Fee"]);
+        Assert.AreEqual(0, client.AccountInfoCalls);
+    }
+
     #endregion
 
     #region Cancellation

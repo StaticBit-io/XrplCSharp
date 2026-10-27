@@ -110,6 +110,22 @@ public class TestUFeeRoundingAndCulture
     }
 
     [TestMethod]
+    public async Task TestUXrplClient_EmptyMaxFee_LeavesTheFeeUncapped()
+    {
+        // ChangeServer applies its options through the same SetSettings as the constructor.
+        using XrplClient client = new XrplClient("ws://127.0.0.1:1", new XrplClient.ClientOptions { maxFeeXRP = "" });
+
+        Assert.AreEqual("", client.maxFeeXRP);
+
+        // The same empty cap on a fee source: 10 drops x 1,000,000 stays 10 XRP.
+        FeeTestClient feeClient = new FeeTestClient(BASE_FEE_XRP, RESERVE_INC, maxFeeXRP: client.maxFeeXRP)
+        {
+            LoadFactor = 1_000_000
+        };
+        Assert.AreEqual("10", await feeClient.GetFeeXrp());
+    }
+
+    [TestMethod]
     public async Task TestUDefaultCap_HighLoadFactor_HoldsTheFeeAtTwoXrp()
     {
         // 10 drops × 1,000,000 = 10 XRP before the cap.

@@ -584,7 +584,10 @@ namespace Xrpl.Sugar
                 uint u => u,
                 int i when i >= 0 => (uint)i,
                 long l when l is >= 0 and <= uint.MaxValue => (uint)l,
-                LoanPayFlags f => (uint)f,
+                ulong ul when ul <= uint.MaxValue => (uint)ul,
+                // Any flags enum, not only LoanPayFlags: a LoanSetFlags value carrying
+                // tfInnerBatchTxn read as 0 would price a Batch inner as a top-level LoanSet.
+                Enum e => unchecked((uint)Convert.ToInt64(e, CultureInfo.InvariantCulture)),
                 JsonValue jv when jv.TryGetValue(out uint u) => u,
                 JsonElement je when je.ValueKind == JsonValueKind.Number && je.TryGetUInt32(out uint u) => u,
                 string s when uint.TryParse(s, NumberStyles.Integer, CultureInfo.InvariantCulture, out uint u) => u,
