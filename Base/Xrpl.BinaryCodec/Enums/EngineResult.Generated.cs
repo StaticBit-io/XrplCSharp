@@ -108,6 +108,8 @@ namespace Xrpl.BinaryCodec.Enums
         public static readonly EngineResult tefBAD_PATH_COUNT = Add(nameof(tefBAD_PATH_COUNT), -176);
         public static readonly EngineResult tefNO_BYTECODE = Add(nameof(tefNO_BYTECODE), -175);
         public static readonly EngineResult tefBYTECODE_NOT_INCLUDED = Add(nameof(tefBYTECODE_NOT_INCLUDED), -174);
+        public static readonly EngineResult tefTEMP_DISABLED = Add(nameof(tefTEMP_DISABLED), -173);
+        public static readonly EngineResult tefEXCEEDS_LIMIT = Add(nameof(tefEXCEEDS_LIMIT), -172);
 
         // ─── ter ───
         public static readonly EngineResult terRETRY = Add(nameof(terRETRY), -99);
@@ -127,6 +129,7 @@ namespace Xrpl.BinaryCodec.Enums
         public static readonly EngineResult terNO_DELEGATE_PERMISSION = Add(nameof(terNO_DELEGATE_PERMISSION), -85);
         public static readonly EngineResult terLOCKED = Add(nameof(terLOCKED), -84);
         public static readonly EngineResult terNO_PERMISSION = Add(nameof(terNO_PERMISSION), -83);
+        public static readonly EngineResult terTICKET_RESERVED = Add(nameof(terTICKET_RESERVED), -82);
 
         // ─── tes ───
         public static readonly EngineResult tesSUCCESS = Add(nameof(tesSUCCESS), 0);

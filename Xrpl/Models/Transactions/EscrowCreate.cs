@@ -39,6 +39,14 @@ namespace Xrpl.Models.Transactions
 
         /// <inheritdoc />
         public uint? DestinationTag { get; set; }
+
+        /// <inheritdoc />
+        [JsonIgnore(Condition = JsonIgnoreCondition.WhenWritingNull)]
+        public string Bytecode { get; set; }
+
+        /// <inheritdoc />
+        [JsonIgnore(Condition = JsonIgnoreCondition.WhenWritingNull)]
+        public string Data { get; set; }
     }
 
     /// <summary>
@@ -77,6 +85,16 @@ namespace Xrpl.Models.Transactions
         /// until this time is reached.
         /// </summary>
         DateTime? FinishAfter { get; set; }
+        /// <summary>
+        /// (Optional) SmartEscrow: the WebAssembly module, hex-encoded, whose finish function
+        /// decides whether the escrow may be finished.
+        /// </summary>
+        string Bytecode { get; set; }
+        /// <summary>
+        /// (Optional) SmartEscrow: arbitrary hex-encoded data stored on the escrow for the
+        /// <see cref="Bytecode"/> to read and update.
+        /// </summary>
+        string Data { get; set; }
     }
 
     /// <inheritdoc cref="IEscrowCreate" />
@@ -102,6 +120,14 @@ namespace Xrpl.Models.Transactions
 
         /// <inheritdoc />
         public uint? DestinationTag { get; set; }
+
+        /// <inheritdoc />
+        [JsonIgnore(Condition = JsonIgnoreCondition.WhenWritingNull)]
+        public string Bytecode { get; set; }
+
+        /// <inheritdoc />
+        [JsonIgnore(Condition = JsonIgnoreCondition.WhenWritingNull)]
+        public string Data { get; set; }
     }
 
     public partial class Validation

@@ -136,6 +136,11 @@ namespace Xrpl.Client.Json.Converters
                 "ConfidentialMPTConvertBack" => new ConfidentialMPTConvertBackResponse(),
                 "ConfidentialMPTSend" => new ConfidentialMPTSendResponse(),
                 "ConfidentialMPTClawback" => new ConfidentialMPTClawbackResponse(),
+                "ConfidentialMPTMirrorUpdate" => new ConfidentialMPTMirrorUpdateResponse(),
+                "ConfidentialMPTHolderKeyUpdate" => new ConfidentialMPTHolderKeyUpdateResponse(),
+
+                "TransactionProposalCreate" => new TransactionProposalCreateResponse(),
+                "TransactionProposalCancel" => new TransactionProposalCancelResponse(),
 
                 //_ => throw new Exception("Can't create transaction type" + transactionType)
                 _ => new TransactionResponseUnknown(),

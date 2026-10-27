@@ -52,5 +52,8 @@ namespace Xrpl.BinaryCodec.Enums
         public static readonly BlobField AmountCommitment = new BlobField(nameof(AmountCommitment), 45);
         public static readonly BlobField BalanceCommitment = new BlobField(nameof(BalanceCommitment), 46);
         public static readonly BlobField Bytecode = new BlobField(nameof(Bytecode), 47);
+        public static readonly BlobField RecoveryKey = new BlobField(nameof(RecoveryKey), 48);
+        public static readonly BlobField InitialIssuerEncryptionKey = new BlobField(nameof(InitialIssuerEncryptionKey), 49);
+        public static readonly BlobField IssuerMirrorEncryptionKey = new BlobField(nameof(IssuerMirrorEncryptionKey), 50);
     }
 }

@@ -365,7 +365,9 @@ namespace Xrpl.Sugar
                 or nameof(TransactionType.ConfidentialMPTConvert)
                 or nameof(TransactionType.ConfidentialMPTConvertBack)
                 or nameof(TransactionType.ConfidentialMPTMergeInbox)
-                or nameof(TransactionType.ConfidentialMPTClawback);
+                or nameof(TransactionType.ConfidentialMPTClawback)
+                or nameof(TransactionType.ConfidentialMPTMirrorUpdate)
+                or nameof(TransactionType.ConfidentialMPTHolderKeyUpdate);
         }
 
         /// <summary>

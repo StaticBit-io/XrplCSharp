@@ -58,6 +58,25 @@ namespace Xrpl.Models.Transactions
         /// Arbitrary hex-encoded metadata, limited to 256 bytes.
         /// </summary>
         string Data { get; set; }
+
+        /// <summary>
+        /// (Optional) LendingProtocolV1_2: the permissioned domain a private loan broker is bound to.
+        /// Only a broker created with <see cref="LoanBrokerSetFlags.tfLoanBrokerPrivate"/> may carry
+        /// one; on an existing private broker the zero hash removes it.
+        /// </summary>
+        string DomainID { get; set; }
+    }
+
+    /// <summary>
+    /// Flags of <see cref="LoanBrokerSet"/> (rippled TxFlags.h).
+    /// </summary>
+    [System.Flags]
+    public enum LoanBrokerSetFlags : uint
+    {
+        /// <summary>
+        /// LendingProtocolV1_2: create a private loan broker, which may be bound to a permissioned domain.
+        /// </summary>
+        tfLoanBrokerPrivate = 0x00010000,
     }
 
     /// <inheritdoc cref="ILoanBrokerSet" />
@@ -95,6 +114,22 @@ namespace Xrpl.Models.Transactions
         /// <inheritdoc />
         [JsonPropertyName("Data")]
         public string Data { get; set; }
+
+        /// <inheritdoc />
+        [JsonPropertyName("DomainID")]
+        [JsonIgnore(Condition = JsonIgnoreCondition.WhenWritingNull)]
+        public string DomainID { get; set; }
+
+        /// <summary>
+        /// Typed view over the base Flags value (see <see cref="LoanBrokerSetFlags"/>).
+        /// </summary>
+        [JsonPropertyName("Flags")]
+        [JsonIgnore(Condition = JsonIgnoreCondition.WhenWritingNull)]
+        public new LoanBrokerSetFlags? Flags
+        {
+            get => base.Flags.HasValue ? (LoanBrokerSetFlags?)base.Flags.Value : null;
+            set => base.Flags = (uint?)value;
+        }
     }
 
     /// <inheritdoc cref="ILoanBrokerSet" />
@@ -128,6 +163,22 @@ namespace Xrpl.Models.Transactions
         /// <inheritdoc />
         [JsonPropertyName("Data")]
         public string Data { get; set; }
+
+        /// <inheritdoc />
+        [JsonPropertyName("DomainID")]
+        [JsonIgnore(Condition = JsonIgnoreCondition.WhenWritingNull)]
+        public string DomainID { get; set; }
+
+        /// <summary>
+        /// Typed view over the base Flags value (see <see cref="LoanBrokerSetFlags"/>).
+        /// </summary>
+        [JsonPropertyName("Flags")]
+        [JsonIgnore(Condition = JsonIgnoreCondition.WhenWritingNull)]
+        public new LoanBrokerSetFlags? Flags
+        {
+            get => base.Flags.HasValue ? (LoanBrokerSetFlags?)base.Flags.Value : null;
+            set => base.Flags = (uint?)value;
+        }
     }
 
     public partial class Validation
@@ -138,6 +189,21 @@ namespace Xrpl.Models.Transactions
 
             if (!tx.TryGetValue("VaultID", out var vaultId) || vaultId is not string)
                 throw new ValidationException("LoanBrokerSet: missing field VaultID");
+
+            // Mirror of rippled LoanBrokerSet::preflight for DomainID on a new broker; on an
+            // existing broker the zero hash is how DomainID is removed.
+            if (tx.TryGetValue("DomainID", out var domainId))
+            {
+                if (domainId is not string domain)
+                    throw new ValidationException("LoanBrokerSet: invalid DomainID");
+                if (!tx.ContainsKey("LoanBrokerID"))
+                {
+                    if (string.Equals(domain, ZeroHash256, System.StringComparison.Ordinal))
+                        throw new ValidationException("LoanBrokerSet: DomainID must not be zero when creating a loan broker");
+                    if ((ExtractFlags(tx) & (uint)LoanBrokerSetFlags.tfLoanBrokerPrivate) == 0)
+                        throw new ValidationException("LoanBrokerSet: a public loan broker cannot have a DomainID");
+                }
+            }
         }
     }
 }

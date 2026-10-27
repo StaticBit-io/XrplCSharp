@@ -152,5 +152,20 @@ namespace Xrpl.Models.Ledger
         /// </summary>
         [JsonPropertyName("HolderEncryptionKey")]
         public string? HolderEncryptionKey { get; init; }
+
+        /// <summary>
+        /// ConfidentialMPTKeyRotation: the issuer key the issuer mirror of this balance
+        /// (<c>IssuerEncryptedBalance</c>) is encrypted under (hex blob).
+        /// </summary>
+        [JsonPropertyName("IssuerMirrorEncryptionKey")]
+        public string? IssuerMirrorEncryptionKey { get; init; }
+
+        /// <summary>
+        /// ConfidentialMPTKeyRotation: the new holder key of a pending recovery (hex blob), set by
+        /// ConfidentialMPTHolderKeyUpdate with <c>tfHolderKeyRecovery</c>. Absent when no recovery is
+        /// pending; a rotation or <c>tfCancelRecovery</c> removes it.
+        /// </summary>
+        [JsonPropertyName("RecoveryKey")]
+        public string? RecoveryKey { get; init; }
     }
 }
