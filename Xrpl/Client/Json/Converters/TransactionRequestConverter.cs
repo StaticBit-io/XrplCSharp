@@ -133,6 +133,11 @@ public class TransactionRequestConverter : JsonConverter<ITransactionRequest>
             "ConfidentialMPTConvertBack" => new ConfidentialMPTConvertBack(),
             "ConfidentialMPTSend" => new ConfidentialMPTSend(),
             "ConfidentialMPTClawback" => new ConfidentialMPTClawback(),
+            "ConfidentialMPTMirrorUpdate" => new ConfidentialMPTMirrorUpdate(),
+            "ConfidentialMPTHolderKeyUpdate" => new ConfidentialMPTHolderKeyUpdate(),
+
+            "TransactionProposalCreate" => new TransactionProposalCreate(),
+            "TransactionProposalCancel" => new TransactionProposalCancel(),
 
             //_ => throw new Exception("Can't create transaction type" + transactionType)
             _ => new TransactionUnknown(),

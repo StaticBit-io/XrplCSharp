@@ -366,6 +366,30 @@
         /// </summary>
         /// <remarks>Requires the ConfidentialTransfer amendment. This feature is in draft and subject to change.</remarks>
         ConfidentialMPTClawback,
+
+        /// <summary>
+        /// Re-encrypts the issuer or auditor mirror of a confidential MPT balance under the current key.
+        /// </summary>
+        /// <remarks>Requires the ConfidentialMPTKeyRotation amendment. This feature is in draft and subject to change.</remarks>
+        ConfidentialMPTMirrorUpdate,
+
+        /// <summary>
+        /// Rotates or recovers a confidential MPT holder's encryption key, or cancels a recovery.
+        /// </summary>
+        /// <remarks>Requires the ConfidentialMPTKeyRotation amendment. This feature is in draft and subject to change.</remarks>
+        ConfidentialMPTHolderKeyUpdate,
+
+        /// <summary>
+        /// Deletes a TransactionProposal and releases its owner's reserve.
+        /// </summary>
+        /// <remarks>Requires the Cosign amendment. This feature is in draft and subject to change.</remarks>
+        TransactionProposalCancel,
+
+        /// <summary>
+        /// Posts an unsigned transaction on-ledger as a TransactionProposal to collect signatures for it.
+        /// </summary>
+        /// <remarks>Requires the Cosign amendment. This feature is in draft and subject to change.</remarks>
+        TransactionProposalCreate,
     }
 }
 

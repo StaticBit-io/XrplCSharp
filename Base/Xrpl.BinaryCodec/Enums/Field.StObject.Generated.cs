@@ -42,5 +42,6 @@ namespace Xrpl.BinaryCodec.Enums
         public static readonly StObjectField Book = new StObjectField(nameof(Book), 36);
         public static readonly StObjectField CounterpartySignature = new StObjectField(nameof(CounterpartySignature), 37, isSigningField: false);
         public static readonly StObjectField SponsorSignature = new StObjectField(nameof(SponsorSignature), 38, isSigningField: false);
+        public static readonly StObjectField ProposedTransaction = new StObjectField(nameof(ProposedTransaction), 39);
     }
 }

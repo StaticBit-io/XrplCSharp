@@ -32,5 +32,6 @@ namespace Xrpl.BinaryCodec.Enums
         public static readonly AccountIdField LowSponsor = new AccountIdField(nameof(LowSponsor), 29);
         public static readonly AccountIdField CounterpartySponsor = new AccountIdField(nameof(CounterpartySponsor), 30);
         public static readonly AccountIdField Sponsee = new AccountIdField(nameof(Sponsee), 31);
+        public static readonly AccountIdField SigningFor = new AccountIdField(nameof(SigningFor), 32);
     }
 }

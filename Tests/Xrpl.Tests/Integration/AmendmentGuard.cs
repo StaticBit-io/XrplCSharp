@@ -137,6 +137,33 @@ public static class AmendmentGuard
             Assert.Inconclusive("XChainBridge is not enabled on the test node; rippled develop removed the bridge and its transaction types (XRPLF/rippled#8255).");
     }
 
+    /// <summary>
+    /// Skips the test when the node's build does not know <paramref name="transactionType"/>.
+    /// </summary>
+    /// <remarks>
+    /// For a type whose amendment is Supported::No the on-ledger check cannot answer: the only way
+    /// a stand runs it is a <c>[features]</c> preset, which neither the Amendments object nor the
+    /// <c>feature</c> command reports (<c>feature</c> answers <c>badFeature</c> to the name). Such a
+    /// test therefore asks the build whether it knows the type, then treats a <c>temDISABLED</c>
+    /// answer to its first submission as "not enabled here" through <see cref="SkipIfDisabled"/>.
+    /// </remarks>
+    public static async Task RequireTransactionTypeAsync(IXrplClient client, string transactionType, string amendment)
+    {
+        ServerDefinitionsResponse definitions = await client.ServerDefinitions(new ServerDefinitionsRequest()).Typed();
+        if (definitions?.TransactionTypes is null || !definitions.TransactionTypes.ContainsKey(transactionType))
+            Assert.Inconclusive($"The test node's build does not know {transactionType}; it needs a build carrying the {amendment} amendment (the nightly stand, with {amendment} in [features]).");
+    }
+
+    /// <summary>
+    /// Skips the test when the node refused a transaction as <c>temDISABLED</c>: the build knows the
+    /// type but its amendment is neither enabled on-ledger nor a <c>[features]</c> preset.
+    /// </summary>
+    public static void SkipIfDisabled(string engineResult, string amendment)
+    {
+        if (string.Equals(engineResult, "temDISABLED", StringComparison.Ordinal))
+            Assert.Inconclusive($"{amendment} is not enabled on the test node: add {amendment} to [features] of the stand's config (Supported::No amendments run only as Rules presets).");
+    }
+
     public static async Task<bool> IsEnabledAsync(IXrplClient client, string amendmentId)
     {
         try

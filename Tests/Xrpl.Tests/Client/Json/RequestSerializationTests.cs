@@ -97,6 +97,26 @@ public class TestURequestSerialization
     }
 
     [TestMethod]
+    public void Serialize_LedgerEntryRequest_TransactionProposal_UsesRippledParameterNames()
+    {
+        BaseRequest request = new LedgerEntryRequest
+        {
+            TransactionProposal = new TransactionProposalQuery
+            {
+                Account = "rAccount1",
+                TicketSequence = 7
+            }
+        };
+        string json = JsonSerializer.Serialize(request, request.GetType(), Options);
+
+        // rippled parseTransactionProposal reads jss::account and jss::ticket_seq.
+        System.Text.Json.Nodes.JsonNode query = System.Text.Json.Nodes.JsonNode.Parse(json)!["transaction_proposal"];
+        Assert.IsNotNull(query, "Missing 'transaction_proposal' field");
+        Assert.AreEqual("rAccount1", query["account"]!.GetValue<string>());
+        Assert.AreEqual(7u, query["ticket_seq"]!.GetValue<uint>());
+    }
+
+    [TestMethod]
     public void Serialize_BookOffersRequest_IncludesAllFields()
     {
         BaseRequest request = new BookOffersRequest

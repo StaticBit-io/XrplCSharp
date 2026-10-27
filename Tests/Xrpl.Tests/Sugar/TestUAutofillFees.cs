@@ -366,6 +366,24 @@ public class TestUAutofillFees
         Assert.AreEqual("144", tx["Fee"]);
     }
 
+    [TestMethod]
+    [DataRow("ConfidentialMPTMirrorUpdate")]
+    [DataRow("ConfidentialMPTHolderKeyUpdate")]
+    public async Task TestUCalculateFee_KeyRotation_AppliesConfidentialMultiplier(string transactionType)
+    {
+        var client = new FeeTestClient(MAINNET_BASE_FEE, RESERVE_INC);
+        var tx = new Dictionary<string, object>
+        {
+            ["TransactionType"] = transactionType,
+            ["Account"] = "rTestAccount"
+        };
+
+        await client.CalculateFeePerTransactionType(tx);
+
+        // Both transactors override calculateBaseFee with kConfidentialFeeMultiplier: base * 10
+        Assert.AreEqual("120", tx["Fee"]);
+    }
+
     #endregion
 
     #region LoanSet Fee Tests

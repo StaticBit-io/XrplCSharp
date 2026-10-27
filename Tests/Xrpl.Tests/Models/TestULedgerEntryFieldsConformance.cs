@@ -69,6 +69,7 @@ namespace Xrpl.Tests.Models.Tests
             ["SignerList"] = typeof(LOSignerList),
             ["Sponsorship"] = typeof(LOSponsorship),
             ["Ticket"] = typeof(LOTicket),
+            ["TransactionProposal"] = typeof(LOTransactionProposal),
             ["Vault"] = typeof(LOVault),
             ["XChainOwnedClaimID"] = typeof(LOXChainOwnedClaimID),
             ["XChainOwnedCreateAccountClaimID"] = typeof(LOXChainOwnedCreateAccountClaimID),

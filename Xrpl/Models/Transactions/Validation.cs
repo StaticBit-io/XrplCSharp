@@ -294,6 +294,19 @@ namespace Xrpl.Models.Transactions
                 case "ConfidentialMPTClawback":
                     ValidateConfidentialMPTClawback(tx);
                     break;
+                case "ConfidentialMPTMirrorUpdate":
+                    ValidateConfidentialMPTMirrorUpdate(tx);
+                    break;
+                case "ConfidentialMPTHolderKeyUpdate":
+                    ValidateConfidentialMPTHolderKeyUpdate(tx);
+                    break;
+
+                case "TransactionProposalCreate":
+                    ValidateTransactionProposalCreate(tx);
+                    break;
+                case "TransactionProposalCancel":
+                    ValidateTransactionProposalCancel(tx);
+                    break;
 
                 default:
                     throw new ValidationException($"Invalid field TransactionType: {type}");
