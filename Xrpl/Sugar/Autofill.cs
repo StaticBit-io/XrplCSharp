@@ -260,6 +260,21 @@ namespace Xrpl.Sugar
             return BigInteger.Parse(fee.Value.ToString());
         }
 
+        /// <summary>
+        /// The owner reserve scaled by the load factor, rounded up to whole drops. rippled
+        /// Transactor::checkFee compares the fee paid with scaleFeeLoad(calculateBaseFee), and for
+        /// a reserve-priced type calculateBaseFee is the reserve, so under load the reserve at face
+        /// value is refused with telINSUF_FEE_P. The fee cushion is not applied: at load factor 1
+        /// it would charge every AccountDelete a fifth of a reserve more than the node requires.
+        /// </summary>
+        private static async Task<BigInteger> FetchLoadScaledReserveFee(IXrplClient client, decimal loadFactor, CancellationToken cancellationToken)
+        {
+            BigInteger reserve = await FetchReserveFee(client, cancellationToken);
+            return loadFactor <= 1m
+                ? reserve
+                : new BigInteger(Math.Ceiling((decimal)reserve * loadFactor));
+        }
+
         public static async Task CalculateFeePerTransactionType(this IXrplClient client, Dictionary<string, object> tx, int signersCount = 0, CancellationToken cancellationToken = default)
         {
             string fee = await client.ComputeFeePerTransactionType(tx, signersCount, cancellationToken);
@@ -274,7 +289,7 @@ namespace Xrpl.Sugar
         /// </summary>
         private static async Task<string> ComputeFeePerTransactionType(this IXrplClient client, Dictionary<string, object> tx, int signersCount, CancellationToken cancellationToken)
         {
-            var netFeeXRP = await client.GetFeeXrp(cancellationToken: cancellationToken);
+            (string netFeeXRP, decimal loadFactor) = await GetFeeXrpSugar.FetchFeeXrp(client, null, cancellationToken);
             var netFeeDrops = XrpConversion.XrpToDrops(netFeeXRP);
             var baseFee = new BigInteger(Math.Floor(decimal.Parse(netFeeDrops, NumberStyles.AllowDecimalPoint | NumberStyles.AllowLeadingSign | NumberStyles.AllowExponent, CultureInfo.InvariantCulture)));
             
@@ -285,21 +300,24 @@ namespace Xrpl.Sugar
             }
 
             var transactionType = (string)tx["TransactionType"];
-            var calculatedFee = await CalculateTransactorFee(client, tx, transactionType, baseFee, netFeeDrops, signersCount, IsInnerBatchTxn(tx), cancellationToken);
+            var calculatedFee = await CalculateTransactorFee(client, tx, transactionType, baseFee, netFeeDrops, loadFactor, signersCount, IsInnerBatchTxn(tx), cancellationToken);
 
             BigInteger totalFee;
-            if (!string.IsNullOrWhiteSpace(client.maxFeeXRP) && !IsReserveFeeTxNeed(tx))
+            if (!string.IsNullOrWhiteSpace(client.maxFeeXRP))
             {
                 var maxFeeBI = new BigInteger(GetFeeXrpSugar.MaxFeeDrops(client.maxFeeXRP));
-                // The cap guards against a high load factor, and the owner reserve does not scale
-                // with it. A Batch carrying an AMMCreate pays that reserve on top: on a network
-                // whose increment is at or above the cap (a standalone genesis charges 2 XRP),
-                // capping it would leave the Batch below what rippled requires.
-                int reservePricedInners = transactionType == "Batch" ? CountReservePricedInners(tx) : 0;
-                BigInteger reserveCharges = reservePricedInners > 0
-                    ? reservePricedInners * await FetchReserveFee(client, cancellationToken)
+                // The cap bounds what the load factor adds, never the owner reserve itself: each
+                // reserve charge (the transaction's own, or one per reserve-priced Batch inner) is
+                // allowed on top of it. Capped whole, an AccountDelete, or a Batch carrying an
+                // AMMCreate, would fall below rippled's minimum wherever the reserve increment is
+                // at or above the cap (a standalone genesis charges 2 XRP).
+                int reserveCharges = IsReserveFeeTxNeed(tx) ? 1
+                    : transactionType == "Batch" ? CountReservePricedInners(tx)
+                    : 0;
+                BigInteger reserveAllowance = reserveCharges > 0
+                    ? reserveCharges * await FetchReserveFee(client, cancellationToken)
                     : BigInteger.Zero;
-                totalFee = BigInteger.Min(calculatedFee, maxFeeBI + reserveCharges);
+                totalFee = BigInteger.Min(calculatedFee, maxFeeBI + reserveAllowance);
             }
             else
             {
@@ -323,11 +341,12 @@ namespace Xrpl.Sugar
             string transactionType,
             BigInteger baseFee,
             string netFeeDrops,
+            decimal loadFactor,
             int signersCount,
             bool isInner,
             CancellationToken cancellationToken)
         {
-            var calculatedFee = await CalculateBaseFeeForType(client, tx, transactionType, baseFee, netFeeDrops, isInner, cancellationToken);
+            var calculatedFee = await CalculateBaseFeeForType(client, tx, transactionType, baseFee, netFeeDrops, loadFactor, isInner, cancellationToken);
             // rippled Transactor::calculateBaseFee: one baseFee per outer multisig signer
             // plus one per signer nested in SponsorSignature.Signers (XLS-68 sponsor
             // multisig; a single-signed SponsorSignature adds nothing). Scaled from the
@@ -353,16 +372,17 @@ namespace Xrpl.Sugar
             string transactionType, 
             BigInteger baseFee, 
             string netFeeDrops,
+            decimal loadFactor,
             bool isInner,
             CancellationToken cancellationToken = default)
         {
             return transactionType switch
             {
                 "EscrowFinish" when tx.TryGetValue("Fulfillment", out _) => CalculateEscrowFinishFee(tx, netFeeDrops),
-                "Batch" => await CalculateBatchFee(client, tx, baseFee, netFeeDrops, cancellationToken),
+                "Batch" => await CalculateBatchFee(client, tx, baseFee, netFeeDrops, loadFactor, cancellationToken),
                 nameof(TransactionType.LoanSet) => await CalculateLoanSetFee(client, tx, baseFee, isInner, cancellationToken),
                 _ when IsConfidentialMPTTx(transactionType) => baseFee * (1 + CONFIDENTIAL_FEE_MULTIPLIER),
-                _ when IsReserveFeeTxNeed(tx) => await FetchReserveFee(client, cancellationToken),
+                _ when IsReserveFeeTxNeed(tx) => await FetchLoadScaledReserveFee(client, loadFactor, cancellationToken),
                 _ => baseFee
             };
         }
@@ -670,7 +690,7 @@ namespace Xrpl.Sugar
         /// account that has not signed yet is counted as one signature. A participant that will
         /// multi-sign its BatchSigner needs a Fee set by hand.
         /// </remarks>
-        private static async Task<BigInteger> CalculateBatchFee(IXrplClient client, Dictionary<string, object> tx, BigInteger baseFee, string netFeeDrops, CancellationToken cancellationToken = default)
+        private static async Task<BigInteger> CalculateBatchFee(IXrplClient client, Dictionary<string, object> tx, BigInteger baseFee, string netFeeDrops, decimal loadFactor, CancellationToken cancellationToken = default)
         {
             var calculatedFee = baseFee * 2;
 
@@ -694,7 +714,7 @@ namespace Xrpl.Sugar
 
                 // Inner transactions carry no signatures of their own: their signers sign the
                 // outer batch as BatchSigners, which are counted below.
-                calculatedFee += await CalculateTransactorFee(client, innerTx, innerType, baseFee, netFeeDrops, 0, isInner: true, cancellationToken);
+                calculatedFee += await CalculateTransactorFee(client, innerTx, innerType, baseFee, netFeeDrops, loadFactor, 0, isInner: true, cancellationToken);
             }
 
             calculatedFee += baseFee * CountBatchSignatures(tx);

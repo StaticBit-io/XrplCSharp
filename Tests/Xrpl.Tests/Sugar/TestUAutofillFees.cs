@@ -159,6 +159,60 @@ public class TestUAutofillFees
         Assert.AreEqual("2000000", tx["Fee"]); // Reserve fee
     }
 
+    /// <summary>
+    /// rippled Transactor::checkFee requires scaleFeeLoad(calculateBaseFee), and for a
+    /// reserve-priced type calculateBaseFee is the reserve: under load the reserve at face value
+    /// is refused with telINSUF_FEE_P.
+    /// </summary>
+    [TestMethod]
+    [DataRow("AccountDelete", 2.0, "4000000")]
+    [DataRow("AMMCreate", 2.0, "4000000")]
+    [DataRow("LedgerStateFix", 1.03515625, "2070313")] // 2,070,312.5 rounded up
+    public async Task TestUCalculateFee_ReservePriced_ScalesByLoadFactor(string transactionType, double loadFactor, string expectedFee)
+    {
+        var client = new FeeTestClient(MAINNET_BASE_FEE, RESERVE_INC) { LoadFactor = loadFactor };
+        var tx = new Dictionary<string, object>
+        {
+            ["TransactionType"] = transactionType,
+            ["Account"] = "rTestAccount"
+        };
+
+        await client.CalculateFeePerTransactionType(tx);
+
+        Assert.AreEqual(expectedFee, tx["Fee"]);
+    }
+
+    [TestMethod]
+    public async Task TestUCalculateFee_ReservePriced_CushionIsNotApplied()
+    {
+        var client = new FeeTestClient(MAINNET_BASE_FEE, RESERVE_INC) { feeCushion = 1.2 };
+        var tx = new Dictionary<string, object>
+        {
+            ["TransactionType"] = "AccountDelete",
+            ["Account"] = "rTestAccount"
+        };
+
+        await client.CalculateFeePerTransactionType(tx);
+
+        Assert.AreEqual("2000000", tx["Fee"]);
+    }
+
+    [TestMethod]
+    public async Task TestUCalculateFee_ReservePriced_CapBoundsOnlyTheLoadSurcharge()
+    {
+        // 2 XRP x 10 = 20 XRP before the cap; the cap of 50 drops is allowed on top of the reserve.
+        var client = new FeeTestClient(MAINNET_BASE_FEE, RESERVE_INC, maxFeeXRP: "0.000050") { LoadFactor = 10 };
+        var tx = new Dictionary<string, object>
+        {
+            ["TransactionType"] = "AccountDelete",
+            ["Account"] = "rTestAccount"
+        };
+
+        await client.CalculateFeePerTransactionType(tx);
+
+        Assert.AreEqual("2000050", tx["Fee"]);
+    }
+
     [TestMethod]
     public async Task TestUCalculateFee_AMMCreate_UsesReserveFee()
     {
@@ -279,6 +333,19 @@ public class TestUAutofillFees
 
         // 2 base + Payment + AMMCreate + 2 BatchSigners = 24 + 12 + 2000000 + 24
         Assert.AreEqual("2000060", tx["Fee"]);
+    }
+
+    [TestMethod]
+    public async Task TestUCalculateFee_Batch_WithReserveInner_ScalesTheReserveByLoadFactor()
+    {
+        var client = new FeeTestClient(MAINNET_BASE_FEE, RESERVE_INC) { LoadFactor = 2 };
+        var tx = BatchOf("rTestAccount", Inner("Payment", "rAccount1"), Inner("AMMCreate", "rAccount2"));
+
+        await client.CalculateFeePerTransactionType(tx);
+
+        // Base fee 24 drops at load 2: 2 base + Payment + AMMCreate (2 XRP x 2) + 2 BatchSigners
+        // = 48 + 24 + 4000000 + 48
+        Assert.AreEqual("4000120", tx["Fee"]);
     }
 
     [TestMethod]

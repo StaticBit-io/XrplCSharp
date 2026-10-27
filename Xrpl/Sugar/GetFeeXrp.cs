@@ -24,6 +24,16 @@ namespace Xrpl.Sugar
         /// <returns>The transaction fee in XRP, rounded up to whole drops and capped at <c>maxFeeXRP</c> (floored to whole drops).</returns>
         public static async Task<string> GetFeeXrp(this IXrplClient client, double? cushion = null, CancellationToken cancellationToken = default)
         {
+            (string fee, _) = await FetchFeeXrp(client, cushion, cancellationToken);
+            return fee;
+        }
+
+        /// <summary>
+        /// <see cref="GetFeeXrp"/> together with the load factor it was scaled by (1 when the node
+        /// reports none). Autofill scales the owner-reserve charge by the same factor.
+        /// </summary>
+        internal static async Task<(string FeeXrp, decimal LoadFactor)> FetchFeeXrp(IXrplClient client, double? cushion, CancellationToken cancellationToken)
+        {
             double feeCushion = cushion ?? client.feeCushion;
             ServerInfoRequest request = new ServerInfoRequest();
             ServerInfo serverInfo = await client.ServerInfo(request, cancellationToken).Typed();
@@ -41,7 +51,8 @@ namespace Xrpl.Sugar
                 serverInfo.Info.LoadFactor = 1;
             }
 
-            decimal fee = baseFeeXrp * (decimal)serverInfo.Info.LoadFactor * (decimal)feeCushion;
+            decimal loadFactor = (decimal)serverInfo.Info.LoadFactor;
+            decimal fee = baseFeeXrp * loadFactor * (decimal)feeCushion;
 
             // A fractional load_factor (1.03515625 is a common one) leaves digits below one drop,
             // which XrpToDrops rejects. xrpl.js rounds half-up to 6 places; rounding up instead
@@ -54,7 +65,7 @@ namespace Xrpl.Sugar
                 fee = Math.Min(fee, MaxFeeDrops(client.maxFeeXRP) / DROPS_PER_XRP);
             }
 
-            return fee.ToString(CultureInfo.InvariantCulture);
+            return (fee.ToString(CultureInfo.InvariantCulture), loadFactor);
         }
 
         /// <summary>
