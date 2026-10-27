@@ -42,6 +42,11 @@ namespace Xrpl.Models.Transactions
         [JsonPropertyName("CredentialIDs")]
         [JsonIgnore(Condition = JsonIgnoreCondition.WhenWritingNull)]
         public List<string> CredentialIDs { get; set; }
+
+        /// <inheritdoc />
+        [JsonPropertyName("Gas")]
+        [JsonIgnore(Condition = JsonIgnoreCondition.WhenWritingNull)]
+        public uint? Gas { get; set; }
     }
 
     /// <summary>
@@ -75,6 +80,12 @@ namespace Xrpl.Models.Transactions
         /// Maximum 8 entries.
         /// </summary>
         List<string> CredentialIDs { get; set; }
+
+        /// <summary>
+        /// (Optional) SmartEscrow: the most gas the escrow's finish function may use. Required to
+        /// finish an escrow that carries <c>Bytecode</c>.
+        /// </summary>
+        uint? Gas { get; set; }
     }
 
     /// <inheritdoc cref="IEscrowFinish" />
@@ -93,6 +104,11 @@ namespace Xrpl.Models.Transactions
         [JsonPropertyName("CredentialIDs")]
         [JsonIgnore(Condition = JsonIgnoreCondition.WhenWritingNull)]
         public List<string> CredentialIDs { get; set; }
+
+        /// <inheritdoc />
+        [JsonPropertyName("Gas")]
+        [JsonIgnore(Condition = JsonIgnoreCondition.WhenWritingNull)]
+        public uint? Gas { get; set; }
     }
 
     public partial class Validation

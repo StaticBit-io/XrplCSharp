@@ -1,11 +1,11 @@
 https://github.com/XRPLF/rippled/blob/develop/include/xrpl/protocol/detail/transactions.macro
-sha  e3c8996e44921fe3b4e02c65cb41948848bcc7c5
-date 2026-09-05T00:06:14Z
+sha  1f46f7531850bc1a0870910028abe8b9f9527d4c
+date 2026-10-23T19:28:52Z
 
 transactions.macro is vendored byte-identical to the ref above so that it can be
 re-verified with a plain diff:
 
-  curl -sSL https://raw.githubusercontent.com/XRPLF/rippled/e3c8996e44921fe3b4e02c65cb41948848bcc7c5/include/xrpl/protocol/detail/transactions.macro \
+  curl -sSL https://raw.githubusercontent.com/XRPLF/rippled/1f46f7531850bc1a0870910028abe8b9f9527d4c/include/xrpl/protocol/detail/transactions.macro \
     | diff - Tests/Xrpl.Tests/Fixtures/transactions.macro
 
 Pinned to a develop commit rather than to a release tag, the way ledger_entries.macro
@@ -15,6 +15,11 @@ pin; since then develop has added fields the models carry ahead of a release
 LoanBrokerCoverWithdraw.CredentialIDs), and a tag would report them as fields the
 models invented. The sha is the commit the nightly stand is pinned to
 (.ci-config/Dockerfile.nightly), so the fixture and the stand describe the same build.
+
+The eight XChain transactions are gone from this file since develop made the
+XChainBridge amendment obsolete, while released nodes still accept them. TxFormat
+keeps them, and TestUTxFormatConformance lists them in RemovedOnDevelopOnly; that
+test fails once the file declares one of them again.
 
 Do not hand-edit it. When protocol-watch reports a change to this file upstream,
 replace it wholesale, update the sha above, and let TestUTxFormatConformance

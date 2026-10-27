@@ -23,5 +23,7 @@ namespace Xrpl.BinaryCodec.Enums
         public static readonly NumberField TotalValueOutstanding = new NumberField(nameof(TotalValueOutstanding), 15);
         public static readonly NumberField PeriodicPayment = new NumberField(nameof(PeriodicPayment), 16);
         public static readonly NumberField ManagementFeeOutstanding = new NumberField(nameof(ManagementFeeOutstanding), 17);
+        public static readonly NumberField YieldUnrealized = new NumberField(nameof(YieldUnrealized), 18);
+        public static readonly NumberField AssetsDeployed = new NumberField(nameof(AssetsDeployed), 19);
     }
 }

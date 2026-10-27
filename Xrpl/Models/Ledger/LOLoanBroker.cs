@@ -96,6 +96,13 @@ public class LOLoanBroker : BaseLedgerEntry
     public string Data { get; init; }
 
     /// <summary>
+    /// LendingProtocolV1_2: the permissioned domain a private loan broker is bound to.
+    /// Only a broker with <c>lsfLoanBrokerPrivate</c> carries it. Hex-encoded Hash256.
+    /// </summary>
+    [JsonPropertyName("DomainID")]
+    public string DomainID { get; init; }
+
+    /// <summary>
     /// A hint indicating which page of the owner's directory links to this object (UInt64).
     /// </summary>
     [JsonPropertyName("OwnerNode")]

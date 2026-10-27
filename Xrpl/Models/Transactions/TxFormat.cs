@@ -125,6 +125,8 @@ namespace Xrpl.Models.Transaction
                     [Field.CancelAfter] = Requirement.Optional,
                     [Field.FinishAfter] = Requirement.Optional,
                     [Field.DestinationTag] = Requirement.Optional,
+                    [Field.Bytecode] = Requirement.Optional,
+                    [Field.Data] = Requirement.Optional,
                 },
                 [BinaryCodec.Types.TransactionType.EscrowFinish] = new TxFormat
                 {
@@ -133,6 +135,7 @@ namespace Xrpl.Models.Transaction
                     [Field.Condition] = Requirement.Optional,
                     [Field.Fulfillment] = Requirement.Optional,
                     [Field.CredentialIDs] = Requirement.Optional,
+                    [Field.Gas] = Requirement.Optional,
                 },
                 [BinaryCodec.Types.TransactionType.AccountSet] = new TxFormat
                 {
@@ -303,6 +306,9 @@ namespace Xrpl.Models.Transaction
                     [Field.BaseFeeDrops] = Requirement.Optional,
                     [Field.ReserveBaseDrops] = Requirement.Optional,
                     [Field.ReserveIncrementDrops] = Requirement.Optional,
+                    [Field.GasLimit] = Requirement.Optional,
+                    [Field.BytecodeSizeLimit] = Requirement.Optional,
+                    [Field.GasPrice] = Requirement.Optional,
                 },
                 [BinaryCodec.Types.TransactionType.UNLModify] = new TxFormat
                 {
@@ -548,6 +554,7 @@ namespace Xrpl.Models.Transaction
                     [Field.ManagementFeeRate] = Requirement.Optional,
                     [Field.DebtMaximum] = Requirement.Optional,
                     [Field.Data] = Requirement.Optional,
+                    [Field.DomainID] = Requirement.Optional,
                 },
                 [BinaryCodec.Types.TransactionType.LoanBrokerDelete] = new TxFormat
                 {
@@ -713,6 +720,35 @@ namespace Xrpl.Models.Transaction
                     [Field.Holder] = Requirement.Required,
                     [Field.MPTAmount] = Requirement.Required,
                     [Field.ZKProof] = Requirement.Required,
+                },
+
+                // ConfidentialMPTKeyRotation
+                [BinaryCodec.Types.TransactionType.ConfidentialMPTMirrorUpdate] = new TxFormat
+                {
+                    [Field.MPTokenIssuanceID] = Requirement.Required,
+                    [Field.Holder] = Requirement.Optional,
+                    [Field.IssuerEncryptedAmount] = Requirement.Optional,
+                    [Field.AuditorEncryptedAmount] = Requirement.Optional,
+                    [Field.ZKProof] = Requirement.Required,
+                },
+                [BinaryCodec.Types.TransactionType.ConfidentialMPTHolderKeyUpdate] = new TxFormat
+                {
+                    [Field.MPTokenIssuanceID] = Requirement.Required,
+                    [Field.HolderEncryptionKey] = Requirement.Optional,
+                    [Field.ConfidentialBalanceSpending] = Requirement.Optional,
+                    [Field.ConfidentialBalanceInbox] = Requirement.Optional,
+                    [Field.ZKProof] = Requirement.Optional,
+                },
+
+                // Cosign
+                [BinaryCodec.Types.TransactionType.TransactionProposalCreate] = new TxFormat
+                {
+                    [Field.ProposedTransaction] = Requirement.Required,
+                    [Field.Expiration] = Requirement.Required,
+                },
+                [BinaryCodec.Types.TransactionType.TransactionProposalCancel] = new TxFormat
+                {
+                    [Field.ProposalID] = Requirement.Required,
                 },
 
             };

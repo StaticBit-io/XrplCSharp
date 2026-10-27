@@ -39,6 +39,15 @@ namespace Xrpl.Models.Transactions
         /// <summary>XRPFees: owner reserve increment in drops.</summary>
         [JsonConverter(typeof(CurrencyConverter))]
         public Currency ReserveIncrementDrops { get; set; }
+
+        /// <summary>SmartEscrow: the most gas one escrow finish function may use.</summary>
+        public uint? GasLimit { get; set; }
+
+        /// <summary>SmartEscrow: the largest escrow Bytecode accepted, in bytes.</summary>
+        public uint? BytecodeSizeLimit { get; set; }
+
+        /// <summary>SmartEscrow: the price of gas, in micro-drops per unit.</summary>
+        public uint? GasPrice { get; set; }
 }
 
     public interface ISetFee : ITransactionCommon
@@ -92,5 +101,14 @@ namespace Xrpl.Models.Transactions
         /// <summary>XRPFees: owner reserve increment in drops.</summary>
         [JsonConverter(typeof(CurrencyConverter))]
         public Currency ReserveIncrementDrops { get; set; }
+
+        /// <summary>SmartEscrow: the most gas one escrow finish function may use.</summary>
+        public uint? GasLimit { get; set; }
+
+        /// <summary>SmartEscrow: the largest escrow Bytecode accepted, in bytes.</summary>
+        public uint? BytecodeSizeLimit { get; set; }
+
+        /// <summary>SmartEscrow: the price of gas, in micro-drops per unit.</summary>
+        public uint? GasPrice { get; set; }
 }
 }

@@ -37,6 +37,24 @@ namespace Xrpl.Tests.Models.Tests
                 .Select(field => field.Name)
                 .ToHashSet(StringComparer.Ordinal);
 
+        /// <summary>
+        /// Types develop has removed while every released node still runs them. rippled dropped
+        /// XChainBridge in favour of VoteBehavior::Obsolete (the amendment was never enabled on
+        /// mainnet), but 3.4.1 and devnet still accept the transactions, so the SDK keeps their
+        /// formats until a release drops them too.
+        /// </summary>
+        private static readonly HashSet<string> RemovedOnDevelopOnly = new(StringComparer.Ordinal)
+        {
+            "XChainAccountCreateCommit",
+            "XChainAddAccountCreateAttestation",
+            "XChainAddClaimAttestation",
+            "XChainClaim",
+            "XChainCommit",
+            "XChainCreateBridge",
+            "XChainCreateClaimID",
+            "XChainModifyBridge",
+        };
+
         [TestMethod]
         public void TestUTxFormat_MatchesRippledTransactionsMacro()
         {
@@ -49,6 +67,12 @@ namespace Xrpl.Tests.Models.Tests
                 string name = entry.Key.Name;
                 if (!upstream.TryGetValue(name, out Dictionary<string, TxFormat.Requirement> declared))
                 {
+                    if (RemovedOnDevelopOnly.Contains(name))
+                    {
+                        continue;
+                    }
+
+
                     report.AppendLine($"{name}: present in TxFormat, absent from transactions.macro");
                     continue;
                 }
@@ -81,6 +105,11 @@ namespace Xrpl.Tests.Models.Tests
                          .OrderBy(n => n, StringComparer.Ordinal))
             {
                 report.AppendLine($"{name}: declared by rippled, absent from TxFormat");
+            }
+
+            foreach (string name in RemovedOnDevelopOnly.Where(upstream.ContainsKey).OrderBy(n => n, StringComparer.Ordinal))
+            {
+                report.AppendLine($"{name}: listed in RemovedOnDevelopOnly but declared by transactions.macro; drop the exemption");
             }
 
             Assert.AreEqual(

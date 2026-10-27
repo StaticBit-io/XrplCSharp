@@ -167,6 +167,12 @@ public enum LedgerEntryType
     Sponsorship,
 
     /// <summary>
+    /// A pending transaction proposal collecting signatures for an unsigned transaction.
+    /// </summary>
+    /// <remarks>Requires the Cosign amendment. This feature is in draft and subject to change.</remarks>
+    TransactionProposal,
+
+    /// <summary>
     /// Unknown ledger entry type (for forward compatibility with future ledger objects).
     /// </summary>
     Unknown,

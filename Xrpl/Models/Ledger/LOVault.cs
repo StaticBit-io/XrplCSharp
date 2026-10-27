@@ -192,6 +192,23 @@ public class LOVault : BaseLedgerEntry
     public XrplNumber? LossUnrealized { get; init; }
 
     /// <summary>
+    /// The interest and fees the vault's loans still owe beyond their principal, not yet received
+    /// (Number type): the sum over the loans of TotalValueOutstanding - PrincipalOutstanding -
+    /// ManagementFeeOutstanding.
+    /// </summary>
+    [JsonPropertyName("YieldUnrealized")]
+    [JsonConverter(typeof(LenientXrplNumberConverter))]
+    public XrplNumber? YieldUnrealized { get; init; }
+
+    /// <summary>
+    /// The vault's assets lent out through loans rather than held as cash (Number type). On a
+    /// fixed-precision vault <see cref="AssetsTotal"/> is AssetsAvailable + AssetsDeployed.
+    /// </summary>
+    [JsonPropertyName("AssetsDeployed")]
+    [JsonConverter(typeof(LenientXrplNumberConverter))]
+    public XrplNumber? AssetsDeployed { get; init; }
+
+    /// <summary>
     /// The identifier of the share MPTokenIssuance object.
     /// </summary>
     [JsonPropertyName("ShareMPTID")]

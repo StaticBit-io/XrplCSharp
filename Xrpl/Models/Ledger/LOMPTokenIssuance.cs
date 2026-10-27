@@ -207,6 +207,13 @@ namespace Xrpl.Models.Ledger
         public uint? AuditorKeyEpoch { get; init; }
 
         /// <summary>
+        /// ConfidentialMPTKeyRotation: the issuer encryption key the issuance started with (hex blob),
+        /// kept after <see cref="IssuerEncryptionKey"/> is rotated.
+        /// </summary>
+        [JsonPropertyName("InitialIssuerEncryptionKey")]
+        public string? InitialIssuerEncryptionKey { get; init; }
+
+        /// <summary>
         /// ConfidentialTransfer: total amount held in confidential balances.
         /// UInt64 (0 .. 2^63-1)
         /// </summary>

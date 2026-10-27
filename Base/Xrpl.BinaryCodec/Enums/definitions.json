@@ -2481,6 +2481,26 @@
       }
     ],
     [
+      "YieldUnrealized",
+      {
+        "isSerialized": true,
+        "isSigningField": true,
+        "isVLEncoded": false,
+        "nth": 18,
+        "type": "Number"
+      }
+    ],
+    [
+      "AssetsDeployed",
+      {
+        "isSerialized": true,
+        "isSigningField": true,
+        "isVLEncoded": false,
+        "nth": 19,
+        "type": "Number"
+      }
+    ],
+    [
       "LoanScale",
       {
         "isSerialized": true,
@@ -3511,6 +3531,16 @@
       }
     ],
     [
+      "SigningFor",
+      {
+        "isSerialized": true,
+        "isSigningField": true,
+        "isVLEncoded": true,
+        "nth": 32,
+        "type": "AccountID"
+      }
+    ],
+    [
       "FeeAmount",
       {
         "isSerialized": true,
@@ -3561,6 +3591,16 @@
       }
     ],
     [
+      "ProposalID",
+      {
+        "isSerialized": true,
+        "isSigningField": true,
+        "isVLEncoded": false,
+        "nth": 42,
+        "type": "Hash256"
+      }
+    ],
+    [
       "SponseeNode",
       {
         "isSerialized": true,
@@ -3577,6 +3617,16 @@
         "isSigningField": false,
         "isVLEncoded": false,
         "nth": 38,
+        "type": "STObject"
+      }
+    ],
+    [
+      "ProposedTransaction",
+      {
+        "isSerialized": true,
+        "isSigningField": true,
+        "isVLEncoded": false,
+        "nth": 39,
         "type": "STObject"
       }
     ],
@@ -3677,6 +3727,36 @@
         "isSigningField": true,
         "isVLEncoded": true,
         "nth": 47,
+        "type": "Blob"
+      }
+    ],
+    [
+      "RecoveryKey",
+      {
+        "isSerialized": true,
+        "isSigningField": true,
+        "isVLEncoded": true,
+        "nth": 48,
+        "type": "Blob"
+      }
+    ],
+    [
+      "InitialIssuerEncryptionKey",
+      {
+        "isSerialized": true,
+        "isSigningField": true,
+        "isVLEncoded": true,
+        "nth": 49,
+        "type": "Blob"
+      }
+    ],
+    [
+      "IssuerMirrorEncryptionKey",
+      {
+        "isSerialized": true,
+        "isSigningField": true,
+        "isVLEncoded": true,
+        "nth": 50,
         "type": "Blob"
       }
     ],
@@ -4003,7 +4083,8 @@
     "Ticket": 84,
     "Vault": 132,
     "XChainOwnedClaimID": 113,
-    "XChainOwnedCreateAccountClaimID": 116
+    "XChainOwnedCreateAccountClaimID": 116,
+    "TransactionProposal": 145
   },
   "TRANSACTION_RESULTS": {
     "tecAMM_ACCOUNT": 168,
@@ -4208,7 +4289,10 @@
     "tefNO_BYTECODE": -175,
     "tefBYTECODE_NOT_INCLUDED": -174,
     "tecOUT_OF_GAS": 201,
-    "tecBYTECODE_REJECTED": 202
+    "tecBYTECODE_REJECTED": 202,
+    "tefTEMP_DISABLED": -173,
+    "tefEXCEEDS_LIMIT": -172,
+    "terTICKET_RESERVED": -82
   },
   "TRANSACTION_TYPES": {
     "AMMBid": 39,
@@ -4293,7 +4377,11 @@
     "XChainCommit": 42,
     "XChainCreateBridge": 48,
     "XChainCreateClaimID": 41,
-    "XChainModifyBridge": 47
+    "XChainModifyBridge": 47,
+    "ConfidentialMPTMirrorUpdate": 92,
+    "ConfidentialMPTHolderKeyUpdate": 93,
+    "TransactionProposalCancel": 94,
+    "TransactionProposalCreate": 95
   },
   "TYPES": {
     "AccountID": 8,

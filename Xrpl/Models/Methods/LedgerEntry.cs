@@ -210,6 +210,14 @@ public class LedgerEntryRequest : BaseLedgerRequest
     /// </summary>
     [JsonPropertyName("oracle")]
     public OracleQuery? Oracle { get; set; }
+
+    /// <summary>
+    /// Specify the TransactionProposal to retrieve by the transaction it proposes. To retrieve
+    /// it by its ledger entry ID, use <see cref="Index"/>.
+    /// </summary>
+    /// <remarks>Requires the Cosign amendment. This feature is in draft and subject to change.</remarks>
+    [JsonPropertyName("transaction_proposal")]
+    public TransactionProposalQuery? TransactionProposal { get; set; }
 }
 
 /// <summary>
@@ -331,6 +339,28 @@ public class TicketQuery
     /// </summary>
     [JsonPropertyName("account")]
     public string Account { get; set; }
+}
+
+/// <summary>
+/// Identifies a TransactionProposal by the transaction it proposes. A proposed transaction is
+/// always ticket-based, so the account it is for and its <c>TicketSequence</c> name exactly one
+/// proposal (rippled <c>keylet::txProposal</c>).
+/// </summary>
+public class TransactionProposalQuery
+{
+    /// <summary>
+    /// The <c>Account</c> of the proposed transaction. This is not necessarily the proposal's
+    /// <c>Owner</c>: an account on its SignerList, or its delegate for that transaction type,
+    /// may create the proposal.
+    /// </summary>
+    [JsonPropertyName("account")]
+    public string Account { get; set; }
+
+    /// <summary>
+    /// The <c>TicketSequence</c> of the proposed transaction.
+    /// </summary>
+    [JsonPropertyName("ticket_seq")]
+    public uint TicketSequence { get; set; }
 }
 
 /// <summary>
