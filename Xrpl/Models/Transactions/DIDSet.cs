@@ -89,13 +89,21 @@ namespace Xrpl.Models.Transactions
             tx.TryGetValue("DIDDocument", out var didDocument);
             tx.TryGetValue("URI", out var uri);
 
-            bool hasData = data is not null && data is string dataStr && !string.IsNullOrEmpty(dataStr);
-            bool hasDocument = didDocument is not null && didDocument is string docStr && !string.IsNullOrEmpty(docStr);
-            bool hasUri = uri is not null && uri is string uriStr && !string.IsNullOrEmpty(uriStr);
+            // An empty string is a present field: on the ledger it clears that field of the DID.
+            bool hasData = data is string;
+            bool hasDocument = didDocument is string;
+            bool hasUri = uri is string;
 
             if (!hasData && !hasDocument && !hasUri)
             {
                 throw new ValidationException("DIDSet: must include at least one of Data, DIDDocument, or URI");
+            }
+
+            // rippled temEMPTY_DID: all three present and all empty would leave nothing to set or clear.
+            if (hasData && hasDocument && hasUri
+                && string.IsNullOrEmpty((string)data) && string.IsNullOrEmpty((string)didDocument) && string.IsNullOrEmpty((string)uri))
+            {
+                throw new ValidationException("DIDSet: must include at least one non-empty field among Data, DIDDocument, or URI");
             }
 
             if (hasData && data is string dataVal && dataVal.Length > MaxDIDFieldLength)

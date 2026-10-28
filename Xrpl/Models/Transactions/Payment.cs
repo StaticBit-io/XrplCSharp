@@ -381,7 +381,7 @@ namespace Xrpl.Models.Transactions
 
             if (tx.TryGetValue("InvoiceID", out var InvoiceID) && InvoiceID is not string { })
                 throw new ValidationException("PaymentTransaction: InvoiceID must be a string");
-            if (tx.TryGetValue("Paths", out var Paths) && !IsPaths(Paths as List<List<Dictionary<string, object>>>))
+            if (tx.TryGetValue("Paths", out var Paths) && Paths is not null && !IsPathSet(Paths))
                 throw new ValidationException("PaymentTransaction: invalid Paths");
             if (tx.TryGetValue("SendMax", out var SendMax) && !Common.IsAmount(SendMax))
                 throw new ValidationException("PaymentTransaction: invalid SendMax");
@@ -471,6 +471,40 @@ namespace Xrpl.Models.Transactions
             return true;
 
         }
+        /// <summary>
+        /// Checks a path set of any collection shape: DictionaryObjectConverter yields
+        /// <c>List&lt;object&gt;</c> of <c>List&lt;object&gt;</c> of <c>Dictionary&lt;string, object&gt;</c>,
+        /// while code-built transactions use strongly typed lists.
+        /// </summary>
+        public static bool IsPathSet(object paths)
+        {
+            if (paths is string || paths is not System.Collections.IEnumerable pathList)
+                return false;
+
+            bool any = false;
+            foreach (object path in pathList)
+            {
+                if (path is string || path is not System.Collections.IEnumerable steps)
+                    return false;
+
+                bool anyStep = false;
+                foreach (object step in steps)
+                {
+                    if (step is not System.Collections.Generic.IDictionary<string, object> stepDict)
+                        return false;
+                    if (!IsPathStep(new Dictionary<string, object>(stepDict)))
+                        return false;
+                    anyStep = true;
+                }
+
+                if (!anyStep)
+                    return false;
+                any = true;
+            }
+
+            return any;
+        }
+
         public static bool IsPaths(List<List<Dictionary<string, object>>> paths)
         {
             if (paths is null || paths.Count == 0)

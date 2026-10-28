@@ -52,9 +52,19 @@ public static class BatchNormalizer
         {
             if (fv is JsonValue jv)
             {
-                if (jv.TryGetValue<long>(out long lv))
+                // Flags set from code are CLR-typed JsonValues (uint, int, ...) that only answer
+                // TryGetValue for their own type; losing them would replace the caller's flags.
+                if (jv.TryGetValue(out uint uv))
+                    flags = uv;
+                else if (jv.TryGetValue(out int iv) && iv >= 0)
+                    flags = (uint)iv;
+                else if (jv.TryGetValue(out long lv) && lv >= 0 && lv <= uint.MaxValue)
                     flags = (uint)lv;
-                else if (jv.TryGetValue<string>(out string sv) && uint.TryParse(sv, out uint u))
+                else if (jv.TryGetValue(out ulong ulv) && ulv <= uint.MaxValue)
+                    flags = (uint)ulv;
+                else if (jv.TryGetValue(out JsonElement je) && je.ValueKind == JsonValueKind.Number && je.TryGetUInt32(out uint eu))
+                    flags = eu;
+                else if (jv.TryGetValue(out string sv) && uint.TryParse(sv, out uint u))
                     flags = u;
             }
         }

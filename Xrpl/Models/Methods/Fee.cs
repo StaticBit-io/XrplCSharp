@@ -78,28 +78,28 @@ namespace Xrpl.Models.Methods
         /// The transaction cost required for a reference transaction to be included in a ledger under minimum load, represented in drops of XRP.
         /// </summary>
         [JsonPropertyName("base_fee")]
-        [JsonConverter(typeof(GenericStringConverter<uint>))]
-        public uint BaseFee { get; set; }
+        [JsonConverter(typeof(GenericStringConverter<ulong>))]
+        public ulong BaseFee { get; set; }
         /// <summary>
         /// An approximation of the median transaction cost among transactions.<br/>
         /// Included in the previous validated ledger, represented in drops of XRP.
         /// </summary>
         [JsonPropertyName("median_fee")]
-        [JsonConverter(typeof(GenericStringConverter<uint>))]
-        public uint MedianFee { get; set; }
+        [JsonConverter(typeof(GenericStringConverter<ulong>))]
+        public ulong MedianFee { get; set; }
         /// <summary>
         /// The minimum transaction cost for a reference transaction to be queued for a later ledger, represented in drops of XRP.<br/>
         /// If greater than base_fee, the transaction queue is full.
         /// </summary>
         [JsonPropertyName("minimum_fee")]
-        [JsonConverter(typeof(GenericStringConverter<uint>))]
-        public uint MinimumFee { get; set; }
+        [JsonConverter(typeof(GenericStringConverter<ulong>))]
+        public ulong MinimumFee { get; set; }
         /// <summary>
         /// The minimum transaction cost that a reference transaction must pay to be included in the current open ledger, represented in drops of XRP.
         /// </summary>
         [JsonPropertyName("open_ledger_fee")]
-        [JsonConverter(typeof(GenericStringConverter<uint>))]
-        public uint OpenLedgerFee { get; set; }
+        [JsonConverter(typeof(GenericStringConverter<ulong>))]
+        public ulong OpenLedgerFee { get; set; }
     }
     /// <summary>
     /// required transaction cost level
@@ -110,26 +110,26 @@ namespace Xrpl.Models.Methods
         /// The median transaction cost among transactions in the previous validated ledger, represented in fee levels.
         /// </summary>
         [JsonPropertyName("median_level")]
-        [JsonConverter(typeof(GenericStringConverter<uint>))]
-        public uint MedianLevel { get; set; }
+        [JsonConverter(typeof(GenericStringConverter<ulong>))]
+        public ulong MedianLevel { get; set; }
         /// <summary>
         /// The minimum transaction cost required to be queued for a future ledger, represented in fee levels.
         /// </summary>
         [JsonPropertyName("minimum_level")]
-        [JsonConverter(typeof(GenericStringConverter<uint>))]
-        public uint MinimumLevel { get; set; }
+        [JsonConverter(typeof(GenericStringConverter<ulong>))]
+        public ulong MinimumLevel { get; set; }
         /// <summary>
         /// The minimum transaction cost required to be included in the current open ledger, represented in fee levels.
         /// </summary>
         [JsonPropertyName("open_ledger_level")]
-        [JsonConverter(typeof(GenericStringConverter<uint>))]
-        public uint OpenLedgerLevel { get; set; }
+        [JsonConverter(typeof(GenericStringConverter<ulong>))]
+        public ulong OpenLedgerLevel { get; set; }
         /// <summary>
         /// The equivalent of the minimum transaction cost, represented in fee levels.
         /// </summary>
         [JsonPropertyName("reference_level")]
-        [JsonConverter(typeof(GenericStringConverter<uint>))]
-        public uint ReferenceLevel { get; set; }
+        [JsonConverter(typeof(GenericStringConverter<ulong>))]
+        public ulong ReferenceLevel { get; set; }
     }
 
 }

@@ -180,7 +180,7 @@ namespace Xrpl.Models.Transactions
         {
             Common.ValidateBaseTransaction(tx);
 
-            if (tx.TryGetValue("Account", out var Account) && tx.TryGetValue("Issuer", out var Issuer) && Account == Issuer)
+            if (tx.TryGetValue("Account", out var Account) && tx.TryGetValue("Issuer", out var Issuer) && Account is string accountStr && Issuer is string issuerStr && string.Equals(accountStr, issuerStr, StringComparison.Ordinal))
                 throw new ValidationException("NFTokenMint: Issuer must not be equal to Account");
 
             if (tx.TryGetValue("URI", out var URI) && URI is string { Length: > 0 } uri && !uri.IsHex())

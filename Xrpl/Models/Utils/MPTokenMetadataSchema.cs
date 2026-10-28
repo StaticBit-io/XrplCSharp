@@ -2,6 +2,7 @@ using System;
 using System.Collections.Generic;
 using System.Linq;
 using System.Text;
+using System.Text.Encodings.Web;
 using System.Text.Json;
 using System.Text.Json.Nodes;
 using System.Text.Json.Serialization;
@@ -362,6 +363,13 @@ namespace Xrpl.Models.Utils
             return schema;
         }
 
+        // JSON.stringify writes non-ASCII as UTF-8; the default escaper would emit \uXXXX and inflate the
+        // on-chain byte size that GetByteSize reports.
+        private static readonly JsonSerializerOptions CompactUtf8Options = new JsonSerializerOptions
+        {
+            Encoder = JavaScriptEncoder.UnsafeRelaxedJsonEscaping,
+        };
+
         /// <summary>
         /// Serializes this metadata to a compact JSON string.
         /// </summary>
@@ -370,7 +378,7 @@ namespace Xrpl.Models.Utils
         public string ToJson(bool useShortKeys = true)
         {
             JsonObject obj = BuildJsonObject(useShortKeys);
-            return obj.ToJsonString();
+            return obj.ToJsonString(CompactUtf8Options);
         }
 
         /// <summary>

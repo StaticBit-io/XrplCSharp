@@ -1,8 +1,10 @@
 ﻿//https://github.com/XRPLF/xrpl.js/blob/main/packages/xrpl/src/utils/createCrossChainPayment.ts
 using System.Collections.Generic;
 using System.Linq;
+using System.Text.Json;
 
 using Xrpl.Client.Exceptions;
+using Xrpl.Client.Json;
 using Xrpl.Models.Transactions;
 
 namespace Xrpl.Utils
@@ -34,28 +36,12 @@ namespace Xrpl.Utils
             var newMemos = new List<Memo> { destAccountMemo };
             newMemos.AddRange(memos);
 
-            var newPayment = new Payment 
-            {
-                TransactionType = payment.TransactionType,
-                Account = payment.Account,
-                AccountTxnID = payment.AccountTxnID,
-                Amount = payment.Amount,
-                DeliverMin = payment.DeliverMin,
-                Destination = payment.Destination,
-                DestinationTag = payment.DestinationTag,
-                Fee = payment.Fee,
-                Flags = payment.Flags,
-                InvoiceID = payment.InvoiceID,
-                LastLedgerSequence = payment.LastLedgerSequence,
-                Paths = payment.Paths,
-                SendMax = payment.SendMax,
-                Sequence = payment.Sequence,
-                Signers = payment.Signers,
-                SigningPublicKey = payment.SigningPublicKey,
-
-                Memos = newMemos.Select(c => new MemoWrapper() { Memo = c }).ToList(),
-                TransactionSignature = null
-            };
+            // Round-trip through JSON so every field of the source (SourceTag, Ticket, NetworkID, ...)
+            // survives; a hand-written field list silently dropped whatever it forgot.
+            Payment newPayment = JsonSerializer.Deserialize<Payment>(
+                JsonSerializer.Serialize(payment, XrplJsonOptions.Default), XrplJsonOptions.Default);
+            newPayment.Memos = newMemos.Select(c => new MemoWrapper() { Memo = c }).ToList();
+            newPayment.TransactionSignature = null;
 
             return newPayment;
         }

@@ -173,7 +173,7 @@ namespace Xrpl.Sugar
             // XRPL: Does bool or int. Smells.
             if (classicAccount.Tag != null)
             {
-                if (tField != null && (int)tField != classicAccount.Tag)
+                if (tField != null && (!Xrpl.Models.Transactions.Common.TryGetUInt32(tField, out uint explicitTag) || explicitTag != classicAccount.Tag))
                 {
                     throw new ValidationException($"The {tagField}, if present, must match the tag of the {accountField} X - address");
                 }

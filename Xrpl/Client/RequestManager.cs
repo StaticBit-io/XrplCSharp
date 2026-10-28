@@ -307,7 +307,7 @@ namespace Xrpl.Client
 
             if (!promisesAwaitingResponse.TryAdd(newId, taskInfo))
             {
-                throw new XrplException($"Response with id '${newId}' is already pending");
+                throw new XrplException($"Response with id '{newId}' is already pending");
             }
 
             if (cancellationToken.CanBeCanceled)
@@ -404,7 +404,7 @@ namespace Xrpl.Client
 
             if (!promisesAwaitingResponse.TryAdd(newId, taskInfo))
             {
-                throw new XrplException($"Response with id '${newId}' is already pending");
+                throw new XrplException($"Response with id '{newId}' is already pending");
             }
 
             if (cancellationToken.CanBeCanceled)
