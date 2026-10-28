@@ -73,25 +73,31 @@ namespace Xrpl.Client
         {
             if (!promisesAwaitingResponse.TryGetValue(id, out var taskInfo) || taskInfo == null)
             {
+                // Nothing to clean up: a request removes its own timer however it finishes, and a
+                // timer under this id may already belong to a new request that reused it.
                 Debug.WriteLine($"Resolve called for non-existent promise {id} (likely already cancelled/timed out)");
-                DisposeTimeout(id);
                 return;
             }
 
-            DisposeTimeout(id);
+            DisposeTimeout(id, taskInfo);
 
+            object deserialized;
             try
             {
-                object deserialized = DeserializeResult(response.RawResult, taskInfo.Type);
-                CompleteWithResult(taskInfo, new ResolvedResponse(deserialized, response));
-                this.DeletePromise(id, taskInfo);
+                deserialized = DeserializeResult(response.RawResult, taskInfo.Type);
             }
             catch (Exception ex)
             {
                 var error = new XrplException($"Failed to deserialize response for request {id}: {ex.Message}", ex);
-                this.Reject(id, error);
+                this.RejectOwned(id, taskInfo, error);
                 throw;  // re-throw so IOnMessageFastPath also logs via OnError
             }
+
+            // The id is released before the caller is woken: a caller that sends its next request
+            // with the same id (a reused request object, as marker pagination does) must not find
+            // this one still registered.
+            this.DeletePromise(id, taskInfo);
+            CompleteWithResult(taskInfo, new ResolvedResponse(deserialized, response));
         }
 
         /// <summary>
@@ -128,21 +134,37 @@ namespace Xrpl.Client
             if (!promisesAwaitingResponse.TryGetValue(id, out var taskInfo) || taskInfo == null)
             {
                 Debug.WriteLine($"Reject called for non-existent promise {id} (likely already resolved)");
-
-                // A timer registered after its request had already finished has no other chance of
-                // being cleaned up: this is the Elapsed callback of exactly such a timer.
-                DisposeTimeout(id);
                 return;
             }
 
-            DisposeTimeout(id);
+            RejectPending(id, taskInfo, error);
+        }
+
+        /// <summary>
+        /// Rejects <paramref name="owner"/> from its own timer or cancellation callback. Either can
+        /// fire after the request has finished, when a caller that reuses the request object may
+        /// already have registered a new request under the same id; that one is left alone.
+        /// </summary>
+        private void RejectOwned(Guid id, TaskInfo owner, Exception error)
+        {
+            if (promisesAwaitingResponse.TryGetValue(id, out TaskInfo current) && ReferenceEquals(current, owner))
+            {
+                RejectPending(id, owner, error);
+                return;
+            }
+
+            DisposeTimeout(id, owner);
+        }
+
+        private void RejectPending(Guid id, TaskInfo taskInfo, Exception error)
+        {
+            DisposeTimeout(id, taskInfo);
+            this.DeletePromise(id, taskInfo);
             CompleteWithException(taskInfo, error);
 
             // Observe the exception to prevent UnobservedTaskException in consuming apps
             // This is critical for MAUI/mobile apps that have global exception handlers
             ObserveTaskException(taskInfo);
-            
-            this.DeletePromise(id, taskInfo);
         }
         
         /// <summary>
@@ -156,6 +178,24 @@ namespace Xrpl.Client
             {
                 timer.Dispose();
             }
+        }
+
+        /// <summary>
+        /// Removes and disposes the timeout timer of <paramref name="owner"/>, and no other timer
+        /// registered under <paramref name="id"/>. A <see cref="TaskInfo"/> built outside this
+        /// manager has no timer of its own, and the one under the id is removed.
+        /// </summary>
+        private void DisposeTimeout(Guid id, TaskInfo owner)
+        {
+            if (owner.TimeoutTimer is not Timer timer)
+            {
+                if (owner.CompletionTask is null)
+                    DisposeTimeout(id);
+                return;
+            }
+
+            timeoutsAwaitingResponse.TryRemove(new KeyValuePair<Guid, Timer>(id, timer));
+            timer.Dispose();
         }
 
         /// <summary>
@@ -295,7 +335,7 @@ namespace Xrpl.Client
             string newRequest = JsonSerializer.Serialize(request, serializerOptions);
             string outgoingRequest = ApplyAdminCredentials(newRequest, adminCredentials);
 
-            TaskCompletionSource<object> task = new TaskCompletionSource<object>();
+            TaskCompletionSource<object> task = new TaskCompletionSource<object>(TaskCreationOptions.RunContinuationsAsynchronously);
             TaskInfo taskInfo = new TaskInfo();
             taskInfo.TaskId = newId;
             taskInfo.TaskCompletionResult = task;
@@ -316,7 +356,7 @@ namespace Xrpl.Client
                 {
                     try
                     {
-                        this.Reject(newId, new OperationCanceledException("Request was cancelled"));
+                        this.RejectOwned(newId, taskInfo, new OperationCanceledException("Request was cancelled"));
                     }
                     catch (Exception ex)
                     {
@@ -342,7 +382,7 @@ namespace Xrpl.Client
                 {
                     try
                     {
-                        this.Reject(newId, new TimeoutException($"Timeout for request: {newRequest} with id {newId}", request));
+                        this.RejectOwned(newId, taskInfo, new TimeoutException($"Timeout for request: {newRequest} with id {newId}", request));
                     }
                     catch (Exception ex)
                     {
@@ -352,13 +392,17 @@ namespace Xrpl.Client
                 timer.Start();
                 timeoutsAwaitingResponse.TryAdd(newId, timer);
 
+                // Published only once started: a cancellation that disposed it before Start would
+                // make the request throw instead of returning its already completed promise.
+                taskInfo.TimeoutTimer = timer;
+
                 // Same inline-cancellation case: the request may already be finished, and the
                 // Reject that finished it ran before this timer existed, so it had nothing to
                 // remove. Whatever is registered under this id now belongs to a request that is
                 // already gone.
-                if (!promisesAwaitingResponse.ContainsKey(newId))
+                if (!promisesAwaitingResponse.TryGetValue(newId, out TaskInfo registered) || !ReferenceEquals(registered, taskInfo))
                 {
-                    DisposeTimeout(newId);
+                    DisposeTimeout(newId, taskInfo);
                 }
             }
 
@@ -392,7 +436,7 @@ namespace Xrpl.Client
             string newRequest = JsonSerializer.Serialize(request, serializerOptions);
             string outgoingRequest = ApplyAdminCredentials(newRequest, adminCredentials);
 
-            TaskCompletionSource<object> task = new TaskCompletionSource<object>();
+            TaskCompletionSource<object> task = new TaskCompletionSource<object>(TaskCreationOptions.RunContinuationsAsynchronously);
             TaskInfo taskInfo = new TaskInfo();
             taskInfo.TaskId = newId;
             taskInfo.TaskCompletionResult = task;
@@ -413,7 +457,7 @@ namespace Xrpl.Client
                 {
                     try
                     {
-                        this.Reject(newId, new OperationCanceledException("Request was cancelled"));
+                        this.RejectOwned(newId, taskInfo, new OperationCanceledException("Request was cancelled"));
                     }
                     catch (Exception ex)
                     {
@@ -439,7 +483,7 @@ namespace Xrpl.Client
                 {
                     try
                     {
-                        this.Reject(newId, new TimeoutException($"Timeout for request: {newRequest} with id {newId}", request));
+                        this.RejectOwned(newId, taskInfo, new TimeoutException($"Timeout for request: {newRequest} with id {newId}", request));
                     }
                     catch (Exception ex)
                     {
@@ -449,13 +493,17 @@ namespace Xrpl.Client
                 timer.Start();
                 timeoutsAwaitingResponse.TryAdd(newId, timer);
 
+                // Published only once started: a cancellation that disposed it before Start would
+                // make the request throw instead of returning its already completed promise.
+                taskInfo.TimeoutTimer = timer;
+
                 // Same inline-cancellation case: the request may already be finished, and the
                 // Reject that finished it ran before this timer existed, so it had nothing to
                 // remove. Whatever is registered under this id now belongs to a request that is
                 // already gone.
-                if (!promisesAwaitingResponse.ContainsKey(newId))
+                if (!promisesAwaitingResponse.TryGetValue(newId, out TaskInfo registered) || !ReferenceEquals(registered, taskInfo))
                 {
-                    DisposeTimeout(newId);
+                    DisposeTimeout(newId, taskInfo);
                 }
             }
 
@@ -610,7 +658,8 @@ namespace Xrpl.Client
         /// </summary>
         public void DeletePromise(Guid id, TaskInfo taskInfo)
         {
-            this.promisesAwaitingResponse.TryRemove(id, out _);
+            // Only this request's entry: a request that reused the id may already be registered.
+            this.promisesAwaitingResponse.TryRemove(new KeyValuePair<Guid, TaskInfo>(id, taskInfo));
             if (taskInfo.CancellationRegistration is { } reg)
             {
                 _ = reg.DisposeAsync();

@@ -476,7 +476,12 @@ public static class CurrencyExtensions
             // XLS-16d NFT metadata, which begins with 02
             if (hex.StartsWith("02"))
             {
-                string xlf15d = Encoding.UTF8.GetString(HexToBytes(hex)).Substring(8, Math.Min(maxLength, hex.Length / 2 - 8)).Trim();
+                // The text is bytes 8 to 20, cut as bytes before decoding: UTF-8 text with
+                // multi-byte characters decodes to fewer characters than bytes, and anyone can
+                // open a trust line with such a code. maxLength counts the decoded characters.
+                byte[] bytes = HexToBytes(hex);
+                string text = Encoding.UTF8.GetString(bytes, 8, bytes.Length - 8);
+                string xlf15d = text.Substring(0, Math.Min(Math.Max(0, maxLength), text.Length)).Trim();
                 if (Regex.IsMatch(xlf15d, "[a-zA-Z0-9]{3,}") && xlf15d.ToLower() != "xrp")
                 {
                     return xlf15d;

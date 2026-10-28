@@ -128,7 +128,7 @@ namespace Xrpl.Amounts
                     continue;
 
                 if (node.CreatedNode.TryGetNew(out LODirectoryNode directory) && directory != null)
-                    AddDirectory(directory, node.CreatedNode.LedgerIndex);
+                    AddDirectory(directory, node.CreatedNode.LedgerIndex, fromMetadata: true);
                 else if (node.CreatedNode.TryGetNew(out LOAmm amm) && amm?.Asset != null && amm.Asset2 != null)
                     AddPool(amm.Asset.ToXrplAmount().Asset, amm.Asset2.ToXrplAmount().Asset);
             }
@@ -338,23 +338,38 @@ namespace Xrpl.Amounts
         }
 
         /// <summary>A book directory's book, when the entry is the first page of one (<c>OrderBookDB::update</c>).</summary>
-        private void AddDirectory(LODirectoryNode directory, string index)
+        /// <param name="directory">The directory entry.</param>
+        /// <param name="index">The entry's ledger index.</param>
+        /// <param name="fromMetadata">
+        /// The entry is a <c>CreatedNode</c>'s <c>NewFields</c>, which leave out every field at its
+        /// default value. The XRP side of a book is a zero currency and a zero issuer, so it is absent
+        /// there, while a full ledger entry always carries both sides.
+        /// </param>
+        private void AddDirectory(LODirectoryNode directory, string index, bool fromMetadata = false)
         {
-            // A book side is a currency and issuer, or an MPT (TakerPaysMPT, TakerGetsMPT).
-            if (string.IsNullOrEmpty(directory.ExchangeRate) ||
-                (directory.TakerPaysCurrency == null && directory.TakerPaysMPT == null) ||
-                (directory.TakerGetsCurrency == null && directory.TakerGetsMPT == null))
-            {
+            if (string.IsNullOrEmpty(directory.ExchangeRate))
                 return;
-            }
+
+            // A book side is a currency and issuer, or an MPT (TakerPaysMPT, TakerGetsMPT).
+            bool paysAbsent = directory.TakerPaysCurrency == null && directory.TakerPaysMPT == null;
+            bool getsAbsent = directory.TakerGetsCurrency == null && directory.TakerGetsMPT == null;
+            if (fromMetadata ? paysAbsent && getsAbsent : paysAbsent || getsAbsent)
+                return;
 
             if (directory.RootIndex != null && index != null && !string.Equals(directory.RootIndex, index, StringComparison.OrdinalIgnoreCase))
                 return;
 
             Add(
-                directory.TakerPaysMPT != null ? DexAssets.Mpt(directory.TakerPaysMPT) : AssetFromHex(directory.TakerPaysCurrency, directory.TakerPaysIssuer),
-                directory.TakerGetsMPT != null ? DexAssets.Mpt(directory.TakerGetsMPT) : AssetFromHex(directory.TakerGetsCurrency, directory.TakerGetsIssuer),
+                BookSide(paysAbsent, directory.TakerPaysMPT, directory.TakerPaysCurrency, directory.TakerPaysIssuer),
+                BookSide(getsAbsent, directory.TakerGetsMPT, directory.TakerGetsCurrency, directory.TakerGetsIssuer),
                 string.IsNullOrEmpty(directory.DomainID) ? null : directory.DomainID);
+        }
+
+        private static IssuedCurrency BookSide(bool absent, string mpt, string currency, string issuer)
+        {
+            if (absent)
+                return XrpAsset;
+            return mpt != null ? DexAssets.Mpt(mpt) : AssetFromHex(currency, issuer);
         }
 
         /// <summary>An asset as a directory stores it: a 160-bit currency and a 160-bit account, both hex.</summary>
