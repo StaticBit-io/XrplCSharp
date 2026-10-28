@@ -159,6 +159,13 @@ namespace Xrpl.Keypairs.K256
                         return null;
                     }
 
+                    // Strict DER, as rippled requires: trailing bytes or a non-minimal encoding
+                    // would otherwise decode to a signature that verifies.
+                    if (!Org.BouncyCastle.Utilities.Arrays.AreEqual(seq.GetDerEncoded(), bytes))
+                    {
+                        return null;
+                    }
+
                     r = seq[0] as DerInteger;
                     s = seq[1] as DerInteger;
                 }

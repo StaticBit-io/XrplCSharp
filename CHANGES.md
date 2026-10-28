@@ -2,26 +2,26 @@
 
 ## 11.22.0.0 28/10/2026
 
-* `MptValue(string)` (the MPT branch of `Amount.FromJson`) refuses a fractional value and one above `long.MaxValue` with `BinaryCodecException`, as `NativeValue` does for drops; it truncated the fraction and wrapped the high bit into the type flags
+* `MptValue(string)` (the MPT branch of `Amount.FromJson`) refuses a fractional value and one above `long.MaxValue` with `BinaryCodecException`, as `NativeValue` does for drops; it truncated the fraction and wrapped the high bit into the type flags. The value is read exactly (`1e3` and `1.5e1` are whole numbers), not through `decimal`, which rounded a fraction past 28 digits to a whole number
 * `Currency.ValueAsNumber` setter writes an MPT amount (`MPTokenIssuanceID` set) as a whole number, so `1e16` and `long.MaxValue` are exact instead of `G16` exponent notation, and throws `ArgumentException` for a fraction. **Breaking:** `Currency.ValueAsXrp` setter throws `ArgumentException` for a value with more than six decimal places; it wrote fractional drops. Migration: round the XRP value to drops before assigning. `Currency.IsNFT14D` returns false for a null `CurrencyCode`
 * `ServerFeaturesRequest.Feature` serializes as `feature`; rippled reads the lowercase key and ignored `Feature`
 * `Amount.DecimalValue` accepts a negative IOU value (`NumberStyles.AllowLeadingSign`)
 * `Hashes.LedgerSpaceHex(string)` uses the enum value, as the enum overload does (`Account` is `0061`; it was `0041`), and throws `ArgumentException` for an unknown name instead of answering for the first enum member
-* `Uint32.FromJson` reads a `JsonValue` built in code from `int`, `uint`, `long`, `ulong`, `short`, `ushort`, `byte`, `sbyte` and `double` with a range check; it threw `InvalidOperationException` for anything but `uint`. `BatchNormalizer.NormalizeInnerTransaction` reads `Flags` the same way, so flags set from code are OR-ed with `tfInnerBatchTxn` instead of replaced by it
+* `Uint32.FromJson` reads a `JsonValue` built in code from `int`, `uint`, `long`, `ulong`, `short`, `ushort`, `byte`, `sbyte`, `double`, `float` and `decimal` with a range check, and a parsed `7.0` or `7e0`; a fractional value raises `OverflowException`. It threw `InvalidOperationException` for anything but `uint`. `BatchNormalizer.NormalizeInnerTransaction` reads a numeric `Flags` through `Uint32.FromJson`, so flags set from code are OR-ed with `tfInnerBatchTxn` instead of replaced by it, and a `Flags` that is not a UInt32 raises `ValidationException`
 * `LedgerSequenceHelper.GetLastLedgerSequence`, `SubmitSugar.IsSigned` and `SubmitSugar.IsAccountDelete` read the fields of a typed or anonymous transaction from its JSON form; the fallback parsed the hex blob returned by `XrplBinaryCodec.Encode` as JSON and threw
 * `Hash` overrides `Equals(object)` and `GetHashCode` consistently with `IEquatable<Hash>`; `Hash128`, `Hash160` and `Hash256` check the buffer length with `ArgumentException` instead of `Contract.Assert`, which is compiled out of release builds
 * `GetOrderbook(ledgerIndex)` builds a numeric ledger index with `new LedgerIndex((uint)ledgerIndex)`; it cast the number to `LedgerIndexType`. `-1` stays `validated`
-* `CrossChainPayment.CreateCrossChainPayment` copies the source payment through its JSON form, so `SourceTag`, `TicketSequence`, `NetworkID` and every other field survive; only `Memos` and `TransactionSignature` change
+* `CrossChainPayment.CreateCrossChainPayment` copies the source payment member by member, so `SourceTag`, `TicketSequence`, `NetworkID` and every other field survive; only `Memos` and `TransactionSignature` change
 * `Validation.ValidatePayment` accepts `Paths` of any collection shape, as `DictionaryObjectConverter` produces them (`List<object>` of `List<object>` of `Dictionary<string, object>`); `Validation.IsPathSet` is added. A null `Paths` is accepted and a wrong shape is invalid. It rejected every `Paths` that was not a `List<List<Dictionary<string, object>>>`
 * `BinarySerializer.EncodeVl` caps a variable-length field at 918744 bytes, as rippled and xrpl.js do (was 918745)
 * `SerializedEnumeration.ReadOrdinal` reads a multi-byte ordinal as `(a << 8) | b`; `(a >> 8) + b` returned the last byte for the two-byte `TransactionType` and `LedgerEntryType` ordinals
-* `EcdsaSignature.DecodeFromDer` returns null for a malformed DER signature (truncated, not a sequence, not two integers) instead of throwing `IOException`, `ArgumentException` or `NullReferenceException`, so `K256KeyPair.Verify` answers false
+* `EcdsaSignature.DecodeFromDer` returns null for a malformed DER signature (truncated, not a sequence, not two integers, trailing bytes, not the strict DER encoding rippled requires) instead of throwing `IOException`, `ArgumentException` or `NullReferenceException`, so `K256KeyPair.Verify` answers false
 * `DexSnapshotLoader` reads `DepositPreauth` objects page by page (`Limit` 400, `Marker`), as `PathfindingSource` does; it read the first page only
 * `XrplClient.Connect` and `ChangeServer` pass their `CancellationToken` into the `server_info` request that reads the network id
 * `UnixDateTimeConverter` converts a `DateTimeKind.Local` value to UTC before it writes the timestamp; `Unspecified` is taken as UTC (documented on the type)
 * `Validation.ValidateDIDSet` counts an empty string as a present field, since it clears that field of the DID; it refuses the transaction when all three fields are absent or all three are present and empty (`temEMPTY_DID`)
 * `Validation.ValidateNFTokenCreateOffer` and `Validation.ValidateNFTokenMint` compare `Account` with `Owner`, `Destination` and `Issuer` by value (`string.Equals`, ordinal); `==` on `object` compared references
-* `BatchUtils.ToBatchTx` and `BatchUtils.Build` work on a copy of each transaction; the caller's model was stripped of its signature and `LastLedgerSequence`, given `Fee` 0 and flagged `tfInnerBatchTxn`
+* `BatchUtils.ToBatchTx` and `BatchUtils.Build` work on a member-wise copy of each transaction (a JSON copy would restore constructor defaults such as `TrustSet`'s `tfSetNoRipple` that the caller cleared); the caller's model was stripped of its signature and `LastLedgerSequence`, given `Fee` 0 and flagged `tfInnerBatchTxn`
 * `MPTokenMetadataSchema.ToJson` writes non-ASCII as UTF-8 (`JavaScriptEncoder.UnsafeRelaxedJsonEscaping`), as `JSON.stringify` does; `GetByteSize` measures the same bytes. The default escaper wrote `\uXXXX`, which overstated the size
 * `AutofillSugar.ValidateAccountAddress` compares an X-address tag with `Common.TryGetUInt32`; the `(int)` unboxing threw `InvalidCastException` for a `uint` or `long` tag
 * **Breaking:** `Drops.BaseFee`, `MedianFee`, `MinimumFee`, `OpenLedgerFee` and `Levels.MedianLevel`, `MinimumLevel`, `OpenLedgerLevel`, `ReferenceLevel` are `ulong`; they were `uint` and failed to read a fee level above 4,294,967,295 under load. Migration: assign to a `ulong` or cast
@@ -33,9 +33,9 @@
 ## Xrpl.X402 1.0.2 28/10/2026
 
 * `X402PaymentHandler` passes the request's `CancellationToken` to the request-body buffering and to the clone for the retry, and disposes the 402 response when negotiation throws
-* `X402PaymentHandler` walks the `exact` requirements of the challenge on its network and pays the first one the client policy allows (`PayToAllowlist`, `MaxAmountDrops`, `IouValueCaps`); when none passes it rethrows the first policy error. It enforced the policy on the first `exact` option only
+* `X402PaymentHandler` walks the `exact` requirements of the challenge on its network and pays the first one the client policy allows (`PayToAllowlist`, `MaxAmountDrops`, `IouValueCaps`) and a payment can be built for; when none passes it rethrows the first error. It enforced the policy on the first `exact` option only
 * `X402Base64Json.Decode` wraps a `JsonException` in the `FormatException` its documentation promises
-* `PaymentHandlerSelectionTests` covers the requirement choice, the rethrown policy error, the disposed 402 response and the `FormatException`
+* `PaymentHandlerSelectionTests` covers the requirement choice, an option without `extra.invoiceId` ahead of a valid one, the rethrown policy error, the disposed 402 response and the `FormatException`
 
 ## 11.21.0.0 26/10/2026
 

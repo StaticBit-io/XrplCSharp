@@ -57,9 +57,7 @@ public sealed class X402PaymentHandler : DelegatingHandler
         PaymentSignatureEnvelope envelope;
         try
         {
-            PaymentRequirement requirement = SelectRequirement(response);
-
-            (Payment payment, string invoiceId) = X402PaymentBuilder.BuildWithInvoiceId(requirement, _signer.PayerAddress, _options);
+            (PaymentRequirement requirement, Payment payment, string invoiceId) = SelectRequirement(response);
             string signedBlob = await _signer.PrepareAndSignAsync(payment, requirement.MaxTimeoutSeconds, cancellationToken);
 
             envelope = new PaymentSignatureEnvelope
@@ -94,7 +92,7 @@ public sealed class X402PaymentHandler : DelegatingHandler
         return paid;
     }
 
-    private PaymentRequirement SelectRequirement(HttpResponseMessage response)
+    private (PaymentRequirement Requirement, Payment Payment, string InvoiceId) SelectRequirement(HttpResponseMessage response)
     {
         if (!response.Headers.TryGetValues(X402Headers.PaymentRequired, out System.Collections.Generic.IEnumerable<string>? values))
             throw new X402PaymentException("invalid_challenge", "402 without PAYMENT-REQUIRED header.");
@@ -116,7 +114,8 @@ public sealed class X402PaymentHandler : DelegatingHandler
             throw new X402PaymentException("invalid_challenge", "PAYMENT-REQUIRED challenge had no requirements.");
 
         // A server may list several 'exact' options (different assets or payees); take the first one
-        // the client's policy allows rather than failing on the first one it does not.
+        // the client's policy allows and a payment can be built for, rather than failing on the
+        // first one that does not.
         X402PaymentException? firstPolicyError = null;
         foreach (PaymentRequirement candidate in challenge.Accepts.Where(r =>
                      string.Equals(r.Scheme, "exact", StringComparison.OrdinalIgnoreCase) &&
@@ -125,7 +124,8 @@ public sealed class X402PaymentHandler : DelegatingHandler
             try
             {
                 EnforcePolicy(candidate);
-                return candidate;
+                (Payment payment, string invoiceId) = X402PaymentBuilder.BuildWithInvoiceId(candidate, _signer.PayerAddress, _options);
+                return (candidate, payment, invoiceId);
             }
             catch (X402PaymentException ex)
             {

@@ -51,8 +51,17 @@ namespace Xrpl.BinaryCodec.Types
                 else if (number.TryGetValue(out short s)) val = s;
                 else if (number.TryGetValue(out byte b)) val = b;
                 else if (number.TryGetValue(out sbyte sb)) val = sb;
-                else if (number.TryGetValue(out JsonElement je) && je.TryGetDecimal(out decimal d)) val = d;
-                else if (number.TryGetValue(out double dbl) && !double.IsNaN(dbl) && !double.IsInfinity(dbl)) val = (decimal)dbl;
+                else if (number.TryGetValue(out JsonElement je))
+                {
+                    // Parsed JSON: "7", and also "7.0" or "7e0", which xrpl.js accepts as 7.
+                    if (je.TryGetUInt32(out uint fromElement))
+                        return fromElement;
+                    if (!je.TryGetDecimal(out val))
+                        throw new OverflowException($"Value {je.GetRawText()} is out of range for Uint32 (0..{uint.MaxValue}).");
+                }
+                else if (number.TryGetValue(out double dbl)) return FromIntegralDouble(dbl);
+                else if (number.TryGetValue(out float flt)) return FromIntegralDouble(flt);
+                else if (number.TryGetValue(out decimal dec)) val = dec;
                 else throw new FormatException($"Cannot read '{token.ToJsonString()}' as Uint32.");
 
                 if (val != Math.Truncate(val) || val < 0 || val > uint.MaxValue)
@@ -61,6 +70,14 @@ namespace Xrpl.BinaryCodec.Types
                 return (uint)val;
             }
             return uint.Parse(token.GetValue<string>(), CultureInfo.InvariantCulture);
+        }
+
+        // Checked as a double: converting to decimal first rounds 1.0000000000000002 to 1.
+        private static Uint32 FromIntegralDouble(double value)
+        {
+            if (double.IsNaN(value) || double.IsInfinity(value) || value != Math.Floor(value) || value < 0 || value > uint.MaxValue)
+                throw new OverflowException($"Value {value.ToString("R", CultureInfo.InvariantCulture)} is out of range for Uint32 (0..{uint.MaxValue}).");
+            return (uint)value;
         }
 
         /// <summary>

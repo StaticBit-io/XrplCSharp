@@ -54,9 +54,8 @@ public static class BatchUtils
 
         // Work on a copy: the caller keeps using its own transaction (to sign and submit it alone, or
         // to build another batch), and must not find it stripped and flagged as an inner transaction.
-        Type runtimeType = tx.GetType();
-        tx = (ITransactionRequest)JsonSerializer.Deserialize(
-            JsonSerializer.Serialize(tx, runtimeType, XrplJsonOptions.Default), runtimeType, XrplJsonOptions.Default)!;
+        // Only top-level members are changed below, so a member-wise copy is enough.
+        tx = ShallowCopy.Of(tx);
 
         // 2) Drop the fields a Batch forbids, and those that are not stable inside one
         tx.TransactionSignature = null;

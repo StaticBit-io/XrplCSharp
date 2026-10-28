@@ -52,18 +52,20 @@ public static class BatchNormalizer
         {
             if (fv is JsonValue jv)
             {
-                // Flags set from code are CLR-typed JsonValues (uint, int, ...) that only answer
-                // TryGetValue for their own type; losing them would replace the caller's flags.
-                if (jv.TryGetValue(out uint uv))
-                    flags = uv;
-                else if (jv.TryGetValue(out int iv) && iv >= 0)
-                    flags = (uint)iv;
-                else if (jv.TryGetValue(out long lv) && lv >= 0 && lv <= uint.MaxValue)
-                    flags = (uint)lv;
-                else if (jv.TryGetValue(out ulong ulv) && ulv <= uint.MaxValue)
-                    flags = (uint)ulv;
-                else if (jv.TryGetValue(out JsonElement je) && je.ValueKind == JsonValueKind.Number && je.TryGetUInt32(out uint eu))
-                    flags = eu;
+                // Flags set from code are CLR-typed JsonValues (uint, int, double, ...) that only
+                // answer TryGetValue for their own type. Uint32.FromJson reads every one of them;
+                // a value it cannot read is refused, since dropping it would replace the caller's flags.
+                if (jv.GetValueKind() == JsonValueKind.Number)
+                {
+                    try
+                    {
+                        flags = Xrpl.BinaryCodec.Types.Uint32.FromJson(jv);
+                    }
+                    catch (Exception ex) when (ex is OverflowException || ex is FormatException)
+                    {
+                        throw new ValidationException($"Flags must be a UInt32: {ex.Message}");
+                    }
+                }
                 else if (jv.TryGetValue(out string sv) && uint.TryParse(sv, out uint u))
                     flags = u;
             }

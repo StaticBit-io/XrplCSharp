@@ -117,4 +117,21 @@ public class PaymentHandlerSelectionTests
 
         Assert.ThrowsExactly<FormatException>(() => X402Base64Json.Decode<PaymentRequiredChallenge>(notJson));
     }
+
+    [TestMethod]
+    public async Task TestUSkipsOptionThePaymentCannotBeBuiltFor()
+    {
+        Stub inner = new();
+        PaymentRequirement withoutInvoice = Xrp("rMerchant", "1000000", "unused");
+        withoutInvoice.Extra.Remove("invoiceId");
+        inner.Accepts.Add(withoutInvoice);
+        inner.Accepts.Add(Xrp("rMerchant", "1000000", "inv-2"));
+        HttpClient http = Build(inner, new X402ClientOptions { Network = "xrpl:1", MaxAmountDrops = 10_000_000 });
+
+        HttpResponseMessage r = await http.GetAsync("http://merchant/resource");
+
+        Assert.AreEqual(HttpStatusCode.OK, r.StatusCode);
+        PaymentSignatureEnvelope env = X402Base64Json.Decode<PaymentSignatureEnvelope>(inner.SeenSignature!);
+        Assert.AreEqual("inv-2", env.Payload.InvoiceId);
+    }
 }

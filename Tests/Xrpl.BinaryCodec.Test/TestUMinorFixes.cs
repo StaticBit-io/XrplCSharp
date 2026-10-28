@@ -122,5 +122,33 @@ namespace Xrpl.BinaryCodec.Tests
             BinaryParser parser = new BufferParser("0102");
             Assert.AreEqual(0x0102, TransactionType.Values.ReadOrdinal(parser));
         }
+
+        [TestMethod]
+        public void MptAmount_FractionBeyondDecimalPrecision_Throws()
+        {
+            // 31 significant digits: decimal would round this to 1.
+            Assert.ThrowsExactly<BinaryCodecException>(() => Amount.FromJson(MptAmountJson("1.000000000000000000000000000001")));
+        }
+
+        [TestMethod]
+        public void MptAmount_ExponentForms_AreReadExactly()
+        {
+            Assert.AreEqual("1000", Amount.FromJson(MptAmountJson("1e3")).ToJson()["value"]!.GetValue<string>());
+            Assert.AreEqual("15", Amount.FromJson(MptAmountJson("1.5e1")).ToJson()["value"]!.GetValue<string>());
+            Assert.ThrowsExactly<BinaryCodecException>(() => Amount.FromJson(MptAmountJson("15e-1")));
+            Assert.ThrowsExactly<BinaryCodecException>(() => Amount.FromJson(MptAmountJson("abc")));
+        }
+
+        [TestMethod]
+        public void Uint32_FromJson_FloatingValues_MustBeWhole()
+        {
+            Assert.AreEqual(7u, (uint)Uint32.FromJson(JsonValue.Create(7d)));
+            Assert.AreEqual(7u, (uint)Uint32.FromJson(JsonValue.Create(7f)));
+            Assert.AreEqual(7u, (uint)Uint32.FromJson(JsonValue.Create(7m)));
+            Assert.ThrowsExactly<OverflowException>(() => Uint32.FromJson(JsonValue.Create(1.0000000000000002d)));
+            Assert.AreEqual(7u, (uint)Uint32.FromJson(JsonNode.Parse("7.0")));
+            Assert.AreEqual(7u, (uint)Uint32.FromJson(JsonNode.Parse("7e0")));
+            Assert.ThrowsExactly<OverflowException>(() => Uint32.FromJson(JsonNode.Parse("7.5")));
+        }
     }
 }

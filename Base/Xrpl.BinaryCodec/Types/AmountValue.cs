@@ -1,5 +1,6 @@
 ﻿using System;
 using System.Globalization;
+using System.Numerics;
 using System.Text.RegularExpressions;
 using Xrpl.BinaryCodec.Binary;
 using Xrpl.BinaryCodec.Util;
@@ -316,16 +317,50 @@ namespace Xrpl.BinaryCodec.Types
         public override bool IsIou => false;
         public bool IsMpt => true;
 
+        private static readonly Regex MptAmountPattern = new Regex(
+            @"\A([+-]?)(\d*)(?:\.(\d*))?(?:[eE]([+-]?\d+))?\z", RegexOptions.CultureInvariant);
+
         public MptValue(string value)
         {
-            decimal parsed = decimal.Parse(value, NumberStyles.AllowDecimalPoint | NumberStyles.AllowExponent | NumberStyles.AllowLeadingSign, CultureInfo.InvariantCulture);
-            if (parsed != Math.Truncate(parsed))
-                throw new BinaryCodecException($"MPT amounts must be integers, got: {value}");
-            IsNegative = parsed < 0;
-            decimal magnitude = Math.Abs(parsed);
+            // Read exactly, not through decimal: decimal keeps 28 digits and would round a fraction
+            // beyond them to a whole number that passes the integer check.
+            Match match = value is null ? Match.Empty : MptAmountPattern.Match(value);
+            string digits = match.Success ? match.Groups[2].Value + match.Groups[3].Value : "";
+            if (digits.Length == 0)
+                throw new BinaryCodecException($"Invalid MPT amount: {value}");
+
+            BigInteger magnitude = BigInteger.Parse(digits, CultureInfo.InvariantCulture);
+            long exponent = -(long)match.Groups[3].Value.Length;
+            if (match.Groups[4].Success)
+            {
+                if (!int.TryParse(match.Groups[4].Value, NumberStyles.AllowLeadingSign, CultureInfo.InvariantCulture, out int written))
+                    throw new BinaryCodecException($"Invalid MPT amount: {value}");
+                exponent += written;
+            }
+
+            if (!magnitude.IsZero)
+            {
+                if (exponent < 0)
+                {
+                    BigInteger divisor = -exponent > digits.Length ? BigInteger.Zero : BigInteger.Pow(10, (int)-exponent);
+                    if (divisor.IsZero || !(magnitude % divisor).IsZero)
+                        throw new BinaryCodecException($"MPT amounts must be integers, got: {value}");
+                    magnitude /= divisor;
+                }
+                else if (exponent > 0)
+                {
+                    // Anything past 19 digits is beyond INT64_MAX already.
+                    if (exponent > 19)
+                        throw new BinaryCodecException($"MPT amount {value} exceeds maximum ({long.MaxValue}).");
+                    magnitude *= BigInteger.Pow(10, (int)exponent);
+                }
+            }
+
             // The mantissa shares 64 bits with the sign and type flags; rippled caps MPT amounts at INT64_MAX.
             if (magnitude > long.MaxValue)
                 throw new BinaryCodecException($"MPT amount {value} exceeds maximum ({long.MaxValue}).");
+
+            IsNegative = match.Groups[1].Value == "-" && !magnitude.IsZero;
             Mantissa = (ulong)magnitude;
         }
 

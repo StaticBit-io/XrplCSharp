@@ -1,11 +1,10 @@
 ﻿//https://github.com/XRPLF/xrpl.js/blob/main/packages/xrpl/src/utils/createCrossChainPayment.ts
 using System.Collections.Generic;
 using System.Linq;
-using System.Text.Json;
 
 using Xrpl.Client.Exceptions;
-using Xrpl.Client.Json;
 using Xrpl.Models.Transactions;
+using Xrpl.Models.Utils;
 
 namespace Xrpl.Utils
 {
@@ -36,10 +35,9 @@ namespace Xrpl.Utils
             var newMemos = new List<Memo> { destAccountMemo };
             newMemos.AddRange(memos);
 
-            // Round-trip through JSON so every field of the source (SourceTag, Ticket, NetworkID, ...)
+            // A member-wise copy, so every field of the source (SourceTag, Ticket, NetworkID, ...)
             // survives; a hand-written field list silently dropped whatever it forgot.
-            Payment newPayment = JsonSerializer.Deserialize<Payment>(
-                JsonSerializer.Serialize(payment, XrplJsonOptions.Default), XrplJsonOptions.Default);
+            Payment newPayment = ShallowCopy.Of(payment);
             newPayment.Memos = newMemos.Select(c => new MemoWrapper() { Memo = c }).ToList();
             newPayment.TransactionSignature = null;
 

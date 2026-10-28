@@ -40,5 +40,15 @@ namespace Xrpl.Keypairs.Tests
                 Assert.IsNull(EcdsaSignature.DecodeFromDer(bytes), bytes == null ? "null" : BitConverter.ToString(bytes));
             }
         }
+
+        [TestMethod]
+        public void DecodeFromDer_TrailingBytes_ReturnsNull()
+        {
+            byte[] der = new EcdsaSignature(new Org.BouncyCastle.Math.BigInteger("12345"), new Org.BouncyCastle.Math.BigInteger("67890")).EncodeToDer();
+            byte[] withTrailer = new byte[der.Length + 1];
+            der.CopyTo(withTrailer, 0);
+
+            Assert.IsNull(EcdsaSignature.DecodeFromDer(withTrailer));
+        }
     }
 }

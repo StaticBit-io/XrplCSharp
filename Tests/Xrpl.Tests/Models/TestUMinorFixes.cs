@@ -376,5 +376,43 @@ namespace XrplTests.MinorFixes
                 new DateTimeOffset(DateTime.SpecifyKind(unspecified, DateTimeKind.Utc)).ToUnixTimeSeconds().ToString(),
                 JsonSerializer.Serialize<DateTime?>(unspecified, options));
         }
+
+        [TestMethod]
+        public void BatchNormalizer_FloatingPointFlags_AreRead()
+        {
+            JsonObject inner = new JsonObject
+            {
+                ["TransactionType"] = "Payment",
+                ["Account"] = Alice,
+                ["Flags"] = JsonValue.Create(131072d),
+            };
+
+            Assert.AreEqual(0x40020000u, (uint)inner.NormalizeInnerTransaction()["Flags"]!);
+        }
+
+        [TestMethod]
+        public void BatchNormalizer_FractionalFlags_AreRefused()
+        {
+            JsonObject inner = new JsonObject
+            {
+                ["TransactionType"] = "Payment",
+                ["Account"] = Alice,
+                ["Flags"] = JsonValue.Create(1.5d),
+            };
+
+            Assert.ThrowsExactly<ValidationException>(() => inner.NormalizeInnerTransaction());
+        }
+
+        [TestMethod]
+        public void BatchUtils_ToBatchTx_KeepsClearedFlagsCleared()
+        {
+            // TrustSet's constructor sets tfSetNoRipple; a copy must not bring it back.
+            TrustSet trustSet = new TrustSet { Account = Alice, Flags = null };
+
+            ITransactionRequest inner = trustSet.ToBatchTx().RawTransaction;
+
+            Assert.AreEqual((uint)XrplGlobalFlags.tfInnerBatchTxn, inner.Flags);
+            Assert.IsNull(trustSet.Flags);
+        }
     }
 }
