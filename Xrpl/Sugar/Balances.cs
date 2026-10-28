@@ -165,6 +165,8 @@ namespace Xrpl.Sugar
             while (response.Marker is not null && lines.Count > 0)
             {
                 linesRequest.Marker = response.Marker;
+                // The client writes the id it chose back into the request; each page is a request of its own.
+                linesRequest.Id = null;
                 response = await client.AccountLines(linesRequest, cancellationToken).Typed();
                 if (response.TrustLines.Count > 0)
                     lines.AddRange(response.TrustLines);

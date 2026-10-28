@@ -216,7 +216,8 @@ namespace Xrpl.Wallet
             var node = masterNode.Derive(new KeyPath(derivationPath ?? "m/44'/144'/0'/0/0"));
 
             var publicKey = node.PrivateKey.PubKey.ToHex().ToUpper();
-            var privateKey = node.PrivateKey.ToHex().ToUpper();
+            // The 00 prefix marks a secp256k1 key, as for a seed-derived key and in xrpl.js.
+            var privateKey = $"00{node.PrivateKey.ToHex().ToUpper()}";
             return new XrplWallet(publicKey, privateKey, masterAddress);
         }
         private static XrplWallet FromRFC1751Mnemonic(string mnemonic, string? masterAddress = null, string? algorithm = null)
