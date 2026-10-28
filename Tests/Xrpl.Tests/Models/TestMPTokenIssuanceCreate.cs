@@ -1,8 +1,11 @@
 using Microsoft.VisualStudio.TestTools.UnitTesting;
 
 using System.Collections.Generic;
+using System.Text.Json;
 
+using Xrpl.BinaryCodec;
 using Xrpl.Client.Exceptions;
+using Xrpl.Client.Json;
 using Xrpl.Models.Transactions;
 
 namespace XrplTests.Xrpl.Models
@@ -161,6 +164,22 @@ namespace XrplTests.Xrpl.Models
                 mpTokenIssuanceCreate.Remove("DomainID");
                 mpTokenIssuanceCreate.Remove("Flags");
             }
+        }
+
+        [TestMethod]
+        public void TestUAssetScale_IsAUInt8_OnTheModel()
+        {
+            MPTokenIssuanceCreate tx = new MPTokenIssuanceCreate { Account = "rWYkbWkCeg8dP6rXALnjgZSjjLyih5NXm", AssetScale = 255 };
+
+            string json = tx.ToJson();
+            StringAssert.Contains(json, "\"AssetScale\":255");
+            Assert.AreEqual((byte)255, JsonSerializer.Deserialize<MPTokenIssuanceCreate>(json, XrplJsonOptions.Default).AssetScale);
+
+            string encoded = XrplBinaryCodec.Encode(JsonSerializer.Deserialize<Dictionary<string, object>>(json, XrplJsonOptions.Default));
+            Assert.AreEqual(255u, XrplBinaryCodec.Decode(encoded)["AssetScale"]!.GetValue<uint>());
+
+            Assert.ThrowsExactly<JsonException>(() => JsonSerializer.Deserialize<MPTokenIssuanceCreate>(
+                "{\"TransactionType\":\"MPTokenIssuanceCreate\",\"AssetScale\":256}", XrplJsonOptions.Default));
         }
     }
 }

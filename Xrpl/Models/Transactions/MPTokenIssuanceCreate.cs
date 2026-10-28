@@ -74,7 +74,7 @@ namespace Xrpl.Models.Transactions
         /// fractional unit.If the fractional unit equals the standard unit, then the asset scale is 0.
         /// Note that this value is optional, and will default to 0 if not supplied.
         /// </summary>
-        public uint? AssetScale { get; set; }
+        public byte? AssetScale { get; set; }
 
         /// <summary>
         /// Specifies the maximum asset amount of this token that should ever be issued.
@@ -133,7 +133,7 @@ namespace Xrpl.Models.Transactions
 
         /// <inheritdoc />
         [JsonPropertyName("AssetScale")]
-        public uint? AssetScale { get; set; }
+        public byte? AssetScale { get; set; }
 
         /// <inheritdoc />
         [JsonPropertyName("MaximumAmount")]
@@ -181,7 +181,7 @@ namespace Xrpl.Models.Transactions
 
         /// <inheritdoc />
         [JsonPropertyName("AssetScale")]
-        public uint? AssetScale { get; set; }
+        public byte? AssetScale { get; set; }
 
         /// <inheritdoc />
         [JsonPropertyName("MaximumAmount")]
