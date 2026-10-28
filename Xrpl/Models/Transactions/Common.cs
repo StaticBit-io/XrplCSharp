@@ -195,6 +195,10 @@ namespace Xrpl.Models.Transactions
                 case int i when i >= 0: result = (uint)i; return true;
                 case long l when l >= 0 && l <= uint.MaxValue: result = (uint)l; return true;
                 case ulong ul when ul <= uint.MaxValue: result = (uint)ul; return true;
+                case byte b: result = b; return true;
+                case ushort us: result = us; return true;
+                case sbyte sb when sb >= 0: result = (uint)sb; return true;
+                case short s when s >= 0: result = (uint)s; return true;
                 default: result = 0; return false;
             }
         }

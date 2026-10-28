@@ -16,11 +16,6 @@ namespace Xrpl.Models.Transactions
     public enum AccountSetAsfFlags : uint
     {
         /// <summary>
-        /// batch inner transaction
-        /// </summary>
-        tfInnerBatchTxn = XrplGlobalFlags.tfInnerBatchTxn,
-
-        /// <summary>
         /// Require a destination tag to send transactions to this account.
         /// </summary>
         asfRequireDest = 1,

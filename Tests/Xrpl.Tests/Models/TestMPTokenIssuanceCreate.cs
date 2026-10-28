@@ -74,10 +74,21 @@ namespace XrplTests.Xrpl.Models
         [TestMethod]
         public void TestThrowsWithAssetScaleOutOfRange()
         {
-            mpTokenIssuanceCreate["AssetScale"] = (byte)11;
+            mpTokenIssuanceCreate["AssetScale"] = 256u;
             Helper.ThrowsException<ValidationException>(
                 () => Validation.Validate(mpTokenIssuanceCreate),
-                "MPTokenIssuanceCreate: AssetScale must be between 0 and 10");
+                "MPTokenIssuanceCreate: AssetScale must be between 0 and 255");
+            mpTokenIssuanceCreate.Remove("AssetScale");
+        }
+
+        [TestMethod]
+        [DataRow(11)]
+        [DataRow(255)]
+        public void TestVerifyAssetScaleAboveTen(int assetScale)
+        {
+            // rippled bounds AssetScale only by its UInt8 type.
+            mpTokenIssuanceCreate["AssetScale"] = (byte)assetScale;
+            Validation.Validate(mpTokenIssuanceCreate);
             mpTokenIssuanceCreate.Remove("AssetScale");
         }
 

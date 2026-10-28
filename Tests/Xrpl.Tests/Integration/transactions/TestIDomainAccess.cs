@@ -127,9 +127,16 @@ public class TestIDomainAccess
         Assert.IsFalse(noCredential.HasAccess, "Trader without credential should not have access");
         Assert.AreEqual(0, noCredential.InvalidCredentials.Count, "No matching credential means an empty invalid list");
 
-        // The domain owner gets no shortcut either: access requires a credential.
+        // The credential check gives the domain owner no shortcut: access requires a credential.
         DomainAccessResult ownerAccess = await client.GetDomainAccess(issuerWallet.ClassicAddress, domainId);
         Assert.IsFalse(ownerAccess.HasAccess, "Domain owner without credential should not have access");
+
+        // The permissioned DEX check does: rippled's accountInDomain puts the owner in its domain.
+        DomainAccessResult ownerDex = await client.GetDomainAccess(issuerWallet.ClassicAddress, domainId, DomainAccessScope.PermissionedDex);
+        Assert.IsTrue(ownerDex.HasAccess, "Domain owner is in its domain for the permissioned DEX");
+        Assert.IsTrue(ownerDex.IsDomainOwner);
+        DomainAccessResult traderDex = await client.GetDomainAccess(traderWallet.ClassicAddress, domainId, DomainAccessScope.PermissionedDex);
+        Assert.IsFalse(traderDex.HasAccess, "A trader without credential is not in the domain for the permissioned DEX either");
 
         // Step 2: the issuer issues a credential to the trader; it is not accepted yet.
         var credCreate = new CredentialCreate
