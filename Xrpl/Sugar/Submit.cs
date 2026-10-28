@@ -1071,8 +1071,7 @@ public static class SubmitSugar
         }
         else
         {
-            var ob = XrplBinaryCodec.Encode(transaction);
-            var json = JsonNode.Parse($"{ob}")?.AsObject();
+            JsonObject json = ToJsonObject(transaction);
             if (json == null) return false;
             return (json.TryGetPropertyValue("SigningPubKey", out var SigningPubKey) &&
                     !string.IsNullOrWhiteSpace(SigningPubKey?.ToString())) ||
@@ -1106,12 +1105,23 @@ public static class SubmitSugar
         }
         else
         {
-            var ob = XrplBinaryCodec.Encode(transaction);
-            var json = JsonNode.Parse($"{ob}")?.AsObject();
+            JsonObject json = ToJsonObject(transaction);
             if (json == null) return false;
 
             return json.TryGetPropertyValue("TransactionType", out var TransactionType) &&
                    TransactionType?.ToString() == "AccountDelete";
         }
+    }
+
+    // XrplBinaryCodec.Encode returns the serialized blob as hex, which is not JSON, so the fields are
+    // read from the object's own JSON form instead.
+    private static JsonObject ToJsonObject(object transaction)
+    {
+        if (transaction is JsonObject jsonObject)
+            return jsonObject;
+
+        return transaction is null
+            ? null
+            : JsonSerializer.SerializeToNode(transaction, transaction.GetType(), XrplJsonOptions.Default) as JsonObject;
     }
 }

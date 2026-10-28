@@ -6,7 +6,9 @@ using System.Text.Json.Serialization;
 namespace Xrpl.Client.Json.Converters;
 
 /// <summary>
-/// Converts a DateTime to and from a Unix timestamp (seconds since the Unix Epoch).<br/> 
+/// Converts a DateTime to and from a Unix timestamp (seconds since the Unix Epoch).<br/>
+/// A <see cref="DateTimeKind.Local"/> value is converted to UTC before it is written; an
+/// <see cref="DateTimeKind.Unspecified"/> value is taken to already be UTC. Values are read back as UTC.
 /// </summary>
 public class UnixDateTimeConverter : JsonConverter<DateTime?>
 {
@@ -16,7 +18,8 @@ public class UnixDateTimeConverter : JsonConverter<DateTime?>
     {
         if (value is DateTime dateTime)
         {
-            long totalSeconds = (long)(dateTime - UnixEpoch).TotalSeconds;
+            DateTime utc = dateTime.Kind == DateTimeKind.Local ? dateTime.ToUniversalTime() : dateTime;
+            long totalSeconds = (long)(utc - UnixEpoch).TotalSeconds;
             writer.WriteNumberValue(totalSeconds);
         }
         else

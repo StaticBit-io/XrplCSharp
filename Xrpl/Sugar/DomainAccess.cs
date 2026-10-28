@@ -13,13 +13,34 @@ using Xrpl.Models.Transactions;
 
 // Client-side implementation of the `domain_access` check proposed in
 // https://github.com/XRPLF/rippled/issues/7743.
-// Mirrors rippled's credentials::validDomain (CredentialHelpers.cpp): an account
-// has access to a permissioned domain iff it holds a Credential matching one of
-// the domain's AcceptedCredentials (Issuer + CredentialType) that is accepted
-// (lsfAccepted) and not expired at the checked ledger's close time.
+// rippled has two checks. credentials::validDomain (CredentialHelpers.cpp), used for
+// vaults, MPT issuances and the other domain-gated objects: an account has access iff
+// it holds a Credential matching one of the domain's AcceptedCredentials (Issuer +
+// CredentialType) that is accepted (lsfAccepted) and not expired at the checked
+// ledger's close time. permissioned_dex::accountInDomain (PermissionedDEXHelpers.cpp),
+// used for permissioned DEX offers and payments: the same, except that the domain
+// owner is always in its domain.
 
 namespace Xrpl.Sugar
 {
+    /// <summary>
+    /// Which of rippled's two domain checks a <see cref="DomainAccessSugar.GetDomainAccess"/> call applies.
+    /// </summary>
+    public enum DomainAccessScope
+    {
+        /// <summary>
+        /// rippled's <c>credentials::validDomain</c>, for vaults, MPT issuances and other domain-gated
+        /// objects: access requires a valid credential, also for the domain owner.
+        /// </summary>
+        Credentials,
+
+        /// <summary>
+        /// rippled's <c>permissioned_dex::accountInDomain</c>, for offers and payments on the permissioned
+        /// DEX: the domain owner has access without a credential; anyone else needs a valid one.
+        /// </summary>
+        PermissionedDex,
+    }
+
     /// <summary>
     /// Status of a single credential held by the account that matches one of the
     /// domain's accepted (issuer, credential_type) pairs but is not currently valid.
@@ -44,8 +65,14 @@ namespace Xrpl.Sugar
     /// </summary>
     public class DomainAccessResult
     {
-        /// <summary> True if the account can use the domain (permissioned DEX, vaults, ...). </summary>
+        /// <summary> True if the account passes the check of the requested <see cref="DomainAccessScope"/>. </summary>
         public bool HasAccess { get; set; }
+
+        /// <summary>
+        /// True if access was granted because the account owns the domain, which only
+        /// <see cref="DomainAccessScope.PermissionedDex"/> allows. No credentials are looked up then.
+        /// </summary>
+        public bool IsDomainOwner { get; set; }
 
         /// <summary>
         /// Credentials held by the account that match the domain's accepted pairs but are
@@ -70,7 +97,21 @@ namespace Xrpl.Sugar
         /// <param name="domainId">The ledger entry ID of the PermissionedDomain, as hexadecimal.</param>
         /// <param name="cancellationToken">Cancellation token.</param>
         /// <exception cref="RippleException">The entry at <paramref name="domainId"/> is not a PermissionedDomain.</exception>
-        public static async Task<DomainAccessResult> GetDomainAccess(this IXrplClient client, string account, string domainId, CancellationToken cancellationToken = default)
+        public static Task<DomainAccessResult> GetDomainAccess(this IXrplClient client, string account, string domainId, CancellationToken cancellationToken = default) =>
+            GetDomainAccess(client, account, domainId, DomainAccessScope.Credentials, cancellationToken);
+
+        /// <summary>
+        /// Checks whether an account has access to a permissioned domain under the check of
+        /// <paramref name="scope"/>: the credential check for vaults and other domain-gated objects,
+        /// or the permissioned DEX check, which also admits the domain owner.
+        /// </summary>
+        /// <param name="client">Client.</param>
+        /// <param name="account">The account whose domain access is checked.</param>
+        /// <param name="domainId">The ledger entry ID of the PermissionedDomain, as hexadecimal.</param>
+        /// <param name="scope">Which of rippled's two domain checks to apply.</param>
+        /// <param name="cancellationToken">Cancellation token.</param>
+        /// <exception cref="RippleException">The entry at <paramref name="domainId"/> is not a PermissionedDomain.</exception>
+        public static async Task<DomainAccessResult> GetDomainAccess(this IXrplClient client, string account, string domainId, DomainAccessScope scope, CancellationToken cancellationToken = default)
         {
             // Pin all lookups to one validated ledger; its close time is the reference
             // point for expiration. rippled deletes expired credentials lazily (only
@@ -104,6 +145,9 @@ namespace Xrpl.Sugar
             LedgerEntryResponse domainResponse = await client.LedgerEntry(domainRequest, cancellationToken).Typed();
             if (domainResponse.Node is not LOPermissionedDomain domain)
                 throw new RippleException($"Ledger entry {domainId} is not a PermissionedDomain.");
+
+            if (scope == DomainAccessScope.PermissionedDex && string.Equals(domain.Owner, account, StringComparison.Ordinal))
+                return new DomainAccessResult { HasAccess = true, IsDomainOwner = true, LedgerIndex = ledgerIndex };
 
             List<Task<LOCredential>> lookups = domain.AcceptedCredentials
                 .Select(wrapper => LookupCredential(client, account, wrapper.Credential, pinnedIndex, cancellationToken))

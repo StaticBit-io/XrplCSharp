@@ -138,23 +138,48 @@ namespace Xrpl.Keypairs.K256
             return DerByteStream().ToArray();
         }
 
+        /// <summary>
+        /// Decodes a DER signature; returns null when the bytes are not a DER sequence of two integers.
+        /// </summary>
         public static EcdsaSignature DecodeFromDer(byte[] bytes)
         {
-            Asn1InputStream decoder = new Asn1InputStream(bytes);
-            DerInteger r, s;
-            try
-            {
-                DerSequence seq = (DerSequence)decoder.ReadObject();
-                r = (DerInteger) seq[0];
-                s = (DerInteger) seq[1];
-            }
-            catch (System.InvalidCastException)
+            if (bytes == null)
             {
                 return null;
             }
-            finally
+
+            DerInteger r, s;
+            try
             {
-                decoder.Close();
+                using (Asn1InputStream decoder = new Asn1InputStream(bytes))
+                {
+                    DerSequence seq = decoder.ReadObject() as DerSequence;
+                    if (seq == null || seq.Count != 2)
+                    {
+                        return null;
+                    }
+
+                    // Strict DER, as rippled requires: trailing bytes or a non-minimal encoding
+                    // would otherwise decode to a signature that verifies.
+                    if (!Org.BouncyCastle.Utilities.Arrays.AreEqual(seq.GetDerEncoded(), bytes))
+                    {
+                        return null;
+                    }
+
+                    r = seq[0] as DerInteger;
+                    s = seq[1] as DerInteger;
+                }
+            }
+            catch (Exception ex) when (ex is IOException || ex is ArgumentException || ex is InvalidCastException
+                                       || ex is NullReferenceException || ex is IndexOutOfRangeException)
+            {
+                // Truncated or malformed DER: a signature that cannot be parsed cannot verify.
+                return null;
+            }
+
+            if (r == null || s == null)
+            {
+                return null;
             }
             // OpenSSL deviates from the DER spec by interpreting these values as unsigned, though they should not be
             // Thus, we always use the positive versions. See: http://r6.ca/blog/20111119T211504Z.html

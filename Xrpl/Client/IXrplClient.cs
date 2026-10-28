@@ -1073,7 +1073,7 @@ namespace Xrpl.Client
             {
                 try
                 {
-                    await SetNetworkId();
+                    await SetNetworkId(cancellationToken);
                     return;
                 }
                 catch (Exception error) when (
@@ -1117,9 +1117,9 @@ namespace Xrpl.Client
                 _ => false,
             };
 
-        private async Task SetNetworkId()
+        private async Task SetNetworkId(CancellationToken cancellationToken)
         {
-            var server = await ServerInfo(new ServerInfoRequest());
+            var server = await ServerInfo(new ServerInfoRequest(), cancellationToken);
             if (server.Result?.Info?.NetworkID is { } id and > 1024)
             {
                 SetNetworkId(id);

@@ -132,11 +132,18 @@ namespace Xrpl.Wallet
             if (string.IsNullOrEmpty(number) || number.Length != 6)
                 return false;
 
-            if (!int.TryParse(number, out _))
-                return false;
+            // int.TryParse would also accept a sign or surrounding whitespace.
+            foreach (char c in number)
+            {
+                if (c < '0' || c > '9')
+                    return false;
+            }
 
             var checkSum = int.Parse(number[5..]);
             var value = int.Parse(number[..5]);
+            // The value part is read as two bytes of the 16-byte entropy.
+            if (value > ushort.MaxValue)
+                return false;
             var expectedChecksum = CalculateChecksum(position, value);
             return expectedChecksum == checkSum;
         }

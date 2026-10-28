@@ -48,30 +48,37 @@ public sealed class X402PaymentHandler : DelegatingHandler
         HttpRequestMessage request, CancellationToken cancellationToken)
     {
         if (request.Content is not null)
-            await request.Content.LoadIntoBufferAsync();
+            await request.Content.LoadIntoBufferAsync().WaitAsync(cancellationToken);
 
         HttpResponseMessage response = await base.SendAsync(request, cancellationToken);
         if (response.StatusCode != HttpStatusCode.PaymentRequired)
             return response;
 
-        PaymentRequirement requirement = SelectRequirement(response);
-        EnforcePolicy(requirement);
-
-        (Payment payment, string invoiceId) = X402PaymentBuilder.BuildWithInvoiceId(requirement, _signer.PayerAddress, _options);
-        string signedBlob = await _signer.PrepareAndSignAsync(payment, requirement.MaxTimeoutSeconds, cancellationToken);
-
-        PaymentSignatureEnvelope envelope = new()
+        PaymentSignatureEnvelope envelope;
+        try
         {
-            X402Version = _options.X402Version,
-            Accepted = requirement,
-            Payload = new SignedPayload { SignedTxBlob = signedBlob, InvoiceId = invoiceId },
-        };
+            (PaymentRequirement requirement, Payment payment, string invoiceId) = SelectRequirement(response);
+            string signedBlob = await _signer.PrepareAndSignAsync(payment, requirement.MaxTimeoutSeconds, cancellationToken);
 
-        if (_options.VerifiableIntentProvider is not null)
-            envelope.Extensions = await _options.VerifiableIntentProvider.CreateExtensionsAsync(requirement, payment, cancellationToken);
+            envelope = new PaymentSignatureEnvelope
+            {
+                X402Version = _options.X402Version,
+                Accepted = requirement,
+                Payload = new SignedPayload { SignedTxBlob = signedBlob, InvoiceId = invoiceId },
+            };
+
+            if (_options.VerifiableIntentProvider is not null)
+                envelope.Extensions = await _options.VerifiableIntentProvider.CreateExtensionsAsync(requirement, payment, cancellationToken);
+        }
+        catch
+        {
+            // The caller never receives the 402 response when negotiation throws, so it is released here.
+            response.Dispose();
+            throw;
+        }
 
         response.Dispose();
-        using HttpRequestMessage retry = await CloneAsync(request);
+        using HttpRequestMessage retry = await CloneAsync(request, cancellationToken);
         retry.Headers.Remove(X402Headers.PaymentSignature);
         retry.Headers.Add(X402Headers.PaymentSignature, X402Base64Json.Encode(envelope));
 
@@ -85,7 +92,7 @@ public sealed class X402PaymentHandler : DelegatingHandler
         return paid;
     }
 
-    private PaymentRequirement SelectRequirement(HttpResponseMessage response)
+    private (PaymentRequirement Requirement, Payment Payment, string InvoiceId) SelectRequirement(HttpResponseMessage response)
     {
         if (!response.Headers.TryGetValues(X402Headers.PaymentRequired, out System.Collections.Generic.IEnumerable<string>? values))
             throw new X402PaymentException("invalid_challenge", "402 without PAYMENT-REQUIRED header.");
@@ -106,11 +113,27 @@ public sealed class X402PaymentHandler : DelegatingHandler
         if (challenge.Accepts is null || challenge.Accepts.Count == 0)
             throw new X402PaymentException("invalid_challenge", "PAYMENT-REQUIRED challenge had no requirements.");
 
-        PaymentRequirement? match = challenge.Accepts.FirstOrDefault(r =>
-            string.Equals(r.Scheme, "exact", StringComparison.OrdinalIgnoreCase) &&
-            string.Equals(r.Network, _options.Network, StringComparison.OrdinalIgnoreCase));
+        // A server may list several 'exact' options (different assets or payees); take the first one
+        // the client's policy allows and a payment can be built for, rather than failing on the
+        // first one that does not.
+        X402PaymentException? firstPolicyError = null;
+        foreach (PaymentRequirement candidate in challenge.Accepts.Where(r =>
+                     string.Equals(r.Scheme, "exact", StringComparison.OrdinalIgnoreCase) &&
+                     string.Equals(r.Network, _options.Network, StringComparison.OrdinalIgnoreCase)))
+        {
+            try
+            {
+                EnforcePolicy(candidate);
+                (Payment payment, string invoiceId) = X402PaymentBuilder.BuildWithInvoiceId(candidate, _signer.PayerAddress, _options);
+                return (candidate, payment, invoiceId);
+            }
+            catch (X402PaymentException ex)
+            {
+                firstPolicyError ??= ex;
+            }
+        }
 
-        return match ?? throw new X402PaymentException("no_acceptable_requirement",
+        throw firstPolicyError ?? new X402PaymentException("no_acceptable_requirement",
             $"No 'exact' requirement on network {_options.Network}.");
     }
 
@@ -142,14 +165,14 @@ public sealed class X402PaymentHandler : DelegatingHandler
             throw new X402PaymentException("amount_over_cap", $"IOU amount {val} exceeds cap {cap} for issuer {issuer}.");
     }
 
-    private static async Task<HttpRequestMessage> CloneAsync(HttpRequestMessage req)
+    private static async Task<HttpRequestMessage> CloneAsync(HttpRequestMessage req, CancellationToken cancellationToken)
     {
         HttpRequestMessage clone = new(req.Method, req.RequestUri) { Version = req.Version };
         foreach (System.Collections.Generic.KeyValuePair<string, System.Collections.Generic.IEnumerable<string>> h in req.Headers)
             clone.Headers.TryAddWithoutValidation(h.Key, h.Value);
         if (req.Content is not null)
         {
-            byte[] body = await req.Content.ReadAsByteArrayAsync();
+            byte[] body = await req.Content.ReadAsByteArrayAsync(cancellationToken);
             clone.Content = new ByteArrayContent(body);
             foreach (System.Collections.Generic.KeyValuePair<string, System.Collections.Generic.IEnumerable<string>> h in req.Content.Headers)
                 clone.Content.Headers.TryAddWithoutValidation(h.Key, h.Value);

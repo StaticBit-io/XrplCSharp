@@ -31,7 +31,7 @@ namespace Xrpl.BinaryCodec.Enums
 
         public int ReadOrdinal(BinaryParser parser)
         {
-            return parser.Read(Width).Aggregate(0, (a, b) => (a >> 8) + b);
+            return parser.Read(Width).Aggregate(0, (a, b) => (a << 8) | b);
         }
     }
 }

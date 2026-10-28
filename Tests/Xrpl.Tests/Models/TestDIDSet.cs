@@ -88,8 +88,10 @@ namespace XrplTests.Xrpl.Models
         }
 
         [TestMethod]
-        public void TestVerify_Invalid_EmptyData()
+        public void TestVerify_Valid_EmptyDataClearsTheField()
         {
+            // An empty string is a present field: on the ledger it clears Data (rippled rejects only
+            // the case where all three fields are present and empty).
             var tx = new Dictionary<string, object>
             {
                 { "Account", "r3rhWeE31Jt5sWmi4QiGLMZnY3ENgqw96W" },
@@ -98,9 +100,25 @@ namespace XrplTests.Xrpl.Models
                 { "Sequence", 1u },
                 { "Data", "" }
             };
+            Validation.ValidateDIDSet(tx);
+        }
+
+        [TestMethod]
+        public void TestVerify_Invalid_AllFieldsPresentAndEmpty()
+        {
+            var tx = new Dictionary<string, object>
+            {
+                { "Account", "r3rhWeE31Jt5sWmi4QiGLMZnY3ENgqw96W" },
+                { "TransactionType", "DIDSet" },
+                { "Fee", "12" },
+                { "Sequence", 1u },
+                { "Data", "" },
+                { "DIDDocument", "" },
+                { "URI", "" }
+            };
             Helper.ThrowsException<ValidationException>(
                 () => Validation.ValidateDIDSet(tx),
-                "DIDSet: must include at least one of Data, DIDDocument, or URI");
+                "DIDSet: must include at least one non-empty field among Data, DIDDocument, or URI");
         }
 
         [TestMethod]

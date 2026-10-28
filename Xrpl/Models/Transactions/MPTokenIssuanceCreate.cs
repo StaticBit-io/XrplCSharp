@@ -74,7 +74,7 @@ namespace Xrpl.Models.Transactions
         /// fractional unit.If the fractional unit equals the standard unit, then the asset scale is 0.
         /// Note that this value is optional, and will default to 0 if not supplied.
         /// </summary>
-        public uint? AssetScale { get; set; }
+        public byte? AssetScale { get; set; }
 
         /// <summary>
         /// Specifies the maximum asset amount of this token that should ever be issued.
@@ -133,7 +133,7 @@ namespace Xrpl.Models.Transactions
 
         /// <inheritdoc />
         [JsonPropertyName("AssetScale")]
-        public uint? AssetScale { get; set; }
+        public byte? AssetScale { get; set; }
 
         /// <inheritdoc />
         [JsonPropertyName("MaximumAmount")]
@@ -181,7 +181,7 @@ namespace Xrpl.Models.Transactions
 
         /// <inheritdoc />
         [JsonPropertyName("AssetScale")]
-        public uint? AssetScale { get; set; }
+        public byte? AssetScale { get; set; }
 
         /// <inheritdoc />
         [JsonPropertyName("MaximumAmount")]
@@ -242,11 +242,6 @@ namespace Xrpl.Models.Transactions
         public const ushort MPT_MAX_TRANSFER_FEE = 50000;
 
         /// <summary>
-        /// Maximum asset scale for MPT.
-        /// </summary>
-        public const byte MPT_MAX_ASSET_SCALE = 10;
-
-        /// <summary>
         /// Maximum metadata length in bytes.
         /// </summary>
         public const int MPT_MAX_METADATA_LENGTH = 1024;
@@ -260,21 +255,17 @@ namespace Xrpl.Models.Transactions
         {
             Common.ValidateBaseTransaction(tx);
 
+            // AssetScale is a UInt8 with no further bound: rippled's preflight does not check it.
             if (tx.TryGetValue("AssetScale", out var assetScale) && assetScale is not null)
             {
-                byte scale;
-                try
-                {
-                    scale = Convert.ToByte(assetScale);
-                }
-                catch
+                if (!Common.TryGetUInt32(assetScale, out uint scale))
                 {
                     throw new ValidationException("MPTokenIssuanceCreate: AssetScale must be a number");
                 }
 
-                if (scale > MPT_MAX_ASSET_SCALE)
+                if (scale > byte.MaxValue)
                 {
-                    throw new ValidationException($"MPTokenIssuanceCreate: AssetScale must be between 0 and {MPT_MAX_ASSET_SCALE}");
+                    throw new ValidationException($"MPTokenIssuanceCreate: AssetScale must be between 0 and {byte.MaxValue}");
                 }
             }
 
