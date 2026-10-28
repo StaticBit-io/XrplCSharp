@@ -416,7 +416,7 @@ public static class SubmitSugar
         var combined = Signer.Multisign(signed);
         var txRes = XrplBinaryCodec.Decode(combined);
 
-        var response = await client.SubmitRequest(combined, failHard: false, cancellationToken: cancellationToken);
+        var response = await client.SubmitRequest(combined, failHard: failHard, cancellationToken: cancellationToken);
         return response;
     }
 

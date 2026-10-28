@@ -199,10 +199,10 @@ namespace Xrpl.Tests
             Task<XrplResponse<Dictionary<string, object>>> followUp = null;
             WebSocketClient socketSeenByFollowUp = null;
 
-            // ExecuteSynchronously, not an await: the continuation has to run on the thread that
-            // completes the promise, which is the thread inside the retirement sweep. That is the
-            // consumer shape the issue reports - a second value read from the response handler of
-            // the first - and it is what puts the follow-up request in the window.
+            // The consumer shape the issue reports: a second value read from the response handler
+            // of the first. Request promises run their continuations asynchronously, so
+            // ExecuteSynchronously no longer puts the follow-up inside the retirement sweep; it runs
+            // on the thread pool while the switch is still in progress.
             Task continuation = pending.ContinueWith(
                 _ =>
                 {
@@ -278,8 +278,10 @@ namespace Xrpl.Tests
 
             Task<XrplResponse<Dictionary<string, object>>> followUp = null;
 
+            // Captured: the continuation runs on the thread pool and may run after _client is cleared.
+            XrplClient client = _client;
             Task continuation = pending.ContinueWith(
-                _ => { followUp = _client.connection.Request(AccountInfoRequest()); },
+                _ => { followUp = client.connection.Request(AccountInfoRequest()); },
                 TaskContinuationOptions.ExecuteSynchronously);
 
             await _client.Disconnect();
