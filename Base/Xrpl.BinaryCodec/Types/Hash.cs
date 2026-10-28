@@ -44,6 +44,21 @@ namespace Xrpl.BinaryCodec.Types
         /// <param name="other">other hash</param>
         /// <returns></returns>
         public bool Equals(Hash other) => other is not null && other.Buffer.SequenceEqual(Buffer);
+
+        /// <inheritdoc />
+        public override bool Equals(object obj) => Equals(obj as Hash);
+
+        /// <inheritdoc />
+        public override int GetHashCode()
+        {
+            int hash = 17;
+            foreach (byte b in Buffer)
+            {
+                hash = unchecked(hash * 31 + b);
+            }
+
+            return hash;
+        }
         /// <summary> hash to string value </summary>
         /// <returns></returns>
         public override string ToString() => B16.Encode(Buffer);

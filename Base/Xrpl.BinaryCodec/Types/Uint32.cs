@@ -37,15 +37,28 @@ namespace Xrpl.BinaryCodec.Types
         {
             if (token.GetValueKind() == JsonValueKind.Number)
             {
-                try { return token.GetValue<uint>(); }
-                catch (InvalidOperationException)
-                {
-                    long val = token.GetValue<long>();
-                    if (val < 0 || val > uint.MaxValue)
-                        throw new OverflowException(
-                            $"Value {val} is out of range for Uint32 (0..{uint.MaxValue}).");
-                    return (uint)val;
-                }
+                // A JsonValue built in code keeps its CLR type (int, uint, long, ...) and only
+                // answers TryGetValue for exactly that type, so probe each integral type.
+                JsonValue number = token.AsValue();
+                if (number.TryGetValue(out uint exact))
+                    return exact;
+
+                decimal val;
+                if (number.TryGetValue(out long l)) val = l;
+                else if (number.TryGetValue(out int i)) val = i;
+                else if (number.TryGetValue(out ulong ul)) val = ul;
+                else if (number.TryGetValue(out ushort us)) val = us;
+                else if (number.TryGetValue(out short s)) val = s;
+                else if (number.TryGetValue(out byte b)) val = b;
+                else if (number.TryGetValue(out sbyte sb)) val = sb;
+                else if (number.TryGetValue(out JsonElement je) && je.TryGetDecimal(out decimal d)) val = d;
+                else if (number.TryGetValue(out double dbl) && !double.IsNaN(dbl) && !double.IsInfinity(dbl)) val = (decimal)dbl;
+                else throw new FormatException($"Cannot read '{token.ToJsonString()}' as Uint32.");
+
+                if (val != Math.Truncate(val) || val < 0 || val > uint.MaxValue)
+                    throw new OverflowException(
+                        $"Value {val} is out of range for Uint32 (0..{uint.MaxValue}).");
+                return (uint)val;
             }
             return uint.Parse(token.GetValue<string>(), CultureInfo.InvariantCulture);
         }

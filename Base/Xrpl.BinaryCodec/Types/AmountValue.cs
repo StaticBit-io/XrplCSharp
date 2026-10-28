@@ -318,9 +318,15 @@ namespace Xrpl.BinaryCodec.Types
 
         public MptValue(string value)
         {
-            var parsed = decimal.Parse(value, NumberStyles.AllowDecimalPoint | NumberStyles.AllowExponent | NumberStyles.AllowLeadingSign, CultureInfo.InvariantCulture);
+            decimal parsed = decimal.Parse(value, NumberStyles.AllowDecimalPoint | NumberStyles.AllowExponent | NumberStyles.AllowLeadingSign, CultureInfo.InvariantCulture);
+            if (parsed != Math.Truncate(parsed))
+                throw new BinaryCodecException($"MPT amounts must be integers, got: {value}");
             IsNegative = parsed < 0;
-            Mantissa = (ulong)Math.Abs(parsed);
+            decimal magnitude = Math.Abs(parsed);
+            // The mantissa shares 64 bits with the sign and type flags; rippled caps MPT amounts at INT64_MAX.
+            if (magnitude > long.MaxValue)
+                throw new BinaryCodecException($"MPT amount {value} exceeds maximum ({long.MaxValue}).");
+            Mantissa = (ulong)magnitude;
         }
 
         public MptValue(byte[] mantissa, int sign)
