@@ -109,6 +109,57 @@ namespace XrplTests.Xrpl.Utils
             Assert.AreEqual(expectedEntryHash, actualEntryHash);
         }
 
+        // Middle and max: pages listed by account_objects (type NFTokenPage) for this mainnet account at validated
+        // ledger 108074793. Min: keylet::nftpage_min(owner) built here from the AccountID (no on-ledger page sits there).
+        private const string NftPageOwner = "rpbjkoncKiv1LkPWShzZksqYPzKXmUhTW7";
+        private const string NftPageOwnerAccountIdHex = "1189F5687DBB7516339D6CCB5593D96622AD82DF";
+
+        [TestMethod]
+        [DataRow("1189F5687DBB7516339D6CCB5593D96622AD82DF000000000000000000000000")]
+        [DataRow("1189F5687DBB7516339D6CCB5593D96622AD82DF22AD82DF6A3EBC6500001CB6")]
+        [DataRow("1189F5687DBB7516339D6CCB5593D96622AD82DFFFFFFFFFFFFFFFFFFFFFFFFF")]
+        public void TestGetNFTokenPageOwner(string pageIndex)
+        {
+            Assert.AreEqual(NftPageOwner, Hashes.GetNFTokenPageOwner(pageIndex));
+        }
+
+        [TestMethod]
+        public void TestNFTokenPageOwnerVectorsUseTheOwnerAccountId()
+        {
+            Assert.AreEqual(NftPageOwnerAccountIdHex, Hashes.AddressToHex(NftPageOwner));
+        }
+
+        [TestMethod]
+        public void TestGetNFTokenPageOwnerAcceptsLowerCase()
+        {
+            string lower = "1189f5687dbb7516339d6ccb5593d96622ad82df22ad82df6a3ebc6500001cb6";
+            Assert.AreEqual(NftPageOwner, Hashes.GetNFTokenPageOwner(lower));
+        }
+
+        [TestMethod]
+        public void TestGetNFTokenPageOwnerRoundTripsMinAndMaxKeylets()
+        {
+            string account = "rHb9CJAWyB4rj91VRWn96DkukG4bwdtyTh";
+            string accountIdHex = Hashes.AddressToHex(account);
+
+            Assert.AreEqual(account, Hashes.GetNFTokenPageOwner(accountIdHex + new string('0', 24)));
+            Assert.AreEqual(account, Hashes.GetNFTokenPageOwner(accountIdHex + new string('F', 24)));
+        }
+
+        [TestMethod]
+        [DataRow(null)]
+        [DataRow("")]
+        [DataRow("1189F5687DBB7516339D6CCB5593D96622AD82DF")]
+        [DataRow("1189F5687DBB7516339D6CCB5593D96622AD82DFFFFFFFFFFFFFFFFFFFFFFFFFF")]
+        [DataRow("1189F5687DBB7516339D6CCB5593D96622AD82DFFFFFFFFFFFFFFFFFFFFFFFFG")]
+        [DataRow("0x89F5687DBB7516339D6CCB5593D96622AD82DFFFFFFFFFFFFFFFFFFFFFFFFF")]
+        [DataRow(" 189F5687DBB7516339D6CCB5593D96622AD82DFFFFFFFFFFFFFFFFFFFFFFFFF")]
+        [DataRow("189F5687DBB7516339D6CCB5593D96622AD82DFFFFFFFFFFFFFFFFFFFFFFFFFFF\n")]
+        public void TestGetNFTokenPageOwnerRejectsMalformedIndex(string pageIndex)
+        {
+            Assert.ThrowsExactly<System.ArgumentException>(() => Hashes.GetNFTokenPageOwner(pageIndex));
+        }
+
         [TestMethod]
         public void TestSequence()
         {
