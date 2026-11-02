@@ -73,68 +73,68 @@ namespace XrplTests.Xrpl.Models
 
         #endregion
 
-        #region IsLowAccount / GetCounterparty
+        #region IsLowSide / GetPeerOf
 
         [TestMethod]
-        public void IsLowAccount_TellsSidesByAccountNotByAddressText()
+        public void IsLowSide_TellsSidesByAccountNotByAddressText()
         {
             LORippleState line = Line();
 
-            Assert.IsTrue(line.IsLowAccount(Low));
-            Assert.IsFalse(line.IsLowAccount(High));
+            Assert.IsTrue(line.IsLowSide(Low));
+            Assert.IsFalse(line.IsLowSide(High));
         }
 
         [TestMethod]
-        public void IsLowAccount_AccountNotOnTheLine_Throws()
+        public void IsLowSide_AccountNotOnTheLine_Throws()
         {
-            Assert.ThrowsExactly<ArgumentException>(() => Line().IsLowAccount(Stranger));
+            Assert.ThrowsExactly<ArgumentException>(() => Line().IsLowSide(Stranger));
         }
 
         [TestMethod]
-        public void IsLowAccount_NullArguments_Throw()
+        public void IsLowSide_NullArguments_Throw()
         {
-            Assert.ThrowsExactly<ArgumentNullException>(() => ((LORippleState)null).IsLowAccount(Low));
-            Assert.ThrowsExactly<ArgumentNullException>(() => Line().IsLowAccount(null));
+            Assert.ThrowsExactly<ArgumentNullException>(() => ((LORippleState)null).IsLowSide(Low));
+            Assert.ThrowsExactly<ArgumentNullException>(() => Line().IsLowSide(null));
         }
 
         [TestMethod]
-        public void IsLowAccount_SparseLineWithOnlyTheAccountsOwnLimit_StillAnswers()
+        public void IsLowSide_SparseLineWithOnlyTheAccountsOwnLimit_StillAnswers()
         {
             LORippleState lowOnly = Line(lowLimit: "0", highLimit: null);
             LORippleState highOnly = Line(lowLimit: null, highLimit: "110");
 
-            Assert.IsTrue(lowOnly.IsLowAccount(Low));
-            Assert.IsFalse(highOnly.IsLowAccount(High));
+            Assert.IsTrue(lowOnly.IsLowSide(Low));
+            Assert.IsFalse(highOnly.IsLowSide(High));
         }
 
         [TestMethod]
-        public void IsLowAccount_SparseLineWithOnlyThePeersLimit_Throws()
+        public void IsLowSide_SparseLineWithOnlyThePeersLimit_Throws()
         {
             // Without the account's own limit the side cannot be read from the entry, and guessing
             // would hand a wrong answer to a caller that passed the wrong account.
-            Assert.ThrowsExactly<ArgumentException>(() => Line(lowLimit: null).IsLowAccount(Low));
-            Assert.ThrowsExactly<ArgumentException>(() => Line(highLimit: null).IsLowAccount(High));
+            Assert.ThrowsExactly<ArgumentException>(() => Line(lowLimit: null).IsLowSide(Low));
+            Assert.ThrowsExactly<ArgumentException>(() => Line(highLimit: null).IsLowSide(High));
         }
 
         [TestMethod]
-        public void GetCounterparty_IsTheOtherSide()
+        public void GetPeerOf_IsTheOtherSide()
         {
             LORippleState line = Line();
 
-            Assert.AreEqual(High, line.GetCounterparty(Low));
-            Assert.AreEqual(Low, line.GetCounterparty(High));
+            Assert.AreEqual(High, line.GetPeerOf(Low));
+            Assert.AreEqual(Low, line.GetPeerOf(High));
         }
 
         [TestMethod]
-        public void GetCounterparty_AccountNotOnTheLine_Throws()
+        public void GetPeerOf_AccountNotOnTheLine_Throws()
         {
-            Assert.ThrowsExactly<ArgumentException>(() => Line().GetCounterparty(Stranger));
+            Assert.ThrowsExactly<ArgumentException>(() => Line().GetPeerOf(Stranger));
         }
 
         [TestMethod]
-        public void GetCounterparty_PeerLimitMissing_Throws()
+        public void GetPeerOf_PeerLimitMissing_Throws()
         {
-            Assert.ThrowsExactly<InvalidOperationException>(() => Line(highLimit: null).GetCounterparty(Low));
+            Assert.ThrowsExactly<InvalidOperationException>(() => Line(highLimit: null).GetPeerOf(Low));
         }
 
         #endregion
@@ -291,46 +291,46 @@ namespace XrplTests.Xrpl.Models
 
         #endregion
 
-        #region IsSet
+        #region IsFlagSet
 
         [TestMethod]
-        public void IsSet_NullFlags_NothingIsSet()
+        public void IsFlagSet_NullFlags_NothingIsSet()
         {
             RippleStateFlags? absent = null;
 
             foreach (RippleStateFlags flag in Enum.GetValues<RippleStateFlags>())
             {
-                Assert.IsFalse(absent.IsSet(flag), $"{flag} must not read as set on an absent flag word.");
+                Assert.IsFalse(absent.IsFlagSet(flag), $"{flag} must not read as set on an absent flag word.");
             }
         }
 
         [TestMethod]
-        public void IsSet_ReadsTheBit()
+        public void IsFlagSet_ReadsTheBit()
         {
             RippleStateFlags? flags = (RippleStateFlags)HighReserveAndLowAuth;
 
-            Assert.IsTrue(flags.IsSet(RippleStateFlags.lsfHighReserve));
-            Assert.IsTrue(flags.IsSet(RippleStateFlags.lsfLowAuth));
-            Assert.IsFalse(flags.IsSet(RippleStateFlags.lsfLowReserve));
-            Assert.IsFalse(flags.IsSet(RippleStateFlags.lsfHighFreeze));
+            Assert.IsTrue(flags.IsFlagSet(RippleStateFlags.lsfHighReserve));
+            Assert.IsTrue(flags.IsFlagSet(RippleStateFlags.lsfLowAuth));
+            Assert.IsFalse(flags.IsFlagSet(RippleStateFlags.lsfLowReserve));
+            Assert.IsFalse(flags.IsFlagSet(RippleStateFlags.lsfHighFreeze));
         }
 
         [TestMethod]
-        public void IsSet_ZeroFlagWord_NothingIsSet()
+        public void IsFlagSet_ZeroFlagWord_NothingIsSet()
         {
             RippleStateFlags? zero = 0;
 
-            Assert.IsFalse(zero.IsSet(RippleStateFlags.lsfLowReserve));
+            Assert.IsFalse(zero.IsFlagSet(RippleStateFlags.lsfLowReserve));
         }
 
         [TestMethod]
-        public void IsSet_CombinedFlag_RequiresEveryBit()
+        public void IsFlagSet_CombinedFlag_RequiresEveryBit()
         {
             RippleStateFlags? flags = RippleStateFlags.lsfLowFreeze;
             RippleStateFlags both = RippleStateFlags.lsfLowFreeze | RippleStateFlags.lsfHighFreeze;
 
-            Assert.IsFalse(flags.IsSet(both));
-            Assert.IsTrue(((RippleStateFlags?)both).IsSet(both));
+            Assert.IsFalse(flags.IsFlagSet(both));
+            Assert.IsTrue(((RippleStateFlags?)both).IsFlagSet(both));
         }
 
         #endregion
@@ -374,56 +374,56 @@ namespace XrplTests.Xrpl.Models
         #region Reserve
 
         [TestMethod]
-        public void OccupiesReserveOf_FollowsTheReserveFlagOfTheAccountsSide()
+        public void IsReserveSetFor_FollowsTheReserveFlagOfTheAccountsSide()
         {
             // 393216 from the xrpl.org example: lsfHighReserve | lsfLowAuth. The High account's owner
             // count includes the line; the Low account's does not.
             LORippleState line = Line((RippleStateFlags)HighReserveAndLowAuth);
 
-            Assert.IsFalse(line.OccupiesReserveOf(Low));
-            Assert.IsTrue(line.OccupiesReserveOf(High));
-            Assert.IsTrue(line.PeerOccupiesReserveOf(Low));
-            Assert.IsFalse(line.PeerOccupiesReserveOf(High));
+            Assert.IsFalse(line.IsReserveSetFor(Low));
+            Assert.IsTrue(line.IsReserveSetFor(High));
+            Assert.IsTrue(line.IsPeerReserveSetFor(Low));
+            Assert.IsFalse(line.IsPeerReserveSetFor(High));
         }
 
         [TestMethod]
-        public void OccupiesReserveOf_BothSidesReserved()
+        public void IsReserveSetFor_BothSidesReserved()
         {
             LORippleState line = Line(RippleStateFlags.lsfLowReserve | RippleStateFlags.lsfHighReserve);
 
-            Assert.IsTrue(line.OccupiesReserveOf(Low));
-            Assert.IsTrue(line.OccupiesReserveOf(High));
-            Assert.IsTrue(line.PeerOccupiesReserveOf(Low));
-            Assert.IsTrue(line.PeerOccupiesReserveOf(High));
+            Assert.IsTrue(line.IsReserveSetFor(Low));
+            Assert.IsTrue(line.IsReserveSetFor(High));
+            Assert.IsTrue(line.IsPeerReserveSetFor(Low));
+            Assert.IsTrue(line.IsPeerReserveSetFor(High));
         }
 
         [TestMethod]
-        public void OccupiesReserveOf_LowReserveOnly()
+        public void IsReserveSetFor_LowReserveOnly()
         {
             LORippleState line = Line(RippleStateFlags.lsfLowReserve);
 
-            Assert.IsTrue(line.OccupiesReserveOf(Low));
-            Assert.IsFalse(line.OccupiesReserveOf(High));
-            Assert.IsFalse(line.PeerOccupiesReserveOf(Low));
-            Assert.IsTrue(line.PeerOccupiesReserveOf(High));
+            Assert.IsTrue(line.IsReserveSetFor(Low));
+            Assert.IsFalse(line.IsReserveSetFor(High));
+            Assert.IsFalse(line.IsPeerReserveSetFor(Low));
+            Assert.IsTrue(line.IsPeerReserveSetFor(High));
         }
 
         [TestMethod]
-        public void OccupiesReserveOf_AbsentFlagWord_IsFalse()
+        public void IsReserveSetFor_AbsentFlagWord_IsFalse()
         {
             LORippleState line = Line(flags: null);
 
-            Assert.IsFalse(line.OccupiesReserveOf(Low));
-            Assert.IsFalse(line.PeerOccupiesReserveOf(Low));
+            Assert.IsFalse(line.IsReserveSetFor(Low));
+            Assert.IsFalse(line.IsPeerReserveSetFor(Low));
         }
 
         [TestMethod]
-        public void OccupiesReserveOf_AccountNotOnTheLine_Throws()
+        public void IsReserveSetFor_AccountNotOnTheLine_Throws()
         {
             LORippleState line = Line(RippleStateFlags.lsfLowReserve);
 
-            Assert.ThrowsExactly<ArgumentException>(() => line.OccupiesReserveOf(Stranger));
-            Assert.ThrowsExactly<ArgumentException>(() => line.PeerOccupiesReserveOf(Stranger));
+            Assert.ThrowsExactly<ArgumentException>(() => line.IsReserveSetFor(Stranger));
+            Assert.ThrowsExactly<ArgumentException>(() => line.IsPeerReserveSetFor(Stranger));
         }
 
         #endregion
@@ -470,24 +470,24 @@ namespace XrplTests.Xrpl.Models
 
         #endregion
 
-        #region MergePreviousOver
+        #region OverlayPreviousFields
 
         [TestMethod]
-        public void MergePreviousOver_NoPrevious_ReturnsTheFinalState()
+        public void OverlayPreviousFields_NoPrevious_ReturnsTheFinalState()
         {
             LORippleState final = Line(RippleStateFlags.lsfLowReserve);
 
-            Assert.AreSame(final, final.MergePreviousOver(null));
+            Assert.AreSame(final, final.OverlayPreviousFields(null));
         }
 
         [TestMethod]
-        public void MergePreviousOver_NullFinal_Throws()
+        public void OverlayPreviousFields_NullFinal_Throws()
         {
-            Assert.ThrowsExactly<ArgumentNullException>(() => ((LORippleState)null).MergePreviousOver(Line()));
+            Assert.ThrowsExactly<ArgumentNullException>(() => ((LORippleState)null).OverlayPreviousFields(Line()));
         }
 
         [TestMethod]
-        public void MergePreviousOver_DeletedLineWithOneLimitChanged_KeepsTheFinalFlags()
+        public void OverlayPreviousFields_DeletedLineWithOneLimitChanged_KeepsTheFinalFlags()
         {
             // The common shape of a deleted line in metadata: FinalFields carries the line, and
             // PreviousFields lists only what the transaction changed - here the Low limit the
@@ -504,32 +504,32 @@ namespace XrplTests.Xrpl.Models
                 LowLimit = new Currency { CurrencyCode = "USD", Issuer = Low, Value = "100" },
             };
 
-            LORippleState merged = final.MergePreviousOver(previous);
+            LORippleState merged = final.OverlayPreviousFields(previous);
 
             Assert.AreEqual("100", merged.LowLimit.Value);
             Assert.AreEqual("0", merged.HighLimit.Value);
             Assert.AreEqual(final.Flags, merged.Flags);
-            Assert.IsTrue(merged.Flags.IsSet(RippleStateFlags.lsfLowReserve));
-            Assert.IsTrue(merged.OccupiesReserveOf(Low));
+            Assert.IsTrue(merged.Flags.IsFlagSet(RippleStateFlags.lsfLowReserve));
+            Assert.IsTrue(merged.IsReserveSetFor(Low));
             Assert.AreEqual("AAA", merged.Index);
             Assert.AreEqual("FINALTX", merged.PreviousTxnID);
         }
 
         [TestMethod]
-        public void MergePreviousOver_PreviousFlagsOfZero_IsARealDiffAndWins()
+        public void OverlayPreviousFields_PreviousFlagsOfZero_IsARealDiffAndWins()
         {
             // PreviousFields.Flags == 0 means the transaction cleared every flag; it is not "absent".
             LORippleState final = Line(RippleStateFlags.lsfLowReserve);
             LORippleState previous = new LORippleState { Flags = 0 };
 
-            LORippleState merged = final.MergePreviousOver(previous);
+            LORippleState merged = final.OverlayPreviousFields(previous);
 
             Assert.AreEqual((RippleStateFlags)0, merged.Flags);
-            Assert.IsFalse(merged.OccupiesReserveOf(Low));
+            Assert.IsFalse(merged.IsReserveSetFor(Low));
         }
 
         [TestMethod]
-        public void MergePreviousOver_PreviousFieldsWinOverFinalFields()
+        public void OverlayPreviousFields_PreviousFieldsWinOverFinalFields()
         {
             LORippleState final = Line(RippleStateFlags.lsfHighReserve, balance: "-3");
             final.LowQualityIn = 1;
@@ -551,7 +551,7 @@ namespace XrplTests.Xrpl.Models
                 HighSponsor = "rHighSponsorPrevious",
             };
 
-            LORippleState merged = final.MergePreviousOver(previous);
+            LORippleState merged = final.OverlayPreviousFields(previous);
 
             Assert.AreEqual(RippleStateFlags.lsfLowReserve, merged.Flags);
             Assert.AreEqual("-7", merged.Balance.Value);
@@ -568,7 +568,7 @@ namespace XrplTests.Xrpl.Models
         }
 
         [TestMethod]
-        public void MergePreviousOver_DoesNotChangeEitherInput()
+        public void OverlayPreviousFields_DoesNotChangeEitherInput()
         {
             LORippleState final = Line(RippleStateFlags.lsfLowReserve, lowLimit: "0");
             LORippleState previous = new LORippleState
@@ -576,7 +576,7 @@ namespace XrplTests.Xrpl.Models
                 LowLimit = new Currency { CurrencyCode = "USD", Issuer = Low, Value = "100" },
             };
 
-            LORippleState merged = final.MergePreviousOver(previous);
+            LORippleState merged = final.OverlayPreviousFields(previous);
 
             Assert.AreNotSame(final, merged);
             Assert.AreEqual("0", final.LowLimit.Value);
@@ -585,7 +585,7 @@ namespace XrplTests.Xrpl.Models
         }
 
         [TestMethod]
-        public void MergePreviousOver_UnknownFieldsAreMergedWithPreviousWinning()
+        public void OverlayPreviousFields_UnknownFieldsAreMergedWithPreviousWinning()
         {
             LORippleState final = Line();
             final.UnknownFields = new Dictionary<string, JsonElement>
@@ -601,7 +601,7 @@ namespace XrplTests.Xrpl.Models
                 },
             };
 
-            LORippleState merged = final.MergePreviousOver(previous);
+            LORippleState merged = final.OverlayPreviousFields(previous);
 
             Assert.AreEqual(1, merged.UnknownFields["OnlyFinal"].GetInt32());
             Assert.AreEqual(3, merged.UnknownFields["Both"].GetInt32());
@@ -637,16 +637,16 @@ namespace XrplTests.Xrpl.Models
             LORippleState line = (LORippleState)JsonSerializer.Deserialize<BaseLedgerEntry>(LedgerEntryJson, XrplJsonOptions.Default);
 
             Assert.AreEqual((RippleStateFlags)HighReserveAndLowAuth, line.Flags);
-            Assert.IsTrue(line.IsLowAccount(Low));
-            Assert.IsFalse(line.IsLowAccount(High));
-            Assert.AreEqual(High, line.GetCounterparty(Low));
+            Assert.IsTrue(line.IsLowSide(Low));
+            Assert.IsFalse(line.IsLowSide(High));
+            Assert.AreEqual(High, line.GetPeerOf(Low));
             Assert.AreEqual("110", line.GetLimitOf(High).Value);
             Assert.AreEqual("0", line.GetPeerLimitOf(High).Value);
             Assert.AreEqual(-5m, line.GetBalanceFor(Low));
             Assert.AreEqual(5m, line.GetBalanceFor(High));
             Assert.AreEqual("5", line.GetBalanceValueFor(High));
-            Assert.IsTrue(line.OccupiesReserveOf(High));
-            Assert.IsFalse(line.OccupiesReserveOf(Low));
+            Assert.IsTrue(line.IsReserveSetFor(High));
+            Assert.IsFalse(line.IsReserveSetFor(Low));
             Assert.IsTrue(line.GetFlagOf(Low, RippleStateFlags.lsfLowAuth, RippleStateFlags.lsfHighAuth));
             Assert.IsNull(line.GetQualityInOf(Low));
         }
@@ -682,13 +682,13 @@ namespace XrplTests.Xrpl.Models
             LORippleState previous = (LORippleState)node.ModifiedNode.PreviousFields;
             Assert.IsNull(previous.Flags, "PreviousFields carries no flag word here.");
 
-            LORippleState before = final.MergePreviousOver(previous);
+            LORippleState before = final.OverlayPreviousFields(previous);
 
             Assert.AreEqual(-5m, final.GetBalanceFor(Low));
             Assert.AreEqual(-3m, before.GetBalanceFor(Low));
             Assert.AreEqual(3m, before.GetBalanceFor(High));
             Assert.AreEqual(final.Flags, before.Flags);
-            Assert.IsTrue(before.OccupiesReserveOf(High));
+            Assert.IsTrue(before.IsReserveSetFor(High));
             Assert.AreEqual("110", before.GetLimitOf(High).Value);
         }
 
@@ -718,13 +718,13 @@ namespace XrplTests.Xrpl.Models
                 """);
 
             LORippleState before = ((LORippleState)node.DeletedNode.FinalFields)
-                .MergePreviousOver((LORippleState)node.DeletedNode.PreviousFields);
+                .OverlayPreviousFields((LORippleState)node.DeletedNode.PreviousFields);
 
             Assert.AreEqual("100", before.GetLimitOf(Low).Value);
             Assert.AreEqual("0", before.GetPeerLimitOf(Low).Value);
             Assert.AreEqual((RippleStateFlags)65536, before.Flags);
-            Assert.IsTrue(before.OccupiesReserveOf(Low));
-            Assert.IsFalse(before.PeerOccupiesReserveOf(Low));
+            Assert.IsTrue(before.IsReserveSetFor(Low));
+            Assert.IsFalse(before.IsPeerReserveSetFor(Low));
         }
 
         [TestMethod]
@@ -752,65 +752,65 @@ namespace XrplTests.Xrpl.Models
                 """);
 
             LORippleState final = (LORippleState)node.DeletedNode.FinalFields;
-            LORippleState before = final.MergePreviousOver((LORippleState)node.DeletedNode.PreviousFields);
+            LORippleState before = final.OverlayPreviousFields((LORippleState)node.DeletedNode.PreviousFields);
 
-            Assert.IsFalse(final.OccupiesReserveOf(High));
-            Assert.IsTrue(before.OccupiesReserveOf(High));
+            Assert.IsFalse(final.IsReserveSetFor(High));
+            Assert.IsTrue(before.IsReserveSetFor(High));
             Assert.AreEqual("100", before.GetLimitOf(High).Value);
         }
 
         #endregion
 
-        #region ToDecimalSaturating
+        #region ToDecimalClamped
 
         private static Currency Iou(string value) => new Currency { CurrencyCode = "USD", Issuer = Low, Value = value };
 
         [TestMethod]
-        public void ToDecimalSaturating_InRange_IsTheExactValue()
+        public void ToDecimalClamped_InRange_IsTheExactValue()
         {
-            Assert.AreEqual(12.5m, Iou("12.5").ToDecimalSaturating());
-            Assert.AreEqual(-0.000001m, Iou("-0.000001").ToDecimalSaturating());
-            Assert.AreEqual(0m, Iou("0").ToDecimalSaturating());
+            Assert.AreEqual(12.5m, Iou("12.5").ToDecimalClamped());
+            Assert.AreEqual(-0.000001m, Iou("-0.000001").ToDecimalClamped());
+            Assert.AreEqual(0m, Iou("0").ToDecimalClamped());
         }
 
         [TestMethod]
-        public void ToDecimalSaturating_AboveDecimalRange_SaturatesWithTheSign()
+        public void ToDecimalClamped_AboveDecimalRange_SaturatesWithTheSign()
         {
             foreach (string big in new[] { "1e29", "8e28", "9999999999999999e80" })
             {
-                Assert.AreEqual(decimal.MaxValue, Iou(big).ToDecimalSaturating(), big);
-                Assert.AreEqual(decimal.MinValue, Iou("-" + big).ToDecimalSaturating(), "-" + big);
+                Assert.AreEqual(decimal.MaxValue, Iou(big).ToDecimalClamped(), big);
+                Assert.AreEqual(decimal.MinValue, Iou("-" + big).ToDecimalClamped(), "-" + big);
             }
         }
 
         [TestMethod]
-        public void ToDecimalSaturating_NullAndBlank_AreZero()
+        public void ToDecimalClamped_NullAndBlank_AreZero()
         {
-            Assert.AreEqual(0m, ((Currency)null).ToDecimalSaturating());
-            Assert.AreEqual(0m, Iou(null).ToDecimalSaturating());
-            Assert.AreEqual(0m, Iou("  ").ToDecimalSaturating());
+            Assert.AreEqual(0m, ((Currency)null).ToDecimalClamped());
+            Assert.AreEqual(0m, Iou(null).ToDecimalClamped());
+            Assert.AreEqual(0m, Iou("  ").ToDecimalClamped());
         }
 
         [TestMethod]
-        public void ToDecimalSaturating_BelowDecimalPrecision_ReadsAsZeroLikeValueAsNumber()
+        public void ToDecimalClamped_BelowDecimalPrecision_ReadsAsZeroLikeValueAsNumber()
         {
-            Assert.AreEqual(0m, Iou("1e-81").ToDecimalSaturating());
+            Assert.AreEqual(0m, Iou("1e-81").ToDecimalClamped());
         }
 
         [TestMethod]
-        public void ToDecimalSaturating_NotANumber_StillThrowsFormatException()
+        public void ToDecimalClamped_NotANumber_StillThrowsFormatException()
         {
             // Saturation answers "too large", not "not a quantity".
-            Assert.ThrowsExactly<FormatException>(() => Iou("abc").ToDecimalSaturating());
-            Assert.ThrowsExactly<FormatException>(() => Iou("NaN").ToDecimalSaturating());
+            Assert.ThrowsExactly<FormatException>(() => Iou("abc").ToDecimalClamped());
+            Assert.ThrowsExactly<FormatException>(() => Iou("NaN").ToDecimalClamped());
         }
 
         [TestMethod]
-        public void ToDecimalSaturating_XrpIsReadInDrops_LikeValueAsNumber()
+        public void ToDecimalClamped_XrpIsReadInDrops_LikeValueAsNumber()
         {
             Currency drops = new Currency { CurrencyCode = "XRP", Value = "1000000" };
 
-            Assert.AreEqual(1000000m, drops.ToDecimalSaturating());
+            Assert.AreEqual(1000000m, drops.ToDecimalClamped());
         }
 
         [TestMethod]
@@ -819,7 +819,7 @@ namespace XrplTests.Xrpl.Models
             Currency big = Iou("9999999999999999e80");
 
             Assert.ThrowsExactly<AmountOutOfRangeException>(() => _ = big.ValueAsNumber);
-            Assert.AreEqual(decimal.MaxValue, big.ToDecimalSaturating());
+            Assert.AreEqual(decimal.MaxValue, big.ToDecimalClamped());
         }
 
         #endregion

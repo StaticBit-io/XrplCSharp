@@ -45,14 +45,14 @@ namespace Xrpl.Models.Ledger
         /// An absent word reads as "not set". A RippleState in the ledger always carries
         /// <c>Flags</c>, so a null here is a sparse metadata projection: <c>PreviousFields</c> lists only
         /// the fields a transaction changed, and an unlisted flag word means "unchanged". Combine such a
-        /// projection with the entry it belongs to through <see cref="MergePreviousOver"/> before testing.
+        /// projection with the entry it belongs to through <see cref="OverlayPreviousFields"/> before testing.
         /// Writing the test as <c>(flags &amp; flag) != 0</c> on the nullable instead would read every
         /// flag as set for a null word, because C# lifts <c>null != 0</c> to <see langword="true"/>.
         /// </remarks>
         /// <param name="flags">The flag word, or null when the entry did not carry one.</param>
         /// <param name="flag">The flag to test. A combination of flags is set only when all of its bits are.</param>
         /// <returns><see langword="true"/> when <paramref name="flags"/> is present and has the flag set.</returns>
-        public static bool IsSet(this RippleStateFlags? flags, RippleStateFlags flag)
+        public static bool IsFlagSet(this RippleStateFlags? flags, RippleStateFlags flag)
             => flags.HasValue && (flags.Value & flag) == flag;
 
         /// <summary>
@@ -67,7 +67,7 @@ namespace Xrpl.Models.Ledger
         /// <see cref="LORippleState.HighLimit"/>. On a sparse entry the account's own limit has to be
         /// present: the peer's limit alone does not say which side the account is.
         /// </exception>
-        public static bool IsLowAccount(this LORippleState state, string account)
+        public static bool IsLowSide(this LORippleState state, string account)
         {
             ArgumentNullException.ThrowIfNull(state);
             ArgumentNullException.ThrowIfNull(account);
@@ -94,9 +94,9 @@ namespace Xrpl.Models.Ledger
         /// <param name="account">Classic address of an account on the line.</param>
         /// <returns>Classic address of the counterparty.</returns>
         /// <exception cref="ArgumentNullException"><paramref name="state"/> or <paramref name="account"/> is null.</exception>
-        /// <exception cref="ArgumentException"><paramref name="account"/> is not on the line (see <see cref="IsLowAccount"/>).</exception>
+        /// <exception cref="ArgumentException"><paramref name="account"/> is not on the line (see <see cref="IsLowSide"/>).</exception>
         /// <exception cref="InvalidOperationException">The counterparty's limit is absent from a sparse entry, so its address is unknown.</exception>
-        public static string GetCounterparty(this LORippleState state, string account)
+        public static string GetPeerOf(this LORippleState state, string account)
         {
             Currency peerLimit = state.GetPeerLimitOf(account);
 
@@ -111,9 +111,9 @@ namespace Xrpl.Models.Ledger
         /// <param name="account">Classic address of an account on the line.</param>
         /// <returns>The limit, or null when a sparse entry does not carry it.</returns>
         /// <exception cref="ArgumentNullException"><paramref name="state"/> or <paramref name="account"/> is null.</exception>
-        /// <exception cref="ArgumentException"><paramref name="account"/> is not on the line (see <see cref="IsLowAccount"/>).</exception>
+        /// <exception cref="ArgumentException"><paramref name="account"/> is not on the line (see <see cref="IsLowSide"/>).</exception>
         public static Currency GetLimitOf(this LORippleState state, string account)
-            => state.IsLowAccount(account) ? state.LowLimit : state.HighLimit;
+            => state.IsLowSide(account) ? state.LowLimit : state.HighLimit;
 
         /// <summary>
         /// The limit the counterparty of <paramref name="account"/> has set on the line.
@@ -122,9 +122,9 @@ namespace Xrpl.Models.Ledger
         /// <param name="account">Classic address of an account on the line.</param>
         /// <returns>The limit, or null when a sparse entry does not carry it.</returns>
         /// <exception cref="ArgumentNullException"><paramref name="state"/> or <paramref name="account"/> is null.</exception>
-        /// <exception cref="ArgumentException"><paramref name="account"/> is not on the line (see <see cref="IsLowAccount"/>).</exception>
+        /// <exception cref="ArgumentException"><paramref name="account"/> is not on the line (see <see cref="IsLowSide"/>).</exception>
         public static Currency GetPeerLimitOf(this LORippleState state, string account)
-            => state.IsLowAccount(account) ? state.HighLimit : state.LowLimit;
+            => state.IsLowSide(account) ? state.HighLimit : state.LowLimit;
 
         /// <summary>
         /// The balance from the point of view of <paramref name="account"/>: positive when the account
@@ -140,14 +140,14 @@ namespace Xrpl.Models.Ledger
         /// <param name="account">Classic address of an account on the line.</param>
         /// <returns>The balance; zero when a sparse entry does not carry one.</returns>
         /// <exception cref="ArgumentNullException"><paramref name="state"/> or <paramref name="account"/> is null.</exception>
-        /// <exception cref="ArgumentException"><paramref name="account"/> is not on the line (see <see cref="IsLowAccount"/>).</exception>
+        /// <exception cref="ArgumentException"><paramref name="account"/> is not on the line (see <see cref="IsLowSide"/>).</exception>
         /// <exception cref="FormatException">The stored balance is not a number.</exception>
         public static decimal GetBalanceFor(this LORippleState state, string account)
         {
             // Validate before reading the balance, so a null state, a null or off-line account and a
             // malformed balance are reported in that order and the first two as documented.
-            bool isLow = state.IsLowAccount(account);
-            decimal stored = state.Balance.ToDecimalSaturating();
+            bool isLow = state.IsLowSide(account);
+            decimal stored = state.Balance.ToDecimalClamped();
 
             return isLow ? stored : -stored;
         }
@@ -166,10 +166,10 @@ namespace Xrpl.Models.Ledger
         /// text is not a number.
         /// </returns>
         /// <exception cref="ArgumentNullException"><paramref name="state"/> or <paramref name="account"/> is null.</exception>
-        /// <exception cref="ArgumentException"><paramref name="account"/> is not on the line (see <see cref="IsLowAccount"/>).</exception>
+        /// <exception cref="ArgumentException"><paramref name="account"/> is not on the line (see <see cref="IsLowSide"/>).</exception>
         public static string GetBalanceValueFor(this LORippleState state, string account)
         {
-            bool isLow = state.IsLowAccount(account);
+            bool isLow = state.IsLowSide(account);
             string stored = state.Balance?.Value;
 
             return isLow ? stored : NegateAmountText(stored);
@@ -189,20 +189,20 @@ namespace Xrpl.Models.Ledger
         /// <param name="account">Classic address of an account on the line.</param>
         /// <returns>True when the line counts toward the account's owner reserve; false when it does not or the entry has no flag word.</returns>
         /// <exception cref="ArgumentNullException"><paramref name="state"/> or <paramref name="account"/> is null.</exception>
-        /// <exception cref="ArgumentException"><paramref name="account"/> is not on the line (see <see cref="IsLowAccount"/>).</exception>
-        public static bool OccupiesReserveOf(this LORippleState state, string account)
+        /// <exception cref="ArgumentException"><paramref name="account"/> is not on the line (see <see cref="IsLowSide"/>).</exception>
+        public static bool IsReserveSetFor(this LORippleState state, string account)
             => state.GetFlagOf(account, RippleStateFlags.lsfLowReserve, RippleStateFlags.lsfHighReserve);
 
         /// <summary>
         /// Whether the line is in the owner count of the counterparty of <paramref name="account"/>.
-        /// The mirror of <see cref="OccupiesReserveOf"/>.
+        /// The mirror of <see cref="IsReserveSetFor"/>.
         /// </summary>
         /// <param name="state">The trust line.</param>
         /// <param name="account">Classic address of an account on the line.</param>
         /// <returns>True when the line counts toward the counterparty's owner reserve; false when it does not or the entry has no flag word.</returns>
         /// <exception cref="ArgumentNullException"><paramref name="state"/> or <paramref name="account"/> is null.</exception>
-        /// <exception cref="ArgumentException"><paramref name="account"/> is not on the line (see <see cref="IsLowAccount"/>).</exception>
-        public static bool PeerOccupiesReserveOf(this LORippleState state, string account)
+        /// <exception cref="ArgumentException"><paramref name="account"/> is not on the line (see <see cref="IsLowSide"/>).</exception>
+        public static bool IsPeerReserveSetFor(this LORippleState state, string account)
             => state.GetPeerFlagOf(account, RippleStateFlags.lsfLowReserve, RippleStateFlags.lsfHighReserve);
 
         /// <summary>
@@ -216,9 +216,9 @@ namespace Xrpl.Models.Ledger
         /// <param name="highFlag">The flag as set by the High account.</param>
         /// <returns>True when the flag is set; false when it is not or the entry has no flag word.</returns>
         /// <exception cref="ArgumentNullException"><paramref name="state"/> or <paramref name="account"/> is null.</exception>
-        /// <exception cref="ArgumentException"><paramref name="account"/> is not on the line (see <see cref="IsLowAccount"/>).</exception>
+        /// <exception cref="ArgumentException"><paramref name="account"/> is not on the line (see <see cref="IsLowSide"/>).</exception>
         public static bool GetFlagOf(this LORippleState state, string account, RippleStateFlags lowFlag, RippleStateFlags highFlag)
-            => state.IsLowAccount(account) ? state.Flags.IsSet(lowFlag) : state.Flags.IsSet(highFlag);
+            => state.IsLowSide(account) ? state.Flags.IsFlagSet(lowFlag) : state.Flags.IsFlagSet(highFlag);
 
         /// <summary>
         /// Whether a flag on the side of the counterparty of <paramref name="account"/> is set. The
@@ -230,9 +230,9 @@ namespace Xrpl.Models.Ledger
         /// <param name="highFlag">The flag as set by the High account.</param>
         /// <returns>True when the flag is set; false when it is not or the entry has no flag word.</returns>
         /// <exception cref="ArgumentNullException"><paramref name="state"/> or <paramref name="account"/> is null.</exception>
-        /// <exception cref="ArgumentException"><paramref name="account"/> is not on the line (see <see cref="IsLowAccount"/>).</exception>
+        /// <exception cref="ArgumentException"><paramref name="account"/> is not on the line (see <see cref="IsLowSide"/>).</exception>
         public static bool GetPeerFlagOf(this LORippleState state, string account, RippleStateFlags lowFlag, RippleStateFlags highFlag)
-            => state.IsLowAccount(account) ? state.Flags.IsSet(highFlag) : state.Flags.IsSet(lowFlag);
+            => state.IsLowSide(account) ? state.Flags.IsFlagSet(highFlag) : state.Flags.IsFlagSet(lowFlag);
 
         /// <summary>
         /// The inbound quality <paramref name="account"/> has set, in billionths. The raw ledger field:
@@ -242,9 +242,9 @@ namespace Xrpl.Models.Ledger
         /// <param name="account">Classic address of an account on the line.</param>
         /// <returns>The quality, or null when the field is absent.</returns>
         /// <exception cref="ArgumentNullException"><paramref name="state"/> or <paramref name="account"/> is null.</exception>
-        /// <exception cref="ArgumentException"><paramref name="account"/> is not on the line (see <see cref="IsLowAccount"/>).</exception>
+        /// <exception cref="ArgumentException"><paramref name="account"/> is not on the line (see <see cref="IsLowSide"/>).</exception>
         public static uint? GetQualityInOf(this LORippleState state, string account)
-            => state.IsLowAccount(account) ? state.LowQualityIn : state.HighQualityIn;
+            => state.IsLowSide(account) ? state.LowQualityIn : state.HighQualityIn;
 
         /// <summary>
         /// The outbound quality <paramref name="account"/> has set. Same encoding as <see cref="GetQualityInOf"/>.
@@ -253,9 +253,9 @@ namespace Xrpl.Models.Ledger
         /// <param name="account">Classic address of an account on the line.</param>
         /// <returns>The quality, or null when the field is absent.</returns>
         /// <exception cref="ArgumentNullException"><paramref name="state"/> or <paramref name="account"/> is null.</exception>
-        /// <exception cref="ArgumentException"><paramref name="account"/> is not on the line (see <see cref="IsLowAccount"/>).</exception>
+        /// <exception cref="ArgumentException"><paramref name="account"/> is not on the line (see <see cref="IsLowSide"/>).</exception>
         public static uint? GetQualityOutOf(this LORippleState state, string account)
-            => state.IsLowAccount(account) ? state.LowQualityOut : state.HighQualityOut;
+            => state.IsLowSide(account) ? state.LowQualityOut : state.HighQualityOut;
 
         /// <summary>
         /// The inbound quality the counterparty of <paramref name="account"/> has set.
@@ -264,9 +264,9 @@ namespace Xrpl.Models.Ledger
         /// <param name="account">Classic address of an account on the line.</param>
         /// <returns>The quality, or null when the field is absent.</returns>
         /// <exception cref="ArgumentNullException"><paramref name="state"/> or <paramref name="account"/> is null.</exception>
-        /// <exception cref="ArgumentException"><paramref name="account"/> is not on the line (see <see cref="IsLowAccount"/>).</exception>
+        /// <exception cref="ArgumentException"><paramref name="account"/> is not on the line (see <see cref="IsLowSide"/>).</exception>
         public static uint? GetPeerQualityInOf(this LORippleState state, string account)
-            => state.IsLowAccount(account) ? state.HighQualityIn : state.LowQualityIn;
+            => state.IsLowSide(account) ? state.HighQualityIn : state.LowQualityIn;
 
         /// <summary>
         /// The outbound quality the counterparty of <paramref name="account"/> has set.
@@ -275,9 +275,9 @@ namespace Xrpl.Models.Ledger
         /// <param name="account">Classic address of an account on the line.</param>
         /// <returns>The quality, or null when the field is absent.</returns>
         /// <exception cref="ArgumentNullException"><paramref name="state"/> or <paramref name="account"/> is null.</exception>
-        /// <exception cref="ArgumentException"><paramref name="account"/> is not on the line (see <see cref="IsLowAccount"/>).</exception>
+        /// <exception cref="ArgumentException"><paramref name="account"/> is not on the line (see <see cref="IsLowSide"/>).</exception>
         public static uint? GetPeerQualityOutOf(this LORippleState state, string account)
-            => state.IsLowAccount(account) ? state.HighQualityOut : state.LowQualityOut;
+            => state.IsLowSide(account) ? state.HighQualityOut : state.LowQualityOut;
 
         /// <summary>
         /// The trust line as it was before a transaction: the <c>PreviousFields</c> of a metadata node laid
@@ -303,7 +303,7 @@ namespace Xrpl.Models.Ledger
         /// entry; neither input is changed.
         /// </returns>
         /// <exception cref="ArgumentNullException"><paramref name="final"/> is null.</exception>
-        public static LORippleState MergePreviousOver(this LORippleState final, LORippleState previous)
+        public static LORippleState OverlayPreviousFields(this LORippleState final, LORippleState previous)
         {
             ArgumentNullException.ThrowIfNull(final);
 

@@ -382,7 +382,7 @@ public static class CurrencyExtensions
     /// <param name="amount">The amount, or null.</param>
     /// <returns>The value; zero for a null amount or a blank <see cref="Currency.Value"/>.</returns>
     /// <exception cref="FormatException"><see cref="Currency.Value"/> is not a number at all.</exception>
-    public static decimal ToDecimalSaturating(this Currency amount)
+    public static decimal ToDecimalClamped(this Currency amount)
     {
         if (amount is null)
         {
