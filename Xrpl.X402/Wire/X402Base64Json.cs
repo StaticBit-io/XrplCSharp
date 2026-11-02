@@ -40,7 +40,14 @@ public static class X402Base64Json
     {
         byte[] bytes = Convert.FromBase64String(base64.Trim());
         string json = Encoding.UTF8.GetString(bytes);
-        return JsonSerializer.Deserialize<T>(json, Options)
-            ?? throw new FormatException($"X402: cannot decode {typeof(T).Name}");
+        try
+        {
+            return JsonSerializer.Deserialize<T>(json, Options)
+                ?? throw new FormatException($"X402: cannot decode {typeof(T).Name}");
+        }
+        catch (JsonException ex)
+        {
+            throw new FormatException($"X402: cannot decode {typeof(T).Name}", ex);
+        }
     }
 }

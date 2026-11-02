@@ -196,7 +196,7 @@ namespace Xrpl.BinaryCodec.Types
 
         public decimal DecimalValue()
         {
-            return decimal.Parse(Value.ToString(), NumberStyles.AllowDecimalPoint | NumberStyles.AllowExponent, CultureInfo.InvariantCulture);
+            return decimal.Parse(Value.ToString(), NumberStyles.AllowDecimalPoint | NumberStyles.AllowExponent | NumberStyles.AllowLeadingSign, CultureInfo.InvariantCulture);
         }
 
         public static Amount operator *(Amount a, decimal b)

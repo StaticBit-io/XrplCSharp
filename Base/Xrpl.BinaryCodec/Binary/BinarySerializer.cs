@@ -52,7 +52,7 @@ namespace Xrpl.BinaryCodec.Binary
                 lenBytes[1] = (byte)(length & 0xff);
                 return TakeSome(lenBytes, 2);
             }
-            if (length <= 918745)
+            if (length <= 918744)
             {
                 length -= 12481;
                 lenBytes[0] = (byte)(241u + (length >> 16));
@@ -60,7 +60,7 @@ namespace Xrpl.BinaryCodec.Binary
                 lenBytes[2] = (byte)(length & 0xff);
                 return TakeSome(lenBytes, 3);
             }
-            throw new InvalidOperationException($"length must <= 918745, was {length}");
+            throw new InvalidOperationException($"length must be <= 918744, was {length}");
         }
 
         private static byte[] TakeSome(byte[] buffer, int n)

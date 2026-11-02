@@ -173,7 +173,7 @@ namespace Xrpl.Sugar
             // XRPL: Does bool or int. Smells.
             if (classicAccount.Tag != null)
             {
-                if (tField != null && (int)tField != classicAccount.Tag)
+                if (tField != null && (!Xrpl.Models.Transactions.Common.TryGetUInt32(tField, out uint explicitTag) || explicitTag != classicAccount.Tag))
                 {
                     throw new ValidationException($"The {tagField}, if present, must match the tag of the {accountField} X - address");
                 }
@@ -860,12 +860,10 @@ namespace Xrpl.Sugar
                 DeletionBlockersOnly = true,
             };
             AccountObjects response = await client.AccountObjects(request, cancellationToken).Typed();
-            TaskCompletionSource task = new TaskCompletionSource();
-            if (response.AccountObjectList.Count > 0)
+            if (response.AccountObjectList?.Count > 0)
             {
-                task.TrySetException(new XrplException($"Account {(string)tx["Account"]} cannot be deleted; there are Escrows, PayChannels, RippleStates, or Checks associated with the account."));
+                throw new XrplException($"Account {(string)tx["Account"]} cannot be deleted; there are Escrows, PayChannels, RippleStates, or Checks associated with the account.");
             }
-            task.TrySetResult();
         }
     }
 }

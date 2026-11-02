@@ -158,10 +158,10 @@ namespace Xrpl.Models.Transactions
         {
             Common.ValidateBaseTransaction(tx);
 
-            if (tx.TryGetValue("Account", out var Account) && tx.TryGetValue("Owner", out var Owner) && Account == Owner)
+            if (tx.TryGetValue("Account", out var Account) && tx.TryGetValue("Owner", out var Owner) && Account is string accountStr && Owner is string ownerStr && string.Equals(accountStr, ownerStr, StringComparison.Ordinal))
                 throw new ValidationException("NFTokenCreateOffer: Owner and Account must not be equal");
 
-            if (tx.TryGetValue("Destination", out var Destination) && Account == Destination)
+            if (tx.TryGetValue("Destination", out var Destination) && Account is string account2 && Destination is string destinationStr && string.Equals(account2, destinationStr, StringComparison.Ordinal))
                 throw new ValidationException("NFTokenCreateOffer: Destination and Account must not be equal");
             if (!tx.TryGetValue("NFTokenID", out var NFTokenID) || NFTokenID is null)
                 throw new ValidationException("NFTokenCreateOffer: missing field NFTokenID");

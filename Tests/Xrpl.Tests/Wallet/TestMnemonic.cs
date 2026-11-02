@@ -15,7 +15,7 @@ public class TestUMnemonic
 {
     private string mnemonic = "assault rare scout seed design extend noble drink talk control guitar quote";
     private string publicKey = "035953FCD81D001CF634EB44A87940F3F98ADF2483D09C914BAED0539BE50F385D";
-    private string privateKey = "13FC461CA5799F1357C8130AF703CBA7E9C28E072C6CA8F7DEF8601CDE98F394";
+    private string privateKey = "0013FC461CA5799F1357C8130AF703CBA7E9C28E072C6CA8F7DEF8601CDE98F394";
 
     [TestMethod]
     public void TestDefaultDerivationPath()
@@ -296,5 +296,17 @@ public class TestUMnemonic
 
         string[] words24 = XrplWallet.GenerateMnemonic(24);
         Assert.IsTrue(XrplWallet.ValidateMnemonicChecksum(words24));
+    }
+
+    [TestMethod]
+    public void TestUHighFirstByteKey_SignsVerifiably()
+    {
+        // The BIP-39 test vector: its private key begins with 0x90, which a signed read of the
+        // raw 32 bytes takes as a negative number.
+        XrplWallet wallet = XrplWallet.FromMnemonic("abandon abandon abandon abandon abandon abandon abandon abandon abandon abandon abandon about");
+        byte[] message = System.Text.Encoding.UTF8.GetBytes("hello");
+
+        Assert.AreEqual("0090802A50AA84EFB6CDB225F17C27616EA94048C179142FECF03F4712A07EA7A4", wallet.PrivateKey);
+        Assert.IsTrue(XrplKeypairs.Verify(message, XrplKeypairs.Sign(message, wallet.PrivateKey), wallet.PublicKey));
     }
 }

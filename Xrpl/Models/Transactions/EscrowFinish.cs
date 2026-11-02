@@ -18,7 +18,7 @@ namespace Xrpl.Models.Transactions
             TransactionType = TransactionType.EscrowFinish;
         }
 
-        public EscrowFinish(string owner, uint offerSequence, string condition, string fulfillment)
+        public EscrowFinish(string owner, uint offerSequence, string condition, string fulfillment) : this()
         {
             Owner = owner;
             OfferSequence = offerSequence;

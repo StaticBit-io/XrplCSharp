@@ -43,6 +43,10 @@ namespace XrplTests.Xrpl.Models
             Helper.ThrowsException<ValidationException>(() => Validation.ValidateAccountSet(accountSet), "AccountSet: invalid SetFlag");
             Helper.ThrowsException<ValidationException>(() => Validation.Validate(accountSet), "AccountSet: invalid SetFlag");
 
+            //throws w/ tfInnerBatchTxn, a transaction flag for Flags and not an asf value
+            accountSet["SetFlag"] = 0x40000000u;
+            Helper.ThrowsException<ValidationException>(() => Validation.ValidateAccountSet(accountSet), "AccountSet: invalid SetFlag");
+
             //throws w/ invalid SetFlag (incorrect type)
             accountSet["SetFlag"] = "abc";
             Helper.ThrowsException<ValidationException>(() => Validation.ValidateAccountSet(accountSet), "AccountSet: invalid SetFlag");

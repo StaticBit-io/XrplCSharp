@@ -29,9 +29,9 @@ public static class LedgerSequenceHelper
         if (transaction is JsonObject j)
             return TryGetUint(j, "LastLedgerSequence");
 
-        // 4) fallback: encode -> parse
-        var encoded = XrplBinaryCodec.Encode(transaction);
-        var json = JsonNode.Parse($"{encoded}")?.AsObject();
+        // 4) fallback: Encode returns the binary blob as hex, which is not JSON, so read the field
+        // from the object's own JSON form.
+        JsonObject? json = JsonSerializer.SerializeToNode(transaction, transaction.GetType(), XrplJsonOptions.Default) as JsonObject;
         return json != null ? TryGetUint(json, "LastLedgerSequence") : null;
     }
 

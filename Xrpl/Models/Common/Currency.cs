@@ -156,6 +156,18 @@ public class Currency
                 return;
             }
 
+            // MPT amounts are whole numbers up to 2^63-1; G16 would turn them into exponent notation.
+            if (!string.IsNullOrWhiteSpace(MPTokenIssuanceID))
+            {
+                if (value != Math.Truncate(value))
+                {
+                    throw new ArgumentException("MPT amounts must be whole numbers.", nameof(value));
+                }
+
+                Value = value.ToString("F0", CultureInfo.InvariantCulture);
+                return;
+            }
+
             // G16 keeps the sixteen significant digits the ledger allows, rounding to nearest -
             // which is what rippled does too, so this is not a place to be clever. The one input
             // it cannot serve is the top of decimal's own range: there, rounding to nearest rounds
@@ -229,7 +241,12 @@ public class Currency
             if (value.HasValue)
             {
                 CurrencyCode = "XRP";
-                var val = value.Value * 1000000;
+                decimal val = value.Value * 1000000;
+                if (val != Math.Truncate(val))
+                {
+                    throw new ArgumentException("XRP amounts cannot have more than 6 decimal places (drops are whole numbers).", nameof(value));
+                }
+
                 Value = val.ToString(format: "G0", CultureInfo.InvariantCulture);
             }
             else
@@ -351,6 +368,41 @@ public class Currency
 public static class CurrencyExtensions
 {
     /// <summary>
+    /// The amount as a <see cref="decimal"/> (drops for XRP, as <see cref="Currency.ValueAsNumber"/> reads it),
+    /// saturating at <see cref="decimal.MinValue"/> or <see cref="decimal.MaxValue"/> for an amount the ledger
+    /// allows but <see cref="decimal"/> cannot hold.
+    /// </summary>
+    /// <remarks>
+    /// For a value that is compared or displayed, where "at least this large" is the whole question: a
+    /// trust line limit against a balance, the sign of an issuer's supply. It is not for an amount that goes
+    /// back to the ledger; build that from <see cref="Currency.Value"/>, which is the text as the node sent
+    /// it. Everything else is read as <see cref="Currency.ValueAsNumber"/> reads it, including drops for XRP
+    /// and zero for an amount below 1e-28.
+    /// </remarks>
+    /// <param name="amount">The amount, or null.</param>
+    /// <returns>The value; zero for a null amount or a blank <see cref="Currency.Value"/>.</returns>
+    /// <exception cref="FormatException"><see cref="Currency.Value"/> is not a number at all.</exception>
+    public static decimal ToDecimalClamped(this Currency amount)
+    {
+        if (amount is null)
+        {
+            return 0m;
+        }
+
+        try
+        {
+            return amount.ValueAsNumber;
+        }
+        catch (AmountOutOfRangeException)
+        {
+            // Too large rather than malformed, so the sign picks the end of the range.
+            return amount.Value.AsSpan().TrimStart().StartsWith("-", StringComparison.Ordinal)
+                ? decimal.MinValue
+                : decimal.MaxValue;
+        }
+    }
+
+    /// <summary>
     /// Returns the human-readable value of this currency amount.
     /// For XRP, returns the value in XRP (drops / 1,000,000).
     /// For tokens, returns the raw numeric value.
@@ -389,7 +441,7 @@ public static class CurrencyExtensions
     /// </summary>
     /// <param name="cur"></param>
     /// <returns></returns>
-    public static bool IsNFT14D(this Currency cur) => cur is { } c && c.CurrencyCode.StartsWith("02");
+    public static bool IsNFT14D(this Currency cur) => cur is { } c && c.CurrencyCode?.StartsWith("02", StringComparison.Ordinal) == true;
     //cur is { ValueAsNumber: 0.000000000000000000000000000000000000000000000000000000000000000000000000000000001m };
 
     /// <summary> get readable token code </summary>
@@ -459,7 +511,12 @@ public static class CurrencyExtensions
             // XLS-16d NFT metadata, which begins with 02
             if (hex.StartsWith("02"))
             {
-                string xlf15d = Encoding.UTF8.GetString(HexToBytes(hex)).Substring(8, Math.Min(maxLength, hex.Length / 2 - 8)).Trim();
+                // The text is bytes 8 to 20, cut as bytes before decoding: UTF-8 text with
+                // multi-byte characters decodes to fewer characters than bytes, and anyone can
+                // open a trust line with such a code. maxLength counts the decoded characters.
+                byte[] bytes = HexToBytes(hex);
+                string text = Encoding.UTF8.GetString(bytes, 8, bytes.Length - 8);
+                string xlf15d = text.Substring(0, Math.Min(Math.Max(0, maxLength), text.Length)).Trim();
                 if (Regex.IsMatch(xlf15d, "[a-zA-Z0-9]{3,}") && xlf15d.ToLower() != "xrp")
                 {
                     return xlf15d;

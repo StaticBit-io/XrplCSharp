@@ -27,13 +27,12 @@ namespace Xrpl.Utils.Hashes
 
         public static string LedgerSpaceHex(string name)
         {
-            var enums = Enum.GetValues(typeof(LedgerSpace)).Cast<LedgerSpace>().ToList();
+            if (!Enum.TryParse(name, false, out LedgerSpace space) || !Enum.IsDefined(typeof(LedgerSpace), space))
+            {
+                throw new ArgumentException($"Unknown ledger space '{name}'.", nameof(name));
+            }
 
-            var res = enums.FirstOrDefault(f => f.ToString() == name).ToString();
-            var val = Convert.ToString(res.ToCharArray(0, 1)[0], HEX);
-            while (val.Length < 4)
-                val = "0" + val;
-            return val;
+            return space.LedgerSpaceHex();
         }
         /// <summary>
         /// check currency code for HEX 

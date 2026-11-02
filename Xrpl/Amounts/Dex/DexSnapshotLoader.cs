@@ -1261,26 +1261,40 @@ namespace Xrpl.Amounts
         {
             List<string> accounts = new List<string>();
             List<IReadOnlyList<DexCredentialType>> credentials = new List<IReadOnlyList<DexCredentialType>>();
-            AccountObjects objects = await client
-                .AccountObjects(new AccountObjectsRequest(address) { Type = LedgerEntryType.DepositPreauth, LedgerIndex = at }, cancellationToken)
-                .Typed()
-                .ConfigureAwait(false);
-            foreach (BaseLedgerEntry entry in objects?.AccountObjectList ?? new List<BaseLedgerEntry>())
+            object marker = null;
+            do
             {
-                if (entry is not LODepositPreauth preauth)
-                    continue;
-
-                if (preauth.Authorize != null)
-                    accounts.Add(preauth.Authorize);
-
-                if (preauth.AuthorizeCredentials is { Count: > 0 } set)
+                // One page holds a default 10 objects; an account with more preauthorizations would
+                // otherwise lose the rest and the payment simulation would refuse a permitted sender.
+                AccountObjects objects = await client
+                    .AccountObjects(new AccountObjectsRequest(address) { Type = LedgerEntryType.DepositPreauth, LedgerIndex = at, Limit = 400, Marker = marker }, cancellationToken)
+                    .Typed()
+                    .ConfigureAwait(false);
+                foreach (BaseLedgerEntry entry in objects?.AccountObjectList ?? new List<BaseLedgerEntry>())
                 {
-                    credentials.Add(set
-                        .Where(item => item?.Credential?.Issuer != null && item.Credential.CredentialType != null)
-                        .Select(item => new DexCredentialType { Issuer = item.Credential.Issuer, CredentialType = item.Credential.CredentialType })
-                        .ToList());
+                    if (entry is not LODepositPreauth preauth)
+                        continue;
+
+                    if (preauth.Authorize != null)
+                        accounts.Add(preauth.Authorize);
+
+                    if (preauth.AuthorizeCredentials is { Count: > 0 } set)
+                    {
+                        credentials.Add(set
+                            .Where(item => item?.Credential?.Issuer != null && item.Credential.CredentialType != null)
+                            .Select(item => new DexCredentialType { Issuer = item.Credential.Issuer, CredentialType = item.Credential.CredentialType })
+                            .ToList());
+                    }
                 }
+
+                marker = objects?.Marker switch
+                {
+                    null => null,
+                    JsonElement { ValueKind: JsonValueKind.Null } => null,
+                    object value => value,
+                };
             }
+            while (marker != null);
 
             return (accounts, credentials);
         }

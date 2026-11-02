@@ -35,6 +35,12 @@ namespace Xrpl.Client
 
         public CancellationTokenRegistration? CancellationRegistration { get; set; }
 
+        /// <summary>
+        /// The request's timeout timer, so that it is removed only while it is this request's: a
+        /// request that reuses the id may have registered its own under the same key.
+        /// </summary>
+        internal System.Timers.Timer TimeoutTimer { get; set; }
+
         public TaskInfo()
         {
             RemoveUponCompletion = true;

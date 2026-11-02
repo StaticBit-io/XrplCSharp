@@ -1,5 +1,5 @@
 ﻿using System.Text.Json.Nodes;
-using System.Diagnostics.Contracts;
+using System;
 using Xrpl.BinaryCodec.Binary;
 using Xrpl.BinaryCodec.Util;
 
@@ -15,7 +15,8 @@ namespace Xrpl.BinaryCodec.Types
         /// <inheritdoc />
         public Hash160(byte[] buffer) : base(buffer)
         {
-            Contract.Assert(buffer.Length == 20, "buffer should be 20 bytes");
+            if (buffer is null || buffer.Length != 20)
+                throw new ArgumentException("buffer should be 20 bytes", nameof(buffer));
         }
         /// <summary>
         /// Constructs a value that may also be zero-length, for a defaulted AccountID field.
@@ -24,7 +25,8 @@ namespace Xrpl.BinaryCodec.Types
         /// <param name="allowEmpty">accept an empty buffer</param>
         private protected Hash160(byte[] buffer, bool allowEmpty) : base(buffer)
         {
-            Contract.Assert(buffer.Length == 20 || (allowEmpty && buffer.Length == 0), "buffer should be 20 bytes");
+            if (buffer is null || !(buffer.Length == 20 || (allowEmpty && buffer.Length == 0)))
+                throw new ArgumentException("buffer should be 20 bytes", nameof(buffer));
         }
         /// <summary> create instance from json object </summary>
         /// <param name="token">json object</param>

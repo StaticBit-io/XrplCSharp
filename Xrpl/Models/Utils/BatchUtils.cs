@@ -52,6 +52,11 @@ public static class BatchUtils
         if (tx.TransactionType == TransactionType.Batch)
             throw new ArgumentException("Nested Batch is not allowed.");
 
+        // Work on a copy: the caller keeps using its own transaction (to sign and submit it alone, or
+        // to build another batch), and must not find it stripped and flagged as an inner transaction.
+        // Only top-level members are changed below, so a member-wise copy is enough.
+        tx = ShallowCopy.Of(tx);
+
         // 2) Drop the fields a Batch forbids, and those that are not stable inside one
         tx.TransactionSignature = null;
         tx.Signers = null;

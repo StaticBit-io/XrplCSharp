@@ -32,13 +32,20 @@ namespace Xrpl.Keypairs.K256
 
         public string Pk()
         {
-            return $"00{_privKey.ToByteArrayUnsigned().ToHex()}";
+            // Always 33 bytes: a key with leading zero bytes is still written as 32, as xrpl.js does.
+            return $"00{_privKey.ToByteArrayUnsigned().ToHex().PadLeft(64, '0')}";
         }
 
+        /// <summary>Signs the SHA-512Half of <paramref name="message"/>, with a canonical (low) S.</summary>
+        /// <param name="message">The message bytes.</param>
+        /// <param name="privateKey">
+        /// The private key, unsigned big-endian: the 33-byte form with the 00 prefix or the raw 32 bytes.
+        /// It is read as unsigned, so a raw key whose first byte is 0x80 or above is not taken as negative.
+        /// </param>
         public static byte[] Sign(byte[] message, byte[] privateKey)
         {
             ECDSASigner signer = new ECDSASigner(new HMacDsaKCalculator(new Sha256Digest()));
-            ECPrivateKeyParameters parameters = new ECPrivateKeyParameters("ECDSA", new BigInteger(privateKey), Secp256K1.Parameters());
+            ECPrivateKeyParameters parameters = new ECPrivateKeyParameters("ECDSA", new BigInteger(1, privateKey), Secp256K1.Parameters());
             signer.Init(true, parameters);
             BigInteger[] sigs = signer.GenerateSignature(Sha512.Half(message));
             var r = sigs[0];

@@ -186,5 +186,19 @@ namespace Xrpl.Keypairs.Tests
             bool verified = XrplKeypairs.Verify(messageBytes, signature, publicKey);
             Assert.IsTrue(verified);
         }
+
+        [TestMethod]
+        public void TestUSignSECP_RawKeyWithHighFirstByte()
+        {
+            // The same key written as 33 bytes with the 00 prefix and as the raw 32 bytes must sign alike.
+            string prefixed = "0090802A50AA84EFB6CDB225F17C27616EA94048C179142FECF03F4712A07EA7A4";
+            string publicKey = "031D68BC1A142E6766B2BDFB006CCFE135EF2E0E2E94ABB5CF5C9AB6104776FBAE";
+            byte[] message = System.Text.Encoding.UTF8.GetBytes("hello");
+
+            string signature = XrplKeypairs.Sign(message, prefixed.Substring(2));
+
+            Assert.AreEqual(XrplKeypairs.Sign(message, prefixed), signature);
+            Assert.IsTrue(XrplKeypairs.Verify(message, signature, publicKey));
+        }
     }
 }

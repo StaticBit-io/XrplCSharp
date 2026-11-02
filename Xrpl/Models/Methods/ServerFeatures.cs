@@ -259,6 +259,7 @@ public class ServerFeaturesRequest : BaseRequest
     /// (Optional) The unique ID of an amendment, as hexadecimal; or the short name of the amendment.<br/>
     /// If provided, limits the response to one amendment. Otherwise, the response lists all amendments.
     /// </summary>
+    [JsonPropertyName("feature")]
     public string? Feature { get; set; }
 }
 

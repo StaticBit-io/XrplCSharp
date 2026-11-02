@@ -4,6 +4,7 @@ using System.Linq;
 
 using Xrpl.Client.Exceptions;
 using Xrpl.Models.Transactions;
+using Xrpl.Models.Utils;
 
 namespace Xrpl.Utils
 {
@@ -34,28 +35,11 @@ namespace Xrpl.Utils
             var newMemos = new List<Memo> { destAccountMemo };
             newMemos.AddRange(memos);
 
-            var newPayment = new Payment 
-            {
-                TransactionType = payment.TransactionType,
-                Account = payment.Account,
-                AccountTxnID = payment.AccountTxnID,
-                Amount = payment.Amount,
-                DeliverMin = payment.DeliverMin,
-                Destination = payment.Destination,
-                DestinationTag = payment.DestinationTag,
-                Fee = payment.Fee,
-                Flags = payment.Flags,
-                InvoiceID = payment.InvoiceID,
-                LastLedgerSequence = payment.LastLedgerSequence,
-                Paths = payment.Paths,
-                SendMax = payment.SendMax,
-                Sequence = payment.Sequence,
-                Signers = payment.Signers,
-                SigningPublicKey = payment.SigningPublicKey,
-
-                Memos = newMemos.Select(c => new MemoWrapper() { Memo = c }).ToList(),
-                TransactionSignature = null
-            };
+            // A member-wise copy, so every field of the source (SourceTag, Ticket, NetworkID, ...)
+            // survives; a hand-written field list silently dropped whatever it forgot.
+            Payment newPayment = ShallowCopy.Of(payment);
+            newPayment.Memos = newMemos.Select(c => new MemoWrapper() { Memo = c }).ToList();
+            newPayment.TransactionSignature = null;
 
             return newPayment;
         }

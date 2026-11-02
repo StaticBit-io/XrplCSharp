@@ -1,5 +1,5 @@
 ﻿using System.Text.Json.Nodes;
-using System.Diagnostics.Contracts;
+using System;
 using Xrpl.BinaryCodec.Binary;
 using Xrpl.BinaryCodec.Util;
 
@@ -17,7 +17,8 @@ namespace Xrpl.BinaryCodec.Types
         /// <inheritdoc />
         public Hash256(byte[] buffer) : base(buffer)
         {
-            Contract.Assert(buffer.Length == 32, "buffer should be 32 bytes");
+            if (buffer is null || buffer.Length != 32)
+                throw new ArgumentException("buffer should be 32 bytes", nameof(buffer));
         }   
         /// <summary> create instance from json object </summary>
         /// <param name="token">json object</param>

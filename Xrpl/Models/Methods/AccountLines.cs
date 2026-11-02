@@ -96,17 +96,14 @@ public class TrustLine : BaseMethodResult
     /// A positive balance means that the perspective account holds value;<br/>
     /// a negative Balance means that the perspective account owes value.
     /// </summary>
+    /// <remarks>
+    /// Parsed as <see cref="Xrpl.Models.Common.Currency.ValueAsNumber"/> parses an amount: a balance beyond
+    /// what <see cref="decimal"/> holds raises <see cref="Xrpl.Client.Exceptions.AmountOutOfRangeException"/>
+    /// rather than <see cref="OverflowException"/>, and one below 1e-28 reads as zero.
+    /// </remarks>
+    /// <exception cref="Xrpl.Client.Exceptions.AmountOutOfRangeException">The balance exceeds what <see cref="decimal"/> can hold.</exception>
     [JsonIgnore]
-    public decimal BalanceAsNumber => decimal.Parse(
-        Balance,
-        NumberStyles.AllowLeadingSign
-        | (NumberStyles.AllowLeadingSign & NumberStyles.AllowDecimalPoint)
-        | (NumberStyles.AllowLeadingSign & NumberStyles.AllowExponent)
-        | (NumberStyles.AllowLeadingSign & NumberStyles.AllowExponent & NumberStyles.AllowDecimalPoint)
-        | (NumberStyles.AllowExponent & NumberStyles.AllowDecimalPoint)
-        | NumberStyles.AllowExponent
-        | NumberStyles.AllowDecimalPoint,
-        CultureInfo.InvariantCulture);
+    public decimal BalanceAsNumber => new Xrpl.Models.Common.Currency { Value = Balance }.ValueAsNumber;
 
     /// <summary>
     /// A Currency Code identifying what currency this trust line can hold.

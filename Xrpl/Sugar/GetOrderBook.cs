@@ -32,7 +32,7 @@ namespace Xrpl.Sugar
                 Command = "book_offers",
                 TakerPays = takerPays,
                 TakerGets = takerGets,
-                LedgerIndex = new LedgerIndex(ledgerIndex==-1? LedgerIndexType.Validated: (LedgerIndexType)ledgerIndex),
+                LedgerIndex = ledgerIndex == -1 ? new LedgerIndex(LedgerIndexType.Validated) : new LedgerIndex((uint)ledgerIndex),
                 LedgerHash = ledgerHash,
                 Limit = limit,
                 Taker = taker
