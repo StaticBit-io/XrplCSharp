@@ -368,8 +368,9 @@ public class Currency
 public static class CurrencyExtensions
 {
     /// <summary>
-    /// The amount as a <see cref="decimal"/>, saturating at <see cref="decimal.MinValue"/> or
-    /// <see cref="decimal.MaxValue"/> for an amount the ledger allows but <see cref="decimal"/> cannot hold.
+    /// The amount as a <see cref="decimal"/> (drops for XRP, as <see cref="Currency.ValueAsNumber"/> reads it),
+    /// saturating at <see cref="decimal.MinValue"/> or <see cref="decimal.MaxValue"/> for an amount the ledger
+    /// allows but <see cref="decimal"/> cannot hold.
     /// </summary>
     /// <remarks>
     /// For a value that is compared or displayed, where "at least this large" is the whole question: a

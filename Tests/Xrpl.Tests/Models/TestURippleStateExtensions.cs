@@ -6,8 +6,10 @@ using System.Text.Json;
 
 using Xrpl.AddressCodec;
 using Xrpl.Client.Exceptions;
+using Xrpl.Client.Json;
 using Xrpl.Models.Common;
 using Xrpl.Models.Ledger;
+using Xrpl.Models.Transactions;
 
 namespace XrplTests.Xrpl.Models
 {
@@ -213,6 +215,41 @@ namespace XrplTests.Xrpl.Models
         public void GetBalanceFor_AccountNotOnTheLine_Throws()
         {
             Assert.ThrowsExactly<ArgumentException>(() => Line().GetBalanceFor(Stranger));
+        }
+
+        [TestMethod]
+        public void GetBalanceFor_NullArguments_Throw()
+        {
+            Assert.ThrowsExactly<ArgumentNullException>(() => ((LORippleState)null).GetBalanceFor(Low));
+            Assert.ThrowsExactly<ArgumentNullException>(() => Line().GetBalanceFor(null));
+        }
+
+        [TestMethod]
+        public void GetBalanceFor_ChecksTheAccountBeforeReadingTheBalance()
+        {
+            // A malformed balance must not mask the contract violation of an account that is not on the line.
+            Assert.ThrowsExactly<ArgumentException>(() => Line(balance: "abc").GetBalanceFor(Stranger));
+        }
+
+        [TestMethod]
+        public void GetLimitOf_And_GetPeerLimitOf_AccountNotOnTheLine_Throw()
+        {
+            Assert.ThrowsExactly<ArgumentException>(() => Line().GetLimitOf(Stranger));
+            Assert.ThrowsExactly<ArgumentException>(() => Line().GetPeerLimitOf(Stranger));
+        }
+
+        [TestMethod]
+        public void GetLimitOf_And_GetPeerLimitOf_NullArguments_Throw()
+        {
+            Assert.ThrowsExactly<ArgumentNullException>(() => ((LORippleState)null).GetLimitOf(Low));
+            Assert.ThrowsExactly<ArgumentNullException>(() => Line().GetPeerLimitOf(null));
+        }
+
+        [TestMethod]
+        public void GetBalanceValueFor_NullArguments_Throw()
+        {
+            Assert.ThrowsExactly<ArgumentNullException>(() => ((LORippleState)null).GetBalanceValueFor(Low));
+            Assert.ThrowsExactly<ArgumentException>(() => Line().GetBalanceValueFor(Stranger));
         }
 
         [TestMethod]
@@ -569,6 +606,157 @@ namespace XrplTests.Xrpl.Models
             Assert.AreEqual(1, merged.UnknownFields["OnlyFinal"].GetInt32());
             Assert.AreEqual(3, merged.UnknownFields["Both"].GetInt32());
             Assert.HasCount(2, final.UnknownFields);
+        }
+
+        #endregion
+
+        #region Deserialized entries and metadata nodes
+
+        // The RippleState from xrpl.org (account_objects), verbatim.
+        private const string LedgerEntryJson = """
+            {
+                "Balance": {"currency": "USD", "issuer": "rrrrrrrrrrrrrrrrrrrrBZbvji", "value": "-5"},
+                "Flags": 393216,
+                "HighLimit": {"currency": "USD", "issuer": "rf1BiGeXwwQoi8Z2ueFYTEXSwuJYfV2Jpn", "value": "110"},
+                "HighNode": "0000000000000000",
+                "LedgerEntryType": "RippleState",
+                "LowLimit": {"currency": "USD", "issuer": "rsA2LpzuawewSBQXkiju3YQTMzW13pAAdW", "value": "0"},
+                "LowNode": "0000000000000000",
+                "PreviousTxnID": "E3FE6EA3D48F0C2B639448020EA4F03D4F4F8FFDB243A852A0F59177921B4879",
+                "PreviousTxnLgrSeq": 14090896,
+                "index": "9CA88CDEDFF9252B3DE183CE35B038F57282BC9503CDFA1923EF9A95DF0D6F7B"
+            }
+            """;
+
+        private static AffectedNode ReadNode(string json)
+            => JsonSerializer.Deserialize<AffectedNode>(json, XrplJsonOptions.Default);
+
+        [TestMethod]
+        public void LedgerEntry_DeserializedFromTheXrplOrgExample_ReadsFromBothSides()
+        {
+            LORippleState line = (LORippleState)JsonSerializer.Deserialize<BaseLedgerEntry>(LedgerEntryJson, XrplJsonOptions.Default);
+
+            Assert.AreEqual((RippleStateFlags)HighReserveAndLowAuth, line.Flags);
+            Assert.IsTrue(line.IsLowAccount(Low));
+            Assert.IsFalse(line.IsLowAccount(High));
+            Assert.AreEqual(High, line.GetCounterparty(Low));
+            Assert.AreEqual("110", line.GetLimitOf(High).Value);
+            Assert.AreEqual("0", line.GetPeerLimitOf(High).Value);
+            Assert.AreEqual(-5m, line.GetBalanceFor(Low));
+            Assert.AreEqual(5m, line.GetBalanceFor(High));
+            Assert.AreEqual("5", line.GetBalanceValueFor(High));
+            Assert.IsTrue(line.OccupiesReserveOf(High));
+            Assert.IsFalse(line.OccupiesReserveOf(Low));
+            Assert.IsTrue(line.GetFlagOf(Low, RippleStateFlags.lsfLowAuth, RippleStateFlags.lsfHighAuth));
+            Assert.IsNull(line.GetQualityInOf(Low));
+        }
+
+        [TestMethod]
+        public void ModifiedNode_FinalAndPreviousFields_MergeToThePreTransactionLine()
+        {
+            // A payment moved 2 USD from the Low account's side: the balance went from -3 to -5. The
+            // flags and limits did not change, so PreviousFields lists only the balance.
+            AffectedNode node = ReadNode("""
+                {
+                    "ModifiedNode": {
+                        "FinalFields": {
+                            "Balance": {"currency": "USD", "issuer": "rrrrrrrrrrrrrrrrrrrrBZbvji", "value": "-5"},
+                            "Flags": 393216,
+                            "HighLimit": {"currency": "USD", "issuer": "rf1BiGeXwwQoi8Z2ueFYTEXSwuJYfV2Jpn", "value": "110"},
+                            "HighNode": "0000000000000000",
+                            "LowLimit": {"currency": "USD", "issuer": "rsA2LpzuawewSBQXkiju3YQTMzW13pAAdW", "value": "0"},
+                            "LowNode": "0000000000000000"
+                        },
+                        "LedgerEntryType": "RippleState",
+                        "LedgerIndex": "9CA88CDEDFF9252B3DE183CE35B038F57282BC9503CDFA1923EF9A95DF0D6F7B",
+                        "PreviousFields": {
+                            "Balance": {"currency": "USD", "issuer": "rrrrrrrrrrrrrrrrrrrrBZbvji", "value": "-3"}
+                        },
+                        "PreviousTxnID": "E3FE6EA3D48F0C2B639448020EA4F03D4F4F8FFDB243A852A0F59177921B4879",
+                        "PreviousTxnLgrSeq": 14090896
+                    }
+                }
+                """);
+
+            LORippleState final = (LORippleState)node.ModifiedNode.FinalFields;
+            LORippleState previous = (LORippleState)node.ModifiedNode.PreviousFields;
+            Assert.IsNull(previous.Flags, "PreviousFields carries no flag word here.");
+
+            LORippleState before = final.MergePreviousOver(previous);
+
+            Assert.AreEqual(-5m, final.GetBalanceFor(Low));
+            Assert.AreEqual(-3m, before.GetBalanceFor(Low));
+            Assert.AreEqual(3m, before.GetBalanceFor(High));
+            Assert.AreEqual(final.Flags, before.Flags);
+            Assert.IsTrue(before.OccupiesReserveOf(High));
+            Assert.AreEqual("110", before.GetLimitOf(High).Value);
+        }
+
+        [TestMethod]
+        public void DeletedNode_PreviousFieldsWithOnlyALimit_KeepTheFinalFlags()
+        {
+            // The Low account deleted its side of an empty line by taking its limit back to zero.
+            // PreviousFields lists the limit alone; the flag word has to come from FinalFields.
+            AffectedNode node = ReadNode("""
+                {
+                    "DeletedNode": {
+                        "FinalFields": {
+                            "Balance": {"currency": "USD", "issuer": "rrrrrrrrrrrrrrrrrrrrBZbvji", "value": "0"},
+                            "Flags": 65536,
+                            "HighLimit": {"currency": "USD", "issuer": "rf1BiGeXwwQoi8Z2ueFYTEXSwuJYfV2Jpn", "value": "0"},
+                            "HighNode": "0000000000000000",
+                            "LowLimit": {"currency": "USD", "issuer": "rsA2LpzuawewSBQXkiju3YQTMzW13pAAdW", "value": "0"},
+                            "LowNode": "0000000000000000"
+                        },
+                        "LedgerEntryType": "RippleState",
+                        "LedgerIndex": "9CA88CDEDFF9252B3DE183CE35B038F57282BC9503CDFA1923EF9A95DF0D6F7B",
+                        "PreviousFields": {
+                            "LowLimit": {"currency": "USD", "issuer": "rsA2LpzuawewSBQXkiju3YQTMzW13pAAdW", "value": "100"}
+                        }
+                    }
+                }
+                """);
+
+            LORippleState before = ((LORippleState)node.DeletedNode.FinalFields)
+                .MergePreviousOver((LORippleState)node.DeletedNode.PreviousFields);
+
+            Assert.AreEqual("100", before.GetLimitOf(Low).Value);
+            Assert.AreEqual("0", before.GetPeerLimitOf(Low).Value);
+            Assert.AreEqual((RippleStateFlags)65536, before.Flags);
+            Assert.IsTrue(before.OccupiesReserveOf(Low));
+            Assert.IsFalse(before.PeerOccupiesReserveOf(Low));
+        }
+
+        [TestMethod]
+        public void DeletedNode_PreviousFieldsWithTheFlagWord_ShowTheReserveBeforeItWasCleared()
+        {
+            // rippled clears the reserve flags before it deletes a line, so the final flag word of a
+            // deleted node no longer says who paid the reserve; PreviousFields does.
+            AffectedNode node = ReadNode("""
+                {
+                    "DeletedNode": {
+                        "FinalFields": {
+                            "Balance": {"currency": "USD", "issuer": "rrrrrrrrrrrrrrrrrrrrBZbvji", "value": "0"},
+                            "Flags": 0,
+                            "HighLimit": {"currency": "USD", "issuer": "rf1BiGeXwwQoi8Z2ueFYTEXSwuJYfV2Jpn", "value": "0"},
+                            "LowLimit": {"currency": "USD", "issuer": "rsA2LpzuawewSBQXkiju3YQTMzW13pAAdW", "value": "0"}
+                        },
+                        "LedgerEntryType": "RippleState",
+                        "LedgerIndex": "9CA88CDEDFF9252B3DE183CE35B038F57282BC9503CDFA1923EF9A95DF0D6F7B",
+                        "PreviousFields": {
+                            "Flags": 131072,
+                            "HighLimit": {"currency": "USD", "issuer": "rf1BiGeXwwQoi8Z2ueFYTEXSwuJYfV2Jpn", "value": "100"}
+                        }
+                    }
+                }
+                """);
+
+            LORippleState final = (LORippleState)node.DeletedNode.FinalFields;
+            LORippleState before = final.MergePreviousOver((LORippleState)node.DeletedNode.PreviousFields);
+
+            Assert.IsFalse(final.OccupiesReserveOf(High));
+            Assert.IsTrue(before.OccupiesReserveOf(High));
+            Assert.AreEqual("100", before.GetLimitOf(High).Value);
         }
 
         #endregion

@@ -144,9 +144,12 @@ namespace Xrpl.Models.Ledger
         /// <exception cref="FormatException">The stored balance is not a number.</exception>
         public static decimal GetBalanceFor(this LORippleState state, string account)
         {
+            // Validate before reading the balance, so a null state, a null or off-line account and a
+            // malformed balance are reported in that order and the first two as documented.
+            bool isLow = state.IsLowAccount(account);
             decimal stored = state.Balance.ToDecimalSaturating();
 
-            return state.IsLowAccount(account) ? stored : -stored;
+            return isLow ? stored : -stored;
         }
 
         /// <summary>
