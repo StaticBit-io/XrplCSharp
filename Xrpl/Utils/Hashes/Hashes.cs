@@ -229,7 +229,7 @@ namespace Xrpl.Utils.Hashes
         /// <summary>
         /// Get the owner of an <c>NFTokenPage</c> ledger entry from the page's ledger index.
         /// Mirrors rippled's <c>keylet::nftpage_min(owner)</c> and <c>keylet::nftpage_max(owner)</c>: the high
-        /// 160 bits of a page index are the owner's AccountID and the low 96 bits (<c>nft::pageMask</c>) come from
+        /// 160 bits of a page index are the owner's AccountID and the low 96 bits (<c>nft::kPageMask</c>) come from
         /// an NFTokenID. An NFTokenPage carries no <c>Owner</c> field, so this is the only way to tell whose page it is
         /// without asking the ledger.
         /// </summary>

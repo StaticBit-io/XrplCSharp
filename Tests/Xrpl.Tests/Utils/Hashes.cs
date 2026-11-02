@@ -109,8 +109,9 @@ namespace XrplTests.Xrpl.Utils
             Assert.AreEqual(expectedEntryHash, actualEntryHash);
         }
 
-        // Middle and max: pages listed by account_objects (type NFTokenPage) for this mainnet account at validated
-        // ledger 108074793. Min: keylet::nftpage_min(owner) built here from the AccountID (no on-ledger page sits there).
+        // Middle and max are real mainnet pages listed by account_objects (type NFTokenPage) for this account at validated
+        // ledger 108074793. Min is NOT from the ledger: it is constructed per keylet::nftpage_min(owner), AccountID followed
+        // by 96 zero bits, because rippled does not normally create a page at that key.
         private const string NftPageOwner = "rpbjkoncKiv1LkPWShzZksqYPzKXmUhTW7";
         private const string NftPageOwnerAccountIdHex = "1189F5687DBB7516339D6CCB5593D96622AD82DF";
 
@@ -154,7 +155,7 @@ namespace XrplTests.Xrpl.Utils
         [DataRow("1189F5687DBB7516339D6CCB5593D96622AD82DFFFFFFFFFFFFFFFFFFFFFFFFG")]
         [DataRow("0x89F5687DBB7516339D6CCB5593D96622AD82DFFFFFFFFFFFFFFFFFFFFFFFFF")]
         [DataRow(" 189F5687DBB7516339D6CCB5593D96622AD82DFFFFFFFFFFFFFFFFFFFFFFFFF")]
-        [DataRow("189F5687DBB7516339D6CCB5593D96622AD82DFFFFFFFFFFFFFFFFFFFFFFFFFFF\n")]
+        [DataRow("189F5687DBB7516339D6CCB5593D96622AD82DFFFFFFFFFFFFFFFFFFFFFFFFF\n")]
         public void TestGetNFTokenPageOwnerRejectsMalformedIndex(string pageIndex)
         {
             Assert.ThrowsExactly<System.ArgumentException>(() => Hashes.GetNFTokenPageOwner(pageIndex));
