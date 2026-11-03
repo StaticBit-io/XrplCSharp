@@ -201,8 +201,8 @@ public class TestULedgerAmountGrid
     [TestMethod]
     public void TestUResidueBelowHalfAMillionthOfAStepCountsAsZero()
     {
-        // The scaled value is rounded to six places before the cut, so a figure within 5e-7 of the
-        // next step lands on it even when rounding down; this pins the size of that window.
+        // The scaled value is rounded to six places before the cut, so a figure within 5e-7 of a
+        // step lands on it even when rounding down; this pins the size of that window.
         Assert.AreEqual(1.234_568m, LedgerAmountGrid.RoundDown(D("1.23456799999999"), isXrp: true));
         Assert.AreEqual(1m, LedgerAmountGrid.RoundDown(1m - D("1e-23"), isXrp: false));
         Assert.AreEqual(D("1.234567"), LedgerAmountGrid.RoundDown(D("1.2345679"), isXrp: true));

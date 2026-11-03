@@ -59,7 +59,7 @@ namespace Xrpl.Amounts
         /// grid and rounded to six places (<see cref="Math.Round(decimal, int)"/>, banker's rounding at
         /// the midpoint) before the cut, so the result may land up to 5e-7 of a step on the other side
         /// of the input, treating the difference as arithmetic residue. For XRP,
-        /// <c>RoundDown(1.23456799999999m)</c> is <c>1.234568</c>, while <c>1.2345679m</c> is cut to
+        /// <c>RoundDown(1.23456799999999m, isXrp: true)</c> is <c>1.234568</c>, while <c>1.2345679m</c> is cut to
         /// <c>1.234567</c>.</returns>
         public static decimal RoundDown(decimal value, bool isXrp) => Adjust(value, isXrp, awayFromZero: false);
 
