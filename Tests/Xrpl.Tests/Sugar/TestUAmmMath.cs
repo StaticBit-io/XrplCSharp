@@ -460,7 +460,15 @@ public class TestUAmmMath
     [TestMethod]
     public void TestUAHugeDepositIntoATinyPoolDoesNotOverflow()
     {
-        Assert.IsTrue(AmmMath.LPTokensForSingleAssetDeposit(1m, 1e22m, 1e10m, 0) > 0m);
+        decimal tokens = AmmMath.LPTokensForSingleAssetDeposit(1m, 1e22m, 1e10m, 0);
+
+        // Equation 3 at fee 0 (f1 = f2 = 1), worked in double, which does not overflow here:
+        // c = sqrt(1 + r) - 1 and t = T * (r - c) / (1 + c), about 1e21 for r = 1e22 and T = 1e10.
+        double r = 1e22;
+        double c = Math.Sqrt(1d + r) - 1d;
+        double expected = 1e10 * (r - c) / (1d + c);
+
+        Assert.AreEqual(expected, (double)tokens, expected * 1e-9);
     }
 
     /// <summary>

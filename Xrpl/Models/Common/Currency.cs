@@ -190,7 +190,10 @@ public class Currency
     /// </summary>
     /// <remarks>
     /// Reached only when rounding would carry the value past <see cref="decimal.MaxValue"/>.
-    /// Truncating cannot: dropping digits only ever moves a number toward zero.
+    /// <see cref="LedgerAmountGrid.RoundDown"/> first rounds the scaled value to six places, which
+    /// can in general land above the input, so it is safe here only because of where this is called:
+    /// the fractional part of <c>decimal.MaxValue / 1e13</c> is .759..., outside the window that
+    /// rounding can carry across, so the result stays at or below the input.
     /// </remarks>
     private static decimal TruncateToLedgerPrecision(decimal value) =>
         LedgerAmountGrid.RoundDown(value, isXrp: false);
@@ -396,8 +399,10 @@ public static class CurrencyExtensions
     /// A currency is XRP if its code is exactly "XRP" (case-sensitive) and it has no issuer.
     /// </summary>
     /// <remarks>
-    /// The comparison is ordinal because the ledger only refuses an IOU with the exact code "XRP"
-    /// (<c>temBAD_CURRENCY</c>): "xrp" and "Xrp" are legal issued currency codes, distinct from native XRP.
+    /// The comparison is ordinal because the exact code "XRP" is reserved for native XRP, so an issued
+    /// currency cannot use it (the JSON code "XRP" is parsed as native, and the hex form of ASCII "XRP"
+    /// is refused with <c>temBAD_CURRENCY</c>): "xrp" and "Xrp" are legal issued currency codes, distinct
+    /// from native XRP.
     /// An issued currency always has an issuer, so a legal IOU was never reported as XRP; what changed in
     /// 11.24.0.0 is that a currency with the code "xrp" or "Xrp" and no issuer (malformed input) used to be
     /// reported as XRP because the code was upper-cased first, and now is not.

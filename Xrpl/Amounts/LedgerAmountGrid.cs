@@ -24,6 +24,11 @@ namespace Xrpl.Amounts
     /// Everything is decimal arithmetic. A logarithm on a converted double lands on the wrong side of
     /// a power of ten often enough to give a digit too many or too few.
     /// </para>
+    /// <para>
+    /// MPT amounts are not covered: they are whole numbers up to 2^63-1, which neither the XRP grid
+    /// (six places) nor the issued one (sixteen significant digits) describes. Use
+    /// <see cref="Math.Truncate(decimal)"/> and <see cref="Math.Ceiling(decimal)"/> for them.
+    /// </para>
     /// </remarks>
     public static class LedgerAmountGrid
     {
@@ -51,7 +56,8 @@ namespace Xrpl.Amounts
         private const int ResidueDigits = 6;
 
         /// <summary>
-        /// Rounds toward zero onto the grid: the form for anything presented as received.
+        /// Rounds toward zero onto the grid: the form for anything presented as received. XRP and
+        /// issued amounts only; an MPT amount is not on this grid.
         /// </summary>
         /// <param name="value">The amount; zero is returned as is.</param>
         /// <param name="isXrp"><see langword="true"/> for XRP (drops), <see langword="false"/> for an issued amount.</param>
@@ -64,7 +70,8 @@ namespace Xrpl.Amounts
         public static decimal RoundDown(decimal value, bool isXrp) => Adjust(value, isXrp, awayFromZero: false);
 
         /// <summary>
-        /// Rounds away from zero onto the grid: the form for anything that bounds a spend.
+        /// Rounds away from zero onto the grid: the form for anything that bounds a spend. XRP and
+        /// issued amounts only; an MPT amount is not on this grid.
         /// </summary>
         /// <param name="value">The amount; zero is returned as is.</param>
         /// <param name="isXrp"><see langword="true"/> for XRP (drops), <see langword="false"/> for an issued amount.</param>
@@ -82,7 +89,8 @@ namespace Xrpl.Amounts
         /// The distance between two neighbouring grid values at the magnitude of
         /// <paramref name="value"/>: 1e-6 for XRP; for an issued amount <c>10^(msd - 15)</c>, which is
         /// 10, 100, ... from 1e16 and is never smaller than 1e-28, the finest a <see cref="decimal"/>
-        /// holds. The sign of <paramref name="value"/> is ignored.
+        /// holds. The sign of <paramref name="value"/> is ignored. XRP and issued amounts only; an MPT
+        /// amount has a step of one and is not covered.
         /// </summary>
         /// <param name="value">A nonzero amount.</param>
         /// <param name="isXrp"><see langword="true"/> for XRP (drops), <see langword="false"/> for an issued amount.</param>

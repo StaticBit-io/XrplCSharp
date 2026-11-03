@@ -21,8 +21,8 @@ namespace Xrpl.Utils
         }
 
         /// <summary>
-        /// Ripple-epoch seconds of a Unix time in milliseconds, rounded to the nearest second as xrpl.js
-        /// does. For an expiration or any deadline use <see cref="ToRippleTime(DateTimeOffset)"/>, which
+        /// Ripple-epoch seconds of a Unix time in milliseconds, rounded to the nearest second, ties to
+        /// even (<see cref="Math.Round(decimal)"/>: 0.5 s is 0, 2.5 s is 2; xrpl.js rounds ties up). For an expiration or any deadline use <see cref="ToRippleTime(DateTimeOffset)"/>, which
         /// rounds down: rounding 0.7 s up would put the deadline a second later than the instant asked for.
         /// </summary>
         public static long UnixTimeToRippleTime(long timestamp)

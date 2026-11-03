@@ -136,6 +136,9 @@ namespace Xrpl.Sugar
         /// <param name="lpTokenBalance">The pool's LP token balance, before the deposit.</param>
         /// <param name="tradingFee">The fee this depositor trades at - see <see cref="DiscountedTradingFee"/>.</param>
         /// <exception cref="ArgumentOutOfRangeException">A balance is not positive, the deposit is negative, or the fee exceeds <see cref="TradingFeeThreshold"/>.</exception>
+        /// <exception cref="OverflowException">An extreme input does not fit a <see cref="decimal"/>: the
+        /// ratio <c>deposit / poolBalance</c> (or the root of it) exceeds the range, or the credited
+        /// tokens do even after the product is reordered to divide first.</exception>
         public static decimal LPTokensForSingleAssetDeposit(
             decimal poolBalance,
             decimal deposit,

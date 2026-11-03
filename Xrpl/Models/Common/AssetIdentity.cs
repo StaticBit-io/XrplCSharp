@@ -11,9 +11,10 @@ namespace Xrpl.Models.Common
     /// <list type="bullet">
     /// <item>
     /// A 3-character (or otherwise non-hex) currency code is case-sensitive: "XPM", "xpm" and
-    /// "Xpm" are three tokens, possibly with the same issuer. The ledger refuses an IOU with the
-    /// exact code "XRP" (<c>temBAD_CURRENCY</c>), so an ordinal match on "XRP" identifies native
-    /// XRP, and a lowercase "xrp" IOU is a different, legal asset.
+    /// "Xpm" are three tokens, possibly with the same issuer. The exact code "XRP" is reserved for
+    /// native XRP, so an issued currency cannot use it (the JSON code "XRP" is parsed as native, and
+    /// the hex form of ASCII "XRP" is refused with <c>temBAD_CURRENCY</c>); an ordinal match on
+    /// "XRP" therefore identifies native XRP, and a lowercase "xrp" IOU is a different, legal asset.
     /// </item>
     /// <item>
     /// A 40-character hex code (a non-standard currency name, or an LP token starting with "03")
@@ -22,8 +23,22 @@ namespace Xrpl.Models.Common
     /// </item>
     /// <item>An issuer is a base58 address and compares ordinally.</item>
     /// </list>
+    /// <para>
+    /// These rules hold for codes in the canonical form the node returns. The 3-character code "USD"
+    /// and its 40-digit standard-code hex form are the same currency on the ledger, but
+    /// <see cref="CurrencyEquals"/> returns <c>false</c> for them, and <c>IsXrp</c> of an all-zero
+    /// 40-digit code is <c>false</c> although the ledger reads that as native XRP. MPT issuance ids
+    /// are not compared here.
+    /// </para>
+    /// <para>
     /// User-facing search and filter inputs (a token picker's name filter) should stay
     /// case-insensitive; this type is for identity, not search.
+    /// </para>
+    /// <para>
+    /// The three <c>IsXrp</c> variants treat the issuer differently: <c>Currency.IsXrp()</c> requires
+    /// <c>Issuer == null</c>, <see cref="IsXrp(string, string)"/> requires it null, empty or whitespace,
+    /// and <c>IssuedCurrency.IsXrp()</c> does not look at the code at all (no issuer and no MPT id).
+    /// </para>
     /// </remarks>
     public static class AssetIdentity
     {
@@ -104,9 +119,9 @@ namespace Xrpl.Models.Common
         }
 
         /// <summary>
-        /// Whether <paramref name="code"/> is exactly "XRP", compared ordinally. The ledger refuses
-        /// an IOU with that exact code, so the code alone identifies native XRP; "xrp" and "Xrp"
-        /// are legal IOU codes and do not match.
+        /// Whether <paramref name="code"/> is exactly "XRP", compared ordinally (case-sensitive: "xrp"
+        /// does not match). The exact code is reserved for native XRP, so an issued currency cannot use
+        /// it and the code alone identifies native XRP; "xrp" and "Xrp" are legal IOU codes.
         /// </summary>
         public static bool IsXrp(string code)
         {
