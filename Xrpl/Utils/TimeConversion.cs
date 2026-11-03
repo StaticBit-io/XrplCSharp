@@ -90,6 +90,7 @@ namespace Xrpl.Utils
         }
 
         /// <summary>The UTC instant of a ledger time: <see cref="RippleEpoch"/> plus <paramref name="rippleTime"/> seconds.</summary>
+        /// <exception cref="ArgumentOutOfRangeException">The result is outside the <see cref="DateTimeOffset"/> range.</exception>
         public static DateTimeOffset FromRippleTime(long rippleTime) => RippleEpoch.AddSeconds(rippleTime);
     }
 }
