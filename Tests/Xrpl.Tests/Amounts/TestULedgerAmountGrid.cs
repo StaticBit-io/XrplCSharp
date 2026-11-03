@@ -197,4 +197,43 @@ public class TestULedgerAmountGrid
         Assert.AreEqual(huge, LedgerAmountGrid.RoundDown(huge, isXrp: true));
         Assert.AreEqual(huge, LedgerAmountGrid.RoundUp(huge, isXrp: true));
     }
+
+    [TestMethod]
+    public void TestUResidueBelowHalfAMillionthOfAStepCountsAsZero()
+    {
+        // The scaled value is rounded to six places before the cut, so a figure within 5e-7 of the
+        // next step lands on it even when rounding down; this pins the size of that window.
+        Assert.AreEqual(1.234_568m, LedgerAmountGrid.RoundDown(D("1.23456799999999"), isXrp: true));
+        Assert.AreEqual(1m, LedgerAmountGrid.RoundDown(1m - D("1e-23"), isXrp: false));
+        Assert.AreEqual(D("1.234567"), LedgerAmountGrid.RoundDown(D("1.2345679"), isXrp: true));
+        Assert.AreEqual(D("0.9999999999999999"), LedgerAmountGrid.RoundDown(1m - D("1e-17"), isXrp: false));
+        Assert.AreEqual(D("0.9999999999999"), LedgerAmountGrid.RoundDown(1m - D("1e-13"), isXrp: false));
+    }
+
+    [TestMethod]
+    public void TestUResidueWindowIsSymmetricForRoundUp()
+    {
+        Assert.AreEqual(1.234_567m, LedgerAmountGrid.RoundUp(D("1.23456700000001"), isXrp: true));
+        Assert.AreEqual(D("1.234569"), LedgerAmountGrid.RoundUp(D("1.2345681"), isXrp: true));
+    }
+
+    [TestMethod]
+    public void TestURoundUpAtTheTopOfDecimalOverflows()
+    {
+        Assert.ThrowsExactly<OverflowException>(() => LedgerAmountGrid.RoundUp(decimal.MaxValue, isXrp: false));
+        Assert.ThrowsExactly<OverflowException>(() => LedgerAmountGrid.RoundUp(decimal.MinValue, isXrp: false));
+    }
+
+    [TestMethod]
+    public void TestURoundDownAtTheBottomOfDecimalStaysRepresentable()
+    {
+        Assert.AreEqual(D("-79228162514264330000000000000"), LedgerAmountGrid.RoundDown(decimal.MinValue, isXrp: false));
+    }
+
+    [TestMethod]
+    public void TestUANegativeHugeXrpAmountIsReturnedUnchanged()
+    {
+        Assert.AreEqual(-decimal.MaxValue, LedgerAmountGrid.RoundDown(-decimal.MaxValue, isXrp: true));
+        Assert.AreEqual(-decimal.MaxValue, LedgerAmountGrid.RoundUp(-decimal.MaxValue, isXrp: true));
+    }
 }

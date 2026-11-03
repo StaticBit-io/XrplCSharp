@@ -55,8 +55,12 @@ namespace Xrpl.Amounts
         /// </summary>
         /// <param name="value">The amount; zero is returned as is.</param>
         /// <param name="isXrp"><see langword="true"/> for XRP (drops), <see langword="false"/> for an issued amount.</param>
-        /// <returns>The nearest grid value not farther from zero than <paramref name="value"/>, ignoring
-        /// residue below a millionth of a step.</returns>
+        /// <returns>The grid value toward zero. Residue is removed first: the value is scaled to the
+        /// grid and rounded to six places (<see cref="Math.Round(decimal, int)"/>, banker's rounding at
+        /// the midpoint) before the cut, so the result may land up to 5e-7 of a step on the other side
+        /// of the input, treating the difference as arithmetic residue. For XRP,
+        /// <c>RoundDown(1.23456799999999m)</c> is <c>1.234568</c>, while <c>1.2345679m</c> is cut to
+        /// <c>1.234567</c>.</returns>
         public static decimal RoundDown(decimal value, bool isXrp) => Adjust(value, isXrp, awayFromZero: false);
 
         /// <summary>
@@ -64,10 +68,14 @@ namespace Xrpl.Amounts
         /// </summary>
         /// <param name="value">The amount; zero is returned as is.</param>
         /// <param name="isXrp"><see langword="true"/> for XRP (drops), <see langword="false"/> for an issued amount.</param>
-        /// <returns>The nearest grid value not nearer to zero than <paramref name="value"/>, ignoring
-        /// residue below a millionth of a step.</returns>
+        /// <returns>The grid value away from zero. Residue is removed first, as in
+        /// <see cref="RoundDown"/>: the result may land up to 5e-7 of a step on the other side of the
+        /// input, treating the difference as arithmetic residue, so <c>400000 + 1e-16</c> stays
+        /// <c>400000</c> for XRP.</returns>
         /// <exception cref="OverflowException">The result would exceed the range of <see cref="decimal"/>;
-        /// only possible within one step of <see cref="decimal.MaxValue"/> or <see cref="decimal.MinValue"/>.</exception>
+        /// only possible for an issued amount within one step of <see cref="decimal.MaxValue"/> or
+        /// <see cref="decimal.MinValue"/>, since the sign is applied after the magnitude is rounded.
+        /// An XRP amount that large is returned unchanged.</exception>
         public static decimal RoundUp(decimal value, bool isXrp) => Adjust(value, isXrp, awayFromZero: true);
 
         /// <summary>
