@@ -3,6 +3,7 @@ using System.Collections.Generic;
 using System.Text.Json;
 using System.Text.Json.Nodes;
 
+using Xrpl.BinaryCodec;
 using Xrpl.BinaryCodec.Binary;
 using Xrpl.BinaryCodec.Types;
 using Xrpl.Client.Exceptions;
@@ -116,7 +117,11 @@ namespace Xrpl.Models.Transactions
         /// </summary>
         /// <param name="memos">
         /// The value of the transaction's <c>Memos</c> field: a collection of <c>{ "Memo": { ... } }</c>
-        /// elements (or the equivalent JSON array), the shape <see cref="Validate"/> accepts.
+        /// elements (or the equivalent JSON array), the shape <see cref="Validate"/> accepts. A
+        /// transaction's typed <c>Memos</c> (<see cref="MemoWrapper"/> elements) go through the
+        /// <see cref="TryGetSerializedLength(IEnumerable{MemoWrapper}, out int)"/> overload, which
+        /// the compiler checks; this one takes anything and answers <c>false</c> for what is not an
+        /// array of memos, such as a string or a single memo.
         /// </param>
         /// <param name="length">
         /// The length in bytes of the array as it would be serialized in the transaction, to compare
@@ -156,13 +161,35 @@ namespace Xrpl.Models.Transactions
             {
                 node = memos as JsonNode ?? JsonSerializer.SerializeToNode(memos, XrplJsonOptions.Default);
             }
-            catch (Exception)
+            catch (Exception e) when (e is JsonException || e is NotSupportedException)
             {
-                // A value System.Text.Json cannot turn into a node is not a Memos array.
+                // A value System.Text.Json cannot turn into a node is not a Memos array. Anything
+                // else - a getter that throws, say - is a bug in the caller's type and surfaces.
                 return false;
             }
 
             return node is JsonArray array && TryMeasure(array, out length);
+        }
+
+        /// <summary>
+        /// Measures the SDK's typed <c>Memos</c> (<c>TransactionCommon.Memos</c>,
+        /// <see cref="MemoWrapper"/> elements) with the same rules as
+        /// <see cref="TryGetSerializedLength(object, out int)"/>.
+        /// </summary>
+        /// <param name="memos">The memos of a transaction, or <c>null</c>.</param>
+        /// <param name="length">
+        /// The serialized length in bytes, to compare with <see cref="MaxSerializedLength"/>; <c>0</c>
+        /// when the method returns <c>false</c>.
+        /// </param>
+        /// <returns>
+        /// <c>false</c> for <c>null</c>, an empty sequence, a <see cref="MemoWrapper"/> without a
+        /// <see cref="MemoWrapper.Memo"/>, or a memo whose members are not hex. A member left
+        /// <c>null</c> is not written, so a memo of <c>MemoData</c> alone is measured without
+        /// <c>MemoType</c> and <c>MemoFormat</c>.
+        /// </returns>
+        public static bool TryGetSerializedLength(IEnumerable<MemoWrapper> memos, out int length)
+        {
+            return TryGetSerializedLength((object)memos, out length);
         }
 
         private static bool TryMeasure(JsonArray array, out int length)
@@ -175,7 +202,8 @@ namespace Xrpl.Models.Transactions
 
             foreach (JsonNode element in array)
             {
-                if (TryUnwrapMemo(element) is null)
+                JsonObject memo = TryUnwrapMemo(element);
+                if (memo is null || HasNullMember(memo))
                 {
                     return false;
                 }
@@ -189,14 +217,36 @@ namespace Xrpl.Models.Transactions
                 length = sink.BytesLength();
                 return true;
             }
-            catch (Exception)
+            catch (InvalidJsonException)
             {
                 // Content the codec cannot serialize at all - a value that is not hex, say. It
                 // will refuse the transaction when it builds the blob and explain why; measuring
                 // is not the place to find that out, and reporting it from here would replace a
-                // precise message with a vague one.
+                // precise message with a vague one. InvalidJsonException is the codec's one
+                // failure type for such content (StObject wraps the FormatException, the
+                // InvalidOperationException of a value of the wrong JSON kind, and the overflow
+                // and precision failures into it); any other exception is a codec fault and is
+                // not reported as "nothing to measure".
                 return false;
             }
+        }
+
+        /// <summary>
+        /// A JSON <c>null</c> member is not a value the codec can read: it fails on it with a
+        /// <see cref="NullReferenceException"/> rather than <c>InvalidJsonException</c>, so it is
+        /// screened out here instead of being caught.
+        /// </summary>
+        private static bool HasNullMember(JsonObject memo)
+        {
+            foreach (KeyValuePair<string, JsonNode> member in memo)
+            {
+                if (member.Value is null)
+                {
+                    return true;
+                }
+            }
+
+            return false;
         }
 
         /// <summary>

@@ -434,6 +434,78 @@ namespace Xrpl.Tests.Models
             AssertNotMeasurable("x");
             AssertNotMeasurable(new List<object> { Memo(HexOf(4)), "x" });
             AssertNotMeasurable(new List<object> { Memo("not hex") });
+            AssertNotMeasurable(new List<object> { Memo("ABC") });
+            AssertNotMeasurable(new List<object> { Memo(HexOf(4), memoFormat: "zz") });
+        }
+
+        /// <summary>
+        /// Every way a member can be unserializable ends as "not measurable", not as an exception:
+        /// the codec reports them as <c>InvalidJsonException</c>, except a JSON null, which the
+        /// measurement screens out itself.
+        /// </summary>
+        [TestMethod]
+        public void TestUMembersTheCodecCannotReadAreNotMeasurable()
+        {
+            AssertNotMeasurable(new List<object>
+            {
+                new Dictionary<string, object> { { "Memo", new Dictionary<string, object> { { "MemoData", 5 } } } },
+            });
+            AssertNotMeasurable(new List<object>
+            {
+                new Dictionary<string, object> { { "Memo", new Dictionary<string, object> { { "MemoData", null } } } },
+            });
+            AssertNotMeasurable(new List<object>
+            {
+                new Dictionary<string, object>
+                {
+                    { "Memo", new Dictionary<string, object> { { "MemoData", new Dictionary<string, object>() } } },
+                },
+            });
+        }
+
+        /// <summary>
+        /// The typed model measures the same as the dictionary shape, so a caller that holds
+        /// <see cref="MemoWrapper"/>s needs no conversion and gets the same <c>n + 17</c>.
+        /// </summary>
+        [TestMethod]
+        public void TestUTypedMemosAreMeasuredLikeTheDictionaryShape()
+        {
+            foreach (int dataBytes in new[] { 10, 193, 1007 })
+            {
+                List<MemoWrapper> typed = new List<MemoWrapper>
+                {
+                    new MemoWrapper { Memo = new Xrpl.Models.Transactions.Memo { MemoData = HexOf(dataBytes), MemoFormat = TextPlainHex } },
+                };
+                List<object> dictionaries = new List<object> { Memo(HexOf(dataBytes), memoFormat: TextPlainHex) };
+
+                Assert.IsTrue(MemoRules.TryGetSerializedLength(typed, out int typedLength));
+                Assert.AreEqual(LengthOf(dictionaries), typedLength);
+            }
+
+            List<MemoWrapper> dataOnly = new List<MemoWrapper>
+            {
+                new MemoWrapper { Memo = new Xrpl.Models.Transactions.Memo { MemoData = HexOf(1019) } },
+            };
+            Assert.IsTrue(MemoRules.TryGetSerializedLength(dataOnly, out int dataOnlyLength));
+            Assert.AreEqual(MemoRules.MaxSerializedLength, dataOnlyLength, "a missing MemoType/MemoFormat is not written");
+        }
+
+        /// <summary>
+        /// The typed overload has the same "nothing to measure" answers.
+        /// </summary>
+        [TestMethod]
+        public void TestUTypedNothingToMeasureIsNotALength()
+        {
+            Assert.IsFalse(MemoRules.TryGetSerializedLength((IEnumerable<MemoWrapper>)null, out int none));
+            Assert.AreEqual(0, none);
+            Assert.IsFalse(MemoRules.TryGetSerializedLength(new List<MemoWrapper>(), out int empty));
+            Assert.AreEqual(0, empty);
+            Assert.IsFalse(MemoRules.TryGetSerializedLength(new List<MemoWrapper> { new MemoWrapper() }, out int noMemo));
+            Assert.AreEqual(0, noMemo);
+            Assert.IsFalse(MemoRules.TryGetSerializedLength(
+                new List<MemoWrapper> { new MemoWrapper { Memo = new Xrpl.Models.Transactions.Memo { MemoData = "not hex" } } },
+                out int notHex));
+            Assert.AreEqual(0, notHex);
         }
 
         private static void AssertNotMeasurable(object memos)
