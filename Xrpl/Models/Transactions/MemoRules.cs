@@ -214,16 +214,18 @@ namespace Xrpl.Models.Transactions
             {
                 serialized = StArray.FromJson(array);
             }
-            catch (InvalidJsonException)
+            catch (Exception e) when (e is InvalidJsonException || e is BinaryCodecException)
             {
                 // Content the codec cannot serialize at all - a value that is not hex, say. It
                 // will refuse the transaction when it builds the blob and explain why; measuring
                 // is not the place to find that out, and reporting it from here would replace a
-                // precise message with a vague one. InvalidJsonException is the codec's one
-                // failure type for such content (StObject wraps the FormatException, the
+                // precise message with a vague one. The codec's own failure types for such
+                // content are InvalidJsonException (StObject wraps the FormatException, the
                 // InvalidOperationException of a value of the wrong JSON kind, and the overflow
-                // and precision failures into it); any other exception is a codec fault and is
-                // not reported as "nothing to measure".
+                // and precision failures into it) and BinaryCodecException, which a nested type
+                // throws on its own - an MPT amount whose value is not a number, say - and
+                // StObject does not wrap. Nothing broader is caught: any other exception is a
+                // codec fault and is not reported as "nothing to measure".
                 return false;
             }
 
@@ -234,12 +236,13 @@ namespace Xrpl.Models.Transactions
                 length = sink.BytesLength();
                 return true;
             }
-            catch (InvalidOperationException)
+            catch (Exception e) when (e is InvalidOperationException || e is BinaryCodecException)
             {
-                // Parsing accepts a field of any size; writing it does not. BinarySerializer
-                // refuses a variable-length field past 918744 bytes with this exception, which is
-                // not wrapped like the parse failures are. Only the write is guarded, so a fault
-                // in parsing still surfaces.
+                // Parsing accepts what writing does not. BinarySerializer refuses a
+                // variable-length field past 918744 bytes with InvalidOperationException, and
+                // PathSet refuses an empty path with BinaryCodecException; neither is wrapped
+                // like the parse failures are. The two guards are separate so that each names
+                // only the types its own step throws.
                 return false;
             }
         }

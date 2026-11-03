@@ -517,6 +517,63 @@ namespace Xrpl.Tests.Models
         }
 
         /// <summary>
+        /// The codec has three failure types, not one: <c>InvalidJsonException</c> for a member it
+        /// cannot read, <c>BinaryCodecException</c> from a nested type that parses a value
+        /// itself (an MPT amount) or refuses to write one (an empty path), and
+        /// <c>InvalidOperationException</c> from the size cap. None of them is a length, and none
+        /// may escape as an exception.
+        /// </summary>
+        [TestMethod]
+        public void TestUABadMptAmountInAMemoIsNotMeasurable()
+        {
+            // Refused while parsing: a nested Amount whose MPT value is not a number.
+            List<object> badMptAmount = new List<object>
+            {
+                new Dictionary<string, object>
+                {
+                    {
+                        "Memo", new Dictionary<string, object>
+                        {
+                            {
+                                "Amount", new Dictionary<string, object>
+                                {
+                                    { "mpt_issuance_id", new string('0', 48) },
+                                    { "value", "abc" },
+                                }
+                            },
+                        }
+                    },
+                },
+            };
+
+            AssertNotMeasurable(badMptAmount);
+            MemoRules.Validate(badMptAmount);
+        }
+
+        /// <summary>
+        /// Parses, then the codec refuses it when writing: a path set holding an empty path.
+        /// </summary>
+        [TestMethod]
+        public void TestUAnEmptyPathInAMemoIsNotMeasurable()
+        {
+            List<object> emptyPath = new List<object>
+            {
+                new Dictionary<string, object>
+                {
+                    {
+                        "Memo", new Dictionary<string, object>
+                        {
+                            { "Paths", new List<object> { new List<object>() } },
+                        }
+                    },
+                },
+            };
+
+            AssertNotMeasurable(emptyPath);
+            MemoRules.Validate(emptyPath);
+        }
+
+        /// <summary>
         /// The typed model measures the same as the dictionary shape, so a caller that holds
         /// <see cref="MemoWrapper"/>s needs no conversion and gets the same <c>n + 17</c>.
         /// </summary>
