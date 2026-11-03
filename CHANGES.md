@@ -1,5 +1,9 @@
 # Changes
 
+## 11.24.0.0 03/11/2026
+
+* `AmmMath.Sqrt(decimal)` is public: the decimal square root (Newton's method, `ArgumentOutOfRangeException` for a negative value) that the pool formulas use, for consumers that compute on top of them. `AmmMath.LPTokensForSingleAssetDeposit` divides `(r - c) / (1 + c)` before multiplying by the LP token balance (rippled evaluates equation 3 in `Number`); a huge deposit into a small pool, such as 1e22 against a balance of 1 with 1e10 LP tokens, threw `OverflowException`. Results for other inputs differ at most in the last decimal digits. Tests: `TestUAmmMath.TestUAHugeDepositIntoABigPoolDoesNotOverflow`, `TestUSqrtSettlesAcrossTheDecimalRange`, `TestUAnUnbalancedTwoSidedDepositIsCreditedAtTheSmallerRatio` in `Xrpl.Tests`
+
 ## 11.23.0.0 02/11/2026
 
 * `Hashes.GetNFTokenPageOwner(pageIndex)` returns the classic address of the owner of an `NFTokenPage` from its ledger index: the high 160 bits are the owner's AccountID (rippled `keylet::nftpage_min`/`nftpage_max`; the low 96 bits come from an NFTokenID). Upper and lower case hex are accepted; a null, non-64-character or non-hex index raises `ArgumentException`. Tests: `TestUHashes.TestGetNFTokenPageOwner*` in `Xrpl.Tests`

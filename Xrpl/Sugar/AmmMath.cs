@@ -158,7 +158,9 @@ namespace Xrpl.Sugar
             decimal r = deposit / poolBalance;
             decimal c = Sqrt(f2 * f2 + r / f1) - f2;
 
-            return lpTokenBalance * (r - c) / (1m + c);
+            // The quotient goes first: rippled evaluates this in Number, which does not overflow,
+            // while decimal does when a huge deposit meets a large LP balance.
+            return lpTokenBalance * ((r - c) / (1m + c));
         }
 
         /// <summary>
@@ -507,10 +509,11 @@ namespace Xrpl.Sugar
         /// discard the precision the rest of this class keeps. The iteration is seeded from the
         /// double result, which is already close, so it converges in a handful of steps; it stops
         /// when the estimate settles or begins alternating between two neighbouring values, which
-        /// is how a decimal iteration ends when it can get no closer.
+        /// is how a decimal iteration ends when it can get no closer. Public because consumers that
+        /// compute on top of the pool formulas need the same root, at the same precision.
         /// </remarks>
         /// <exception cref="ArgumentOutOfRangeException"><paramref name="value"/> is negative.</exception>
-        internal static decimal Sqrt(decimal value)
+        public static decimal Sqrt(decimal value)
         {
             if (value < 0m)
             {

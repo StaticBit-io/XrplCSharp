@@ -451,4 +451,54 @@ public class TestUAmmMath
         Assert.AreEqual(0m, AmmMath.LPTokensForSingleAssetDeposit(100m, 0m, 100m, 1000));
         Assert.AreEqual(0m, AmmMath.LPTokensForSingleAssetWithdraw(100m, 0m, 100m, 1000));
     }
+
+    /// <summary>
+    /// Equation 3 multiplies the LP token balance by a ratio near the deposit-to-pool ratio, so a
+    /// huge deposit into a tiny pool must be divided down before it meets a large balance.
+    /// </summary>
+    [TestMethod]
+    public void TestUAHugeDepositIntoABigPoolDoesNotOverflow()
+    {
+        Assert.IsTrue(AmmMath.LPTokensForSingleAssetDeposit(1m, 1e22m, 1e10m, 0) > 0m);
+    }
+
+    /// <summary>
+    /// The node credits a two-sided deposit at the smaller of the two ratios and leaves the
+    /// surplus of the other asset with the depositor.
+    /// </summary>
+    [TestMethod]
+    public void TestUAnUnbalancedTwoSidedDepositIsCreditedAtTheSmallerRatio()
+    {
+        Assert.AreEqual(100m, AmmMath.LPTokensForProportionalDeposit(1000m, 1000m, 100m, 200m, 1000m));
+    }
+
+    /// <summary>
+    /// The square root must finish at every magnitude a decimal can hold, including the two
+    /// extremes where the seed from <see cref="Math.Sqrt"/> is least helpful.
+    /// </summary>
+    [TestMethod]
+    [Timeout(2000)]
+    public void TestUSqrtSettlesAcrossTheDecimalRange()
+    {
+        for (int k = -28; k <= 28; k++)
+        {
+            decimal value = 1m;
+            for (int i = 0; i < Math.Abs(k); i++)
+            {
+                value = k < 0 ? value / 10m : value * 10m;
+            }
+
+            decimal root = AmmMath.Sqrt(value);
+            Assert.IsTrue(root > 0m, $"sqrt(1e{k}) is not positive: {root}");
+
+            if (value >= 1e-8m && value <= 1e28m)
+            {
+                Assert.IsTrue(
+                    Math.Abs(root * root - value) <= value * 1e-20m,
+                    $"sqrt(1e{k}) = {root} squares to {root * root}");
+            }
+        }
+
+        Assert.IsTrue(AmmMath.Sqrt(decimal.MaxValue) > 0m);
+    }
 }
