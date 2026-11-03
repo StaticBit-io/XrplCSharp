@@ -96,8 +96,7 @@ namespace Xrpl.Models.Transactions
                 return;
             }
 
-            int length = SerializedLength(array);
-            if (length < 0)
+            if (!TryMeasure(array, out int length))
             {
                 return;
             }
@@ -112,22 +111,83 @@ namespace Xrpl.Models.Transactions
         }
 
         /// <summary>
-        /// Measures the <c>Memos</c> array the way the node measures it.
+        /// Measures a <c>Memos</c> array the way the node measures it, so a caller can show how much
+        /// room is left before the limit instead of finding out when signing is refused.
         /// </summary>
+        /// <param name="memos">
+        /// The value of the transaction's <c>Memos</c> field: a collection of <c>{ "Memo": { ... } }</c>
+        /// elements (or the equivalent JSON array), the shape <see cref="Validate"/> accepts.
+        /// </param>
+        /// <param name="length">
+        /// The length in bytes of the array as it would be serialized in the transaction, to compare
+        /// with <see cref="MaxSerializedLength"/>; <c>0</c> when the method returns <c>false</c>.
+        /// </param>
+        /// <returns>
+        /// <c>false</c> when there is nothing to measure: <paramref name="memos"/> is <c>null</c>, not
+        /// an array, empty, holds an element that is not a <c>Memo</c> object, or holds content the
+        /// binary codec cannot serialize (a value that is not hex, say).
+        /// </returns>
         /// <remarks>
-        /// rippled serializes the array with <c>STArray::add</c>, which writes each element as its
-        /// object start marker, the fields, and the object end marker - the array's own markers are
-        /// not part of the length it then compares. <see cref="StArray.ToBytes"/> writes exactly
-        /// that, which is why the measurement is taken here rather than reimplemented.
+        /// <para>
+        /// This is the figure <see cref="Validate"/> compares with the limit, so a form and the
+        /// signing check cannot disagree. rippled serializes the array with <c>STArray::add</c>:
+        /// each element is its object start marker, the fields, and the object end marker; the
+        /// array's own markers are not part of the length it compares.
+        /// </para>
+        /// <para>
+        /// Each field costs one byte of field id plus its length prefix (one byte up to 192 bytes,
+        /// two up to 12480) plus the value. A memo costs two more for its start and end markers. A
+        /// single memo of <c>n</c> bytes of <c>MemoData</c> with a ten-byte <c>MemoFormat</c> such as
+        /// <c>text/plain</c> and no <c>MemoType</c> therefore measures <c>n + 17</c> once <c>n</c> is
+        /// 193 or more, and a memo of data alone measures <c>n + 5</c> (<c>n + 4</c> below 193, where
+        /// the length prefix is one byte).
+        /// </para>
         /// </remarks>
-        private static int SerializedLength(JsonArray array)
+        public static bool TryGetSerializedLength(object memos, out int length)
         {
+            length = 0;
+            if (memos is null)
+            {
+                return false;
+            }
+
+            JsonNode node;
+            try
+            {
+                node = memos as JsonNode ?? JsonSerializer.SerializeToNode(memos, XrplJsonOptions.Default);
+            }
+            catch (Exception)
+            {
+                // A value System.Text.Json cannot turn into a node is not a Memos array.
+                return false;
+            }
+
+            return node is JsonArray array && TryMeasure(array, out length);
+        }
+
+        private static bool TryMeasure(JsonArray array, out int length)
+        {
+            length = 0;
+            if (array.Count == 0)
+            {
+                return false;
+            }
+
+            foreach (JsonNode element in array)
+            {
+                if (TryUnwrapMemo(element) is null)
+                {
+                    return false;
+                }
+            }
+
             try
             {
                 StArray serialized = StArray.FromJson(array);
                 BytesList sink = new BytesList();
                 serialized.ToBytes(sink);
-                return sink.BytesLength();
+                length = sink.BytesLength();
+                return true;
             }
             catch (Exception)
             {
@@ -135,7 +195,7 @@ namespace Xrpl.Models.Transactions
                 // will refuse the transaction when it builds the blob and explain why; measuring
                 // is not the place to find that out, and reporting it from here would replace a
                 // precise message with a vague one.
-                return -1;
+                return false;
             }
         }
 

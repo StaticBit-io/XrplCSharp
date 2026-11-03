@@ -337,5 +337,109 @@ namespace Xrpl.Tests.Models
 
             StringAssert.Contains(error.Message, $"{MemoRules.MaxSerializedLength + 1} bytes");
         }
+
+        /// <summary>
+        /// "text/plain" as hex: the <c>MemoFormat</c> a form that sends text puts beside the data.
+        /// </summary>
+        private const string TextPlainHex = "746578742F706C61696E";
+
+        private static int LengthOf(object memos)
+        {
+            Assert.IsTrue(MemoRules.TryGetSerializedLength(memos, out int length), "the array must be measurable");
+            return length;
+        }
+
+        /// <summary>
+        /// The public measurement agrees with the check: a data-only memo fills the limit at 1019 bytes.
+        /// </summary>
+        [TestMethod]
+        public void TestUOneMemoOfDataOnlyFillsTheLimitAt1019Bytes()
+        {
+            List<object> atTheLimit = new List<object> { Memo(HexOf(1019)) };
+            List<object> justOver = new List<object> { Memo(HexOf(1020)) };
+
+            Assert.AreEqual(MemoRules.MaxSerializedLength, LengthOf(atTheLimit));
+            MemoRules.Validate(atTheLimit);
+
+            Assert.AreEqual(MemoRules.MaxSerializedLength + 1, LengthOf(justOver));
+            Assert.ThrowsExactly<ValidationException>(() => MemoRules.Validate(justOver));
+        }
+
+        /// <summary>
+        /// A caller adding the fixed overhead of a plain-text memo (17 bytes) gets the same answer
+        /// as the measurement.
+        /// </summary>
+        [TestMethod]
+        public void TestUAPlainTextMemoFillsTheLimitAt1007Bytes()
+        {
+            List<object> atTheLimit = new List<object> { Memo(HexOf(1007), memoFormat: TextPlainHex) };
+            List<object> justOver = new List<object> { Memo(HexOf(1008), memoFormat: TextPlainHex) };
+
+            Assert.AreEqual(MemoRules.MaxSerializedLength, LengthOf(atTheLimit));
+            MemoRules.Validate(atTheLimit);
+
+            Assert.AreEqual(MemoRules.MaxSerializedLength + 1, LengthOf(justOver));
+            Assert.ThrowsExactly<ValidationException>(() => MemoRules.Validate(justOver));
+        }
+
+        /// <summary>
+        /// The overhead is constant from 193 bytes of data on (two length bytes), so
+        /// <c>n + 17</c> holds across that range.
+        /// </summary>
+        [TestMethod]
+        public void TestUAPlainTextMemoCostsItsDataPlus17Bytes()
+        {
+            foreach (int dataBytes in new[] { 193, 500, 1007 })
+            {
+                Assert.AreEqual(
+                    dataBytes + 17,
+                    LengthOf(new List<object> { Memo(HexOf(dataBytes), memoFormat: TextPlainHex) }));
+            }
+        }
+
+        /// <summary>
+        /// The limit is on the array as a whole, so the lengths of several memos add up.
+        /// </summary>
+        [TestMethod]
+        public void TestUSeveralMemosAreMeasuredAsOneArray()
+        {
+            int one = LengthOf(new List<object> { Memo(HexOf(300)) });
+            int two = LengthOf(new List<object> { Memo(HexOf(300)), Memo(HexOf(300)) });
+
+            Assert.AreEqual(one * 2, two);
+        }
+
+        /// <summary>
+        /// An already-built JSON array is measured as the same value as the typed collection.
+        /// </summary>
+        [TestMethod]
+        public void TestUAJsonArrayIsMeasuredLikeTheCollectionItCameFrom()
+        {
+            List<object> memos = new List<object> { Memo(HexOf(40), "AB", TextPlainHex) };
+            System.Text.Json.Nodes.JsonNode node =
+                System.Text.Json.JsonSerializer.SerializeToNode(memos, Xrpl.Client.Json.XrplJsonOptions.Default);
+
+            Assert.AreEqual(LengthOf(memos), LengthOf(node));
+        }
+
+        /// <summary>
+        /// Nothing to measure is not a length of zero: the caller must be able to tell them apart.
+        /// </summary>
+        [TestMethod]
+        public void TestUNothingToMeasureIsNotALength()
+        {
+            AssertNotMeasurable(null);
+            AssertNotMeasurable(new List<object>());
+            AssertNotMeasurable(new List<object> { "x" });
+            AssertNotMeasurable("x");
+            AssertNotMeasurable(new List<object> { Memo(HexOf(4)), "x" });
+            AssertNotMeasurable(new List<object> { Memo("not hex") });
+        }
+
+        private static void AssertNotMeasurable(object memos)
+        {
+            Assert.IsFalse(MemoRules.TryGetSerializedLength(memos, out int length));
+            Assert.AreEqual(0, length, "length is zero whenever there is no measurement");
+        }
     }
 }
