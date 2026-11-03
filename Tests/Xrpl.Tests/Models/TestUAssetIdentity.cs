@@ -14,7 +14,7 @@ namespace XrplTests.Xrpl.Models
         private const string UsdIssuer = "rN7n7otQDd6FczFgLdSqtcsAUxDkw6fzRH";
         private const string EurIssuer = "rMxCKbEDwqr76QuheSUMdEGf4B9xJ8m5De";
 
-        [DataTestMethod]
+        [TestMethod]
         [DataRow(null, false)]
         [DataRow("", false)]
         [DataRow("XRP", false)]
@@ -129,7 +129,7 @@ namespace XrplTests.Xrpl.Models
                 "58504d00000000000000000000000000000000ab", UsdIssuer));
         }
 
-        [DataTestMethod]
+        [TestMethod]
         [DataRow("XRP", true)]
         [DataRow("xrp", false)]
         [DataRow("Xrp", false)]

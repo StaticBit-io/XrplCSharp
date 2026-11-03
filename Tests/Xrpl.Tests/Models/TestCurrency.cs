@@ -4,6 +4,7 @@ using System.Globalization;
 
 using System;
 
+using Xrpl.Amounts;
 using Xrpl.Client.Exceptions;
 using Xrpl.Models.Common;
 using Xrpl.Models.Transactions;
@@ -602,6 +603,22 @@ namespace XrplTests.Xrpl.Models
         public void IsXrp_MixedCaseXrp_ReturnsFalse()
         {
             Assert.IsFalse(new Currency { CurrencyCode = "Xrp" }.IsXrp());
+        }
+
+        [TestMethod]
+        public void FromCurrency_LowercaseXrpWithoutIssuer_KeepsTheCodeAndIsStillXrpKind()
+        {
+            // Malformed input: the code is no longer normalized to "XRP", but the kind comes from
+            // IssuedCurrency.IsXrp(), which looks only at the issuer and the MPT id.
+            XrplAmount amount = XrplAmount.FromCurrency(new Currency { CurrencyCode = "xrp", Value = "1000000" });
+
+            Assert.AreEqual("xrp", amount.Asset.Currency);
+            Assert.IsNull(amount.Asset.Issuer);
+            Assert.AreEqual(AmountKind.Xrp, amount.Kind);
+
+            XrplAmount native = XrplAmount.FromCurrency(new Currency { CurrencyCode = "XRP", Value = "1000000" });
+            Assert.AreEqual("XRP", native.Asset.Currency);
+            Assert.AreEqual(AmountKind.Xrp, native.Kind);
         }
 
         [TestMethod]

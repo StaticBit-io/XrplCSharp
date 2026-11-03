@@ -423,8 +423,10 @@ public static class CurrencyExtensions
     /// </summary>
     /// <remarks>
     /// The comparison is ordinal because the ledger only refuses an IOU with the exact code "XRP"
-    /// (<c>temBAD_CURRENCY</c>): "xrp" and "Xrp" are legal issued currencies, distinct from native XRP.
-    /// Before 11.24.0.0 the code was upper-cased first, so such an IOU was reported as XRP.
+    /// (<c>temBAD_CURRENCY</c>): "xrp" and "Xrp" are legal issued currency codes, distinct from native XRP.
+    /// An issued currency always has an issuer, so a legal IOU was never reported as XRP; what changed in
+    /// 11.24.0.0 is that a currency with the code "xrp" or "Xrp" and no issuer (malformed input) used to be
+    /// reported as XRP because the code was upper-cased first, and now is not.
     /// </remarks>
     /// <param name="currency">The currency to check.</param>
     /// <returns><c>true</c> if this currency is XRP; otherwise, <c>false</c>.</returns>
