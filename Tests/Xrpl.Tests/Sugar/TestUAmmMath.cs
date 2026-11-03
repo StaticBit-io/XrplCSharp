@@ -453,8 +453,9 @@ public class TestUAmmMath
     }
 
     /// <summary>
-    /// Equation 3 multiplies the LP token balance by a ratio near the deposit-to-pool ratio, so a
-    /// huge deposit into a tiny pool must be divided down before it meets a large balance.
+    /// Equation 3 multiplies the LP token balance by a ratio near the deposit-to-pool ratio, and the
+    /// multiply-first product of a huge deposit into a tiny pool overflows <see cref="decimal"/>; only
+    /// then is the ratio divided down before it meets the balance.
     /// </summary>
     [TestMethod]
     public void TestUAHugeDepositIntoATinyPoolDoesNotOverflow()
