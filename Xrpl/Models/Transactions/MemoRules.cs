@@ -2,8 +2,8 @@ using System;
 using System.Collections.Generic;
 using System.Text.Json;
 using System.Text.Json.Nodes;
+using System.Threading;
 
-using Xrpl.BinaryCodec;
 using Xrpl.BinaryCodec.Binary;
 using Xrpl.BinaryCodec.Types;
 using Xrpl.Client.Exceptions;
@@ -202,85 +202,45 @@ namespace Xrpl.Models.Transactions
 
             foreach (JsonNode element in array)
             {
-                JsonObject memo = TryUnwrapMemo(element);
-                if (memo is null || HasNullMember(memo))
+                if (TryUnwrapMemo(element) is null)
                 {
                     return false;
                 }
             }
 
-            StArray serialized;
             try
             {
-                serialized = StArray.FromJson(array);
-            }
-            catch (Exception e) when (e is InvalidJsonException || e is BinaryCodecException)
-            {
-                // Content the codec cannot serialize at all - a value that is not hex, say. It
-                // will refuse the transaction when it builds the blob and explain why; measuring
-                // is not the place to find that out, and reporting it from here would replace a
-                // precise message with a vague one. The codec's own failure types for such
-                // content are InvalidJsonException (StObject wraps the FormatException, the
-                // InvalidOperationException of a value of the wrong JSON kind, and the overflow
-                // and precision failures into it) and BinaryCodecException, which a nested type
-                // throws on its own - an MPT amount whose value is not a number, say - and
-                // StObject does not wrap. Nothing broader is caught: any other exception is a
-                // codec fault and is not reported as "nothing to measure".
-                return false;
-            }
-
-            try
-            {
+                StArray serialized = StArray.FromJson(array);
                 BytesList sink = new BytesList();
                 serialized.ToBytes(sink);
                 length = sink.BytesLength();
                 return true;
             }
-            catch (Exception e) when (e is InvalidOperationException || e is BinaryCodecException)
+            catch (Exception e) when (!IsCritical(e))
             {
-                // Parsing accepts what writing does not. BinarySerializer refuses a
-                // variable-length field past 918744 bytes with InvalidOperationException, and
-                // PathSet refuses an empty path with BinaryCodecException; neither is wrapped
-                // like the parse failures are. The two guards are separate so that each names
-                // only the types its own step throws.
+                // The content is arbitrary user or JSON input, and the codec's failures on it come
+                // in several unrelated types (InvalidJsonException, BinaryCodecException,
+                // ArgumentException for a buffer of the wrong length, KeyNotFoundException for an
+                // unknown enum name, NullReferenceException for a JSON null, InvalidOperationException
+                // past the size cap, ...), so no list of them stays complete. Any of them means there
+                // is no length to report. Nothing is hidden by answering false: building the
+                // transaction runs the same codec on the same content, so a codec fault still
+                // surfaces there, with the codec's own message.
+                length = 0;
                 return false;
             }
         }
 
         /// <summary>
-        /// A JSON <c>null</c> anywhere in the memo's subtree is not a value the codec can read: it
-        /// fails on it with a <see cref="NullReferenceException"/> rather than
-        /// <c>InvalidJsonException</c>, so it is screened out here instead of being caught.
+        /// Failures that say nothing about the input and must not be turned into "nothing to measure".
         /// </summary>
-        private static bool HasNullMember(JsonNode node)
+        private static bool IsCritical(Exception e)
         {
-            switch (node)
-            {
-                case null:
-                    return true;
-                case JsonObject obj:
-                    foreach (KeyValuePair<string, JsonNode> member in obj)
-                    {
-                        if (HasNullMember(member.Value))
-                        {
-                            return true;
-                        }
-                    }
-
-                    return false;
-                case JsonArray array:
-                    foreach (JsonNode item in array)
-                    {
-                        if (HasNullMember(item))
-                        {
-                            return true;
-                        }
-                    }
-
-                    return false;
-                default:
-                    return false;
-            }
+            return e is OutOfMemoryException
+                || e is StackOverflowException
+                || e is AccessViolationException
+                || e is ThreadAbortException
+                || e is ThreadInterruptedException;
         }
 
         /// <summary>

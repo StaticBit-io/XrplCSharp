@@ -439,9 +439,8 @@ namespace Xrpl.Tests.Models
         }
 
         /// <summary>
-        /// Every way a member can be unserializable ends as "not measurable", not as an exception:
-        /// the codec reports them as <c>InvalidJsonException</c>, except a JSON null, which the
-        /// measurement screens out itself.
+        /// Every way a member can be unserializable ends as "not measurable", not as an exception,
+        /// whichever type the codec fails with.
         /// </summary>
         [TestMethod]
         public void TestUMembersTheCodecCannotReadAreNotMeasurable()
@@ -464,8 +463,8 @@ namespace Xrpl.Tests.Models
         }
 
         /// <summary>
-        /// A JSON null below the memo's direct members still reaches the codec's own
-        /// <see cref="NullReferenceException"/>, so the screen has to cover the whole subtree.
+        /// A JSON null below the memo's direct members fails inside the codec with its own
+        /// <see cref="NullReferenceException"/>; that is "not measurable" too.
         /// </summary>
         [TestMethod]
         public void TestUANullDeeperInAMemoIsNotMeasurable()
@@ -517,11 +516,8 @@ namespace Xrpl.Tests.Models
         }
 
         /// <summary>
-        /// The codec has three failure types, not one: <c>InvalidJsonException</c> for a member it
-        /// cannot read, <c>BinaryCodecException</c> from a nested type that parses a value
-        /// itself (an MPT amount) or refuses to write one (an empty path), and
-        /// <c>InvalidOperationException</c> from the size cap. None of them is a length, and none
-        /// may escape as an exception.
+        /// Refused while parsing by a nested type that reads the value itself: not a length, and not
+        /// an exception either.
         /// </summary>
         [TestMethod]
         public void TestUABadMptAmountInAMemoIsNotMeasurable()
@@ -616,6 +612,56 @@ namespace Xrpl.Tests.Models
                 new List<MemoWrapper> { new MemoWrapper { Memo = new Xrpl.Models.Transactions.Memo { MemoData = "not hex" } } },
                 out int notHex));
             Assert.AreEqual(0, notHex);
+        }
+
+        /// <summary>
+        /// Memo elements the codec fails on, keyed by what is wrong with them. The failures come
+        /// from different parts of the codec in unrelated exception types, which is why the
+        /// measurement does not list the types it expects.
+        /// </summary>
+        private static readonly Dictionary<string, string> MemosTheCodecFailsOn = new Dictionary<string, string>
+        {
+            ["amount value not a number"] =
+                "{\"Memo\":{\"Amount\":{\"value\":\"abc\",\"currency\":\"USD\",\"issuer\":\"rHb9CJAWyB4rj91VRWn96DkukG4bwdtyTh\"}}}",
+            ["hash of the wrong length"] = "{\"Memo\":{\"LedgerHash\":\"AB\"}}",
+            ["currency of the wrong length"] = "{\"Memo\":{\"TakerPaysCurrency\":\"AB\"}}",
+            ["hash in a vector of the wrong length"] = "{\"Memo\":{\"Hashes\":[\"AB\"]}}",
+            ["MPT issuance id of the wrong length"] = "{\"Memo\":{\"Amount\":{\"mpt_issuance_id\":\"AB\",\"value\":\"1\"}}}",
+            ["unknown transaction type"] = "{\"Memo\":{\"TransactionType\":\"Nope\"}}",
+            ["empty path in a path set"] = "{\"Memo\":{\"Paths\":[[]]}}",
+            ["MPT amount value not a number"] =
+                "{\"Memo\":{\"Amount\":{\"mpt_issuance_id\":\"" + new string('0', 48) + "\",\"value\":\"abc\"}}}",
+            ["field past the serializer cap"] = "{\"Memo\":{\"MemoData\":\"" + HexOf(918_745) + "\"}}",
+            ["null member"] = "{\"Memo\":{\"MemoData\":null}}",
+            ["null in a nested object"] = "{\"Memo\":{\"Memo\":{\"MemoData\":null}}}",
+            ["null in a nested array"] = "{\"Memo\":{\"Memos\":[null]}}",
+        };
+
+        public static IEnumerable<object[]> MemosTheCodecFailsOnNames()
+        {
+            foreach (string name in MemosTheCodecFailsOn.Keys)
+            {
+                yield return new object[] { name };
+            }
+        }
+
+        /// <summary>
+        /// Whatever the codec throws on a memo's content, the measurement answers "nothing to
+        /// measure" and <see cref="MemoRules.Validate"/> stays quiet: the codec reports the cause
+        /// when the transaction is built.
+        /// </summary>
+        /// <remarks>
+        /// Rows are named rather than carrying the JSON, so the 1.8 MB row does not become a test name.
+        /// </remarks>
+        [TestMethod]
+        [DynamicData(nameof(MemosTheCodecFailsOnNames))]
+        public void TestUContentTheCodecFailsOnIsNotMeasurable(string failure)
+        {
+            System.Text.Json.Nodes.JsonNode memos =
+                System.Text.Json.Nodes.JsonNode.Parse("[" + MemosTheCodecFailsOn[failure] + "]");
+
+            AssertNotMeasurable(memos);
+            MemoRules.Validate(memos);
         }
 
         private static void AssertNotMeasurable(object memos)
