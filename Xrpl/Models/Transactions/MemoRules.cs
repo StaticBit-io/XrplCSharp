@@ -209,13 +209,10 @@ namespace Xrpl.Models.Transactions
                 }
             }
 
+            StArray serialized;
             try
             {
-                StArray serialized = StArray.FromJson(array);
-                BytesList sink = new BytesList();
-                serialized.ToBytes(sink);
-                length = sink.BytesLength();
-                return true;
+                serialized = StArray.FromJson(array);
             }
             catch (InvalidJsonException)
             {
@@ -229,24 +226,58 @@ namespace Xrpl.Models.Transactions
                 // not reported as "nothing to measure".
                 return false;
             }
+
+            try
+            {
+                BytesList sink = new BytesList();
+                serialized.ToBytes(sink);
+                length = sink.BytesLength();
+                return true;
+            }
+            catch (InvalidOperationException)
+            {
+                // Parsing accepts a field of any size; writing it does not. BinarySerializer
+                // refuses a variable-length field past 918744 bytes with this exception, which is
+                // not wrapped like the parse failures are. Only the write is guarded, so a fault
+                // in parsing still surfaces.
+                return false;
+            }
         }
 
         /// <summary>
-        /// A JSON <c>null</c> member is not a value the codec can read: it fails on it with a
-        /// <see cref="NullReferenceException"/> rather than <c>InvalidJsonException</c>, so it is
-        /// screened out here instead of being caught.
+        /// A JSON <c>null</c> anywhere in the memo's subtree is not a value the codec can read: it
+        /// fails on it with a <see cref="NullReferenceException"/> rather than
+        /// <c>InvalidJsonException</c>, so it is screened out here instead of being caught.
         /// </summary>
-        private static bool HasNullMember(JsonObject memo)
+        private static bool HasNullMember(JsonNode node)
         {
-            foreach (KeyValuePair<string, JsonNode> member in memo)
+            switch (node)
             {
-                if (member.Value is null)
-                {
+                case null:
                     return true;
-                }
-            }
+                case JsonObject obj:
+                    foreach (KeyValuePair<string, JsonNode> member in obj)
+                    {
+                        if (HasNullMember(member.Value))
+                        {
+                            return true;
+                        }
+                    }
 
-            return false;
+                    return false;
+                case JsonArray array:
+                    foreach (JsonNode item in array)
+                    {
+                        if (HasNullMember(item))
+                        {
+                            return true;
+                        }
+                    }
+
+                    return false;
+                default:
+                    return false;
+            }
         }
 
         /// <summary>

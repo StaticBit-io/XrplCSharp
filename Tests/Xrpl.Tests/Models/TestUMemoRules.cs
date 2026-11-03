@@ -464,6 +464,59 @@ namespace Xrpl.Tests.Models
         }
 
         /// <summary>
+        /// A JSON null below the memo's direct members still reaches the codec's own
+        /// <see cref="NullReferenceException"/>, so the screen has to cover the whole subtree.
+        /// </summary>
+        [TestMethod]
+        public void TestUANullDeeperInAMemoIsNotMeasurable()
+        {
+            List<object> nullInNestedObject = new List<object>
+            {
+                new Dictionary<string, object>
+                {
+                    {
+                        "Memo", new Dictionary<string, object>
+                        {
+                            { "Memo", new Dictionary<string, object> { { "MemoData", null } } },
+                        }
+                    },
+                },
+            };
+            List<object> nullInNestedArray = new List<object>
+            {
+                new Dictionary<string, object>
+                {
+                    { "Memo", new Dictionary<string, object> { { "Memos", new List<object> { null } } } },
+                },
+            };
+
+            AssertNotMeasurable(nullInNestedObject);
+            AssertNotMeasurable(nullInNestedArray);
+            MemoRules.Validate(nullInNestedObject);
+            MemoRules.Validate(nullInNestedArray);
+        }
+
+        /// <summary>
+        /// A field past the serializer's own cap parses, then fails when written. That is not a
+        /// length and not an exception either: the codec reports the real cause when the blob is built.
+        /// </summary>
+        [TestMethod]
+        public void TestUAMemoFieldPastTheSerializerCapIsNotMeasurable()
+        {
+            const int OverTheCap = 918_745;
+            List<object> dictionaries = new List<object> { Memo(HexOf(OverTheCap)) };
+            List<MemoWrapper> typed = new List<MemoWrapper>
+            {
+                new MemoWrapper { Memo = new Xrpl.Models.Transactions.Memo { MemoData = HexOf(OverTheCap) } },
+            };
+
+            AssertNotMeasurable(dictionaries);
+            Assert.IsFalse(MemoRules.TryGetSerializedLength(typed, out int typedLength));
+            Assert.AreEqual(0, typedLength);
+            MemoRules.Validate(dictionaries);
+        }
+
+        /// <summary>
         /// The typed model measures the same as the dictionary shape, so a caller that holds
         /// <see cref="MemoWrapper"/>s needs no conversion and gets the same <c>n + 17</c>.
         /// </summary>
