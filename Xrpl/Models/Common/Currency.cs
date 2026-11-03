@@ -2,6 +2,7 @@ using System.Text.Json.Serialization;
 
 using System;
 using System.Globalization;
+using Xrpl.Amounts;
 using Xrpl.Client.Exceptions;
 using System.Linq;
 using System.Text;
@@ -191,35 +192,8 @@ public class Currency
     /// Reached only when rounding would carry the value past <see cref="decimal.MaxValue"/>.
     /// Truncating cannot: dropping digits only ever moves a number toward zero.
     /// </remarks>
-    private static decimal TruncateToLedgerPrecision(decimal value)
-    {
-        if (value == 0m)
-        {
-            return 0m;
-        }
-
-        int magnitude = (int)Math.Floor(Math.Log10((double)Math.Abs(value)));
-        int digitsToDrop = magnitude - (LedgerSignificantDigits - 1);
-
-        if (digitsToDrop <= 0)
-        {
-            return value;
-        }
-
-        decimal scale = 1m;
-        for (int i = 0; i < digitsToDrop; i++)
-        {
-            scale *= 10m;
-        }
-
-        return Math.Truncate(value / scale) * scale;
-    }
-
-    /// <summary>
-    /// How many significant digits an issued-currency amount carries on the ledger.
-    /// </summary>
-    /// <remarks>rippled's <c>STAmount</c> normalises the mantissa into <c>[1e15, 1e16)</c>.</remarks>
-    private const int LedgerSignificantDigits = 16;
+    private static decimal TruncateToLedgerPrecision(decimal value) =>
+        LedgerAmountGrid.RoundDown(value, isXrp: false);
 
     /// <summary>
     /// XRP token amount (non drops value)
