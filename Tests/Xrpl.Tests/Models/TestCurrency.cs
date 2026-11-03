@@ -592,6 +592,19 @@ namespace XrplTests.Xrpl.Models
         }
 
         [TestMethod]
+        public void IsXrp_LowercaseXrpWithoutIssuer_ReturnsFalse()
+        {
+            // A lowercase "xrp" IOU is legal on the ledger; only the exact code "XRP" is reserved.
+            Assert.IsFalse(new Currency { CurrencyCode = "xrp" }.IsXrp());
+        }
+
+        [TestMethod]
+        public void IsXrp_MixedCaseXrp_ReturnsFalse()
+        {
+            Assert.IsFalse(new Currency { CurrencyCode = "Xrp" }.IsXrp());
+        }
+
+        [TestMethod]
         public void IsLpToken_LpCurrencyCode_ReturnsTrue()
         {
             Currency currency = new Currency

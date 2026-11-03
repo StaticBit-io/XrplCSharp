@@ -419,12 +419,17 @@ public static class CurrencyExtensions
 
     /// <summary>
     /// Determines whether this currency represents XRP.
-    /// A currency is XRP if its code (case-insensitive) is "XRP" and it has no issuer.
+    /// A currency is XRP if its code is exactly "XRP" (case-sensitive) and it has no issuer.
     /// </summary>
+    /// <remarks>
+    /// The comparison is ordinal because the ledger only refuses an IOU with the exact code "XRP"
+    /// (<c>temBAD_CURRENCY</c>): "xrp" and "Xrp" are legal issued currencies, distinct from native XRP.
+    /// Before 11.24.0.0 the code was upper-cased first, so such an IOU was reported as XRP.
+    /// </remarks>
     /// <param name="currency">The currency to check.</param>
     /// <returns><c>true</c> if this currency is XRP; otherwise, <c>false</c>.</returns>
     public static bool IsXrp(this Currency currency)
-        => currency is not null && currency.CurrencyCode?.ToUpper() is "XRP" && currency.Issuer == null;
+        => currency is not null && AssetIdentity.IsXrp(currency.CurrencyCode) && currency.Issuer == null;
 
     /// <summary>
     /// The asset of this amount, without its value: currency code and issuer, or the MPT issuance ID.
