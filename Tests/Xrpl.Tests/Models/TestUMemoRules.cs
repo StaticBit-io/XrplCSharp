@@ -664,6 +664,31 @@ namespace Xrpl.Tests.Models
             MemoRules.Validate(memos);
         }
 
+        private sealed class MemoWithAThrowingGetter
+        {
+            public string MemoData => throw new InvalidOperationException("getter fails");
+        }
+
+        /// <summary>
+        /// An object System.Text.Json cannot convert to JSON never reaches the codec; the
+        /// measurement answers "nothing to measure" for it as well, whatever the serializer throws.
+        /// </summary>
+        [TestMethod]
+        public void TestUAnObjectTheSerializerCannotConvertIsNotMeasurable()
+        {
+            // System.Text.Json refuses a NaN double with ArgumentException.
+            AssertNotMeasurable(new List<object>
+            {
+                new Dictionary<string, object> { { "Memo", new Dictionary<string, object> { { "MemoData", double.NaN } } } },
+            });
+
+            // A getter's own exception passes through the serializer unwrapped.
+            AssertNotMeasurable(new List<object>
+            {
+                new Dictionary<string, object> { { "Memo", new MemoWithAThrowingGetter() } },
+            });
+        }
+
         private static void AssertNotMeasurable(object memos)
         {
             Assert.IsFalse(MemoRules.TryGetSerializedLength(memos, out int length));

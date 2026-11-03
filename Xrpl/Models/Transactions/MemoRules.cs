@@ -130,7 +130,10 @@ namespace Xrpl.Models.Transactions
         /// <returns>
         /// <c>false</c> when there is nothing to measure: <paramref name="memos"/> is <c>null</c>, not
         /// an array, empty, holds an element that is not a <c>Memo</c> object, or holds content the
-        /// binary codec cannot serialize (a value that is not hex, say).
+        /// binary codec cannot serialize (a value that is not hex, say), or is an object
+        /// <c>System.Text.Json</c> cannot convert to JSON (a <c>double.NaN</c> value, a getter that
+        /// throws). The method throws nothing but critical runtime failures such as
+        /// <see cref="OutOfMemoryException"/>.
         /// </returns>
         /// <remarks>
         /// <para>
@@ -161,10 +164,13 @@ namespace Xrpl.Models.Transactions
             {
                 node = memos as JsonNode ?? JsonSerializer.SerializeToNode(memos, XrplJsonOptions.Default);
             }
-            catch (Exception e) when (e is JsonException || e is NotSupportedException)
+            catch (Exception e) when (!IsCritical(e))
             {
-                // A value System.Text.Json cannot turn into a node is not a Memos array. Anything
-                // else - a getter that throws, say - is a bug in the caller's type and surfaces.
+                // A value System.Text.Json cannot turn into a node is not a Memos array. Like the
+                // codec, the serializer fails on the caller's object in unrelated types (a NaN
+                // double: ArgumentException; a throwing getter or duplicate names:
+                // InvalidOperationException; a custom converter: whatever it throws), so the
+                // same guard applies and a Try* method throws only critical failures.
                 return false;
             }
 
