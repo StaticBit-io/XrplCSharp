@@ -10,7 +10,8 @@
 * `LedgerBinaryConverter`, `TransactionRequestConverter` and `TransactionResponseConverter` find the member that picks the type through a copy of the reader (`JsonMemberReader`, internal) and deserialize from the reader they were given, instead of a `JsonDocument`, `GetRawText` and a second parse. `LOConverter.GetBaseRippleLO` reads the `JsonElement` straight into the model. Tests: `TestUJsonMemberReader`
 * **Behaviour change:** a `tx_json` or `ledger` value that is not an object fails with `JsonException` from the model, not `InvalidOperationException` from `TryGetProperty`. The `JsonException` inside `Cannot read X` carries positions in the outer document, not the nested string
 * `B58.DivMod256` and `DivMod58` take `byte[]`; `HashUtils.DoubleDigest` uses one disposed `SHA256` for both rounds, and `HashUtils.Sha256` is gone. `Xrpl.AddressCodec` is 11.25.0.0. Tests: `TestUInnerTxId`
-* `SubmitSugar` looks up the sponsorship that decides whether a sponsor must sign by the transaction's initiator, the `Delegate` when there is one, as rippled does; it used the `Account`. Tests: `TestUSponsorSignatureRequired`
+* `SubmitSugar` looks up the sponsorship that decides whether a sponsor must sign by the transaction's initiator, the `Delegate` when there is one, as rippled does; it used the `Account`, and it reads every page of `account_objects`, not the first. Tests: `TestUSponsorSignatureRequired`
+* The loan a payment quote leaves (`LoanAfter`) keeps `Sponsor`. Tests: `TestULoanPaymentProjection`
 
 ## 11.24.0.0 03/11/2026
 

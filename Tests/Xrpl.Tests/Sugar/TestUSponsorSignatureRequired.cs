@@ -65,15 +65,25 @@ public class TestUSponsorSignatureRequired
         Assert.IsFalse(await Required(Transaction(Delegate), Account));
     }
 
+    /// <summary>Absence on one page says nothing: the sponsorship of the initiator may be on the next.</summary>
+    [TestMethod]
+    public async Task TestUTheSponsorshipOnALaterPageDecides()
+    {
+        Assert.IsTrue(await SubmitSugar.IsSponsorSignatureRequired(Node.Answering(Account, pagesBefore: 2), Transaction(), Sponsor));
+    }
+
     /// <summary>Answers <c>account_objects</c> with one sponsorship that requires the signature for the fee.</summary>
     public class Node : DispatchProxy
     {
         private string _sponsee;
 
-        public static IXrplClient Answering(string sponsee)
+        private int _pagesBefore;
+
+        public static IXrplClient Answering(string sponsee, int pagesBefore = 0)
         {
             IXrplClient proxy = Create<IXrplClient, Node>();
             ((Node)(object)proxy)._sponsee = sponsee;
+            ((Node)(object)proxy)._pagesBefore = pagesBefore;
 
             return proxy;
         }
@@ -82,13 +92,15 @@ public class TestUSponsorSignatureRequired
         {
             Assert.AreEqual(nameof(IXrplClient.AccountObjects), targetMethod.Name);
 
-            AccountObjects answer = new AccountObjects
-            {
-                AccountObjectList =
-                [
-                    new LOSponsorship { Sponsee = _sponsee, Flags = SponsorshipFlags.lsfSponsorshipRequireSignForFee },
-                ],
-            };
+            AccountObjects answer = _pagesBefore-- > 0
+                ? new AccountObjects { AccountObjectList = [new LOSponsorship { Sponsee = Delegate }], Marker = "next" }
+                : new AccountObjects
+                {
+                    AccountObjectList =
+                    [
+                        new LOSponsorship { Sponsee = _sponsee, Flags = SponsorshipFlags.lsfSponsorshipRequireSignForFee },
+                    ],
+                };
 
             return Task.FromResult(new XrplResponse<AccountObjects>(answer, default, null, null, null, null, false));
         }

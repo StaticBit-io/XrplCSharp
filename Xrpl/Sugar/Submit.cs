@@ -1047,14 +1047,24 @@ public static class SubmitSugar
         if (coverage == 0)
             return false;
 
-        var request = new Models.Methods.AccountObjectsRequest(sponsorAddress)
+        // A sponsor can have more sponsorships than one page holds, and absence is only an answer after the last page.
+        Models.Ledger.LOSponsorship sponsorship = null;
+        object marker = null;
+        do
         {
-            Type = Models.LedgerEntryType.Sponsorship,
-        };
-        var response = await client.AccountObjects(request, cancellationToken).Typed().ConfigureAwait(false);
-        var sponsorship = response?.AccountObjectList?
-            .OfType<Models.Ledger.LOSponsorship>()
-            .FirstOrDefault(s => string.Equals(s.Sponsee, initiator, StringComparison.Ordinal));
+            var request = new Models.Methods.AccountObjectsRequest(sponsorAddress)
+            {
+                Type = Models.LedgerEntryType.Sponsorship,
+                Marker = marker,
+            };
+            var response = await client.AccountObjects(request, cancellationToken).Typed().ConfigureAwait(false);
+            sponsorship = response?.AccountObjectList?
+                .OfType<Models.Ledger.LOSponsorship>()
+                .FirstOrDefault(s => string.Equals(s.Sponsee, initiator, StringComparison.Ordinal));
+            marker = response?.Marker;
+        }
+        while (sponsorship is null && marker is not null);
+
         if (sponsorship is null)
             return false;
 
