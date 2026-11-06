@@ -10,9 +10,39 @@ namespace Xrpl.Models.Ledger
     public class BaseLedgerEntry
     {
 
+        private LedgerEntryType? _ledgerEntryType;
+        private string _unknownLedgerEntryType;
+
         // Nullable: this model also represents PreviousFields/FinalFields content, where the node omits LedgerEntryType.
-        [JsonConverter(typeof(LedgerEntryTypeConverter))]
-        public LedgerEntryType? LedgerEntryType { get; set; }
+        [JsonIgnore]
+        public LedgerEntryType? LedgerEntryType
+        {
+            get => _ledgerEntryType;
+            set
+            {
+                _ledgerEntryType = value;
+                _unknownLedgerEntryType = null;
+            }
+        }
+
+        /// <summary>
+        /// The name of the entry's type: the JSON form of <see cref="LedgerEntryType"/>. For a type
+        /// this SDK does not know, where <see cref="LedgerEntryType"/> is
+        /// <see cref="Xrpl.Models.LedgerEntryType.Unknown"/>, this is the name the node sent, and the
+        /// entry writes that name back to JSON. <see langword="null"/> when the JSON had no type, as
+        /// in <c>FinalFields</c> and <c>PreviousFields</c>.
+        /// </summary>
+        [JsonPropertyName("LedgerEntryType")]
+        [JsonConverter(typeof(LedgerEntryTypeNameConverter))]
+        public string LedgerEntryTypeName
+        {
+            get => _unknownLedgerEntryType ?? _ledgerEntryType?.ToString();
+            set
+            {
+                _ledgerEntryType = value == null ? null : LedgerEntryTypeConverter.Parse(value);
+                _unknownLedgerEntryType = _ledgerEntryType == Xrpl.Models.LedgerEntryType.Unknown ? value : null;
+            }
+        }
 
         /// <summary>
         /// The unique ID for this ledger entry.<br/>
