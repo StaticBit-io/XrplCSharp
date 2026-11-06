@@ -7,7 +7,9 @@
 
 ## Xrpl.X402 1.0.3 / Xrpl.X402.AspNetCore 1.1.1 06/11/2026
 
-* Both require `Xrpl` 11.25.1, and `Xrpl.X402.AspNetCore` requires `Xrpl.X402` 1.0.3. `Xrpl.X402` 1.0.2 requires `Xrpl` 11.22.0, and `Xrpl.X402.AspNetCore` 1.1.0 requires `Xrpl` 11.20.0 and `Xrpl.X402` 1.0.1, so installing them alone stayed on those versions. No code changed in these two packages, but their consumers now get every change of `Xrpl` up to 11.25.1, including the breaking ones listed above
+* Both require `Xrpl` 11.25.1, and `Xrpl.X402.AspNetCore` requires `Xrpl.X402` 1.0.3. `Xrpl.X402` 1.0.2 requires `Xrpl` 11.22.0, and `Xrpl.X402.AspNetCore` 1.1.0 requires `Xrpl` 11.20.0 and `Xrpl.X402` 1.0.1, so installing them alone stayed on those versions. Their consumers now get every change of `Xrpl` up to 11.25.1, including the breaking ones listed below. What reaches a payment directly is the 2 XRP default fee cap of 11.21.0.0: under a load that puts the fee above it, `XrplWalletX402Signer` signs at 2 XRP unless `ClientOptions.maxFeeXRP` says otherwise
+* **Behaviour change:** `X402AmountMapper.IsXrp` compares the code exactly, as `AssetIdentity.IsXrp` does. It ignored case, so an issued currency with the code `xrp` was built and settled as native XRP: `LedgerSettlingFacilitator` accepted a payment of `amount` drops for a requirement of `amount` tokens. A requirement with `xrp` and no `extra.issuer` now fails with `invalid_requirement`, as any issued currency without an issuer does. Tests: `AmountMapperTests.TestUMapsLowercaseXrpAsAnIssuedCurrency`, `TestULowercaseXrpWithoutIssuerThrows`, `LedgerSettlingFacilitatorTests.TestUAnIssuedLowercaseXrpIsNotPaidInDrops`
+* The tests of `LedgerSettlingFacilitatorTests` and `RequirePaymentTests` carry the `TestU` prefix: without it neither the unit filter nor the integration one selected them, so these 35 tests never ran in CI or in the release job
 
 ## 11.25.0.0 06/11/2026
 
