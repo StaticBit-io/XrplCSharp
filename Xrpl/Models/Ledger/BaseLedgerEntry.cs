@@ -55,6 +55,14 @@ namespace Xrpl.Models.Ledger
         public string LedgerIndex { get; set; }
 
         /// <summary>
+        /// XLS-68: the account sponsoring the reserve of this entry (sfSponsor, a rippled common ledger
+        /// field). A trust line has one sponsor per side instead, in <see cref="LORippleState.LowSponsor"/>
+        /// and <see cref="LORippleState.HighSponsor"/>.
+        /// </summary>
+        [JsonPropertyName("Sponsor")]
+        public string Sponsor { get; set; }
+
+        /// <summary>
         /// Members of this ledger entry that no declared property claims — new fields an amendment
         /// added to the wire format before this SDK modeled them, or anything else unrecognized.
         /// Populated on every derived LO* type, and on FinalFields/PreviousFields/NewFields reached
