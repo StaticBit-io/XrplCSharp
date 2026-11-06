@@ -1,5 +1,10 @@
 # Changes
 
+## 11.25.1.0 06/11/2026
+
+* The `B58` change of 11.25.0.0 reaches those who install `Xrpl`. `Xrpl` 11.25.0 requires `Xrpl.BinaryCodec` and `Xrpl.Keypairs` 11.22.0, and both of those require `Xrpl.AddressCodec` 11.20.0, so `Xrpl.AddressCodec` 11.25.0 was installed only by asking for it directly. `Xrpl`, `Xrpl.AddressCodec`, `Xrpl.BinaryCodec` and `Xrpl.Keypairs` are all 11.25.1.0, and each requires the others at that version. No code changed
+* These four packages now move together in every release, including one with no change of its own: the release skips a version nuget.org already has, so a package left behind keeps the dependencies it was published with. Tests: `TestUPackageVersions`
+
 ## 11.25.0.0 06/11/2026
 
 * `ITransactionCommon.TransactionTypeName` and `BaseLedgerEntry.LedgerEntryTypeName`, `NodeBase.LedgerEntryTypeName` hold the name of the type: for a type the SDK does not know, where the enum is `Unknown`, the name the node sent, otherwise the enum member's name. `TransactionTypeName` is `Unknown` when the JSON had no type; `BaseLedgerEntry.LedgerEntryTypeName` is `null`, as in `FinalFields` and `PreviousFields`. Assigning the enum replaces the name. `ToJson()` and the node converters write the name, so `TransactionType` and `LedgerEntryType` no longer turn into the word `Unknown` on the way back to JSON. These properties now carry the JSON field through `TransactionTypeNameConverter` and `LedgerEntryTypeNameConverter`; the enum properties are `[JsonIgnore]` and keep their meaning. Tests: `TestUUnknownTypeName` in `Xrpl.Tests`
