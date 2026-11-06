@@ -1033,7 +1033,12 @@ public static class SubmitSugar
         string sponsorAddress,
         CancellationToken cancellationToken = default)
     {
-        if (!tx.TryGetValue("Account", out var accountField) || accountField is not string account)
+        // The sponsorship is the one with the transaction's initiator (rippled STTx::getInitiator): the delegate when
+        // the transaction has one.
+        string initiator = tx.TryGetValue("Delegate", out var delegateField) && delegateField is string { Length: > 0 } @delegate
+            ? @delegate
+            : tx.TryGetValue("Account", out var accountField) ? accountField as string : null;
+        if (initiator is null)
             return false;
         uint coverage = tx.TryGetValue("SponsorFlags", out var flagsField) &&
                         Models.Transactions.Common.TryGetUInt32(flagsField, out uint parsed)
@@ -1049,7 +1054,7 @@ public static class SubmitSugar
         var response = await client.AccountObjects(request, cancellationToken).Typed().ConfigureAwait(false);
         var sponsorship = response?.AccountObjectList?
             .OfType<Models.Ledger.LOSponsorship>()
-            .FirstOrDefault(s => string.Equals(s.Sponsee, account, StringComparison.Ordinal));
+            .FirstOrDefault(s => string.Equals(s.Sponsee, initiator, StringComparison.Ordinal));
         if (sponsorship is null)
             return false;
 
