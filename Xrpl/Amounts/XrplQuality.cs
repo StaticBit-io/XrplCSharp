@@ -180,7 +180,19 @@ namespace Xrpl.Amounts
                 return (@in, @out);
 
             XrplAmount rate = RateAmount;
-            XrplAmount resultIn = XrplAmountMath.MulRoundImpl(limit, rate, @in.Asset, @in.Kind, roundUp, strict, rules);
+            XrplAmount resultIn;
+            try
+            {
+                resultIn = XrplAmountMath.MulRoundImpl(limit, rate, @in.Asset, @in.Kind, roundUp, strict, rules);
+            }
+            catch (AmountRangeException) when (@in.Kind == AmountKind.Xrp && (rules ?? new LedgerRules()).CurrentFixCleanup3_5_0)
+            {
+                // tryMulRound: an XRP product past the ledger's range is larger than the offer's
+                // input, which the clamp below would return anyway. An arithmetic overflow still
+                // propagates, and the caller removes the offer.
+                resultIn = @in;
+            }
+
             if (resultIn > @in)
                 resultIn = @in;
 

@@ -149,6 +149,9 @@ public class TestUAmountVectors
         FixCleanup3_2_0 = scale is "Large320" or "Large330",
         FixCleanup3_3_0 = scale == "Large330",
         MPTokensV2 = mpTokensV2,
+
+        // The vectors come from rippled 3.4.1, which has no fixCleanup3_5_0.
+        FixCleanup3_5_0 = false,
         AmbientRounding = Enum.Parse<NumberRounding>(mode),
     };
 

@@ -100,6 +100,36 @@ namespace Xrpl.Sugar
         internal static int ScaleInMode(XrplNumber value, bool integral, NumberContext context) =>
             AmountExponent(ToAmount(value, integral, context), integral);
 
+        /// <summary>
+        /// <c>isRepresentable(asset, value)</c>: whether <c>STAmount{asset, value}</c> can be built
+        /// at all - at most 10^17 drops of XRP, <c>maxMPTokenAmount</c> of an MPT, an issued
+        /// currency's exponent at most 80 once rounded to 16 digits. Precision is not checked.
+        /// </summary>
+        internal static bool IsInRange(XrplNumber value, bool xrp, bool integral, NumberContext context)
+        {
+            if (value.IsZero)
+                return true;
+
+            NumberContext nearest = context.WithRounding(NumberRounding.ToNearest);
+            if (!integral)
+            {
+                XrplNumber amount = RoundToIouDigits(XrplNumber.Abs(value), NumberRounding.ToNearest);
+                return IouExponent(amount) <= 80;
+            }
+
+            long units;
+            try
+            {
+                units = XrplNumber.Abs(value).ToInt64(nearest);
+            }
+            catch (OverflowException)
+            {
+                return false;
+            }
+
+            return xrp ? units <= 100_000_000_000_000_000L : units <= long.MaxValue;
+        }
+
         /// <summary><c>STAmount{asset, value} == value</c>: whether an amount of the asset holds the value exactly.</summary>
         internal static bool IsRepresentable(XrplNumber value, bool integral, NumberContext context) =>
             ToAmount(value, integral, context.WithRounding(NumberRounding.ToNearest)) == value;

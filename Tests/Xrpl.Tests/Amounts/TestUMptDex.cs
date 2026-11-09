@@ -371,6 +371,52 @@ public class TestUMptDex
         }
     }
 
+    private static readonly LedgerRules BeforeV2Fix350 = new LedgerRules { MPTokensV2 = false, FixCleanup3_5_0 = true };
+    private static readonly LedgerRules BeforeV2NoFix350 = new LedgerRules { MPTokensV2 = false, FixCleanup3_5_0 = false };
+
+    /// <summary>
+    /// fixCleanup3_5_0, <c>Payment::doApply</c>: the direct MPT payment's cost is exact and rounded
+    /// up, so 50 delivered at 1% costs 51, which a SendMax of 50 refuses. Before it the cost went
+    /// through <c>multiply</c> to nearest, and 50.5 rounded to 50.
+    /// </summary>
+    [TestMethod]
+    public void Pay_Direct_Fix350_RoundsTheCostUp()
+    {
+        PaymentFlowResult fixedPay = PaymentFlow.Evaluate(Holders(1000), Pay(Alice, Bob, Units(Usd, 50), Units(Usd, 50)), BeforeV2Fix350);
+        Assert.AreEqual("tecPATH_PARTIAL", fixedPay.EngineResult);
+
+        PaymentFlowResult legacy = PaymentFlow.Evaluate(Holders(1000), Pay(Alice, Bob, Units(Usd, 50), Units(Usd, 50)), BeforeV2NoFix350);
+        Assert.AreEqual("tesSUCCESS", legacy.EngineResult);
+        Assert.AreEqual(Units(Usd, 50), legacy.Paid);
+    }
+
+    /// <summary>
+    /// fixCleanup3_5_0: a partial payment delivers SendMax over the rate, rounded down, and the
+    /// fee on it rounded up never takes the sender past SendMax: 50 at 1% delivers 49 for 50.
+    /// </summary>
+    [TestMethod]
+    public void Pay_DirectPartial_Fix350_NeverChargesPastSendMax()
+    {
+        PaymentFlowResult paid = PaymentFlow.Evaluate(
+            Holders(1000), Pay(Alice, Bob, Units(Usd, 100), Units(Usd, 50), PaymentFlags.tfPartialPayment), BeforeV2Fix350);
+
+        Assert.AreEqual("tesSUCCESS", paid.EngineResult);
+        Assert.AreEqual(Units(Usd, 49), paid.DeliveredAmount);
+        Assert.AreEqual(Units(Usd, 50), paid.Paid);
+        Assert.AreEqual(Units(Usd, -50), Change(paid.BalanceChanges, Alice, Usd));
+        Assert.AreEqual(Units(Usd, 49), Change(paid.BalanceChanges, Bob, Usd));
+    }
+
+    /// <summary>fixCleanup3_5_0: a partial payment whose SendMax delivers nothing after the fee is tecPATH_PARTIAL.</summary>
+    [TestMethod]
+    public void Pay_DirectPartial_Fix350_NothingDeliveredIsPartial()
+    {
+        PaymentFlowResult paid = PaymentFlow.Evaluate(
+            Holders(50_000), Pay(Alice, Bob, Units(Usd, 10), Units(Usd, 1), PaymentFlags.tfPartialPayment), BeforeV2Fix350);
+
+        Assert.AreEqual("tecPATH_PARTIAL", paid.EngineResult);
+    }
+
     /// <summary>
     /// An issuance authorizing through a permissioned domain: a holder whose MPToken the issuer
     /// never authorized holds it by an accepted credential the domain takes, and not without one.

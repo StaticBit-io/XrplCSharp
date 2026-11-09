@@ -173,14 +173,37 @@ namespace Xrpl.Amounts
             }
 
             XrplAmount deliver = amount;
-            XrplAmount required = XrplAmountMath.Multiply(amount, StepMath.RateAmount(rate), mpt, rules);
-            if (partialPayment && required > maxSource)
+            bool exceedsSendMax;
+            if (rules.FixCleanup3_5_0)
             {
-                required = maxSource;
-                deliver = XrplAmountMath.Divide(maxSource, StepMath.RateAmount(rate), mpt, rules);
+                // Exact integer arithmetic: the legacy multiply and divide overflow on large MPT
+                // amounts and can charge more than SendMax. The cost rounds up, as the fee
+                // accountSend charges; a cost that overflows exceeds any SendMax.
+                XrplAmount? required = TryMulRatio(amount, rate, OfferCrossing.QualityOne, roundUp: true, rules);
+                exceedsSendMax = required is not { } cost || maxSource < cost;
+                if (partialPayment && exceedsSendMax)
+                {
+                    // Rounded down, so the sender is never charged more than SendMax.
+                    deliver = OfferCrossing.MulRatio(maxSource, OfferCrossing.QualityOne, rate, roundUp: false, rules);
+                    if (deliver <= XrplAmount.Zero(mpt))
+                        return Applied(world, new DexView(world, rules), "tecPATH_PARTIAL", null, null);
+
+                    exceedsSendMax = false;
+                }
+            }
+            else
+            {
+                XrplAmount required = XrplAmountMath.Multiply(amount, StepMath.RateAmount(rate), mpt, rules);
+                if (partialPayment && required > maxSource)
+                {
+                    required = maxSource;
+                    deliver = XrplAmountMath.Divide(maxSource, StepMath.RateAmount(rate), mpt, rules);
+                }
+
+                exceedsSendMax = required > maxSource;
             }
 
-            if (required > maxSource || (deliverMin is { } min && deliver < min))
+            if (exceedsSendMax || (deliverMin is { } min && deliver < min))
                 return Applied(world, new DexView(world, rules), "tecPATH_PARTIAL", null, null);
 
             // accountSend: direct to or from the issuer, through it between holders with the fee.
@@ -194,7 +217,7 @@ namespace Xrpl.Amounts
             }
             else
             {
-                paid = XrplAmountMath.Multiply(deliver, StepMath.RateAmount(rate), mpt, rules);
+                paid = TransitCost(deliver, rate, rules);
                 sent = view.SendMpt(issuer, destination, deliver) ?? view.SendMpt(account, issuer, paid);
             }
 
@@ -204,6 +227,34 @@ namespace Xrpl.Amounts
                 return Applied(world, new DexView(world, rules), sent, null, null);
 
             return Applied(world, view, "tesSUCCESS", deliver, paid);
+        }
+
+        /// <summary>
+        /// What <c>accountSend</c> takes from a holder sending an MPT through its issuer: the amount
+        /// with the transfer fee, exact and rounded up under <c>fixCleanup3_5_0</c>
+        /// (<c>addTransferFee</c>), through <c>multiply</c> before it.
+        /// </summary>
+        internal static XrplAmount TransitCost(XrplAmount amount, uint rate, LedgerRules rules)
+        {
+            if (!rules.FixCleanup3_5_0)
+                return XrplAmountMath.Multiply(amount, StepMath.RateAmount(rate), amount.Asset, rules);
+
+            return rate == OfferCrossing.QualityOne
+                ? amount
+                : OfferCrossing.MulRatio(amount, rate, OfferCrossing.QualityOne, roundUp: true, rules);
+        }
+
+        /// <summary><c>tryMulRatio</c>: <see cref="OfferCrossing.MulRatio"/>, or null when the result overflows.</summary>
+        private static XrplAmount? TryMulRatio(XrplAmount amount, uint num, uint den, bool roundUp, LedgerRules rules)
+        {
+            try
+            {
+                return OfferCrossing.MulRatio(amount, num, den, roundUp, rules);
+            }
+            catch (OverflowException)
+            {
+                return null;
+            }
         }
 
         /// <summary><c>isMPTOverflow</c> without overflow allowed: issuing would take OutstandingAmount past MaximumAmount.</summary>
