@@ -248,6 +248,20 @@ namespace Xrpl.Tests.Wallet.Tests
         }
 
         [TestMethod]
+        public void ClearedOrOutOfRangeSecp256k1Key_IsRefused()
+        {
+            byte[] message = { 1, 2, 3 };
+            byte[] cleared = new byte[33];
+            Assert.ThrowsExactly<ArgumentException>(() => new XrplSigningKey(cleared));
+            Assert.ThrowsExactly<ArgumentException>(() => XrplKeypairs.Sign((ReadOnlySpan<byte>)message, cleared));
+
+            byte[] aboveOrder = new byte[33];
+            for (int i = 1; i < 33; i++)
+                aboveOrder[i] = 0xFF;
+            Assert.ThrowsExactly<ArgumentException>(() => XrplKeypairs.DerivePublicKey(aboveOrder));
+        }
+
+        [TestMethod]
         public void Constructor_CopiesTheCallersBuffer()
         {
             byte[] privateKey = XrplWallet.FromEntropy(Entropy).PrivateKey.FromHex();

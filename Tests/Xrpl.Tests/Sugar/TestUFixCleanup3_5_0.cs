@@ -165,6 +165,17 @@ public class TestUFixCleanup3_5_0
             () => VaultShares.WithdrawAssets(UsdVault(), 1000, 500, 100, 999_999_999, Fixed));
     }
 
+    /// <summary>A rate of 0 is the ledger's "no TransferRate" and charges nothing.</summary>
+    [TestMethod]
+    public void WithdrawAssets_RateZero_IsNoFee()
+    {
+        VaultQuote zero = VaultShares.WithdrawAssets(UsdVault(), 1000, 500, 100, 0, Fixed);
+        VaultQuote parity = VaultShares.WithdrawAssets(UsdVault(), 1000, 500, 100, 1_000_000_000, Fixed);
+
+        Assert.AreEqual(parity.Shares, zero.Shares);
+        Assert.AreEqual(parity.AssetsDelivered, zero.AssetsDelivered);
+    }
+
     /// <summary>
     /// <c>LoanSet::preclaim</c>: a value field beyond what XRP holds is <c>tecPRECISION_LOSS</c>
     /// under the amendment; before it, building the amount throws, which the node reports as

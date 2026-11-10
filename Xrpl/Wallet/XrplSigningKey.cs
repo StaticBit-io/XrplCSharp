@@ -49,7 +49,7 @@ namespace Xrpl.Wallet
         /// The account this key signs for when it is the account's regular key; the key's own
         /// address when null.
         /// </param>
-        /// <exception cref="ArgumentException">The key is not 33 bytes or has an unknown prefix.</exception>
+        /// <exception cref="ArgumentException">The key is not 33 bytes, has an unknown prefix, or is a secp256k1 scalar of zero or not below the curve order.</exception>
         public XrplSigningKey(ReadOnlySpan<byte> privateKey, string? masterAddress = null)
             : this(XrplKeypairs.DerivePublicKey(privateKey), privateKey.ToArray(), masterAddress)
         {

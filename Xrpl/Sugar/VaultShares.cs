@@ -154,7 +154,7 @@ namespace Xrpl.Sugar
         /// <param name="amount">The assets the destination is to receive.</param>
         /// <param name="transferRate">
         /// The rate the withdrawal pays in billionths, as <see cref="WithdrawalTransferRate"/>
-        /// returns it; 1,000,000,000 for no fee. Ignored before <c>fixCleanup3_5_0</c> and for XRP.
+        /// returns it; 1,000,000,000 or 0 for no fee. Ignored before <c>fixCleanup3_5_0</c> and for XRP.
         /// </param>
         /// <param name="rules">The amendments in force; the current rules when null.</param>
         /// <param name="parentCloseTime">
@@ -163,7 +163,7 @@ namespace Xrpl.Sugar
         /// unspecified one is taken as UTC.
         /// </param>
         /// <exception cref="OverflowException">An amount is beyond <see cref="decimal"/>.</exception>
-        /// <exception cref="ArgumentOutOfRangeException"><paramref name="transferRate"/> is below 1,000,000,000.</exception>
+        /// <exception cref="ArgumentOutOfRangeException"><paramref name="transferRate"/> is between 1 and 999,999,999.</exception>
         public static VaultQuote WithdrawAssets(
             LOVault vault,
             ulong sharesOutstanding,
@@ -210,7 +210,7 @@ namespace Xrpl.Sugar
         /// <param name="shares">The shares to redeem.</param>
         /// <param name="transferRate">
         /// The rate the withdrawal pays in billionths, as <see cref="WithdrawalTransferRate"/>
-        /// returns it; 1,000,000,000 for no fee. Ignored before <c>fixCleanup3_5_0</c> and for XRP.
+        /// returns it; 1,000,000,000 or 0 for no fee. Ignored before <c>fixCleanup3_5_0</c> and for XRP.
         /// </param>
         /// <param name="rules">The amendments in force; the current rules when null.</param>
         /// <param name="parentCloseTime">
@@ -219,7 +219,7 @@ namespace Xrpl.Sugar
         /// unspecified one is taken as UTC.
         /// </param>
         /// <exception cref="OverflowException">An amount is beyond <see cref="decimal"/>.</exception>
-        /// <exception cref="ArgumentOutOfRangeException"><paramref name="transferRate"/> is below 1,000,000,000.</exception>
+        /// <exception cref="ArgumentOutOfRangeException"><paramref name="transferRate"/> is between 1 and 999,999,999.</exception>
         public static VaultQuote RedeemShares(
             LOVault vault,
             ulong sharesOutstanding,
@@ -647,6 +647,9 @@ namespace Xrpl.Sugar
                     throw new ArgumentException("The vault carries no Asset.", nameof(vault));
 
                 rules ??= new LedgerRules();
+                // 0 is how the ledger writes "no TransferRate", and rippled reads it as parity.
+                if (transferRate == 0)
+                    transferRate = OfferCrossing.QualityOne;
                 if (transferRate < OfferCrossing.QualityOne)
                     throw new ArgumentOutOfRangeException(nameof(transferRate), transferRate, "A transfer rate is at least 1,000,000,000.");
 
