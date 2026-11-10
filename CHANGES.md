@@ -1,6 +1,6 @@
 # Changes
 
-## 11.26.0.0 09/11/2026
+## 11.26.0.0 10/11/2026
 
 * `Xrpl.Wallet.XrplSigningKey : IDisposable` signs with a private key held in a `byte[]` and clears it on `Dispose`; signing afterwards throws `ObjectDisposedException`. It is built from the 33-byte key (`new XrplSigningKey(ReadOnlySpan<byte>, masterAddress)`) or from seed entropy (`XrplSigningKey.FromEntropy`), and its `Sign` overloads (dictionary and typed, with and without `SignatureRole`) produce the same blob and hash as `XrplWallet.Sign`, through the same routing. `XrplWallet` sends every signature through one internal `SignBytes`, which this type supplies with the byte key. Issue #347
 * `Xrpl.Keypairs.XrplKeypairs` takes keys as bytes: `Sign(ReadOnlySpan<byte> message, ReadOnlySpan<byte> privateKey)`, `DerivePublicKey(ReadOnlySpan<byte> privateKey)` and `DeriveKeyBytes(ReadOnlySpan<byte> entropy, string algorithm)`, which derives the keys of `XrplWallet.FromEntropy` without encoding a seed string. The key is the 33-byte XRPL form, `0xED` or `0x00` followed by 32 bytes, and a secp256k1 scalar of zero or not below the curve order is refused, so a cleared buffer never signs; the buffers these methods allocate for key material, the Ed25519 expanded key included, are cleared before they return. The secp256k1 scalar still passes through a BouncyCastle `BigInteger`, which cannot be cleared
