@@ -239,6 +239,15 @@ namespace Xrpl.Tests.Wallet.Tests
         }
 
         [TestMethod]
+        public void Constructor_RefusesAKeyThatIsNotInTheXrplForm()
+        {
+            Assert.ThrowsExactly<ArgumentException>(() => new XrplSigningKey(new byte[32]));
+            byte[] badPrefix = new byte[33];
+            badPrefix[0] = 0x02;
+            Assert.ThrowsExactly<ArgumentException>(() => new XrplSigningKey(badPrefix));
+        }
+
+        [TestMethod]
         public void Constructor_CopiesTheCallersBuffer()
         {
             byte[] privateKey = XrplWallet.FromEntropy(Entropy).PrivateKey.FromHex();

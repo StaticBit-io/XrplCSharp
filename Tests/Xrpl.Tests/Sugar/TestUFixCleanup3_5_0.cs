@@ -50,7 +50,7 @@ public class TestUFixCleanup3_5_0
     {
         LedgerRules enabled = LedgerRules.FromFeatures(new ServerFeatures { Features = Features(("fixCleanup3_5_0", true)) });
         Assert.IsTrue(enabled.FixCleanup3_5_0);
-        Assert.IsTrue(enabled.FixCleanup3_5_0Known);
+        Assert.AreEqual(true, enabled.FixCleanup3_5_0Known);
 
         // A 3.5.0 node with the amendment not yet enabled: off in a transaction, on outside one.
         LedgerRules pending = LedgerRules.FromFeatures(new ServerFeatures { Features = Features(("fixCleanup3_5_0", false)) });
@@ -61,6 +61,14 @@ public class TestUFixCleanup3_5_0
         LedgerRules older = LedgerRules.FromFeatures(new ServerFeatures { Features = Features(("fixCleanup3_4_0", true)) });
         Assert.IsFalse(older.FixCleanup3_5_0);
         Assert.IsFalse(older.OutsideOfTransaction().CurrentFixCleanup3_5_0);
+    }
+
+    [TestMethod]
+    public void LedgerRules_BuiltByHand_FollowTheFlagOutsideATransaction()
+    {
+        Assert.IsTrue(new LedgerRules().OutsideOfTransaction().CurrentFixCleanup3_5_0);
+        Assert.IsFalse(new LedgerRules { FixCleanup3_5_0 = false }.OutsideOfTransaction().CurrentFixCleanup3_5_0);
+        Assert.IsFalse(new LedgerRules { FixCleanup3_5_0 = false }.WithMPTokensV2().OutsideOfTransaction().CurrentFixCleanup3_5_0);
     }
 
     [TestMethod]

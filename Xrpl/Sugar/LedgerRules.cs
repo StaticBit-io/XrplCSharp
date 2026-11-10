@@ -155,14 +155,14 @@ namespace Xrpl.Sugar
         /// <c>fixCleanup3_5_0</c> as <c>isFeatureEnabled(fixCleanup3_5_0, true)</c> reads it: from
         /// the current transaction rules, and outside a transaction enabled on a node that has it.
         /// </summary>
-        internal bool CurrentFixCleanup3_5_0 => OutsideTransaction ? FixCleanup3_5_0Known : FixCleanup3_5_0;
+        internal bool CurrentFixCleanup3_5_0 => OutsideTransaction ? FixCleanup3_5_0Known ?? FixCleanup3_5_0 : FixCleanup3_5_0;
 
         /// <summary>
         /// Whether the node knows <c>fixCleanup3_5_0</c>: rippled 3.5.0 on. A node before it runs
-        /// the old code outside a transaction too. True unless <see cref="FromFeatures"/> finds the
-        /// amendment missing from the node's list.
+        /// the old code outside a transaction too. Set only by <see cref="FromFeatures"/>; null for
+        /// rules built by hand, which then follow <see cref="FixCleanup3_5_0"/> there as well.
         /// </summary>
-        internal bool FixCleanup3_5_0Known { get; init; } = true;
+        internal bool? FixCleanup3_5_0Known { get; init; }
 
         /// <summary>These rules as code outside a transaction sees them.</summary>
         internal LedgerRules OutsideOfTransaction()

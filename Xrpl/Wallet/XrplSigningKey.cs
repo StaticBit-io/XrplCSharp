@@ -51,11 +51,13 @@ namespace Xrpl.Wallet
         /// </param>
         /// <exception cref="ArgumentException">The key is not 33 bytes or has an unknown prefix.</exception>
         public XrplSigningKey(ReadOnlySpan<byte> privateKey, string? masterAddress = null)
-            : this(privateKey.ToArray(), XrplKeypairs.DerivePublicKey(privateKey), masterAddress)
+            : this(XrplKeypairs.DerivePublicKey(privateKey), privateKey.ToArray(), masterAddress)
         {
         }
 
-        private XrplSigningKey(byte[] privateKey, byte[] publicKey, string? masterAddress)
+        // The public key comes first so that the key is validated before it is copied: arguments are
+        // evaluated left to right, and a copy made before a throw would be left on the heap uncleared.
+        private XrplSigningKey(byte[] publicKey, byte[] privateKey, string? masterAddress)
         {
             _privateKey = privateKey;
             PublicKey = publicKey.ToHex();
@@ -74,7 +76,7 @@ namespace Xrpl.Wallet
         public static XrplSigningKey FromEntropy(ReadOnlySpan<byte> entropy, string algorithm = XrplWallet.Ed25519, string? masterAddress = null)
         {
             (byte[] privateKey, byte[] publicKey) = XrplKeypairs.DeriveKeyBytes(entropy, algorithm);
-            return new XrplSigningKey(privateKey, publicKey, masterAddress);
+            return new XrplSigningKey(publicKey, privateKey, masterAddress);
         }
 
         /// <summary>The public key, hex.</summary>
