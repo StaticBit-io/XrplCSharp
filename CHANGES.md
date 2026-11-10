@@ -1,7 +1,11 @@
 # Changes
 
-## Unreleased
+## 11.26.0.0 09/11/2026
 
+* `Xrpl.Wallet.XrplSigningKey : IDisposable` signs with a private key held in a `byte[]` and clears it on `Dispose`; signing afterwards throws `ObjectDisposedException`. It is built from the 33-byte key (`new XrplSigningKey(ReadOnlySpan<byte>, masterAddress)`) or from seed entropy (`XrplSigningKey.FromEntropy`), and its `Sign` overloads (dictionary and typed, with and without `SignatureRole`) produce the same blob and hash as `XrplWallet.Sign`, through the same routing. `XrplWallet` sends every signature through one internal `SignBytes`, which this type supplies with the byte key. Issue #347
+* `Xrpl.Keypairs.XrplKeypairs` takes keys as bytes: `Sign(ReadOnlySpan<byte> message, ReadOnlySpan<byte> privateKey)`, `DerivePublicKey(ReadOnlySpan<byte> privateKey)` and `DeriveKeyBytes(ReadOnlySpan<byte> entropy, string algorithm)`, which derives the keys of `XrplWallet.FromEntropy` without encoding a seed string. The key is the 33-byte XRPL form, `0xED` or `0x00` followed by 32 bytes; the buffers these methods allocate for key material, the Ed25519 expanded key included, are cleared before they return. The secp256k1 scalar still passes through a BouncyCastle `BigInteger`, which cannot be cleared
+* Tests: `TestUSigningKey`
+* `Xrpl`, `Xrpl.AddressCodec`, `Xrpl.BinaryCodec` and `Xrpl.Keypairs` are 11.26.0.0
 * `LedgerRules.FixCleanup3_5_0` (default `true`) carries rippled 3.5.0's `fixCleanup3_5_0`; `LedgerRules.FromNodeAsync` reads it, and records whether the node lists the amendment at all, since rippled 3.5.0 treats it as enabled outside a transaction and 3.4.x does not have it. Under it:
   * `PaymentFlow`, direct MPT payment (before `MPTokensV2`): the cost is `mulRatio(amount, rate)` rounded up, a cost that overflows exceeds any `SendMax`, and a partial payment delivers `mulRatio(SendMax, 1/rate)` rounded down, `tecPATH_PARTIAL` when that is zero; an MPT sent between holders charges `addTransferFee`. rippled #8302. Tests: `TestUMptDex.Pay_Direct_Fix350_RoundsTheCostUp`, `Pay_DirectPartial_Fix350_NeverChargesPastSendMax`, `Pay_DirectPartial_Fix350_NothingDeliveredIsPartial`
   * `XrplQuality.CeilOut` / `CeilOutStrict`: an XRP input beyond 10^17 drops is clamped to the offer's input instead of throwing; an overflow past 64 bits still throws. The out-of-range case throws the internal `AmountRangeException`, an `OverflowException`. rippled #8480
