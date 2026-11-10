@@ -94,10 +94,22 @@ namespace Xrpl.Sugar
             NumberContext c = options.Context;
             bool integral = LoanPayments.IsIntegral(asset);
 
-            // Preclaim: every value field must be an amount the asset can hold.
+            // Preclaim: every value field must be an amount the asset can hold. One out of the
+            // asset's range makes STAmount throw, which the node turns into tefEXCEPTION until
+            // fixCleanup3_5_0 checks the range first.
             foreach ((string name, XrplNumber? value) in ValueFields(loanSet))
             {
-                if (value is { } v && !AssetRounding.IsRepresentable(v, integral, c))
+                if (value is not { } v)
+                    continue;
+
+                if (!AssetRounding.IsInRange(v, asset.IsXrp(), integral, c))
+                {
+                    return options.FixCleanup3_5_0
+                        ? Refused("tecPRECISION_LOSS", $"{name} ({v}) is out of the range of the asset.")
+                        : Refused("tefEXCEPTION", $"{name} ({v}) is out of the range of the asset, which the node fails on.");
+                }
+
+                if (!AssetRounding.IsRepresentable(v, integral, c))
                     return Refused("tecPRECISION_LOSS", $"{name} ({v}) cannot be represented as an amount of the asset.");
             }
 

@@ -1,3 +1,4 @@
+using System;
 using System.Security.Cryptography;
 using System.Text;
 
@@ -6,6 +7,8 @@ using Org.BouncyCastle.Math;
 using Xrpl.AddressCodec;
 using Xrpl.Keypairs.Ed25519;
 using Xrpl.Keypairs.K256;
+
+using Sha512 = Xrpl.Keypairs.Utils.Sha512;
 
 using static Xrpl.AddressCodec.Utils;
 using static Xrpl.AddressCodec.XrplCodec;
@@ -97,6 +100,180 @@ namespace Xrpl.Keypairs
                 return EdKeyPair.Sign(message, pk).ToHex();
             }
             return K256KeyPair.Sign(message, privateKey.FromHex()).ToHex();
+        }
+
+        /// <summary>
+        /// Signs <paramref name="message"/> with a private key held as bytes, so the caller can wipe it
+        /// after use; produces the same signature as <see cref="Sign(byte[], string)"/>.
+        /// </summary>
+        /// <remarks>
+        /// Every buffer this method allocates for key material, the Ed25519 expanded key included, is
+        /// cleared before it returns. Copies made beyond the SDK's reach are not: the secp256k1 path
+        /// hands the scalar to BouncyCastle as an immutable <c>BigInteger</c>, and hash
+        /// implementations keep their own state.
+        /// </remarks>
+        /// <param name="message">The message bytes; for secp256k1 the SHA-512Half of it is signed.</param>
+        /// <param name="privateKey">
+        /// The 33-byte XRPL form of the key: <c>0xED</c> followed by the 32-byte Ed25519 seed, or
+        /// <c>0x00</c> followed by the 32-byte secp256k1 scalar.
+        /// </param>
+        /// <returns>The signature: 64 bytes for Ed25519, DER for secp256k1.</returns>
+        /// <exception cref="ArgumentException">The key is not 33 bytes, has an unknown prefix, or is a secp256k1 scalar of zero or not below the curve order.</exception>
+        public static byte[] Sign(ReadOnlySpan<byte> message, ReadOnlySpan<byte> privateKey)
+        {
+            bool ed25519 = IsEd25519PrivateKey(privateKey);
+            byte[] messageBytes = message.ToArray();
+            if (ed25519)
+            {
+                byte[] seed = privateKey.Slice(1).ToArray();
+                byte[] expanded = Array.Empty<byte>();
+                try
+                {
+                    expanded = Chaos.NaCl.Ed25519.ExpandedPrivateKeyFromSeed(seed);
+                    return EdKeyPair.Sign(messageBytes, expanded);
+                }
+                finally
+                {
+                    CryptographicOperations.ZeroMemory(seed);
+                    CryptographicOperations.ZeroMemory(expanded);
+                }
+            }
+
+            byte[] scalar = privateKey.ToArray();
+            try
+            {
+                RequireSecp256k1Scalar(scalar);
+                return K256KeyPair.Sign(messageBytes, scalar);
+            }
+            finally
+            {
+                CryptographicOperations.ZeroMemory(scalar);
+            }
+        }
+
+        /// <summary>
+        /// Derives the public key of a private key held as bytes.
+        /// </summary>
+        /// <param name="privateKey">The 33-byte XRPL form of the key, as <see cref="Sign(ReadOnlySpan{byte}, ReadOnlySpan{byte})"/> takes it.</param>
+        /// <returns>The 33-byte public key: <c>0xED</c> and the Ed25519 key, or a compressed secp256k1 point.</returns>
+        /// <exception cref="ArgumentException">The key is not 33 bytes, has an unknown prefix, or is a secp256k1 scalar of zero or not below the curve order.</exception>
+        public static byte[] DerivePublicKey(ReadOnlySpan<byte> privateKey)
+        {
+            bool ed25519 = IsEd25519PrivateKey(privateKey);
+            byte[] keyBytes = privateKey.Slice(1).ToArray();
+            try
+            {
+                if (ed25519)
+                    return Ed25519PublicKey(keyBytes);
+                return K256KeyGenerator.ComputePublicKey(RequireSecp256k1Scalar(keyBytes)).GetEncoded(true);
+            }
+            finally
+            {
+                CryptographicOperations.ZeroMemory(keyBytes);
+            }
+        }
+
+        /// <summary>
+        /// Derives an account's key pair from 16 bytes of entropy without encoding a seed string:
+        /// the keys <see cref="DeriveKeypair"/> derives from the seed that
+        /// <see cref="GenerateSeed"/> makes of the same entropy.
+        /// </summary>
+        /// <param name="entropy">The 16 bytes of seed entropy.</param>
+        /// <param name="algorithm"><c>ed25519</c> or <c>secp256k1</c>.</param>
+        /// <returns>
+        /// The 33-byte private key in the XRPL form <see cref="Sign(ReadOnlySpan{byte}, ReadOnlySpan{byte})"/>
+        /// takes, and the 33-byte public key. The caller owns the private key array and should clear it.
+        /// </returns>
+        /// <exception cref="ArgumentException">The entropy is not 16 bytes, or the algorithm is unknown.</exception>
+        public static (byte[] PrivateKey, byte[] PublicKey) DeriveKeyBytes(ReadOnlySpan<byte> entropy, string algorithm)
+        {
+            if (entropy.Length != 16)
+                throw new ArgumentException("Seed entropy must be 16 bytes.", nameof(entropy));
+
+            byte[] seed = entropy.ToArray();
+            try
+            {
+                if (string.Equals(algorithm, "ed25519", StringComparison.Ordinal))
+                {
+                    byte[] edSecret = Sha512.Half(seed);
+                    try
+                    {
+                        byte[] privateKey = new byte[33];
+                        privateKey[0] = 0xED;
+                        Buffer.BlockCopy(edSecret, 0, privateKey, 1, 32);
+                        return (privateKey, Ed25519PublicKey(edSecret));
+                    }
+                    finally
+                    {
+                        CryptographicOperations.ZeroMemory(edSecret);
+                    }
+                }
+
+                if (string.Equals(algorithm, "secp256k1", StringComparison.Ordinal))
+                {
+                    // Account key 0 of the seed's family, as DeriveKeypair derives it for a non-validator.
+                    BigInteger privateGen = K256KeyGenerator.ComputePrivateGen(seed);
+                    BigInteger secret = K256KeyGenerator.ComputeSecretKey(privateGen, 0);
+                    byte[] magnitude = secret.ToByteArrayUnsigned();
+                    try
+                    {
+                        byte[] privateKey = new byte[33];
+                        Buffer.BlockCopy(magnitude, 0, privateKey, 33 - magnitude.Length, magnitude.Length);
+                        return (privateKey, K256KeyGenerator.ComputePublicKey(secret).GetEncoded(true));
+                    }
+                    finally
+                    {
+                        CryptographicOperations.ZeroMemory(magnitude);
+                    }
+                }
+
+                throw new ArgumentException($"Unknown algorithm '{algorithm}'; expected ed25519 or secp256k1.", nameof(algorithm));
+            }
+            finally
+            {
+                CryptographicOperations.ZeroMemory(seed);
+            }
+        }
+
+        private static bool IsEd25519PrivateKey(ReadOnlySpan<byte> privateKey)
+        {
+            if (privateKey.Length != 33)
+                throw new ArgumentException("The private key must be 33 bytes: 0xED or 0x00 followed by 32 key bytes.", nameof(privateKey));
+            return privateKey[0] switch
+            {
+                0xED => true,
+                0x00 => false,
+                _ => throw new ArgumentException("The private key must start with 0xED (Ed25519) or 0x00 (secp256k1).", nameof(privateKey)),
+            };
+        }
+
+        /// <summary>
+        /// Refuses a secp256k1 scalar outside [1, n-1]. A buffer the caller has already cleared is
+        /// 33 zero bytes, whose 0x00 prefix reads as secp256k1; without this it would sign as d = 0
+        /// under a public key at infinity, and the node would only refuse it at submission.
+        /// </summary>
+        private static BigInteger RequireSecp256k1Scalar(byte[] key)
+        {
+            BigInteger d = new BigInteger(1, key);
+            if (d.SignValue <= 0 || d.CompareTo(Secp256K1.Order()) >= 0)
+                throw new ArgumentException("The secp256k1 private key is not a valid scalar: zero, or not below the curve order.", "privateKey");
+            return d;
+        }
+
+        private static byte[] Ed25519PublicKey(byte[] seed)
+        {
+            byte[] expanded = Chaos.NaCl.Ed25519.ExpandedPrivateKeyFromSeed(seed);
+            try
+            {
+                byte[] publicKey = new byte[33];
+                publicKey[0] = 0xED;
+                Buffer.BlockCopy(expanded, 32, publicKey, 1, 32);
+                return publicKey;
+            }
+            finally
+            {
+                CryptographicOperations.ZeroMemory(expanded);
+            }
         }
 
         /// <summary> Sing message </summary>

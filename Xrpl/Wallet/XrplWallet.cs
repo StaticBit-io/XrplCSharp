@@ -140,6 +140,27 @@ namespace Xrpl.Wallet
         }
 
         /// <summary>
+        /// A wallet whose signatures come from <paramref name="signBytes"/> rather than a key string:
+        /// the engine behind <see cref="XrplSigningKey"/>, which keeps its key in a byte array.
+        /// <see cref="PrivateKey"/> and <see cref="Seed"/> are null on it.
+        /// </summary>
+        internal XrplWallet(string publicKey, string classicAddress, Func<byte[], string> signBytes)
+        {
+            this.PublicKey = publicKey;
+            this.ClassicAddress = classicAddress;
+            _signBytes = signBytes ?? throw new ArgumentNullException(nameof(signBytes));
+        }
+
+        private readonly Func<byte[], string>? _signBytes;
+
+        /// <summary>
+        /// The one place a wallet turns a signing preimage into a signature, so that a byte-held key
+        /// goes through the same routing and encoding as a string one.
+        /// </summary>
+        private string SignBytes(byte[] message) =>
+            _signBytes != null ? _signBytes(message) : XrplKeypairs.Sign(message, this.PrivateKey);
+
+        /// <summary>
         /// Generates a new Wallet using a generated seed.
         /// </summary>
         /// <param name="algorithm">The digital signature algorithm to generate an address for.</param>
@@ -791,7 +812,8 @@ namespace Xrpl.Wallet
 
             txToSignAndEncode["SigningPubKey"] = this.PublicKey;
 
-            string signature = ComputeSignature(JsonSerializer.Deserialize<Dictionary<string, object>>(txToSignAndEncode.ToJsonString(), XrplJsonOptions.Default), this.PrivateKey);
+            string encoded = XrplBinaryCodec.EncodeForSigning(JsonSerializer.Deserialize<Dictionary<string, object>>(txToSignAndEncode.ToJsonString(), XrplJsonOptions.Default));
+            string signature = SignBytes(AddressCodec.Utils.FromHex(encoded));
             txToSignAndEncode["TxnSignature"] = signature;
 
             string serialized = XrplBinaryCodec.Encode(txToSignAndEncode);
@@ -903,7 +925,7 @@ namespace Xrpl.Wallet
                 MultiSigningPrefix(txBase, sponsoredSingleMain, role));
             var preimage = Xrpl.AddressCodec.Utils.FromHex(preimageHex);
 
-            string sig = Xrpl.Keypairs.XrplKeypairs.Sign(preimage, this.PrivateKey);
+            string sig = SignBytes(preimage);
 
             var existingSigners = txBase["Signers"] as JsonArray;
             var signers = existingSigners != null
@@ -1065,7 +1087,7 @@ namespace Xrpl.Wallet
                 Buffer.BlockCopy(preimage, 0, signData, 0, preimage.Length);
                 Buffer.BlockCopy(batchSignerAccountId, 0, signData, preimage.Length, batchSignerAccountId.Length);
 
-                string signature = XrplKeypairs.Sign(signData, this.PrivateKey);
+                string signature = SignBytes(signData);
 
                 var existingBatchSigners = outer["BatchSigners"] as JsonArray;
                 var batchSigners = existingBatchSigners != null
@@ -1113,7 +1135,7 @@ namespace Xrpl.Wallet
                 Buffer.BlockCopy(ownerAccountId, 0, fullPreimage, preimage.Length, ownerAccountId.Length);
                 Buffer.BlockCopy(signerAccountId, 0, fullPreimage, preimage.Length + ownerAccountId.Length, signerAccountId.Length);
 
-                var sig = Xrpl.Keypairs.XrplKeypairs.Sign(fullPreimage, this.PrivateKey);
+                var sig = SignBytes(fullPreimage);
 
                 // Fetch or create the BatchSigner for ownerAccount
                 var existingBatchSigners = outer["BatchSigners"] as JsonArray;
@@ -1365,7 +1387,7 @@ namespace Xrpl.Wallet
             byte[] signingBytes = LoanSigningHelper.GetCounterpartyPreimage(tx);
 
             // Sign the preimage with this wallet's key
-            string sig = XrplKeypairs.Sign(signingBytes, this.PrivateKey);
+            string sig = SignBytes(signingBytes);
 
             // Add CounterpartySignature
             tx["CounterpartySignature"] = SignatureObject.Single(this.PublicKey, sig).ToJsonObject();
@@ -1427,7 +1449,7 @@ namespace Xrpl.Wallet
             tx.Remove("TxnSignature");
 
             byte[] signingBytes = SponsorSigningHelper.GetSponsorPreimage(tx);
-            string sig = XrplKeypairs.Sign(signingBytes, this.PrivateKey);
+            string sig = SignBytes(signingBytes);
 
             tx["SponsorSignature"] = SignatureObject.Single(this.PublicKey, sig).ToJsonObject();
 

@@ -140,7 +140,7 @@ public class TestUXrplAmount
     {
         Assert.AreEqual("-25", XrplAmount.Parse(Xrp, "-25").ToString());
         Assert.ThrowsExactly<FormatException>(() => XrplAmount.Parse(Xrp, "1.5"));
-        Assert.ThrowsExactly<OverflowException>(() => XrplAmount.Parse(Xrp, "100000000000000001"));
+        Assert.Throws<OverflowException>(() => XrplAmount.Parse(Xrp, "100000000000000001"));
     }
 
     [TestMethod]
