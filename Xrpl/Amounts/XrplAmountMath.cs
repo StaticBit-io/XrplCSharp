@@ -16,8 +16,8 @@ namespace Xrpl.Amounts
     /// <remarks>
     /// <para>
     /// <see cref="LedgerRules"/> supplies what the node switches on: the <c>Number</c> scale, and
-    /// <c>MPTokensV2</c>, under which an MPT result goes through <c>Number</c> arithmetic. null
-    /// means the current rules.
+    /// <c>MPTokensV2</c> and <c>fixCleanup3_5_0</c>, under which a rounded product or quotient
+    /// with an MPT operand goes through <c>Number</c> arithmetic. null means the current rules.
     /// </para>
     /// <para>
     /// The strict forms differ from the legacy ones in two places only. An integral result (XRP,
@@ -224,7 +224,14 @@ namespace Xrpl.Amounts
             bool resultNegative = num.IsNegative != den.IsNegative;
             NumberContext c = Context(rules);
 
-            if (kind == AmountKind.Mpt && (rules ?? new LedgerRules()).MPTokensV2)
+            // fixCleanup3_5_0 takes any MPT operand through Number, MPTokensV2 or not: the legacy
+            // path overflows on large MPT amounts. Without it, an MPT result under MPTokensV2, as
+            // rippled 3.4.1 has it.
+            LedgerRules current = rules ?? new LedgerRules();
+            bool numberPath = current.CurrentFixCleanup3_5_0
+                ? AnyMpt(num, den, kind)
+                : kind == AmountKind.Mpt && current.MPTokensV2;
+            if (numberPath)
             {
                 NumberRounding mode = RoundMode(resultNegative, roundUp);
                 XrplNumber quotient = XrplNumber.Divide(num.Value, den.Value, c.WithRounding(mode));
@@ -396,12 +403,15 @@ namespace Xrpl.Amounts
             ulong minV = Math.Min(a, b);
             ulong maxV = Math.Max(a, b);
             if (bothXrp && (minV > 3_000_000_000UL || (maxV >> 32) * minV > 2_095_475_792UL))
-                throw new OverflowException("Native value overflow");
+                throw new AmountRangeException("Native value overflow");
             if (bothMpt && (minV > 3_037_000_499UL || (maxV >> 32) * minV > 2_147_483_648UL))
-                throw new OverflowException("MPT value overflow");
+                throw new AmountRangeException("MPT value overflow");
 
             return unchecked(minV * maxV);
         }
+
+        private static bool AnyMpt(XrplAmount a, XrplAmount b, AmountKind kind) =>
+            kind == AmountKind.Mpt || a.Kind == AmountKind.Mpt || b.Kind == AmountKind.Mpt;
 
         private static BigInteger Signed(XrplAmount amount) =>
             amount.IsNegative ? -(BigInteger)amount.StMantissa : amount.StMantissa;

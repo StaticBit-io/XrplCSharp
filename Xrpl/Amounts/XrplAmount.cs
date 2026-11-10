@@ -374,9 +374,9 @@ namespace Xrpl.Amounts
                 if (exponent <= -20)
                     return new XrplAmount(asset, kind, 0, 0, false);
                 if (kind == AmountKind.Xrp && exponent > 17)
-                    throw new OverflowException("Native currency amount out of range");
+                    throw new AmountRangeException("Native currency amount out of range");
                 if (kind == AmountKind.Mpt && exponent > 18)
-                    throw new OverflowException("MPT amount out of range");
+                    throw new AmountRangeException("MPT amount out of range");
 
                 BigInteger units = exponent >= 0
                     ? magnitude * BigInteger.Pow(10, exponent)
@@ -387,7 +387,7 @@ namespace Xrpl.Amounts
                 ulong limit = kind == AmountKind.Xrp ? MaxDrops : MaxMptAmount;
                 if (units > limit)
                 {
-                    throw new OverflowException(kind == AmountKind.Xrp
+                    throw new AmountRangeException(kind == AmountKind.Xrp
                         ? "Native currency amount out of range"
                         : "MPT amount out of range");
                 }
@@ -447,9 +447,9 @@ namespace Xrpl.Amounts
             if (value == 0 || exponent <= -20)
                 return new XrplAmount(asset, kind, 0, 0, false);
             if (kind == AmountKind.Xrp && exponent > 17)
-                throw new OverflowException("Native currency amount out of range");
+                throw new AmountRangeException("Native currency amount out of range");
             if (kind == AmountKind.Mpt && exponent > 18)
-                throw new OverflowException("MPT amount out of range");
+                throw new AmountRangeException("MPT amount out of range");
 
             if (value > long.MaxValue)
             {

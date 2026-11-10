@@ -1,5 +1,6 @@
 using System;
 
+using Xrpl.Amounts;
 using Xrpl.BinaryCodec.Numbers;
 using Xrpl.Models.Ledger;
 
@@ -19,6 +20,12 @@ namespace Xrpl.Sugar
 
         /// <summary>Assets that move into the vault on a deposit, or out of it on a withdrawal.</summary>
         public decimal Assets { get; init; }
+
+        /// <summary>
+        /// Assets the destination receives: <see cref="Assets"/>, less the transfer fee on a
+        /// withdrawal that pays one (see <see cref="VaultShares.WithdrawalTransferRate"/>).
+        /// </summary>
+        public decimal AssetsDelivered { get; init; }
 
         /// <summary>
         /// The result the node would give instead, such as <c>tecPRECISION_LOSS</c>,
@@ -133,9 +140,40 @@ namespace Xrpl.Sugar
             ulong holderShares,
             XrplNumber amount,
             LedgerRules rules = null,
+            DateTime? parentCloseTime = null) =>
+            WithdrawAssets(vault, sharesOutstanding, holderShares, amount, OfferCrossing.QualityOne, rules, parentCloseTime);
+
+        /// <summary>
+        /// A <c>VaultWithdraw</c> of <paramref name="amount"/> in the vault asset that pays a
+        /// transfer fee: the vault pays out the amount plus the fee, so the destination receives
+        /// the amount (<see cref="VaultQuote.AssetsDelivered"/>).
+        /// </summary>
+        /// <param name="vault">The <c>Vault</c> entry.</param>
+        /// <param name="sharesOutstanding">The share issuance's <c>OutstandingAmount</c>.</param>
+        /// <param name="holderShares">The withdrawing account's shares.</param>
+        /// <param name="amount">The assets the destination is to receive.</param>
+        /// <param name="transferRate">
+        /// The rate the withdrawal pays in billionths, as <see cref="WithdrawalTransferRate"/>
+        /// returns it; 1,000,000,000 or 0 for no fee. Ignored before <c>fixCleanup3_5_0</c> and for XRP.
+        /// </param>
+        /// <param name="rules">The amendments in force; the current rules when null.</param>
+        /// <param name="parentCloseTime">
+        /// The close time of the ledger before the one the transaction lands in, for the phases of a
+        /// closed-ended vault; null skips that check. A local time is converted to UTC; an
+        /// unspecified one is taken as UTC.
+        /// </param>
+        /// <exception cref="OverflowException">An amount is beyond <see cref="decimal"/>.</exception>
+        /// <exception cref="ArgumentOutOfRangeException"><paramref name="transferRate"/> is between 1 and 999,999,999.</exception>
+        public static VaultQuote WithdrawAssets(
+            LOVault vault,
+            ulong sharesOutstanding,
+            ulong holderShares,
+            XrplNumber amount,
+            uint transferRate,
+            LedgerRules rules = null,
             DateTime? parentCloseTime = null)
         {
-            VaultState state = VaultState.Of(vault, sharesOutstanding, rules);
+            VaultState state = VaultState.Of(vault, sharesOutstanding, rules, transferRate);
             return Guarded(() => WithdrawAssetsCore(state, vault, holderShares, amount, parentCloseTime));
         }
 
@@ -159,10 +197,84 @@ namespace Xrpl.Sugar
             ulong holderShares,
             ulong shares,
             LedgerRules rules = null,
+            DateTime? parentCloseTime = null) =>
+            RedeemShares(vault, sharesOutstanding, holderShares, shares, OfferCrossing.QualityOne, rules, parentCloseTime);
+
+        /// <summary>
+        /// A <c>VaultWithdraw</c> of <paramref name="shares"/> vault shares that pays a transfer
+        /// fee: the fee comes out of what the shares pay (<see cref="VaultQuote.AssetsDelivered"/>).
+        /// </summary>
+        /// <param name="vault">The <c>Vault</c> entry.</param>
+        /// <param name="sharesOutstanding">The share issuance's <c>OutstandingAmount</c>.</param>
+        /// <param name="holderShares">The withdrawing account's shares.</param>
+        /// <param name="shares">The shares to redeem.</param>
+        /// <param name="transferRate">
+        /// The rate the withdrawal pays in billionths, as <see cref="WithdrawalTransferRate"/>
+        /// returns it; 1,000,000,000 or 0 for no fee. Ignored before <c>fixCleanup3_5_0</c> and for XRP.
+        /// </param>
+        /// <param name="rules">The amendments in force; the current rules when null.</param>
+        /// <param name="parentCloseTime">
+        /// The close time of the ledger before the one the transaction lands in, for the phases of a
+        /// closed-ended vault; null skips that check. A local time is converted to UTC; an
+        /// unspecified one is taken as UTC.
+        /// </param>
+        /// <exception cref="OverflowException">An amount is beyond <see cref="decimal"/>.</exception>
+        /// <exception cref="ArgumentOutOfRangeException"><paramref name="transferRate"/> is between 1 and 999,999,999.</exception>
+        public static VaultQuote RedeemShares(
+            LOVault vault,
+            ulong sharesOutstanding,
+            ulong holderShares,
+            ulong shares,
+            uint transferRate,
+            LedgerRules rules = null,
             DateTime? parentCloseTime = null)
         {
-            VaultState state = VaultState.Of(vault, sharesOutstanding, rules);
+            VaultState state = VaultState.Of(vault, sharesOutstanding, rules, transferRate);
             return Guarded(() => RedeemSharesCore(state, vault, holderShares, shares, parentCloseTime));
+        }
+
+        /// <summary>
+        /// <c>withdrawalTransferRate</c>: the transfer rate a <c>VaultWithdraw</c> pays. Under
+        /// <c>fixCleanup3_5_0</c> it is the asset's rate when a holder other than the issuer
+        /// withdraws to another account that is not the issuer either; otherwise, and always
+        /// before the amendment and for XRP, there is no fee.
+        /// </summary>
+        /// <param name="asset">The vault asset.</param>
+        /// <param name="account">The withdrawing account.</param>
+        /// <param name="destination">The <c>Destination</c>, or null when the account withdraws to itself.</param>
+        /// <param name="assetTransferRate">
+        /// The asset's transfer rate in billionths: the issuer's <c>TransferRate</c> for an issued
+        /// currency, 1,000,000,000 plus 10,000 x <c>TransferFee</c> for an MPT; 0 means none.
+        /// </param>
+        /// <param name="rules">The amendments in force; the current rules when null.</param>
+        /// <returns>The rate in billionths, 1,000,000,000 for no fee.</returns>
+        /// <exception cref="ArgumentNullException"><paramref name="asset"/> or <paramref name="account"/> is null.</exception>
+        public static uint WithdrawalTransferRate(
+            IssuedCurrency asset,
+            string account,
+            string destination,
+            uint assetTransferRate,
+            LedgerRules rules = null)
+        {
+            if (asset == null)
+                throw new ArgumentNullException(nameof(asset));
+            if (account == null)
+                throw new ArgumentNullException(nameof(account));
+
+            rules ??= new LedgerRules();
+            destination ??= account;
+            if (!rules.FixCleanup3_5_0 || asset.IsXrp() || assetTransferRate == 0)
+                return OfferCrossing.QualityOne;
+
+            string issuer = asset.MptIssuanceId != null ? DexAssets.MptIssuer(asset.MptIssuanceId) : asset.Issuer;
+            if (string.Equals(destination, account, StringComparison.Ordinal)
+                || string.Equals(account, issuer, StringComparison.Ordinal)
+                || string.Equals(destination, issuer, StringComparison.Ordinal))
+            {
+                return OfferCrossing.QualityOne;
+            }
+
+            return assetTransferRate;
         }
 
         /// <summary>
@@ -185,7 +297,12 @@ namespace Xrpl.Sugar
 
             return outcome.Refusal != null
                 ? new VaultQuote { Refusal = outcome.Refusal, RefusalReason = outcome.Reason }
-                : new VaultQuote { Shares = LoanSchedule.ToDecimal(outcome.Shares), Assets = LoanSchedule.ToDecimal(outcome.Assets) };
+                : new VaultQuote
+                {
+                    Shares = LoanSchedule.ToDecimal(outcome.Shares),
+                    Assets = LoanSchedule.ToDecimal(outcome.Assets),
+                    AssetsDelivered = LoanSchedule.ToDecimal(outcome.Delivered),
+                };
         }
 
         /// <summary><c>VaultDeposit::doApply</c>.</summary>
@@ -230,7 +347,7 @@ namespace Xrpl.Sugar
             if (!maximum.IsZero && XrplNumber.Add(state.AssetsTotal, deposited, c) > maximum)
                 return Refused("tecLIMIT_EXCEEDED", "The deposit would take the vault's assets past AssetsMaximum.");
 
-            return Quote(shares, deposited);
+            return new Outcome(shares, deposited, deposited, null, null);
         }
 
         /// <summary><c>VaultWithdraw::doApply</c> for an amount of the asset.</summary>
@@ -243,7 +360,9 @@ namespace Xrpl.Sugar
                 return phase;
 
             bool waive = WaivesLoss(state, holderShares);
-            XrplNumber shares = AssetsToSharesWithdraw(AssetRounding.ToAmount(amount, state.Integral, state.Context), state, waive);
+            // The vault pays the fee on top: the shares burned cover the amount plus the fee.
+            XrplNumber charged = TransferFee(AssetRounding.ToAmount(amount, state.Integral, state.Context), state, add: true);
+            XrplNumber shares = AssetsToSharesWithdraw(charged, state, waive);
             if (shares.IsZero)
                 return Refused("tecPRECISION_LOSS", "The withdrawal is worth less than one share.");
 
@@ -356,7 +475,11 @@ namespace Xrpl.Sugar
             if (state.Rules.FixCleanup3_2_0 && final)
                 assets = AssetRounding.ToAmount(state.AssetsAvailable, state.Integral, c);
 
-            return Quote(shares, assets);
+            XrplNumber delivered = TransferFee(assets, state, add: false);
+            if (assets > XrplNumber.Zero && delivered.IsZero)
+                return Refused("tecPRECISION_LOSS", "The transfer fee leaves nothing to deliver.");
+
+            return new Outcome(shares, assets, delivered, null, null);
         }
 
         /// <summary><c>assetsToSharesDeposit</c>: shares minted, truncated to a whole share.</summary>
@@ -471,12 +594,26 @@ namespace Xrpl.Sugar
         /// <summary>An MPT amount as a number; MPT amounts never exceed <see cref="long.MaxValue"/>.</summary>
         private static XrplNumber FromULong(ulong value) => (XrplNumber)checked((long)value);
 
-        private static Outcome Quote(XrplNumber shares, XrplNumber assets) => new Outcome(shares, assets, null, null);
+        /// <summary>
+        /// <c>addTransferFee</c> (<paramref name="add"/>) or <c>subtractTransferFee</c>: the amount
+        /// times the rate, rounded up, or divided by it, rounded down, through <c>mulRatio</c>.
+        /// </summary>
+        private static XrplNumber TransferFee(XrplNumber amount, VaultState state, bool add)
+        {
+            if (state.TransferRate == OfferCrossing.QualityOne || amount.IsZero)
+                return amount;
 
-        private static Outcome Refused(string result, string reason) => new Outcome(XrplNumber.Zero, XrplNumber.Zero, result, reason);
+            XrplAmount value = XrplAmount.FromNumber(state.Asset, amount, NumberRounding.ToNearest);
+            XrplAmount result = add
+                ? OfferCrossing.MulRatio(value, state.TransferRate, OfferCrossing.QualityOne, roundUp: true, state.Rules)
+                : OfferCrossing.MulRatio(value, OfferCrossing.QualityOne, state.TransferRate, roundUp: false, state.Rules);
+            return result.Value;
+        }
+
+        private static Outcome Refused(string result, string reason) => new Outcome(XrplNumber.Zero, XrplNumber.Zero, XrplNumber.Zero, result, reason);
 
         /// <summary>A computation's result before it becomes a <see cref="VaultQuote"/>.</summary>
-        private sealed record Outcome(XrplNumber Shares, XrplNumber Assets, string Refusal, string Reason);
+        private sealed record Outcome(XrplNumber Shares, XrplNumber Assets, XrplNumber Delivered, string Refusal, string Reason);
 
         /// <summary>The vault fields the computations read.</summary>
         private sealed class VaultState
@@ -497,7 +634,12 @@ namespace Xrpl.Sugar
 
             public ulong SharesOutstanding { get; private init; }
 
-            public static VaultState Of(LOVault vault, ulong sharesOutstanding, LedgerRules rules)
+            public IssuedCurrency Asset { get; private init; }
+
+            /// <summary>The rate the withdrawal pays; no fee before <c>fixCleanup3_5_0</c> and for XRP.</summary>
+            public uint TransferRate { get; private init; }
+
+            public static VaultState Of(LOVault vault, ulong sharesOutstanding, LedgerRules rules, uint transferRate = OfferCrossing.QualityOne)
             {
                 if (vault == null)
                     throw new ArgumentNullException(nameof(vault));
@@ -505,9 +647,17 @@ namespace Xrpl.Sugar
                     throw new ArgumentException("The vault carries no Asset.", nameof(vault));
 
                 rules ??= new LedgerRules();
+                // 0 is how the ledger writes "no TransferRate", and rippled reads it as parity.
+                if (transferRate == 0)
+                    transferRate = OfferCrossing.QualityOne;
+                if (transferRate < OfferCrossing.QualityOne)
+                    throw new ArgumentOutOfRangeException(nameof(transferRate), transferRate, "A transfer rate is at least 1,000,000,000.");
+
                 return new VaultState
                 {
                     Rules = rules,
+                    Asset = asset,
+                    TransferRate = rules.FixCleanup3_5_0 && !asset.IsXrp() ? transferRate : OfferCrossing.QualityOne,
                     Context = rules.Context,
                     Integral = LoanPayments.IsIntegral(asset),
                     Scale = (int)(vault.Scale ?? 0),

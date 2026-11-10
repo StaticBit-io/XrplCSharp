@@ -40,6 +40,22 @@ namespace Xrpl.Sugar
         public bool FixCleanup3_4_0 { get; init; } = true;
 
         /// <summary>
+        /// Whether <c>fixCleanup3_5_0</c> is enabled: a direct MPT payment and an MPT sent through
+        /// its issuer charge the transfer fee in exact integer arithmetic, rounded up; an XRP amount
+        /// beyond the ledger's range no longer aborts <c>ceilOut</c>; <c>divRound</c> takes an MPT
+        /// operand through <c>Number</c>; <c>LoanSet</c> refuses a value field out of the asset's
+        /// range with <c>tecPRECISION_LOSS</c>; and a vault withdrawal from one holder to another
+        /// pays the asset's transfer fee.
+        /// </summary>
+        /// <remarks>
+        /// rippled 3.5.0 reads the amendment outside a transaction as enabled
+        /// (<c>resultIfNoRules</c>), so path finding on such a node follows it whatever the ledger
+        /// records. <see cref="FromNodeAsync"/> tells such a node from an older one by whether its
+        /// <c>feature</c> list names the amendment.
+        /// </remarks>
+        public bool FixCleanup3_5_0 { get; init; } = true;
+
+        /// <summary>
         /// Whether SingleAssetVault, LendingProtocol or MPTokensV2 is enabled, which switches
         /// rippled's <c>Number</c> to the large mantissa. Lending and vaults imply it; AMM arithmetic
         /// follows it. <see cref="FromNodeAsync"/> derives it from those amendments; set by hand, it
@@ -135,6 +151,19 @@ namespace Xrpl.Sugar
         /// <summary><c>fixReducedOffersV2</c> as an offer's <c>limitIn</c> reads it: from the current transaction rules.</summary>
         internal bool CurrentFixReducedOffersV2 => CurrentRulesSet && FixReducedOffersV2;
 
+        /// <summary>
+        /// <c>fixCleanup3_5_0</c> as <c>isFeatureEnabled(fixCleanup3_5_0, true)</c> reads it: from
+        /// the current transaction rules, and outside a transaction enabled on a node that has it.
+        /// </summary>
+        internal bool CurrentFixCleanup3_5_0 => OutsideTransaction ? FixCleanup3_5_0Known ?? FixCleanup3_5_0 : FixCleanup3_5_0;
+
+        /// <summary>
+        /// Whether the node knows <c>fixCleanup3_5_0</c>: rippled 3.5.0 on. A node before it runs
+        /// the old code outside a transaction too. Set only by <see cref="FromFeatures"/>; null for
+        /// rules built by hand, which then follow <see cref="FixCleanup3_5_0"/> there as well.
+        /// </summary>
+        internal bool? FixCleanup3_5_0Known { get; init; }
+
         /// <summary>These rules as code outside a transaction sees them.</summary>
         internal LedgerRules OutsideOfTransaction()
         {
@@ -160,6 +189,8 @@ namespace Xrpl.Sugar
                 FixCleanup3_2_0 = FixCleanup3_2_0,
                 FixCleanup3_3_0 = FixCleanup3_3_0,
                 FixCleanup3_4_0 = FixCleanup3_4_0,
+                FixCleanup3_5_0 = FixCleanup3_5_0,
+                FixCleanup3_5_0Known = FixCleanup3_5_0Known,
                 LargeNumbers = true,
                 FixAMMv1_1 = FixAMMv1_1,
                 FixAMMv1_2 = FixAMMv1_2,
@@ -219,6 +250,8 @@ namespace Xrpl.Sugar
                 FixCleanup3_2_0 = Enabled("fixCleanup3_2_0"),
                 FixCleanup3_3_0 = Enabled("fixCleanup3_3_0"),
                 FixCleanup3_4_0 = Enabled("fixCleanup3_4_0"),
+                FixCleanup3_5_0 = Enabled("fixCleanup3_5_0"),
+                FixCleanup3_5_0Known = features.GetByName("fixCleanup3_5_0") != null,
                 LargeNumbers = Enabled("SingleAssetVault") || Enabled("LendingProtocol") || Enabled("MPTokensV2"),
                 FixAMMv1_1 = true,
                 FixAMMv1_2 = Enabled("fixAMMv1_2"),
