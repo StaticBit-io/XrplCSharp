@@ -54,6 +54,22 @@ public class GatewayBalancesResponse //todo rename to  GatewayBalancesResponse
 
     [JsonPropertyName("validated")]
     public bool? Validated { get; set; }
+
+    /// <summary>
+    /// The totals of the escrows linked to the account, by currency code: rippled sums the Amount of
+    /// every Escrow in the account's owner directory - XRP escrows the account created and token
+    /// escrows of its own issued currencies alike; MPT escrows are left out. The value is the
+    /// amount as text: drops for <c>XRP</c>, a decimal for a token. Absent when there are none.
+    /// </summary>
+    [JsonPropertyName("locked")]
+    public Dictionary<string, string> Locked { get; set; }
+
+    /// <summary>
+    /// The ledger index of the open ledger the data was read from. Present instead of
+    /// <c>ledger_index</c> and <c>ledger_hash</c> when the request did not name a closed ledger.
+    /// </summary>
+    [JsonPropertyName("ledger_current_index")]
+    public uint? LedgerCurrentIndex { get; set; }
 }
 
 /// <summary>

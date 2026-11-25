@@ -115,5 +115,11 @@ namespace Xrpl.Models.Methods
         /// </summary>
         [JsonPropertyName("deletion_blockers_only")]
         public bool? DeletionBlockersOnly { get; set; }
+        /// <summary>
+        /// If set, return only the objects whose sponsored state matches: <c>true</c> for objects
+        /// that carry a sponsor (XLS-68), <c>false</c> for objects that do not. Omitted returns both.
+        /// </summary>
+        [JsonPropertyName("sponsored")]
+        public bool? Sponsored { get; set; }
     }
 }

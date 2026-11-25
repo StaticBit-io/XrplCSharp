@@ -58,5 +58,16 @@ namespace Xrpl.Models.Methods
         /// </summary>
         [JsonPropertyName("queue")]
         public bool? Queue { get; set; }
+        /// <summary>
+        /// Admin only. If true, return the full ledger: every state entry and every transaction.
+        /// </summary>
+        [JsonPropertyName("full")]
+        public bool? Full { get; set; }
+        /// <summary>
+        /// Admin only. If true, return the ledger's state entries (hashes, or the entries with
+        /// <see cref="Expand"/>).
+        /// </summary>
+        [JsonPropertyName("accounts")]
+        public bool? Accounts { get; set; }
     }
 }

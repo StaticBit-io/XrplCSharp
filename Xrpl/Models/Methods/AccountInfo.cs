@@ -61,6 +61,12 @@ namespace Xrpl.Models.Methods
         /// </summary>
         [JsonPropertyName("validated")]
         public bool Validated { get; set; }
+
+        /// <summary>
+        /// The identifying hash of the ledger version the data was read from. Absent for the open ledger.
+        /// </summary>
+        [JsonPropertyName("ledger_hash")]
+        public string LedgerHash { get; set; }
     }
 
 

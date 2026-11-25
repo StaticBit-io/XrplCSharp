@@ -89,4 +89,11 @@ public class SimulateResponse : BaseMethodResult
 
     [JsonPropertyName("ledger_index")]
     public ulong? LedgerIndex { get; set; }
+
+    /// <summary>
+    /// The metadata of the simulated transaction in the binary format, as hexadecimal, when the
+    /// request set <c>binary</c>. <see cref="Meta"/> is absent then.
+    /// </summary>
+    [JsonPropertyName("meta_blob")]
+    public string MetaBlob { get; set; }
 }

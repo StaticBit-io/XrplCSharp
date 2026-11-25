@@ -52,5 +52,11 @@ namespace Xrpl.Models.Methods
         /// </summary>
         [JsonPropertyName("ledger_hash")]
         public string LedgerHash { get; set; }
+
+        /// <summary>
+        /// True if the data comes from a validated ledger version, which cannot change.
+        /// </summary>
+        [JsonPropertyName("validated")]
+        public bool? Validated { get; set; }
     }
 }

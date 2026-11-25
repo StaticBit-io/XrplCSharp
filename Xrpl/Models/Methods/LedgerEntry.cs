@@ -3,6 +3,7 @@ using System.Text.Json.Serialization;
 using System.Collections.Generic;
 
 using Xrpl.Client.Json.Converters;
+using Xrpl.Models.Common;
 using Xrpl.Models.Ledger;
 
 //https://github.com/XRPLF/xrpl.js/blob/main/packages/xrpl/src/models/methods/ledgerEntry.ts
@@ -180,10 +181,65 @@ public class LedgerEntryRequest : BaseLedgerRequest
     public string? NftOffer { get; set; }
 
     /// <summary>
-    /// 
+    /// The door account of the <see cref="Bridge"/> to retrieve: the bridge is stored on the side
+    /// of the chain whose door this is.
     /// </summary>
     [JsonPropertyName("bridge_account")]
     public string? BridgeAccount { get; set; }
+
+    /// <summary>
+    /// The Bridge to retrieve, identified by its four XChainBridge fields. Requires
+    /// <see cref="BridgeAccount"/>. To retrieve it by its ledger entry ID, use <see cref="Index"/>.
+    /// </summary>
+    [JsonPropertyName("bridge")]
+    public XChainBridgeModel? Bridge { get; set; }
+
+    /// <summary>
+    /// The XChainOwnedClaimID to retrieve, identified by its bridge and claim ID.
+    /// </summary>
+    [JsonPropertyName("xchain_owned_claim_id")]
+    public XChainOwnedClaimIdQuery? XChainOwnedClaimId { get; set; }
+
+    /// <summary>
+    /// The XChainOwnedCreateAccountClaimID to retrieve, identified by its bridge and account
+    /// creation count.
+    /// </summary>
+    [JsonPropertyName("xchain_owned_create_account_claim_id")]
+    public XChainOwnedCreateAccountClaimIdQuery? XChainOwnedCreateAccountClaimId { get; set; }
+
+    /// <summary>
+    /// The Vault to retrieve, identified by its owner and the sequence of the VaultCreate
+    /// transaction. To retrieve it by its ledger entry ID, use <see cref="Index"/>.
+    /// </summary>
+    [JsonPropertyName("vault")]
+    public VaultQuery? Vault { get; set; }
+
+    /// <summary>
+    /// The Sponsorship (XLS-68) to retrieve, identified by its sponsor and sponsee. To retrieve it
+    /// by its ledger entry ID, use <see cref="Index"/>.
+    /// </summary>
+    [JsonPropertyName("sponsorship")]
+    public SponsorshipQuery? Sponsorship { get; set; }
+
+    /// <summary>
+    /// Set to <c>true</c> to retrieve the FeeSettings singleton.
+    /// </summary>
+    [JsonPropertyName("fee")]
+    public bool? Fee { get; set; }
+
+    /// <summary>
+    /// Set to <c>true</c> to retrieve the NegativeUNL singleton.
+    /// </summary>
+    [JsonPropertyName("nunl")]
+    public bool? NegativeUnl { get; set; }
+
+    /// <summary>
+    /// The LedgerHashes entry to retrieve: <c>true</c> for the short skip list (the hashes since
+    /// the last flag ledger), or a ledger index (<see cref="uint"/>) for the long skip list that
+    /// covers it.
+    /// </summary>
+    [JsonPropertyName("hashes")]
+    public object? Hashes { get; set; }
 
     /// <summary>
     /// 
@@ -218,6 +274,69 @@ public class LedgerEntryRequest : BaseLedgerRequest
     /// <remarks>Requires the Cosign amendment. This feature is in draft and subject to change.</remarks>
     [JsonPropertyName("transaction_proposal")]
     public TransactionProposalQuery? TransactionProposal { get; set; }
+}
+
+/// <summary>
+/// Identifies a Vault by the account that created it and the sequence of the VaultCreate
+/// transaction.
+/// </summary>
+public class VaultQuery
+{
+    /// <summary>
+    /// The account that created the vault.
+    /// </summary>
+    [JsonPropertyName("owner")]
+    public string Owner { get; set; }
+
+    /// <summary>
+    /// The sequence number of the VaultCreate transaction.
+    /// </summary>
+    [JsonPropertyName("seq")]
+    public uint Seq { get; set; }
+}
+
+/// <summary>
+/// Identifies a Sponsorship (XLS-68) by its two accounts.
+/// </summary>
+public class SponsorshipQuery
+{
+    /// <summary>
+    /// The sponsoring account.
+    /// </summary>
+    [JsonPropertyName("sponsor")]
+    public string Sponsor { get; set; }
+
+    /// <summary>
+    /// The sponsored account.
+    /// </summary>
+    [JsonPropertyName("sponsee")]
+    public string Sponsee { get; set; }
+}
+
+/// <summary>
+/// Identifies an XChainOwnedClaimID: the four XChainBridge fields of its bridge, at the top
+/// level of the object, and the claim ID.
+/// </summary>
+public class XChainOwnedClaimIdQuery : XChainBridgeModel
+{
+    /// <summary>
+    /// The claim ID, as XChainCreateClaimID assigned it.
+    /// </summary>
+    [JsonPropertyName("xchain_owned_claim_id")]
+    public uint XChainOwnedClaimId { get; set; }
+}
+
+/// <summary>
+/// Identifies an XChainOwnedCreateAccountClaimID: the four XChainBridge fields of its bridge, at
+/// the top level of the object, and the account creation count.
+/// </summary>
+public class XChainOwnedCreateAccountClaimIdQuery : XChainBridgeModel
+{
+    /// <summary>
+    /// The XChainAccountCreateCount of the account creation this entry collects attestations for.
+    /// </summary>
+    [JsonPropertyName("xchain_owned_create_account_claim_id")]
+    public uint XChainOwnedCreateAccountClaimId { get; set; }
 }
 
 /// <summary>

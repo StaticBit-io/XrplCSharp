@@ -46,6 +46,19 @@ namespace Xrpl.Models.Methods
         /// </summary>
         [JsonPropertyName("marker")]
         public object Marker { get; set; }
+
+        /// <summary>
+        /// The ledger index of the ledger version the data was read from. Absent when it was read from
+        /// the open ledger; see <see cref="LedgerCurrentIndex"/>.
+        /// </summary>
+        [JsonPropertyName("ledger_index")]
+        public uint? LedgerIndex { get; set; }
+
+        /// <summary>
+        /// The identifying hash of the ledger version the data was read from. Absent for the open ledger.
+        /// </summary>
+        [JsonPropertyName("ledger_hash")]
+        public string LedgerHash { get; set; }
     }
     /// <summary>
     /// One NFToken that might be returned from an <see cref="AccountNFTsRequest"/>.

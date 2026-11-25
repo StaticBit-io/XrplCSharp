@@ -22,6 +22,19 @@ namespace Xrpl.Models.Methods
         /// </summary>
         [JsonPropertyName("vault_id")]
         public string VaultID { get; set; }
+
+        /// <summary>
+        /// The account that created the vault. Together with <see cref="Seq"/> it identifies the
+        /// vault in place of <see cref="VaultID"/>; the node rejects a request that mixes the two.
+        /// </summary>
+        [JsonPropertyName("owner")]
+        public string Owner { get; set; }
+
+        /// <summary>
+        /// The sequence number of the VaultCreate transaction that created the vault.
+        /// </summary>
+        [JsonPropertyName("seq")]
+        public uint? Seq { get; set; }
     }
 
     /// <summary>
@@ -52,5 +65,12 @@ namespace Xrpl.Models.Methods
         /// </summary>
         [JsonPropertyName("validated")]
         public bool? Validated { get; set; }
+
+        /// <summary>
+        /// The ledger index of the open ledger the data was read from. Present instead of
+        /// <c>ledger_index</c> and <c>ledger_hash</c> when the request did not name a closed ledger.
+        /// </summary>
+        [JsonPropertyName("ledger_current_index")]
+        public uint? LedgerCurrentIndex { get; set; }
     }
 }
