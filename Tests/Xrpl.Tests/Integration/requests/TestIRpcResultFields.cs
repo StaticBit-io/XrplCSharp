@@ -104,6 +104,14 @@ namespace XrplTests.Xrpl.ClientLib.Integration
             AccountOffers offers = await client.AccountOffers(
                 new AccountOffersRequest(wallet.ClassicAddress) { LedgerIndex = Validated }).Typed();
             Assert.AreEqual(true, offers.Validated);
+
+            BookOffers book = await client.BookOffers(new BookOffersRequest
+            {
+                TakerGets = new TakerAmount { Currency = "XRP" },
+                TakerPays = new TakerAmount { Currency = "USD", Issuer = wallet.ClassicAddress },
+                LedgerIndex = Validated,
+            }).Typed();
+            Assert.AreEqual(true, book.Validated);
         }
 
         [TestMethod]

@@ -6,6 +6,7 @@ using Xrpl.Client.Json;
 using Xrpl.Models.Common;
 using Xrpl.Models.Ledger;
 using Xrpl.Models.Methods;
+using Xrpl.Models.Transactions;
 
 using static Xrpl.Models.Common.Common;
 
@@ -165,7 +166,11 @@ namespace Xrpl.Tests.ClientLib
             Assert.AreEqual(true, Read<TransactionEntryResponse>("{\"ledger_index\":7,\"validated\":true}").Validated);
             Assert.AreEqual(Hash, Read<AccountInfo>("{\"ledger_hash\":\"" + Hash + "\",\"ledger_index\":7,\"validated\":true}").LedgerHash);
             Assert.AreEqual(7u, Read<AccountNFTs>("{\"account\":\"" + Account + "\",\"account_nfts\":[],\"ledger_index\":7,\"validated\":true}").LedgerIndex);
-            Assert.AreEqual(8, Read<AccountCurrencies>("{\"ledger_current_index\":8,\"validated\":false}").LedgerCurrentIndex);
+            Assert.AreEqual(8u, Read<AccountCurrencies>("{\"ledger_current_index\":8,\"validated\":false}").LedgerCurrentIndex);
+            Assert.AreEqual(2147483648u, Read<AMMInfoResponse>("{\"ledger_current_index\":2147483648,\"validated\":false}").LedgerCurrentIndex,
+                "a ledger index is an unsigned 32-bit number");
+            Assert.AreEqual(true, Read<BookOffers>("{\"offers\":[],\"ledger_index\":7,\"validated\":true}").Validated);
+            Assert.AreEqual(8u, Read<LOLedgerData>("{\"ledger_current_index\":8,\"state\":[]}").LedgerCurrentIndex);
             Assert.AreEqual(8u, Read<VaultInfoResponse>("{\"ledger_current_index\":8,\"validated\":false}").LedgerCurrentIndex);
             Assert.AreEqual(8u, Read<RipplePathFindResponse>("{\"alternatives\":[],\"ledger_current_index\":8,\"validated\":false}").LedgerCurrentIndex);
         }

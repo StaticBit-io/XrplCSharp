@@ -42,7 +42,7 @@ namespace Xrpl.Models.Methods
         /// <c>ledger_index</c> and <c>ledger_hash</c> when the request did not name a closed ledger.
         /// </summary>
         [JsonPropertyName("ledger_current_index")]
-        public int? LedgerCurrentIndex { get; set; }
+        public uint? LedgerCurrentIndex { get; set; }
     }
 
     /// <summary>
