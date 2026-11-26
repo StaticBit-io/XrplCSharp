@@ -46,6 +46,18 @@ namespace Xrpl.Models.Methods
         /// </summary>
         [JsonPropertyName("marker")]
         public object Marker { get; set; }
+
+        /// <summary>
+        /// The limit the server applied. Present only together with <see cref="Marker"/>.
+        /// </summary>
+        [JsonPropertyName("limit")]
+        public int? Limit { get; set; }
+
+        /// <summary>
+        /// True if the data comes from a validated ledger version, which cannot change.
+        /// </summary>
+        [JsonPropertyName("validated")]
+        public bool? Validated { get; set; }
     }
     /// <summary>
     /// offer made by account that is outstanding as of the requested ledger version.

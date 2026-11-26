@@ -69,6 +69,11 @@ namespace Xrpl.Models.Transactions
 
         //todo not found field  validated?: boolean
 
+        /// <summary>
+        /// True if the data comes from a validated ledger version, which cannot change.
+        /// </summary>
+        [JsonPropertyName("validated")]
+        public bool? Validated { get; set; }
     }
 
     //https://github.com/XRPLF/xrpl.js/blob/b20c05c3680d80344006d20c44b4ae1c3b0ffcac/packages/xrpl/src/models/ledger/Offer.ts

@@ -53,5 +53,12 @@ namespace Xrpl.Models.Ledger
         /// </summary>
         [JsonPropertyName("validated")]
         public bool? Validated { get; set; }
+
+        /// <summary>
+        /// The ledger index of the open ledger the data was read from. Present instead of
+        /// <c>ledger_index</c> and <c>ledger_hash</c> when the request did not name a closed ledger.
+        /// </summary>
+        [JsonPropertyName("ledger_current_index")]
+        public uint? LedgerCurrentIndex { get; set; }
     }
 }

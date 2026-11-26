@@ -310,5 +310,33 @@ namespace Xrpl.Models.Methods
         /// </summary>
         [JsonPropertyName("tx_type")]
         public string TxType { get; set; }
+
+        /// <summary>
+        /// Return only the transactions in which this account took part through a delegation
+        /// (XLS-75). The node pages this view with a marker of its own, so the same filter has to be
+        /// sent with every page.
+        /// </summary>
+        [JsonPropertyName("delegate")]
+        public AccountTransactionsDelegateFilter Delegate { get; set; }
+    }
+
+    /// <summary>
+    /// The <c>delegate</c> filter of <c>account_tx</c>.
+    /// </summary>
+    public class AccountTransactionsDelegateFilter
+    {
+        /// <summary>
+        /// <c>"actor"</c> for transactions the account sent on behalf of another account,
+        /// <c>"authorizer"</c> for transactions another account sent on its behalf.
+        /// </summary>
+        [JsonPropertyName("delegate_filter")]
+        public string DelegateFilter { get; set; }
+
+        /// <summary>
+        /// The other side of the delegation: the delegating account for <c>"actor"</c>, the
+        /// delegate for <c>"authorizer"</c>. Omitted matches any counterparty.
+        /// </summary>
+        [JsonPropertyName("counter_party")]
+        public string CounterParty { get; set; }
     }
 }

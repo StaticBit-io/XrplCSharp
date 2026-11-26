@@ -1,5 +1,23 @@
 # Changes
 
+## 11.28.0.0 25/11/2026
+
+* Request parameters xrpld 3.4.1 reads that the request models could not send:
+  * `AccountObjectsRequest.Sponsored` (`sponsored`): only objects with (`true`) or without (`false`) a sponsor
+  * `AccountTransactionsRequest.Delegate` (`delegate`): `AccountTransactionsDelegateFilter` with `DelegateFilter` (`delegate_filter`, `"actor"` or `"authorizer"`) and `CounterParty` (`counter_party`)
+  * `VaultInfoRequest.Owner` and `Seq` (`owner`, `seq`): a vault by its owner and the sequence of VaultCreate, in place of `VaultID`
+  * `LedgerEntryRequest`: `Vault` (`VaultQuery`), `Sponsorship` (`SponsorshipQuery`), `Bridge` (`XChainBridgeModel`, with the existing `BridgeAccount`), `XChainOwnedClaimId` (`XChainOwnedClaimIdQuery`), `XChainOwnedCreateAccountClaimId` (`XChainOwnedCreateAccountClaimIdQuery`), `Fee` and `NegativeUnl` (`true` for the FeeSettings and NegativeUNL singletons) and `Hashes` (`true` for the short skip list, a ledger index for the long one)
+  * Admin: `LedgerRequest.Full` and `Accounts` (`full`, `accounts`), `ServerFeaturesRequest.Vetoed` (`vetoed`)
+* Result fields xrpld 3.4.1 writes that the result models did not read:
+  * The ledger a result was read from: `AccountChannels.LedgerIndex`, `LedgerHash`, `LedgerCurrentIndex`, `Validated`; `LedgerEntryResponse` and `RipplePathFindResponse` the same four; `AccountNFTs.LedgerIndex` and `LedgerHash`; `AccountInfo.LedgerHash`; `AccountOffers.Validated`, `BookOffers.Validated`, `TransactionEntryResponse.Validated`; `LedgerCurrentIndex` on `AccountCurrencies`, `AMMInfoResponse`, `VaultInfoResponse`, `LOLedgerData` and `GatewayBalancesResponse`
+  * `LedgerEntryResponse.NodeBinary` (`node_binary`) and `SimulateResponse.MetaBlob` (`meta_blob`): the hex forms returned with `binary: true`
+  * `GatewayBalancesResponse.Locked` (`locked`): escrow totals by currency code, read and written by `GatewayBalancesResponseConverter`
+  * `AccountOffers.Limit` (`limit`)
+* These fields used to arrive in `UnknownFields` of the result; they now go to their members and no longer appear there
+* Tests: `TestURpcFieldGaps`, `TestIRpcResultFields`, `TestIVault.TestVaultLookup_ByOwnerAndSequence`, `TestIXChainBridge.TestXChainLedgerEntry_BridgeAndClaimId`
+* `NFTBuyOffersRequest` and `NFTSellOffersRequest` take `Limit` (`limit`) and `Marker` (`marker`), and `NFTBuyOffers` and `NFTSellOffers` read the `Limit` and `Marker` rippled returns when another page follows, so the offers of an NFT can be paged through. rippled clamps `limit` to 50..500 (default 250) on a non-admin connection. `Marker` is a `string`: the hex key of the first `NFTokenOffer` of the next page. The response carries no `ledger_index`, so a consistent walk sets the same `LedgerIndex` on every page. Issue #353. Tests: `TestUNFTOffersPaging`, `TestINFTSellOffers`, `TestINFTBuyOffers` (the integration classes replace the commented-out files of the same name)
+* `Xrpl` is 11.28.0.0
+
 ## 11.27.0.0 14/11/2026
 
 * **Breaking:** no package depends on `Portable.BouncyCastle` any more. `Xrpl.Keypairs` runs secp256k1 on `NBitcoin.Secp256k1` 4.0.4 (MIT, a port of libsecp256k1) through the internal `K256SecretKey`: signing, verification, key derivation from a seed (account keys and the validator root key) and from entropy (`XrplKeypairs.DeriveKeyBytes`). The scalar and the RFC 6979 nonce are value types cleared after each signature, not `BigInteger`s; this covers `XrplSigningKey`. Signatures, derived keys, DER encoding and verification results are byte-identical to 11.26.0.0. Public types that carried BouncyCastle types change:
@@ -48,7 +66,6 @@
 ## 11.25.1.0 06/11/2026
 
 * The `B58` change of 11.25.0.0 reaches those who install `Xrpl`. `Xrpl` 11.25.0 requires `Xrpl.BinaryCodec` and `Xrpl.Keypairs` 11.22.0, and both of those require `Xrpl.AddressCodec` 11.20.0, so `Xrpl.AddressCodec` 11.25.0 was installed only by asking for it directly. `Xrpl`, `Xrpl.AddressCodec`, `Xrpl.BinaryCodec` and `Xrpl.Keypairs` are all 11.25.1.0, and each requires the others at that version. No code changed
-* These four packages now move together in every release, including one with no change of its own: the release skips a version nuget.org already has, so a package left behind keeps the dependencies it was published with. Tests: `TestUPackageVersions`
 
 ## Xrpl.X402 1.0.3 / Xrpl.X402.AspNetCore 1.1.1 06/11/2026
 
