@@ -90,8 +90,8 @@ public class GatewayBalancesResponseConverter : JsonConverter<GatewayBalancesRes
     }
 
     /// <summary>
-    /// Reads <c>locked</c>: an object of currency code to amount, which rippled writes only when
-    /// the account has escrowed amounts of its own tokens.
+    /// Reads <c>locked</c>: an object of currency code to amount held in escrows the account owns,
+    /// XRP in drops among them. rippled writes it only when there is such an escrow.
     /// </summary>
     private static Dictionary<string, string> ReadLocked(JsonElement root)
     {

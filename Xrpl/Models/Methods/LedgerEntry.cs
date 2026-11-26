@@ -234,8 +234,8 @@ public class LedgerEntryRequest : BaseLedgerRequest
     public bool? NegativeUnl { get; set; }
 
     /// <summary>
-    /// The LedgerHashes entry to retrieve: <c>true</c> for the short skip list (the hashes since
-    /// the last flag ledger), or a ledger index (<see cref="uint"/>) for the long skip list that
+    /// The LedgerHashes entry to retrieve: <c>true</c> for the short skip list (the hashes of up
+    /// to the 256 most recent ledgers), or a ledger index (<see cref="uint"/>) for the long skip list that
     /// covers it.
     /// </summary>
     [JsonPropertyName("hashes")]
@@ -322,6 +322,10 @@ public class XChainOwnedClaimIdQuery : XChainBridgeModel
     /// <summary>
     /// The claim ID, as XChainCreateClaimID assigned it.
     /// </summary>
+    /// <remarks>
+    /// The ledger field is a UInt64, but rippled's ledger_entry reads this selector as an unsigned
+    /// 32-bit number and rejects anything larger with malformedXChainOwnedClaimID.
+    /// </remarks>
     [JsonPropertyName("xchain_owned_claim_id")]
     public uint XChainOwnedClaimId { get; set; }
 }
@@ -335,6 +339,10 @@ public class XChainOwnedCreateAccountClaimIdQuery : XChainBridgeModel
     /// <summary>
     /// The XChainAccountCreateCount of the account creation this entry collects attestations for.
     /// </summary>
+    /// <remarks>
+    /// The ledger field is a UInt64, but rippled's ledger_entry reads this selector as an unsigned
+    /// 32-bit number and rejects anything larger with malformedXChainOwnedCreateAccountClaimID.
+    /// </remarks>
     [JsonPropertyName("xchain_owned_create_account_claim_id")]
     public uint XChainOwnedCreateAccountClaimId { get; set; }
 }

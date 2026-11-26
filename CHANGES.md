@@ -1,6 +1,6 @@
 # Changes
 
-## 11.29.0.0 25/11/2026
+## 11.28.0.0 25/11/2026
 
 * Request parameters xrpld 3.4.1 reads that the request models could not send:
   * `AccountObjectsRequest.Sponsored` (`sponsored`): only objects with (`true`) or without (`false`) a sponsor
@@ -15,10 +15,6 @@
   * `AccountOffers.Limit` (`limit`)
 * These fields used to arrive in `UnknownFields` of the result; they now go to their members and no longer appear there
 * Tests: `TestURpcFieldGaps`, `TestIRpcResultFields`, `TestIVault.TestVaultLookup_ByOwnerAndSequence`, `TestIXChainBridge.TestXChainLedgerEntry_BridgeAndClaimId`
-* `Xrpl` is 11.29.0.0
-
-## 11.28.0.0 25/11/2026
-
 * `NFTBuyOffersRequest` and `NFTSellOffersRequest` take `Limit` (`limit`) and `Marker` (`marker`), and `NFTBuyOffers` and `NFTSellOffers` read the `Limit` and `Marker` rippled returns when another page follows, so the offers of an NFT can be paged through. rippled clamps `limit` to 50..500 (default 250) on a non-admin connection. `Marker` is a `string`: the hex key of the first `NFTokenOffer` of the next page. The response carries no `ledger_index`, so a consistent walk sets the same `LedgerIndex` on every page. Issue #353. Tests: `TestUNFTOffersPaging`, `TestINFTSellOffers`, `TestINFTBuyOffers` (the integration classes replace the commented-out files of the same name)
 * `Xrpl` is 11.28.0.0
 
