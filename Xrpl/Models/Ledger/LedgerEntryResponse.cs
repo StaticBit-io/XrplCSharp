@@ -29,5 +29,38 @@ namespace Xrpl.Models.Ledger
         //public BaseLedgerEntry LedgerEntry => Node.TryGetValue("LedgerEntryType", out LedgerEntryType type) ? LOConverter.GetBaseRippleLO(type, Node) : null;
 
         //todo not found fields  - ledger_current_index: number, node?: LedgerEntry,  node_binary?: string,  validated?: boolean
+
+        /// <summary>
+        /// The entry in the binary format, as hexadecimal, when the request set <c>binary</c>.
+        /// <see cref="Node"/> is absent then.
+        /// </summary>
+        [JsonPropertyName("node_binary")]
+        public string NodeBinary { get; set; }
+
+        /// <summary>
+        /// The ledger index of the ledger version the data was read from. Absent when it was read from
+        /// the open ledger; see <see cref="LedgerCurrentIndex"/>.
+        /// </summary>
+        [JsonPropertyName("ledger_index")]
+        public uint? LedgerIndex { get; set; }
+
+        /// <summary>
+        /// The identifying hash of the ledger version the data was read from. Absent for the open ledger.
+        /// </summary>
+        [JsonPropertyName("ledger_hash")]
+        public string LedgerHash { get; set; }
+
+        /// <summary>
+        /// The ledger index of the open ledger the data was read from. Present instead of
+        /// <c>ledger_index</c> and <c>ledger_hash</c> when the request did not name a closed ledger.
+        /// </summary>
+        [JsonPropertyName("ledger_current_index")]
+        public uint? LedgerCurrentIndex { get; set; }
+
+        /// <summary>
+        /// True if the data comes from a validated ledger version, which cannot change.
+        /// </summary>
+        [JsonPropertyName("validated")]
+        public bool? Validated { get; set; }
     }
 }

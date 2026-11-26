@@ -638,4 +638,42 @@ public class TestIVault : TestIVaultBase
         }
         return null;
     }
+
+    /// <summary>
+    /// vault_info and ledger_entry find a vault by its owner and the sequence of VaultCreate, the
+    /// alternative to its ID that the request models could not express.
+    /// </summary>
+    [TestMethod]
+    public async Task TestVaultLookup_ByOwnerAndSequence()
+    {
+        XrplWallet wallet = XrplWallet.Generate();
+        await IntegrationTestConfig.TryFundWalletAsync(client, wallet, nodeType);
+
+        VaultCreate createTx = new VaultCreate
+        {
+            Account = wallet.ClassicAddress,
+            Asset = new IssuedCurrency { Currency = "XRP" },
+        };
+        createTx = await client.Autofill(createTx);
+        TransactionSummary createResult = await client.SubmitAndWait(createTx, wallet, true);
+        ValidateResult(createResult);
+        string vaultId = GetCreatedObjectId(createResult);
+        uint sequence = createTx.Sequence.Value;
+
+        VaultInfoResponse info = await client.VaultInfo(new VaultInfoRequest
+        {
+            Owner = wallet.ClassicAddress,
+            Seq = sequence,
+            LedgerIndex = new LedgerIndex(LedgerIndexType.Validated),
+        }).Typed();
+        Assert.AreEqual(vaultId, info.Vault.Index);
+
+        LedgerEntryResponse entry = await client.LedgerEntry(new LedgerEntryRequest
+        {
+            Vault = new VaultQuery { Owner = wallet.ClassicAddress, Seq = sequence },
+            LedgerIndex = new LedgerIndex(LedgerIndexType.Validated),
+        }).Typed();
+        Assert.AreEqual(vaultId, entry.Index);
+        Assert.IsInstanceOfType<LOVault>(entry.Node);
+    }
 }

@@ -261,5 +261,11 @@ public class ServerFeaturesRequest : BaseRequest
     /// </summary>
     [JsonPropertyName("feature")]
     public string? Feature { get; set; }
+    /// <summary>
+    /// Admin only, together with <see cref="Feature"/>: <c>true</c> makes the server vote against
+    /// the amendment, <c>false</c> withdraws that veto. This changes the server's amendment votes.
+    /// </summary>
+    [JsonPropertyName("vetoed")]
+    public bool? Vetoed { get; set; }
 }
 

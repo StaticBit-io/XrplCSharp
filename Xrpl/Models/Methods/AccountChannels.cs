@@ -39,6 +39,32 @@ namespace Xrpl.Models.Methods
 
         //todo not found BaseResponse fiends - ledger_hash: string, ledger_index: number,  validated?: boolean
         //https://github.com/XRPLF/xrpl.js/blob/b20c05c3680d80344006d20c44b4ae1c3b0ffcac/packages/xrpl/src/models/methods/accountChannels.ts#L80
+
+        /// <summary>
+        /// The ledger index of the ledger version the data was read from. Absent when it was read from
+        /// the open ledger; see <see cref="LedgerCurrentIndex"/>.
+        /// </summary>
+        [JsonPropertyName("ledger_index")]
+        public uint? LedgerIndex { get; set; }
+
+        /// <summary>
+        /// The identifying hash of the ledger version the data was read from. Absent for the open ledger.
+        /// </summary>
+        [JsonPropertyName("ledger_hash")]
+        public string LedgerHash { get; set; }
+
+        /// <summary>
+        /// The ledger index of the open ledger the data was read from. Present instead of
+        /// <c>ledger_index</c> and <c>ledger_hash</c> when the request did not name a closed ledger.
+        /// </summary>
+        [JsonPropertyName("ledger_current_index")]
+        public uint? LedgerCurrentIndex { get; set; }
+
+        /// <summary>
+        /// True if the data comes from a validated ledger version, which cannot change.
+        /// </summary>
+        [JsonPropertyName("validated")]
+        public bool? Validated { get; set; }
     }
 
     /// <summary>

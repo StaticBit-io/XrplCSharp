@@ -28,7 +28,9 @@ public class GatewayBalancesResponseConverter : JsonConverter<GatewayBalancesRes
             Account = account,
             LedgerHash = root.TryGetProperty("ledger_hash", out JsonElement lhEl) ? lhEl.GetString() : null,
             LedgerIndex = root.TryGetProperty("ledger_index", out JsonElement liEl) ? liEl.GetUInt32() : null,
+            LedgerCurrentIndex = root.TryGetProperty("ledger_current_index", out JsonElement lciEl) ? lciEl.GetUInt32() : null,
             Validated = root.TryGetProperty("validated", out JsonElement vEl) ? vEl.GetBoolean() : null,
+            Locked = ReadLocked(root),
 
             Assets = ReadIssuerCurrencyList(root, "assets", options),
             Balances = ReadIssuerCurrencyList(root, "balances", options),
@@ -63,12 +65,48 @@ public class GatewayBalancesResponseConverter : JsonConverter<GatewayBalancesRes
             writer.WriteNumber("ledger_index", value.LedgerIndex.Value);
         }
 
+        if (value.LedgerCurrentIndex.HasValue)
+        {
+            writer.WriteNumber("ledger_current_index", value.LedgerCurrentIndex.Value);
+        }
+
         if (value.Validated.HasValue)
         {
             writer.WriteBoolean("validated", value.Validated.Value);
         }
 
+        if (value.Locked is { Count: > 0 })
+        {
+            writer.WritePropertyName("locked");
+            writer.WriteStartObject();
+            foreach (KeyValuePair<string, string> entry in value.Locked)
+            {
+                writer.WriteString(entry.Key, entry.Value);
+            }
+            writer.WriteEndObject();
+        }
+
         writer.WriteEndObject();
+    }
+
+    /// <summary>
+    /// Reads <c>locked</c>: an object of currency code to amount held in escrows the account owns,
+    /// XRP in drops among them. rippled writes it only when there is such an escrow.
+    /// </summary>
+    private static Dictionary<string, string> ReadLocked(JsonElement root)
+    {
+        if (!root.TryGetProperty("locked", out JsonElement token) || token.ValueKind != JsonValueKind.Object)
+        {
+            return null;
+        }
+
+        Dictionary<string, string> result = new Dictionary<string, string>(StringComparer.Ordinal);
+        foreach (JsonProperty entry in token.EnumerateObject())
+        {
+            result[entry.Name] = entry.Value.GetString();
+        }
+
+        return result;
     }
 
     private static List<Currency> ReadIssuerCurrencyList(JsonElement root, string propertyName, JsonSerializerOptions options)

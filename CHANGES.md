@@ -2,6 +2,19 @@
 
 ## 11.28.0.0 25/11/2026
 
+* Request parameters xrpld 3.4.1 reads that the request models could not send:
+  * `AccountObjectsRequest.Sponsored` (`sponsored`): only objects with (`true`) or without (`false`) a sponsor
+  * `AccountTransactionsRequest.Delegate` (`delegate`): `AccountTransactionsDelegateFilter` with `DelegateFilter` (`delegate_filter`, `"actor"` or `"authorizer"`) and `CounterParty` (`counter_party`)
+  * `VaultInfoRequest.Owner` and `Seq` (`owner`, `seq`): a vault by its owner and the sequence of VaultCreate, in place of `VaultID`
+  * `LedgerEntryRequest`: `Vault` (`VaultQuery`), `Sponsorship` (`SponsorshipQuery`), `Bridge` (`XChainBridgeModel`, with the existing `BridgeAccount`), `XChainOwnedClaimId` (`XChainOwnedClaimIdQuery`), `XChainOwnedCreateAccountClaimId` (`XChainOwnedCreateAccountClaimIdQuery`), `Fee` and `NegativeUnl` (`true` for the FeeSettings and NegativeUNL singletons) and `Hashes` (`true` for the short skip list, a ledger index for the long one)
+  * Admin: `LedgerRequest.Full` and `Accounts` (`full`, `accounts`), `ServerFeaturesRequest.Vetoed` (`vetoed`)
+* Result fields xrpld 3.4.1 writes that the result models did not read:
+  * The ledger a result was read from: `AccountChannels.LedgerIndex`, `LedgerHash`, `LedgerCurrentIndex`, `Validated`; `LedgerEntryResponse` and `RipplePathFindResponse` the same four; `AccountNFTs.LedgerIndex` and `LedgerHash`; `AccountInfo.LedgerHash`; `AccountOffers.Validated`, `BookOffers.Validated`, `TransactionEntryResponse.Validated`; `LedgerCurrentIndex` on `AccountCurrencies`, `AMMInfoResponse`, `VaultInfoResponse`, `LOLedgerData` and `GatewayBalancesResponse`
+  * `LedgerEntryResponse.NodeBinary` (`node_binary`) and `SimulateResponse.MetaBlob` (`meta_blob`): the hex forms returned with `binary: true`
+  * `GatewayBalancesResponse.Locked` (`locked`): escrow totals by currency code, read and written by `GatewayBalancesResponseConverter`
+  * `AccountOffers.Limit` (`limit`)
+* These fields used to arrive in `UnknownFields` of the result; they now go to their members and no longer appear there
+* Tests: `TestURpcFieldGaps`, `TestIRpcResultFields`, `TestIVault.TestVaultLookup_ByOwnerAndSequence`, `TestIXChainBridge.TestXChainLedgerEntry_BridgeAndClaimId`
 * `NFTBuyOffersRequest` and `NFTSellOffersRequest` take `Limit` (`limit`) and `Marker` (`marker`), and `NFTBuyOffers` and `NFTSellOffers` read the `Limit` and `Marker` rippled returns when another page follows, so the offers of an NFT can be paged through. rippled clamps `limit` to 50..500 (default 250) on a non-admin connection. `Marker` is a `string`: the hex key of the first `NFTokenOffer` of the next page. The response carries no `ledger_index`, so a consistent walk sets the same `LedgerIndex` on every page. Issue #353. Tests: `TestUNFTOffersPaging`, `TestINFTSellOffers`, `TestINFTBuyOffers` (the integration classes replace the commented-out files of the same name)
 * `Xrpl` is 11.28.0.0
 

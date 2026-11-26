@@ -3,6 +3,8 @@ using System.Threading.Tasks;
 using Microsoft.VisualStudio.TestTools.UnitTesting;
 
 using Xrpl.Client;
+using Xrpl.Models;
+using Xrpl.Models.Ledger;
 using Xrpl.Models.Common;
 using Xrpl.Models.Methods;
 using Xrpl.Models.Transactions;
@@ -385,5 +387,60 @@ public class TestIXChainBridge : TestIXChainBridgeBase
 
         TransactionSummary result = await client.SubmitAndWait(modifyTx, walletLockingDoor, true);
         ValidateResult(result);
+    }
+
+    /// <summary>
+    /// ledger_entry finds a Bridge by its XChainBridge fields and door, and an XChainOwnedClaimID by
+    /// its bridge and claim ID.
+    /// </summary>
+    [TestMethod]
+    public async Task TestXChainLedgerEntry_BridgeAndClaimId()
+    {
+        XrplWallet walletDoor = XrplWallet.Generate();
+        XrplWallet walletUser = XrplWallet.Generate();
+        await IntegrationTestConfig.TryFundWalletsAsync(client, nodeType, walletDoor, walletUser);
+
+        XChainBridgeModel bridge = CreateXrpTestBridge(walletDoor.ClassicAddress);
+        XChainCreateBridge createBridge = new XChainCreateBridge
+        {
+            Account = walletDoor.ClassicAddress,
+            XChainBridge = bridge,
+            SignatureReward = new Currency { Value = "100", CurrencyCode = "XRP" },
+        };
+        createBridge = await client.Autofill(createBridge);
+        ValidateResult(await client.SubmitAndWait(createBridge, walletDoor, true));
+
+        XChainCreateClaimID createClaim = new XChainCreateClaimID
+        {
+            Account = walletUser.ClassicAddress,
+            XChainBridge = bridge,
+            SignatureReward = new Currency { Value = "100", CurrencyCode = "XRP" },
+            OtherChainSource = walletUser.ClassicAddress,
+        };
+        createClaim = await client.Autofill(createClaim);
+        ValidateResult(await client.SubmitAndWait(createClaim, walletUser, true));
+
+        LedgerEntryResponse bridgeEntry = await client.LedgerEntry(new LedgerEntryRequest
+        {
+            Bridge = bridge,
+            BridgeAccount = walletDoor.ClassicAddress,
+            LedgerIndex = new LedgerIndex(LedgerIndexType.Validated),
+        }).Typed();
+        Assert.IsInstanceOfType<LOBridge>(bridgeEntry.Node);
+
+        LedgerEntryResponse claimEntry = await client.LedgerEntry(new LedgerEntryRequest
+        {
+            XChainOwnedClaimId = new XChainOwnedClaimIdQuery
+            {
+                LockingChainDoor = bridge.LockingChainDoor,
+                LockingChainIssue = bridge.LockingChainIssue,
+                IssuingChainDoor = bridge.IssuingChainDoor,
+                IssuingChainIssue = bridge.IssuingChainIssue,
+                XChainOwnedClaimId = 1,
+            },
+            LedgerIndex = new LedgerIndex(LedgerIndexType.Validated),
+        }).Typed();
+        Assert.IsNotNull(claimEntry.Node);
+        Assert.AreEqual((LedgerEntryType?)LedgerEntryType.XChainOwnedClaimID, claimEntry.Node.LedgerEntryType);
     }
 }
