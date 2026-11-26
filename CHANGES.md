@@ -1,5 +1,10 @@
 # Changes
 
+## 11.28.0.0 25/11/2026
+
+* `NFTBuyOffersRequest` and `NFTSellOffersRequest` take `Limit` (`limit`) and `Marker` (`marker`), and `NFTBuyOffers` and `NFTSellOffers` read the `Limit` and `Marker` rippled returns when another page follows, so the offers of an NFT can be paged through. rippled clamps `limit` to 50..500 (default 250) on a non-admin connection. `Marker` is a `string`: the hex key of the first `NFTokenOffer` of the next page. The response carries no `ledger_index`, so a consistent walk sets the same `LedgerIndex` on every page. Issue #353. Tests: `TestUNFTOffersPaging`, `TestINFTSellOffers`, `TestINFTBuyOffers` (the integration classes replace the commented-out files of the same name)
+* `Xrpl` is 11.28.0.0
+
 ## 11.27.0.0 14/11/2026
 
 * **Breaking:** no package depends on `Portable.BouncyCastle` any more. `Xrpl.Keypairs` runs secp256k1 on `NBitcoin.Secp256k1` 4.0.4 (MIT, a port of libsecp256k1) through the internal `K256SecretKey`: signing, verification, key derivation from a seed (account keys and the validator root key) and from entropy (`XrplKeypairs.DeriveKeyBytes`). The scalar and the RFC 6979 nonce are value types cleared after each signature, not `BigInteger`s; this covers `XrplSigningKey`. Signatures, derived keys, DER encoding and verification results are byte-identical to 11.26.0.0. Public types that carried BouncyCastle types change:
