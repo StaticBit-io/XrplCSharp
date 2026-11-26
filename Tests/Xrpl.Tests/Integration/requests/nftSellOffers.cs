@@ -1,4 +1,4 @@
-// https://github.com/XRPLF/xrpl.js/blob/main/packages/xrpl/test/integration/requests/nftSellOffers.ts
+﻿// https://github.com/XRPLF/xrpl.js/blob/main/packages/xrpl/test/integration/requests/nftSellOffers.ts
 
 using System.Collections.Generic;
 using System.Linq;
