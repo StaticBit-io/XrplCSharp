@@ -73,7 +73,7 @@ Use [this repo](https://github.com/RichardAH/xrpl-codec-gen) to generate a new `
 ### Release
 
 1. Ensure that all tests passed on the last CI that ran on `dev`.
-2. Update the version in all `.csproj` files (`Xrpl`, `Xrpl.AddressCodec`, `Xrpl.BinaryCodec`, `Xrpl.Keypairs`), including a package with no change of its own. The release skips a version nuget.org already has, so a package left behind keeps the dependencies it was published with. `TestUPackageVersions` fails when the versions differ. `Xrpl.X402` and `Xrpl.X402.AspNetCore` have versions of their own and no such check: they keep requiring the `Xrpl` they were published with until their version moves.
+2. Update the version only in the packages that changed and in the packages that must carry that change to their consumers. Packing turns a `ProjectReference` into a dependency on the referenced project's version at pack time, and the release skips a version nuget.org already has, so a package left at its published version keeps the dependencies it was published with. A change in `Xrpl.AddressCodec` that `Xrpl` users need therefore also moves `Xrpl.BinaryCodec` and `Xrpl.Keypairs` (which reference it) and `Xrpl`. A package untouched by the change and not on such a path keeps its version. `Xrpl.X402` and `Xrpl.X402.AspNetCore` follow the same rule: they keep requiring the `Xrpl` they were published with until their version moves.
 3. Update `CHANGES.md` with the new version and changelog.
 4. Merge `dev` into `release` (the push to `release` publishes the NuGet packages and deploys the documentation).
 5. The NuGet publish workflow will start automatically on push to `release`.
